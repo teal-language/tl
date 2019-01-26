@@ -35,7 +35,6 @@ describe("type_check", function()
    end)
 
    it("local function declaration", function()
-      -- fail
       local tokens = tl.lex([[
          local function f(a: number, b: string): boolean
             return #b == a
@@ -45,6 +44,23 @@ describe("type_check", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same({}, errors)
+   end)
+
+   it("string method call", function()
+      -- pass
+      local tokens = tl.lex([[
+         print(("  "):rep(12))
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+      -- fail
+      tokens = tl.lex([[
+         print(("  "):rep("foo"))
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.match("mismatch: @methcall", errors[1].err, 1, true)
    end)
 
    it("+", function()

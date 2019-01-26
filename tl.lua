@@ -347,7 +347,7 @@ local function parse_trying_list(tokens, i, errs, node, parse_item)
    local item
    i, item = parse_item(tokens, i, errs)
    table.insert(node, item)
-   if tokens[i].tk == "," then
+   if tokens[i] and tokens[i].tk == "," then
       while tokens[i].tk == "," do
          i = i + 1
          i, item = parse_item(tokens, i, errs)
@@ -448,6 +448,7 @@ local precedences = {
       ["%"] = 10,
       ["^"] = 12,
       ["@funcall"] = 100,
+      ["@methcall"] = 100,
       ["@index"] = 200,
       ["."] = 200,
       [":"] = 200,
@@ -469,14 +470,28 @@ local function pop_operator(operators, operands)
    if operators[#operators].arity == 2 then
       local t2 = table.remove(operands)
       local t1 = table.remove(operands)
-      table.insert(operands, {
-         ["y"] = t1.y,
-         ["x"] = t1.x,
-         ["kind"] = "op",
-         ["op"] = table.remove(operators),
-         ["e1"] = t1,
-         ["e2"] = t2,
-      })
+      local operator = table.remove(operators)
+      if operator.op == "@funcall" and t1.op and t1.op.op == ":" then
+         operator.op = "@methcall"
+         table.insert(operands, {
+            ["y"] = t1.y,
+            ["x"] = t1.x,
+            ["kind"] = "op",
+            ["op"] = operator,
+            ["e1"] = t1.e1,
+            ["method"] = t1.e2,
+            ["e2"] = t2,
+         })
+      else
+         table.insert(operands, {
+            ["y"] = t1.y,
+            ["x"] = t1.x,
+            ["kind"] = "op",
+            ["op"] = operator,
+            ["e1"] = t1,
+            ["e2"] = t2,
+         })
+      end
    else
       local t1 = table.remove(operands)
       table.insert(operands, {
@@ -760,7 +775,7 @@ local function parse_call_or_assignment(tokens, i, errs, is_local)
    if is_local then
       i, asgn.decltype = parse_type_list(tokens, i, errs)
    end
-   if tokens[i].tk == "=" then
+   if tokens[i] and tokens[i].tk == "=" then
       asgn.vals = new_node(tokens, i, "values")
       repeat
       i = i + 1
@@ -772,7 +787,7 @@ local function parse_call_or_assignment(tokens, i, errs, is_local)
    elseif is_local then
       return i, asgn
    end
-   if lhs.op and lhs.op.op == "@funcall" then
+   if lhs.op and (lhs.op.op == "@funcall" or lhs.op.op == "@methcall") then
       return i, lhs
    end
    return fail(tokens, i, errs)
@@ -900,7 +915,7 @@ local function recurse_ast(ast, visitor)
    elseif ast.kind == "op" then
       table.insert(xs, recurse_ast(ast.e1, visitor) or false)
       local p1 = ast.e1.op and ast.e1.op.prec or false
-      if ast.op.op == ":" and ast.e1.kind == "string" then
+      if ast.op.op == "@methcall" and ast.e1.kind == "string" then
          p1 =- 999
       end
       table.insert(xs, p1)
@@ -930,7 +945,6 @@ local function recurse_ast(ast, visitor)
 end
 local tight_op = {
    ["."] = true,
-   [":"] = true,
    ["-"] = true,
    ["~"] = true,
    ["#"] = true,
@@ -1259,6 +1273,19 @@ end,
       table.insert(out, "(")
       table.insert(out, children[3])
       table.insert(out, ")")
+   elseif node.op.op == "@methcall" then
+      if children[2] and node.op.prec > children[2] then
+         table.insert(out, "(")
+      end
+      table.insert(out, children[1])
+      if children[2] and node.op.prec > children[2] then
+         table.insert(out, ")")
+      end
+      table.insert(out, ":")
+      table.insert(out, node.method.tk)
+      table.insert(out, "(")
+      table.insert(out, children[3])
+      table.insert(out, ")")
    elseif node.op.op == "@index" then
       table.insert(out, children[1])
       table.insert(out, "[")
@@ -1371,6 +1398,9 @@ local boolean_binop = {
       ["boolean"] = {
          ["boolean"] = BOOLEAN,
       },
+      ["number"] = {
+         ["number"] = NUMBER,
+      },
    },
 }
 local op_types = {
@@ -1379,12 +1409,6 @@ local op_types = {
          ["string"] = NUMBER,
          ["table"] = NUMBER,
       },
-   },
-   ["."] = {
-      [2] = {},
-   },
-   [":"] = {
-      [2] = {},
    },
    ["+"] = numeric_binop,
    ["-"] = {
@@ -1407,6 +1431,7 @@ local op_types = {
    [">"] = relational_binop,
    ["not"] = {
       [1] = {
+         ["string"] = BOOLEAN,
          ["boolean"] = BOOLEAN,
       },
    },
@@ -1478,6 +1503,42 @@ function tl.type_check(ast)
                      ["rets"] = {
                         [1] = ANY,
                      },
+                  },
+               },
+            },
+         },
+         ["string"] = {
+            ["typename"] = "table",
+            ["fields"] = {
+               ["sub"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = NUMBER,
+                     [3] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
+                  },
+               },
+               ["match"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
+                  },
+               },
+               ["rep"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
                   },
                },
             },
@@ -1619,7 +1680,7 @@ function tl.type_check(ast)
          })
          return INVALID
       end
-      if key.typename == "string" or key.typename == "unknown" then
+      if key.typename == "string" or key.typename == "unknown" or key.kind == "variable" then
          if tbl.fields[key.tk] then
             return tbl.fields[key.tk]
          end
@@ -1913,6 +1974,25 @@ end,
    local b = children[3]
    if node.op.op == "@funcall" then
       node.type = match_func_args(node, a, b)
+   elseif node.op.op == "@methcall" then
+      local obj = a
+      if obj.typename == "string" then
+         obj = find_var({
+            ["tk"] = "string",
+         })
+      end
+      local func = match_table_key(node, obj, node.method)
+      if func.typename == "function" then
+         table.insert(b,1, a)
+         node.type = match_func_args(node, func, b)
+      else
+         table.insert(errors, {
+            ["y"] = node.y,
+            ["x"] = node.x,
+            ["err"] = "method not found: " .. inspect(node),
+         })
+         node.type = INVALID
+      end
    elseif node.op.op == "@index" then
       node.type = match_table_key(node, a, b)
    elseif node.op.op == "." then
