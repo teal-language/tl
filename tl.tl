@@ -1427,6 +1427,11 @@ local op_types = {
       [2] = {
          ["string"] = {
             ["string"] = STRING,
+            ["number"] = STRING,
+         },
+         ["number"] = {
+            ["number"] = STRING,
+            ["string"] = STRING,
          }
       }
    },
