@@ -1488,7 +1488,7 @@ function tl.type_check(ast)
    }
    local errors = {}
    
-   local function match_type(node, t1, t2)
+   local function match_type(node: table, t1: table, t2: table)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
       if t2.typename == "any" then
@@ -1502,7 +1502,7 @@ function tl.type_check(ast)
       return true
    end
    
-   local function match_func_args(node, func, args)
+   local function match_func_args(node: table, func: table, args: table)
       assert(type(func) == "table")
       assert(type(args) == "table")
 
@@ -1531,7 +1531,7 @@ function tl.type_check(ast)
       return INVALID
    end
 
-   local function match_table_key(node, tbl, key)
+   local function match_table_key(node: table, tbl: table, key: table)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
 
@@ -1549,7 +1549,7 @@ function tl.type_check(ast)
       return INVALID
    end
    
-   local function untuple(t)
+   local function untuple(t: table)
       if t.typename == "tuple" then
          t = t[1]
       end
@@ -1559,7 +1559,7 @@ function tl.type_check(ast)
       return t
    end
 
-   local function find_var(node)
+   local function find_var(node: table)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[node.tk] then
@@ -1569,15 +1569,15 @@ function tl.type_check(ast)
       return { typename = "unknown", tk = node.tk }
    end
    
-   local function add_var(var, valtype)
+   local function add_var(var: string, valtype: table)
       st[#st][var] = valtype
    end
 
-   local function add_global(var, valtype)
+   local function add_global(var: string, valtype: table)
       st[1][var] = valtype
    end
    
-   local function begin_function_scope(node)
+   local function begin_function_scope(node: table)
       table.insert(st, {})
       for _, arg in ipairs(node.args) do
          add_var(arg.tk, arg.decltype or { typename = "unknown" })
