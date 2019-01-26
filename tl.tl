@@ -1706,19 +1706,16 @@ function tl.type_check(ast)
       },
       ["if"] = {
          after = function(node: table, children: table)
-            match_type(node, children[1], BOOLEAN) -- should fail :)
             node.type = { typename = "none" }
          end,
       },
       ["while"] = {
          after = function(node: table, children: table)
-            match_type(node, children[1], BOOLEAN) -- should fail :)
             node.type = { typename = "none" }
          end,
       },
       ["repeat"] = {
          after = function(node: table, children: table)
-            match_type(node, children[2], BOOLEAN) -- should fail :)
             node.type = { typename = "none" }
          end,
       },
@@ -1759,7 +1756,6 @@ function tl.type_check(ast)
       },
       ["elseif"] = {
          after = function(node: table, children: table)
-            match_type(node, children[1], BOOLEAN) -- should fail :)
             node.type = { typename = "none" }
          end,
       },

@@ -1798,7 +1798,6 @@ end,
 },
 ["if"] = {
    ["after"] = function (node, children)
-   match_type(node, children[1], BOOLEAN)
    node.type = {
       ["typename"] = "none",
    }
@@ -1806,7 +1805,6 @@ end,
 },
 ["while"] = {
    ["after"] = function (node, children)
-   match_type(node, children[1], BOOLEAN)
    node.type = {
       ["typename"] = "none",
    }
@@ -1814,7 +1812,6 @@ end,
 },
 ["repeat"] = {
    ["after"] = function (node, children)
-   match_type(node, children[2], BOOLEAN)
    node.type = {
       ["typename"] = "none",
    }
@@ -1863,7 +1860,6 @@ end,
 },
 ["elseif"] = {
    ["after"] = function (node, children)
-   match_type(node, children[1], BOOLEAN)
    node.type = {
       ["typename"] = "none",
    }
