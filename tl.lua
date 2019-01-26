@@ -559,8 +559,42 @@ local function parse_variable(tokens, i, errs)
    end
    return verify_kind(tokens, i, errs, "word", "variable")
 end
+local function parse_type(tokens, i, errs)
+   if tokens[i].tk == "string" or tokens[i].tk == "boolean" or tokens[i].tk == "number" then
+      return i + 1, {
+         ["kind"] = "typedecl",
+         ["typename"] = tokens[i].tk,
+      }
+   elseif tokens[i].tk == "table" then
+      return i + 1, {
+         ["kind"] = "typedecl",
+         ["typename"] = "table",
+         ["fields"] = {},
+      }
+   elseif tokens[i].tk == "function" then
+      return i + 1, {
+         ["kind"] = "typedecl",
+         ["typename"] = "function",
+         ["args"] = {},
+         ["rets"] = {},
+      }
+   end
+   return fail(tokens, i, errs)
+end
+local function parse_argument(tokens, i, errs)
+   if tokens[i].tk == "..." then
+      return verify_kind(tokens, i, errs, "...")
+   end
+   local node
+   i, node = verify_kind(tokens, i, errs, "word", "variable")
+   if tokens[i].tk == ":" then
+      i = i + 1
+      i, node.decltype = parse_type(tokens, i, errs)
+   end
+   return i, node
+end
 parse_argument_list = function (tokens, i, errs)
-return parse_bracket_list(tokens, i, errs, "argument_list", "(", ")", true, parse_variable)
+return parse_bracket_list(tokens, i, errs, "argument_list", "(", ")", true, parse_argument)
 end
 local function parse_local_function(tokens, i, errs)
    local node = new_node(tokens, i, "local_function")
@@ -1578,6 +1612,17 @@ function tl.type_check(ast)
    local function add_global(var, valtype)
       st[1][var] = valtype
    end
+   local function begin_function_scope(node)
+      table.insert(st, {})
+      for _, arg in ipairs(node.args) do
+         add_var(arg.tk, arg.decltype or{
+            ["typename"] = "unknown",
+         })
+      end
+   end
+   local function end_function_scope()
+      table.remove(st)
+   end
    local visit = {
       ["statements"] = {
          ["before"] = function ()
@@ -1721,48 +1766,60 @@ end,
 end,
 },
 ["local_function"] = {
-   ["after"] = function (node, children)
-   add_var(node.name.tk, {
-      ["typename"] = "function",
-      ["args"] = children[2],
-      ["rets"] = children[3],
-   })
-   node.type = {
-      ["typename"] = "none",
-   }
+   ["before"] = function (node)
+   begin_function_scope(node)
+end,
+["after"] = function (node, children)
+end_function_scope()
+add_var(node.name.tk, {
+   ["typename"] = "function",
+   ["args"] = children[2],
+   ["rets"] = children[3],
+})
+node.type = {
+   ["typename"] = "none",
+}
 end,
 },
 ["global_function"] = {
-   ["after"] = function (node, children)
-   add_global(node.name.tk, {
-      ["typename"] = "function",
-      ["args"] = children[2],
-      ["rets"] = children[3],
-   })
-   node.type = {
-      ["typename"] = "none",
-   }
+   ["before"] = function ()
+   begin_function_scope(node)
+end,
+["after"] = function (node, children)
+end_function_scope()
+add_global(node.name.tk, {
+   ["typename"] = "function",
+   ["args"] = children[2],
+   ["rets"] = children[3],
+})
+node.type = {
+   ["typename"] = "none",
+}
 end,
 },
 ["module_function"] = {
-   ["after"] = function (node, children)
-   local var = find_var(node.module)
-   if var.typename == "table" then
-      var.fields[node.name.tk] = {
-         ["typename"] = "function",
-         ["args"] = children[3],
-         ["rets"] = children[4],
-      }
-   else
-      table.insert(errors, {
-         ["y"] = node.y,
-         ["x"] = node.x,
-         ["err"] = "not a module: " .. node.module.tk,
-      })
-   end
-   node.type = {
-      ["typename"] = "none",
+   ["before"] = function (node)
+   begin_function_scope(node)
+end,
+["after"] = function (node, children)
+end_function_scope()
+local var = find_var(node.module)
+if var.typename == "table" then
+   var.fields[node.name.tk] = {
+      ["typename"] = "function",
+      ["args"] = children[3],
+      ["rets"] = children[4],
    }
+else
+   table.insert(errors, {
+      ["y"] = node.y,
+      ["x"] = node.x,
+      ["err"] = "not a module: " .. node.module.tk,
+   })
+end
+node.type = {
+   ["typename"] = "none",
+}
 end,
 },
 ["function"] = {
@@ -1818,7 +1875,7 @@ end,
 end,
 },
 ["variable"] = {
-   ["after"] = function (node, _)
+   ["after"] = function (node)
    node.type = find_var(node)
 end,
 },
@@ -1828,7 +1885,7 @@ visit["expression_list"] = visit["variables"]
 visit["argument_list"] = visit["variables"]
 visit["word"] = visit["variable"]
 visit["string"] = {
-   ["after"] = function (node, _)
+   ["after"] = function (node)
    node.type = {
       ["typename"] = node.kind,
    }
