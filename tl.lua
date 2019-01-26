@@ -326,7 +326,7 @@ local function parse_list(tokens, i, errs, node, close, is_sep, parse_item)
       table.insert(node, item)
       if tokens[i] and tokens[i].tk == "," then
          i = i + 1
-         if is_sep and tokens[i].tk == close then
+         if is_sep and close[tokens[i].tk] then
             return fail(tokens, i, errs)
          end
       end
@@ -721,23 +721,32 @@ local function parse_return(tokens, i, errs)
    i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
    return i, node
 end
+local function parse_trying_list(tokens, i, errs, node, parse_item)
+   local item
+   i, item = parse_item(tokens, i, errs)
+   table.insert(node, item)
+   if tokens[i].tk == "," then
+      while tokens[i].tk == "," do
+         i = i + 1
+         i, item = parse_item(tokens, i, errs)
+         table.insert(node, item)
+      end
+   end
+   return i, node
+end
 local function parse_call_or_assignment(tokens, i, errs, is_local)
    local asgn = new_node(tokens, i, "assignment")
    if is_local then
       asgn.kind = "local_declaration"
    end
-   local lhs
-   i, lhs = parse_expression(tokens, i, errs)
-   assert(lhs)
    asgn.vars = new_node(tokens, i, "variables")
-   table.insert(asgn.vars, lhs)
-   if tokens[i].tk == "," then
-      while tokens[i].tk == "," do
-         i = i + 1
-         local var
-         i, var = parse_expression(tokens, i, errs)
-         table.insert(asgn.vars, var)
-      end
+   i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_variable or parse_expression)
+   assert(#asgn.vars >= 1)
+   local lhs = asgn.vars[1]
+   if is_local and tokens[i].tk == ":" then
+      i = i + 1
+      asgn.decltype = new_node(tokens, i, "typedecl")
+      i = parse_trying_list(tokens, i, errs, asgn.decltype, parse_type)
    end
    if tokens[i].tk == "=" then
       asgn.vals = new_node(tokens, i, "values")
@@ -1328,6 +1337,9 @@ local relational_binop = {
       ["string"] = {
          ["string"] = BOOLEAN,
       },
+      ["boolean"] = {
+         ["boolean"] = BOOLEAN,
+      },
    },
 }
 local boolean_binop = {
@@ -1652,7 +1664,12 @@ function tl.type_check(ast)
 ["local_declaration"] = {
    ["after"] = function (node, children)
    for i, var in ipairs(node.vars) do
-      add_var(var.tk, children[2] and children[2][i] or NIL)
+      local decltype = node.decltype and node.decltype[i]
+      local infertype = children[2] and children[2][i]
+      if decltype and infertype then
+         match_type(var, decltype, infertype)
+      end
+      add_var(var.tk, decltype or infertype or NIL)
    end
    node.type = {
       ["typename"] = "none",

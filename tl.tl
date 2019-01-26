@@ -51,7 +51,7 @@ function tl.lex(input: string)
    local function end_token(kind: string, t, last)
       assert(type(kind) == "string")
 
-      local token = tokens[#tokens]
+      local token: table = tokens[#tokens]
       token.tk = t or input:sub(token.i, last or i)
       if keywords[token.tk] then
          kind = "keyword"
@@ -67,7 +67,7 @@ function tl.lex(input: string)
          break
       end
 
-      local c = input:sub(i, i)
+      local c: string = input:sub(i, i)
 
       if fwd then
          if c == "\n" then
@@ -243,7 +243,7 @@ local should_indent = {
 function tl.pretty_print_tokens(tokens: table)
    local y = 1
    local out = {}
-   local kind = nil
+   local kind: string = nil
    local indent = 0
    local bracket = false
    for _, t in ipairs(tokens) do
@@ -284,9 +284,9 @@ end
 -- Recursive descent parser
 --------------------------------------------------------------------------------
 
-local parse_expression
-local parse_statements
-local parse_argument_list
+local parse_expression: function
+local parse_statements: function
+local parse_argument_list: function
 
 local function fail(tokens: table, i: number, errs: table)
    local tks = {}
@@ -319,7 +319,7 @@ local function verify_kind(tokens: table, i: number, errs: table, kind: string, 
 end
 
 local function parse_table_item(tokens: table, i: number, errs: table, n: number)
-   local node = new_node(tokens, i, "table_item")
+   local node: table = new_node(tokens, i, "table_item")
    if tokens[i].tk == "[" then
       i = i + 1
       i, node.key = parse_expression(tokens, i, errs)
@@ -350,12 +350,12 @@ local function parse_list(tokens: table, i: number, errs: table, node: table, cl
       if close[tokens[i].tk] then
          break
       end
-      local item
+      local item: table
       i, item, n = parse_item(tokens, i, errs, n)
       table.insert(node, item)
       if tokens[i] and tokens[i].tk == "," then
          i = i + 1
-         if is_sep and tokens[i].tk == close then
+         if is_sep and close[tokens[i].tk] then
             return fail(tokens, i, errs)
          end
       end
@@ -364,7 +364,7 @@ local function parse_list(tokens: table, i: number, errs: table, node: table, cl
 end
 
 local function parse_bracket_list(tokens: table, i: number, errs: table, node_kind: string, open: string, close, is_sep: boolean, parse_item: function)
-   local node = new_node(tokens, i, node_kind)
+   local node: table = new_node(tokens, i, node_kind)
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, node, close, is_sep, parse_item)
    i = i + 1
@@ -394,7 +394,7 @@ local function parse_literal(tokens: table, i: number, errs: table)
    elseif tokens[i].tk == "nil" then
       return verify_kind(tokens, i, errs, "keyword", "nil")
    elseif tokens[i].tk == "function" then
-      local node = new_node(tokens, i, "function")
+      local node: table = new_node(tokens, i, "function")
       i = verify_tk(tokens, i, errs, "function")
       i, node.args = parse_argument_list(tokens, i, errs)
       i, node.body = parse_statements(tokens, i, errs)
@@ -477,8 +477,8 @@ do
       table.insert(operators, op)
    end
    
-   local P
-   local E
+   local P: function
+   local E: function
 
    P = function(tokens: table, i: number, errs: table, operators: table, operands: table)
       if is_unop(tokens[i]) then
@@ -524,7 +524,7 @@ do
       while tokens[i] do
          if tokens[i].kind == "string" or tokens[i].kind == "{" then
             push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "@funcall" }, operators, operands)
-            local arglist = new_node(tokens, i, "argument_list")
+            local arglist: table = new_node(tokens, i, "argument_list")
             local arg
             if tokens[i].kind == "string" then
                arg = new_node(tokens, i)
@@ -601,7 +601,7 @@ parse_argument_list = function(tokens: table, i: number, errs: table)
 end
 
 local function parse_local_function(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "local_function")
+   local node: table = new_node(tokens, i, "local_function")
    i = verify_tk(tokens, i, errs, "local")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
@@ -612,7 +612,7 @@ local function parse_local_function(tokens: table, i: number, errs: table)
 end
 
 local function parse_function(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "global_function")
+   local node: table = new_node(tokens, i, "global_function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
    if tokens[i].tk == "." then
@@ -628,7 +628,7 @@ local function parse_function(tokens: table, i: number, errs: table)
 end
 
 local function parse_if(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "if")
+   local node: table = new_node(tokens, i, "if")
    i = verify_tk(tokens, i, errs, "if")
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "then")
@@ -651,7 +651,7 @@ local function parse_if(tokens: table, i: number, errs: table)
 end
 
 local function parse_while(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "while")
+   local node: table = new_node(tokens, i, "while")
    i = verify_tk(tokens, i, errs, "while")
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "do")
@@ -661,7 +661,7 @@ local function parse_while(tokens: table, i: number, errs: table)
 end
 
 local function parse_fornum(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "fornum")
+   local node: table = new_node(tokens, i, "fornum")
    i = i + 1
    i, node.var = verify_kind(tokens, i, errs, "word", "variable")
    i = verify_tk(tokens, i, errs, "=")
@@ -679,7 +679,7 @@ local function parse_fornum(tokens: table, i: number, errs: table)
 end
 
 local function parse_forin(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "forin")
+   local node: table = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
    i, node.vars = parse_list(tokens, i, errs, node.vars, "in", true, parse_variable)
@@ -700,7 +700,7 @@ local function parse_for(tokens: table, i: number, errs: table)
 end
 
 local function parse_repeat(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "repeat")
+   local node: table = new_node(tokens, i, "repeat")
    i = verify_tk(tokens, i, errs, "repeat")
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "until")
@@ -709,7 +709,7 @@ local function parse_repeat(tokens: table, i: number, errs: table)
 end
 
 local function parse_do(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "do")
+   local node: table = new_node(tokens, i, "do")
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -717,7 +717,7 @@ local function parse_do(tokens: table, i: number, errs: table)
 end
 
 local function parse_break(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "break")
+   local node: table = new_node(tokens, i, "break")
    i = verify_tk(tokens, i, errs, "break")
    return i, node
 end
@@ -730,31 +730,42 @@ local stop_statement_list = {
 }
 
 local function parse_return(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "return")
+   local node: table = new_node(tokens, i, "return")
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
    i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
    return i, node
 end
 
-local function parse_call_or_assignment(tokens: table, i: number, errs: table, is_local: boolean)
-   local asgn = new_node(tokens, i, "assignment")
-   if is_local then
-      asgn.kind = "local_declaration"
-   end
-   local lhs
-   
-   i, lhs = parse_expression(tokens, i, errs)
-   assert(lhs)
-   asgn.vars = new_node(tokens, i, "variables")
-   table.insert(asgn.vars, lhs)
+local function parse_trying_list(tokens: table, i: number, errs: table, node: table, parse_item: function)
+   local item
+   i, item = parse_item(tokens, i, errs)
+   table.insert(node, item)
    if tokens[i].tk == "," then
       while tokens[i].tk == "," do
          i = i + 1
-         local var
-         i, var = parse_expression(tokens, i, errs)
-         table.insert(asgn.vars, var)
+         i, item = parse_item(tokens, i, errs)
+         table.insert(node, item)
       end
+   end
+   return i, node
+end
+
+local function parse_call_or_assignment(tokens: table, i: number, errs: table, is_local: boolean)
+   local asgn: table = new_node(tokens, i, "assignment")
+   if is_local then
+      asgn.kind = "local_declaration"
+   end
+   
+   asgn.vars = new_node(tokens, i, "variables")
+   i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_variable or parse_expression)
+   assert(#asgn.vars >= 1)
+   local lhs: table = asgn.vars[1]
+   
+   if is_local and tokens[i].tk == ":" then
+      i = i + 1
+      asgn.decltype = new_node(tokens, i, "typedecl")
+      i = parse_trying_list(tokens, i, errs, asgn.decltype, parse_type)
    end
    if tokens[i].tk == "=" then
       asgn.vals = new_node(tokens, i, "values")
@@ -805,7 +816,7 @@ local function parse_statement(tokens: table, i: number, errs: table)
 end
 
 parse_statements = function(tokens: table, i: number, errs: table)
-   local node = new_node(tokens, i, "statements")
+   local node: table = new_node(tokens, i, "statements")
    while tokens[i] do
       if stop_statement_list[tokens[i].tk] then
          break
@@ -839,7 +850,7 @@ local function recurse_ast(ast: table, visitor: table)
    if visitor["@afterbefore"] then
       visitor["@afterbefore"](ast)
    end
-   local xs = {}
+   local xs: table = {}
    if ast.kind == "statements"
       or ast.kind == "variables"
       or ast.kind == "values"
@@ -1371,6 +1382,9 @@ local relational_binop = {
       ["string"] = {
          ["string"] = BOOLEAN,
       },
+      ["boolean"] = {
+         ["boolean"] = BOOLEAN,
+      },
    }
 }
 
@@ -1596,7 +1610,12 @@ function tl.type_check(ast)
       ["local_declaration"] = {
          after = function(node: table, children: table)
             for i, var in ipairs(node.vars) do
-               add_var(var.tk, children[2] and children[2][i] or NIL)
+               local decltype = node.decltype and node.decltype[i]
+               local infertype = children[2] and children[2][i]
+               if decltype and infertype then
+                  match_type(var, decltype, infertype)
+               end
+               add_var(var.tk, decltype or infertype or NIL)
             end
             node.type = { typename = "none" }
          end,
