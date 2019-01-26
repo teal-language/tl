@@ -1,3 +1,4 @@
+local tl = {}
 
 --------------------------------------------------------------------------------
 -- Lexer
@@ -30,7 +31,7 @@ local keywords = {
    ["while"] = true,
 }
 
-local function lex(input)
+function tl.lex(input)
    local tokens = {}
 
    local state = "any"
@@ -172,6 +173,8 @@ local function lex(input)
 end
 
 --------------------------------------------------------------------------------
+-- Pretty-print tokens
+--------------------------------------------------------------------------------
 
 local add_space = {
    ["word:keyword"] = true,
@@ -234,9 +237,10 @@ local should_indent = {
    ["while"] = true,
    ["elseif"] = true,
    ["else"] = true,
+   ["function"] = true,
 }
 
-local function pretty_print_tokens(tokens)
+function tl.pretty_print_tokens(tokens)
    local y = 1
    local out = {}
    local kind = nil
@@ -581,10 +585,16 @@ local function parse_local_function(tokens, i, errs)
    return i, node
 end
 
-local function parse_global_function(tokens, i, errs)
+local function parse_function(tokens, i, errs)
    local node = new_node(tokens, i, "global_function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
+   if tokens[i].tk == "." then
+      i = i + 1
+      node.module = node.name
+      i, node.name = verify_kind(tokens, i, errs, "word")
+      node.kind = "module_function"
+   end
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -747,7 +757,7 @@ local function parse_statement(tokens, i, errs)
          return parse_call_or_assignment(tokens, i, errs, true)
       end
    elseif tokens[i].tk == "function" then
-      return parse_global_function(tokens, i, errs)
+      return parse_function(tokens, i, errs)
    elseif tokens[i].tk == "if" then
       return parse_if(tokens, i, errs)
    elseif tokens[i].tk == "while" then
@@ -784,9 +794,13 @@ parse_statements = function(tokens, i, errs)
    return i, node
 end
 
-local function parse_program(tokens, errs)
+function tl.parse_program(tokens, errs)
    return parse_statements(tokens, 1, errs)
 end
+
+--------------------------------------------------------------------------------
+-- AST traversal
+--------------------------------------------------------------------------------
 
 local function recurse_ast(ast, visitor)
    assert(visitor[ast.kind])
@@ -860,6 +874,11 @@ local function recurse_ast(ast, visitor)
       table.insert(xs, recurse_ast(ast.name, visitor) or false)
       table.insert(xs, recurse_ast(ast.args, visitor) or false)
       table.insert(xs, recurse_ast(ast.body, visitor) or false)
+   elseif ast.kind == "module_function" then
+      table.insert(xs, recurse_ast(ast.module, visitor) or false)
+      table.insert(xs, recurse_ast(ast.name, visitor) or false)
+      table.insert(xs, recurse_ast(ast.args, visitor) or false)
+      table.insert(xs, recurse_ast(ast.body, visitor) or false)
    elseif ast.kind == "op" then
       table.insert(xs, recurse_ast(ast.e1, visitor) or false)
       local p1 = ast.e1.op and ast.e1.op.prec or false
@@ -897,6 +916,8 @@ local function recurse_ast(ast, visitor)
 end
 
 --------------------------------------------------------------------------------
+-- Pretty-print AST
+--------------------------------------------------------------------------------
 
 local tight_op = {
    ["."] = true,
@@ -931,8 +952,9 @@ local spaced_op = {
    ["^"] = true,
 }
 
-local function pretty_print_ast(ast)
+function tl.pretty_print_ast(ast)
    local indent = 0
+
    local visit = {
       ["statements"] = {
          after = function(node, children)
@@ -1187,6 +1209,26 @@ local function pretty_print_ast(ast)
             return table.concat(out)
          end,
       },
+      ["module_function"] = {
+         before = function()
+            indent = indent + 1
+         end,
+         after = function(node, children)
+            local out = {}
+            table.insert(out, "function ")
+            table.insert(out, children[1])
+            table.insert(out, ".")
+            table.insert(out, children[2])
+            table.insert(out, "(")
+            table.insert(out, children[3])
+            table.insert(out, ")\n")
+            table.insert(out, children[4])
+            indent = indent - 1
+            table.insert(out, ("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
       ["function"] = {
          before = function()
             indent = indent + 1
@@ -1364,7 +1406,7 @@ local op_types = {
    },
 }
 
-local function type_check(ast)
+function tl.type_check(ast)
    local st = {
       {
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
@@ -1470,6 +1512,16 @@ local function type_check(ast)
          return NIL
       end
       return t
+   end
+
+   local function find_var(node)
+      for i = #st, 1, -1 do
+         local scope = st[i]
+         if scope[node.tk] then
+            return scope[node.tk]
+         end
+      end
+      return { typename = "unknown", tk = node.tk }
    end
    
    local function add_var(var, valtype)
@@ -1615,6 +1667,21 @@ local function type_check(ast)
             node.type = { typename = "none" }
          end,
       },
+      ["module_function"] = {
+         after = function(node, children)
+            local var = find_var(node.module)
+            if var.typename == "table" then
+               var.fields[node.name.tk] = {
+                  typename = "function",
+                  args = children[3],
+                  rets = children[4],
+               }
+            else
+               table.insert(errors, { y = node.y, x = node.x, err = "not a module: " .. node.module.tk })
+            end
+            node.type = { typename = "none" }
+         end,
+      },
       ["function"] = {
          after = function(node, children)
             -- children[1] args
@@ -1661,14 +1728,7 @@ local function type_check(ast)
       },
       ["variable"] = {
          after = function(node, _)
-            for i = #st, 1, -1 do
-               local scope = st[i]
-               if scope[node.tk] then
-                  node.type = scope[node.tk]
-                  return scope[node.tk]
-               end
-            end
-            node.type = { typename = "unknown", tk = node.tk }
+            node.type = find_var(node)
          end,
       }
    }
@@ -1703,40 +1763,4 @@ local function type_check(ast)
    return errors
 end
 
---------------------------------------------------------------------------------
--- Main
---------------------------------------------------------------------------------
-
---if arg[1] then
---   local fd = io.open(arg[1], "r")
---   local input = fd:read("*a")
---   local tokens = lex(input)
---   
---   local errs = {}
---   local i, program = parse_program(tokens, errs)
---   
---   for _, err in ipairs(errs) do
---      print(err.y, err.x, err.msg) 
---   end
---   
---   --print(pretty_print_ast(program))
---   
---   --local tokens2 = lex(pretty_print_ast(program))
---   --print(pretty_print_tokens(tokens2))
---   
---   print("================================")
---   local errors = type_check(program)
---
---   print(#errors .. " error" .. (#errors ~= 1 and "s" or "") .. ":")
---   for _, err in ipairs(errors) do
---      print(arg[1] .. ":" .. err.y .. ":" .. err.x .. ": " .. err.err)
---   end
---end
-
-return {
-   lex = lex,
-   parse_program = parse_program,
-   pretty_print_ast = pretty_print_ast,
-   pretty_print_tokens = pretty_print_tokens,
-   type_check = type_check,
-}
+return tl

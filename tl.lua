@@ -1,3 +1,4 @@
+local tl = {}
 local inspect = require("inspect")
 local keywords = {
    ["and"] = true,
@@ -23,7 +24,7 @@ local keywords = {
    ["until"] = true,
    ["while"] = true,
 }
-local function lex(input)
+function tl.lex(input)
    local tokens = {}
    local state = "any"
    local fwd = true
@@ -208,8 +209,9 @@ local should_indent = {
    ["while"] = true,
    ["elseif"] = true,
    ["else"] = true,
+   ["function"] = true,
 }
-local function pretty_print_tokens(tokens)
+function tl.pretty_print_tokens(tokens)
    local y = 1
    local out = {}
    local kind = nil
@@ -570,10 +572,16 @@ local function parse_local_function(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
-local function parse_global_function(tokens, i, errs)
+local function parse_function(tokens, i, errs)
    local node = new_node(tokens, i, "global_function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
+   if tokens[i].tk == "." then
+      i = i + 1
+      node.module = node.name
+      i, node.name = verify_kind(tokens, i, errs, "word")
+      node.kind = "module_function"
+   end
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -723,7 +731,7 @@ local function parse_statement(tokens, i, errs)
          return parse_call_or_assignment(tokens, i, errs, true)
       end
    elseif tokens[i].tk == "function" then
-      return parse_global_function(tokens, i, errs)
+      return parse_function(tokens, i, errs)
    elseif tokens[i].tk == "if" then
       return parse_if(tokens, i, errs)
    elseif tokens[i].tk == "while" then
@@ -758,7 +766,7 @@ while tokens[i] do
 end
 return i, node
 end
-local function parse_program(tokens, errs)
+function tl.parse_program(tokens, errs)
    return parse_statements(tokens,1, errs)
 end
 local function recurse_ast(ast, visitor)
@@ -826,6 +834,11 @@ local function recurse_ast(ast, visitor)
       table.insert(xs, recurse_ast(ast.name, visitor) or false)
       table.insert(xs, recurse_ast(ast.args, visitor) or false)
       table.insert(xs, recurse_ast(ast.body, visitor) or false)
+   elseif ast.kind == "module_function" then
+      table.insert(xs, recurse_ast(ast.module, visitor) or false)
+      table.insert(xs, recurse_ast(ast.name, visitor) or false)
+      table.insert(xs, recurse_ast(ast.args, visitor) or false)
+      table.insert(xs, recurse_ast(ast.body, visitor) or false)
    elseif ast.kind == "op" then
       table.insert(xs, recurse_ast(ast.e1, visitor) or false)
       local p1 = ast.e1.op and ast.e1.op.prec or false
@@ -885,7 +898,7 @@ local spaced_op = {
    ["%"] = true,
    ["^"] = true,
 }
-local function pretty_print_ast(ast)
+function tl.pretty_print_ast(ast)
    local indent = 0
    local visit = {
       ["statements"] = {
@@ -1141,6 +1154,26 @@ table.insert(out, "end")
 return table.concat(out)
 end,
 },
+["module_function"] = {
+   ["before"] = function ()
+   indent = indent + 1
+end,
+["after"] = function (node, children)
+local out = {}
+table.insert(out, "function ")
+table.insert(out, children[1])
+table.insert(out, ".")
+table.insert(out, children[2])
+table.insert(out, "(")
+table.insert(out, children[3])
+table.insert(out, ")\n")
+table.insert(out, children[4])
+indent = indent - 1
+table.insert(out,("   "):rep(indent))
+table.insert(out, "end")
+return table.concat(out)
+end,
+},
 ["function"] = {
    ["before"] = function ()
    indent = indent + 1
@@ -1317,7 +1350,7 @@ local op_types = {
       },
    },
 }
-local function type_check(ast)
+function tl.type_check(ast)
    local st = {
       [1] = {
          ["require"] = {
@@ -1527,6 +1560,18 @@ local function type_check(ast)
       end
       return t
    end
+   local function find_var(node)
+      for i =#st,1,- 1 do
+         local scope = st[i]
+         if scope[node.tk] then
+            return scope[node.tk]
+         end
+      end
+      return{
+         ["typename"] = "unknown",
+         ["tk"] = node.tk,
+      }
+   end
    local function add_var(var, valtype)
       st[#st][var] = valtype
    end
@@ -1699,6 +1744,27 @@ end,
    }
 end,
 },
+["module_function"] = {
+   ["after"] = function (node, children)
+   local var = find_var(node.module)
+   if var.typename == "table" then
+      var.fields[node.name.tk] = {
+         ["typename"] = "function",
+         ["args"] = children[3],
+         ["rets"] = children[4],
+      }
+   else
+      table.insert(errors, {
+         ["y"] = node.y,
+         ["x"] = node.x,
+         ["err"] = "not a module: " .. node.module.tk,
+      })
+   end
+   node.type = {
+      ["typename"] = "none",
+   }
+end,
+},
 ["function"] = {
    ["after"] = function (node, children)
    node.type = {
@@ -1753,17 +1819,7 @@ end,
 },
 ["variable"] = {
    ["after"] = function (node, _)
-   for i =#st,1,- 1 do
-      local scope = st[i]
-      if scope[node.tk] then
-         node.type = scope[node.tk]
-         return scope[node.tk]
-      end
-   end
-   node.type = {
-      ["typename"] = "unknown",
-      ["tk"] = node.tk,
-   }
+   node.type = find_var(node)
 end,
 },
 }
@@ -1791,10 +1847,4 @@ end
 recurse_ast(ast, visit)
 return errors
 end
-return{
-   ["lex"] = lex,
-   ["parse_program"] = parse_program,
-   ["pretty_print_ast"] = pretty_print_ast,
-   ["pretty_print_tokens"] = pretty_print_tokens,
-   ["type_check"] = type_check,
-}
+return tl
