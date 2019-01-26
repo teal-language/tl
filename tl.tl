@@ -1568,6 +1568,14 @@ function tl.type_check(ast)
       for _, arg in ipairs(node.args) do
          add_var(arg.tk, arg.decltype or { typename = "unknown" })
       end
+      -- HACK for recursive functions
+      if node.name then
+         add_var(node.name.tk, {
+            typename = "function",
+            args = node.args,
+            rets = { typename = "unknown" },
+         })
+      end
    end
 
    local function end_function_scope()
@@ -1737,7 +1745,11 @@ function tl.type_check(ast)
          end,
       },
       ["function"] = {
+         before = function(node: table)
+            begin_function_scope(node)
+         end,
          after = function(node: table, children: table)
+            end_function_scope()
             -- children[1] args
             -- children[2] body
             node.type = {

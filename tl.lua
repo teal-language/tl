@@ -1624,6 +1624,15 @@ function tl.type_check(ast)
             ["typename"] = "unknown",
          })
       end
+      if node.name then
+         add_var(node.name.tk, {
+            ["typename"] = "function",
+            ["args"] = node.args,
+            ["rets"] = {
+               ["typename"] = "unknown",
+            },
+         })
+      end
    end
    local function end_function_scope()
       table.remove(st)
@@ -1828,15 +1837,19 @@ node.type = {
 end,
 },
 ["function"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "function",
-      ["args"] = children[1],
-      ["rets"] = {
-         ["typename"] = "unknown",
-      },
-   }
-   return node.type
+   ["before"] = function (node)
+   begin_function_scope(node)
+end,
+["after"] = function (node, children)
+end_function_scope()
+node.type = {
+   ["typename"] = "function",
+   ["args"] = children[1],
+   ["rets"] = {
+      ["typename"] = "unknown",
+   },
+}
+return node.type
 end,
 },
 ["op"] = {
