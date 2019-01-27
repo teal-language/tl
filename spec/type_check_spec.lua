@@ -60,7 +60,7 @@ describe("type_check", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: @methcall", errors[1].err, 1, true)
+      assert.match("error in argument 1:", errors[1].err, 1, true)
    end)
 
    it("+", function()
