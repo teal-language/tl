@@ -375,6 +375,13 @@ local function parse_type(tokens, i, errs)
          ["args"] = {},
          ["rets"] = {},
       }
+   elseif tokens[i].tk == "{" then
+      i = i + 1
+      local node = new_node(tokens, i, "typedecl")
+      node.typename = "array"
+      i, node.elements = parse_type(tokens, i, errs)
+      i = verify_tk(tokens, i, errs, "}")
+      return i, node
    end
    return fail(tokens, i, errs)
 end
@@ -1626,8 +1633,11 @@ function tl.type_check(ast)
       assert(type(t2) == "table")
       if t2.typename == "any" then
          return true
-      end
-      if t1.typename ~= t2.typename then
+      elseif t1.typename == "array" and t2.typename == "table" then
+         return true
+      elseif t1.typename == "array" and t2.typename == "array" then
+         return match_type(node, t1.elements, t2.elements)
+      elseif t1.typename ~= t2.typename then
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
@@ -1990,7 +2000,13 @@ end,
          node.type = INVALID
       end
    elseif node.op.op == "@index" then
-      node.type = match_table_key(node, a, b)
+      a = untuple(a)
+      b = untuple(b)
+      if a.typename == "array" and b.typename == "number" then
+         node.type = a.elements
+      else
+         node.type = match_table_key(node, a, b)
+      end
    elseif node.op.op == "." then
       node.type = match_table_key(node, a, b)
    elseif op_types[node.op.op] then

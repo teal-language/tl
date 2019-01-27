@@ -31,7 +31,7 @@ local keywords = {
    ["while"] = true,
 }
 
-function tl.lex(input: string): table
+function tl.lex(input: string): {table}
    local tokens = {}
 
    local state = "any"
@@ -240,7 +240,7 @@ local should_indent = {
    ["function"] = true,
 }
 
-function tl.pretty_print_tokens(tokens: table): string
+function tl.pretty_print_tokens(tokens: {table}): string
    local y = 1
    local out = {}
    local kind: string = nil
@@ -288,7 +288,7 @@ local parse_expression: function
 local parse_statements: function
 local parse_argument_list: function
 
-local function fail(tokens: table, i: number, errs: table): number
+local function fail(tokens: {table}, i: number, errs: {table}): number
    local tks = {}
    for x = i, i + 10 do
       if tokens[x] then
@@ -299,26 +299,26 @@ local function fail(tokens: table, i: number, errs: table): number
    return i + 1
 end
 
-local function verify_tk(tokens: table, i: number, errs: table, tk: string): number
+local function verify_tk(tokens: {table}, i: number, errs: {table}, tk: string): number
    if tokens[i].tk == tk then
       return i + 1
    end
    return fail(tokens, i, errs)
 end
 
-local function new_node(tokens: table, i: number, kind): table
+local function new_node(tokens: {table}, i: number, kind): table
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
 
-local function verify_kind(tokens: table, i: number, errs: table, kind: string, node_kind): number, table
+local function verify_kind(tokens: {table}, i: number, errs: {table}, kind: string, node_kind): number, table
    if tokens[i].kind == kind then
       return i + 1, new_node(tokens, i, node_kind)
    end
    return fail(tokens, i, errs)
 end
 
-local function parse_table_item(tokens: table, i: number, errs: table, n: number): number, table, number
+local function parse_table_item(tokens: {table}, i: number, errs: {table}, n: number): number, table, number
    local node: table = new_node(tokens, i, "table_item")
    if tokens[i].tk == "[" then
       i = i + 1
@@ -341,7 +341,7 @@ local function parse_table_item(tokens: table, i: number, errs: table, n: number
    end
 end
 
-local function parse_list(tokens: table, i: number, errs: table, node: table, close, is_sep: boolean, parse_item: function): number, table
+local function parse_list(tokens: {table}, i: number, errs: {table}, node: table, close, is_sep: boolean, parse_item: function): number, table
    if type(close) == "string" then
       close = { [close] = true }
    end
@@ -363,7 +363,7 @@ local function parse_list(tokens: table, i: number, errs: table, node: table, cl
    return i, node
 end
 
-local function parse_bracket_list(tokens: table, i: number, errs: table, node_kind: string, open: string, close, is_sep: boolean, parse_item: function): number, table
+local function parse_bracket_list(tokens: {table}, i: number, errs: {table}, node_kind: string, open: string, close, is_sep: boolean, parse_item: function): number, table
    local node: table = new_node(tokens, i, node_kind)
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, node, close, is_sep, parse_item)
@@ -371,11 +371,11 @@ local function parse_bracket_list(tokens: table, i: number, errs: table, node_ki
    return i, node
 end
 
-local function parse_table_literal(tokens: table, i: number, errs: table): number, table
+local function parse_table_literal(tokens: {table}, i: number, errs: {table}): number, table
    return parse_bracket_list(tokens, i, errs, "table_literal", "{", "}", false, parse_table_item)
 end
 
-local function parse_trying_list(tokens: table, i: number, errs: table, node: table, parse_item: function): number, table
+local function parse_trying_list(tokens: {table}, i: number, errs: {table}, node: table, parse_item: function): number, table
    local item
    i, item = parse_item(tokens, i, errs)
    table.insert(node, item)
@@ -389,7 +389,7 @@ local function parse_trying_list(tokens: table, i: number, errs: table, node: ta
    return i, node
 end
 
-local function parse_type(tokens: table, i: number, errs: table): number, table
+local function parse_type(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i].tk == "string"
       or tokens[i].tk == "boolean"
       or tokens[i].tk == "number" then
@@ -398,11 +398,18 @@ local function parse_type(tokens: table, i: number, errs: table): number, table
       return i + 1, { kind = "typedecl", typename = "table", fields = {} }
    elseif tokens[i].tk == "function" then
       return i + 1, { kind = "typedecl", typename = "function", args = {}, rets = {} }
+   elseif tokens[i].tk == "{" then
+      i = i + 1
+      local node: table = new_node(tokens, i, "typedecl")
+      node.typename = "array"
+      i, node.elements = parse_type(tokens, i, errs)
+      i = verify_tk(tokens, i, errs, "}")
+      return i, node
    end
    return fail(tokens, i, errs)
 end
 
-local function parse_type_list(tokens: table, i: number, errs: table): number, table
+local function parse_type_list(tokens: {table}, i: number, errs: {table}): number, table
    local node = new_node(tokens, i, "type_list")
    if tokens[i].tk == ":" then
       i = i + 1
@@ -411,7 +418,7 @@ local function parse_type_list(tokens: table, i: number, errs: table): number, t
    return i, node
 end
 
-local function parse_function_value(tokens: table, i: number, errs: table): number, table
+local function parse_function_value(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.args = parse_argument_list(tokens, i, errs)
@@ -421,7 +428,7 @@ local function parse_function_value(tokens: table, i: number, errs: table): numb
    return i, node
 end
 
-local function parse_literal(tokens: table, i: number, errs: table): number, table
+local function parse_literal(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i].tk == "{" then
       return parse_table_literal(tokens, i, errs)
    elseif tokens[i].kind == "..." then
@@ -528,7 +535,7 @@ do
    local P: function
    local E: function
 
-   P = function(tokens: table, i: number, errs: table, operators: table, operands: table): number
+   P = function(tokens: {table}, i: number, errs: {table}, operators: table, operands: table): number
       if is_unop(tokens[i]) then
          push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 1, op = tokens[i].tk }, operators, operands)
          i = i + 1
@@ -551,14 +558,14 @@ do
       end
    end
    
-   local function push_arguments(tokens: table, i: number, errs: table, operands: table): number
+   local function push_arguments(tokens: {table}, i: number, errs: {table}, operands: table): number
       local args
       i, args = parse_bracket_list(tokens, i, errs, "expression_list", "(", ")", true, parse_expression)
       table.insert(operands, args)
       return i
    end
 
-   local function push_index(tokens: table, i: number, errs: table, operands: table): number
+   local function push_index(tokens: {table}, i: number, errs: {table}, operands: table): number
       local arg
       i = verify_tk(tokens, i, errs, "[")
       i, arg = parse_expression(tokens, i, errs)
@@ -567,7 +574,7 @@ do
       return i
    end
 
-   E = function(tokens: table, i: number, errs: table, operators: table, operands: table): number
+   E = function(tokens: {table}, i: number, errs: {table}, operators: table, operands: table): number
       i = P(tokens, i, errs, operators, operands)
       while tokens[i] do
          if tokens[i].kind == "string" or tokens[i].kind == "{" then
@@ -602,7 +609,7 @@ do
       return i
    end
 
-   parse_expression = function(tokens: table, i: number, errs: table): number, table
+   parse_expression = function(tokens: {table}, i: number, errs: {table}): number, table
       local operands = {}
       local operators = {}
       table.insert(operators, "sentinel")
@@ -611,14 +618,14 @@ do
    end
 end
 
-local function parse_variable(tokens: table, i: number, errs: table): number, table
+local function parse_variable(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i].tk == "..." then
       return verify_kind(tokens, i, errs, "...")
    end
    return verify_kind(tokens, i, errs, "word", "variable")
 end
 
-local function parse_argument(tokens: table, i: number, errs: table): number, table
+local function parse_argument(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i].tk == "..." then
       return verify_kind(tokens, i, errs, "...")
    end
@@ -631,11 +638,11 @@ local function parse_argument(tokens: table, i: number, errs: table): number, ta
    return i, node
 end
 
-parse_argument_list = function(tokens: table, i: number, errs: table): number, table
+parse_argument_list = function(tokens: {table}, i: number, errs: {table}): number, table
    return parse_bracket_list(tokens, i, errs, "argument_list", "(", ")", true, parse_argument)
 end
 
-local function parse_local_function(tokens: table, i: number, errs: table): number, table
+local function parse_local_function(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "local_function")
    i = verify_tk(tokens, i, errs, "local")
    i = verify_tk(tokens, i, errs, "function")
@@ -647,7 +654,7 @@ local function parse_local_function(tokens: table, i: number, errs: table): numb
    return i, node
 end
 
-local function parse_function(tokens: table, i: number, errs: table): number, table
+local function parse_function(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "global_function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
@@ -664,7 +671,7 @@ local function parse_function(tokens: table, i: number, errs: table): number, ta
    return i, node
 end
 
-local function parse_if(tokens: table, i: number, errs: table): number, table
+local function parse_if(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "if")
    i = verify_tk(tokens, i, errs, "if")
    i, node.exp = parse_expression(tokens, i, errs)
@@ -687,7 +694,7 @@ local function parse_if(tokens: table, i: number, errs: table): number, table
    return i, node
 end
 
-local function parse_while(tokens: table, i: number, errs: table): number, table
+local function parse_while(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "while")
    i = verify_tk(tokens, i, errs, "while")
    i, node.exp = parse_expression(tokens, i, errs)
@@ -697,7 +704,7 @@ local function parse_while(tokens: table, i: number, errs: table): number, table
    return i, node
 end
 
-local function parse_fornum(tokens: table, i: number, errs: table): number, table
+local function parse_fornum(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "fornum")
    i = i + 1
    i, node.var = verify_kind(tokens, i, errs, "word", "variable")
@@ -715,7 +722,7 @@ local function parse_fornum(tokens: table, i: number, errs: table): number, tabl
    return i, node
 end
 
-local function parse_forin(tokens: table, i: number, errs: table): number, table
+local function parse_forin(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
@@ -728,7 +735,7 @@ local function parse_forin(tokens: table, i: number, errs: table): number, table
    return i, node
 end
 
-local function parse_for(tokens: table, i: number, errs: table): number, table
+local function parse_for(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i+2].tk == "=" then
       return parse_fornum(tokens, i, errs)
    else
@@ -736,7 +743,7 @@ local function parse_for(tokens: table, i: number, errs: table): number, table
    end
 end
 
-local function parse_repeat(tokens: table, i: number, errs: table): number, table
+local function parse_repeat(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "repeat")
    i = verify_tk(tokens, i, errs, "repeat")
    i, node.body = parse_statements(tokens, i, errs)
@@ -745,7 +752,7 @@ local function parse_repeat(tokens: table, i: number, errs: table): number, tabl
    return i, node
 end
 
-local function parse_do(tokens: table, i: number, errs: table): number, table
+local function parse_do(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "do")
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
@@ -753,7 +760,7 @@ local function parse_do(tokens: table, i: number, errs: table): number, table
    return i, node
 end
 
-local function parse_break(tokens: table, i: number, errs: table): number, table
+local function parse_break(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "break")
    i = verify_tk(tokens, i, errs, "break")
    return i, node
@@ -766,7 +773,7 @@ local stop_statement_list = {
    ["until"] = true,
 }
 
-local function parse_return(tokens: table, i: number, errs: table): number, table
+local function parse_return(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "return")
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
@@ -774,7 +781,7 @@ local function parse_return(tokens: table, i: number, errs: table): number, tabl
    return i, node
 end
 
-local function parse_call_or_assignment(tokens: table, i: number, errs: table, is_local: boolean): number, table
+local function parse_call_or_assignment(tokens: {table}, i: number, errs: {table}, is_local: boolean): number, table
    local asgn: table = new_node(tokens, i, "assignment")
    if is_local then
       asgn.kind = "local_declaration"
@@ -806,7 +813,7 @@ local function parse_call_or_assignment(tokens: table, i: number, errs: table, i
    return fail(tokens, i, errs)
 end
 
-local function parse_statement(tokens: table, i: number, errs: table): number, table
+local function parse_statement(tokens: {table}, i: number, errs: {table}): number, table
    if tokens[i].tk == "local" then
       if tokens[i+1].tk == "function" then
          return parse_local_function(tokens, i, errs)
@@ -836,7 +843,7 @@ local function parse_statement(tokens: table, i: number, errs: table): number, t
    return fail(tokens, i, errs)
 end
 
-parse_statements = function(tokens: table, i: number, errs: table): number, table
+parse_statements = function(tokens: {table}, i: number, errs: {table}): number, table
    local node: table = new_node(tokens, i, "statements")
    while tokens[i] do
       if stop_statement_list[tokens[i].tk] then
@@ -852,7 +859,7 @@ parse_statements = function(tokens: table, i: number, errs: table): number, tabl
    return i, node
 end
 
-function tl.parse_program(tokens: table, errs: table): number, table
+function tl.parse_program(tokens: {table}, errs: {table}): number, table
    return parse_statements(tokens, 1, errs)
 end
 
@@ -958,6 +965,7 @@ local function recurse_ast(ast: table, visitor: table)
           or ast.kind == "number"
           or ast.kind == "break"
           or ast.kind == "nil"
+          or ast.kind == "array"
           or ast.kind == "..."
           or ast.kind == "typedecl"
           or ast.kind == "boolean" then
@@ -1394,6 +1402,7 @@ function tl.pretty_print_ast(ast: table)
    visit["string"] = visit["variable"]
    visit["number"] = visit["variable"]
    visit["nil"] = visit["variable"]
+   visit["array"] = visit["variable"]
    visit["boolean"] = visit["variable"]
    visit["..."] = visit["variable"]
 
@@ -1452,6 +1461,7 @@ local op_types = {
       [1] = {
          ["string"] = NUMBER,
          ["table"] = NUMBER,
+         ["array"] = NUMBER,
       }
    },
    ["+"] = numeric_binop,
@@ -1540,13 +1550,17 @@ function tl.type_check(ast)
    }
    local errors = {}
    
+   -- t1 is-a t2
    local function match_type(node: table, t1: table, t2: table)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
       if t2.typename == "any" then
          return true
-      end
-      if t1.typename ~= t2.typename then
+      elseif t1.typename == "array" and t2.typename == "table" then
+         return true
+      elseif t1.typename == "array" and t2.typename == "array" then
+         return match_type(node, t1.elements, t2.elements)
+      elseif t1.typename ~= t2.typename then
          -- TODO typecheck complex types
          table.insert(errors, { y = node.y, x = node.x, err = "mismatch: " .. (node.tk or node.op.op) .. " " .. inspect(t1) .. " / " .. inspect(t2) })
          return false
@@ -1648,7 +1662,7 @@ function tl.type_check(ast)
       table.remove(st)
    end
 
-   local function flatten_list(list: table): table
+   local function flatten_list(list: {table}): {table}
       local vals = {}
       for i = 1, #list - 1 do
          table.insert(vals, untuple(list[i]))
@@ -1866,7 +1880,13 @@ function tl.type_check(ast)
                   node.type = INVALID
                end
             elseif node.op.op == "@index" then
-               node.type = match_table_key(node, a, b)
+               a = untuple(a)
+               b = untuple(b)
+               if a.typename == "array" and b.typename == "number" then
+                  node.type = a.elements
+               else
+                  node.type = match_table_key(node, a, b)
+               end
             elseif node.op.op == "." then
                node.type = match_table_key(node, a, b)
             elseif op_types[node.op.op] then
@@ -1921,6 +1941,7 @@ function tl.type_check(ast)
    visit["number"] = visit["string"]
    visit["nil"] = visit["string"]
    visit["boolean"] = visit["string"]
+   visit["array"] = visit["string"]
    visit["..."] = visit["string"]
 
    visit["@afterafter"] = function(node: table)
