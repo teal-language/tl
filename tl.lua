@@ -24,9 +24,6 @@ local keywords = {
    ["until"] = true,
    ["while"] = true,
 }
-function tl.record()
-
-end
 function tl.number()
 
 end
@@ -39,7 +36,13 @@ end
 function tl.nominal()
 
 end
+function tl.record()
+
+end
 function tl.array()
+
+end
+function tl.map(k, v)
 
 end
 function tl.fun()
@@ -296,6 +299,7 @@ local Type = tl.record({
    ["tk"] = tl.string,
    ["keys"] = tl.nominal("Type"),
    ["values"] = tl.nominal("Type"),
+   ["fields"] = tl.map(tl.string, tl.nominal("Type")),
    ["elements"] = tl.nominal("Type"),
    ["args"] = tl.nominal("Node"),
    ["rets"] = tl.nominal("Node"),
@@ -1702,6 +1706,7 @@ local tl_type_declarators = {
    ["string"] = "string",
    ["nominal"] = "nominal",
    ["array"] = "array",
+   ["map"] = "map",
    ["fun"] = "function",
 }
 function tl.type_check(ast)
@@ -2306,6 +2311,15 @@ function tl.type_check(ast)
             ["type"] = {
                ["typename"] = "array",
                ["elements"] = args[1].type,
+            },
+         }
+      elseif ctor.type.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "map",
+               ["keys"] = args[1].type,
+               ["values"] = args[2].type,
             },
          }
       elseif ctor.type.typename == "record" and args[1].typename == "record" then

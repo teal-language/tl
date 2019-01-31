@@ -31,12 +31,13 @@ local keywords: {string:boolean} = {
    ["while"] = true,
 }
 
-function tl.record() end
 function tl.number() end
 function tl.string() end
 function tl.boolean() end
 function tl.nominal() end
+function tl.record() end
 function tl.array() end
+function tl.map(k, v) end
 function tl.fun() end
 
 local Token = tl.record {
@@ -320,6 +321,9 @@ local Type = tl.record {
    -- map
    keys = tl.nominal("Type"),
    values = tl.nominal("Type"),
+
+   -- records
+   fields = tl.map(tl.string, tl.nominal("Type")),
 
    -- array
    elements = tl.nominal("Type"),
@@ -1041,7 +1045,7 @@ end
 --------------------------------------------------------------------------------
 
 local VisitorCallbacks = tl.record {
-   before = tl.fun ({ tl.nominal "Node" }, {}),
+   before = tl.fun ({ tl.nominal "Node", tl.array(tl.nominal "Node") }, {}),
    before_statement = tl.fun ({ tl.nominal "Node" }, {}),
    after = tl.fun ({ tl.nominal "Node", tl.array(tl.nominal "Node") }, {}),
 }
@@ -1741,6 +1745,7 @@ local tl_type_declarators: {string:string} = {
    ["string"] = "string",
    ["nominal"] = "nominal",
    ["array"] = "array",
+   ["map"] = "map",
    ["fun"] = "function",
 }
 
@@ -2142,6 +2147,15 @@ function tl.type_check(ast: Node)
          return {
             typename = "typetype",
             type = { typename = "array", elements = args[1].type }
+         }
+      elseif ctor.type.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
+         return {
+            typename = "typetype",
+            type = {
+               typename = "map",
+               keys = args[1].type,
+               values = args[2].type,
+            }
          }
       elseif ctor.type.typename == "record" and args[1].typename == "record" then
          return {
