@@ -352,14 +352,14 @@ local function fail(tokens, i, errs)
       table.insert(errs, {
          ["y"] =- 1,
          ["x"] =- 1,
-         ["msg"] = "EOF " .. debug.traceback(),
+         ["msg"] = "$EOF$",
       })
       return i + 1
    end
    table.insert(errs, {
       ["y"] = tokens[i].y,
       ["x"] = tokens[i].x,
-      ["msg"] = table.concat(tks, " ") .. debug.traceback(),
+      ["msg"] = table.concat(tks, " "),
    })
    return i + 1
 end
@@ -617,6 +617,9 @@ local function pop_operator(operators, operands)
    if operators[#operators].arity == 2 then
       local t2 = table.remove(operands)
       local t1 = table.remove(operands)
+      if not t1 or not t2 then
+         return false
+      end
       local operator = table.remove(operators)
       if operator.op == "@funcall" and t1.op and t1.op.op == ":" then
          operator.op = "@methcall"
@@ -649,24 +652,32 @@ local function pop_operator(operators, operands)
          ["e1"] = t1,
       })
    end
+   return true
 end
 local function push_operator(op, operators, operands)
    while prec(operators[#operators]) >= prec(op) do
-      pop_operator(operators, operands)
+      local ok = pop_operator(operators, operands)
+      if not ok then
+         return false
+      end
    end
    op.prec = assert(precedences[op.arity][op.op])
    table.insert(operators, op)
+   return true
 end
 local P
 local E
 P = function (tokens, i, errs, operators, operands)
 if is_unop(tokens[i]) then
-   push_operator({
+   local ok = push_operator({
       ["y"] = tokens[i].y,
       ["x"] = tokens[i].x,
       ["arity"] = 1,
       ["op"] = tokens[i].tk,
    }, operators, operands)
+   if not ok then
+      return fail(tokens, i, errs)
+   end
    i = i + 1
    i = P(tokens, i, errs, operators, operands)
    return i
@@ -704,12 +715,15 @@ E = function (tokens, i, errs, operators, operands)
 i = P(tokens, i, errs, operators, operands)
 while tokens[i] do
    if tokens[i].kind == "string" or tokens[i].kind == "{" then
-      push_operator({
+      local ok = push_operator({
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
          ["arity"] = 2,
          ["op"] = "@funcall",
       }, operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
       local arglist = new_node(tokens, i, "argument_list")
       local arg
       if tokens[i].kind == "string" then
@@ -721,28 +735,37 @@ while tokens[i] do
       table.insert(arglist, arg)
       table.insert(operands, arglist)
    elseif tokens[i].tk == "(" then
-      push_operator({
+      local ok = push_operator({
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
          ["arity"] = 2,
          ["op"] = "@funcall",
       }, operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
       i = push_arguments(tokens, i, errs, operands)
    elseif tokens[i].tk == "[" then
-      push_operator({
+      local ok = push_operator({
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
          ["arity"] = 2,
          ["op"] = "@index",
       }, operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
       i = push_index(tokens, i, errs, operands)
    elseif is_binop(tokens[i]) then
-      push_operator({
+      local ok = push_operator({
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
          ["arity"] = 2,
          ["op"] = tokens[i].tk,
       }, operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
       i = i + 1
       i = P(tokens, i, errs, operators, operands)
    else
@@ -750,7 +773,10 @@ while tokens[i] do
    end
 end
 while operators[#operators] ~= sentinel do
-   pop_operator(operators, operands)
+   local ok = pop_operator(operators, operands)
+   if not ok then
+      return fail(tokens, i, errs)
+   end
 end
 return i
 end
