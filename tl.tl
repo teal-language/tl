@@ -4,7 +4,7 @@ local tl = {}
 -- Lexer
 --------------------------------------------------------------------------------
 
-local inspect = require"inspect"
+local inspect: function(any):string = require"inspect"
 
 local keywords: {string:boolean} = {
    ["and"] = true,   
@@ -342,7 +342,7 @@ local Operator = tl.record {
    prec = tl.number,
 }
 
-local Node = tl.record {
+local Node = tl.record(tl.nominal"Node", {
    y = tl.number,
    x = tl.number,
    tk = tl.string,
@@ -383,7 +383,7 @@ local Node = tl.record {
    typename = tl.string,
    type = tl.nominal("Type"),
    decltype = tl.nominal("Type"),
-}
+})
 
 local parse_expression: function({Token}, number, {ParseError}): number, Node, number
 local parse_statements: function({Token}, number, {ParseError}): number, Node
@@ -1046,7 +1046,7 @@ end
 
 local VisitorCallbacks = tl.record {
    before = tl.fun ({ tl.nominal "Node", tl.array(tl.nominal "Node") }, {}),
-   before_statement = tl.fun ({ tl.nominal "Node" }, {}),
+   before_statements = tl.fun ({ tl.nominal "Node" }, {}),
    after = tl.fun ({ tl.nominal "Node", tl.array(tl.nominal "Node") }, {}),
 }
 
@@ -1215,7 +1215,7 @@ function tl.pretty_print_ast(ast: Node)
 
    local visit: {string:VisitorCallbacks} = {
       ["statements"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             for _, child in ipairs(children) do
                table.insert(out, ("   "):rep(indent))
@@ -1229,7 +1229,7 @@ function tl.pretty_print_ast(ast: Node)
          end
       },
       ["local_declaration"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "local ")
             table.insert(out, children[1])
@@ -1241,7 +1241,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["assignment"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, children[1])
             table.insert(out, " = ")
@@ -1253,7 +1253,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "if ")
             table.insert(out, children[1])
@@ -1279,7 +1279,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "while ")
             table.insert(out, children[1])
@@ -1295,7 +1295,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "repeat\n")
             table.insert(out, children[1])
@@ -1310,7 +1310,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "do\n")
             table.insert(out, children[1])
@@ -1324,7 +1324,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "for ")
             table.insert(out, children[1])
@@ -1342,7 +1342,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "for ")
             table.insert(out, children[1])
@@ -1363,7 +1363,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["return"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "return ")
             table.insert(out, children[1])
@@ -1371,14 +1371,14 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["break"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "break")
             return table.concat(out)
          end,
       },
       ["elseif"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, children[1])
             table.insert(out, " then\n")
@@ -1387,7 +1387,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["variables"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             for i, child in ipairs(children) do
                if i > 1 then
@@ -1402,7 +1402,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             if #children == 0 then
                indent = indent - 1
@@ -1421,7 +1421,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["table_item"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "[")
             table.insert(out, children[1])
@@ -1435,7 +1435,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "local function ")
             table.insert(out, children[1])
@@ -1453,7 +1453,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "function ")
             table.insert(out, children[1])
@@ -1471,7 +1471,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "function ")
             table.insert(out, children[1])
@@ -1491,7 +1491,7 @@ function tl.pretty_print_ast(ast: Node)
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, "function(")
             table.insert(out, children[1])
@@ -1504,7 +1504,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["op"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             if node.op.op == "@funcall" then
                table.insert(out, children[1])
@@ -1566,7 +1566,7 @@ function tl.pretty_print_ast(ast: Node)
          end,
       },
       ["variable"] = {
-         after = function(node: Node, children: {table})
+         after = function(node: Node, children: {string})
             local out = {}
             table.insert(out, node.tk)
             return table.concat(out)
@@ -1645,10 +1645,18 @@ local equality_binop = {
          ["nil"] = BOOLEAN,
       },
       ["record"] = {
+         ["arrayrecord"] = BOOLEAN,
          ["record"] = BOOLEAN,
          ["nil"] = BOOLEAN,
       },
       ["array"] = {
+         ["arrayrecord"] = BOOLEAN,
+         ["array"] = BOOLEAN,
+         ["nil"] = BOOLEAN,
+      },
+      ["arrayrecord"] = {
+         ["arrayrecord"] = BOOLEAN,
+         ["record"] = BOOLEAN,
          ["array"] = BOOLEAN,
          ["nil"] = BOOLEAN,
       },
@@ -1677,7 +1685,13 @@ local boolean_binop = {
          ["function"] = FUNCTION,
          ["boolean"] = BOOLEAN,
       },
+      ["array"] = {
+         ["boolean"] = BOOLEAN,
+      },
       ["record"] = {
+         ["boolean"] = BOOLEAN,
+      },
+      ["arrayrecord"] = {
          ["boolean"] = BOOLEAN,
       },
       ["map"] = {
@@ -1689,6 +1703,7 @@ local boolean_binop = {
 local op_types: {string:{number:{string:Type}}} = {
    ["#"] = {
       [1] = {
+         ["arrayrecord"] = NUMBER,
          ["string"] = NUMBER,
          ["array"] = NUMBER,
          ["map"] = NUMBER,
@@ -1718,6 +1733,7 @@ local op_types: {string:{number:{string:Type}}} = {
          ["string"] = BOOLEAN,
          ["boolean"] = BOOLEAN,
          ["record"] = BOOLEAN,
+         ["arrayrecord"] = BOOLEAN,
          ["array"] = BOOLEAN,
          ["map"] = BOOLEAN,
       }
@@ -1879,6 +1895,13 @@ function tl.type_check(ast: Node)
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
+      if t2.typename == "tuple" and t1.typename ~= "tuple" then
+         t1 = {
+            typename = "tuple",
+            [1] = t1,
+         }
+      end
+
       if t2.typename == "any" then
          return true
       elseif t1.typename == "nil" then -- TODO nilable
@@ -1891,23 +1914,30 @@ function tl.type_check(ast: Node)
          return is_a(t1, t2)
       elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map") then
          return true
-      elseif t1.typename == "array" and t2.typename == "array" then
+      elseif (t1.typename == "array" or t1.typename == "arrayrecord") and (t2.typename == "array" or t2.typename == "arrayrecord") then
          return is_a(t1.elements, t2.elements)
       elseif t1.typename == "array" and t2.typename == "map" then
          return is_a(NUMBER, t2.keys) and is_a(t1.elements, t2.values)
       elseif t1.typename == "map" and t2.typename == "array" then
          return is_a(t1.keys, NUMBER) and is_a(t1.values, t2.elements)
-      elseif t1.typename == "record" and t2.typename == "map" then
+      elseif (t1.typename == "record" or t1.typename == "arrayrecord") and t2.typename == "map" then
          if not is_a(STRING, t2.keys) then
             return false
          end
-         for _, f in ipairs(t1.fields) do
+         for _, f in pairs(t1.fields) do
             if not is_a(f, t2.values) then
                return false
             end
          end
          return true
-      elseif t1.typename == "map" and t2.typename == "record" then
+      elseif (t1.typename == "record" or t1.typename == "arrayrecord") and (t2.typename == "record" and t2.typename == "arrayrecord") then
+         for k, f in pairs(t1.fields) do
+            if not is_a(f, t2.fields[k]) then
+               return false
+            end
+         end
+         return true
+      elseif t1.typename == "map" and (t2.typename == "record" or t2.typename == "arrayrecord") then
          if not is_a(t1.keys, STRING) then
             return false
          end
@@ -1974,7 +2004,6 @@ function tl.type_check(ast: Node)
                local matches, why_not = is_a(arg, f.args[a])
                if not matches then
                   polyerrs[p] = polyerrs[p] or {}
---error(inspect(node))
                   local at = node.e2 and node.e2[a] or node
                   table.insert(polyerrs[p], { y = at.y, x = at.x, err = "error in argument " .. (is_method and a-1 or a) .. ": " .. inspect(arg) .. " is not a " .. inspect(f.args[a]) .. ": " .. (why_not or "") })
                   ok = false
@@ -2036,7 +2065,7 @@ function tl.type_check(ast: Node)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
 
-      if tbl.typename ~= "record" then
+      if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
          table.insert(errors, { y = node.y, x = node.x, err = "not a table: " .. inspect(tbl) })
          return INVALID
       end
@@ -2165,6 +2194,15 @@ function tl.type_check(ast: Node)
                fields = extract_type_fields(node, args[1].fields),
             }
          }
+      elseif ctor.type.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
+         return {
+            typename = "typetype",
+            type = {
+               typename = "arrayrecord",
+               elements = args[1].type,
+               fields = extract_type_fields(node, args[2].fields),
+            }
+         }
       end
       
       return INVALID
@@ -2236,7 +2274,7 @@ function tl.type_check(ast: Node)
          before_statements = function(node: Node, children: {table})
             if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then -- [magic] ipairs
                local t = resolve_unary(node.exp.e2.type)
-               if t.typename == "array" then
+               if (t.typename == "array" or t.typename == "arrayrecord") then
                   add_var(node.vars[1].tk, NUMBER)
                   add_var(node.vars[2].tk, t.elements)
                else
@@ -2371,7 +2409,7 @@ function tl.type_check(ast: Node)
          after = function(node: Node, children: {table})
             end_function_scope()
             local var = find_var(node.module.tk)
-            if var.typename == "record" then
+            if (var.typename == "record" or var.typename == "arrayrecord") then
                var.fields[node.name.tk] = {
                   typename = "function",
                   args = children[3],
@@ -2425,10 +2463,11 @@ function tl.type_check(ast: Node)
             elseif node.op.op == "@index" then
                a = resolve_unary(a)
                b = resolve_unary(b)
-               if a.typename == "array" then
+               if a.typename == "array" or a.typename == "arrayrecord" then
                   if is_a(b, NUMBER) then
                      node.type = a.elements
                   else
+                     -- TODO what if we []-index an arrayrecord to get at the fields?
                      table.insert(errors, { y = node.y, x = node.x, err = "wrong index type: " .. inspect(b) .. ", expected number" })
                      node.type = INVALID
                   end

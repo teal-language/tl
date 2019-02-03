@@ -312,7 +312,7 @@ local Operator = tl.record({
    ["op"] = tl.string,
    ["prec"] = tl.number,
 })
-local Node = tl.record({
+local Node = tl.record(tl.nominal("Node"), {
    ["y"] = tl.number,
    ["x"] = tl.number,
    ["tk"] = tl.string,
@@ -1021,8 +1021,9 @@ end
 local VisitorCallbacks = tl.record({
    ["before"] = tl.fun({
       [1] = tl.nominal("Node"),
+      [2] = tl.array(tl.nominal("Node")),
    }, {}),
-   ["before_statement"] = tl.fun({
+   ["before_statements"] = tl.fun({
       [1] = tl.nominal("Node"),
    }, {}),
    ["after"] = tl.fun({
@@ -1609,10 +1610,18 @@ local equality_binop = {
          ["nil"] = BOOLEAN,
       },
       ["record"] = {
+         ["arrayrecord"] = BOOLEAN,
          ["record"] = BOOLEAN,
          ["nil"] = BOOLEAN,
       },
       ["array"] = {
+         ["arrayrecord"] = BOOLEAN,
+         ["array"] = BOOLEAN,
+         ["nil"] = BOOLEAN,
+      },
+      ["arrayrecord"] = {
+         ["arrayrecord"] = BOOLEAN,
+         ["record"] = BOOLEAN,
          ["array"] = BOOLEAN,
          ["nil"] = BOOLEAN,
       },
@@ -1640,7 +1649,13 @@ local boolean_binop = {
          ["function"] = FUNCTION,
          ["boolean"] = BOOLEAN,
       },
+      ["array"] = {
+         ["boolean"] = BOOLEAN,
+      },
       ["record"] = {
+         ["boolean"] = BOOLEAN,
+      },
+      ["arrayrecord"] = {
          ["boolean"] = BOOLEAN,
       },
       ["map"] = {
@@ -1651,6 +1666,7 @@ local boolean_binop = {
 local op_types = {
    ["#"] = {
       [1] = {
+         ["arrayrecord"] = NUMBER,
          ["string"] = NUMBER,
          ["array"] = NUMBER,
          ["map"] = NUMBER,
@@ -1680,6 +1696,7 @@ local op_types = {
          ["string"] = BOOLEAN,
          ["boolean"] = BOOLEAN,
          ["record"] = BOOLEAN,
+         ["arrayrecord"] = BOOLEAN,
          ["array"] = BOOLEAN,
          ["map"] = BOOLEAN,
       },
@@ -2016,6 +2033,12 @@ function tl.type_check(ast)
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
+      if t2.typename == "tuple" and t1.typename ~= "tuple" then
+         t1 = {
+            ["typename"] = "tuple",
+            [1] = t1,
+         }
+      end
       if t2.typename == "any" then
          return true
       elseif t1.typename == "nil" then
@@ -2028,23 +2051,30 @@ function tl.type_check(ast)
          return is_a(t1, t2)
       elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map") then
          return true
-      elseif t1.typename == "array" and t2.typename == "array" then
+      elseif (t1.typename == "array" or t1.typename == "arrayrecord") and (t2.typename == "array" or t2.typename == "arrayrecord") then
          return is_a(t1.elements, t2.elements)
       elseif t1.typename == "array" and t2.typename == "map" then
          return is_a(NUMBER, t2.keys) and is_a(t1.elements, t2.values)
       elseif t1.typename == "map" and t2.typename == "array" then
          return is_a(t1.keys, NUMBER) and is_a(t1.values, t2.elements)
-      elseif t1.typename == "record" and t2.typename == "map" then
+      elseif (t1.typename == "record" or t1.typename == "arrayrecord") and t2.typename == "map" then
          if not is_a(STRING, t2.keys) then
             return false
          end
-         for _, f in ipairs(t1.fields) do
+         for _, f in pairs(t1.fields) do
             if not is_a(f, t2.values) then
                return false
             end
          end
          return true
-      elseif t1.typename == "map" and t2.typename == "record" then
+      elseif (t1.typename == "record" or t1.typename == "arrayrecord") and t2.typename == "record" and t2.typename == "arrayrecord" then
+         for k, f in pairs(t1.fields) do
+            if not is_a(f, t2.fields[k]) then
+               return false
+            end
+         end
+         return true
+      elseif t1.typename == "map" and (t2.typename == "record" or t2.typename == "arrayrecord") then
          if not is_a(t1.keys, STRING) then
             return false
          end
@@ -2190,7 +2220,7 @@ function tl.type_check(ast)
    local function match_record_key(node, tbl, key, orig_tbl)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
-      if tbl.typename ~= "record" then
+      if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
@@ -2330,6 +2360,15 @@ function tl.type_check(ast)
                ["fields"] = extract_type_fields(node, args[1].fields),
             },
          }
+      elseif ctor.type.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "arrayrecord",
+               ["elements"] = args[1].type,
+               ["fields"] = extract_type_fields(node, args[2].fields),
+            },
+         }
       end
       return INVALID
    end
@@ -2418,7 +2457,7 @@ end,
 ["before_statements"] = function (node, children)
 if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then
    local t = resolve_unary(node.exp.e2.type)
-   if t.typename == "array" then
+   if t.typename == "array" or t.typename == "arrayrecord" then
       add_var(node.vars[1].tk, NUMBER)
       add_var(node.vars[2].tk, t.elements)
    else
@@ -2586,7 +2625,7 @@ end,
 ["after"] = function (node, children)
 end_function_scope()
 local var = find_var(node.module.tk)
-if var.typename == "record" then
+if var.typename == "record" or var.typename == "arrayrecord" then
    var.fields[node.name.tk] = {
       ["typename"] = "function",
       ["args"] = children[3],
@@ -2648,7 +2687,7 @@ end,
    elseif node.op.op == "@index" then
       a = resolve_unary(a)
       b = resolve_unary(b)
-      if a.typename == "array" then
+      if a.typename == "array" or a.typename == "arrayrecord" then
          if is_a(b, NUMBER) then
             node.type = a.elements
          else
