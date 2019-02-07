@@ -304,6 +304,8 @@ local Type = tl.record({
    ["args"] = tl.nominal("Node"),
    ["rets"] = tl.nominal("Node"),
    ["vararg"] = tl.boolean,
+   ["name"] = tl.string,
+   ["typevar"] = tl.string,
 })
 local Operator = tl.record({
    ["y"] = tl.number,
@@ -1080,7 +1082,7 @@ local function recurse_ast(ast, visitor)
       table.insert(xs, recurse_ast(ast.vars, visitor) or false)
       table.insert(xs, recurse_ast(ast.exp, visitor) or false)
       if visitor["forin"].before_statements then
-         visitor["forin"].before_statements(ast, xs)
+         visitor["forin"].before_statements(ast)
       end
       table.insert(xs, recurse_ast(ast.body, visitor) or false)
    elseif ast.kind == "fornum" then
@@ -1553,10 +1555,6 @@ local ANY = {
 local NIL = {
    ["typename"] = "nil",
 }
-local ARRAY_OF_ANY = {
-   ["typename"] = "array",
-   ["elements"] = ANY,
-}
 local NUMBER = {
    ["typename"] = "number",
 }
@@ -1565,6 +1563,22 @@ local STRING = {
 }
 local BOOLEAN = {
    ["typename"] = "boolean",
+}
+local ALPHA = {
+   ["typename"] = "typevar",
+   ["typevar"] = "`a",
+}
+local ARRAY_OF_ANY = {
+   ["typename"] = "array",
+   ["elements"] = ANY,
+}
+local ARRAY_OF_STRING = {
+   ["typename"] = "array",
+   ["elements"] = STRING,
+}
+local ARRAY_OF_ALPHA = {
+   ["typename"] = "array",
+   ["elements"] = ALPHA,
 }
 local FUNCTION = {
    ["typename"] = "function",
@@ -1631,38 +1645,6 @@ local equality_binop = {
       },
    },
 }
-local boolean_binop = {
-   [2] = {
-      ["boolean"] = {
-         ["boolean"] = BOOLEAN,
-         ["function"] = FUNCTION,
-      },
-      ["number"] = {
-         ["number"] = NUMBER,
-         ["boolean"] = BOOLEAN,
-      },
-      ["string"] = {
-         ["string"] = STRING,
-         ["boolean"] = BOOLEAN,
-      },
-      ["function"] = {
-         ["function"] = FUNCTION,
-         ["boolean"] = BOOLEAN,
-      },
-      ["array"] = {
-         ["boolean"] = BOOLEAN,
-      },
-      ["record"] = {
-         ["boolean"] = BOOLEAN,
-      },
-      ["arrayrecord"] = {
-         ["boolean"] = BOOLEAN,
-      },
-      ["map"] = {
-         ["boolean"] = BOOLEAN,
-      },
-   },
-}
 local op_types = {
    ["#"] = {
       [1] = {
@@ -1701,8 +1683,73 @@ local op_types = {
          ["map"] = BOOLEAN,
       },
    },
-   ["or"] = boolean_binop,
-   ["and"] = boolean_binop,
+   ["or"] = {
+      [2] = {
+         ["boolean"] = {
+            ["boolean"] = BOOLEAN,
+            ["function"] = FUNCTION,
+         },
+         ["number"] = {
+            ["number"] = NUMBER,
+            ["boolean"] = BOOLEAN,
+         },
+         ["string"] = {
+            ["string"] = STRING,
+            ["boolean"] = BOOLEAN,
+         },
+         ["function"] = {
+            ["function"] = FUNCTION,
+            ["boolean"] = BOOLEAN,
+         },
+         ["array"] = {
+            ["boolean"] = BOOLEAN,
+         },
+         ["record"] = {
+            ["boolean"] = BOOLEAN,
+         },
+         ["arrayrecord"] = {
+            ["boolean"] = BOOLEAN,
+         },
+         ["map"] = {
+            ["boolean"] = BOOLEAN,
+         },
+      },
+   },
+   ["and"] = {
+      [2] = {
+         ["boolean"] = {
+            ["boolean"] = BOOLEAN,
+            ["function"] = FUNCTION,
+         },
+         ["number"] = {
+            ["number"] = NUMBER,
+            ["boolean"] = BOOLEAN,
+         },
+         ["string"] = {
+            ["string"] = STRING,
+            ["boolean"] = BOOLEAN,
+         },
+         ["function"] = {
+            ["function"] = FUNCTION,
+            ["boolean"] = BOOLEAN,
+         },
+         ["array"] = {
+            ["boolean"] = BOOLEAN,
+         },
+         ["record"] = {
+            ["function"] = FUNCTION,
+            ["number"] = NUMBER,
+            ["boolean"] = BOOLEAN,
+         },
+         ["arrayrecord"] = {
+            ["map"] = MAP,
+            ["boolean"] = BOOLEAN,
+         },
+         ["map"] = {
+            ["boolean"] = BOOLEAN,
+         },
+      },
+   },
    [".."] = {
       [2] = {
          ["string"] = {
@@ -1729,6 +1776,10 @@ local tl_type_declarators = {
 function tl.type_check(ast)
    local st = {
       [1] = {
+         ["any"] = {
+            ["typename"] = "typetype",
+            ["type"] = ANY,
+         },
          ["require"] = {
             ["typename"] = "function",
             ["args"] = {
@@ -1745,7 +1796,7 @@ function tl.type_check(ast)
                      [1] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_ALPHA,
                            [2] = NUMBER,
                            [3] = ANY,
                         },
@@ -1754,7 +1805,7 @@ function tl.type_check(ast)
                      [2] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_ALPHA,
                            [2] = ANY,
                         },
                         ["rets"] = {},
@@ -1767,20 +1818,20 @@ function tl.type_check(ast)
                      [1] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_ALPHA,
                            [2] = NUMBER,
                         },
                         ["rets"] = {
-                           [1] = ANY,
+                           [1] = ALPHA,
                         },
                      },
                      [2] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_ALPHA,
                         },
                         ["rets"] = {
-                           [1] = ANY,
+                           [1] = ALPHA,
                         },
                      },
                   },
@@ -1791,7 +1842,7 @@ function tl.type_check(ast)
                      [1] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_STRING,
                            [2] = STRING,
                         },
                         ["rets"] = {
@@ -1801,7 +1852,7 @@ function tl.type_check(ast)
                      [2] = {
                         ["typename"] = "function",
                         ["args"] = {
-                           [1] = ARRAY_OF_ANY,
+                           [1] = ARRAY_OF_STRING,
                         },
                         ["rets"] = {
                            [1] = STRING,
@@ -2009,9 +2060,23 @@ function tl.type_check(ast)
       end
       return t
    end
-   local function same_type(t1, t2)
+   local function same_type(t1, t2, typevars)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
+      if t1.typename == "typevar" then
+         if not typevars[t1.typevar] then
+            return false
+         else
+            return same_type(typevars[t1.typevar], t2, typevars)
+         end
+      end
+      if t2.typename == "typevar" then
+         if not typevars[t2.typevar] then
+            return false
+         else
+            return same_type(t1, typevars[t2.typevar], typevars)
+         end
+      end
       if t1.typename ~= t2.typename then
          return false
       end
@@ -2027,7 +2092,7 @@ function tl.type_check(ast)
    local function is_empty_table(t)
       return t.typename == "record" and #t.fields == 0
    end
-   local function is_a(t1, t2)
+   local function is_a(t1, t2, typevars)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
       if t2.typename ~= "tuple" then
@@ -2039,47 +2104,57 @@ function tl.type_check(ast)
             [1] = t1,
          }
       end
+      if t2.typename == "typevar" then
+         if not typevars[t2.typevar] then
+            typevars[t2.typevar] = t1
+            return true
+         else
+            return is_a(t1, typevars[t2.typevar], typevars)
+         end
+      end
       if t2.typename == "any" then
          return true
       elseif t1.typename == "nil" then
+         return true
+      elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
          return t1.name == t2.name
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          t1 = resolve_unary(t1)
          t2 = resolve_unary(t2)
-         return is_a(t1, t2)
+         return is_a(t1, t2, typevars)
       elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map") then
          return true
       elseif (t1.typename == "array" or t1.typename == "arrayrecord") and (t2.typename == "array" or t2.typename == "arrayrecord") then
-         return is_a(t1.elements, t2.elements)
+         return is_a(t1.elements, t2.elements, typevars)
       elseif t1.typename == "array" and t2.typename == "map" then
-         return is_a(NUMBER, t2.keys) and is_a(t1.elements, t2.values)
+         return is_a(NUMBER, t2.keys, typevars) and is_a(t1.elements, t2.values, typevars)
       elseif t1.typename == "map" and t2.typename == "array" then
-         return is_a(t1.keys, NUMBER) and is_a(t1.values, t2.elements)
+         return is_a(t1.keys, NUMBER, typevars) and is_a(t1.values, t2.elements, typevars)
       elseif (t1.typename == "record" or t1.typename == "arrayrecord") and t2.typename == "map" then
-         if not is_a(STRING, t2.keys) then
+         if not is_a(STRING, t2.keys, typevars) then
             return false
          end
          for _, f in pairs(t1.fields) do
-            if not is_a(f, t2.values) then
+            if not is_a(f, t2.values, typevars) then
                return false
             end
          end
          return true
       elseif (t1.typename == "record" or t1.typename == "arrayrecord") and t2.typename == "record" and t2.typename == "arrayrecord" then
          for k, f in pairs(t1.fields) do
-            if not is_a(f, t2.fields[k]) then
+            if not is_a(f, t2.fields[k], typevars) then
                return false
             end
          end
          return true
       elseif t1.typename == "map" and (t2.typename == "record" or t2.typename == "arrayrecord") then
-         if not is_a(t1.keys, STRING) then
+         if not is_a(t1.keys, STRING, typevars) then
             return false
          end
          for _, f in ipairs(t2.fields) do
-            if not is_a(t1.values, f) then
+            if not is_a(t1.values, f, typevars) then
                return false
             end
          end
@@ -2094,12 +2169,12 @@ function tl.type_check(ast)
             return false, "failed on number of returns"
          end
          for i = 1,#t1.args do
-            if not is_a(t1.args[i], t2.args[i] or ANY) then
+            if not is_a(t1.args[i], t2.args[i] or ANY, typevars) then
                return false, "failed on argument " .. i
             end
          end
          for i = 1,#t2.rets do
-            if not same_type(t1.rets[i], t2.rets[i]) then
+            if not same_type(t1.rets[i], t2.rets[i], typevars) then
                return false, "failed on return " .. i
             end
          end
@@ -2110,6 +2185,25 @@ function tl.type_check(ast)
          return false
       end
       return true
+   end
+   local function resolve_typevars(t, typevars, has_cycle)
+      has_cycle = has_cycle or {}
+      if has_cycle[t] then
+         error("HAS CYCLE IN TYPE " .. inspect(t))
+      end
+      has_cycle[t] = true
+      if t.typename == "typevar" then
+         return assert(typevars[t.typevar])
+      end
+      local copy = {}
+      for k, v in pairs(t) do
+         if type(v) == "table" and k ~= "type" then
+            copy[k] = resolve_typevars(v, typevars, has_cycle)
+         else
+            copy[k] = v
+         end
+      end
+      return copy
    end
    local function assert_is_a(node, t1, t2)
       if not is_a(t1, t2) then
@@ -2144,8 +2238,9 @@ function tl.type_check(ast)
          table.insert(expects, tostring(#f.args or 0))
          if #args == (#f.args or 0) then
             local ok = true
+            local typevars = {}
             for a, arg in ipairs(args) do
-               local matches, why_not = is_a(arg, f.args[a])
+               local matches, why_not = is_a(arg, f.args[a], typevars)
                if not matches then
                   polyerrs[p] = polyerrs[p] or {}
                   local at = node.e2 and node.e2[a] or node
@@ -2160,13 +2255,14 @@ function tl.type_check(ast)
             end
             if ok == true then
                f.rets.typename = "tuple"
-               return f.rets
+               return resolve_typevars(f.rets, typevars)
             end
          end
          if #args < (#f.args or 0) then
             local ok = true
+            local typevars = {}
             for a, arg in ipairs(args) do
-               if not is_a(arg, f.args[a]) then
+               if not is_a(arg, f.args[a], typevars) then
                   polyerrs[p] = polyerrs[p] or {}
                   table.insert(polyerrs[p], {
                      ["y"] = node.y,
@@ -2179,14 +2275,15 @@ function tl.type_check(ast)
             end
             if ok == true then
                f.rets.typename = "tuple"
-               return f.rets
+               return resolve_typevars(f.rets, typevars)
             end
          end
          if f.vararg and #args > (#f.args or 0) then
             local ok = true
+            local typevars = {}
             for a = 1,#f.args do
                local arg = args[a]
-               if not is_a(arg, f.args[a]) then
+               if not is_a(arg, f.args[a], typevars) then
                   polyerrs[p] = polyerrs[p] or {}
                   table.insert(polyerrs[p], {
                      ["y"] = node.y,
@@ -2199,7 +2296,7 @@ function tl.type_check(ast)
             end
             if ok == true then
                f.rets.typename = "tuple"
-               return f.rets
+               return resolve_typevars(f.rets, typevars)
             end
          end
       end
@@ -2454,7 +2551,7 @@ end,
    ["before"] = function ()
    table.insert(st, {})
 end,
-["before_statements"] = function (node, children)
+["before_statements"] = function (node)
 if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then
    local t = resolve_unary(node.exp.e2.type)
    if t.typename == "array" or t.typename == "arrayrecord" then
@@ -2465,6 +2562,20 @@ if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == 
          ["y"] = node.y,
          ["x"] = node.x,
          ["err"] = "attempting ipairs loop on something that's not an array: " .. inspect(node.exp.e2.type),
+      })
+   end
+elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then
+   local t = resolve_unary(node.exp.e2.type)
+   if t.typename == "map" then
+      add_var(node.vars[1].tk, t.keys)
+      add_var(node.vars[2].tk, t.values)
+   elseif t.typename == "record" then
+      add_var(node.vars[1].tk, t.string)
+   else
+      table.insert(errors, {
+         ["y"] = node.y,
+         ["x"] = node.x,
+         ["err"] = "attempting pairs loop on something that's not a map or record: " .. inspect(node.exp.e2.type),
       })
    end
 end
@@ -2723,7 +2834,7 @@ end,
          return
       end
       a = resolve_unary(a)
-      if a.typename == "map" and is_a(STRING, a.keys) then
+      if a.typename == "map" then
          if is_a(STRING, a.keys) then
             node.type = a.values
          else
@@ -2760,7 +2871,7 @@ end,
             table.insert(errors, {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["err"] = "binop mismatch: " .. node.op.op .. " " .. a.typename .. " " .. b.typename,
+               ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
             })
             node.type = INVALID
          end
