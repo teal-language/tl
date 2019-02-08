@@ -1746,41 +1746,6 @@ local op_types: {string:{number:{string:Type}}} = {
          },
       }
    },
-   ["and"] = {
-      [2] = {
-         ["boolean"] = {
-            ["boolean"] = BOOLEAN,
-            ["function"] = FUNCTION, -- HACK
-         },
-         ["number"] = {
-            ["number"] = NUMBER,
-            ["boolean"] = BOOLEAN,
-         },
-         ["string"] = {
-            ["string"] = STRING,
-            ["boolean"] = BOOLEAN,
-         },
-         ["function"] = {
-            ["function"] = FUNCTION,
-            ["boolean"] = BOOLEAN,
-         },
-         ["array"] = {
-            ["boolean"] = BOOLEAN,
-         },
-         ["record"] = {
-            ["function"] = FUNCTION,
-            ["number"] = NUMBER,
-            ["boolean"] = BOOLEAN,
-         },
-         ["arrayrecord"] = {
-            ["map"] = MAP,
-            ["boolean"] = BOOLEAN,
-         },
-         ["map"] = {
-            ["boolean"] = BOOLEAN,
-         },
-      }
-   },
    [".."] = {
       [2] = {
          ["string"] = {
@@ -2599,6 +2564,9 @@ function tl.type_check(ast: Node)
                else
                   node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk }, orig_a)
                end
+            elseif node.op.op == "and" then
+               b = resolve_unary(b)
+               node.type = b
             elseif op_types[node.op.op] then
                a = resolve_unary(a)
                local types_op = op_types[node.op.op][node.op.arity]

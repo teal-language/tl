@@ -1715,41 +1715,6 @@ local op_types = {
          },
       },
    },
-   ["and"] = {
-      [2] = {
-         ["boolean"] = {
-            ["boolean"] = BOOLEAN,
-            ["function"] = FUNCTION,
-         },
-         ["number"] = {
-            ["number"] = NUMBER,
-            ["boolean"] = BOOLEAN,
-         },
-         ["string"] = {
-            ["string"] = STRING,
-            ["boolean"] = BOOLEAN,
-         },
-         ["function"] = {
-            ["function"] = FUNCTION,
-            ["boolean"] = BOOLEAN,
-         },
-         ["array"] = {
-            ["boolean"] = BOOLEAN,
-         },
-         ["record"] = {
-            ["function"] = FUNCTION,
-            ["number"] = NUMBER,
-            ["boolean"] = BOOLEAN,
-         },
-         ["arrayrecord"] = {
-            ["map"] = MAP,
-            ["boolean"] = BOOLEAN,
-         },
-         ["map"] = {
-            ["boolean"] = BOOLEAN,
-         },
-      },
-   },
    [".."] = {
       [2] = {
          ["string"] = {
@@ -2851,6 +2816,9 @@ end,
             ["tk"] = node.e2.tk,
          }, orig_a)
       end
+   elseif node.op.op == "and" then
+      b = resolve_unary(b)
+      node.type = b
    elseif op_types[node.op.op] then
       a = resolve_unary(a)
       local types_op = op_types[node.op.op][node.op.arity]
