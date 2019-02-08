@@ -1811,7 +1811,8 @@ function tl.type_check(ast: Node)
             },
          },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
-         ["ipairs"] = { typename = "function", args = { ARRAY_OF_ANY }, rets = {} },
+         ["ipairs"] = { typename = "function", args = { ARRAY_OF_ANY }, rets = {} }, -- [magic]
+         ["pairs"] = { typename = "function", args = { { typename = "map", keys = ANY, values = ANY } }, rets = {} }, -- [magic]
          ["assert"] = {
             typename = "poly",
             poly = {
@@ -1975,7 +1976,7 @@ function tl.type_check(ast: Node)
          if not is_a(t1.keys, STRING, typevars) then
             return false
          end
-         for _, f in ipairs(t2.fields) do
+         for _, f in pairs(t2.fields) do
             if not is_a(t1.values, f, typevars) then
                return false
             end
@@ -2118,7 +2119,7 @@ function tl.type_check(ast: Node)
       return poly.poly[1].rets
    end
 
-   local function match_record_key(node: Node, tbl: Type, key: Node, orig_tbl: Type)
+   local function match_record_key(node: Node, tbl: Type, key: Node, orig_tbl: Type): Type
       assert(type(tbl) == "table")
       assert(type(key) == "table")
 
@@ -2337,7 +2338,7 @@ function tl.type_check(ast: Node)
                else
                   table.insert(errors, { y = node.y, x = node.x, err = "attempting ipairs loop on something that's not an array: " .. inspect(node.exp.e2.type) })
                end
-            elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then -- [magic] ipairs
+            elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then -- [magic] pairs
                local t = resolve_unary(node.exp.e2.type)
                if (t.typename == "map") then
                   add_var(node.vars[1].tk, t.keys)
@@ -2421,8 +2422,15 @@ function tl.type_check(ast: Node)
                for _, child in ipairs(children) do
                   if child.typename == "kv" then
                      node.type.fields[child.k] = child.v
-                  else
-                     table.insert(errors, { y = node.y, x = node.x, err = "mixing array fields in a record" })
+                  elseif child.typename == "iv" then
+                     if not node.type.elements then
+                        node.type.typename = "arrayrecord"
+                        node.type.elements = child.type
+                     else
+                        if not is_a(child.type, node.type.elements) then
+                           table.insert(errors, { y = node.y, x = node.x, err = "type mismatch in array part of record" })
+                        end
+                     end
                   end
                end
             end

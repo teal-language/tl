@@ -1879,6 +1879,17 @@ function tl.type_check(ast)
             },
             ["rets"] = {},
          },
+         ["pairs"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = {
+                  ["typename"] = "map",
+                  ["keys"] = ANY,
+                  ["values"] = ANY,
+               },
+            },
+            ["rets"] = {},
+         },
          ["assert"] = {
             ["typename"] = "poly",
             ["poly"] = {
@@ -2118,7 +2129,7 @@ function tl.type_check(ast)
          if not is_a(t1.keys, STRING, typevars) then
             return false
          end
-         for _, f in ipairs(t2.fields) do
+         for _, f in pairs(t2.fields) do
             if not is_a(t1.values, f, typevars) then
                return false
             end
@@ -2630,12 +2641,19 @@ end,
       for _, child in ipairs(children) do
          if child.typename == "kv" then
             node.type.fields[child.k] = child.v
-         else
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "mixing array fields in a record",
-            })
+         elseif child.typename == "iv" then
+            if not node.type.elements then
+               node.type.typename = "arrayrecord"
+               node.type.elements = child.type
+            else
+               if not is_a(child.type, node.type.elements) then
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "type mismatch in array part of record",
+                  })
+               end
+            end
          end
       end
    end
