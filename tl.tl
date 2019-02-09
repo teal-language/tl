@@ -338,6 +338,11 @@ local Type = tl.record {
    
    -- typevar
    typevar = tl.string,
+   
+   -- array and record entries
+   i = tl.number,
+   k = tl.string,
+   v = tl.nominal("Type"),
 }
 
 local Operator = tl.record {
@@ -1676,7 +1681,7 @@ local equality_binop = {
    }
 }
 
-local op_types: {string:{number:{string:Type}}} = {
+local op_types: {string:{number:{string:{string:Type}}}} = {
    ["#"] = {
       [1] = {
          ["arrayrecord"] = NUMBER,
@@ -2030,7 +2035,7 @@ function tl.type_check(ast: Node)
       return copy
    end
    
-   local function assert_is_a(node: Node, t1: type, t2: Type)
+   local function assert_is_a(node: Node, t1: Type, t2: Type)
       if not is_a(t1, t2) then
          table.insert(errors, { y = node.y, x = node.x, err = "mismatch: " .. (node.tk or node.op.op) .. ": " .. inspect(t1) .. " is not a " .. inspect(t2) })
       end

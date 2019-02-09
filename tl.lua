@@ -306,6 +306,9 @@ local Type = tl.record({
    ["vararg"] = tl.boolean,
    ["name"] = tl.string,
    ["typevar"] = tl.string,
+   ["i"] = tl.number,
+   ["k"] = tl.string,
+   ["v"] = tl.nominal("Type"),
 })
 local Operator = tl.record({
    ["y"] = tl.number,
