@@ -244,6 +244,7 @@ local should_unindent = {
    ["}"] = true,
 }
 local should_indent = {
+   ["{"] = true,
    ["for"] = true,
    ["if"] = true,
    ["while"] = true,
@@ -254,39 +255,36 @@ local should_indent = {
 function tl.pretty_print_tokens(tokens)
    local y = 1
    local out = {}
-   local kind = nil
    local indent = 0
-   local bracket = false
+   local newline = false
+   local kind = ""
    for _, t in ipairs(tokens) do
       while t.y > y do
-         if bracket then
-            indent = indent + 1
-            bracket = false
-         end
          table.insert(out, "\n")
          y = y + 1
-         kind = nil
+         newline = true
+         kind = ""
       end
-      if kind == nil then
-         if should_unindent[t.tk] then
-            indent = indent - 1
-         end
+      if should_unindent[t.tk] then
+         indent = indent - 1
          if indent < 0 then
             indent = 0
          end
+      end
+      if newline then
          for _ = 1, indent do
             table.insert(out, "   ")
          end
-         if should_indent[t.tk] or t.tk == "local" and tokens[_ + 1].tk == "function" then
-            indent = indent + 1
-         end
+         newline = false
+      end
+      if should_indent[t.tk] then
+         indent = indent + 1
       end
       if add_space[(kind or "") .. ":" .. t.kind] then
          table.insert(out, " ")
       end
       table.insert(out, t.tk)
-      kind = t.kind
-      bracket = t.tk == "{"
+      kind = t.kind or ""
    end
    return table.concat(out)
 end
@@ -538,12 +536,12 @@ local function parse_type(tokens, i, errs)
    return fail(tokens, i, errs)
 end
 parse_type_list = function (tokens, i, errs, open)
-local node = new_node(tokens, i, "type_list")
-if tokens[i].tk == (open or ":") then
-   i = i + 1
-   i = parse_trying_list(tokens, i, errs, node, parse_type)
-end
-return i, node
+   local node = new_node(tokens, i, "type_list")
+   if tokens[i].tk == (open or ":") then
+      i = i + 1
+      i = parse_trying_list(tokens, i, errs, node, parse_type)
+   end
+   return i, node
 end
 local function parse_function_value(tokens, i, errs)
    local node = new_node(tokens, i, "function")
@@ -683,34 +681,34 @@ end
 local P
 local E
 P = function (tokens, i, errs, operators, operands)
-if is_unop(tokens[i]) then
-   local ok = push_operator({
-      ["y"] = tokens[i].y,
-      ["x"] = tokens[i].x,
-      ["arity"] = 1,
-      ["op"] = tokens[i].tk,
-   }, operators, operands)
-   if not ok then
-      return fail(tokens, i, errs)
+   if is_unop(tokens[i]) then
+      local ok = push_operator({
+         ["y"] = tokens[i].y,
+         ["x"] = tokens[i].x,
+         ["arity"] = 1,
+         ["op"] = tokens[i].tk,
+      }, operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
+      i = i + 1
+      i = P(tokens, i, errs, operators, operands)
+      return i
+   elseif tokens[i].tk == "(" then
+      i = i + 1
+      table.insert(operators, sentinel)
+      i = E(tokens, i, errs, operators, operands)
+      i = verify_tk(tokens, i, errs, ")")
+      table.remove(operators)
+      return i
+   else
+      local leaf
+      i, leaf = parse_literal(tokens, i, errs)
+      if leaf then
+         table.insert(operands, leaf)
+      end
+      return i
    end
-   i = i + 1
-   i = P(tokens, i, errs, operators, operands)
-   return i
-elseif tokens[i].tk == "(" then
-   i = i + 1
-   table.insert(operators, sentinel)
-   i = E(tokens, i, errs, operators, operands)
-   i = verify_tk(tokens, i, errs, ")")
-   table.remove(operators)
-   return i
-else
-   local leaf
-   i, leaf = parse_literal(tokens, i, errs)
-   if leaf then
-      table.insert(operands, leaf)
-   end
-   return i
-end
 end
 local function push_arguments(tokens, i, errs, operands)
    local args
@@ -727,80 +725,80 @@ local function push_index(tokens, i, errs, operands)
    return i
 end
 E = function (tokens, i, errs, operators, operands)
-i = P(tokens, i, errs, operators, operands)
-while tokens[i] do
-   if tokens[i].kind == "string" or tokens[i].kind == "{" then
-      local ok = push_operator({
-         ["y"] = tokens[i].y,
-         ["x"] = tokens[i].x,
-         ["arity"] = 2,
-         ["op"] = "@funcall",
-      }, operators, operands)
-      if not ok then
-         return fail(tokens, i, errs)
-      end
-      local arglist = new_node(tokens, i, "argument_list")
-      local arg
-      if tokens[i].kind == "string" then
-         arg = new_node(tokens, i)
+   i = P(tokens, i, errs, operators, operands)
+   while tokens[i] do
+      if tokens[i].kind == "string" or tokens[i].kind == "{" then
+         local ok = push_operator({
+            ["y"] = tokens[i].y,
+            ["x"] = tokens[i].x,
+            ["arity"] = 2,
+            ["op"] = "@funcall",
+         }, operators, operands)
+         if not ok then
+            return fail(tokens, i, errs)
+         end
+         local arglist = new_node(tokens, i, "argument_list")
+         local arg
+         if tokens[i].kind == "string" then
+            arg = new_node(tokens, i)
+            i = i + 1
+         else
+            i, arg = parse_table_literal(tokens, i, errs)
+         end
+         table.insert(arglist, arg)
+         table.insert(operands, arglist)
+      elseif tokens[i].tk == "(" then
+         local ok = push_operator({
+            ["y"] = tokens[i].y,
+            ["x"] = tokens[i].x,
+            ["arity"] = 2,
+            ["op"] = "@funcall",
+         }, operators, operands)
+         if not ok then
+            return fail(tokens, i, errs)
+         end
+         i = push_arguments(tokens, i, errs, operands)
+      elseif tokens[i].tk == "[" then
+         local ok = push_operator({
+            ["y"] = tokens[i].y,
+            ["x"] = tokens[i].x,
+            ["arity"] = 2,
+            ["op"] = "@index",
+         }, operators, operands)
+         if not ok then
+            return fail(tokens, i, errs)
+         end
+         i = push_index(tokens, i, errs, operands)
+      elseif is_binop(tokens[i]) then
+         local ok = push_operator({
+            ["y"] = tokens[i].y,
+            ["x"] = tokens[i].x,
+            ["arity"] = 2,
+            ["op"] = tokens[i].tk,
+         }, operators, operands)
+         if not ok then
+            return fail(tokens, i, errs)
+         end
          i = i + 1
+         i = P(tokens, i, errs, operators, operands)
       else
-         i, arg = parse_table_literal(tokens, i, errs)
+         break
       end
-      table.insert(arglist, arg)
-      table.insert(operands, arglist)
-   elseif tokens[i].tk == "(" then
-      local ok = push_operator({
-         ["y"] = tokens[i].y,
-         ["x"] = tokens[i].x,
-         ["arity"] = 2,
-         ["op"] = "@funcall",
-      }, operators, operands)
-      if not ok then
-         return fail(tokens, i, errs)
-      end
-      i = push_arguments(tokens, i, errs, operands)
-   elseif tokens[i].tk == "[" then
-      local ok = push_operator({
-         ["y"] = tokens[i].y,
-         ["x"] = tokens[i].x,
-         ["arity"] = 2,
-         ["op"] = "@index",
-      }, operators, operands)
-      if not ok then
-         return fail(tokens, i, errs)
-      end
-      i = push_index(tokens, i, errs, operands)
-   elseif is_binop(tokens[i]) then
-      local ok = push_operator({
-         ["y"] = tokens[i].y,
-         ["x"] = tokens[i].x,
-         ["arity"] = 2,
-         ["op"] = tokens[i].tk,
-      }, operators, operands)
-      if not ok then
-         return fail(tokens, i, errs)
-      end
-      i = i + 1
-      i = P(tokens, i, errs, operators, operands)
-   else
-      break
    end
-end
-while operators[#operators] ~= sentinel do
-   local ok = pop_operator(operators, operands)
-   if not ok then
-      return fail(tokens, i, errs)
+   while operators[#operators] ~= sentinel do
+      local ok = pop_operator(operators, operands)
+      if not ok then
+         return fail(tokens, i, errs)
+      end
    end
-end
-return i
+   return i
 end
 parse_expression = function (tokens, i, errs)
-local operands = {}
-local operators = {}
-table.insert(operators, sentinel)
-i = E(tokens, i, errs, operators, operands)
-return i, operands[#operands],0
+   local operands = {}
+   local operators = {}
+   table.insert(operators, sentinel)
+   i = E(tokens, i, errs, operators, operands)
+   return i, operands[#operands],0
 end
 end
 local function parse_variable(tokens, i, errs)
@@ -822,7 +820,7 @@ local function parse_argument(tokens, i, errs)
    return i, node,0
 end
 parse_argument_list = function (tokens, i, errs)
-return parse_bracket_list(tokens, i, errs, "argument_list", "(", ")", true, parse_argument)
+   return parse_bracket_list(tokens, i, errs, "argument_list", "(", ")", true, parse_argument)
 end
 local function parse_local_function(tokens, i, errs)
    local node = new_node(tokens, i, "local_function")
@@ -1012,19 +1010,19 @@ local function parse_statement(tokens, i, errs)
    return fail(tokens, i, errs)
 end
 parse_statements = function (tokens, i, errs)
-local node = new_node(tokens, i, "statements")
-while tokens[i] do
-   if stop_statement_list[tokens[i].tk] then
-      break
+   local node = new_node(tokens, i, "statements")
+   while tokens[i] do
+      if stop_statement_list[tokens[i].tk] then
+         break
+      end
+      local item
+      i, item = parse_statement(tokens, i, errs)
+      if not item then
+         break
+      end
+      table.insert(node, item)
    end
-   local item
-   i, item = parse_statement(tokens, i, errs)
-   if not item then
-      break
-   end
-   table.insert(node, item)
-end
-return i, node
+   return i, node
 end
 function tl.parse_program(tokens, errs)
    return parse_statements(tokens,1, errs)
@@ -1186,379 +1184,379 @@ function tl.pretty_print_ast(ast)
    local visit = {
       ["statements"] = {
          ["after"] = function (node, children)
-         local out = {}
-         for _, child in ipairs(children) do
+            local out = {}
+            for _, child in ipairs(children) do
+               table.insert(out,("   "):rep(indent))
+               table.insert(out, child)
+               table.insert(out, "\n")
+            end
+            if #children == 0 then
+               table.insert(out, "\n")
+            end
+            return table.concat(out)
+         end,
+      },
+      ["local_declaration"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "local ")
+            table.insert(out, children[1])
+            if children[2] then
+               table.insert(out, " = ")
+               table.insert(out, children[2])
+            end
+            return table.concat(out)
+         end,
+      },
+      ["assignment"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, children[1])
+            table.insert(out, " = ")
+            table.insert(out, children[2])
+            return table.concat(out)
+         end,
+      },
+      ["if"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "if ")
+            table.insert(out, children[1])
+            table.insert(out, " then\n")
+            table.insert(out, children[2])
+            indent = indent - 1
+            for _, e in ipairs(children[3]) do
+               table.insert(out,("   "):rep(indent))
+               table.insert(out, "elseif ")
+               table.insert(out, e)
+            end
+            if children[4] then
+               table.insert(out,("   "):rep(indent))
+               table.insert(out, "else\n")
+               table.insert(out, children[4])
+            end
             table.insert(out,("   "):rep(indent))
-            table.insert(out, child)
-            table.insert(out, "\n")
-         end
-         if #children == 0 then
-            table.insert(out, "\n")
-         end
-         return table.concat(out)
-      end,
-   },
-   ["local_declaration"] = {
-      ["after"] = function (node, children)
-      local out = {}
-      table.insert(out, "local ")
-      table.insert(out, children[1])
-      if children[2] then
-         table.insert(out, " = ")
-         table.insert(out, children[2])
-      end
-      return table.concat(out)
-   end,
-},
-["assignment"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, children[1])
-   table.insert(out, " = ")
-   table.insert(out, children[2])
-   return table.concat(out)
-end,
-},
-["if"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "if ")
-table.insert(out, children[1])
-table.insert(out, " then\n")
-table.insert(out, children[2])
-indent = indent - 1
-for _, e in ipairs(children[3]) do
-   table.insert(out,("   "):rep(indent))
-   table.insert(out, "elseif ")
-   table.insert(out, e)
-end
-if children[4] then
-   table.insert(out,("   "):rep(indent))
-   table.insert(out, "else\n")
-   table.insert(out, children[4])
-end
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["while"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "while ")
-table.insert(out, children[1])
-table.insert(out, " do\n")
-table.insert(out, children[2])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["repeat"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "repeat\n")
-table.insert(out, children[1])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "until ")
-table.insert(out, children[2])
-return table.concat(out)
-end,
-},
-["do"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "do\n")
-table.insert(out, children[1])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["forin"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "for ")
-table.insert(out, children[1])
-table.insert(out, " in ")
-table.insert(out, children[2])
-table.insert(out, " do\n")
-table.insert(out, children[3])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["fornum"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "for ")
-table.insert(out, children[1])
-table.insert(out, " = ")
-table.insert(out, children[2])
-table.insert(out, ", ")
-table.insert(out, children[3])
-if children[4] then
-   table.insert(out, ", ")
-   table.insert(out, children[4])
-end
-table.insert(out, " do\n")
-table.insert(out, children[5])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["return"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, "return ")
-   table.insert(out, children[1])
-   return table.concat(out)
-end,
-},
-["break"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, "break")
-   return table.concat(out)
-end,
-},
-["elseif"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, children[1])
-   table.insert(out, " then\n")
-   table.insert(out, children[2])
-   return table.concat(out)
-end,
-},
-["variables"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   for i, child in ipairs(children) do
-      if i > 1 then
-         table.insert(out, ", ")
-      end
-      table.insert(out, tostring(child))
-   end
-   return table.concat(out)
-end,
-},
-["table_literal"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-if #children == 0 then
-   indent = indent - 1
-   return "{}"
-end
-table.insert(out, "{\n")
-for _, child in ipairs(children) do
-   table.insert(out,("   "):rep(indent))
-   table.insert(out, child)
-   table.insert(out, "\n")
-end
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "}")
-return table.concat(out)
-end,
-},
-["table_item"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, "[")
-   table.insert(out, children[1])
-   table.insert(out, "] = ")
-   table.insert(out, children[2])
-   table.insert(out, ", ")
-   return table.concat(out)
-end,
-},
-["local_function"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "local function ")
-table.insert(out, children[1])
-table.insert(out, "(")
-table.insert(out, children[2])
-table.insert(out, ")\n")
-table.insert(out, children[4])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["global_function"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "function ")
-table.insert(out, children[1])
-table.insert(out, "(")
-table.insert(out, children[2])
-table.insert(out, ")\n")
-table.insert(out, children[4])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["module_function"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "function ")
-table.insert(out, children[1])
-table.insert(out, ".")
-table.insert(out, children[2])
-table.insert(out, "(")
-table.insert(out, children[3])
-table.insert(out, ")\n")
-table.insert(out, children[5])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["function"] = {
-   ["before"] = function ()
-   indent = indent + 1
-end,
-["after"] = function (node, children)
-local out = {}
-table.insert(out, "function(")
-table.insert(out, children[1])
-table.insert(out, ")\n")
-table.insert(out, children[3])
-indent = indent - 1
-table.insert(out,("   "):rep(indent))
-table.insert(out, "end")
-return table.concat(out)
-end,
-},
-["op"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   if node.op.op == "@funcall" then
-      table.insert(out, children[1])
-      table.insert(out, "(")
-      table.insert(out, children[3])
-      table.insert(out, ")")
-   elseif node.op.op == "@methcall" then
-      if children[2] and node.op.prec > tonumber(children[2]) then
-         table.insert(out, "(")
-      end
-      table.insert(out, children[1])
-      if children[2] and node.op.prec > tonumber(children[2]) then
-         table.insert(out, ")")
-      end
-      table.insert(out, ":")
-      table.insert(out, node.method.tk)
-      table.insert(out, "(")
-      table.insert(out, children[3])
-      table.insert(out, ")")
-   elseif node.op.op == "@index" then
-      table.insert(out, children[1])
-      table.insert(out, "[")
-      table.insert(out, children[3])
-      table.insert(out, "]")
-   elseif tight_op[node.op.op] or spaced_op[node.op.op] then
-      if node.op.arity == 1 then
-         table.insert(out, node.op.op)
-         if spaced_op[node.op.op] then
-            table.insert(out, " ")
-         end
-      end
-      if children[2] and node.op.prec > tonumber(children[2]) then
-         table.insert(out, "(")
-      end
-      table.insert(out, children[1])
-      if children[2] and node.op.prec > tonumber(children[2]) then
-         table.insert(out, ")")
-      end
-      if node.op.arity == 2 then
-         if spaced_op[node.op.op] then
-            table.insert(out, " ")
-         end
-         table.insert(out, node.op.op)
-         if spaced_op[node.op.op] then
-            table.insert(out, " ")
-         end
-         if children[4] and node.op.prec > tonumber(children[4]) then
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["while"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "while ")
+            table.insert(out, children[1])
+            table.insert(out, " do\n")
+            table.insert(out, children[2])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["repeat"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "repeat\n")
+            table.insert(out, children[1])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "until ")
+            table.insert(out, children[2])
+            return table.concat(out)
+         end,
+      },
+      ["do"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "do\n")
+            table.insert(out, children[1])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["forin"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "for ")
+            table.insert(out, children[1])
+            table.insert(out, " in ")
+            table.insert(out, children[2])
+            table.insert(out, " do\n")
+            table.insert(out, children[3])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["fornum"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "for ")
+            table.insert(out, children[1])
+            table.insert(out, " = ")
+            table.insert(out, children[2])
+            table.insert(out, ", ")
+            table.insert(out, children[3])
+            if children[4] then
+               table.insert(out, ", ")
+               table.insert(out, children[4])
+            end
+            table.insert(out, " do\n")
+            table.insert(out, children[5])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["return"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "return ")
+            table.insert(out, children[1])
+            return table.concat(out)
+         end,
+      },
+      ["break"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "break")
+            return table.concat(out)
+         end,
+      },
+      ["elseif"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, children[1])
+            table.insert(out, " then\n")
+            table.insert(out, children[2])
+            return table.concat(out)
+         end,
+      },
+      ["variables"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            for i, child in ipairs(children) do
+               if i > 1 then
+                  table.insert(out, ", ")
+               end
+               table.insert(out, tostring(child))
+            end
+            return table.concat(out)
+         end,
+      },
+      ["table_literal"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            if #children == 0 then
+               indent = indent - 1
+               return "{}"
+            end
+            table.insert(out, "{\n")
+            for _, child in ipairs(children) do
+               table.insert(out,("   "):rep(indent))
+               table.insert(out, child)
+               table.insert(out, "\n")
+            end
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "}")
+            return table.concat(out)
+         end,
+      },
+      ["table_item"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "[")
+            table.insert(out, children[1])
+            table.insert(out, "] = ")
+            table.insert(out, children[2])
+            table.insert(out, ", ")
+            return table.concat(out)
+         end,
+      },
+      ["local_function"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "local function ")
+            table.insert(out, children[1])
             table.insert(out, "(")
-         end
-         table.insert(out, children[3])
-         if children[4] and node.op.prec > tonumber(children[4]) then
-            table.insert(out, ")")
-         end
-      end
-   else
-      error("unknown node op " .. node.op.op)
-   end
-   return table.concat(out)
-end,
-},
-["variable"] = {
-   ["after"] = function (node, children)
-   local out = {}
-   table.insert(out, node.tk)
-   return table.concat(out)
-end,
-},
-["type_list"] = {
-   ["after"] = function (node, children)
-   return ""
-end,
-},
-}
-visit["values"] = visit["variables"]
-visit["expression_list"] = visit["variables"]
-visit["argument_list"] = visit["variables"]
-visit["word"] = visit["variable"]
-visit["string"] = visit["variable"]
-visit["number"] = visit["variable"]
-visit["nil"] = visit["variable"]
-visit["boolean"] = visit["variable"]
-visit["..."] = visit["variable"]
-visit["typedecl"] = visit["type_list"]
-return recurse_ast(ast, visit)
+            table.insert(out, children[2])
+            table.insert(out, ")\n")
+            table.insert(out, children[4])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["global_function"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "function ")
+            table.insert(out, children[1])
+            table.insert(out, "(")
+            table.insert(out, children[2])
+            table.insert(out, ")\n")
+            table.insert(out, children[4])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["module_function"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "function ")
+            table.insert(out, children[1])
+            table.insert(out, ".")
+            table.insert(out, children[2])
+            table.insert(out, "(")
+            table.insert(out, children[3])
+            table.insert(out, ")\n")
+            table.insert(out, children[5])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["function"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "function(")
+            table.insert(out, children[1])
+            table.insert(out, ")\n")
+            table.insert(out, children[3])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
+      ["op"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            if node.op.op == "@funcall" then
+               table.insert(out, children[1])
+               table.insert(out, "(")
+               table.insert(out, children[3])
+               table.insert(out, ")")
+            elseif node.op.op == "@methcall" then
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(out, "(")
+               end
+               table.insert(out, children[1])
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(out, ")")
+               end
+               table.insert(out, ":")
+               table.insert(out, node.method.tk)
+               table.insert(out, "(")
+               table.insert(out, children[3])
+               table.insert(out, ")")
+            elseif node.op.op == "@index" then
+               table.insert(out, children[1])
+               table.insert(out, "[")
+               table.insert(out, children[3])
+               table.insert(out, "]")
+            elseif tight_op[node.op.op] or spaced_op[node.op.op] then
+               if node.op.arity == 1 then
+                  table.insert(out, node.op.op)
+                  if spaced_op[node.op.op] then
+                     table.insert(out, " ")
+                  end
+               end
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(out, "(")
+               end
+               table.insert(out, children[1])
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(out, ")")
+               end
+               if node.op.arity == 2 then
+                  if spaced_op[node.op.op] then
+                     table.insert(out, " ")
+                  end
+                  table.insert(out, node.op.op)
+                  if spaced_op[node.op.op] then
+                     table.insert(out, " ")
+                  end
+                  if children[4] and node.op.prec > tonumber(children[4]) then
+                     table.insert(out, "(")
+                  end
+                  table.insert(out, children[3])
+                  if children[4] and node.op.prec > tonumber(children[4]) then
+                     table.insert(out, ")")
+                  end
+               end
+            else
+               error("unknown node op " .. node.op.op)
+            end
+            return table.concat(out)
+         end,
+      },
+      ["variable"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, node.tk)
+            return table.concat(out)
+         end,
+      },
+      ["type_list"] = {
+         ["after"] = function (node, children)
+            return ""
+         end,
+      },
+   }
+   visit["values"] = visit["variables"]
+   visit["expression_list"] = visit["variables"]
+   visit["argument_list"] = visit["variables"]
+   visit["word"] = visit["variable"]
+   visit["string"] = visit["variable"]
+   visit["number"] = visit["variable"]
+   visit["nil"] = visit["variable"]
+   visit["boolean"] = visit["variable"]
+   visit["..."] = visit["variable"]
+   visit["typedecl"] = visit["type_list"]
+   return recurse_ast(ast, visit)
 end
 local ANY = {
    ["typename"] = "any",
@@ -2144,879 +2142,879 @@ function tl.type_check(ast)
       return true
    end
    is_a = function (t1, t2, typevars)
-   assert(type(t1) == "table")
-   assert(type(t2) == "table")
-   if t2.typename ~= "tuple" then
-      t1 = resolve_tuple(t1)
-   end
-   if t2.typename == "tuple" and t1.typename ~= "tuple" then
-      t1 = {
-         ["typename"] = "tuple",
-         [1] = t1,
-      }
-   end
-   if t2.typename == "typevar" then
-      if not typevars[t2.typevar] then
-         typevars[t2.typevar] = t1
+      assert(type(t1) == "table")
+      assert(type(t2) == "table")
+      if t2.typename ~= "tuple" then
+         t1 = resolve_tuple(t1)
+      end
+      if t2.typename == "tuple" and t1.typename ~= "tuple" then
+         t1 = {
+            ["typename"] = "tuple",
+            [1] = t1,
+         }
+      end
+      if t2.typename == "typevar" then
+         if not typevars[t2.typevar] then
+            typevars[t2.typevar] = t1
+            return true
+         else
+            return is_a(t1, typevars[t2.typevar], typevars)
+         end
+      end
+      if t2.typename == "any" then
          return true
-      else
-         return is_a(t1, typevars[t2.typevar], typevars)
-      end
-   end
-   if t2.typename == "any" then
-      return true
-   elseif t2.typename == "poly" then
-      for _, t in ipairs(t2.poly) do
-         if is_a(t1, t, typevars) then
-            return true
+      elseif t2.typename == "poly" then
+         for _, t in ipairs(t2.poly) do
+            if is_a(t1, t, typevars) then
+               return true
+            end
          end
-      end
-      return false
-   elseif t1.typename == "poly" then
-      for _, t in ipairs(t1.poly) do
-         if is_a(t, t2, typevars) then
-            return true
+         return false
+      elseif t1.typename == "poly" then
+         for _, t in ipairs(t1.poly) do
+            if is_a(t, t2, typevars) then
+               return true
+            end
          end
-      end
-      return false
-   elseif t1.typename == "nil" then
-      return true
-   elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
-      return true
-   elseif t1.typename == "nominal" and t2.typename == "nominal" then
-      return t1.name == t2.name
-   elseif t1.typename == "nominal" or t2.typename == "nominal" then
-      t1 = resolve_unary(t1)
-      t2 = resolve_unary(t2)
-      return is_a(t1, t2, typevars)
-   elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map" or t2.typename == "record" or t2.typename == "arrayrecord") then
-      return true
-   elseif t2.typename == "array" then
-      if t1.typename == "array" or t1.typename == "arrayrecord" then
-         return is_a(t1.elements, t2.elements, typevars)
-      elseif t1.typename == "map" then
-         return is_a(t1.keys, NUMBER, typevars) and is_a(t1.values, t2.elements, typevars)
-      end
-      return false
-   elseif t2.typename == "record" then
-      if t1.typename == "record" or t1.typename == "arrayrecord" then
-         return match_record_fields(t1, t2, typevars)
-      elseif t1.typename == "map" then
-         if not is_a(t1.keys, STRING, typevars) then
-            return false
+         return false
+      elseif t1.typename == "nil" then
+         return true
+      elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
+         return true
+      elseif t1.typename == "nominal" and t2.typename == "nominal" then
+         return t1.name == t2.name
+      elseif t1.typename == "nominal" or t2.typename == "nominal" then
+         t1 = resolve_unary(t1)
+         t2 = resolve_unary(t2)
+         return is_a(t1, t2, typevars)
+      elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map" or t2.typename == "record" or t2.typename == "arrayrecord") then
+         return true
+      elseif t2.typename == "array" then
+         if t1.typename == "array" or t1.typename == "arrayrecord" then
+            return is_a(t1.elements, t2.elements, typevars)
+         elseif t1.typename == "map" then
+            return is_a(t1.keys, NUMBER, typevars) and is_a(t1.values, t2.elements, typevars)
          end
-         for _, f in pairs(t2.fields) do
-            if not is_a(t1.values, f, typevars) then
+         return false
+      elseif t2.typename == "record" then
+         if t1.typename == "record" or t1.typename == "arrayrecord" then
+            return match_record_fields(t1, t2, typevars)
+         elseif t1.typename == "map" then
+            if not is_a(t1.keys, STRING, typevars) then
                return false
             end
+            for _, f in pairs(t2.fields) do
+               if not is_a(t1.values, f, typevars) then
+                  return false
+               end
+            end
+            return true
          end
-         return true
-      end
-      return false
-   elseif t2.typename == "arrayrecord" then
-      if t1.typename == "array" then
-         return is_a(t1.elements, t2.elements, typevars)
-      elseif t1.typename == "record" then
-         return match_record_fields(t1, t2, typevars)
-      elseif t1.typename == "arrayrecord" then
-         if not is_a(t1.elements, t2.elements, typevars) then
-            return false
+         return false
+      elseif t2.typename == "arrayrecord" then
+         if t1.typename == "array" then
+            return is_a(t1.elements, t2.elements, typevars)
+         elseif t1.typename == "record" then
+            return match_record_fields(t1, t2, typevars)
+         elseif t1.typename == "arrayrecord" then
+            if not is_a(t1.elements, t2.elements, typevars) then
+               return false
+            end
+            return match_record_fields(t1, t2, typevars)
          end
-         return match_record_fields(t1, t2, typevars)
-      end
-      return false
-   elseif t2.typename == "map" then
-      if t1.typename == "map" then
-         return is_a(t1.values, t2.values, typevars)
-      elseif t1.typename == "array" then
-         return is_a(NUMBER, t2.keys, typevars) and is_a(t1.elements, t2.values, typevars)
-      elseif t1.typename == "record" or t1.typename == "arrayrecord" then
-         if not is_a(STRING, t2.keys, typevars) then
-            return false, "can't match a record to a map with non-string keys"
+         return false
+      elseif t2.typename == "map" then
+         if t1.typename == "map" then
+            return is_a(t1.values, t2.values, typevars)
+         elseif t1.typename == "array" then
+            return is_a(NUMBER, t2.keys, typevars) and is_a(t1.elements, t2.values, typevars)
+         elseif t1.typename == "record" or t1.typename == "arrayrecord" then
+            if not is_a(STRING, t2.keys, typevars) then
+               return false, "can't match a record to a map with non-string keys"
+            end
+            for k, f in pairs(t1.fields) do
+               local match, why_not = is_a(f, t2.values, typevars)
+               if not match then
+                  return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
+               end
+            end
+            return true
          end
-         for k, f in pairs(t1.fields) do
-            local match, why_not = is_a(f, t2.values, typevars)
-            if not match then
-               return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
+         return false
+      elseif t1.typename == "function" and t2.typename == "function" then
+         if not t2.vararg and #t1.args >#t2.args then
+            return false, "failed on number of arguments"
+         end
+         if #t1.rets <#t2.rets then
+            return false, "failed on number of returns"
+         end
+         for i = 1,#t1.args do
+            if not is_a(t1.args[i], t2.args[i] or ANY, typevars) then
+               return false, "failed on argument " .. i
+            end
+         end
+         for i = 1,#t2.rets do
+            if not same_type(t1.rets[i], t2.rets[i], typevars) then
+               return false, "failed on return " .. i
             end
          end
          return true
-      end
-      return false
-   elseif t1.typename == "function" and t2.typename == "function" then
-      if not t2.vararg and #t1.args >#t2.args then
-         return false, "failed on number of arguments"
-      end
-      if #t1.rets <#t2.rets then
-         return false, "failed on number of returns"
-      end
-      for i = 1,#t1.args do
-         if not is_a(t1.args[i], t2.args[i] or ANY, typevars) then
-            return false, "failed on argument " .. i
-         end
-      end
-      for i = 1,#t2.rets do
-         if not same_type(t1.rets[i], t2.rets[i], typevars) then
-            return false, "failed on return " .. i
-         end
+      elseif t2.typename == "boolean" then
+         return true
+      elseif t1.typename ~= t2.typename then
+         return false
       end
       return true
-   elseif t2.typename == "boolean" then
-      return true
-   elseif t1.typename ~= t2.typename then
-      return false
    end
-   return true
-end
-local function resolve_typevars(t, typevars, has_cycle)
-   has_cycle = has_cycle or {}
-   if has_cycle[t] then
-      error("HAS CYCLE IN TYPE " .. inspect(t))
-   end
-   has_cycle[t] = true
-   if t.typename == "typevar" then
-      if not typevars[t.typevar] then
-         return INVALID
+   local function resolve_typevars(t, typevars, has_cycle)
+      has_cycle = has_cycle or {}
+      if has_cycle[t] then
+         error("HAS CYCLE IN TYPE " .. inspect(t))
       end
-      return typevars[t.typevar]
-   end
-   local copy = {}
-   for k, v in pairs(t) do
-      if type(v) == "table" and k ~= "type" then
-         copy[k] = resolve_typevars(v, typevars, has_cycle)
-      else
-         copy[k] = v
+      has_cycle[t] = true
+      if t.typename == "typevar" then
+         if not typevars[t.typevar] then
+            return INVALID
+         end
+         return typevars[t.typevar]
       end
+      local copy = {}
+      for k, v in pairs(t) do
+         if type(v) == "table" and k ~= "type" then
+            copy[k] = resolve_typevars(v, typevars, has_cycle)
+         else
+            copy[k] = v
+         end
+      end
+      return copy
    end
-   return copy
-end
-local function assert_is_a(node, t1, t2, context)
-   local match, why_not = is_a(t1, t2, {})
-   if not match then
-      table.insert(errors, {
-         ["y"] = node.y,
-         ["x"] = node.x,
-         ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or ""),
-      })
-   end
-end
-local function match_func_args(node, func, args, is_method)
-   assert(type(func) == "table")
-   assert(type(args) == "table")
-   func = resolve_unary(func)
-   args = args or {}
-   local poly = func.typename == "poly" and func or {
-      ["poly"] = {
-         [1] = func,
-      },
-   }
-   local polyerrs = {}
-   local expects = {}
-   for p, f in ipairs(poly.poly) do
-      if f.typename ~= "function" then
+   local function assert_is_a(node, t1, t2, context)
+      local match, why_not = is_a(t1, t2, {})
+      if not match then
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
-            ["err"] = "not a function: " .. show_type(f),
+            ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or ""),
+         })
+      end
+   end
+   local function match_func_args(node, func, args, is_method)
+      assert(type(func) == "table")
+      assert(type(args) == "table")
+      func = resolve_unary(func)
+      args = args or {}
+      local poly = func.typename == "poly" and func or {
+         ["poly"] = {
+            [1] = func,
+         },
+      }
+      local polyerrs = {}
+      local expects = {}
+      for p, f in ipairs(poly.poly) do
+         if f.typename ~= "function" then
+            table.insert(errors, {
+               ["y"] = node.y,
+               ["x"] = node.x,
+               ["err"] = "not a function: " .. show_type(f),
+            })
+            return INVALID
+         end
+         table.insert(expects, tostring(#f.args or 0))
+         if #args == (#f.args or 0) then
+            local ok = true
+            local typevars = {}
+            for a, arg in ipairs(args) do
+               local matches, why_not = is_a(arg, f.args[a], typevars)
+               if not matches then
+                  polyerrs[p] = polyerrs[p] or {}
+                  local at = node.e2 and node.e2[a] or node
+                  table.insert(polyerrs[p], {
+                     ["y"] = at.y,
+                     ["x"] = at.x,
+                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. ": " .. (why_not or ""),
+                  })
+                  ok = false
+                  break
+               end
+            end
+            if ok == true then
+               f.rets.typename = "tuple"
+               return resolve_typevars(f.rets, typevars)
+            end
+         end
+         if #args < (#f.args or 0) then
+            local ok = true
+            local typevars = {}
+            for a, arg in ipairs(args) do
+               if not is_a(arg, f.args[a], typevars) then
+                  polyerrs[p] = polyerrs[p] or {}
+                  table.insert(polyerrs[p], {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
+                  })
+                  ok = false
+                  break
+               end
+            end
+            if ok == true then
+               f.rets.typename = "tuple"
+               return resolve_typevars(f.rets, typevars)
+            end
+         end
+         if f.vararg and #args > (#f.args or 0) then
+            local ok = true
+            local typevars = {}
+            for a = 1,#f.args do
+               local arg = args[a]
+               if not is_a(arg, f.args[a], typevars) then
+                  polyerrs[p] = polyerrs[p] or {}
+                  table.insert(polyerrs[p], {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
+                  })
+                  ok = false
+                  break
+               end
+            end
+            if ok == true then
+               f.rets.typename = "tuple"
+               return resolve_typevars(f.rets, typevars)
+            end
+         end
+      end
+      if not next(polyerrs) then
+         table.insert(errors, {
+            ["y"] = node.y,
+            ["x"] = node.x,
+            ["err"] = "wrong number of arguments (given " ..#args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback(),
+         })
+      else
+         for _, err in ipairs(polyerrs[next(polyerrs)]) do
+            table.insert(errors, err)
+         end
+      end
+      poly.poly[1].rets.typename = "tuple"
+      return poly.poly[1].rets
+   end
+   local function match_record_key(node, tbl, key, orig_tbl)
+      assert(type(tbl) == "table")
+      assert(type(key) == "table")
+      if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
+         table.insert(errors, {
+            ["y"] = node.y,
+            ["x"] = node.x,
+            ["err"] = "not a record: " .. show_type(tbl),
          })
          return INVALID
       end
-      table.insert(expects, tostring(#f.args or 0))
-      if #args == (#f.args or 0) then
-         local ok = true
-         local typevars = {}
-         for a, arg in ipairs(args) do
-            local matches, why_not = is_a(arg, f.args[a], typevars)
-            if not matches then
-               polyerrs[p] = polyerrs[p] or {}
-               local at = node.e2 and node.e2[a] or node
-               table.insert(polyerrs[p], {
-                  ["y"] = at.y,
-                  ["x"] = at.x,
-                  ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. ": " .. (why_not or ""),
-               })
-               ok = false
-               break
-            end
-         end
-         if ok == true then
-            f.rets.typename = "tuple"
-            return resolve_typevars(f.rets, typevars)
+      assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
+      if key.typename == "string" or key.typename == "unknown" or key.kind == "variable" then
+         if tbl.fields[key.tk] then
+            return tbl.fields[key.tk]
          end
       end
-      if #args < (#f.args or 0) then
-         local ok = true
-         local typevars = {}
-         for a, arg in ipairs(args) do
-            if not is_a(arg, f.args[a], typevars) then
-               polyerrs[p] = polyerrs[p] or {}
-               table.insert(polyerrs[p], {
-                  ["y"] = node.y,
-                  ["x"] = node.x,
-                  ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
-               })
-               ok = false
-               break
-            end
-         end
-         if ok == true then
-            f.rets.typename = "tuple"
-            return resolve_typevars(f.rets, typevars)
-         end
-      end
-      if f.vararg and #args > (#f.args or 0) then
-         local ok = true
-         local typevars = {}
-         for a = 1,#f.args do
-            local arg = args[a]
-            if not is_a(arg, f.args[a], typevars) then
-               polyerrs[p] = polyerrs[p] or {}
-               table.insert(polyerrs[p], {
-                  ["y"] = node.y,
-                  ["x"] = node.x,
-                  ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
-               })
-               ok = false
-               break
-            end
-         end
-         if ok == true then
-            f.rets.typename = "tuple"
-            return resolve_typevars(f.rets, typevars)
-         end
-      end
-   end
-   if not next(polyerrs) then
       table.insert(errors, {
          ["y"] = node.y,
          ["x"] = node.x,
-         ["err"] = "wrong number of arguments (given " ..#args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback(),
-      })
-   else
-      for _, err in ipairs(polyerrs[next(polyerrs)]) do
-         table.insert(errors, err)
-      end
-   end
-   poly.poly[1].rets.typename = "tuple"
-   return poly.poly[1].rets
-end
-local function match_record_key(node, tbl, key, orig_tbl)
-   assert(type(tbl) == "table")
-   assert(type(key) == "table")
-   if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
-      table.insert(errors, {
-         ["y"] = node.y,
-         ["x"] = node.x,
-         ["err"] = "not a record: " .. show_type(tbl),
+         ["err"] = "failed indexing record " .. show_type(orig_tbl) .. " with key " .. show_type(key),
       })
       return INVALID
    end
-   assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
-   if key.typename == "string" or key.typename == "unknown" or key.kind == "variable" then
-      if tbl.fields[key.tk] then
-         return tbl.fields[key.tk]
-      end
+   local function add_var(var, valtype)
+      st[#st][var] = valtype
    end
-   table.insert(errors, {
-      ["y"] = node.y,
-      ["x"] = node.x,
-      ["err"] = "failed indexing record " .. show_type(orig_tbl) .. " with key " .. show_type(key),
-   })
-   return INVALID
-end
-local function add_var(var, valtype)
-   st[#st][var] = valtype
-end
-local function add_global(var, valtype)
-   st[1][var] = valtype
-end
-local function begin_function_scope(node)
-   table.insert(st, {})
-   local args = {}
-   for _, arg in ipairs(node.args) do
-      local t = arg.decltype or {
-         ["typename"] = "unknown",
-      }
-      table.insert(args, t)
-      add_var(arg.tk, t)
+   local function add_global(var, valtype)
+      st[1][var] = valtype
    end
-   if node.name then
-      add_var(node.name.tk, {
-         ["typename"] = "function",
-         ["args"] = args,
-         ["rets"] = node.rets,
-      })
-   end
-end
-local function end_function_scope()
-   table.remove(st)
-end
-local function flatten_list(list)
-   local exps = {}
-   for i = 1,#list - 1 do
-      table.insert(exps, resolve_unary(list[i]))
-   end
-   if #list > 0 then
-      local last = list[#list]
-      if last.typename == "tuple" then
-         for _, val in ipairs(last) do
-            table.insert(exps, val)
-         end
-      else
-         table.insert(exps, last)
-      end
-   end
-   return exps
-end
-local function extract_type_fields(node, fields)
-   local ret = {}
-   for k, v in pairs(fields) do
-      if v.typename == "typetype" then
-         ret[k] = v.type
-      else
-         table.insert(errors, {
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["err"] = "expected type declaration in record: " .. k .. "; got " .. show_type(v),
-         })
-         ret[k] = INVALID
-      end
-   end
-   return ret
-end
-local function extract_type_list(node, types, name)
-   local ret = {}
-   for i, t in ipairs(types) do
-      if t.typename == "typetype" then
-         ret[i] = t.type
-      else
-         table.insert(errors, {
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["err"] = "expected type declaration in list: " .. i .. "; got " .. show_type(t),
-         })
-         ret[i] = INVALID
-      end
-   end
-   return ret
-end
-local function declare_tl_type(node, ctor, args)
-   if ctor.type.typename == "nominal" and args[1].typename == "string" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "nominal",
-            ["name"] = args[1].tk:sub(2,- 2),
-         },
-      }
-   elseif ctor.type.typename == "typevar" and args[1].typename == "string" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "typevar",
-            ["typevar"] = args[1].tk:sub(2,- 2),
-         },
-      }
-   elseif ctor.type.typename == "function" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "function",
-            ["args"] = extract_type_list(node, args[1].items or {}, "args"),
-            ["rets"] = extract_type_list(node, args[2].items or {}, "rets"),
-         },
-      }
-   elseif ctor.type.typename == "array" and args[1].typename == "typetype" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "array",
-            ["elements"] = args[1].type,
-         },
-      }
-   elseif ctor.type.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "map",
-            ["keys"] = args[1].type,
-            ["values"] = args[2].type,
-         },
-      }
-   elseif ctor.type.typename == "record" and args[1].typename == "record" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "record",
-            ["fields"] = extract_type_fields(node, args[1].fields),
-         },
-      }
-   elseif ctor.type.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
-      return {
-         ["typename"] = "typetype",
-         ["type"] = {
-            ["typename"] = "arrayrecord",
-            ["elements"] = args[1].type,
-            ["fields"] = extract_type_fields(node, args[2].fields),
-         },
-      }
-   end
-   return INVALID
-end
-local function get_assignment_values(vals)
-   if vals and #vals == 1 and vals[1].typename == "tuple" then
-      vals = vals[1]
-   end
-   return vals
-end
-local visit = {
-   ["statements"] = {
-      ["before"] = function ()
+   local function begin_function_scope(node)
       table.insert(st, {})
-   end,
-   ["after"] = function (node, children)
-   table.remove(st)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["local_declaration"] = {
-   ["after"] = function (node, children)
-   local vals = get_assignment_values(children[2])
-   for i, var in ipairs(node.vars) do
-      local decltype = node.decltype and node.decltype[i]
-      local infertype = vals and vals[i]
-      if decltype and infertype then
-         assert_is_a(node.vars[i], infertype, decltype, "local declaration")
+      local args = {}
+      for _, arg in ipairs(node.args) do
+         local t = arg.decltype or {
+            ["typename"] = "unknown",
+         }
+         table.insert(args, t)
+         add_var(arg.tk, t)
       end
-      local t = decltype or infertype or {
-         ["typename"] = "unknown",
-      }
-      add_var(var.tk, t)
-   end
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["assignment"] = {
-   ["after"] = function (node, children)
-   local vals = get_assignment_values(children[2])
-   local exps = flatten_list(vals)
-   for i, var in ipairs(children[1]) do
-      if var then
-         local val = exps[i] or NIL
-         assert_is_a(node.vars[i], val, var, "assignment")
-      else
-         table.insert(errors, {
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["err"] = "unknown variable",
+      if node.name then
+         add_var(node.name.tk, {
+            ["typename"] = "function",
+            ["args"] = args,
+            ["rets"] = node.rets,
          })
       end
    end
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["if"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["while"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["repeat"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["do"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["forin"] = {
-   ["before"] = function ()
-   table.insert(st, {})
-end,
-["before_statements"] = function (node)
-if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then
-   local t = resolve_unary(node.exp.e2.type)
-   if t.typename == "array" or t.typename == "arrayrecord" then
-      add_var(node.vars[1].tk, NUMBER)
-      add_var(node.vars[2].tk, t.elements)
-   else
-      table.insert(errors, {
-         ["y"] = node.y,
-         ["x"] = node.x,
-         ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
-      })
+   local function end_function_scope()
+      table.remove(st)
    end
-elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then
-   local t = resolve_unary(node.exp.e2.type)
-   if t.typename == "map" then
-      add_var(node.vars[1].tk, t.keys)
-      add_var(node.vars[2].tk, t.values)
-   elseif t.typename == "record" then
-      add_var(node.vars[1].tk, t.string)
-   else
-      table.insert(errors, {
-         ["y"] = node.y,
-         ["x"] = node.x,
-         ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(node.exp.e2.type),
-      })
-   end
-end
-end,
-["after"] = function (node, children)
-table.remove(st)
-node.type = {
-   ["typename"] = "none",
-}
-end,
-},
-["fornum"] = {
-   ["before"] = function (node)
-   table.insert(st, {})
-   add_var(node.var.tk, NUMBER)
-end,
-["after"] = function (node, children)
-table.remove(st)
-node.type = {
-   ["typename"] = "none",
-}
-end,
-},
-["return"] = {
-   ["after"] = function (node, children)
-   node.type = children[1]
-end,
-},
-["break"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["elseif"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "none",
-   }
-end,
-},
-["variables"] = {
-   ["after"] = function (node, children)
-   node.type = children
-   node.type.typename = "tuple"
-end,
-},
-["table_literal"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = "record",
-   }
-   for _, child in ipairs(children) do
-      if child.typename == "kv" then
-         if not node.type.fields then
-            node.type.fields = {}
-         end
-         node.type.fields[child.k] = child.v
-      elseif child.typename == "iv" then
-         if not node.type.items then
-            node.type.items = {}
-         end
-         node.type.items[tonumber(child.i)] = child.v
-         if not node.type.elements then
-            node.type.typename = "arrayrecord"
-            node.type.elements = assert(child.v)
-         else
-            if not is_a(child.v, node.type.elements) then
-               node.type.elements = {
-                  ["typename"] = "poly",
-                  ["poly"] = node.type.items,
-               }
+   local function flatten_list(list)
+      local exps = {}
+      for i = 1,#list - 1 do
+         table.insert(exps, resolve_unary(list[i]))
+      end
+      if #list > 0 then
+         local last = list[#list]
+         if last.typename == "tuple" then
+            for _, val in ipairs(last) do
+               table.insert(exps, val)
             end
+         else
+            table.insert(exps, last)
          end
       end
+      return exps
    end
-   if not node.type.fields then
-      if node.type.elements then
-         node.type.typename = "array"
-      else
-         node.type.fields = {}
-      end
-   end
-end,
-},
-["table_item"] = {
-   ["after"] = function (node, children)
-   local key = node.key.tk
-   if children[1].typename == "number" then
-      node.type = {
-         ["typename"] = "iv",
-         ["i"] = tonumber(key),
-         ["v"] = children[2],
-      }
-      return
-   end
-   if node.key.kind == "string" then
-      key = key:sub(2,- 2)
-   end
-   node.type = {
-      ["typename"] = "kv",
-      ["k"] = key,
-      ["v"] = children[2],
-   }
-end,
-},
-["local_function"] = {
-   ["before"] = function (node)
-   begin_function_scope(node)
-end,
-["after"] = function (node, children)
-end_function_scope()
-add_var(node.name.tk, {
-   ["typename"] = "function",
-   ["args"] = children[2],
-   ["rets"] = children[3],
-})
-node.type = {
-   ["typename"] = "none",
-}
-end,
-},
-["global_function"] = {
-   ["before"] = function ()
-   begin_function_scope(node)
-end,
-["after"] = function (node, children)
-end_function_scope()
-add_global(node.name.tk, {
-   ["typename"] = "function",
-   ["args"] = children[2],
-   ["rets"] = children[3],
-})
-node.type = {
-   ["typename"] = "none",
-}
-end,
-},
-["module_function"] = {
-   ["before"] = function (node)
-   begin_function_scope(node)
-end,
-["after"] = function (node, children)
-end_function_scope()
-local var = find_var(node.module.tk)
-if var.typename == "record" or var.typename == "arrayrecord" then
-   var.fields = var.fields or {}
-   var.fields[node.name.tk] = {
-      ["typename"] = "function",
-      ["args"] = children[3],
-      ["rets"] = children[4],
-   }
-else
-   table.insert(errors, {
-      ["y"] = node.y,
-      ["x"] = node.x,
-      ["err"] = "not a module: " .. node.module.tk,
-   })
-end
-node.type = {
-   ["typename"] = "none",
-}
-end,
-},
-["function"] = {
-   ["before"] = function (node)
-   begin_function_scope(node)
-end,
-["after"] = function (node, children)
-end_function_scope()
-node.type = {
-   ["typename"] = "function",
-   ["args"] = children[1],
-   ["rets"] = children[2],
-}
-end,
-},
-["op"] = {
-   ["after"] = function (node, children)
-   local a = children[1]
-   local b = children[3]
-   local orig_a = a
-   if node.op.op == "@funcall" then
-      if a.typename == "typetype" then
-         node.type = declare_tl_type(node, a, b)
-      else
-         node.type = match_func_args(node, a, b, false)
-      end
-   elseif node.op.op == "@methcall" then
-      local obj = a
-      if obj.typename == "string" then
-         obj = find_var("string")
-      end
-      local func = match_record_key(node, obj, node.method, orig_a)
-      if func.typename == "function" then
-         table.insert(b,1, a)
-         node.type = match_func_args(node, func, b, true)
-      else
-         table.insert(errors, {
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["err"] = "method not found: " .. show_type(node),
-         })
-         node.type = INVALID
-      end
-   elseif node.op.op == "@index" then
-      a = resolve_unary(a)
-      b = resolve_unary(b)
-      if a.typename == "array" or a.typename == "arrayrecord" then
-         if is_a(b, NUMBER) then
-            node.type = a.elements
+   local function extract_type_fields(node, fields)
+      local ret = {}
+      for k, v in pairs(fields) do
+         if v.typename == "typetype" then
+            ret[k] = v.type
          else
             table.insert(errors, {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["err"] = "wrong index type: " .. show_type(b) .. ", expected number",
+               ["err"] = "expected type declaration in record: " .. k .. "; got " .. show_type(v),
             })
-            node.type = INVALID
+            ret[k] = INVALID
          end
-      elseif a.typename == "map" then
-         if is_a(b, a.keys) then
-            node.type = a.values
+      end
+      return ret
+   end
+   local function extract_type_list(node, types, name)
+      local ret = {}
+      for i, t in ipairs(types) do
+         if t.typename == "typetype" then
+            ret[i] = t.type
          else
             table.insert(errors, {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["err"] = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys),
+               ["err"] = "expected type declaration in list: " .. i .. "; got " .. show_type(t),
             })
-            node.type = INVALID
+            ret[i] = INVALID
          end
-      else
-         node.type = match_record_key(node, a, b, orig_a)
       end
-   elseif node.op.op == "." then
-      if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then
-         node.type = {
+      return ret
+   end
+   local function declare_tl_type(node, ctor, args)
+      if ctor.type.typename == "nominal" and args[1].typename == "string" then
+         return {
             ["typename"] = "typetype",
             ["type"] = {
-               ["typename"] = tl_type_declarators[node.e2.tk],
+               ["typename"] = "nominal",
+               ["name"] = args[1].tk:sub(2,- 2),
             },
          }
-         return
+      elseif ctor.type.typename == "typevar" and args[1].typename == "string" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "typevar",
+               ["typevar"] = args[1].tk:sub(2,- 2),
+            },
+         }
+      elseif ctor.type.typename == "function" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "function",
+               ["args"] = extract_type_list(node, args[1].items or {}, "args"),
+               ["rets"] = extract_type_list(node, args[2].items or {}, "rets"),
+            },
+         }
+      elseif ctor.type.typename == "array" and args[1].typename == "typetype" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "array",
+               ["elements"] = args[1].type,
+            },
+         }
+      elseif ctor.type.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "map",
+               ["keys"] = args[1].type,
+               ["values"] = args[2].type,
+            },
+         }
+      elseif ctor.type.typename == "record" and args[1].typename == "record" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "record",
+               ["fields"] = extract_type_fields(node, args[1].fields),
+            },
+         }
+      elseif ctor.type.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
+         return {
+            ["typename"] = "typetype",
+            ["type"] = {
+               ["typename"] = "arrayrecord",
+               ["elements"] = args[1].type,
+               ["fields"] = extract_type_fields(node, args[2].fields),
+            },
+         }
       end
-      a = resolve_unary(a)
-      if a.typename == "map" then
-         if is_a(STRING, a.keys) then
-            node.type = a.values
-         else
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "cannot use . index, expects keys of type " .. show_type(a.keys),
-            })
-            node.type = INVALID
-         end
-      else
-         node.type = match_record_key(node, a, {
-            ["typename"] = "string",
-            ["tk"] = node.e2.tk,
-         }, orig_a)
-      end
-   elseif node.op.op == "and" then
-      b = resolve_unary(b)
-      node.type = b
-   elseif node.op.op == "or" and is_empty_table(b) then
-      node.type = a
-   elseif node.op.op == "or" and a.typename == "nominal" and b.typename == "nominal" and a.name == b.name then
-      node.type = a
-   elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
-      node.type = a
-   elseif op_types[node.op.op] then
-      a = resolve_unary(a)
-      local types_op = op_types[node.op.op][node.op.arity]
-      if node.op.arity == 1 then
-         node.type = types_op[a.typename]
-         if not node.type then
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename,
-            })
-            node.type = INVALID
-         end
-      elseif node.op.arity == 2 then
-         b = resolve_unary(b)
-         node.type = types_op[a.typename] and types_op[a.typename][b.typename]
-         if not node.type then
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
-            })
-            node.type = INVALID
-         end
-      end
-   else
-      error("unknown node op " .. node.op.op .. " at " .. inspect(node))
+      return INVALID
    end
-end,
-},
-["variable"] = {
-   ["after"] = function (node, children)
-   node.type = find_var(node.tk)
-end,
-},
-["typedecl"] = {
-   ["after"] = function (node, children)
-   node.type = node
-end,
-},
-}
-visit["values"] = visit["variables"]
-visit["expression_list"] = visit["variables"]
-visit["argument_list"] = visit["variables"]
-visit["type_list"] = visit["variables"]
-visit["word"] = visit["variable"]
-visit["string"] = {
-   ["after"] = function (node, children)
-   node.type = {
-      ["typename"] = node.kind,
-      ["tk"] = node.tk,
+   local function get_assignment_values(vals)
+      if vals and #vals == 1 and vals[1].typename == "tuple" then
+         vals = vals[1]
+      end
+      return vals
+   end
+   local visit = {
+      ["statements"] = {
+         ["before"] = function ()
+            table.insert(st, {})
+         end,
+         ["after"] = function (node, children)
+            table.remove(st)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["local_declaration"] = {
+         ["after"] = function (node, children)
+            local vals = get_assignment_values(children[2])
+            for i, var in ipairs(node.vars) do
+               local decltype = node.decltype and node.decltype[i]
+               local infertype = vals and vals[i]
+               if decltype and infertype then
+                  assert_is_a(node.vars[i], infertype, decltype, "local declaration")
+               end
+               local t = decltype or infertype or {
+                  ["typename"] = "unknown",
+               }
+               add_var(var.tk, t)
+            end
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["assignment"] = {
+         ["after"] = function (node, children)
+            local vals = get_assignment_values(children[2])
+            local exps = flatten_list(vals)
+            for i, var in ipairs(children[1]) do
+               if var then
+                  local val = exps[i] or NIL
+                  assert_is_a(node.vars[i], val, var, "assignment")
+               else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "unknown variable",
+                  })
+               end
+            end
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["if"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["while"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["repeat"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["do"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["forin"] = {
+         ["before"] = function ()
+            table.insert(st, {})
+         end,
+         ["before_statements"] = function (node)
+            if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then
+               local t = resolve_unary(node.exp.e2.type)
+               if t.typename == "array" or t.typename == "arrayrecord" then
+                  add_var(node.vars[1].tk, NUMBER)
+                  add_var(node.vars[2].tk, t.elements)
+               else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
+                  })
+               end
+            elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then
+               local t = resolve_unary(node.exp.e2.type)
+               if t.typename == "map" then
+                  add_var(node.vars[1].tk, t.keys)
+                  add_var(node.vars[2].tk, t.values)
+               elseif t.typename == "record" then
+                  add_var(node.vars[1].tk, t.string)
+               else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(node.exp.e2.type),
+                  })
+               end
+            end
+         end,
+         ["after"] = function (node, children)
+            table.remove(st)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["fornum"] = {
+         ["before"] = function (node)
+            table.insert(st, {})
+            add_var(node.var.tk, NUMBER)
+         end,
+         ["after"] = function (node, children)
+            table.remove(st)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["return"] = {
+         ["after"] = function (node, children)
+            node.type = children[1]
+         end,
+      },
+      ["break"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["elseif"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["variables"] = {
+         ["after"] = function (node, children)
+            node.type = children
+            node.type.typename = "tuple"
+         end,
+      },
+      ["table_literal"] = {
+         ["after"] = function (node, children)
+            node.type = {
+               ["typename"] = "record",
+            }
+            for _, child in ipairs(children) do
+               if child.typename == "kv" then
+                  if not node.type.fields then
+                     node.type.fields = {}
+                  end
+                  node.type.fields[child.k] = child.v
+               elseif child.typename == "iv" then
+                  if not node.type.items then
+                     node.type.items = {}
+                  end
+                  node.type.items[tonumber(child.i)] = child.v
+                  if not node.type.elements then
+                     node.type.typename = "arrayrecord"
+                     node.type.elements = assert(child.v)
+                  else
+                     if not is_a(child.v, node.type.elements) then
+                        node.type.elements = {
+                           ["typename"] = "poly",
+                           ["poly"] = node.type.items,
+                        }
+                     end
+                  end
+               end
+            end
+            if not node.type.fields then
+               if node.type.elements then
+                  node.type.typename = "array"
+               else
+                  node.type.fields = {}
+               end
+            end
+         end,
+      },
+      ["table_item"] = {
+         ["after"] = function (node, children)
+            local key = node.key.tk
+            if children[1].typename == "number" then
+               node.type = {
+                  ["typename"] = "iv",
+                  ["i"] = tonumber(key),
+                  ["v"] = children[2],
+               }
+               return
+            end
+            if node.key.kind == "string" then
+               key = key:sub(2,- 2)
+            end
+            node.type = {
+               ["typename"] = "kv",
+               ["k"] = key,
+               ["v"] = children[2],
+            }
+         end,
+      },
+      ["local_function"] = {
+         ["before"] = function (node)
+            begin_function_scope(node)
+         end,
+         ["after"] = function (node, children)
+            end_function_scope()
+            add_var(node.name.tk, {
+               ["typename"] = "function",
+               ["args"] = children[2],
+               ["rets"] = children[3],
+            })
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["global_function"] = {
+         ["before"] = function ()
+            begin_function_scope(node)
+         end,
+         ["after"] = function (node, children)
+            end_function_scope()
+            add_global(node.name.tk, {
+               ["typename"] = "function",
+               ["args"] = children[2],
+               ["rets"] = children[3],
+            })
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["module_function"] = {
+         ["before"] = function (node)
+            begin_function_scope(node)
+         end,
+         ["after"] = function (node, children)
+            end_function_scope()
+            local var = find_var(node.module.tk)
+            if var.typename == "record" or var.typename == "arrayrecord" then
+               var.fields = var.fields or {}
+               var.fields[node.name.tk] = {
+                  ["typename"] = "function",
+                  ["args"] = children[3],
+                  ["rets"] = children[4],
+               }
+            else
+               table.insert(errors, {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
+                  ["err"] = "not a module: " .. node.module.tk,
+               })
+            end
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["function"] = {
+         ["before"] = function (node)
+            begin_function_scope(node)
+         end,
+         ["after"] = function (node, children)
+            end_function_scope()
+            node.type = {
+               ["typename"] = "function",
+               ["args"] = children[1],
+               ["rets"] = children[2],
+            }
+         end,
+      },
+      ["op"] = {
+         ["after"] = function (node, children)
+            local a = children[1]
+            local b = children[3]
+            local orig_a = a
+            if node.op.op == "@funcall" then
+               if a.typename == "typetype" then
+                  node.type = declare_tl_type(node, a, b)
+               else
+                  node.type = match_func_args(node, a, b, false)
+               end
+            elseif node.op.op == "@methcall" then
+               local obj = a
+               if obj.typename == "string" then
+                  obj = find_var("string")
+               end
+               local func = match_record_key(node, obj, node.method, orig_a)
+               if func.typename == "function" then
+                  table.insert(b,1, a)
+                  node.type = match_func_args(node, func, b, true)
+               else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "method not found: " .. show_type(node),
+                  })
+                  node.type = INVALID
+               end
+            elseif node.op.op == "@index" then
+               a = resolve_unary(a)
+               b = resolve_unary(b)
+               if a.typename == "array" or a.typename == "arrayrecord" then
+                  if is_a(b, NUMBER) then
+                     node.type = a.elements
+                  else
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "wrong index type: " .. show_type(b) .. ", expected number",
+                     })
+                     node.type = INVALID
+                  end
+               elseif a.typename == "map" then
+                  if is_a(b, a.keys) then
+                     node.type = a.values
+                  else
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys),
+                     })
+                     node.type = INVALID
+                  end
+               else
+                  node.type = match_record_key(node, a, b, orig_a)
+               end
+            elseif node.op.op == "." then
+               if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then
+                  node.type = {
+                     ["typename"] = "typetype",
+                     ["type"] = {
+                        ["typename"] = tl_type_declarators[node.e2.tk],
+                     },
+                  }
+                  return
+               end
+               a = resolve_unary(a)
+               if a.typename == "map" then
+                  if is_a(STRING, a.keys) then
+                     node.type = a.values
+                  else
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "cannot use . index, expects keys of type " .. show_type(a.keys),
+                     })
+                     node.type = INVALID
+                  end
+               else
+                  node.type = match_record_key(node, a, {
+                     ["typename"] = "string",
+                     ["tk"] = node.e2.tk,
+                  }, orig_a)
+               end
+            elseif node.op.op == "and" then
+               b = resolve_unary(b)
+               node.type = b
+            elseif node.op.op == "or" and is_empty_table(b) then
+               node.type = a
+            elseif node.op.op == "or" and a.typename == "nominal" and b.typename == "nominal" and a.name == b.name then
+               node.type = a
+            elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
+               node.type = a
+            elseif op_types[node.op.op] then
+               a = resolve_unary(a)
+               local types_op = op_types[node.op.op][node.op.arity]
+               if node.op.arity == 1 then
+                  node.type = types_op[a.typename]
+                  if not node.type then
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename,
+                     })
+                     node.type = INVALID
+                  end
+               elseif node.op.arity == 2 then
+                  b = resolve_unary(b)
+                  node.type = types_op[a.typename] and types_op[a.typename][b.typename]
+                  if not node.type then
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
+                     })
+                     node.type = INVALID
+                  end
+               end
+            else
+               error("unknown node op " .. node.op.op)
+            end
+         end,
+      },
+      ["variable"] = {
+         ["after"] = function (node, children)
+            node.type = find_var(node.tk)
+         end,
+      },
+      ["typedecl"] = {
+         ["after"] = function (node, children)
+            node.type = node
+         end,
+      },
    }
-   return node.type
-end,
-}
-visit["number"] = visit["string"]
-visit["nil"] = visit["string"]
-visit["boolean"] = visit["string"]
-visit["array"] = visit["string"]
-visit["..."] = visit["string"]
-visit["@after"] = {
-   ["after"] = function (node, children)
-   assert(type(node.type) == "table", node.kind .. " did not produce a type")
-   assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
-   return node.type
-end,
-}
-recurse_ast(ast, visit)
-return errors
+   visit["values"] = visit["variables"]
+   visit["expression_list"] = visit["variables"]
+   visit["argument_list"] = visit["variables"]
+   visit["type_list"] = visit["variables"]
+   visit["word"] = visit["variable"]
+   visit["string"] = {
+      ["after"] = function (node, children)
+         node.type = {
+            ["typename"] = node.kind,
+            ["tk"] = node.tk,
+         }
+         return node.type
+      end,
+   }
+   visit["number"] = visit["string"]
+   visit["nil"] = visit["string"]
+   visit["boolean"] = visit["string"]
+   visit["array"] = visit["string"]
+   visit["..."] = visit["string"]
+   visit["@after"] = {
+      ["after"] = function (node, children)
+         assert(type(node.type) == "table", node.kind .. " did not produce a type")
+         assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
+         return node.type
+      end,
+   }
+   recurse_ast(ast, visit)
+   return errors
 end
 return tl

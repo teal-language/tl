@@ -255,6 +255,7 @@ local should_unindent: {string:boolean} = {
 }
 
 local should_indent: {string:boolean} = {
+   ["{"] = true,
    ["for"] = true,
    ["if"] = true,
    ["while"] = true,
@@ -266,39 +267,36 @@ local should_indent: {string:boolean} = {
 function tl.pretty_print_tokens(tokens: {Token}): string
    local y = 1
    local out = {}
-   local kind: string = nil
    local indent = 0
-   local bracket = false
+   local newline = false
+   local kind: string = ""
    for _, t in ipairs(tokens) do
       while t.y > y do
-         if bracket then
-            indent = indent + 1
-            bracket = false
-         end
          table.insert(out, "\n")
          y = y + 1
-         kind = nil
+         newline = true
+         kind = ""
       end
-      if kind == nil then
-         if should_unindent[t.tk] then
-            indent = indent - 1
-         end
+      if should_unindent[t.tk] then
+         indent = indent - 1
          if indent < 0 then
             indent = 0
          end
+      end
+      if newline then
          for _ = 1, indent do
             table.insert(out, "   ")
          end
-         if should_indent[t.tk] or (t.tk == "local" and tokens[_+1].tk == "function") then
-            indent = indent + 1
-         end
+         newline = false
+      end
+      if should_indent[t.tk] then
+         indent = indent + 1
       end
       if add_space[(kind or "") .. ":" .. t.kind] then
          table.insert(out, " ")
       end
       table.insert(out, t.tk)
-      kind = t.kind
-      bracket = (t.tk == "{")
+      kind = t.kind or ""
    end
    return table.concat(out)
 end
