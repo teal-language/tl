@@ -328,7 +328,7 @@ local Node = tl.record(tl.nominal("Node"), {
    ["key"] = tl.nominal("Node"),
    ["value"] = tl.nominal("Node"),
    ["args"] = tl.nominal("Node"),
-   ["rets"] = tl.nominal("Node"),
+   ["rets"] = tl.nominal("Type"),
    ["body"] = tl.nominal("Node"),
    ["vararg"] = tl.boolean,
    ["name"] = tl.nominal("Node"),
@@ -383,6 +383,15 @@ local function verify_tk(tokens, i, errs, tk)
    return fail(tokens, i, errs)
 end
 local function new_node(tokens, i, kind)
+   local t = tokens[i]
+   return {
+      ["y"] = t.y,
+      ["x"] = t.x,
+      ["tk"] = t.tk,
+      ["kind"] = kind or t.kind,
+   }
+end
+local function new_type(tokens, i, kind)
    local t = tokens[i]
    return {
       ["y"] = t.y,
@@ -511,21 +520,21 @@ local function parse_type(tokens, i, errs)
       return i, node
    elseif tokens[i].tk == "{" then
       i = i + 1
-      local node = new_node(tokens, i, "typedecl")
+      local decl = new_type(tokens, i, "typedecl")
       local t
       i, t = parse_type(tokens, i, errs)
       if tokens[i].tk == "}" then
-         node.typename = "array"
-         node.elements = t
+         decl.typename = "array"
+         decl.elements = t
          i = verify_tk(tokens, i, errs, "}")
       elseif tokens[i].tk == ":" then
-         node.typename = "map"
+         decl.typename = "map"
          i = i + 1
-         node.keys = t
-         i, node.values = parse_type(tokens, i, errs)
+         decl.keys = t
+         i, decl.values = parse_type(tokens, i, errs)
          i = verify_tk(tokens, i, errs, "}")
       end
-      return i, node
+      return i, decl
    elseif tokens[i].kind == "word" then
       return i + 1, {
          ["kind"] = "typedecl",
@@ -536,12 +545,12 @@ local function parse_type(tokens, i, errs)
    return fail(tokens, i, errs)
 end
 parse_type_list = function (tokens, i, errs, open)
-   local node = new_node(tokens, i, "type_list")
+   local list = new_type(tokens, i, "type_list")
    if tokens[i].tk == (open or ":") then
       i = i + 1
-      i = parse_trying_list(tokens, i, errs, node, parse_type)
+      i = parse_trying_list(tokens, i, errs, list, parse_type)
    end
-   return i, node
+   return i, list
 end
 local function parse_function_value(tokens, i, errs)
    local node = new_node(tokens, i, "function")
@@ -856,7 +865,7 @@ local function parse_if(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "then")
    i, node.thenpart = parse_statements(tokens, i, errs)
    node.elseifs = {}
-   while tokens[i].tk == "elseif" do
+   while tokens[i] and tokens[i].tk == "elseif" do
       i = i + 1
       local subnode = new_node(tokens, i, "elseif")
       i, subnode.exp = parse_expression(tokens, i, errs)
@@ -864,7 +873,7 @@ local function parse_if(tokens, i, errs)
       i, subnode.thenpart = parse_statements(tokens, i, errs)
       table.insert(node.elseifs, subnode)
    end
-   if tokens[i].tk == "else" then
+   if tokens[i] and tokens[i].tk == "else" then
       i = i + 1
       i, node.elsepart = parse_statements(tokens, i, errs)
    end
@@ -1055,20 +1064,20 @@ local function recurse_ast(ast, visitor)
    end
    local xs = {}
    if ast.kind == "statements" or ast.kind == "variables" or ast.kind == "values" or ast.kind == "argument_list" or ast.kind == "expression_list" or ast.kind == "type_list" or ast.kind == "table_literal" then
-      for _, child in ipairs(ast) do
-         table.insert(xs, recurse_ast(child, visitor) or false)
+      for i, child in ipairs(ast) do
+         xs[i] = recurse_ast(child, visitor)
       end
    elseif ast.kind == "local_declaration" or ast.kind == "assignment" then
-      table.insert(xs, recurse_ast(ast.vars, visitor) or false)
+      xs[1] = recurse_ast(ast.vars, visitor)
       if ast.exps then
-         table.insert(xs, recurse_ast(ast.exps, visitor) or false)
+         xs[2] = recurse_ast(ast.exps, visitor)
       end
    elseif ast.kind == "table_item" then
       table.insert(xs, recurse_ast(ast.key, visitor) or false)
       table.insert(xs, recurse_ast(ast.value, visitor) or false)
    elseif ast.kind == "if" then
-      table.insert(xs, recurse_ast(ast.exp, visitor) or false)
-      table.insert(xs, recurse_ast(ast.thenpart, visitor) or false)
+      xs[1] = recurse_ast(ast.exp, visitor) or false
+      xs[2] = recurse_ast(ast.thenpart, visitor) or false
       local elseifs = {}
       for _, e in ipairs(ast.elseifs) do
          table.insert(elseifs, recurse_ast(e, visitor) or false)
@@ -1608,79 +1617,79 @@ local INVALID = {
    ["typename"] = "invalid",
 }
 local numeric_binop = {
-   [2] = {
-      ["number"] = {
-         ["number"] = NUMBER,
-      },
+   ["number"] = {
+      ["number"] = NUMBER,
    },
 }
 local relational_binop = {
-   [2] = {
-      ["number"] = {
-         ["number"] = BOOLEAN,
-      },
-      ["string"] = {
-         ["string"] = BOOLEAN,
-      },
-      ["boolean"] = {
-         ["boolean"] = BOOLEAN,
-      },
+   ["number"] = {
+      ["number"] = BOOLEAN,
+   },
+   ["string"] = {
+      ["string"] = BOOLEAN,
+   },
+   ["boolean"] = {
+      ["boolean"] = BOOLEAN,
    },
 }
 local equality_binop = {
-   [2] = {
-      ["number"] = {
-         ["number"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["string"] = {
-         ["string"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["boolean"] = {
-         ["boolean"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["record"] = {
-         ["arrayrecord"] = BOOLEAN,
-         ["record"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["array"] = {
-         ["arrayrecord"] = BOOLEAN,
-         ["array"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["arrayrecord"] = {
-         ["arrayrecord"] = BOOLEAN,
-         ["record"] = BOOLEAN,
-         ["array"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
-      ["map"] = {
-         ["map"] = BOOLEAN,
-         ["nil"] = BOOLEAN,
-      },
+   ["number"] = {
+      ["number"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["string"] = {
+      ["string"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["boolean"] = {
+      ["boolean"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["record"] = {
+      ["arrayrecord"] = BOOLEAN,
+      ["record"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["array"] = {
+      ["arrayrecord"] = BOOLEAN,
+      ["array"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["arrayrecord"] = {
+      ["arrayrecord"] = BOOLEAN,
+      ["record"] = BOOLEAN,
+      ["array"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   },
+   ["map"] = {
+      ["map"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
    },
 }
-local op_types = {
+local unop_types = {
    ["#"] = {
-      [1] = {
-         ["arrayrecord"] = NUMBER,
-         ["string"] = NUMBER,
-         ["array"] = NUMBER,
-         ["map"] = NUMBER,
-      },
+      ["arrayrecord"] = NUMBER,
+      ["string"] = NUMBER,
+      ["array"] = NUMBER,
+      ["map"] = NUMBER,
    },
+   ["-"] = {
+      ["number"] = NUMBER,
+   },
+   ["not"] = {
+      ["string"] = BOOLEAN,
+      ["boolean"] = BOOLEAN,
+      ["record"] = BOOLEAN,
+      ["arrayrecord"] = BOOLEAN,
+      ["array"] = BOOLEAN,
+      ["map"] = BOOLEAN,
+   },
+}
+local binop_types = {
    ["+"] = numeric_binop,
    ["-"] = {
-      [1] = {
+      ["number"] = {
          ["number"] = NUMBER,
-      },
-      [2] = {
-         ["number"] = {
-            ["number"] = NUMBER,
-         },
       },
    },
    ["*"] = numeric_binop,
@@ -1691,58 +1700,44 @@ local op_types = {
    [">="] = relational_binop,
    ["<"] = relational_binop,
    [">"] = relational_binop,
-   ["not"] = {
-      [1] = {
-         ["string"] = BOOLEAN,
-         ["boolean"] = BOOLEAN,
-         ["record"] = BOOLEAN,
-         ["arrayrecord"] = BOOLEAN,
-         ["array"] = BOOLEAN,
-         ["map"] = BOOLEAN,
-      },
-   },
    ["or"] = {
-      [2] = {
-         ["boolean"] = {
-            ["boolean"] = BOOLEAN,
-            ["function"] = FUNCTION,
-         },
-         ["number"] = {
-            ["number"] = NUMBER,
-            ["boolean"] = BOOLEAN,
-         },
-         ["string"] = {
-            ["string"] = STRING,
-            ["boolean"] = BOOLEAN,
-         },
-         ["function"] = {
-            ["function"] = FUNCTION,
-            ["boolean"] = BOOLEAN,
-         },
-         ["array"] = {
-            ["boolean"] = BOOLEAN,
-         },
-         ["record"] = {
-            ["boolean"] = BOOLEAN,
-         },
-         ["arrayrecord"] = {
-            ["boolean"] = BOOLEAN,
-         },
-         ["map"] = {
-            ["boolean"] = BOOLEAN,
-         },
+      ["boolean"] = {
+         ["boolean"] = BOOLEAN,
+         ["function"] = FUNCTION,
+      },
+      ["number"] = {
+         ["number"] = NUMBER,
+         ["boolean"] = BOOLEAN,
+      },
+      ["string"] = {
+         ["string"] = STRING,
+         ["boolean"] = BOOLEAN,
+      },
+      ["function"] = {
+         ["function"] = FUNCTION,
+         ["boolean"] = BOOLEAN,
+      },
+      ["array"] = {
+         ["boolean"] = BOOLEAN,
+      },
+      ["record"] = {
+         ["boolean"] = BOOLEAN,
+      },
+      ["arrayrecord"] = {
+         ["boolean"] = BOOLEAN,
+      },
+      ["map"] = {
+         ["boolean"] = BOOLEAN,
       },
    },
    [".."] = {
-      [2] = {
-         ["string"] = {
-            ["string"] = STRING,
-            ["number"] = STRING,
-         },
-         ["number"] = {
-            ["number"] = STRING,
-            ["string"] = STRING,
-         },
+      ["string"] = {
+         ["string"] = STRING,
+         ["number"] = STRING,
+      },
+      ["number"] = {
+         ["number"] = STRING,
+         ["string"] = STRING,
       },
    },
 }
@@ -1768,6 +1763,12 @@ local function show_type(t)
          table.insert(out, show_type(v))
       end
       return "(" .. table.concat(out, ", ") .. ")"
+   elseif t.typename == "poly" then
+      local out = {}
+      for _, v in ipairs(t.poly) do
+         table.insert(out, show_type(v))
+      end
+      return table.concat(out, " or ")
    elseif t.typename == "map" then
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
@@ -1775,11 +1776,11 @@ local function show_type(t)
    elseif t.typename == "string" or t.typename == "number" or t.typename == "boolean" then
       return t.typename
    elseif t.typename == "unknown" then
-      return "<unknown>"
+      return "<unknown type>"
    elseif t.typename == "invalid" then
-      return "<invalid>"
+      return "<invalid type>"
    elseif t.typename == "any" then
-      return "<any>"
+      return "<any type>"
    else
       return inspect(t)
    end
@@ -2298,6 +2299,30 @@ function tl.type_check(ast)
          })
       end
    end
+   local function try_match_func_args(node, f, args, polyerrs, p, is_method)
+      local ok = true
+      local typevars = {}
+      for a = 1, math.min(#args,#f.args) do
+         local arg = args[a]
+         local matches, why_not = is_a(arg, f.args[a], typevars)
+         if not matches then
+            polyerrs[p] = polyerrs[p] or {}
+            local at = node.e2 and node.e2[a] or node
+            table.insert(polyerrs[p], {
+               ["y"] = at.y,
+               ["x"] = at.x,
+               ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. (why_not and ": " .. why_not or ""),
+            })
+            ok = false
+            break
+         end
+      end
+      if ok == true then
+         f.rets.typename = "tuple"
+         return resolve_typevars(f.rets, typevars)
+      end
+      return nil
+   end
    local function match_func_args(node, func, args, is_method)
       assert(type(func) == "table")
       assert(type(args) == "table")
@@ -2321,66 +2346,25 @@ function tl.type_check(ast)
          end
          table.insert(expects, tostring(#f.args or 0))
          if #args == (#f.args or 0) then
-            local ok = true
-            local typevars = {}
-            for a, arg in ipairs(args) do
-               local matches, why_not = is_a(arg, f.args[a], typevars)
-               if not matches then
-                  polyerrs[p] = polyerrs[p] or {}
-                  local at = node.e2 and node.e2[a] or node
-                  table.insert(polyerrs[p], {
-                     ["y"] = at.y,
-                     ["x"] = at.x,
-                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. ": " .. (why_not or ""),
-                  })
-                  ok = false
-                  break
-               end
-            end
-            if ok == true then
-               f.rets.typename = "tuple"
-               return resolve_typevars(f.rets, typevars)
+            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            if matched then
+               return matched
             end
          end
+      end
+      for p, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
-            local ok = true
-            local typevars = {}
-            for a, arg in ipairs(args) do
-               if not is_a(arg, f.args[a], typevars) then
-                  polyerrs[p] = polyerrs[p] or {}
-                  table.insert(polyerrs[p], {
-                     ["y"] = node.y,
-                     ["x"] = node.x,
-                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
-                  })
-                  ok = false
-                  break
-               end
-            end
-            if ok == true then
-               f.rets.typename = "tuple"
-               return resolve_typevars(f.rets, typevars)
+            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            if matched then
+               return matched
             end
          end
+      end
+      for p, f in ipairs(poly.poly) do
          if f.vararg and #args > (#f.args or 0) then
-            local ok = true
-            local typevars = {}
-            for a = 1,#f.args do
-               local arg = args[a]
-               if not is_a(arg, f.args[a], typevars) then
-                  polyerrs[p] = polyerrs[p] or {}
-                  table.insert(polyerrs[p], {
-                     ["y"] = node.y,
-                     ["x"] = node.x,
-                     ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]),
-                  })
-                  ok = false
-                  break
-               end
-            end
-            if ok == true then
-               f.rets.typename = "tuple"
-               return resolve_typevars(f.rets, typevars)
+            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            if matched then
+               return matched
             end
          end
       end
@@ -2418,7 +2402,7 @@ function tl.type_check(ast)
       table.insert(errors, {
          ["y"] = node.y,
          ["x"] = node.x,
-         ["err"] = "failed indexing record " .. show_type(orig_tbl) .. " with key " .. show_type(key),
+         ["err"] = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. show_type(key),
       })
       return INVALID
    end
@@ -2670,7 +2654,24 @@ function tl.type_check(ast)
                   add_var(node.vars[1].tk, t.keys)
                   add_var(node.vars[2].tk, t.values)
                elseif t.typename == "record" then
-                  add_var(node.vars[1].tk, t.string)
+                  add_var(node.vars[1].tk, STRING)
+               elseif t.typename == "arrayrecord" then
+                  add_var(node.vars[1].tk, {
+                     ["typename"] = "poly",
+                     ["poly"] = {
+                        [1] = NUMBER,
+                        [2] = STRING,
+                     },
+                  })
+                  local poly = {}
+                  table.insert(poly, t.elements)
+                  for f, t in pairs(t.fields) do
+                     table.insert(poly, t)
+                  end
+                  add_var(node.vars[2].tk, {
+                     ["typename"] = "poly",
+                     ["poly"] = poly,
+                  })
                else
                   table.insert(errors, {
                      ["y"] = node.y,
@@ -2947,30 +2948,41 @@ function tl.type_check(ast)
                node.type = a
             elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
                node.type = a
-            elseif op_types[node.op.op] then
+            elseif node.op.op == "==" or node.op.op == "~=" then
+               if is_a(a, b) or is_a(b, a) then
+                  node.type = BOOLEAN
+               else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "types are not comparable for equality: " .. show_type(a) .. " " .. show_type(b),
+                  })
+                  node.type = INVALID
+               end
+            elseif node.op.arity == 1 and unop_types[node.op.op] then
                a = resolve_unary(a)
-               local types_op = op_types[node.op.op][node.op.arity]
-               if node.op.arity == 1 then
-                  node.type = types_op[a.typename]
-                  if not node.type then
-                     table.insert(errors, {
-                        ["y"] = node.y,
-                        ["x"] = node.x,
-                        ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename,
-                     })
-                     node.type = INVALID
-                  end
-               elseif node.op.arity == 2 then
-                  b = resolve_unary(b)
-                  node.type = types_op[a.typename] and types_op[a.typename][b.typename]
-                  if not node.type then
-                     table.insert(errors, {
-                        ["y"] = node.y,
-                        ["x"] = node.x,
-                        ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
-                     })
-                     node.type = INVALID
-                  end
+               local types_op = unop_types[node.op.op]
+               node.type = types_op[a.typename]
+               if not node.type then
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename,
+                  })
+                  node.type = INVALID
+               end
+            elseif node.op.arity == 2 and binop_types[node.op.op] then
+               a = resolve_unary(a)
+               b = resolve_unary(b)
+               local types_op = binop_types[node.op.op]
+               node.type = types_op[a.typename] and types_op[a.typename][b.typename]
+               if not node.type then
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
+                  })
+                  node.type = INVALID
                end
             else
                error("unknown node op " .. node.op.op)
