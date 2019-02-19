@@ -121,7 +121,7 @@ function tl.lex(input)
          elseif c:match("[<>=~]") then
             state = "maybeequals"
             begin_token()
-         elseif c:match("[][(){},:#]") then
+         elseif c:match("[][(){},:#`]") then
             begin_token()
             end_token(c, nil, nil)
          elseif c:match("[+*/]") then
@@ -535,6 +535,14 @@ local function parse_type(tokens, i, errs)
          i = verify_tk(tokens, i, errs, "}")
       end
       return i, decl
+   elseif tokens[i].tk == "`" then
+      i = i + 1
+      i = verify_tk(tokens, i, errs, "word")
+      return i, {
+         ["kind"] = "typedecl",
+         ["typename"] = "typevar",
+         ["typevar"] = "`" .. tokens[i - 1].tk,
+      }
    elseif tokens[i].kind == "word" then
       return i + 1, {
          ["kind"] = "typedecl",
@@ -875,7 +883,9 @@ local function parse_if(tokens, i, errs)
    end
    if tokens[i] and tokens[i].tk == "else" then
       i = i + 1
-      i, node.elsepart = parse_statements(tokens, i, errs)
+      local subnode = new_node(tokens, i, "else")
+      i, subnode.elsepart = parse_statements(tokens, i, errs)
+      node.elsepart = subnode
    end
    i = verify_tk(tokens, i, errs, "end")
    return i, node
@@ -1076,15 +1086,13 @@ local function recurse_ast(ast, visitor)
       table.insert(xs, recurse_ast(ast.key, visitor) or false)
       table.insert(xs, recurse_ast(ast.value, visitor) or false)
    elseif ast.kind == "if" then
-      xs[1] = recurse_ast(ast.exp, visitor) or false
-      xs[2] = recurse_ast(ast.thenpart, visitor) or false
-      local elseifs = {}
-      for _, e in ipairs(ast.elseifs) do
-         table.insert(elseifs, recurse_ast(e, visitor) or false)
+      table.insert(xs, recurse_ast(ast.exp, visitor))
+      table.insert(xs, recurse_ast(ast.thenpart, visitor))
+      for i, e in ipairs(ast.elseifs) do
+         table.insert(xs, recurse_ast(e, visitor))
       end
-      table.insert(xs, elseifs)
       if ast.elsepart then
-         table.insert(xs, recurse_ast(ast.elsepart, visitor) or false)
+         table.insert(xs, recurse_ast(ast.elsepart, visitor))
       end
    elseif ast.kind == "while" then
       table.insert(xs, recurse_ast(ast.exp, visitor) or false)
@@ -1112,6 +1120,8 @@ local function recurse_ast(ast, visitor)
    elseif ast.kind == "elseif" then
       table.insert(xs, recurse_ast(ast.exp, visitor) or false)
       table.insert(xs, recurse_ast(ast.thenpart, visitor) or false)
+   elseif ast.kind == "else" then
+      table.insert(xs, recurse_ast(ast.elsepart, visitor) or false)
    elseif ast.kind == "return" then
       table.insert(xs, recurse_ast(ast.exps, visitor) or false)
    elseif ast.kind == "do" then
@@ -1237,15 +1247,9 @@ function tl.pretty_print_ast(ast)
             table.insert(out, " then\n")
             table.insert(out, children[2])
             indent = indent - 1
-            for _, e in ipairs(children[3]) do
+            for i = 3,#children do
                table.insert(out,("   "):rep(indent))
-               table.insert(out, "elseif ")
-               table.insert(out, e)
-            end
-            if children[4] then
-               table.insert(out,("   "):rep(indent))
-               table.insert(out, "else\n")
-               table.insert(out, children[4])
+               table.insert(out, children[i])
             end
             table.insert(out,("   "):rep(indent))
             table.insert(out, "end")
@@ -1357,9 +1361,18 @@ function tl.pretty_print_ast(ast)
       ["elseif"] = {
          ["after"] = function (node, children)
             local out = {}
+            table.insert(out, "elseif ")
             table.insert(out, children[1])
             table.insert(out, " then\n")
             table.insert(out, children[2])
+            return table.concat(out)
+         end,
+      },
+      ["else"] = {
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "else\n")
+            table.insert(out, children[1])
             return table.concat(out)
          end,
       },
@@ -1775,6 +1788,8 @@ local function show_type(t)
       return "{" .. show_type(t.elements) .. "}"
    elseif t.typename == "string" or t.typename == "number" or t.typename == "boolean" then
       return t.typename
+   elseif t.typename == "typevar" then
+      return t.typevar
    elseif t.typename == "unknown" then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -1940,8 +1955,8 @@ function tl.type_check(ast)
             ["args"] = {
                [1] = {
                   ["typename"] = "map",
-                  ["keys"] = ANY,
-                  ["values"] = ANY,
+                  ["keys"] = ALPHA,
+                  ["values"] = BETA,
                },
             },
             ["rets"] = {},
@@ -2154,6 +2169,14 @@ function tl.type_check(ast)
             [1] = t1,
          }
       end
+      if t1.typename == "typevar" then
+         if not typevars[t1.typevar] then
+            typevars[t1.typevar] = t1
+            return true
+         else
+            return is_a(typevars[t1.typevar], t2, typevars)
+         end
+      end
       if t2.typename == "typevar" then
          if not typevars[t2.typevar] then
             typevars[t2.typevar] = t1
@@ -2226,7 +2249,9 @@ function tl.type_check(ast)
          return false
       elseif t2.typename == "map" then
          if t1.typename == "map" then
-            return is_a(t1.values, t2.values, typevars)
+            local matchkeys = is_a(t1.keys, t2.keys, typevars)
+            local matchvalues = is_a(t2.values, t1.values, typevars)
+            return matchkeys and matchvalues
          elseif t1.typename == "array" then
             return is_a(NUMBER, t2.keys, typevars) and is_a(t1.elements, t2.values, typevars)
          elseif t1.typename == "record" or t1.typename == "arrayrecord" then
@@ -2610,27 +2635,6 @@ function tl.type_check(ast)
             }
          end,
       },
-      ["while"] = {
-         ["after"] = function (node, children)
-            node.type = {
-               ["typename"] = "none",
-            }
-         end,
-      },
-      ["repeat"] = {
-         ["after"] = function (node, children)
-            node.type = {
-               ["typename"] = "none",
-            }
-         end,
-      },
-      ["do"] = {
-         ["after"] = function (node, children)
-            node.type = {
-               ["typename"] = "none",
-            }
-         end,
-      },
       ["forin"] = {
          ["before"] = function ()
             table.insert(st, {})
@@ -2703,20 +2707,6 @@ function tl.type_check(ast)
       ["return"] = {
          ["after"] = function (node, children)
             node.type = children[1]
-         end,
-      },
-      ["break"] = {
-         ["after"] = function (node, children)
-            node.type = {
-               ["typename"] = "none",
-            }
-         end,
-      },
-      ["elseif"] = {
-         ["after"] = function (node, children)
-            node.type = {
-               ["typename"] = "none",
-            }
          end,
       },
       ["variables"] = {
@@ -2949,7 +2939,7 @@ function tl.type_check(ast)
             elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
                node.type = a
             elseif node.op.op == "==" or node.op.op == "~=" then
-               if is_a(a, b) or is_a(b, a) then
+               if is_a(a, b, {}) or is_a(b, a, {}) then
                   node.type = BOOLEAN
                else
                   table.insert(errors, {
@@ -3000,6 +2990,12 @@ function tl.type_check(ast)
          end,
       },
    }
+   visit["while"] = visit["if"]
+   visit["repeat"] = visit["if"]
+   visit["do"] = visit["if"]
+   visit["break"] = visit["if"]
+   visit["elseif"] = visit["if"]
+   visit["else"] = visit["if"]
    visit["values"] = visit["variables"]
    visit["expression_list"] = visit["variables"]
    visit["argument_list"] = visit["variables"]
