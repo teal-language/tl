@@ -108,6 +108,9 @@ function tl.lex(input: string): {Token}
          elseif c == "\"" then
             state = "dblquote_string"
             begin_token()
+         elseif c == "'" then
+            state = "singlequote_string"
+            begin_token()
          elseif c:match("[a-zA-Z_]") then
             state = "word"
             begin_token()
@@ -142,6 +145,15 @@ function tl.lex(input: string): {Token}
          end
       elseif state == "escape_dblquote_string" then
          state = "dblquote_string"
+      elseif state == "singlequote_string" then
+         if c == "\\" then
+            state = "escape_singlequote_string"
+         elseif c == "'" then
+            end_token("string")
+            state = "any"
+         end
+      elseif state == "escape_singlequote_string" then
+         state = "singlequote_string"
       elseif state == "maybeequals" then
          if c == "=" then
             end_token("op")
