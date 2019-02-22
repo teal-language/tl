@@ -1934,6 +1934,21 @@ function tl.type_check(ast)
                },
             },
          },
+         ["math"] = {
+            ["typename"] = "record",
+            ["fields"] = {
+               ["min"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = NUMBER,
+                     [2] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                  },
+               },
+            },
+         },
          ["type"] = {
             ["typename"] = "function",
             ["args"] = {

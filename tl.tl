@@ -1868,6 +1868,12 @@ function tl.type_check(ast: Node)
                ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
             },
          },
+         ["math"] = {
+            typename = "record",
+            fields = {
+               ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+            },
+         },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
          ["ipairs"] = { typename = "function", args = { ARRAY_OF_ANY }, rets = {} }, -- [magic]
          ["pairs"] = { typename = "function", args = { { typename = "map", keys = ALPHA, values = BETA } }, rets = {} }, -- [magic]
