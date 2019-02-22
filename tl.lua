@@ -65,8 +65,10 @@ function tl.lex(input)
    local y = 1
    local x = 0
    local i = 0
+   local lc_open_lvl = 0
+   local lc_close_lvl = 0
    local ls_open_lvl = 0
-   local ls_end_lvl = 0
+   local ls_close_lvl = 0
    local function begin_token()
       table.insert(tokens, {
          ["x"] = x,
@@ -138,12 +140,44 @@ function tl.lex(input)
          end
       elseif state == "maybecomment" then
          if c == "-" then
-            state = "comment"
-            drop_token()
+            state = "maybecomment2"
          else
             end_token("op", "-")
             fwd = false
             state = "any"
+         end
+      elseif state == "maybecomment2" then
+         if c == "[" then
+            state = "maybelongcomment"
+         else
+            state = "comment"
+            drop_token()
+         end
+      elseif state == "maybelongcomment" then
+         if c == "[" then
+            state = "longcomment"
+         elseif c == "=" then
+            lc_open_lvl = lc_open_lvl + 1
+         else
+            state = "comment"
+            drop_token()
+            lc_open_lvl = 0
+         end
+      elseif state == "longcomment" then
+         if c == "]" then
+            state = "maybelongcommentend"
+         end
+      elseif state == "maybelongcommentend" then
+         if c == "]" and lc_close_lvl == lc_open_lvl then
+            drop_token()
+            state = "any"
+            lc_open_lvl = 0
+            lc_close_lvl = 0
+         elseif c == "=" then
+            lc_close_lvl = lc_close_lvl + 1
+         else
+            state = "longcomment"
+            lc_close_lvl = 0
          end
       elseif state == "dblquote_string" then
          if c == "\\" then
@@ -188,16 +222,16 @@ function tl.lex(input)
             state = "maybelongstringend"
          end
       elseif state == "maybelongstringend" then
-         if c == "]" and ls_end_lvl == ls_open_lvl then
+         if c == "]" and ls_close_lvl == ls_open_lvl then
             end_token("string")
             state = "any"
             ls_open_lvl = 0
-            ls_end_lvl = 0
+            ls_close_lvl = 0
          elseif c == "=" then
-            ls_end_lvl = ls_end_lvl + 1
+            ls_close_lvl = ls_close_lvl + 1
          else
             state = "longstring"
-            ls_end_lvl = 0
+            ls_close_lvl = 0
          end
       elseif state == "maybedotdot" then
          if c == "." then
