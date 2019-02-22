@@ -65,6 +65,8 @@ function tl.lex(input)
    local y = 1
    local x = 0
    local i = 0
+   local ls_open_lvl = 0
+   local ls_end_lvl = 0
    local function begin_token()
       table.insert(tokens, {
          ["x"] = x,
@@ -124,6 +126,9 @@ function tl.lex(input)
          elseif c:match("[<>=~]") then
             state = "maybeequals"
             begin_token()
+         elseif c == "[" then
+            state = "maybelongstring"
+            begin_token()
          elseif c:match("[][(){},:#`]") then
             begin_token()
             end_token(c, nil, nil)
@@ -166,6 +171,33 @@ function tl.lex(input)
             end_token("=", nil, i - 1)
             fwd = false
             state = "any"
+         end
+      elseif state == "maybelongstring" then
+         if c == "[" then
+            state = "longstring"
+         elseif c == "=" then
+            ls_open_lvl = ls_open_lvl + 1
+         else
+            end_token("[", nil, i - 1)
+            fwd = false
+            state = "any"
+            ls_open_lvl = 0
+         end
+      elseif state == "longstring" then
+         if c == "]" then
+            state = "maybelongstringend"
+         end
+      elseif state == "maybelongstringend" then
+         if c == "]" and ls_end_lvl == ls_open_lvl then
+            end_token("string")
+            state = "any"
+            ls_open_lvl = 0
+            ls_end_lvl = 0
+         elseif c == "=" then
+            ls_end_lvl = ls_end_lvl + 1
+         else
+            state = "longstring"
+            ls_end_lvl = 0
          end
       elseif state == "maybedotdot" then
          if c == "." then
