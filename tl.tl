@@ -2637,6 +2637,7 @@ function tl.type_check(ast: Node)
             local a: Type = children[1]
             local b: Type = children[3]
             local orig_a = a
+            local orig_b = b
             if node.op.op == "@funcall" then
                if a.typename == "typetype" then -- [magic] tl type declarations
                   node.type = declare_tl_type(node, a, b)
@@ -2694,7 +2695,6 @@ function tl.type_check(ast: Node)
                   node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk }, orig_a)
                end
             elseif node.op.op == "and" then
-               b = resolve_unary(b)
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
                node.type = a
@@ -2723,7 +2723,7 @@ function tl.type_check(ast: Node)
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                if not node.type then
-                  table.insert(errors, { y = node.y, x = node.x, err = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename })
+                  table.insert(errors, { y = node.y, x = node.x, err = "binop mismatch for " .. node.op.op .. ": " .. show_type(orig_a) .. " " .. show_type(orig_b) })
                   node.type = INVALID
                end
             else

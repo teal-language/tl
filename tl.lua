@@ -2865,6 +2865,7 @@ function tl.type_check(ast)
             local a = children[1]
             local b = children[3]
             local orig_a = a
+            local orig_b = b
             if node.op.op == "@funcall" then
                if a.typename == "typetype" then
                   node.type = declare_tl_type(node, a, b)
@@ -2945,7 +2946,6 @@ function tl.type_check(ast)
                   }, orig_a)
                end
             elseif node.op.op == "and" then
-               b = resolve_unary(b)
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
                node.type = a
@@ -2985,7 +2985,7 @@ function tl.type_check(ast)
                   table.insert(errors, {
                      ["y"] = node.y,
                      ["x"] = node.x,
-                     ["err"] = "binop mismatch for " .. node.op.op .. ": " .. a.typename .. " " .. b.typename,
+                     ["err"] = "binop mismatch for " .. node.op.op .. ": " .. show_type(orig_a) .. " " .. show_type(orig_b),
                   })
                   node.type = INVALID
                end
