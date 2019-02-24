@@ -88,7 +88,7 @@ function tl.lex(input)
       end
       token.kind = kind
    end
-   while i <=#input do
+   while i <= #input do
       if fwd then
          i = i + 1
       end
@@ -294,6 +294,7 @@ local add_space = {
    ["=:("] = true,
    ["op:("] = true,
    ["op:{"] = true,
+   ["op:#"] = true,
    [",:word"] = true,
    [",:keyword"] = true,
    [",:string"] = true,
@@ -376,7 +377,7 @@ local Type = tl.record(tl.nominal("Type"), {
    ["typename"] = tl.string,
    ["tk"] = tl.string,
    ["poly"] = tl.array(tl.nominal("Type")),
-   ["type"] = tl.nominal("Type"),
+   ["def"] = tl.nominal("Type"),
    ["keys"] = tl.nominal("Type"),
    ["values"] = tl.nominal("Type"),
    ["fields"] = tl.map(tl.string, tl.nominal("Type")),
@@ -425,6 +426,7 @@ local Node = tl.record(tl.nominal("Node"), {
    ["e1"] = tl.nominal("Node"),
    ["e2"] = tl.nominal("Node"),
    ["method"] = tl.nominal("Node"),
+   ["newtype"] = tl.nominal("Type"),
    ["typename"] = tl.string,
    ["type"] = tl.nominal("Type"),
    ["decltype"] = tl.nominal("Type"),
@@ -558,6 +560,23 @@ local function parse_trying_list(tokens, i, errs, node, parse_item)
    return i, node
 end
 local parse_type_list
+local function parse_function_type(tokens, i, errs)
+   i = i + 1
+   local node = {
+      ["kind"] = "typedecl",
+      ["typename"] = "function",
+      ["args"] = {},
+      ["rets"] = {},
+   }
+   if tokens[i].tk == "(" then
+      i, node.args = parse_type_list(tokens, i, errs, "(")
+      i = verify_tk(tokens, i, errs, ")")
+      i, node.rets = parse_type_list(tokens, i, errs)
+   else
+      node.vararg = true
+   end
+   return i, node
+end
 local function parse_type(tokens, i, errs)
    if tokens[i].tk == "string" or tokens[i].tk == "boolean" or tokens[i].tk == "number" then
       return i + 1, {
@@ -576,21 +595,7 @@ local function parse_type(tokens, i, errs)
          },
       }
    elseif tokens[i].tk == "function" then
-      i = i + 1
-      local node = {
-         ["kind"] = "typedecl",
-         ["typename"] = "function",
-         ["args"] = {},
-         ["rets"] = {},
-      }
-      if tokens[i].tk == "(" then
-         i, node.args = parse_type_list(tokens, i, errs, "(")
-         i = verify_tk(tokens, i, errs, ")")
-         i, node.rets = parse_type_list(tokens, i, errs)
-      else
-         node.vararg = true
-      end
-      return i, node
+      return parse_function_type(tokens, i, errs)
    elseif tokens[i].tk == "{" then
       i = i + 1
       local decl = new_type(tokens, i, "typedecl")
@@ -610,7 +615,7 @@ local function parse_type(tokens, i, errs)
       return i, decl
    elseif tokens[i].tk == "`" then
       i = i + 1
-      i = verify_tk(tokens, i, errs, "word")
+      i = verify_kind(tokens, i, errs, "word")
       return i, {
          ["kind"] = "typedecl",
          ["typename"] = "typevar",
@@ -1049,6 +1054,58 @@ local function parse_return(tokens, i, errs)
    i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
    return i, node
 end
+local function parse_newtype(tokens, i, errs)
+   local node = new_node(tokens, i, "newtype")
+   node.newtype = new_type(tokens, i, "typedecl")
+   node.newtype.typename = "typetype"
+   if tokens[i].tk == "record" then
+      local def = new_type(tokens, i, "typedecl")
+      node.newtype.def = def
+      def.typename = "record"
+      def.fields = {}
+      i = i + 1
+      while not (not tokens[i] or tokens[i].tk == "end") do
+         if tokens[i].tk == "{" then
+            if def.typename == "arrayrecord" then
+               return fail(tokens, i, errs, "duplicated declaration of array element type in record")
+            end
+            i = i + 1
+            local t
+            i, t = parse_type(tokens, i, errs)
+            if tokens[i].tk == "}" then
+               i = verify_tk(tokens, i, errs, "}")
+            else
+               return fail(tokens, i, errs, "expected an array declaration")
+            end
+            def.typename = "arrayrecord"
+            def.elements = t
+         else
+            local v
+            i, v = verify_kind(tokens, i, errs, "word", "variable")
+            if not v then
+               return fail(tokens, i, errs, "expected a variable name")
+            end
+            i = verify_tk(tokens, i, errs, ":")
+            local t
+            i, t = parse_type(tokens, i, errs)
+            if not t then
+               return fail(tokens, i, errs, "expected a type")
+            end
+            def.fields[v.tk] = t
+         end
+      end
+      i = verify_tk(tokens, i, errs, "end")
+      return i, node
+   elseif tokens[i].tk == "functiontype" then
+      i, node.newtype.def = parse_function_type(tokens, i, errs)
+      return i, node
+   end
+   return fail(tokens, i, errs)
+end
+local is_newtype = {
+   ["record"] = true,
+   ["functiontype"] = true,
+}
 local function parse_call_or_assignment(tokens, i, errs, is_local)
    local asgn = new_node(tokens, i, "assignment")
    if is_local then
@@ -1066,7 +1123,14 @@ local function parse_call_or_assignment(tokens, i, errs, is_local)
       repeat
       i = i + 1
       local val
-      i, val = parse_expression(tokens, i, errs)
+      if is_newtype[tokens[i].tk] then
+         if #asgn.vars > 1 then
+            return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
+         end
+         i, val = parse_newtype(tokens, i, errs)
+      else
+         i, val = parse_expression(tokens, i, errs)
+      end
       table.insert(asgn.exps, val)
       until tokens[i].tk ~= ","
       return i, asgn
@@ -1126,7 +1190,7 @@ function tl.parse_program(tokens, errs)
    local last = tokens[#tokens]
    table.insert(tokens, {
       ["y"] = last.y,
-      ["x"] = last.x +#last.tk,
+      ["x"] = last.x + #last.tk,
       ["tk"] = "$EOF$",
       ["kind"] = "$EOF$",
    })
@@ -1234,6 +1298,8 @@ local function recurse_ast(ast, visitor)
          table.insert(xs, recurse_ast(ast.e2, visitor) or false)
          table.insert(xs, ast.e2.op and ast.e2.op.prec or false)
       end
+   elseif ast.kind == "newtype" then
+      table.insert(xs, recurse_ast(ast.newtype, visitor) or false)
    elseif ast.kind == "variable" or ast.kind == "word" or ast.kind == "string" or ast.kind == "number" or ast.kind == "break" or ast.kind == "nil" or ast.kind == "..." or ast.kind == "typedecl" or ast.kind == "boolean" then
 
    else
@@ -1653,6 +1719,11 @@ function tl.pretty_print_ast(ast)
             return ""
          end,
       },
+      ["newtype"] = {
+         ["after"] = function (node, children)
+            return "{}"
+         end,
+      },
    }
    visit["values"] = visit["variables"]
    visit["expression_list"] = visit["variables"]
@@ -1891,7 +1962,7 @@ function tl.type_check(ast)
       [1] = {
          ["any"] = {
             ["typename"] = "typetype",
-            ["type"] = ANY,
+            ["def"] = ANY,
          },
          ["require"] = {
             ["typename"] = "function",
@@ -2203,7 +2274,7 @@ function tl.type_check(ast)
       if t.typename == "nominal" then
          local typetype = find_var(t.name)
          if typetype.typename == "typetype" then
-            return typetype.type
+            return typetype.def
          else
             return {
                ["typename"] = "bad_nominal",
@@ -2498,7 +2569,7 @@ function tl.type_check(ast)
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
-            ["err"] = "wrong number of arguments (given " ..#args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback(),
+            ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback(),
          })
       else
          for _, err in ipairs(polyerrs[next(polyerrs)]) do
@@ -2528,7 +2599,7 @@ function tl.type_check(ast)
       table.insert(errors, {
          ["y"] = node.y,
          ["x"] = node.x,
-         ["err"] = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. show_type(key),
+         ["err"] = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. key.tk,
       })
       return INVALID
    end
@@ -2580,7 +2651,7 @@ function tl.type_check(ast)
       local ret = {}
       for k, v in pairs(fields) do
          if v.typename == "typetype" then
-            ret[k] = v.type
+            ret[k] = v.def
          else
             table.insert(errors, {
                ["y"] = node.y,
@@ -2596,7 +2667,7 @@ function tl.type_check(ast)
       local ret = {}
       for i, t in ipairs(types) do
          if t.typename == "typetype" then
-            ret[i] = t.type
+            ret[i] = t.def
          else
             table.insert(errors, {
                ["y"] = node.y,
@@ -2609,62 +2680,62 @@ function tl.type_check(ast)
       return ret
    end
    local function declare_tl_type(node, ctor, args)
-      if ctor.type.typename == "nominal" and args[1].typename == "string" then
+      if ctor.def.typename == "nominal" and args[1].typename == "string" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "nominal",
                ["name"] = args[1].tk:sub(2,- 2),
             },
          }
-      elseif ctor.type.typename == "typevar" and args[1].typename == "string" then
+      elseif ctor.def.typename == "typevar" and args[1].typename == "string" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "typevar",
                ["typevar"] = args[1].tk:sub(2,- 2),
             },
          }
-      elseif ctor.type.typename == "function" then
+      elseif ctor.def.typename == "function" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "function",
                ["args"] = extract_type_list(node, args[1].items or {}, "args"),
                ["rets"] = extract_type_list(node, args[2].items or {}, "rets"),
             },
          }
-      elseif ctor.type.typename == "array" and args[1].typename == "typetype" then
+      elseif ctor.def.typename == "array" and args[1].typename == "typetype" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "array",
-               ["elements"] = args[1].type,
+               ["elements"] = args[1].def,
             },
          }
-      elseif ctor.type.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
+      elseif ctor.def.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "map",
-               ["keys"] = args[1].type,
-               ["values"] = args[2].type,
+               ["keys"] = args[1].def,
+               ["values"] = args[2].def,
             },
          }
-      elseif ctor.type.typename == "record" and args[1].typename == "record" then
+      elseif ctor.def.typename == "record" and args[1].typename == "record" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "record",
                ["fields"] = extract_type_fields(node, args[1].fields),
             },
          }
-      elseif ctor.type.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
+      elseif ctor.def.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
          return {
             ["typename"] = "typetype",
-            ["type"] = {
+            ["def"] = {
                ["typename"] = "arrayrecord",
-               ["elements"] = args[1].type,
+               ["elements"] = args[1].def,
                ["fields"] = extract_type_fields(node, args[2].fields),
             },
          }
@@ -2892,7 +2963,7 @@ function tl.type_check(ast)
          end,
       },
       ["global_function"] = {
-         ["before"] = function ()
+         ["before"] = function (node)
             begin_function_scope(node)
          end,
          ["after"] = function (node, children)
@@ -3007,7 +3078,7 @@ function tl.type_check(ast)
                if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then
                   node.type = {
                      ["typename"] = "typetype",
-                     ["type"] = {
+                     ["def"] = {
                         ["typename"] = tl_type_declarators[node.e2.tk],
                      },
                   }
@@ -3088,6 +3159,11 @@ function tl.type_check(ast)
       ["typedecl"] = {
          ["after"] = function (node, children)
             node.type = node
+         end,
+      },
+      ["newtype"] = {
+         ["after"] = function (node, children)
+            node.type = node.newtype
          end,
       },
    }
