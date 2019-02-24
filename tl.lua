@@ -471,18 +471,18 @@ end
 local function parse_table_literal(tokens, i, errs)
    return parse_bracket_list(tokens, i, errs, "table_literal", "{", "}", false, parse_table_item)
 end
-local function parse_trying_list(tokens, i, errs, node, parse_item)
+local function parse_trying_list(tokens, i, errs, list, parse_item)
    local item
    i, item = parse_item(tokens, i, errs)
-   table.insert(node, item)
+   table.insert(list, item)
    if tokens[i].tk == "," then
       while tokens[i].tk == "," do
          i = i + 1
          i, item = parse_item(tokens, i, errs)
-         table.insert(node, item)
+         table.insert(list, item)
       end
    end
-   return i, node
+   return i, list
 end
 local parse_type_list
 local function parse_function_type(tokens, i, errs)
@@ -1759,6 +1759,7 @@ local unop_types = {
    },
    ["not"] = {
       ["string"] = BOOLEAN,
+      ["number"] = BOOLEAN,
       ["boolean"] = BOOLEAN,
       ["record"] = BOOLEAN,
       ["arrayrecord"] = BOOLEAN,
@@ -1883,12 +1884,28 @@ function tl.type_check(ast)
             ["rets"] = {},
          },
          ["next"] = {
-            ["typename"] = "function",
-            ["args"] = {
-               [1] = MAP_OF_ALPHA_TO_BETA,
-            },
-            ["rets"] = {
-               [1] = BETA,
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = MAP_OF_ALPHA_TO_BETA,
+                  },
+                  ["rets"] = {
+                     [1] = ALPHA,
+                     [2] = BETA,
+                  },
+               },
+               [2] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                     [2] = ALPHA,
+                  },
+               },
             },
          },
          ["table"] = {
@@ -2979,7 +2996,7 @@ function tl.type_check(ast)
                      node.type = INVALID
                   end
                else
-                  node.type = match_record_key(node, a, b, orig_a)
+                  node.type = INVALID
                end
             elseif node.op.op == "." then
                if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then

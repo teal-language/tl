@@ -583,18 +583,18 @@ local function parse_table_literal(tokens: {Token}, i: number, errs: {ParseError
    return parse_bracket_list(tokens, i, errs, "table_literal", "{", "}", false, parse_table_item)
 end
 
-local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError}, node: Node, parse_item: function): number, Node
+local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, parse_item: function): number, {`T}
    local item
    i, item = parse_item(tokens, i, errs)
-   table.insert(node, item)
+   table.insert(list, item)
    if tokens[i].tk == "," then
       while tokens[i].tk == "," do
          i = i + 1
          i, item = parse_item(tokens, i, errs)
-         table.insert(node, item)
+         table.insert(list, item)
       end
    end
-   return i, node
+   return i, list
 end
 
 local parse_type_list: function({Token}, number, {ParseError}, string): number, Type
@@ -1867,6 +1867,7 @@ local unop_types: {string:{string:Type}} = {
    },
    ["not"] = {
       ["string"] = BOOLEAN,
+      ["number"] = BOOLEAN,
       ["boolean"] = BOOLEAN,
       ["record"] = BOOLEAN,
       ["arrayrecord"] = BOOLEAN,
@@ -1987,7 +1988,13 @@ function tl.type_check(ast: Node)
       {
          ["any"] = { typename = "typetype", def = ANY },
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
-         ["next"] = { typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { BETA } },
+         ["next"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
+               { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
+            },
+         },
          ["table"] = {
             typename = "record",
             fields = {
@@ -2450,7 +2457,7 @@ function tl.type_check(ast: Node)
       table.remove(st)
    end
 
-   local function flatten_list(list: {Node}): {Node}
+   local function flatten_list(list: {Type}): {Type}
       local exps = {}
       for i = 1, #list - 1 do
          table.insert(exps, resolve_unary(list[i]))
@@ -2830,7 +2837,7 @@ function tl.type_check(ast: Node)
                      node.type = INVALID
                   end
                else
-                  node.type = match_record_key(node, a, b, orig_a)
+                  node.type = INVALID
                end
             elseif node.op.op == "." then
                if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then
