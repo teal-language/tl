@@ -484,27 +484,18 @@ local parse_expression: function({Token}, number, {ParseError}): number, Node, n
 local parse_statements: function({Token}, number, {ParseError}): number, Node
 local parse_argument_list: function
 
-local function fail(tokens: {Token}, i: number, errs: {ParseError}): number
-   local tks = {}
-   for x = i, i + 10 do
-      if tokens[x] then
-         table.insert(tks, tokens[x].tk)
-      end
-   end
+local function fail(tokens: {Token}, i: number, errs: {ParseError}, msg: string): number
    if not tokens[i] then
-      table.insert(errs, {
-         y = -1,
-         x = -1,
-         msg = "$EOF$",
-      })
-      return i + 1
+      local eof = tokens[#tokens]
+      table.insert(errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
+      return #tokens
    end
-   table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = table.concat(tks, " ") })
+   table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = msg or "syntax error" })
    return i + 1
 end
 
 local function verify_tk(tokens: {Token}, i: number, errs: {ParseError}, tk: string): number
-   if tokens[i] and tokens[i].tk == tk then
+   if tokens[i].tk == tk then
       return i + 1
    end
    return fail(tokens, i, errs)
@@ -529,7 +520,7 @@ end
 
 local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, n: number): number, Node, number
    local node = new_node(tokens, i, "table_item")
-   if not tokens[i] then
+   if tokens[i].kind == "$EOF$" then
       return fail(tokens, i, errs)
    end
    if tokens[i].tk == "[" then
@@ -539,7 +530,7 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
-   elseif tokens[i].kind == "word" and (tokens[i+1] and tokens[i+1].tk == "=") then
+   elseif tokens[i].kind == "word" and tokens[i+1].tk == "=" then
       i, node.key = verify_kind(tokens, i, errs, "word", "string")
       node.key.tk = "\"" .. node.key.tk .. "\""
       i = verify_tk(tokens, i, errs, "=")
@@ -558,14 +549,14 @@ local ParseItem = tl.fun({ tl.array( tl.nominal "Token" ), tl.number, tl.array( 
 
 local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, node: Node, close: {string:boolean}, is_sep: boolean, parse_item: ParseItem): number, Node
    local n = 1
-   while tokens[i] do
+   while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
          break
       end
       local item: Node
       i, item, n = parse_item(tokens, i, errs, n)
       table.insert(node, item)
-      if tokens[i] and tokens[i].tk == "," then
+      if tokens[i].tk == "," then
          i = i + 1
          if is_sep and close[tokens[i].tk] then
             return fail(tokens, i, errs)
@@ -576,7 +567,7 @@ local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, node: 
 end
 
 local function parse_bracket_list(tokens: {Token}, i: number, errs: {ParseError}, node_kind: string, open: string, close: string, is_sep: boolean, parse_item: ParseItem): number, Node
-   local node: Node = new_node(tokens, i, node_kind)
+   local node = new_node(tokens, i, node_kind)
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, node, { [close] = true }, is_sep, parse_item)
    i = i + 1
@@ -591,7 +582,7 @@ local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError},
    local item
    i, item = parse_item(tokens, i, errs)
    table.insert(node, item)
-   if tokens[i] and tokens[i].tk == "," then
+   if tokens[i].tk == "," then
       while tokens[i].tk == "," do
          i = i + 1
          i, item = parse_item(tokens, i, errs)
@@ -633,7 +624,7 @@ local function parse_type(tokens: {Token}, i: number, errs: {ParseError}): numbe
       return i, node
    elseif tokens[i].tk == "{" then
       i = i + 1
-      local decl: Type = new_type(tokens, i, "typedecl")
+      local decl = new_type(tokens, i, "typedecl")
       local t: Type
       i, t = parse_type(tokens, i, errs)
       if tokens[i].tk == "}" then
@@ -676,7 +667,7 @@ parse_type_list = function(tokens: {Token}, i: number, errs: {ParseError}, open:
 end
 
 local function parse_function_value(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "function")
+   local node = new_node(tokens, i, "function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.rets = parse_type_list(tokens, i, errs)
@@ -803,6 +794,9 @@ do
    local E: function({Token}, number, {ParseError}, {Operator}, {Node}): number
 
    P = function(tokens: {Token}, i: number, errs: {ParseError}, operators: {Operator}, operands: {Node}): number
+      if tokens[i].kind == "$EOF$" then
+         return i
+      end
       if is_unop(tokens[i]) then
          local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 1, op = tokens[i].tk }, operators, operands)
          if not ok then
@@ -845,8 +839,11 @@ do
    end
 
    E = function(tokens: {Token}, i: number, errs: {ParseError}, operators: {Operator}, operands: {Node}): number
+      if tokens[i].kind == "$EOF$" then
+         return i
+      end
       i = P(tokens, i, errs, operators, operands)
-      while tokens[i] do
+      while tokens[i].kind ~= "$EOF$" do
          if tokens[i].kind == "string" or tokens[i].kind == "{" then
             local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "@funcall" }, operators, operands)
             if not ok then
@@ -928,7 +925,7 @@ parse_argument_list = function(tokens: {Token}, i: number, errs: {ParseError}): 
 end
 
 local function parse_local_function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "local_function")
+   local node = new_node(tokens, i, "local_function")
    i = verify_tk(tokens, i, errs, "local")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
@@ -940,7 +937,7 @@ local function parse_local_function(tokens: {Token}, i: number, errs: {ParseErro
 end
 
 local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "global_function")
+   local node = new_node(tokens, i, "global_function")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
    if tokens[i].tk == "." then
@@ -957,13 +954,13 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
 end
 
 local function parse_if(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "if")
+   local node = new_node(tokens, i, "if")
    i = verify_tk(tokens, i, errs, "if")
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "then")
    i, node.thenpart = parse_statements(tokens, i, errs)
    node.elseifs = {}
-   while tokens[i] and tokens[i].tk == "elseif" do
+   while tokens[i].tk == "elseif" do
       i = i + 1
       local subnode = new_node(tokens, i, "elseif")
       i, subnode.exp = parse_expression(tokens, i, errs)
@@ -971,7 +968,7 @@ local function parse_if(tokens: {Token}, i: number, errs: {ParseError}): number,
       i, subnode.thenpart = parse_statements(tokens, i, errs)
       table.insert(node.elseifs, subnode)
    end
-   if tokens[i] and tokens[i].tk == "else" then
+   if tokens[i].tk == "else" then
       i = i + 1
       local subnode = new_node(tokens, i, "else")
       i, subnode.elsepart = parse_statements(tokens, i, errs)
@@ -982,7 +979,7 @@ local function parse_if(tokens: {Token}, i: number, errs: {ParseError}): number,
 end
 
 local function parse_while(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "while")
+   local node = new_node(tokens, i, "while")
    i = verify_tk(tokens, i, errs, "while")
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "do")
@@ -992,7 +989,7 @@ local function parse_while(tokens: {Token}, i: number, errs: {ParseError}): numb
 end
 
 local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "fornum")
+   local node = new_node(tokens, i, "fornum")
    i = i + 1
    i, node.var = verify_kind(tokens, i, errs, "word", "variable")
    i = verify_tk(tokens, i, errs, "=")
@@ -1010,7 +1007,7 @@ local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): num
 end
 
 local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "forin")
+   local node = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
    i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, true, parse_variable)
@@ -1023,7 +1020,7 @@ local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): numb
 end
 
 local function parse_for(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if tokens[i+2].tk == "=" then
+   if tokens[i+1].kind == "word" and tokens[i+2].tk == "=" then
       return parse_fornum(tokens, i, errs)
    else
       return parse_forin(tokens, i, errs)
@@ -1031,7 +1028,7 @@ local function parse_for(tokens: {Token}, i: number, errs: {ParseError}): number
 end
 
 local function parse_repeat(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "repeat")
+   local node = new_node(tokens, i, "repeat")
    i = verify_tk(tokens, i, errs, "repeat")
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "until")
@@ -1040,7 +1037,7 @@ local function parse_repeat(tokens: {Token}, i: number, errs: {ParseError}): num
 end
 
 local function parse_do(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "do")
+   local node = new_node(tokens, i, "do")
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -1048,7 +1045,7 @@ local function parse_do(tokens: {Token}, i: number, errs: {ParseError}): number,
 end
 
 local function parse_break(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "break")
+   local node = new_node(tokens, i, "break")
    i = verify_tk(tokens, i, errs, "break")
    return i, node
 end
@@ -1061,7 +1058,7 @@ local stop_statement_list: {string:boolean} = {
 }
 
 local function parse_return(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "return")
+   local node = new_node(tokens, i, "return")
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
    i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
@@ -1082,14 +1079,14 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
    if is_local then
       i, asgn.decltype = parse_type_list(tokens, i, errs)
    end
-   if tokens[i] and tokens[i].tk == "=" then
+   if tokens[i].tk == "=" then
       asgn.exps = new_node(tokens, i, "values")
       repeat
          i = i + 1
          local val: Node
          i, val = parse_expression(tokens, i, errs)
          table.insert(asgn.exps, val)
-      until not tokens[i] or tokens[i].tk ~= ","
+      until tokens[i].tk ~= ","
       return i, asgn
    elseif is_local then
       return i, asgn
@@ -1131,8 +1128,8 @@ local function parse_statement(tokens: {Token}, i: number, errs: {ParseError}): 
 end
 
 parse_statements = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "statements")
-   while tokens[i] do
+   local node = new_node(tokens, i, "statements")
+   while tokens[i].kind ~= "$EOF$" do
       if stop_statement_list[tokens[i].tk] then
          break
       end
@@ -1147,6 +1144,8 @@ parse_statements = function(tokens: {Token}, i: number, errs: {ParseError}): num
 end
 
 function tl.parse_program(tokens: {Token}, errs: {ParseError}): number, Node
+   local last = tokens[#tokens]
+   table.insert(tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    return parse_statements(tokens, 1, errs)
 end
 
