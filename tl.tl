@@ -2344,11 +2344,11 @@ function tl.type_check(ast: Node)
       return INVALID
    end
    
-   local function add_var(var: string, valtype: table)
+   local function add_var(var: string, valtype: Type)
       st[#st][var] = valtype
    end
 
-   local function add_global(var: string, valtype: table)
+   local function add_global(var: string, valtype: Type)
       st[1][var] = valtype
    end
    
