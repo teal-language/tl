@@ -51,13 +51,7 @@ end
 function tl.typevar()
 
 end
-local Token = tl.record({
-   ["x"] = tl.number,
-   ["y"] = tl.number,
-   ["i"] = tl.number,
-   ["tk"] = tl.string,
-   ["kind"] = tl.string,
-})
+local Token = {}
 function tl.lex(input)
    local tokens = {}
    local state = "any"
@@ -82,7 +76,7 @@ function tl.lex(input)
    local function end_token(kind, t, last)
       assert(type(kind) == "string")
       local token = tokens[#tokens]
-      token.tk = t or input:sub(token.i, last or i)
+      token.tk = t or input:sub(token.i, last or i) or ""
       if keywords[token.tk] then
          kind = "keyword"
       end
@@ -367,70 +361,10 @@ function tl.pretty_print_tokens(tokens)
    end
    return table.concat(out)
 end
-local ParseError = tl.record({
-   ["y"] = tl.number,
-   ["x"] = tl.number,
-   ["msg"] = tl.string,
-})
-local Type = tl.record(tl.nominal("Type"), {
-   ["kind"] = tl.string,
-   ["typename"] = tl.string,
-   ["tk"] = tl.string,
-   ["poly"] = tl.array(tl.nominal("Type")),
-   ["def"] = tl.nominal("Type"),
-   ["keys"] = tl.nominal("Type"),
-   ["values"] = tl.nominal("Type"),
-   ["fields"] = tl.map(tl.string, tl.nominal("Type")),
-   ["elements"] = tl.nominal("Type"),
-   ["args"] = tl.array(tl.nominal("Type")),
-   ["rets"] = tl.array(tl.nominal("Type")),
-   ["vararg"] = tl.boolean,
-   ["name"] = tl.string,
-   ["typevar"] = tl.string,
-   ["i"] = tl.number,
-   ["k"] = tl.string,
-   ["v"] = tl.nominal("Type"),
-   ["items"] = tl.array(tl.nominal("Type")),
-})
-local Operator = tl.record({
-   ["y"] = tl.number,
-   ["x"] = tl.number,
-   ["arity"] = tl.number,
-   ["op"] = tl.string,
-   ["prec"] = tl.number,
-})
-local Node = tl.record(tl.nominal("Node"), {
-   ["y"] = tl.number,
-   ["x"] = tl.number,
-   ["tk"] = tl.string,
-   ["kind"] = tl.string,
-   ["key"] = tl.nominal("Node"),
-   ["value"] = tl.nominal("Node"),
-   ["args"] = tl.nominal("Node"),
-   ["rets"] = tl.nominal("Type"),
-   ["body"] = tl.nominal("Node"),
-   ["vararg"] = tl.boolean,
-   ["name"] = tl.nominal("Node"),
-   ["module"] = tl.nominal("Node"),
-   ["exp"] = tl.nominal("Node"),
-   ["thenpart"] = tl.nominal("Node"),
-   ["elseifs"] = tl.nominal("Node"),
-   ["elsepart"] = tl.nominal("Node"),
-   ["var"] = tl.nominal("Node"),
-   ["from"] = tl.nominal("Node"),
-   ["to"] = tl.nominal("Node"),
-   ["step"] = tl.nominal("Node"),
-   ["vars"] = tl.nominal("Node"),
-   ["exps"] = tl.nominal("Node"),
-   ["op"] = tl.nominal("Operator"),
-   ["e1"] = tl.nominal("Node"),
-   ["e2"] = tl.nominal("Node"),
-   ["method"] = tl.nominal("Node"),
-   ["newtype"] = tl.nominal("Type"),
-   ["typename"] = tl.string,
-   ["type"] = tl.nominal("Type"),
-   ["decltype"] = tl.nominal("Type"),
-})
+local ParseError = {}
+local Type = {}
+local Operator = {}
+local Node = {}
 local parse_expression
 local parse_statements
 local parse_argument_list
@@ -506,16 +440,7 @@ local function parse_table_item(tokens, i, errs, n)
       return i, node, n + 1
    end
 end
-local ParseItem = tl.fun({
-   [1] = tl.array(tl.nominal("Token")),
-   [2] = tl.number,
-   [3] = tl.array(tl.nominal("ParseError")),
-   [4] = tl.number,
-}, {
-   [1] = tl.number,
-   [2] = tl.nominal("Node"),
-   [3] = tl.number,
-})
+local ParseItem = {}
 local function parse_list(tokens, i, errs, node, close, is_sep, parse_item)
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
@@ -1196,21 +1121,7 @@ function tl.parse_program(tokens, errs)
    })
    return parse_statements(tokens,1, errs)
 end
-local VisitorCallbacks = tl.record({
-   ["before"] = tl.fun({
-      [1] = tl.nominal("Node"),
-      [2] = tl.array(tl.typevar("`T")),
-   }, {}),
-   ["before_statements"] = tl.fun({
-      [1] = tl.nominal("Node"),
-   }, {}),
-   ["after"] = tl.fun({
-      [1] = tl.nominal("Node"),
-      [2] = tl.array(tl.typevar("`T")),
-   }, {
-      [1] = tl.typevar("`T"),
-   }),
-})
+local VisitorCallbacks = {}
 local function recurse_ast(ast, visitor)
    assert(visitor[ast.kind], "no visitor for " .. ast.kind)
    if visitor["@before"] and visitor["@before"].before then
@@ -2242,11 +2153,7 @@ function tl.type_check(ast)
          },
       },
    }
-   local Error = tl.record({
-      ["y"] = tl.number,
-      ["x"] = tl.number,
-      ["err"] = tl.string,
-   })
+   local Error = {}
    local errors = {}
    local function find_var(name)
       for i =#st,1,- 1 do

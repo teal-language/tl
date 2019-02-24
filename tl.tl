@@ -41,13 +41,13 @@ function tl.map(k, v) end
 function tl.fun() end
 function tl.typevar() end
 
-local Token = tl.record {
-   x = tl.number,
-   y = tl.number,
-   i = tl.number,
-   tk = tl.string,
-   kind = tl.string,
-}
+local Token = record
+   x: number
+   y: number
+   i: number
+   tk: string
+   kind: string
+end
 
 function tl.lex(input: string): {Token}
    local tokens: {Token} = {}
@@ -74,7 +74,7 @@ function tl.lex(input: string): {Token}
       assert(type(kind) == "string")
 
       local token: Token = tokens[#tokens]
-      token.tk = t or input:sub(token.i, last or i)
+      token.tk = t or input:sub(token.i, last or i) or ""
       if keywords[token.tk] then
          kind = "keyword"
       end
@@ -384,105 +384,107 @@ end
 -- Recursive descent parser
 --------------------------------------------------------------------------------
 
-local ParseError = tl.record {
-   y = tl.number,
-   x = tl.number,
-   msg = tl.string,
-}
+local ParseError = record
+   y: number
+   x: number
+   msg: string
+end
 
-local Type = tl.record(tl.nominal "Type", {
-   kind = tl.string,
-   typename = tl.string,
-   tk = tl.string,
+local Type = record
+   {Type}
+   kind: string
+   typename: string
+   tk: string
 
    -- poly
-   poly = tl.array(tl.nominal "Type"),
+   poly: {Type}
 
    -- typetype
-   def = tl.nominal "Type",
+   def: Type
 
    -- map
-   keys = tl.nominal("Type"),
-   values = tl.nominal("Type"),
+   keys: Type
+   values: Type
 
    -- records
-   fields = tl.map(tl.string, tl.nominal("Type")),
+   fields: {string: Type}
 
    -- array
-   elements = tl.nominal("Type"),
+   elements: Type
 
    -- function
-   args = tl.array(tl.nominal("Type")),
-   rets = tl.array(tl.nominal("Type")),
-   vararg = tl.boolean,
+   args: {Type}
+   rets: {Type}
+   vararg: boolean
 
    -- nominal
-   name = tl.string,
+   name: string
    
    -- typevar
-   typevar = tl.string,
+   typevar: string
    
    -- array and record entries
-   i = tl.number,
-   k = tl.string,
-   v = tl.nominal("Type"),
-   items = tl.array(tl.nominal("Type")),
-})
+   i: number
+   k: string
+   v: Type
+   items: {Type}
+end
 
-local Operator = tl.record {
-   y = tl.number,
-   x = tl.number,
-   arity = tl.number,
-   op = tl.string,
-   prec = tl.number,
-}
+local Operator = record
+   y: number
+   x: number
+   arity: number
+   op: string
+   prec: number
+end
 
-local Node = tl.record(tl.nominal"Node", {
-   y = tl.number,
-   x = tl.number,
-   tk = tl.string,
-   kind = tl.string,
+local Node = record
+   {Node}
+   y: number
+   x: number
+   tk: string
+   kind: string
 
-   key = tl.nominal("Node"),
-   value = tl.nominal("Node"),
+   key: Node
+   value: Node
 
-   args = tl.nominal("Node"),
-   rets = tl.nominal("Type"),
-   body = tl.nominal("Node"),
-   vararg = tl.boolean,
+   args: Node
+   rets: Type
+   body: Node
+   vararg: boolean
 
-   name = tl.nominal("Node"),
+   name: Node
 
-   module = tl.nominal("Node"),
+   module: Node
 
-   exp = tl.nominal("Node"),
-   thenpart = tl.nominal("Node"),
-   elseifs = tl.nominal("Node"),
-   elsepart = tl.nominal("Node"),
+   exp: Node
+   thenpart: Node
+   elseifs: Node
+   elsepart: Node
 
    -- fornum
-   var = tl.nominal("Node"),
-   from = tl.nominal("Node"),
-   to = tl.nominal("Node"),
-   step = tl.nominal("Node"),
+   var: Node
+   from: Node
+   to: Node
+   step: Node
 
    -- forin
-   vars = tl.nominal("Node"),
-   exps = tl.nominal("Node"),
+   vars: Node
+   exps: Node
+
+   -- newtype
+   newtype: Type
    
    -- expressions
-   op = tl.nominal("Operator"),
-   e1 = tl.nominal("Node"),
-   e2 = tl.nominal("Node"),
-   method = tl.nominal("Node"),
-   
-   -- newtype
-   newtype = tl.nominal("Type"),
+   op: Operator
+   e1: Node
+   e2: Node
+   method: Node
 
-   typename = tl.string,
-   type = tl.nominal("Type"),
-   decltype = tl.nominal("Type"),
-})
+   typename: string
+   type: Type
+   decltype: Type
+end
 
 local parse_expression: function({Token}, number, {ParseError}): number, Node, number
 local parse_statements: function({Token}, number, {ParseError}): number, Node
@@ -548,8 +550,7 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
    end
 end
 
-local ParseItem = tl.fun({ tl.array( tl.nominal "Token" ), tl.number, tl.array( tl.nominal "ParseError" ), tl.number },
-                         { tl.number, tl.nominal "Node", tl.number })
+local ParseItem = functiontype({Token}, number, {ParseError}, number): number, Node, number
 
 local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, node: Node, close: {string:boolean}, is_sep: boolean, parse_item: ParseItem): number, Node
    local n = 1
@@ -1222,11 +1223,11 @@ end
 -- AST traversal
 --------------------------------------------------------------------------------
 
-local VisitorCallbacks = tl.record {
-   before = tl.fun ({ tl.nominal "Node", tl.array(tl.typevar "`T") }, {}),
-   before_statements = tl.fun ({ tl.nominal "Node" }, {}),
-   after = tl.fun ({ tl.nominal "Node", tl.array(tl.typevar "`T") }, { tl.typevar "`T" }),
-}
+local VisitorCallbacks = record
+   before: function(Node, {`T})
+   before_statements: function({Node})
+   after: function(Node, {`T}): `T
+end
 
 local function recurse_ast(ast: Node, visitor: {string:VisitorCallbacks}): table
    assert(visitor[ast.kind], "no visitor for " .. ast.kind)
@@ -2059,11 +2060,11 @@ function tl.type_check(ast: Node)
       }
    }
    
-   local Error = tl.record {
-      y = tl.number,
-      x = tl.number,
-      err = tl.string,
-   }
+   local Error = record
+      y: number
+      x: number
+      err: string
+   end
    
    local errors: {Error} = {}
 
