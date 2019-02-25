@@ -10,7 +10,7 @@ local errs = {}
 local i, program = tl.parse_program(tokens, errs)
 
 for _, err in ipairs(errs) do
-   print(err.y, err.x, err.msg) 
+   print(err.y, err.x, err.msg)
 end
 
 --print(pretty_print_ast(program))

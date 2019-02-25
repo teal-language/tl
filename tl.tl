@@ -7,7 +7,7 @@ local tl = {}
 local inspect: function(any):string = require "inspect"
 
 local keywords: {string:boolean} = {
-   ["and"] = true,   
+   ["and"] = true,
    ["break"] = true,
    ["do"] = true,
    ["else"] = true,
@@ -409,10 +409,10 @@ local Type = record
 
    -- nominal
    name: string
-   
+
    -- typevar
    typevar: string
-   
+
    -- array and record entries
    i: number
    k: string
@@ -464,7 +464,7 @@ local Node = record
 
    -- newtype
    newtype: Type
-   
+
    -- expressions
    op: Operator
    e1: Node
@@ -738,9 +738,9 @@ do
          [":"] = 200,
       },
    }
-  
+
    local sentinel: Operator = { op = "sentinel" }
-   
+
    local function is_unop(token: Token): boolean
       return precedences[1][token.tk] ~= nil
    end
@@ -788,7 +788,7 @@ do
       table.insert(operators, op)
       return true
    end
-   
+
    local P: function({Token}, number, {ParseError}, {Operator}, {Node}): number
    local E: function({Token}, number, {ParseError}, {Operator}, {Node}): number
 
@@ -820,7 +820,7 @@ do
          return i
       end
    end
-   
+
    local function push_arguments(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
       local args: Node
       i, args = parse_bracket_list(tokens, i, errs, "expression_list", "(", ")", true, parse_expression)
@@ -1123,7 +1123,7 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
    if is_local then
       asgn.kind = "local_declaration"
    end
-   
+
    asgn.vars = new_node(tokens, i, "variables")
    i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_variable or parse_expression)
    assert(#asgn.vars >= 1)
@@ -1944,7 +1944,7 @@ local function show_type(t: Type): string
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show_type(t.elements) .. "}"
-   elseif t.typename == "string" 
+   elseif t.typename == "string"
        or t.typename == "number"
        or t.typename == "boolean" then
       return t.typename
@@ -2044,13 +2044,13 @@ function tl.type_check(ast: Node)
          }
       }
    }
-   
+
    local Error = record
       y: number
       x: number
       err: string
    end
-   
+
    local errors: {Error} = {}
 
    local function find_var(name: string): Type
@@ -2085,7 +2085,7 @@ function tl.type_check(ast: Node)
       end
       return t
    end
-   
+
    local function same_type(t1: Type, t2: Type, typevars: {string:Type}): boolean
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -2117,7 +2117,7 @@ function tl.type_check(ast: Node)
       end
       return true
    end
-   
+
    local function is_empty_table(t: Type): boolean
       return t.typename == "record" and next(t.fields) == nil
    end
@@ -2150,7 +2150,7 @@ function tl.type_check(ast: Node)
             [1] = t1,
          }
       end
-      
+
       if t1.typename == "typevar" then
          if not typevars[t1.typevar] then
             typevars[t1.typevar] = t1
@@ -2159,7 +2159,7 @@ function tl.type_check(ast: Node)
             return is_a(typevars[t1.typevar], t2, typevars)
          end
       end
-      
+
       if t2.typename == "typevar" then
          if not typevars[t2.typevar] then
             typevars[t2.typevar] = t1
@@ -2276,7 +2276,7 @@ function tl.type_check(ast: Node)
       end
       return true
    end
-   
+
    local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Type:boolean}): Type
       has_cycle = has_cycle or {}
       if has_cycle[t] then
@@ -2299,14 +2299,14 @@ function tl.type_check(ast: Node)
       end
       return copy
    end
-   
+
    local function assert_is_a(node: Node, t1: Type, t2: Type, context: string)
       local match, why_not = is_a(t1, t2, {})
       if not match then
          table.insert(errors, { y = node.y, x = node.x, err = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or "") })
       end
    end
-   
+
    local function try_match_func_args(node: Node, f: Type, args: {Type}, polyerrs: {{Error}}, p: number, is_method: boolean): Type
       local ok = true
       local typevars = {}
@@ -2327,11 +2327,11 @@ function tl.type_check(ast: Node)
       end
       return nil
    end
-   
+
    local function match_func_args(node: Node, func: Type, args: {Type}, is_method: boolean): Type
       assert(type(func) == "table")
       assert(type(args) == "table")
-      
+
       func = resolve_unary(func)
 
       args = args or {}
@@ -2370,7 +2370,7 @@ function tl.type_check(ast: Node)
             end
          end
       end
-      
+
       if not next(polyerrs) then
          table.insert(errors, { y = node.y, x = node.x, err = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback() })
       else
@@ -2378,7 +2378,7 @@ function tl.type_check(ast: Node)
             table.insert(errors, err)
          end
       end
-      
+
       poly.poly[1].rets.typename = "tuple"
       return poly.poly[1].rets
    end
@@ -2391,7 +2391,7 @@ function tl.type_check(ast: Node)
          table.insert(errors, { y = node.y, x = node.x, err = "not a record: " .. show_type(tbl) })
          return INVALID
       end
-      
+
       assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
 
       if key.typename == "string" or key.typename == "unknown" or key.kind == "variable" then -- "unknown" is a plain atom (e.g 'insert' in 'table.insert')
@@ -2401,10 +2401,10 @@ function tl.type_check(ast: Node)
       end
 
       table.insert(errors, { y = node.y, x = node.x, err = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. key.tk })
-      
+
       return INVALID
    end
-   
+
    local function add_var(var: string, valtype: Type)
       st[#st][var] = valtype
    end
@@ -2412,7 +2412,7 @@ function tl.type_check(ast: Node)
    local function add_global(var: string, valtype: Type)
       st[1][var] = valtype
    end
-   
+
    local function begin_function_scope(node: Node)
       table.insert(st, {})
       local args = {}
@@ -2861,7 +2861,7 @@ function tl.type_check(ast: Node)
    }
 
    recurse_ast(ast, visit)
-   
+
    return errors
 end
 
