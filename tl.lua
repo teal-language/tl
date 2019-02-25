@@ -24,33 +24,6 @@ local keywords = {
    ["until"] = true,
    ["while"] = true,
 }
-function tl.number()
-
-end
-function tl.string()
-
-end
-function tl.boolean()
-
-end
-function tl.nominal()
-
-end
-function tl.record()
-
-end
-function tl.array()
-
-end
-function tl.map(k, v)
-
-end
-function tl.fun()
-
-end
-function tl.typevar()
-
-end
 local Token = {}
 function tl.lex(input)
    local tokens = {}
@@ -1823,17 +1796,6 @@ local binop_types = {
       },
    },
 }
-local tl_type_declarators = {
-   ["boolean"] = "boolean",
-   ["record"] = "record",
-   ["number"] = "number",
-   ["string"] = "string",
-   ["nominal"] = "nominal",
-   ["array"] = "array",
-   ["map"] = "map",
-   ["fun"] = "function",
-   ["typevar"] = "typevar",
-}
 local function show_type(t)
    if t.typename == "nominal" then
       return t.name
@@ -2603,69 +2565,6 @@ function tl.type_check(ast)
       end
       return ret
    end
-   local function declare_tl_type(node, ctor, args)
-      if ctor.def.typename == "nominal" and args[1].typename == "string" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "nominal",
-               ["name"] = args[1].tk:sub(2,- 2),
-            },
-         }
-      elseif ctor.def.typename == "typevar" and args[1].typename == "string" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "typevar",
-               ["typevar"] = args[1].tk:sub(2,- 2),
-            },
-         }
-      elseif ctor.def.typename == "function" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "function",
-               ["args"] = extract_type_list(node, args[1].items or {}, "args"),
-               ["rets"] = extract_type_list(node, args[2].items or {}, "rets"),
-            },
-         }
-      elseif ctor.def.typename == "array" and args[1].typename == "typetype" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "array",
-               ["elements"] = args[1].def,
-            },
-         }
-      elseif ctor.def.typename == "map" and args[1].typename == "typetype" and args[2].typename == "typetype" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "map",
-               ["keys"] = args[1].def,
-               ["values"] = args[2].def,
-            },
-         }
-      elseif ctor.def.typename == "record" and args[1].typename == "record" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "record",
-               ["fields"] = extract_type_fields(node, args[1].fields),
-            },
-         }
-      elseif ctor.def.typename == "record" and args[1].typename == "typetype" and args[2].typename == "record" then
-         return {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "arrayrecord",
-               ["elements"] = args[1].def,
-               ["fields"] = extract_type_fields(node, args[2].fields),
-            },
-         }
-      end
-      return INVALID
-   end
    local function get_assignment_values(vals)
       if vals and #vals == 1 and vals[1].typename == "tuple" then
          vals = vals[1]
@@ -2948,11 +2847,7 @@ function tl.type_check(ast)
             local orig_a = a
             local orig_b = b
             if node.op.op == "@funcall" then
-               if a.typename == "typetype" then
-                  node.type = declare_tl_type(node, a, b)
-               else
-                  node.type = match_func_args(node, a, b, false)
-               end
+               node.type = match_func_args(node, a, b, false)
             elseif node.op.op == "@methcall" then
                local obj = a
                if obj.typename == "string" then
@@ -2999,15 +2894,6 @@ function tl.type_check(ast)
                   node.type = INVALID
                end
             elseif node.op.op == "." then
-               if node.e1.tk == "tl" and tl_type_declarators[node.e2.tk] then
-                  node.type = {
-                     ["typename"] = "typetype",
-                     ["def"] = {
-                        ["typename"] = tl_type_declarators[node.e2.tk],
-                     },
-                  }
-                  return
-               end
                a = resolve_unary(a)
                if a.typename == "map" then
                   if is_a(STRING, a.keys) then
