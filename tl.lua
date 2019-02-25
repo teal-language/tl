@@ -1799,8 +1799,6 @@ local binop_types = {
 local function show_type(t)
    if t.typename == "nominal" then
       return t.name
-   elseif t.typename == "tuple" and #t == 1 then
-      return show_type(t[1])
    elseif t.typename == "tuple" then
       local out = {}
       for _, v in ipairs(t) do
@@ -1834,6 +1832,10 @@ end
 function tl.type_check(ast)
    local st = {
       [1] = {
+         ["@return"] = {
+            ["typename"] = "tuple",
+            [1] = ANY,
+         },
          ["any"] = {
             ["typename"] = "typetype",
             ["def"] = ANY,
@@ -2505,6 +2507,9 @@ function tl.type_check(ast)
          table.insert(args, t)
          add_var(arg.tk, t)
       end
+      add_var("@return", node.rets or {
+         ["typename"] = "tuple",
+      })
       if node.name then
          add_var(node.name.tk, {
             ["typename"] = "function",
@@ -2532,38 +2537,6 @@ function tl.type_check(ast)
          end
       end
       return exps
-   end
-   local function extract_type_fields(node, fields)
-      local ret = {}
-      for k, v in pairs(fields) do
-         if v.typename == "typetype" then
-            ret[k] = v.def
-         else
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "expected type declaration in record: " .. k .. "; got " .. show_type(v),
-            })
-            ret[k] = INVALID
-         end
-      end
-      return ret
-   end
-   local function extract_type_list(node, types, name)
-      local ret = {}
-      for i, t in ipairs(types) do
-         if t.typename == "typetype" then
-            ret[i] = t.def
-         else
-            table.insert(errors, {
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["err"] = "expected type declaration in list: " .. i .. "; got " .. show_type(t),
-            })
-            ret[i] = INVALID
-         end
-      end
-      return ret
    end
    local function get_assignment_values(vals)
       if vals and #vals == 1 and vals[1].typename == "tuple" then
@@ -2701,7 +2674,22 @@ function tl.type_check(ast)
       },
       ["return"] = {
          ["after"] = function (node, children)
-            node.type = children[1]
+            local rets = find_var("@return")
+            if #children >#rets then
+               table.insert(errors, {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
+                  ["err"] = "excess return values",
+               })
+            else
+               for i, child in ipairs(children) do
+                  child = resolve_unary(child)
+                  assert_is_a(node.exps[i], child, rets[i], "return value")
+               end
+            end
+            node.type = {
+               ["typename"] = "none",
+            }
          end,
       },
       ["variables"] = {

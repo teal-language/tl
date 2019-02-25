@@ -382,6 +382,8 @@ end
 
 local Type = record
    {Type}
+   y: number
+   x: number
    kind: string
    typename: string
    tk: string
@@ -403,8 +405,8 @@ local Type = record
    elements: Type
 
    -- function
-   args: {Type}
-   rets: {Type}
+   args: Type
+   rets: Type
    vararg: boolean
 
    -- nominal
@@ -1381,7 +1383,7 @@ local spaced_op: {string:boolean} = {
    ["^"] = true,
 }
 
-function tl.pretty_print_ast(ast: Node)
+function tl.pretty_print_ast(ast: Node): string
    local indent = 0
 
    local visit: {string:VisitorCallbacks} = {
@@ -1926,8 +1928,6 @@ local binop_types: {string:{string:{string:Type}}} = {
 local function show_type(t: Type): string
    if t.typename == "nominal" then
       return t.name
-   elseif t.typename == "tuple" and #t == 1 then
-      return show_type(t[1])
    elseif t.typename == "tuple" then
       local out: {string} = {}
       for _, v in ipairs(t) do
@@ -1961,9 +1961,10 @@ local function show_type(t: Type): string
    end
 end
 
-function tl.type_check(ast: Node)
+function tl.type_check(ast: Node): {Error}
    local st: {{string:Type}} = {
       {
+         ["@return"] = { typename = "tuple", ANY },
          ["any"] = { typename = "typetype", def = ANY },
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
          ["next"] = {
@@ -2421,6 +2422,7 @@ function tl.type_check(ast: Node)
          table.insert(args, t)
          add_var(arg.tk, t)
       end
+      add_var("@return", node.rets or { typename = "tuple" })
       -- HACK for recursive functions
       if node.name then
          add_var(node.name.tk, {
@@ -2451,32 +2453,6 @@ function tl.type_check(ast: Node)
          end
       end
       return exps
-   end
-
-   local function extract_type_fields(node: Node, fields: {string:Type}): {string:Type}
-      local ret: {string:Type} = {}
-      for k, v in pairs(fields) do
-         if v.typename == "typetype" then
-            ret[k] = v.def
-         else
-            table.insert(errors, { y = node.y, x = node.x, err = "expected type declaration in record: " .. k .. "; got " .. show_type(v) })
-            ret[k] = INVALID
-         end
-      end
-      return ret
-   end
-
-   local function extract_type_list(node: Node, types: {Type}, name: string): {string:Type}
-      local ret: {Type} = {}
-      for i, t in ipairs(types) do
-         if t.typename == "typetype" then
-            ret[i] = t.def
-         else
-            table.insert(errors, { y = node.y, x = node.x, err = "expected type declaration in list: " .. i .. "; got " .. show_type(t) })
-            ret[i] = INVALID
-         end
-      end
-      return ret
    end
 
    local function get_assignment_values(vals: {Type}): {Type}
@@ -2591,8 +2567,16 @@ function tl.type_check(ast: Node)
       },
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
-            -- TODO check that type matches ret type of curr function
-            node.type = children[1]
+            local rets = find_var("@return")
+            if #children > #rets then
+               table.insert(errors, { y = node.y, x = node.x, err = "excess return values" })
+            else
+               for i, child in ipairs(children) do
+                  child = resolve_unary(child)
+                  assert_is_a(node.exps[i], child, rets[i], "return value")
+               end
+            end
+            node.type = { typename = "none" }
          end,
       },
       ["variables"] = {
