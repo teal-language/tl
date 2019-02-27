@@ -3016,6 +3016,11 @@ function tl.type_check(ast)
                      })
                      node.type = INVALID
                   end
+               elseif node.e2.kind == "string" then
+                  node.type = match_record_key(node, a, {
+                     ["typename"] = "string",
+                     ["tk"] = node.e2.tk:sub(2,- 2),
+                  }, orig_a)
                else
                   node.type = INVALID
                end

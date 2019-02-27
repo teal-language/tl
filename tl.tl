@@ -2870,6 +2870,8 @@ function tl.type_check(ast: Node): {Error}
                      table.insert(errors, { y = node.y, x = node.x, err = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys) })
                      node.type = INVALID
                   end
+               elseif node.e2.kind == "string" then
+                  node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk:sub(2, -2) }, orig_a)
                else
                   node.type = INVALID
                end
