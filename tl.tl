@@ -1860,6 +1860,7 @@ local ARRAY_OF_ALPHA = { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = { typename = "map", keys = ALPHA, values = BETA }
 local FUNCTION = { typename = "function", vararg = true, args = {}, rets = {} }
 local INVALID = { typename = "invalid" }
+local NOMINAL_FILE = { typename = "nominal", name = "FILE" }
 
 local numeric_binop = {
    ["number"] = {
@@ -2068,6 +2069,21 @@ function tl.type_check(ast: Node): {Error}
             poly = {
                { typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
                { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
+            },
+         },
+         ["FILE"] = {
+            typename = "typetype",
+            def = {
+               typename = "record",
+               fields = {
+                  ["write"] = { typename = "function", args = { NOMINAL_FILE, STRING }, rets = {} },
+               },
+            },
+         },
+         ["io"] = {
+            typename = "record",
+            fields = {
+               ["stderr"] = NOMINAL_FILE,
             },
          },
          ["table"] = {

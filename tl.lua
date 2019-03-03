@@ -1728,6 +1728,10 @@ local FUNCTION = {
 local INVALID = {
    ["typename"] = "invalid",
 }
+local NOMINAL_FILE = {
+   ["typename"] = "nominal",
+   ["name"] = "FILE",
+}
 local numeric_binop = {
    ["number"] = {
       ["number"] = NUMBER,
@@ -1960,6 +1964,28 @@ function tl.type_check(ast)
                      [2] = ALPHA,
                   },
                },
+            },
+         },
+         ["FILE"] = {
+            ["typename"] = "typetype",
+            ["def"] = {
+               ["typename"] = "record",
+               ["fields"] = {
+                  ["write"] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = NOMINAL_FILE,
+                        [2] = STRING,
+                     },
+                     ["rets"] = {},
+                  },
+               },
+            },
+         },
+         ["io"] = {
+            ["typename"] = "record",
+            ["fields"] = {
+               ["stderr"] = NOMINAL_FILE,
             },
          },
          ["table"] = {
