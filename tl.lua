@@ -617,10 +617,9 @@ local precedences = {
       ["%"] = 10,
       ["^"] = 12,
       ["@funcall"] = 100,
-      ["@methcall"] = 100,
-      ["@index"] = 200,
-      ["."] = 200,
-      [":"] = 200,
+      ["@index"] = 100,
+      ["."] = 100,
+      [":"] = 100,
    },
 }
 local sentinel = {
@@ -677,27 +676,14 @@ local function pop_operator(operators, operands)
          return false
       end
       local operator = table.remove(operators)
-      if operator.op == "@funcall" and t1.op and t1.op.op == ":" then
-         operator.op = "@methcall"
-         table.insert(operands, {
-            ["y"] = t1.y,
-            ["x"] = t1.x,
-            ["kind"] = "op",
-            ["op"] = operator,
-            ["e1"] = t1.e1,
-            ["method"] = t1.e2,
-            ["e2"] = t2,
-         })
-      else
-         table.insert(operands, {
-            ["y"] = t1.y,
-            ["x"] = t1.x,
-            ["kind"] = "op",
-            ["op"] = operator,
-            ["e1"] = t1,
-            ["e2"] = t2,
-         })
-      end
+      table.insert(operands, {
+         ["y"] = t1.y,
+         ["x"] = t1.x,
+         ["kind"] = "op",
+         ["op"] = operator,
+         ["e1"] = t1,
+         ["e2"] = t2,
+      })
    else
       local t1 = table.remove(operands)
       table.insert(operands, {
@@ -1099,7 +1085,7 @@ local function parse_call_or_assignment(tokens, i, errs, is_local)
    elseif is_local then
       return i, asgn
    end
-   if lhs.op and (lhs.op.op == "@funcall" or lhs.op.op == "@methcall") then
+   if lhs.op and lhs.op.op == "@funcall" then
       return i, lhs
    end
    return fail(tokens, i, errs)
@@ -1271,7 +1257,7 @@ local function recurse_node(ast, visit_node, visit_type)
    elseif ast.kind == "op" then
       xs[1] = recurse_node(ast.e1, visit_node, visit_type)
       local p1 = ast.e1.op and ast.e1.op.prec or nil
-      if ast.op.op == "@methcall" and ast.e1.kind == "string" then
+      if ast.op.op == ":" and ast.e1.kind == "string" then
          p1 =- 999
       end
       xs[2] = p1
@@ -1296,6 +1282,7 @@ local tight_op = {
    ["-"] = true,
    ["~"] = true,
    ["#"] = true,
+   [":"] = true,
 }
 local spaced_op = {
    ["not"] = true,
@@ -1621,19 +1608,6 @@ function tl.pretty_print_ast(ast)
             local out = {}
             if node.op.op == "@funcall" then
                table.insert(out, children[1])
-               table.insert(out, "(")
-               table.insert(out, children[3])
-               table.insert(out, ")")
-            elseif node.op.op == "@methcall" then
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, "(")
-               end
-               table.insert(out, children[1])
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, ")")
-               end
-               table.insert(out, ":")
-               table.insert(out, node.method.tk)
                table.insert(out, "(")
                table.insert(out, children[3])
                table.insert(out, ")")
@@ -2665,11 +2639,15 @@ function tl.type_check(ast)
    local function match_record_key(node, tbl, key, orig_tbl)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
+      tbl = resolve_unary(tbl)
+      if tbl.typename == "string" then
+         tbl = find_var("string")
+      end
       if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
-            ["err"] = "not a record: " .. show_type(tbl),
+            ["err"] = "cannot index something that is not a record: " .. show_type(tbl),
          })
          return INVALID
       end
@@ -3030,38 +3008,22 @@ function tl.type_check(ast)
             local orig_a = a
             local orig_b = b
             if node.op.op == "@funcall" then
-               node.type = match_func_args(node, a, b, false)
-            elseif node.op.op == "@methcall" then
-               local obj = a
-               if obj.typename == "string" then
-                  obj = find_var("string")
-               end
-               local func = match_record_key(node, obj, node.method, orig_a)
-               if func.typename == "function" then
-                  table.insert(b,1, a)
-                  node.type = match_func_args(node, func, b, true)
+               if node.e1.op and node.e1.op.op == ":" then
+                  local func = node.e1.type
+                  if func.typename == "function" then
+                     table.insert(b,1, node.e1.e1.type)
+                     node.type = match_func_args(node, func, b, true)
+                  else
+                     node.type = INVALID
+                  end
                else
-                  table.insert(errors, {
-                     ["y"] = node.y,
-                     ["x"] = node.x,
-                     ["err"] = "method not found: " .. node.method.tk,
-                  })
-                  node.type = INVALID
+                  node.type = match_func_args(node, a, b, false)
                end
             elseif node.op.op == "@index" then
                a = resolve_unary(a)
                b = resolve_unary(b)
-               if a.typename == "array" or a.typename == "arrayrecord" then
-                  if is_a(b, NUMBER) then
-                     node.type = a.elements
-                  else
-                     table.insert(errors, {
-                        ["y"] = node.y,
-                        ["x"] = node.x,
-                        ["err"] = "wrong index type: " .. show_type(b) .. ", expected number",
-                     })
-                     node.type = INVALID
-                  end
+               if a.typename == "array" or a.typename == "arrayrecord" and is_a(b, NUMBER) then
+                  node.type = a.elements
                elseif a.typename == "map" then
                   if is_a(b, a.keys) then
                      node.type = a.values
@@ -3129,6 +3091,8 @@ function tl.type_check(ast)
                      ["tk"] = node.e2.tk,
                   }, orig_a)
                end
+            elseif node.op.op == ":" then
+               node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
             elseif node.op.op == "and" then
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
