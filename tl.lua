@@ -3021,7 +3021,36 @@ function tl.type_check(ast)
                      ["typename"] = "string",
                      ["tk"] = node.e2.tk:sub(2,- 2),
                   }, orig_a)
+               elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
+                  local ff
+                  local typevars = {}
+                  for _, f in pairs(a.fields) do
+                     if not ff then
+                        ff = f
+                     else
+                        local match, why_not = same_type(f, ff, typevars)
+                        if not match then
+                           ff = nil
+                           break
+                        end
+                     end
+                  end
+                  if ff then
+                     node.type = ff
+                  else
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "cannot index, not all fields in record have the same type",
+                     })
+                     node.type = INVALID
+                  end
                else
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "cannot index object of type " .. show_type(a) .. " with " .. show_type(b),
+                  })
                   node.type = INVALID
                end
             elseif node.op.op == "." then

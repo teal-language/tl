@@ -2534,7 +2534,6 @@ function tl.type_check(ast: Node): {Error}
       end
 
       table.insert(errors, { y = node.y, x = node.x, err = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. key.tk })
-
       return INVALID
    end
 
@@ -2855,14 +2854,8 @@ function tl.type_check(ast: Node): {Error}
             elseif node.op.op == "@index" then
                a = resolve_unary(a)
                b = resolve_unary(b)
-               if a.typename == "array" or a.typename == "arrayrecord" then
-                  if is_a(b, NUMBER) then
-                     node.type = a.elements
-                  else
-                     -- TODO what if we []-index an arrayrecord to get at the fields?
-                     table.insert(errors, { y = node.y, x = node.x, err = "wrong index type: " .. show_type(b) .. ", expected number" })
-                     node.type = INVALID
-                  end
+               if a.typename == "array" or a.typename == "arrayrecord" and is_a(b, NUMBER) then
+                  node.type = a.elements
                elseif a.typename == "map" then
                   if is_a(b, a.keys) then
                      node.type = a.values
@@ -2872,7 +2865,28 @@ function tl.type_check(ast: Node): {Error}
                   end
                elseif node.e2.kind == "string" then
                   node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk:sub(2, -2) }, orig_a)
+               elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
+                  local ff: Type
+                  local typevars: {string: Type} = {}
+                  for _, f in pairs(a.fields) do -- FIXME stable order for error messages
+                     if not ff then
+                        ff = f
+                     else
+                        local match, why_not = same_type(f, ff, typevars)
+                        if not match then
+                           ff = nil
+                           break
+                        end
+                     end
+                  end
+                  if ff then
+                     node.type = ff
+                  else
+                     table.insert(errors, { y = node.y, x = node.x, err = "cannot index, not all fields in record have the same type" })
+                     node.type = INVALID
+                  end
                else
+                  table.insert(errors, { y = node.y, x = node.x, err = "cannot index object of type " .. show_type(a) .. " with " .. show_type(b) })
                   node.type = INVALID
                end
             elseif node.op.op == "." then
