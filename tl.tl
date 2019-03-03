@@ -786,6 +786,39 @@ do
       return precedences[op.arity][op.op]
    end
 
+   local function debug_op(name: string, op: Operator, level: number)
+      level = level or 0
+      io.stderr:write(("| "):rep(level - 1) .. ("+-") .. name .. "\n")
+      io.stderr:write(("| "):rep(level) .. ("+-") .. "op...: " .. tostring(op.op) .. "\n")
+      io.stderr:write(("| "):rep(level) .. ("+-") .. "prec.: " .. op.prec .. "\n")
+      io.stderr:write(("| "):rep(level) .. ("+-") .. "arity: " .. op.arity .. "\n")
+   end
+
+   local function debug_exp(name: string, node: Node, level: number)
+      level = level or 0
+      io.stderr:write(("| "):rep(level - 1) .. ("+-") .. name .. "\n")
+      if node.kind then
+         io.stderr:write(("| "):rep(level) .. ("+-") .. "kind.: " .. node.kind .. "\n")
+      end
+      if node.tk then
+         io.stderr:write(("| "):rep(level) .. ("+-") .. "tk...: " .. node.tk .. "\n")
+      end
+      if type(node.op) == "table" then
+         debug_op("op", node.op, level + 1)
+      end
+      if node.e1 then
+         debug_exp("e1", node.e1, level + 1)
+      end
+      if node.e2 then
+         debug_exp("e2", node.e2, level + 1)
+      end
+      if node[1] then
+         for i = 1, #node do
+            debug_exp(tostring(i), node[i], level + 1)
+         end
+      end
+   end
+
    local function pop_operator(operators: {Operator}, operands: {Node}): boolean
       if operators[#operators].arity == 2 then
          local t2: Node = table.remove(operands)
@@ -926,6 +959,7 @@ do
       local operators: {Operator} = {}
       table.insert(operators, sentinel)
       i = E(tokens, i, errs, operators, operands)
+      -- debug_exp("/", operands[#operands], 1)
       return i, operands[#operands], 0
    end
 end
