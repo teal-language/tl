@@ -2595,7 +2595,7 @@ function tl.type_check(ast)
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
-            ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ") => " .. debug.traceback(),
+            ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")",
          })
       else
          for _, err in ipairs(polyerrs[next(polyerrs)]) do
