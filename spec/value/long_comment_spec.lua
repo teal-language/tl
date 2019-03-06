@@ -1,5 +1,11 @@
 local tl = require("tl")
 
+
+local function string_trim(s)
+   return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+
 describe("long comment", function()
    it("typecheck a level 0 long comment", function()
       local tokens = tl.lex([=[
@@ -85,5 +91,22 @@ describe("long comment", function()
       local errs = {}
       tl.parse_program(tokens, errs)
       assert.is_true(#errs > 0)
+   end)
+
+   pending("export Lua", function()
+      local tokens = tl.lex([=[
+         --[[
+            long comment line 1
+            long comment line 2
+         ]]
+         local foo = 1
+      ]=])
+      local _, ast = tl.parse_program(tokens)
+      local lua = tl.pretty_print_ast(ast)
+      assert.equal([=[--[[
+            long comment line 1
+            long comment line 2
+         ]]
+         local foo = 1]=], string_trim(lua))
    end)
 end)
