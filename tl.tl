@@ -2737,11 +2737,10 @@ function tl.type_check(ast: Node): {Error}
             local rets = find_var("@return")
             if #children > #rets then
                table.insert(errors, { y = node.y, x = node.x, err = "excess return values" })
-            else
-               for i, child in ipairs(children) do
-                  child = resolve_unary(child)
-                  assert_is_a(node.exps[i], child, rets[i], "return value")
-               end
+            end
+            for i = 1, math.min(#children, #rets) do
+               local child = resolve_unary(children[i])
+               assert_is_a(node.exps[i], child, rets[i], "return value")
             end
             node.type = { typename = "none" }
          end,
