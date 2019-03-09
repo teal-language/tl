@@ -834,7 +834,7 @@ do
    end
 
    local function push_operator(op: Operator, operators: {Operator}, operands: {Node}): boolean
-      while prec(operators[#operators]) >= prec(op) do
+      while #operands > 0 and prec(operators[#operators]) >= prec(op) do
          local ok = pop_operator(operators, operands)
          if not ok then
             return false

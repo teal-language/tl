@@ -697,7 +697,7 @@ local function pop_operator(operators, operands)
    return true
 end
 local function push_operator(op, operators, operands)
-   while prec(operators[#operators]) >= prec(op) do
+   while #operands > 0 and prec(operators[#operators]) >= prec(op) do
       local ok = pop_operator(operators, operands)
       if not ok then
          return false
