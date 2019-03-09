@@ -2056,6 +2056,15 @@ local function show_type(t: Type): string
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show_type(t.elements) .. "}"
+   elseif t.typename == "record" then
+      local out: {string} = {}
+      for _, k in ipairs(t.field_order) do
+         local v = t.fields[k]
+         table.insert(out, k)
+         table.insert(out, ": ")
+         table.insert(out, show_type(v))
+      end
+      return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "function" then
       local out: {string} = {}
       table.insert(out, "function(")
@@ -2195,8 +2204,7 @@ function tl.type_check(ast: Node): {Error}
          }
       }
    }
-
-   for _, t in pairs(st[1]) do
+   local function fill_field_order(t: Type)
       if t.typename == "record" then
          t.field_order = {}
          for k, v in pairs(t.fields) do
@@ -2205,6 +2213,10 @@ function tl.type_check(ast: Node): {Error}
          table.sort(t.field_order)
       end
    end
+   for _, t in pairs(st[1]) do
+      fill_field_order(t)
+   end
+   fill_field_order(st[1]["FILE"].def)
 
    local Error = record
       y: number

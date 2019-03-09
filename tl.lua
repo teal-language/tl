@@ -1912,6 +1912,15 @@ local function show_type(t)
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show_type(t.elements) .. "}"
+   elseif t.typename == "record" then
+      local out = {}
+      for _, k in ipairs(t.field_order) do
+         local v = t.fields[k]
+         table.insert(out, k)
+         table.insert(out, ": ")
+         table.insert(out, show_type(v))
+      end
+      return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "function" then
       local out = {}
       table.insert(out, "function(")
@@ -2296,7 +2305,7 @@ function tl.type_check(ast)
          },
       },
    }
-   for _, t in pairs(st[1]) do
+   local function fill_field_order(t)
       if t.typename == "record" then
          t.field_order = {}
          for k, v in pairs(t.fields) do
@@ -2305,6 +2314,10 @@ function tl.type_check(ast)
          table.sort(t.field_order)
       end
    end
+   for _, t in pairs(st[1]) do
+      fill_field_order(t)
+   end
+   fill_field_order(st[1]["FILE"].def)
    local Error = {}
    local errors = {}
    local function find_var(name)
