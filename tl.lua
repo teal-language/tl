@@ -834,6 +834,13 @@ parse_expression = function (tokens, i, errs)
    local operators = {}
    table.insert(operators, sentinel)
    i = E(tokens, i, errs, operators, operands)
+   if tokens[i].tk == "as" then
+      i = i + 1
+      local node = new_node(tokens, i, "cast")
+      i, node.casttype = parse_type(tokens, i, errs)
+      node.exp = operands[#operands]
+      return i, node,0
+   end
    return i, operands[#operands],0
 end
 end
@@ -1243,6 +1250,8 @@ local function recurse_node(ast, visit_node, visit_type)
       xs[1] = recurse_node(ast.elsepart, visit_node, visit_type)
    elseif ast.kind == "return" then
       xs[1] = recurse_node(ast.exps, visit_node, visit_type)
+   elseif ast.kind == "cast" then
+      xs[1] = recurse_node(ast.exp, visit_node, visit_type)
    elseif ast.kind == "do" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "local_function" or ast.kind == "global_function" then
@@ -1453,6 +1462,11 @@ function tl.pretty_print_ast(ast)
             table.insert(out,("   "):rep(indent))
             table.insert(out, "end")
             return table.concat(out)
+         end,
+      },
+      ["cast"] = {
+         ["after"] = function (node, children)
+            return children[1]
          end,
       },
       ["return"] = {
@@ -1994,9 +2008,6 @@ function tl.type_check(ast)
             ["fields"] = {
                ["stderr"] = NOMINAL_FILE,
             },
-            ["field_order"] = {
-               [1] = "stderr",
-            },
          },
          ["table"] = {
             ["typename"] = "record",
@@ -2071,11 +2082,13 @@ function tl.type_check(ast)
                      },
                   },
                },
-            },
-            ["field_order"] = {
-               [1] = "insert",
-               [2] = "remove",
-               [3] = "concat",
+               ["sort"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                  },
+                  ["rets"] = {},
+               },
             },
          },
          ["string"] = {
@@ -2113,11 +2126,6 @@ function tl.type_check(ast)
                   },
                },
             },
-            ["field_order"] = {
-               [1] = "sub",
-               [2] = "match",
-               [3] = "rep",
-            },
          },
          ["math"] = {
             ["typename"] = "record",
@@ -2133,9 +2141,6 @@ function tl.type_check(ast)
                   },
                },
             },
-            ["field_order"] = {
-               [1] = "min",
-            },
          },
          ["type"] = {
             ["typename"] = "function",
@@ -2149,9 +2154,18 @@ function tl.type_check(ast)
          ["ipairs"] = {
             ["typename"] = "function",
             ["args"] = {
-               [1] = ARRAY_OF_ANY,
+               [1] = ARRAY_OF_ALPHA,
             },
-            ["rets"] = {},
+            ["rets"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
+                  ["rets"] = {
+                     [1] = NUMBER,
+                     [2] = ALPHA,
+                  },
+               },
+            },
          },
          ["pairs"] = {
             ["typename"] = "function",
@@ -2162,7 +2176,16 @@ function tl.type_check(ast)
                   ["values"] = BETA,
                },
             },
-            ["rets"] = {},
+            ["rets"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
+                  ["rets"] = {
+                     [1] = ALPHA,
+                     [2] = BETA,
+                  },
+               },
+            },
          },
          ["assert"] = {
             ["typename"] = "poly",
@@ -2270,12 +2293,18 @@ function tl.type_check(ast)
                   },
                },
             },
-            ["field_order"] = {
-               [1] = "traceback",
-            },
          },
       },
    }
+   for _, t in pairs(st[1]) do
+      if t.typename == "record" then
+         t.field_order = {}
+         for k, v in pairs(t.fields) do
+            table.insert(t.field_order, k)
+         end
+         table.sort(t.field_order)
+      end
+   end
    local Error = {}
    local errors = {}
    local function find_var(name)
@@ -2577,6 +2606,8 @@ function tl.type_check(ast)
       return true
    end
    local function assert_is_a(node, t1, t2, typevars, context)
+      t1 = resolve_tuple(t1)
+      t2 = resolve_tuple(t2)
       local match, why_not = is_a(t1, t2, typevars)
       if not match then
          table.insert(errors, {
@@ -2814,50 +2845,32 @@ function tl.type_check(ast)
             table.insert(st, {})
          end,
          ["before_statements"] = function (node)
-            if node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "ipairs" then
-               local t = resolve_unary(node.exp.e2.type)
-               if t.typename == "array" or t.typename == "arrayrecord" then
-                  add_var(node.vars[1].tk, NUMBER)
-                  add_var(node.vars[2].tk, t.elements)
-               else
-                  table.insert(errors, {
-                     ["y"] = node.y,
-                     ["x"] = node.x,
-                     ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
-                  })
-               end
-            elseif node.exp.kind == "op" and node.exp.op.op == "@funcall" and node.exp.e1.tk == "pairs" then
-               local t = resolve_unary(node.exp.e2.type)
-               if t.typename == "map" then
-                  add_var(node.vars[1].tk, t.keys)
-                  add_var(node.vars[2].tk, t.values)
-               elseif t.typename == "record" then
-                  add_var(node.vars[1].tk, STRING)
-               elseif t.typename == "arrayrecord" then
-                  add_var(node.vars[1].tk, {
-                     ["typename"] = "poly",
-                     ["poly"] = {
-                        [1] = NUMBER,
-                        [2] = STRING,
-                     },
-                  })
-                  local poly = {}
-                  table.insert(poly, t.elements)
-                  for _, k in ipairs(t.field_order) do
-                     local v = t.fields[k]
-                     table.insert(poly, v)
+            local exptype = resolve_tuple(node.exp.type)
+            if exptype.typename == "function" then
+               add_var(node.vars[1].tk, exptype.rets[1])
+               add_var(node.vars[2].tk, exptype.rets[2])
+               if node.exp.op.op == "@funcall" then
+                  local t = resolve_unary(node.exp.e2.type)
+                  if node.exp.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(node.exp.e2.type),
+                     })
+                  elseif node.exp.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
+                     })
                   end
-                  add_var(node.vars[2].tk, {
-                     ["typename"] = "poly",
-                     ["poly"] = poly,
-                  })
-               else
-                  table.insert(errors, {
-                     ["y"] = node.y,
-                     ["x"] = node.x,
-                     ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(node.exp.e2.type),
-                  })
                end
+            else
+               table.insert(errors, {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
+                  ["err"] = "expression in for loop does not return an iterator",
+               })
             end
          end,
          ["after"] = function (node, children)
@@ -2890,8 +2903,7 @@ function tl.type_check(ast)
                })
             end
             for i = 1, math.min(#children,#rets) do
-               local child = resolve_unary(children[i])
-               assert_is_a(node.exps[i], child, rets[i], nil, "return value")
+               assert_is_a(node.exps[i], children[i], rets[i], nil, "return value")
             end
             node.type = {
                ["typename"] = "none",
@@ -2940,6 +2952,7 @@ function tl.type_check(ast)
                   node.type.typename = "array"
                else
                   node.type.fields = {}
+                  node.type.field_order = {}
                end
             end
          end,
@@ -3038,6 +3051,11 @@ function tl.type_check(ast)
             }
          end,
       },
+      ["cast"] = {
+         ["after"] = function (node, children)
+            node.type = node.casttype
+         end,
+      },
       ["op"] = {
          ["after"] = function (node, children)
             local a = children[1]
@@ -3106,7 +3124,7 @@ function tl.type_check(ast)
                   table.insert(errors, {
                      ["y"] = node.y,
                      ["x"] = node.x,
-                     ["err"] = "cannot index object of type " .. show_type(a) .. " with " .. show_type(b),
+                     ["err"] = "cannot index object of type " .. show_type(orig_a) .. " with " .. show_type(orig_b),
                   })
                   node.type = INVALID
                end
