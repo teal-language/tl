@@ -2286,7 +2286,7 @@ function tl.type_check(ast)
       has_cycle[t] = true
       if t.typename == "typevar" then
          if not typevars[t.typevar] then
-            return INVALID
+            return t
          end
          return typevars[t.typevar]
       end
@@ -2318,7 +2318,7 @@ function tl.type_check(ast)
                }
             end
             local newtypevars = {}
-            for k, v in pairs(typevars) do
+            for k, v in pairs(typevars or {}) do
                newtypevars[k] = v
             end
             for i, tt in ipairs(t.typevals) do
@@ -2355,22 +2355,24 @@ function tl.type_check(ast)
    end
    local CompareTypes = {}
    local function compare_typevars(t1, t2, typevars, comp)
+      if t1.typevar == t2.typevar then
+         return true
+      end
+      if not typevars then
+         return false
+      end
+      local function cmp(k, v, a, b)
+         if typevars[k] then
+            return comp(a, b, typevars)
+         else
+            typevars[k] = v
+            return true
+         end
+      end
       if t1.typename == "typevar" then
-         if t2.typename == "typevar" and t1.typevar == t2.typevar then
-            return true
-         elseif not typevars[t1.typevar] then
-            typevars[t1.typevar] = t2
-            return true
-         else
-            return comp(typevars[t1.typevar], t2, typevars)
-         end
-      elseif t2.typename == "typevar" then
-         if not typevars[t2.typevar] then
-            typevars[t2.typevar] = t1
-            return true
-         else
-            return comp(t1, typevars[t2.typevar], typevars)
-         end
+         return cmp(t1.typevar, t2, typevars[t1.typevar], t2)
+      else
+         return cmp(t2.typevar, t1, t1, typevars[t2.typevar])
       end
    end
    local function same_type(t1, t2, typevars)
@@ -2443,8 +2445,6 @@ function tl.type_check(ast)
       elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         t1 = resolve_nominal(t1, typevars)
-         t2 = resolve_nominal(t2, typevars)
          if t1.name == t2.name then
             if t1.typevals == nil and t2.typevals == nil then
                return true
@@ -2543,8 +2543,8 @@ function tl.type_check(ast)
       end
       return true
    end
-   local function assert_is_a(node, t1, t2, context)
-      local match, why_not = is_a(t1, t2, {})
+   local function assert_is_a(node, t1, t2, typevars, context)
+      local match, why_not = is_a(t1, t2, typevars)
       if not match then
          table.insert(errors, {
             ["y"] = node.y,
@@ -2736,7 +2736,7 @@ function tl.type_check(ast)
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
                if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, "local declaration")
+                  assert_is_a(node.vars[i], infertype, decltype, {}, "local declaration")
                end
                local t = decltype or infertype or {
                   ["typename"] = "unknown",
@@ -2755,7 +2755,7 @@ function tl.type_check(ast)
             for i, var in ipairs(children[1]) do
                if var then
                   local val = exps[i] or NIL
-                  assert_is_a(node.vars[i], val, var, "assignment")
+                  assert_is_a(node.vars[i], val, var, {}, "assignment")
                else
                   table.insert(errors, {
                      ["y"] = node.y,
@@ -2857,7 +2857,7 @@ function tl.type_check(ast)
             end
             for i = 1, math.min(#children,#rets) do
                local child = resolve_unary(children[i])
-               assert_is_a(node.exps[i], child, rets[i], "return value")
+               assert_is_a(node.exps[i], child, rets[i], nil, "return value")
             end
             node.type = {
                ["typename"] = "none",

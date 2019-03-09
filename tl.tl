@@ -2209,7 +2209,7 @@ function tl.type_check(ast: Node): {Error}
       has_cycle[t] = true
       if t.typename == "typevar" then
          if not typevars[t.typevar] then
-            return INVALID -- this is ok if we don't use it, e.g. discarding a return
+            return t -- leave it unresolved
          end
          return typevars[t.typevar]
       end
@@ -2236,7 +2236,7 @@ function tl.type_check(ast: Node): {Error}
             end
 
             local newtypevars: {string:Type} = {}
-            for k,v in pairs(typevars) do
+            for k,v in pairs(typevars or {}) do
                newtypevars[k] = v
             end
             for i, tt in ipairs(t.typevals) do
@@ -2264,23 +2264,26 @@ function tl.type_check(ast: Node): {Error}
 
    local CompareTypes = functiontype(Type, Type, {string:Type}): boolean
 
+
    local function compare_typevars(t1: Type, t2: Type, typevars: {string:Type}, comp: CompareTypes): boolean
+      if t1.typevar == t2.typevar then
+         return true
+      end
+      if not typevars then
+         return false
+      end
+      local function cmp(k: string, v: Type, a: Type, b: Type): boolean
+         if typevars[k] then
+            return comp(a, b, typevars)
+         else
+            typevars[k] = v
+            return true
+         end
+      end
       if t1.typename == "typevar" then
-         if t2.typename == "typevar" and t1.typevar == t2.typevar then
-            return true
-         elseif not typevars[t1.typevar] then
-            typevars[t1.typevar] = t2
-            return true
-         else
-            return comp(typevars[t1.typevar], t2, typevars)
-         end
-      elseif t2.typename == "typevar" then
-         if not typevars[t2.typevar] then
-            typevars[t2.typevar] = t1
-            return true
-         else
-            return comp(t1, typevars[t2.typevar], typevars)
-         end
+         return cmp(t1.typevar, t2, typevars[t1.typevar], t2)
+      else
+         return cmp(t2.typevar, t1, t1, typevars[t2.typevar])
       end
    end
 
@@ -2363,8 +2366,6 @@ function tl.type_check(ast: Node): {Error}
       elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         t1 = resolve_nominal(t1, typevars)
-         t2 = resolve_nominal(t2, typevars)
          if t1.name == t2.name then
             if t1.typevals == nil and t2.typevals == nil then
                return true
@@ -2464,8 +2465,8 @@ function tl.type_check(ast: Node): {Error}
       return true
    end
 
-   local function assert_is_a(node: Node, t1: Type, t2: Type, context: string)
-      local match, why_not = is_a(t1, t2, {})
+   local function assert_is_a(node: Node, t1: Type, t2: Type, typevars: {string:Type}, context: string)
+      local match, why_not = is_a(t1, t2, typevars)
       if not match then
          table.insert(errors, { y = node.y, x = node.x, err = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or "") })
       end
@@ -2647,7 +2648,7 @@ function tl.type_check(ast: Node): {Error}
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
                if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, "local declaration")
+                  assert_is_a(node.vars[i], infertype, decltype, {}, "local declaration")
                end
                local t = decltype or infertype or { typename = "unknown" }
                add_var(var.tk, t)
@@ -2662,7 +2663,7 @@ function tl.type_check(ast: Node): {Error}
             for i, var in ipairs(children[1]) do
                if var then
                   local val = exps[i] or NIL
-                  assert_is_a(node.vars[i], val, var, "assignment")
+                  assert_is_a(node.vars[i], val, var, {}, "assignment")
                else
                   table.insert(errors, { y = node.y, x = node.x, err = "unknown variable" })
                end
@@ -2740,7 +2741,7 @@ function tl.type_check(ast: Node): {Error}
             end
             for i = 1, math.min(#children, #rets) do
                local child = resolve_unary(children[i])
-               assert_is_a(node.exps[i], child, rets[i], "return value")
+               assert_is_a(node.exps[i], child, rets[i], nil, "return value")
             end
             node.type = { typename = "none" }
          end,

@@ -150,7 +150,18 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
-   pending("will catch if return value does not match the typevar", function()
+   it("can use a typevar from an argument as the function return type", function()
+      -- ok
+      local tokens = tl.lex([[
+         local function parse_list(list: {`T}): `T
+            return list[1]
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(0, #errors)
+   end)
+   it("will catch if return value does not match the typevar", function()
       -- fail
       local tokens = tl.lex([[
          local function parse_list(list: {`T}): `T
@@ -162,8 +173,7 @@ describe("generic function", function()
       assert.same(1, #errors)
       assert.match("boolean is not a `T", errors[1].err, 1, true)
    end)
-
-   pending("will catch if resolved typevar does not match", function()
+   it("will catch if resolved typevar does not match", function()
       -- fail
       local tokens = tl.lex([[
          local ParseItem = functiontype<`V>(number): `V
@@ -230,17 +240,12 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
-   pending("propagates resolved typevar in return type", function()
-      -- pass
+   it("propagates resolved typevar in return type", function()
       local tokens = tl.lex([[
-         local VisitorCallbacks = record<`N, `T>
-            before: function(`N, {`T})
-            before_statements: function({`N})
-            after: function(`N, {`T}, `T): `T
+         local VisitorCallbacks = record<`N, `X>
          end
 
          local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
-            return visit_node["foo"].after(ast, {}, nil)
          end
 
          local function pretty_print_ast(ast: Node): string
@@ -253,8 +258,25 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
-   pending("checks that typevars that appear in multiple arguments must match", function()
+   it("checks that typevars that appear in multiple arguments must match", function()
       -- pass
+      local tokens = tl.lex([[
+         local VisitorCallbacks = record<`X, `Y>
+         end
+
+         local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+         end
+
+         local function pretty_print_ast(ast: Node): string
+            local visit_node: {string:VisitorCallbacks<Node, string>} = {}
+            local visit_type: {string:VisitorCallbacks<Type, string>} = {}
+            return recurse_node(ast, visit_node, visit_type)
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+      -- fail
       local tokens = tl.lex([[
          local VisitorCallbacks = record<`X, `Y>
          end
@@ -271,7 +293,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.same("error in argument", errors[1].err, 1, true)
+      assert.match("error in argument", errors[1].err, 1, true)
    end)
 end)
 
