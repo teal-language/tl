@@ -405,6 +405,7 @@ local Type = record
    -- records
    typevars: {Type}
    fields: {string: Type}
+   field_order: {string}
 
    -- array
    elements: Type
@@ -1132,6 +1133,7 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
       node.newtype.def = def
       def.typename = "record"
       def.fields = {}
+      def.field_order = {}
       i = i + 1
       if tokens[i].tk == "<" then
          i, def.typevars = parse_typevar_list(tokens, i, errs)
@@ -1164,6 +1166,7 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
                return fail(tokens, i, errs, "expected a type")
             end
             def.fields[v.tk] = t
+            table.insert(def.field_order, v.tk)
          end
       end
       i = verify_tk(tokens, i, errs, "end")
@@ -2100,6 +2103,9 @@ function tl.type_check(ast: Node): {Error}
             fields = {
                ["stderr"] = NOMINAL_FILE,
             },
+            field_order = {
+               "stderr",
+            }
          },
          ["table"] = {
             typename = "record",
@@ -2126,6 +2132,11 @@ function tl.type_check(ast: Node): {Error}
                   }
                },
             },
+            field_order = {
+               "insert",
+               "remove",
+               "concat",
+            }
          },
          ["string"] = {
             typename = "record",
@@ -2134,12 +2145,20 @@ function tl.type_check(ast: Node): {Error}
                ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
                ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
             },
+            field_order = {
+               "sub",
+               "match",
+               "rep",
+            }
          },
          ["math"] = {
             typename = "record",
             fields = {
                ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
             },
+            field_order = {
+               "min",
+            }
          },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
          ["ipairs"] = { typename = "function", args = { ARRAY_OF_ANY }, rets = {} }, -- [magic]
@@ -2169,6 +2188,9 @@ function tl.type_check(ast: Node): {Error}
             fields = {
                ["traceback"] = { typename = "function", args = {}, rets = { STRING } },
             },
+            field_order = {
+               "traceback"
+            }
          }
       }
    }
@@ -2312,19 +2334,36 @@ function tl.type_check(ast: Node): {Error}
       return t.typename == "record" and next(t.fields) == nil
    end
 
+   local TypeGetter = functiontype(string): Type
+
    local is_a: function(Type, Type, {string:Type}): boolean, string
 
-   local function match_record_fields(t1: Type, t2: Type, typevars: {string:Type}): boolean, string
-      for k, f in pairs(t1.fields) do -- FIXME stable order for error messages
-         if t2.fields[k] == nil then
-            return false, "unknown field " .. k
-         end
-         local match, why_not = is_a(f, t2.fields[k], typevars)
-         if not match then
-            return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
+   local function match_record_fields(t1: Type, t2: TypeGetter, typevars: {string:Type}): boolean, string
+      local fielderrs: {string} = {}
+      for _, k in ipairs(t1.field_order) do
+         local f = t1.fields[k]
+         local t2k = t2(k)
+         if t2k == nil then
+            table.insert(fielderrs, "unknown field " .. k)
+         else
+            local match, why_not = is_a(f, t2k, typevars)
+            if not match then
+               table.insert(fielderrs, k .. (why_not and ": " .. why_not or ""))
+            end
          end
       end
+      if #fielderrs > 0 then
+         return false, "record fields don't match: " .. table.concat(fielderrs, "; ")
+      end
       return true
+   end
+
+   local function match_fields_to_record(t1: Type, t2: Type, typevars: {string:Type}): boolean, string
+      return match_record_fields(t1, function(k: string): Type return t2.fields[k] end, typevars)
+   end
+
+   local function match_fields_to_map(t1: Type, t2: Type, typevars: {string:Type}): boolean, string
+      return match_record_fields(t1, function(_: string): Type return t2.values end, typevars)
    end
 
    is_a = function(t1: Type, t2: Type, typevars: {string:Type}): boolean, string
@@ -2394,7 +2433,7 @@ function tl.type_check(ast: Node): {Error}
          return false
       elseif t2.typename == "record" then
          if t1.typename == "record" or t1.typename == "arrayrecord" then
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          elseif t1.typename == "map" then
             if not is_a(t1.keys, STRING, typevars) then
                return false
@@ -2411,12 +2450,12 @@ function tl.type_check(ast: Node): {Error}
          if t1.typename == "array" then
             return is_a(t1.elements, t2.elements, typevars)
          elseif t1.typename == "record" then
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          elseif t1.typename == "arrayrecord" then
             if not is_a(t1.elements, t2.elements, typevars) then
                return false
             end
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          end
          return false
       elseif t2.typename == "map" then
@@ -2430,13 +2469,7 @@ function tl.type_check(ast: Node): {Error}
             if not is_a(STRING, t2.keys, typevars) then
                return false, "can't match a record to a map with non-string keys"
             end
-            for k, f in pairs(t1.fields) do -- FIXME stable order for error messages
-               local match, why_not = is_a(f, t2.values, typevars)
-               if not match then
-                  return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
-               end
-            end
-            return true
+            return match_fields_to_map(t1, t2, typevars)
          end
          return false
       elseif t1.typename == "function" and t2.typename == "function" then
@@ -2706,8 +2739,9 @@ function tl.type_check(ast: Node): {Error}
                   })
                   local poly: {Type} = {}
                   table.insert(poly, t.elements)
-                  for f, t in pairs(t.fields) do
-                     table.insert(poly, t)
+                  for _, k in ipairs(t.field_order) do
+                     local v = t.fields[k]
+                     table.insert(poly, v)
                   end
                   add_var(node.vars[2].tk, {
                      typename = "poly",
@@ -2761,8 +2795,10 @@ function tl.type_check(ast: Node): {Error}
                if child.typename == "kv" then
                   if not node.type.fields then
                      node.type.fields = {}
+                     node.type.field_order = {}
                   end
                   node.type.fields[child.k] = child.v
+                  table.insert(node.type.field_order, child.k)
                elseif child.typename == "iv" then
                   if not node.type.items then
                      node.type.items = {}
@@ -2840,11 +2876,13 @@ function tl.type_check(ast: Node): {Error}
             local var = find_var(node.module.tk)
             if (var.typename == "record" or var.typename == "arrayrecord") then
                var.fields = var.fields or {}
+               var.field_order = var.field_order or {}
                var.fields[node.name.tk] = {
                   typename = "function",
                   args = children[3],
                   rets = children[4],
                }
+               table.insert(var.field_order, node.name.tk)
             else
                table.insert(errors, { y = node.y, x = node.x, err = "not a module: " .. node.module.tk })
             end
@@ -2901,7 +2939,8 @@ function tl.type_check(ast: Node): {Error}
                elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
                   local ff: Type
                   local typevars: {string: Type} = {}
-                  for _, f in pairs(a.fields) do -- FIXME stable order for error messages
+                  for _ k in ipairs(a.field_order) do
+                     local f = a.fields[k]
                      if not ff then
                         ff = f
                      else

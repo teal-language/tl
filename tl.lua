@@ -999,6 +999,7 @@ local function parse_newtype(tokens, i, errs)
       node.newtype.def = def
       def.typename = "record"
       def.fields = {}
+      def.field_order = {}
       i = i + 1
       if tokens[i].tk == "<" then
          i, def.typevars = parse_typevar_list(tokens, i, errs)
@@ -1031,6 +1032,7 @@ local function parse_newtype(tokens, i, errs)
                return fail(tokens, i, errs, "expected a type")
             end
             def.fields[v.tk] = t
+            table.insert(def.field_order, v.tk)
          end
       end
       i = verify_tk(tokens, i, errs, "end")
@@ -1992,6 +1994,9 @@ function tl.type_check(ast)
             ["fields"] = {
                ["stderr"] = NOMINAL_FILE,
             },
+            ["field_order"] = {
+               [1] = "stderr",
+            },
          },
          ["table"] = {
             ["typename"] = "record",
@@ -2067,6 +2072,11 @@ function tl.type_check(ast)
                   },
                },
             },
+            ["field_order"] = {
+               [1] = "insert",
+               [2] = "remove",
+               [3] = "concat",
+            },
          },
          ["string"] = {
             ["typename"] = "record",
@@ -2103,6 +2113,11 @@ function tl.type_check(ast)
                   },
                },
             },
+            ["field_order"] = {
+               [1] = "sub",
+               [2] = "match",
+               [3] = "rep",
+            },
          },
          ["math"] = {
             ["typename"] = "record",
@@ -2117,6 +2132,9 @@ function tl.type_check(ast)
                      [1] = NUMBER,
                   },
                },
+            },
+            ["field_order"] = {
+               [1] = "min",
             },
          },
          ["type"] = {
@@ -2251,6 +2269,9 @@ function tl.type_check(ast)
                      [1] = STRING,
                   },
                },
+            },
+            ["field_order"] = {
+               [1] = "traceback",
             },
          },
       },
@@ -2396,18 +2417,36 @@ function tl.type_check(ast)
    local function is_empty_table(t)
       return t.typename == "record" and next(t.fields) == nil
    end
+   local TypeGetter = {}
    local is_a
    local function match_record_fields(t1, t2, typevars)
-      for k, f in pairs(t1.fields) do
-         if t2.fields[k] == nil then
-            return false, "unknown field " .. k
-         end
-         local match, why_not = is_a(f, t2.fields[k], typevars)
-         if not match then
-            return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
+      local fielderrs = {}
+      for _, k in ipairs(t1.field_order) do
+         local f = t1.fields[k]
+         local t2k = t2(k)
+         if t2k == nil then
+            table.insert(fielderrs, "unknown field " .. k)
+         else
+            local match, why_not = is_a(f, t2k, typevars)
+            if not match then
+               table.insert(fielderrs, k .. (why_not and ": " .. why_not or ""))
+            end
          end
       end
+      if #fielderrs > 0 then
+         return false, "record fields don't match: " .. table.concat(fielderrs, "; ")
+      end
       return true
+   end
+   local function match_fields_to_record(t1, t2, typevars)
+      return match_record_fields(t1, function (k)
+         return t2.fields[k]
+      end, typevars)
+   end
+   local function match_fields_to_map(t1, t2, typevars)
+      return match_record_fields(t1, function (_)
+         return t2.values
+      end, typevars)
    end
    is_a = function (t1, t2, typevars)
       assert(type(t1) == "table")
@@ -2473,7 +2512,7 @@ function tl.type_check(ast)
          return false
       elseif t2.typename == "record" then
          if t1.typename == "record" or t1.typename == "arrayrecord" then
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          elseif t1.typename == "map" then
             if not is_a(t1.keys, STRING, typevars) then
                return false
@@ -2490,12 +2529,12 @@ function tl.type_check(ast)
          if t1.typename == "array" then
             return is_a(t1.elements, t2.elements, typevars)
          elseif t1.typename == "record" then
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          elseif t1.typename == "arrayrecord" then
             if not is_a(t1.elements, t2.elements, typevars) then
                return false
             end
-            return match_record_fields(t1, t2, typevars)
+            return match_fields_to_record(t1, t2, typevars)
          end
          return false
       elseif t2.typename == "map" then
@@ -2509,13 +2548,7 @@ function tl.type_check(ast)
             if not is_a(STRING, t2.keys, typevars) then
                return false, "can't match a record to a map with non-string keys"
             end
-            for k, f in pairs(t1.fields) do
-               local match, why_not = is_a(f, t2.values, typevars)
-               if not match then
-                  return false, "mismatch in field " .. k .. (why_not and ": " .. why_not or "")
-               end
-            end
-            return true
+            return match_fields_to_map(t1, t2, typevars)
          end
          return false
       elseif t1.typename == "function" and t2.typename == "function" then
@@ -2810,8 +2843,9 @@ function tl.type_check(ast)
                   })
                   local poly = {}
                   table.insert(poly, t.elements)
-                  for f, t in pairs(t.fields) do
-                     table.insert(poly, t)
+                  for _, k in ipairs(t.field_order) do
+                     local v = t.fields[k]
+                     table.insert(poly, v)
                   end
                   add_var(node.vars[2].tk, {
                      ["typename"] = "poly",
@@ -2879,8 +2913,10 @@ function tl.type_check(ast)
                if child.typename == "kv" then
                   if not node.type.fields then
                      node.type.fields = {}
+                     node.type.field_order = {}
                   end
                   node.type.fields[child.k] = child.v
+                  table.insert(node.type.field_order, child.k)
                elseif child.typename == "iv" then
                   if not node.type.items then
                      node.type.items = {}
@@ -2970,11 +3006,13 @@ function tl.type_check(ast)
             local var = find_var(node.module.tk)
             if var.typename == "record" or var.typename == "arrayrecord" then
                var.fields = var.fields or {}
+               var.field_order = var.field_order or {}
                var.fields[node.name.tk] = {
                   ["typename"] = "function",
                   ["args"] = children[3],
                   ["rets"] = children[4],
                }
+               table.insert(var.field_order, node.name.tk)
             else
                table.insert(errors, {
                   ["y"] = node.y,
@@ -3042,7 +3080,8 @@ function tl.type_check(ast)
                elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
                   local ff
                   local typevars = {}
-                  for _, f in pairs(a.fields) do
+                  for _, k in ipairs(a.field_order) do
+                     local f = a.fields[k]
                      if not ff then
                         ff = f
                      else
