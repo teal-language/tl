@@ -2529,16 +2529,17 @@ function tl.type_check(ast: Node): {Error}
       end
    end
 
-   local function try_match_func_args(node: Node, f: Type, args: {Type}, polyerrs: {{Error}}, p: number, is_method: boolean): Type
+   local function try_match_func_args(node: Node, f: Type, args: {Type}, is_method: boolean): Type, {Error}
       local ok = true
       local typevars = {}
+      local errs = {}
       for a = 1, math.min(#args, #f.args) do
          local arg = args[a]
          local matches, why_not = is_a(arg, f.args[a], typevars)
          if not matches then
-            polyerrs[p] = polyerrs[p] or {}
+            errs = errs or {}
             local at = node.e2 and node.e2[a] or node
-            table.insert(polyerrs[p], { y = at.y, x = at.x, err = "error in argument " .. (is_method and a-1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. (why_not and ": " .. why_not or "") })
+            table.insert(errs, { y = at.y, x = at.x, err = "error in argument " .. (is_method and a-1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. (why_not and ": " .. why_not or "") })
             ok = false
             break
          end
@@ -2547,7 +2548,7 @@ function tl.type_check(ast: Node): {Error}
          f.rets.typename = "tuple"
          return resolve_typevars(f.rets, typevars)
       end
-      return nil
+      return nil, errs
    end
 
    local function match_func_args(node: Node, func: Type, args: {Type}, is_method: boolean): Type
@@ -2558,7 +2559,7 @@ function tl.type_check(ast: Node): {Error}
 
       args = args or {}
       local poly: Type = func.typename == "poly" and func or { poly = { func } }
-      local polyerrs: {{Error}} = {}
+      local first_errs: {Error}
       local expects: {string} = {}
       -- try exact match first
       for p, f in ipairs(poly.poly) do
@@ -2568,35 +2569,38 @@ function tl.type_check(ast: Node): {Error}
          end
          table.insert(expects, tostring(#f.args or 0))
          if #args == (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
       -- [nil-lenient] now try passing nils to missing arguments
       for p, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
       -- now try vararg functions
       for p, f in ipairs(poly.poly) do
          if f.vararg and #args > (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
 
-      if not next(polyerrs) then
+      if not first_errs then
          table.insert(errors, { y = node.y, x = node.x, err = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")" }) -- .. " => " .. debug.traceback() })
       else
-         for _, err in ipairs(polyerrs[next(polyerrs)]) do
+         for _, err in ipairs(first_errs) do
             table.insert(errors, err)
          end
       end
@@ -2986,6 +2990,8 @@ function tl.type_check(ast: Node): {Error}
             elseif node.op.op == "and" then
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
+               node.type = a
+            elseif node.op.op == "or" and same_type(a, b) then
                node.type = a
             elseif node.op.op == "or" and b.typename == "nil" then
                node.type = a

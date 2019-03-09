@@ -2630,16 +2630,17 @@ function tl.type_check(ast)
          })
       end
    end
-   local function try_match_func_args(node, f, args, polyerrs, p, is_method)
+   local function try_match_func_args(node, f, args, is_method)
       local ok = true
       local typevars = {}
+      local errs = {}
       for a = 1, math.min(#args,#f.args) do
          local arg = args[a]
          local matches, why_not = is_a(arg, f.args[a], typevars)
          if not matches then
-            polyerrs[p] = polyerrs[p] or {}
+            errs = errs or {}
             local at = node.e2 and node.e2[a] or node
-            table.insert(polyerrs[p], {
+            table.insert(errs, {
                ["y"] = at.y,
                ["x"] = at.x,
                ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. (why_not and ": " .. why_not or ""),
@@ -2652,7 +2653,7 @@ function tl.type_check(ast)
          f.rets.typename = "tuple"
          return resolve_typevars(f.rets, typevars)
       end
-      return nil
+      return nil, errs
    end
    local function match_func_args(node, func, args, is_method)
       assert(type(func) == "table")
@@ -2664,7 +2665,7 @@ function tl.type_check(ast)
             [1] = func,
          },
       }
-      local polyerrs = {}
+      local first_errs
       local expects = {}
       for p, f in ipairs(poly.poly) do
          if f.typename ~= "function" then
@@ -2677,36 +2678,39 @@ function tl.type_check(ast)
          end
          table.insert(expects, tostring(#f.args or 0))
          if #args == (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
       for p, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
       for p, f in ipairs(poly.poly) do
          if f.vararg and #args > (#f.args or 0) then
-            local matched = try_match_func_args(node, f, args, polyerrs, p, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
             end
+            first_errs = first_errs or errs
          end
       end
-      if not next(polyerrs) then
+      if not first_errs then
          table.insert(errors, {
             ["y"] = node.y,
             ["x"] = node.x,
             ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")",
          })
       else
-         for _, err in ipairs(polyerrs[next(polyerrs)]) do
+         for _, err in ipairs(first_errs) do
             table.insert(errors, err)
          end
       end
@@ -3165,6 +3169,8 @@ function tl.type_check(ast)
             elseif node.op.op == "and" then
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
+               node.type = a
+            elseif node.op.op == "or" and same_type(a, b) then
                node.type = a
             elseif node.op.op == "or" and b.typename == "nil" then
                node.type = a
