@@ -1,0 +1,30 @@
+language: python
+sudo: false
+
+env:
+  - LUA="lua=5.1"
+  - LUA="lua=5.2"
+  - LUA="lua=5.3"
+  - LUA="luajit=2.0"
+  - LUA="luajit=2.1"
+
+before_install:
+  - pip install hererocks
+  - hererocks lua_install -r^ --$LUA
+  - export PATH=$PATH:$PWD/lua_install/bin # Add directory with all installed binaries to PATH
+  - ln -s $PWD/lua_install/bin/lua $PWD/lua_install/bin/lua_no_tailcalls
+
+install:
+  - luarocks install busted
+
+script:
+  - make
+
+branches:
+  except:
+    - gh-pages
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
