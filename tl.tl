@@ -259,6 +259,11 @@ function tl.lex(input: string): {Token}
          end
       end
    end
+
+   if #tokens > 0 and tokens[#tokens].tk == nil then
+      drop_token()
+   end
+
    return tokens
 end
 
@@ -1286,6 +1291,7 @@ parse_statements = function(tokens: {Token}, i: number, errs: {ParseError}): num
 end
 
 function tl.parse_program(tokens: {Token}, errs: {ParseError}): number, Node
+   errs = errs or {}
    local last = tokens[#tokens]
    table.insert(tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    return parse_statements(tokens, 1, errs)

@@ -238,6 +238,9 @@ function tl.lex(input)
          end
       end
    end
+   if #tokens > 0 and tokens[#tokens].tk == nil then
+      drop_token()
+   end
    return tokens
 end
 local add_space = {
@@ -1144,6 +1147,7 @@ parse_statements = function (tokens, i, errs)
    return i, node
 end
 function tl.parse_program(tokens, errs)
+   errs = errs or {}
    local last = tokens[#tokens]
    table.insert(tokens, {
       ["y"] = last.y,
