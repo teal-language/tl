@@ -27,4 +27,16 @@ describe("<", function()
       local errors = tl.type_check(ast)
       assert.same("binop mismatch for <: number string", errors[1].err)
    end)
+   it("fails with not gotcha", function()
+      local tokens = tl.lex([[
+         local x = 10
+         local y = 20
+         if not x < y then
+            print("wat")
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same("binop mismatch for <: boolean number", errors[1].err)
+   end)
 end)

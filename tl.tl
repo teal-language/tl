@@ -2394,7 +2394,7 @@ function tl.type_check(ast: Node): {Error}
       return match_record_fields(t1, function(_: string): Type return t2.values end, typevars)
    end
 
-   is_a = function(t1: Type, t2: Type, typevars: {string:Type}): boolean, string
+   is_a = function(t1: Type, t2: Type, typevars: {string:Type}, for_equality: boolean): boolean, string
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -2518,7 +2518,7 @@ function tl.type_check(ast: Node): {Error}
             end
          end
          return true
-      elseif t2.typename == "boolean" then -- all values can be used in a boolean context
+      elseif (not for_equality) and t2.typename == "boolean" then -- all values can be used in a boolean context (but not in == or ~=)
          return true
       elseif t1.typename ~= t2.typename then
          return false
@@ -3006,7 +3006,7 @@ function tl.type_check(ast: Node): {Error}
             elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
                node.type = a
             elseif node.op.op == "==" or node.op.op == "~=" then
-               if is_a(a, b, {}) or is_a(b, a, {}) then
+               if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
                   node.type = BOOLEAN
                else
                   table.insert(errors, { y = node.y, x = node.x, err = "types are not comparable for equality: " .. show_type(a) .. " " .. show_type(b) })

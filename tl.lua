@@ -2494,7 +2494,7 @@ function tl.type_check(ast)
          return t2.values
       end, typevars)
    end
-   is_a = function (t1, t2, typevars)
+   is_a = function (t1, t2, typevars, for_equality)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
       if t2.typename ~= "tuple" then
@@ -2615,7 +2615,7 @@ function tl.type_check(ast)
             end
          end
          return true
-      elseif t2.typename == "boolean" then
+      elseif not for_equality and t2.typename == "boolean" then
          return true
       elseif t1.typename ~= t2.typename then
          return false
@@ -3183,7 +3183,7 @@ function tl.type_check(ast)
             elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
                node.type = a
             elseif node.op.op == "==" or node.op.op == "~=" then
-               if is_a(a, b, {}) or is_a(b, a, {}) then
+               if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
                   node.type = BOOLEAN
                else
                   table.insert(errors, {
