@@ -2313,7 +2313,7 @@ function tl.type_check(ast: Node): {Error}
       return t
    end
 
-   local CompareTypes = functiontype(Type, Type, {string:Type}): boolean
+   local CompareTypes = functiontype(Type, Type, {string:Type}, boolean): boolean
 
    local function compare_typevars(t1: Type, t2: Type, typevars: {string:Type}, comp: CompareTypes): boolean
       if t1.typevar == t2.typevar then
@@ -2364,7 +2364,7 @@ function tl.type_check(ast: Node): {Error}
 
    local TypeGetter = functiontype(string): Type
 
-   local is_a: function(Type, Type, {string:Type}): boolean, string
+   local is_a: function(Type, Type, {string:Type}, boolean): boolean, string
 
    local function match_record_fields(t1: Type, t2: TypeGetter, typevars: {string:Type}): boolean, string
       local fielderrs: {string} = {}
