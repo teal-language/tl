@@ -893,8 +893,22 @@ local function parse_function(tokens, i, errs)
       node.module = node.name
       i, node.name = verify_kind(tokens, i, errs, "word")
       node.kind = "module_function"
+   elseif tokens[i].tk == ":" then
+      i = i + 1
+      node.record_name = node.name
+      i, node.name = verify_kind(tokens, i, errs, "word")
+      node.kind = "record_method"
    end
+   local selfx, selfy = tokens[i].x, tokens[i].y
    i, node.args = parse_argument_list(tokens, i, errs)
+   if node.kind == "record_method" then
+      table.insert(node.args,1, {
+         ["x"] = selfx,
+         ["y"] = selfy,
+         ["tk"] = "self",
+         ["kind"] = "variable",
+      })
+   end
    i, node.rets = parse_type_list(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -1273,6 +1287,15 @@ local function recurse_node(ast, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
       xs[4] = recurse_type(ast.rets, visit_type)
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
+   elseif ast.kind == "record_method" then
+      xs[1] = recurse_node(ast.record_name, visit_node, visit_type)
+      xs[2] = recurse_node(ast.name, visit_node, visit_type)
+      xs[3] = recurse_node(ast.args, visit_node, visit_type)
+      xs[4] = recurse_type(ast.rets, visit_type)
+      if visit_node["record_method"].before_statements then
+         visit_node["record_method"].before_statements(ast, xs)
+      end
+      xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "op" then
       xs[1] = recurse_node(ast.e1, visit_node, visit_type)
       local p1 = ast.e1.op and ast.e1.op.prec or nil
@@ -1611,6 +1634,26 @@ function tl.pretty_print_ast(ast)
             return table.concat(out)
          end,
       },
+      ["record_method"] = {
+         ["before"] = function ()
+            indent = indent + 1
+         end,
+         ["after"] = function (node, children)
+            local out = {}
+            table.insert(out, "function ")
+            table.insert(out, children[1])
+            table.insert(out, ":")
+            table.insert(out, children[2])
+            table.insert(out, "(")
+            table.insert(out, children[3])
+            table.insert(out, ")\n")
+            table.insert(out, children[5])
+            indent = indent - 1
+            table.insert(out,("   "):rep(indent))
+            table.insert(out, "end")
+            return table.concat(out)
+         end,
+      },
       ["function"] = {
          ["before"] = function ()
             indent = indent + 1
@@ -1924,17 +1967,20 @@ local function show_type(t)
       local out = {}
       for _, k in ipairs(t.field_order) do
          local v = t.fields[k]
-         table.insert(out, k)
-         table.insert(out, ": ")
-         table.insert(out, show_type(v))
+         table.insert(out, k .. ": " .. show_type(v))
       end
       return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "function" then
       local out = {}
       table.insert(out, "function(")
       local args = {}
-      for _, v in ipairs(t.args) do
-         table.insert(args, show_type(v))
+      if t.is_method then
+         table.insert(args, "self")
+      end
+      for i, v in ipairs(t.args) do
+         if not t.is_method or i > 1 then
+            table.insert(args, show_type(v))
+         end
       end
       table.insert(out, table.concat(args, ","))
       table.insert(out, ")")
@@ -2608,7 +2654,7 @@ function tl.type_check(ast)
          if #t1.rets <#t2.rets then
             return false, "failed on number of returns"
          end
-         for i = 1,#t1.args do
+         for i = t1.is_method and 2 or 1,#t1.args do
             if not is_a(t1.args[i], t2.args[i] or ANY, typevars) then
                return false, "failed on argument " .. i
             end
@@ -2642,6 +2688,14 @@ function tl.type_check(ast)
       local ok = true
       local typevars = {}
       local errs = {}
+      if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
+         table.insert(errs, {
+            ["y"] = node.y,
+            ["x"] = node.x,
+            ["err"] = "invoked method as a regular function: use ':' instead of '.'",
+         })
+         return nil, errs
+      end
       for a = 1, math.min(#args,#f.args) do
          local arg = args[a]
          local matches, why_not = is_a(arg, f.args[a], typevars)
@@ -3056,6 +3110,40 @@ function tl.type_check(ast)
                   ["y"] = node.y,
                   ["x"] = node.x,
                   ["err"] = "not a module: " .. node.module.tk,
+               })
+            end
+            node.type = {
+               ["typename"] = "none",
+            }
+         end,
+      },
+      ["record_method"] = {
+         ["before"] = function (node)
+            begin_function_scope(node)
+         end,
+         ["before_statements"] = function (node, children)
+            local rtype = assert(find_var(node.record_name.tk))
+            children[3][1] = rtype
+            add_var("self", rtype)
+         end,
+         ["after"] = function (node, children)
+            end_function_scope()
+            local rtype = find_var(node.record_name.tk)
+            if rtype.typename == "record" or rtype.typename == "arrayrecord" then
+               rtype.fields = rtype.fields or {}
+               rtype.field_order = rtype.field_order or {}
+               rtype.fields[node.name.tk] = {
+                  ["typename"] = "function",
+                  ["is_method"] = true,
+                  ["args"] = children[3],
+                  ["rets"] = children[4],
+               }
+               table.insert(rtype.field_order, node.name.tk)
+            else
+               table.insert(errors, {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
+                  ["err"] = "not a record: " .. node.module.tk,
                })
             end
             node.type = {
