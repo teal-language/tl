@@ -239,7 +239,11 @@ function tl.lex(input)
       end
    end
    if #tokens > 0 and tokens[#tokens].tk == nil then
-      drop_token()
+      if state == "word" or state == "number" then
+         end_token(state, nil, i - 1)
+      else
+         drop_token()
+      end
    end
    return tokens
 end
