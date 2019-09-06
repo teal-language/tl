@@ -1318,7 +1318,7 @@ end
 
 local VisitorCallbacks = record<`N, `T>
    before: function(`N, {`T})
-   before_statements: function({`N})
+   before_statements: function({`N}, {`T})
    after: function(`N, {`T}, `T): `T
 end
 
