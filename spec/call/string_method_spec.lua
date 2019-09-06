@@ -20,6 +20,27 @@ describe("string method call", function()
          assert.match("error in argument 1:", errors[1].err, 1, true)
       end)
    end)
+   describe("with variable", function()
+      it("pass", function()
+         -- pass
+         local tokens = tl.lex([[
+            local s = "a"
+            s = s:gsub("a", "b") .. "!"
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+      it("fail", function()
+         local tokens = tl.lex([[
+            local s = "a"
+            s = s:gsub(function() end) .. "!"
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors = tl.type_check(ast)
+         assert.match("error in argument 1:", errors[1].err, 1, true)
+      end)
+   end)
    describe("chained", function()
       it("pass", function()
          -- pass

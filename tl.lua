@@ -1804,6 +1804,10 @@ local NOMINAL_FILE = {
    ["typename"] = "nominal",
    ["name"] = "FILE",
 }
+local METATABLE = {
+   ["typename"] = "nominal",
+   ["name"] = "METATABLE",
+}
 local numeric_binop = {
    ["number"] = {
       ["number"] = NUMBER,
@@ -2025,6 +2029,16 @@ function tl.type_check(ast)
             },
             ["rets"] = {},
          },
+         ["setmetatable"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ALPHA,
+               [2] = METATABLE,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+            },
+         },
          ["next"] = {
             ["typename"] = "poly",
             ["poly"] = {
@@ -2062,6 +2076,21 @@ function tl.type_check(ast)
                         [2] = STRING,
                      },
                      ["rets"] = {},
+                  },
+               },
+            },
+         },
+         ["METATABLE"] = {
+            ["typename"] = "typetype",
+            ["def"] = {
+               ["typename"] = "record",
+               ["fields"] = {
+                  ["__tostring"] = {
+                     ["typename"] = "function",
+                     ["args"] = {},
+                     ["rets"] = {
+                        [1] = STRING,
+                     },
                   },
                },
             },
@@ -2188,6 +2217,56 @@ function tl.type_check(ast)
                      [1] = STRING,
                   },
                },
+               ["gsub"] = {
+                  ["typename"] = "poly",
+                  ["poly"] = {
+                     [1] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = STRING,
+                           [2] = STRING,
+                           [3] = STRING,
+                        },
+                        ["rets"] = {
+                           [1] = STRING,
+                        },
+                     },
+                     [2] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = STRING,
+                           [2] = STRING,
+                           [3] = {
+                              ["typename"] = "map",
+                              ["keys"] = STRING,
+                              ["values"] = STRING,
+                           },
+                        },
+                        ["rets"] = {
+                           [1] = STRING,
+                        },
+                     },
+                  },
+               },
+               ["char"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
+                  },
+               },
+               ["format"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                  },
+                  ["vararg"] = true,
+                  ["rets"] = {
+                     [1] = STRING,
+                  },
+               },
             },
          },
          ["math"] = {
@@ -2256,17 +2335,21 @@ function tl.type_check(ast)
                [1] = {
                   ["typename"] = "function",
                   ["args"] = {
-                     [1] = BOOLEAN,
+                     [1] = ALPHA,
                   },
-                  ["rets"] = {},
+                  ["rets"] = {
+                     [1] = ALPHA,
+                  },
                },
                [2] = {
                   ["typename"] = "function",
                   ["args"] = {
-                     [1] = BOOLEAN,
+                     [1] = ALPHA,
                      [2] = STRING,
                   },
-                  ["rets"] = {},
+                  ["rets"] = {
+                     [1] = ALPHA,
+                  },
                },
             },
          },
@@ -2729,7 +2812,7 @@ function tl.type_check(ast)
       }
       local first_errs
       local expects = {}
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if f.typename ~= "function" then
             table.insert(errors, {
                ["y"] = node.y,
@@ -2747,7 +2830,7 @@ function tl.type_check(ast)
             first_errs = first_errs or errs
          end
       end
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
@@ -2756,7 +2839,7 @@ function tl.type_check(ast)
             first_errs = first_errs or errs
          end
       end
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if f.vararg and #args > (#f.args or 0) then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
@@ -3178,7 +3261,7 @@ function tl.type_check(ast)
             if node.op.op == "@funcall" then
                if node.e1.op and node.e1.op.op == ":" then
                   local func = node.e1.type
-                  if func.typename == "function" then
+                  if func.typename == "function" or func.typename == "poly" then
                      table.insert(b,1, node.e1.e1.type)
                      node.type = match_func_args(node, func, b, true)
                   else

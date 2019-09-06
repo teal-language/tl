@@ -1944,6 +1944,7 @@ local MAP_OF_ALPHA_TO_BETA = { typename = "map", keys = ALPHA, values = BETA }
 local FUNCTION = { typename = "function", vararg = true, args = {}, rets = {} }
 local INVALID = { typename = "invalid" }
 local NOMINAL_FILE = { typename = "nominal", name = "FILE" }
+local METATABLE = { typename = "nominal", name = "METATABLE" }
 
 local numeric_binop = {
    ["number"] = {
@@ -2159,6 +2160,7 @@ function tl.type_check(ast: Node): {Error}
          ["@return"] = { typename = "tuple", ANY },
          ["any"] = { typename = "typetype", def = ANY },
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
+         ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
          ["next"] = {
             typename = "poly",
             poly = {
@@ -2172,6 +2174,17 @@ function tl.type_check(ast: Node): {Error}
                typename = "record",
                fields = {
                   ["write"] = { typename = "function", args = { NOMINAL_FILE, STRING }, rets = {} },
+                  -- TODO complete...
+               },
+            },
+         },
+         ["METATABLE"] = {
+            typename = "typetype",
+            def = {
+               typename = "record",
+               fields = {
+                  ["__tostring"] = { typename = "function", args = {}, rets = { STRING } },
+                  -- TODO complete...
                },
             },
          },
@@ -2214,6 +2227,16 @@ function tl.type_check(ast: Node): {Error}
                ["sub"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
                ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
                ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+               ["gsub"] = {
+                  typename = "poly",
+                  poly = {
+                     { typename = "function", args = { STRING, STRING, STRING }, rets = { STRING } },
+                     { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING } }, rets = { STRING } },
+                     -- FIXME any other modes
+                  }
+               },
+               ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
+               ["format"] = { typename = "function", args = { STRING }, vararg = true, rets = { STRING } },
             },
          },
          ["math"] = {
@@ -2232,8 +2255,8 @@ function tl.type_check(ast: Node): {Error}
          ["assert"] = {
             typename = "poly",
             poly = {
-               { typename = "function", args = { BOOLEAN }, rets = {} },
-               { typename = "function", args = { BOOLEAN, STRING }, rets = {} },
+               { typename = "function", args = { ALPHA }, rets = { ALPHA } },
+               { typename = "function", args = { ALPHA, STRING }, rets = { ALPHA } },
             }
          },
          ["print"] = {
@@ -2621,7 +2644,7 @@ function tl.type_check(ast: Node): {Error}
       local first_errs: {Error}
       local expects: {string} = {}
       -- try exact match first
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if f.typename ~= "function" then
             table.insert(errors, { y = node.y, x = node.x, err = "not a function: " .. show_type(f) })
             return INVALID
@@ -2636,7 +2659,7 @@ function tl.type_check(ast: Node): {Error}
          end
       end
       -- [nil-lenient] now try passing nils to missing arguments
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
@@ -2646,7 +2669,7 @@ function tl.type_check(ast: Node): {Error}
          end
       end
       -- now try vararg functions
-      for p, f in ipairs(poly.poly) do
+      for _, f in ipairs(poly.poly) do
          if f.vararg and #args > (#f.args or 0) then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
@@ -3012,7 +3035,7 @@ function tl.type_check(ast: Node): {Error}
             if node.op.op == "@funcall" then
                if node.e1.op and node.e1.op.op == ":" then
                   local func = node.e1.type
-                  if func.typename == "function" then
+                  if func.typename == "function" or func.typename == "poly" then
                      table.insert(b, 1, node.e1.e1.type)
                      node.type = match_func_args(node, func, b, true)
                   else
