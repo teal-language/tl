@@ -2039,6 +2039,25 @@ function tl.type_check(ast)
                [1] = ALPHA,
             },
          },
+         ["getmetatable"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+            },
+            ["rets"] = {
+               [1] = METATABLE,
+            },
+         },
+         ["rawget"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = MAP_OF_ALPHA_TO_BETA,
+               [2] = ALPHA,
+            },
+            ["rets"] = {
+               [1] = BETA,
+            },
+         },
          ["next"] = {
             ["typename"] = "poly",
             ["poly"] = {
@@ -2175,11 +2194,33 @@ function tl.type_check(ast)
                   },
                },
                ["sort"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ARRAY_OF_ALPHA,
+                  ["typename"] = "poly",
+                  ["poly"] = {
+                     [1] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = ARRAY_OF_ALPHA,
+                        },
+                        ["rets"] = {},
+                     },
+                     [2] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = ARRAY_OF_ALPHA,
+                           [2] = {
+                              ["typename"] = "function",
+                              ["args"] = {
+                                 [1] = ALPHA,
+                                 [2] = ALPHA,
+                              },
+                              ["rets"] = {
+                                 [1] = BOOLEAN,
+                              },
+                           },
+                        },
+                        ["rets"] = {},
+                     },
                   },
-                  ["rets"] = {},
                },
             },
          },
@@ -2272,11 +2313,30 @@ function tl.type_check(ast)
          ["math"] = {
             ["typename"] = "record",
             ["fields"] = {
+               ["max"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = NUMBER,
+                     [2] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                  },
+               },
                ["min"] = {
                   ["typename"] = "function",
                   ["args"] = {
                      [1] = NUMBER,
                      [2] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                  },
+               },
+               ["floor"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = NUMBER,
                   },
                   ["rets"] = {
                      [1] = NUMBER,
@@ -2453,8 +2513,10 @@ function tl.type_check(ast)
    end
    for _, t in pairs(st[1]) do
       fill_field_order(t)
+      if t.typename == "typetype" then
+         fill_field_order(t.def)
+      end
    end
-   fill_field_order(st[1]["FILE"].def)
    local Error = {}
    local errors = {}
    local function find_var(name)

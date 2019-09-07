@@ -2161,6 +2161,8 @@ function tl.type_check(ast: Node): {Error}
          ["any"] = { typename = "typetype", def = ANY },
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
          ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
+         ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },
+         ["rawget"] = { typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { BETA } },
          ["next"] = {
             typename = "poly",
             poly = {
@@ -2218,7 +2220,13 @@ function tl.type_check(ast: Node): {Error}
                      { typename = "function", args = { ARRAY_OF_STRING }, rets = { STRING } },
                   }
                },
-               ["sort"] = { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {} },
+               ["sort"] = {
+                  typename = "poly",
+                  poly = {
+                     { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {} },
+                     { typename = "function", args = { ARRAY_OF_ALPHA, { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
+                  }
+               }
             },
          },
          ["string"] = {
@@ -2242,7 +2250,9 @@ function tl.type_check(ast: Node): {Error}
          ["math"] = {
             typename = "record",
             fields = {
+               ["max"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
                ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+               ["floor"] = { typename = "function", args = { NUMBER }, rets = { NUMBER } },
             },
          },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
@@ -2291,8 +2301,10 @@ function tl.type_check(ast: Node): {Error}
    end
    for _, t in pairs(st[1]) do
       fill_field_order(t)
+      if t.typename == "typetype" then
+         fill_field_order(t.def)
+      end
    end
-   fill_field_order(st[1]["FILE"].def)
 
    local Error = record
       y: number
