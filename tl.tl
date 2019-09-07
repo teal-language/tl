@@ -2824,6 +2824,14 @@ function tl.type_check(ast: Node): {Error}
       return ret
    end
 
+   local function get_self_type(node: Node): Type
+      local rtype = assert(find_var(node.kind == "record_method" and node.record_name.tk or node.module.tk))
+      if rtype.typename == "typetype" then
+         rtype = rtype.def
+      end
+      return rtype
+   end
+
    local visit_node: {string:VisitorCallbacks<Node,Type>} = {
       ["statements"] = {
          before = function()
@@ -3011,48 +3019,28 @@ function tl.type_check(ast: Node): {Error}
          before = function(node: Node)
             begin_function_scope(node)
          end,
-         after = function(node: Node, children: {Type}): Type
-            end_function_scope()
-            local var = find_var(node.module.tk)
-            if (var.typename == "record" or var.typename == "arrayrecord") then
-               var.fields = var.fields or {}
-               var.field_order = var.field_order or {}
-               var.fields[node.name.tk] = {
-                  typename = "function",
-                  args = children[3],
-                  rets = children[4],
-               }
-               table.insert(var.field_order, node.name.tk)
-            else
-               table.insert(errors, { y = node.y, x = node.x, err = "not a module: " .. node.module.tk })
-            end
-            node.type = { typename = "none" }
-         end,
-      },
-      ["record_method"] = {
-         before = function(node: Node)
-            begin_function_scope(node)
-         end,
          before_statements = function(node: Node, children: {Type})
-            local rtype = assert(find_var(node.record_name.tk))
-            children[3][1] = rtype
-            add_var("self", rtype)
+            if node.kind == "record_method" then
+               local rtype = get_self_type(node)
+               children[3][1] = rtype
+               add_var("self", rtype)
+            end
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
-            local rtype = find_var(node.record_name.tk)
+            local rtype = get_self_type(node)
             if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
                rtype.fields = rtype.fields or {}
                rtype.field_order = rtype.field_order or {}
                rtype.fields[node.name.tk] = {
                   typename = "function",
-                  is_method = true,
+                  is_method = node.kind == "record_method",
                   args = children[3],
                   rets = children[4],
                }
                table.insert(rtype.field_order, node.name.tk)
             else
-               table.insert(errors, { y = node.y, x = node.x, err = "not a record: " .. node.module.tk })
+               table.insert(errors, { y = node.y, x = node.x, err = "not a module: " .. show_type(rtype) })
             end
             node.type = { typename = "none" }
          end,
@@ -3209,6 +3197,8 @@ function tl.type_check(ast: Node): {Error}
    visit_node["values"] = visit_node["variables"]
    visit_node["expression_list"] = visit_node["variables"]
    visit_node["argument_list"] = visit_node["variables"]
+
+   visit_node["record_method"] = visit_node["module_function"]
 
    visit_node["word"] = visit_node["variable"]
 
