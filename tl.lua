@@ -3465,8 +3465,6 @@ function tl.type_check(ast)
                node.type = a
             elseif node.op.op == "or" and b.typename == "nil" then
                node.type = a
-            elseif node.op.op == "or" and a.typename == "nominal" and b.typename == "nominal" and a.name == b.name then
-               node.type = a
             elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
                node.type = a
             elseif node.op.op == "==" or node.op.op == "~=" then
