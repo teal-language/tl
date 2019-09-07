@@ -61,7 +61,7 @@ function tl.lex(input)
       if fwd then
          i = i + 1
       end
-      if i >#input then
+      if i > #input then
          break
       end
       local c = input:sub(i, i)
@@ -103,13 +103,13 @@ function tl.lex(input)
          elseif c == ">" then
             state = "gt"
             begin_token()
-         elseif c:match("[<>=~]") then
+         elseif c:match("[=~]") then
             state = "maybeequals"
             begin_token()
          elseif c == "[" then
             state = "maybelongstring"
             begin_token()
-         elseif c:match("[][(){},:#`]") then
+         elseif c:match("[][(){},:#`|&%%]") then
             begin_token()
             end_token(c, nil, nil)
          elseif c:match("[+*/]") then
@@ -180,7 +180,25 @@ function tl.lex(input)
             end_token("op")
             state = "any"
          else
-            end_token("=", nil, i - 1)
+            end_token("op", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "lt" then
+         if c == "=" or c == "<" then
+            end_token("op")
+            state = "any"
+         else
+            end_token("op", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "gt" then
+         if c == "=" or c == ">" then
+            end_token("op")
+            state = "any"
+         else
+            end_token("op", nil, i - 1)
             fwd = false
             state = "any"
          end
@@ -1942,7 +1960,12 @@ local binop_types = {
       },
    },
    ["*"] = numeric_binop,
+   ["%"] = numeric_binop,
    ["/"] = numeric_binop,
+   ["&"] = numeric_binop,
+   ["|"] = numeric_binop,
+   ["<<"] = numeric_binop,
+   [">>"] = numeric_binop,
    ["=="] = equality_binop,
    ["~="] = equality_binop,
    ["<="] = relational_binop,
@@ -2577,7 +2600,7 @@ function tl.type_check(ast)
    local Error = {}
    local errors = {}
    local function find_var(name)
-      for i =#st,1,- 1 do
+      for i = #st,1,- 1 do
          local scope = st[i]
          if scope[name] then
             return scope[name]
@@ -2853,10 +2876,10 @@ function tl.type_check(ast)
          end
          return false
       elseif t1.typename == "function" and t2.typename == "function" then
-         if not is_vararg(t2) and #t1.args >#t2.args then
+         if not is_vararg(t2) and #t1.args > #t2.args then
             return false, "failed on number of arguments"
          end
-         if #t1.rets <#t2.rets then
+         if #t1.rets < #t2.rets then
             return false, "failed on number of returns"
          end
          for i = t1.is_method and 2 or 1,#t1.args do
@@ -2951,7 +2974,7 @@ function tl.type_check(ast)
          end
          table.insert(expects, tostring(#f.args or 0))
          local va = is_vararg(f)
-         if #args == (#f.args or 0) or va and #args >#f.args then
+         if #args == (#f.args or 0) or va and #args > #f.args then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
@@ -3212,7 +3235,7 @@ function tl.type_check(ast)
       ["return"] = {
          ["after"] = function (node, children)
             local rets = find_var("@return")
-            if #children >#rets then
+            if #children > #rets then
                table.insert(errors, {
                   ["y"] = node.y,
                   ["x"] = node.x,

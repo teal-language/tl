@@ -124,13 +124,13 @@ function tl.lex(input: string): {Token}
          elseif c == ">" then
             state = "gt"
             begin_token()
-         elseif c:match("[<>=~]") then
+         elseif c:match("[=~]") then
             state = "maybeequals"
             begin_token()
          elseif c == "[" then
             state = "maybelongstring"
             begin_token()
-         elseif c:match("[][(){},:#`]") then
+         elseif c:match("[][(){},:#`|&%%]") then
             begin_token()
             end_token(c, nil, nil)
          elseif c:match("[+*/]") then
@@ -201,7 +201,25 @@ function tl.lex(input: string): {Token}
             end_token("op")
             state = "any"
          else
-            end_token("=", nil, i - 1)
+            end_token("op", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "lt" then
+         if c == "=" or c == "<" then
+            end_token("op")
+            state = "any"
+         else
+            end_token("op", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "gt" then
+         if c == "=" or c == ">" then
+            end_token("op")
+            state = "any"
+         else
+            end_token("op", nil, i - 1)
             fwd = false
             state = "any"
          end
@@ -2063,7 +2081,12 @@ local binop_types: {string:{string:{string:Type}}} = {
       }
    },
    ["*"] = numeric_binop,
+   ["%"] = numeric_binop,
    ["/"] = numeric_binop,
+   ["&"] = numeric_binop,
+   ["|"] = numeric_binop,
+   ["<<"] = numeric_binop,
+   [">>"] = numeric_binop,
    ["=="] = equality_binop,
    ["~="] = equality_binop,
    ["<="] = relational_binop,
