@@ -3439,6 +3439,8 @@ function tl.type_check(ast)
                end
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
+            elseif node.op.op == "not" then
+               node.type = BOOLEAN
             elseif node.op.op == "and" then
                node.type = b
             elseif node.op.op == "or" and is_empty_table(b) then
