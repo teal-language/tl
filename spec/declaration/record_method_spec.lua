@@ -34,7 +34,7 @@ describe("record method", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("invalid key in record type", errors[1].err, 1, true)
+      assert.match("invalid key 'invalid' in record type", errors[1].err, 1, true)
    end)
 
    it("catches invocation style", function()

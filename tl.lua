@@ -2990,7 +2990,7 @@ function tl.type_check(ast)
       table.insert(errors, {
          ["y"] = node.y,
          ["x"] = node.x,
-         ["err"] = "invalid key in record type " .. show_type(orig_tbl) .. ": " .. key.tk,
+         ["err"] = "invalid key '" .. key.tk .. "' in record type " .. show_type(orig_tbl),
       })
       return INVALID
    end
