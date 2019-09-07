@@ -2132,6 +2132,7 @@ function tl.type_check(ast)
                         [1] = STRING,
                      },
                   },
+                  ["__call"] = FUNCTION,
                },
             },
          },

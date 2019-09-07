@@ -2186,6 +2186,7 @@ function tl.type_check(ast: Node): {Error}
                typename = "record",
                fields = {
                   ["__tostring"] = { typename = "function", args = {}, rets = { STRING } },
+                  ["__call"] = FUNCTION,
                   -- TODO complete...
                },
             },
