@@ -349,6 +349,7 @@ local Operator = {}
 local Node = {}
 local parse_expression
 local parse_statements
+local parse_type_list
 local parse_argument_list
 local function fail(tokens, i, errs, msg)
    if not tokens[i] then
@@ -466,7 +467,6 @@ local function parse_trying_list(tokens, i, errs, list, parse_item)
    end
    return i, list
 end
-local parse_type_list
 local function parse_function_type(tokens, i, errs)
    i = i + 1
    local node = {
@@ -480,7 +480,18 @@ local function parse_function_type(tokens, i, errs)
       i = verify_tk(tokens, i, errs, ")")
       i, node.rets = parse_type_list(tokens, i, errs)
    else
-      node.vararg = true
+      node.args = {
+         [1] = {
+            ["typename"] = "any",
+            ["is_va"] = true,
+         },
+      }
+      node.rets = {
+         [1] = {
+            ["typename"] = "any",
+            ["is_va"] = true,
+         },
+      }
    end
    return i, node
 end
@@ -562,14 +573,17 @@ parse_type_list = function (tokens, i, errs, open)
    end
    return i, list
 end
-local function parse_function_value(tokens, i, errs)
-   local node = new_node(tokens, i, "function")
-   i = verify_tk(tokens, i, errs, "function")
+local function parse_function_args_rets_body(tokens, i, errs, node)
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.rets = parse_type_list(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
    return i, node
+end
+local function parse_function_value(tokens, i, errs)
+   local node = new_node(tokens, i, "function")
+   i = verify_tk(tokens, i, errs, "function")
+   return parse_function_args_rets_body(tokens, i, errs, node)
 end
 local function parse_literal(tokens, i, errs)
    if tokens[i].tk == "{" then
@@ -858,11 +872,12 @@ local function parse_variable(tokens, i, errs)
    return verify_kind(tokens, i, errs, "word", "variable")
 end
 local function parse_argument(tokens, i, errs)
-   if tokens[i].tk == "..." then
-      return verify_kind(tokens, i, errs, "...")
-   end
    local node
-   i, node = verify_kind(tokens, i, errs, "word", "variable")
+   if tokens[i].tk == "..." then
+      i, node = verify_kind(tokens, i, errs, "...")
+   else
+      i, node = verify_kind(tokens, i, errs, "word", "variable")
+   end
    if tokens[i].tk == ":" then
       i = i + 1
       i, node.decltype = parse_type(tokens, i, errs)
@@ -878,11 +893,7 @@ local function parse_local_function(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "local")
    i = verify_tk(tokens, i, errs, "function")
    i, node.name = verify_kind(tokens, i, errs, "word")
-   i, node.args = parse_argument_list(tokens, i, errs)
-   i, node.rets = parse_type_list(tokens, i, errs)
-   i, node.body = parse_statements(tokens, i, errs)
-   i = verify_tk(tokens, i, errs, "end")
-   return i, node
+   return parse_function_args_rets_body(tokens, i, errs, node)
 end
 local function parse_function(tokens, i, errs)
    local node = new_node(tokens, i, "global_function")
@@ -900,7 +911,7 @@ local function parse_function(tokens, i, errs)
       node.kind = "record_method"
    end
    local selfx, selfy = tokens[i].x, tokens[i].y
-   i, node.args = parse_argument_list(tokens, i, errs)
+   i = parse_function_args_rets_body(tokens, i, errs, node)
    if node.kind == "record_method" then
       table.insert(node.args,1, {
          ["x"] = selfx,
@@ -909,9 +920,6 @@ local function parse_function(tokens, i, errs)
          ["kind"] = "variable",
       })
    end
-   i, node.rets = parse_type_list(tokens, i, errs)
-   i, node.body = parse_statements(tokens, i, errs)
-   i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
 local function parse_if(tokens, i, errs)
@@ -1763,6 +1771,10 @@ local NUMBER = {
 local STRING = {
    ["typename"] = "string",
 }
+local VARARG_STRING = {
+   ["typename"] = "string",
+   ["is_va"] = true,
+}
 local BOOLEAN = {
    ["typename"] = "boolean",
 }
@@ -1793,9 +1805,18 @@ local MAP_OF_ALPHA_TO_BETA = {
 }
 local FUNCTION = {
    ["typename"] = "function",
-   ["vararg"] = true,
-   ["args"] = {},
-   ["rets"] = {},
+   ["args"] = {
+      [1] = {
+         ["typename"] = "any",
+         ["is_va"] = true,
+      },
+   },
+   ["rets"] = {
+      [1] = {
+         ["typename"] = "any",
+         ["is_va"] = true,
+      },
+   },
 }
 local INVALID = {
    ["typename"] = "invalid",
@@ -2302,8 +2323,8 @@ function tl.type_check(ast)
                   ["typename"] = "function",
                   ["args"] = {
                      [1] = STRING,
+                     [2] = VARARG_STRING,
                   },
-                  ["vararg"] = true,
                   ["rets"] = {
                      [1] = STRING,
                   },
@@ -2689,6 +2710,9 @@ function tl.type_check(ast)
          return t2.values
       end, typevars)
    end
+   local function is_vararg(t)
+      return t.args and #t.args > 0 and t.args[#t.args].is_va
+   end
    is_a = function (t1, t2, typevars, for_equality)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -2793,7 +2817,7 @@ function tl.type_check(ast)
          end
          return false
       elseif t1.typename == "function" and t2.typename == "function" then
-         if not t2.vararg and #t1.args >#t2.args then
+         if not is_vararg(t2) and #t1.args >#t2.args then
             return false, "failed on number of arguments"
          end
          if #t1.rets <#t2.rets then
@@ -2841,16 +2865,22 @@ function tl.type_check(ast)
          })
          return nil, errs
       end
-      for a = 1, math.min(#args,#f.args) do
+      local va = is_vararg(f)
+      local nargs = va and math.max(#args,#f.args) or math.min(#args,#f.args)
+      for a = 1, nargs do
          local arg = args[a]
-         local matches, why_not = is_a(arg, f.args[a], typevars)
+         local farg = f.args[a] or va and f.args[#f.args]
+         if arg == nil and farg.is_va then
+            break
+         end
+         local matches, why_not = is_a(arg, farg, typevars)
          if not matches then
             errs = errs or {}
             local at = node.e2 and node.e2[a] or node
             table.insert(errs, {
                ["y"] = at.y,
                ["x"] = at.x,
-               ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(f.args[a]) .. (why_not and ": " .. why_not or ""),
+               ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg) .. (why_not and ": " .. why_not or ""),
             })
             ok = false
             break
@@ -2884,7 +2914,8 @@ function tl.type_check(ast)
             return INVALID
          end
          table.insert(expects, tostring(#f.args or 0))
-         if #args == (#f.args or 0) then
+         local va = is_vararg(f)
+         if #args == (#f.args or 0) or va and #args >#f.args then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
@@ -2902,7 +2933,7 @@ function tl.type_check(ast)
          end
       end
       for _, f in ipairs(poly.poly) do
-         if f.vararg and #args > (#f.args or 0) then
+         if is_vararg(f) and #args > (#f.args or 0) then
             local matched, errs = try_match_func_args(node, f, args, is_method)
             if matched then
                return matched
@@ -2965,6 +2996,9 @@ function tl.type_check(ast)
          local t = arg.decltype or {
             ["typename"] = "unknown",
          }
+         if arg.tk == "..." then
+            t.is_va = true
+         end
          table.insert(args, t)
          add_var(arg.tk, t)
       end
@@ -2999,11 +3033,27 @@ function tl.type_check(ast)
       end
       return exps
    end
-   local function get_assignment_values(vals)
-      if vals and #vals == 1 and vals[1].typename == "tuple" then
-         vals = vals[1]
+   local function get_assignment_values(vals, wanted)
+      local ret = {}
+      if vals == nil then
+         return ret
       end
-      return vals
+      for i = 1,#vals - 1 do
+         ret[i] = vals[i]
+      end
+      local last = vals[#vals]
+      if last.typename == "tuple" then
+         for _, v in ipairs(last) do
+            table.insert(ret, v)
+         end
+      elseif last.is_va and #ret < wanted then
+         while #ret < wanted do
+            table.insert(ret, last)
+         end
+      else
+         table.insert(ret, last)
+      end
+      return ret
    end
    local visit_node = {
       ["statements"] = {
@@ -3019,7 +3069,7 @@ function tl.type_check(ast)
       },
       ["local_declaration"] = {
          ["after"] = function (node, children)
-            local vals = get_assignment_values(children[2])
+            local vals = get_assignment_values(children[2],#node.vars)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
@@ -3038,7 +3088,7 @@ function tl.type_check(ast)
       },
       ["assignment"] = {
          ["after"] = function (node, children)
-            local vals = get_assignment_values(children[2])
+            local vals = get_assignment_values(children[2],#children[1])
             local exps = flatten_list(vals)
             for i, var in ipairs(children[1]) do
                if var then
@@ -3494,7 +3544,7 @@ function tl.type_check(ast)
    visit_node["nil"] = visit_node["string"]
    visit_node["boolean"] = visit_node["string"]
    visit_node["array"] = visit_node["string"]
-   visit_node["..."] = visit_node["string"]
+   visit_node["..."] = visit_node["variable"]
    visit_node["@after"] = {
       ["after"] = function (node, children)
          assert(type(node.type) == "table", node.kind .. " did not produce a type")
