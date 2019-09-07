@@ -637,6 +637,7 @@ local precedences = {
       ["//"] = 10,
       ["%"] = 10,
       ["^"] = 12,
+      ["as"] = 50,
       ["@funcall"] = 100,
       ["@index"] = 100,
       ["."] = 100,
@@ -778,6 +779,13 @@ local function push_index(tokens, i, errs, operands)
    table.insert(operands, arg)
    return i
 end
+local function push_cast(tokens, i, errs, operands)
+   i = verify_tk(tokens, i, errs, "as")
+   local node = new_node(tokens, i, "cast")
+   i, node.casttype = parse_type(tokens, i, errs)
+   table.insert(operands, node)
+   return i
+end
 E = function (tokens, i, errs, operators, operands)
    if tokens[i].kind == "$EOF$" then
       return i
@@ -826,6 +834,17 @@ E = function (tokens, i, errs, operators, operands)
             return fail(tokens, i, errs)
          end
          i = push_index(tokens, i, errs, operands)
+      elseif tokens[i].tk == "as" then
+         local ok = push_operator({
+            ["y"] = tokens[i].y,
+            ["x"] = tokens[i].x,
+            ["arity"] = 2,
+            ["op"] = "as",
+         }, operators, operands)
+         if not ok then
+            return fail(tokens, i, errs)
+         end
+         i = push_cast(tokens, i, errs, operands)
       elseif is_binop(tokens[i]) then
          local ok = push_operator({
             ["y"] = tokens[i].y,
@@ -855,13 +874,6 @@ parse_expression = function (tokens, i, errs)
    local operators = {}
    table.insert(operators, sentinel)
    i = E(tokens, i, errs, operators, operands)
-   if tokens[i].tk == "as" then
-      i = i + 1
-      local node = new_node(tokens, i, "cast")
-      i, node.casttype = parse_type(tokens, i, errs)
-      node.exp = operands[#operands]
-      return i, node,0
-   end
    return i, operands[#operands],0
 end
 end
@@ -1280,10 +1292,10 @@ local function recurse_node(ast, visit_node, visit_type)
       xs[1] = recurse_node(ast.elsepart, visit_node, visit_type)
    elseif ast.kind == "return" then
       xs[1] = recurse_node(ast.exps, visit_node, visit_type)
-   elseif ast.kind == "cast" then
-      xs[1] = recurse_node(ast.exp, visit_node, visit_type)
    elseif ast.kind == "do" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
+   elseif ast.kind == "cast" then
+
    elseif ast.kind == "local_function" or ast.kind == "global_function" then
       xs[1] = recurse_node(ast.name, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
@@ -1503,11 +1515,6 @@ function tl.pretty_print_ast(ast)
             return table.concat(out)
          end,
       },
-      ["cast"] = {
-         ["after"] = function (node, children)
-            return children[1]
-         end,
-      },
       ["return"] = {
          ["after"] = function (node, children)
             local out = {}
@@ -1678,6 +1685,7 @@ function tl.pretty_print_ast(ast)
             return table.concat(out)
          end,
       },
+      ["cast"] = {},
       ["op"] = {
          ["after"] = function (node, children)
             local out = {}
@@ -1691,6 +1699,8 @@ function tl.pretty_print_ast(ast)
                table.insert(out, "[")
                table.insert(out, children[3])
                table.insert(out, "]")
+            elseif node.op.op == "as" then
+               table.insert(out, children[1])
             elseif tight_op[node.op.op] or spaced_op[node.op.op] then
                if node.op.arity == 1 then
                   table.insert(out, node.op.op)
@@ -3418,6 +3428,8 @@ function tl.type_check(ast)
                   })
                   node.type = INVALID
                end
+            elseif node.op.op == "as" then
+               node.type = b
             elseif node.op.op == "." then
                a = resolve_unary(a, {})
                if a.typename == "map" then
