@@ -1933,7 +1933,7 @@ local ANY = { typename = "any" }
 local NIL = { typename = "nil" }
 local NUMBER = { typename = "number" }
 local STRING = { typename = "string" }
-local VARARG_STRING = { typename = "string", is_va = true }
+local VARARG_ANY = { typename = "any", is_va = true }
 local BOOLEAN = { typename = "boolean" }
 local ALPHA = { typename = "typevar", typevar = "`a" }
 local BETA = { typename = "typevar", typevar = "`b" }
@@ -2245,7 +2245,7 @@ function tl.type_check(ast: Node): {Error}
                   }
                },
                ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
-               ["format"] = { typename = "function", args = { STRING, VARARG_STRING }, rets = { STRING } },
+               ["format"] = { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
             },
          },
          ["math"] = {

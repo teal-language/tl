@@ -1771,8 +1771,8 @@ local NUMBER = {
 local STRING = {
    ["typename"] = "string",
 }
-local VARARG_STRING = {
-   ["typename"] = "string",
+local VARARG_ANY = {
+   ["typename"] = "any",
    ["is_va"] = true,
 }
 local BOOLEAN = {
@@ -2324,7 +2324,7 @@ function tl.type_check(ast)
                   ["typename"] = "function",
                   ["args"] = {
                      [1] = STRING,
-                     [2] = VARARG_STRING,
+                     [2] = VARARG_ANY,
                   },
                   ["rets"] = {
                      [1] = STRING,
