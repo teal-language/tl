@@ -112,8 +112,17 @@ function tl.lex(input: string): {Token}
          elseif c:match("[a-zA-Z_]") then
             state = "word"
             begin_token()
-         elseif c:match("[0-9]") then
-            state = "number"
+         elseif c == "0" then
+            state = "decimal_or_hex"
+            begin_token()
+         elseif c:match("[1-9]") then
+            state = "decimal_number"
+            begin_token()
+         elseif c == "<" then
+            state = "lt"
+            begin_token()
+         elseif c == ">" then
+            state = "gt"
             begin_token()
          elseif c:match("[<>=~]") then
             state = "maybeequals"
@@ -228,6 +237,7 @@ function tl.lex(input: string): {Token}
             end_token("op")
             state = "maybedotdotdot"
          else
+            -- TODO floating point
             end_token(".", nil, i - 1)
             fwd = false
             state = "any"
@@ -251,7 +261,26 @@ function tl.lex(input: string): {Token}
             fwd = false
             state = "any"
          end
-      elseif state == "number" then
+      elseif state == "decimal_or_hex" then
+         -- TODO floating point
+         if c == "x" then
+            state = "hex_number"
+         elseif c:match("[0-9]") then
+            state = "decimal_number"
+         else
+            end_token("number", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "hex_number" then
+         -- TODO floating hex
+         if not c:match("[0-9a-fA-F]") then
+            end_token("number", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "decimal_number" then
+         -- TODO floating point
          if not c:match("[0-9]") then
             end_token("number", nil, i - 1)
             fwd = false
