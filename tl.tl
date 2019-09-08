@@ -254,6 +254,8 @@ function tl.lex(input: string): {Token}
          if c == "." then
             end_token("op")
             state = "maybedotdotdot"
+         elseif c:match("[0-9]") then
+            state = "decimal_float"
          else
             -- TODO floating point
             end_token(".", nil, i - 1)
@@ -283,6 +285,8 @@ function tl.lex(input: string): {Token}
          -- TODO floating point
          if c == "x" then
             state = "hex_number"
+         elseif c == "e" or c == "E" then
+            state = "power_sign"
          elseif c:match("[0-9]") then
             state = "decimal_number"
          else
@@ -291,14 +295,50 @@ function tl.lex(input: string): {Token}
             state = "any"
          end
       elseif state == "hex_number" then
-         -- TODO floating hex
-         if not c:match("[0-9a-fA-F]") then
+         if c == "." then
+            state = "hex_float"
+         elseif c == "p" or c == "P" then
+            state = "power_sign"
+         elseif not c:match("[0-9a-fA-F]") then
+            end_token("number", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "hex_float" then
+         if c == "p" or c == "P" then
+            state = "power_sign"
+         elseif not c:match("[0-9a-fA-F]") then
             end_token("number", nil, i - 1)
             fwd = false
             state = "any"
          end
       elseif state == "decimal_number" then
-         -- TODO floating point
+         if c == "." then
+            state = "decimal_float"
+         elseif c == "e" or c == "E" then
+            state = "power_sign"
+         elseif not c:match("[0-9]") then
+            end_token("number", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "decimal_float" then
+         if c == "e" or c == "E" then
+            state = "power_sign"
+         elseif not c:match("[0-9]") then
+            end_token("number", nil, i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "power_sign" then
+         if c == "-" or c == "+" then
+            state = "power"
+         elseif c:match("[0-9]") then
+            state = "power"
+         else
+            state = "any" -- FIXME report malformed number
+         end
+      elseif state == "power" then
          if not c:match("[0-9]") then
             end_token("number", nil, i - 1)
             fwd = false
@@ -307,9 +347,19 @@ function tl.lex(input: string): {Token}
       end
    end
 
+   local terminals = {
+      ["word"] = "word",
+      ["decimal_or_hex"] = "number",
+      ["decimal_number"] = "number",
+      ["decimal_float"] = "number",
+      ["hex_number"] = "number",
+      ["hex_float"] = "number",
+      ["power"] = "number",
+   }
+
    if #tokens > 0 and tokens[#tokens].tk == nil then
-      if state == "word" or state == "number" then
-         end_token(state, nil, i - 1)
+      if terminals[state] then
+         end_token(terminals[state], nil, i - 1)
       else
          drop_token()
       end
@@ -2312,6 +2362,7 @@ function tl.type_check(ast: Node): {Error}
                ["max"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
                ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
                ["floor"] = { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+               ["huge"] = NUMBER,
             },
          },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
@@ -3042,7 +3093,7 @@ function tl.type_check(ast: Node): {Error}
             if node.key.kind == "string" then
                key = key:sub(2, -2)
             end
-            node.type = { typename = "kv", k = key, v = children[2] }
+            node.type = { typename = "kv", k = assert(key), v = children[2] }
          end,
       },
       ["local_function"] = {
