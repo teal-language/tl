@@ -3287,15 +3287,15 @@ function tl.type_check(ast)
       ["return"] = {
          ["after"] = function (node, children)
             local rets = find_var("@return")
-            if #children > #rets then
+            if #children[1] > #rets then
                table.insert(errors, {
                   ["y"] = node.y,
                   ["x"] = node.x,
-                  ["err"] = "excess return values",
+                  ["err"] = "excess return values, expected " .. #rets .. " got " .. #children[1],
                })
             end
-            for i = 1, math.min(#children,#rets) do
-               assert_is_a(node.exps[i], children[i], rets[i], nil, "return value")
+            for i = 1, math.min(#children[1],#rets) do
+               assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
             node.type = {
                ["typename"] = "none",

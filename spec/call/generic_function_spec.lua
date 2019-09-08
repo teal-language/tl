@@ -28,7 +28,7 @@ describe("generic function", function()
       local tokens = tl.lex([[
          local ParseItem = functiontype<`T>(number): `T
 
-         local function parse_list(list: {`T}, parse_item: ParseItem): number, `T
+         local function parse_list(list: {`T}, parse_item: ParseItem): number, {`T}
             local ret: {`T} = {}
             local n = 0
             return n, ret
@@ -124,7 +124,7 @@ describe("generic function", function()
       local tokens = tl.lex([[
          local ParseItem = functiontype<`X>(number): `X
 
-         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, `T
+         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
             local ret: {`T} = {}
             local n = 0
             for i, t in ipairs(list) do
@@ -144,7 +144,7 @@ describe("generic function", function()
             return { foo = n }
          end
 
-         local x, result: number, Node = parse_list(nodes, parse_node)
+         local x, result: number, {Node} = parse_list(nodes, parse_node)
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
@@ -178,7 +178,7 @@ describe("generic function", function()
       local tokens = tl.lex([[
          local ParseItem = functiontype<`V>(number): `V
 
-         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, `T
+         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
             local ret: {`T} = {}
             local n = 0
             for i, t in ipairs(list) do
@@ -207,14 +207,14 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("Node is not a Other", errors[1].err, 1, true)
+      assert.match("{Node} is not a Other", errors[1].err, 1, true)
    end)
    it("can map one typevar to another", function()
       -- pass
       local tokens = tl.lex([[
          local ParseItem = functiontype<`V>(number): `V
 
-         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, `T
+         local function parse_list(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
             local ret: {`T} = {}
             local n = 0
             for i, t in ipairs(list) do
@@ -234,7 +234,7 @@ describe("generic function", function()
             return { foo = n }
          end
 
-         local x, result: number, Node = parse_list(nodes, parse_node)
+         local x, result: number, {Node} = parse_list(nodes, parse_node)
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)

@@ -663,7 +663,7 @@ end
 
 local ParseItem = functiontype<`T>({Token}, number, {ParseError}, number): number, `T, number
 
-local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, close: {string:boolean}, is_sep: boolean, parse_item: ParseItem<`T>): number, `T
+local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, close: {string:boolean}, is_sep: boolean, parse_item: ParseItem<`T>): number, {`T}
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
@@ -682,7 +682,7 @@ local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: 
    return i, list
 end
 
-local function parse_bracket_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, is_sep: boolean, parse_item: ParseItem<`T>): number, `T
+local function parse_bracket_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, is_sep: boolean, parse_item: ParseItem<`T>): number, {`T}
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, list, { [close] = true }, is_sep, parse_item)
    i = i + 1
@@ -3027,11 +3027,11 @@ function tl.type_check(ast: Node): {Error}
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
             local rets = find_var("@return")
-            if #children > #rets then
-               table.insert(errors, { y = node.y, x = node.x, err = "excess return values" })
+            if #children[1] > #rets then
+               table.insert(errors, { y = node.y, x = node.x, err = "excess return values, expected " .. #rets .. " got " .. #children[1] })
             end
-            for i = 1, math.min(#children, #rets) do
-               assert_is_a(node.exps[i], children[i], rets[i], nil, "return value")
+            for i = 1, math.min(#children[1], #rets) do
+               assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
             node.type = { typename = "none" }
          end,
