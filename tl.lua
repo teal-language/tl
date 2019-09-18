@@ -3214,7 +3214,18 @@ function tl.type_check(ast)
       return ret
    end
    local function get_self_type(node)
-      local rtype = assert(find_var(node.kind == "record_method" and node.record_name.tk or node.module.tk))
+      local name = node.kind == "record_method" and node.record_name.tk or node.module.tk
+      local rtype = find_var(name)
+      if rtype == nil then
+         table.insert(errors, {
+            ["y"] = node.y,
+            ["x"] = node.x,
+            ["err"] = "unknown variable: " .. name,
+         })
+         rtype = {
+            ["typename"] = "unknown",
+         }
+      end
       if rtype.typename == "typetype" then
          rtype = rtype.def
       end
