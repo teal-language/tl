@@ -1928,6 +1928,11 @@ local MAP_OF_ALPHA_TO_BETA = {
    ["keys"] = ALPHA,
    ["values"] = BETA,
 }
+local TABLE = {
+   ["typename"] = "map",
+   ["keys"] = ANY,
+   ["values"] = ANY,
+}
 local FUNCTION = {
    ["typename"] = "function",
    ["args"] = {
@@ -2158,6 +2163,10 @@ local function show_type(t)
       return "<invalid type>"
    elseif t.typename == "any" then
       return "<any type>"
+   elseif t.typename == "nil" then
+      return "nil"
+   elseif t.typename == "typetype" then
+      return "type " .. show_type(t.def)
    else
       return inspect(t)
    end
@@ -2202,7 +2211,7 @@ function tl.type_check(ast)
          ["rawget"] = {
             ["typename"] = "function",
             ["args"] = {
-               [1] = MAP_OF_ALPHA_TO_BETA,
+               [1] = TABLE,
                [2] = ALPHA,
             },
             ["rets"] = {
@@ -2255,6 +2264,7 @@ function tl.type_check(ast)
             ["def"] = {
                ["typename"] = "record",
                ["fields"] = {
+                  ["__index"] = ANY,
                   ["__tostring"] = {
                      ["typename"] = "function",
                      ["args"] = {},
@@ -2540,6 +2550,16 @@ function tl.type_check(ast)
                      [2] = BETA,
                   },
                },
+            },
+         },
+         ["pcall"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = VARARG_ANY,
+            },
+            ["rets"] = {
+               [1] = BOOLEAN,
+               [2] = ANY,
             },
          },
          ["assert"] = {

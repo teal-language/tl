@@ -2062,6 +2062,7 @@ local ARRAY_OF_ANY = { typename = "array", elements = ANY }
 local ARRAY_OF_STRING = { typename = "array", elements = STRING }
 local ARRAY_OF_ALPHA = { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = { typename = "map", keys = ALPHA, values = BETA }
+local TABLE = { typename = "map", keys = ANY, values = ANY }
 local FUNCTION = { typename = "function", args = { { typename = "any", is_va = true } }, rets = { { typename = "any", is_va = true } } }
 local INVALID = { typename = "invalid" }
 local NOMINAL_FILE = { typename = "nominal", name = "FILE" }
@@ -2275,6 +2276,10 @@ local function show_type(t: Type): string
       return "<invalid type>"
    elseif t.typename == "any" then
       return "<any type>"
+   elseif t.typename == "nil" then
+      return "nil"
+   elseif t.typename == "typetype" then
+      return "type " .. show_type(t.def)
    else
       return inspect(t)
    end
@@ -2288,7 +2293,7 @@ function tl.type_check(ast: Node): {Error}
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
          ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
          ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },
-         ["rawget"] = { typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { BETA } },
+         ["rawget"] = { typename = "function", args = { TABLE, ALPHA }, rets = { BETA } },
          ["next"] = {
             typename = "poly",
             poly = {
@@ -2311,6 +2316,7 @@ function tl.type_check(ast: Node): {Error}
             def = {
                typename = "record",
                fields = {
+                  ["__index"] = ANY, -- FIXME
                   ["__tostring"] = { typename = "function", args = {}, rets = { STRING } },
                   ["__call"] = FUNCTION,
                   -- TODO complete...
@@ -2390,6 +2396,7 @@ function tl.type_check(ast: Node): {Error}
          ["pairs"] = { typename = "function", args = { { typename = "map", keys = ALPHA, values = BETA } }, rets = {
             { typename = "function", args = {}, rets = { ALPHA, BETA } },
          } },
+         ["pcall"] = { typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
          ["assert"] = {
             typename = "poly",
             poly = {
