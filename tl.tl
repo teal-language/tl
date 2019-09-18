@@ -3410,6 +3410,18 @@ function tl.type_check(ast: Node): {Error}
 
    recurse_node(ast, visit_node, visit_type)
 
+   local redundant = {}
+   local lastx, lasty
+   for i, err in ipairs(errors) do
+      if err.x == lastx and err.y == lasty then
+         table.insert(redundant, i)
+      end
+      lastx, lasty = err.x, err.y
+   end
+   for i = #redundant, 1, -1 do
+      table.remove(errors, redundant[i])
+   end
+
    return errors
 end
 
