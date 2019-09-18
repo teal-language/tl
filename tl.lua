@@ -2864,6 +2864,9 @@ function tl.type_check(ast)
    is_a = function (t1, t2, typevars, for_equality)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
+      if t1.typename == "nil" or t2.typename == "nil" then
+         return true
+      end
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
@@ -2892,8 +2895,6 @@ function tl.type_check(ast)
             end
          end
          return false
-      elseif t1.typename == "nil" then
-         return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
