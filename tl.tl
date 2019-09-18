@@ -130,10 +130,10 @@ function tl.lex(input: string): {Token}
          elseif c == "[" then
             state = "maybelongstring"
             begin_token()
-         elseif c:match("[][(){},:#`|&%%]") then
+         elseif c:match("[][(){},:#`]") then
             begin_token()
             end_token(c, nil, nil)
-         elseif c:match("[+*/]") then
+         elseif c:match("[+*/|&%%^]") then
             begin_token()
             end_token("op", nil, nil)
          end
@@ -283,12 +283,14 @@ function tl.lex(input: string): {Token}
          end
       elseif state == "decimal_or_hex" then
          -- TODO floating point
-         if c == "x" then
+         if c == "x" or c == "X" then
             state = "hex_number"
          elseif c == "e" or c == "E" then
             state = "power_sign"
          elseif c:match("[0-9]") then
             state = "decimal_number"
+         elseif c == "." then
+            state = "decimal_float"
          else
             end_token("number", nil, i - 1)
             fwd = false
@@ -2152,6 +2154,7 @@ local binop_types: {string:{string:{string:Type}}} = {
    ["*"] = numeric_binop,
    ["%"] = numeric_binop,
    ["/"] = numeric_binop,
+   ["^"] = numeric_binop,
    ["&"] = numeric_binop,
    ["|"] = numeric_binop,
    ["<<"] = numeric_binop,

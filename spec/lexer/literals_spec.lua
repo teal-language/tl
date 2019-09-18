@@ -52,8 +52,10 @@ describe("lexer", function()
 
    for _, p in ipairs(passes) do
       it("accepts " .. p, function()
+         local syntax_errors = {}
          local tokens = tl.lex("local x = " .. p)
-         local _, ast = tl.parse_program(tokens)
+         local _, ast = tl.parse_program(tokens, syntax_errors)
+         assert.same({}, syntax_errors)
          local errors = tl.type_check(ast)
          assert.same({}, errors)
       end)
