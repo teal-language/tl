@@ -2969,7 +2969,8 @@ function tl.type_check(ast)
          if not is_vararg(t2) and #t1.args > #t2.args then
             return false, "failed on number of arguments"
          end
-         if #t1.rets < #t2.rets then
+         local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets[#t2.rets].is_va
+         if #t1.rets < #t2.rets and not diff_by_va then
             return false, "failed on number of returns"
          end
          for i = t1.is_method and 2 or 1,#t1.args do
@@ -2977,8 +2978,12 @@ function tl.type_check(ast)
                return false, "failed on argument " .. i
             end
          end
-         for i = 1,#t2.rets do
-            if not same_type(t1.rets[i], t2.rets[i], typevars) then
+         local nrets = #t2.rets
+         if diff_by_va then
+            nrets = nrets - 1
+         end
+         for i = 1, nrets do
+            if not is_a(t1.rets[i], t2.rets[i], typevars) then
                return false, "failed on return " .. i
             end
          end
