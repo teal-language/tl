@@ -2293,6 +2293,7 @@ function tl.type_check(ast: Node): {Error}
       {
          ["@return"] = { typename = "tuple", ANY },
          ["any"] = { typename = "typetype", def = ANY },
+         ["arg"] = ARRAY_OF_STRING,
          ["require"] = { typename = "function", args = { STRING }, rets = {} },
          ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
          ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },

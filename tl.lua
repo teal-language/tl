@@ -2185,6 +2185,7 @@ function tl.type_check(ast)
             ["typename"] = "typetype",
             ["def"] = ANY,
          },
+         ["arg"] = ARRAY_OF_STRING,
          ["require"] = {
             ["typename"] = "function",
             ["args"] = {
