@@ -1011,6 +1011,14 @@ do
       return i
    end
 
+   local function push_dot(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
+      local arg: Node
+      i = i + 1
+      i, arg = verify_kind(tokens, i, errs, "word")
+      table.insert(operands, arg)
+      return i
+   end
+
    local function push_cast(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
       i = verify_tk(tokens, i, errs, "as")
       local node = new_node(tokens, i, "cast")
@@ -1052,6 +1060,12 @@ do
                return fail(tokens, i, errs)
             end
             i = push_index(tokens, i, errs, operands)
+         elseif tokens[i].tk == "." or tokens[i].tk == ":" then
+            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = tokens[i].tk }, operators, operands)
+            if not ok then
+               return fail(tokens, i, errs)
+            end
+            i = push_dot(tokens, i, errs, operands)
          elseif tokens[i].tk == "as" then
             local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "as" }, operators, operands)
             if not ok then
@@ -1092,6 +1106,10 @@ local function parse_variable(tokens: {Token}, i: number, errs: {ParseError}): n
       return verify_kind(tokens, i, errs, "...")
    end
    return verify_kind(tokens, i, errs, "word", "variable")
+end
+
+local function parse_local_variable(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
+   return verify_kind(tokens, i, errs, "word")
 end
 
 local function parse_argument(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
@@ -1182,7 +1200,7 @@ end
 local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    local node = new_node(tokens, i, "fornum")
    i = i + 1
-   i, node.var = verify_kind(tokens, i, errs, "word", "variable")
+   i, node.var = verify_kind(tokens, i, errs, "word")
    i = verify_tk(tokens, i, errs, "=")
    i, node.from = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, ",")
@@ -1201,7 +1219,7 @@ local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): numb
    local node = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
-   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, true, parse_variable)
+   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, true, parse_local_variable)
    i = verify_tk(tokens, i, errs, "in")
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "do")
@@ -1331,7 +1349,7 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
    end
 
    asgn.vars = new_node(tokens, i, "variables")
-   i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_variable or parse_expression)
+   i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_local_variable or parse_expression)
    assert(#asgn.vars >= 1)
    local lhs: Node = asgn.vars[1]
 
@@ -2431,7 +2449,6 @@ function tl.type_check(ast: Node): {Error}
             return scope[name]
          end
       end
-      return { typename = "unknown", tk = name }
    end
 
    local function resolve_tuple(t: Type): Type
@@ -2844,7 +2861,7 @@ function tl.type_check(ast: Node): {Error}
 
       assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
 
-      if key.typename == "string" or key.typename == "unknown" or key.kind == "variable" then -- "unknown" is a plain atom (e.g 'insert' in 'table.insert')
+      if key.typename == "string" or key.typename == "unknown" or key.kind == "word" then -- "unknown" is a plain atom (e.g 'insert' in 'table.insert')
          if tbl.fields[key.tk] then
             return tbl.fields[key.tk]
          end
@@ -3026,7 +3043,7 @@ function tl.type_check(ast: Node): {Error}
       },
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
-            local rets = find_var("@return")
+            local rets = assert(find_var("@return"))
             if #children[1] > #rets then
                table.insert(errors, { y = node.y, x = node.x, err = "excess return values, expected " .. #rets .. " got " .. #children[1] })
             end
@@ -3291,6 +3308,15 @@ function tl.type_check(ast: Node): {Error}
       ["variable"] = {
          after = function(node: Node, children: {Type}): Type
             node.type = find_var(node.tk)
+            if node.type == nil then
+               table.insert(errors, { y = node.y, x = node.x, err = "unknown variable: " .. node.tk })
+               node.type = { typename = "unknown" }
+            end
+         end,
+      },
+      ["word"] = {
+         after = function(node: Node, children: {Type}): Type
+            node.type = { typename = "none" } -- type is resolved elsewhere
          end,
       },
       ["newtype"] = {
@@ -3312,8 +3338,6 @@ function tl.type_check(ast: Node): {Error}
    visit_node["argument_list"] = visit_node["variables"]
 
    visit_node["record_method"] = visit_node["module_function"]
-
-   visit_node["word"] = visit_node["variable"]
 
    visit_node["string"] = {
       after = function(node: Node, children: {Type}): Type
