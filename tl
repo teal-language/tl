@@ -2,8 +2,18 @@
 
 local tl = require("tl")
 
-local fd = io.open(arg[1], "r")
-local input = fd:read("*a")
+local fd, err = io.open(arg[1], "r")
+if not fd then
+   io.stderr:write("could not open " .. arg[1] .. ": " .. err .. "\n")
+   os.exit(1)
+end
+
+local input, err = fd:read("*a")
+if not input then
+   io.stderr:write("could not read " .. arg[1] .. ": " .. err .. "\n")
+   os.exit(1)
+end
+
 local tokens = tl.lex(input)
 
 local errs = {}
