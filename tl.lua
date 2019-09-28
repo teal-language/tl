@@ -3310,11 +3310,11 @@ function tl.type_check(ast)
          end,
          ["before_statements"] = function (node)
             local exptype = resolve_tuple(node.exp.type)
-            add_var(node.vars[1].tk, exptype.rets[1])
-            if node.vars[2] then
-               add_var(node.vars[2].tk, exptype.rets[2])
-            end
             if exptype.typename == "function" then
+               add_var(node.vars[1].tk, exptype.rets[1])
+               if node.vars[2] then
+                  add_var(node.vars[2].tk, exptype.rets[2])
+               end
                if node.exp.op and node.exp.op.op == "@funcall" then
                   local t = resolve_unary(node.exp.e2.type)
                   if node.exp.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
