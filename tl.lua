@@ -1110,6 +1110,14 @@ local function parse_forin(tokens, i, errs)
    }, true, parse_local_variable)
    i = verify_tk(tokens, i, errs, "in")
    i, node.exp = parse_expression(tokens, i, errs)
+   if tokens[i].tk == "," then
+      i = i + 1
+      i, node.exp2 = parse_expression(tokens, i, errs)
+   end
+   if tokens[i].tk == "," then
+      i = i + 1
+      i, node.exp3 = parse_expression(tokens, i, errs)
+   end
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "end")
@@ -3302,10 +3310,12 @@ function tl.type_check(ast)
          end,
          ["before_statements"] = function (node)
             local exptype = resolve_tuple(node.exp.type)
-            if exptype.typename == "function" then
-               add_var(node.vars[1].tk, exptype.rets[1])
+            add_var(node.vars[1].tk, exptype.rets[1])
+            if node.vars[2] then
                add_var(node.vars[2].tk, exptype.rets[2])
-               if node.exp.op.op == "@funcall" then
+            end
+            if exptype.typename == "function" then
+               if node.exp.op and node.exp.op.op == "@funcall" then
                   local t = resolve_unary(node.exp.e2.type)
                   if node.exp.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
                      table.insert(errors, {
@@ -3320,6 +3330,8 @@ function tl.type_check(ast)
                         ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
                      })
                   end
+               else
+
                end
             else
                table.insert(errors, {
