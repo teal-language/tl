@@ -3134,10 +3134,16 @@ function tl.type_check(ast)
             return tbl.fields[key.tk]
          end
       end
+      local description
+      if node.e1.kind == "variable" then
+         description = "'" .. node.e1.tk .. "'"
+      else
+         description = "type " .. show_type(orig_tbl)
+      end
       table.insert(errors, {
          ["y"] = node.y,
          ["x"] = node.x,
-         ["err"] = "invalid key '" .. key.tk .. "' in record type " .. show_type(orig_tbl),
+         ["err"] = "invalid key '" .. key.tk .. "' in record " .. description,
       })
       return INVALID
    end
