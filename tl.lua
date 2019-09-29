@@ -1025,24 +1025,49 @@ local function parse_local_function(tokens, i, errs)
    return parse_function_args_rets_body(tokens, i, errs, node)
 end
 local function parse_function(tokens, i, errs)
-   local node = new_node(tokens, i, "global_function")
+   local orig_i = i
+   local fn = new_node(tokens, i, "global_function")
+   local node = fn
    i = verify_tk(tokens, i, errs, "function")
-   i, node.name = verify_kind(tokens, i, errs, "word")
-   if tokens[i].tk == "." then
+   local names = {}
+   i, names[1] = verify_kind(tokens, i, errs, "word", "variable")
+   while tokens[i].tk == "." do
       i = i + 1
-      node.module = node.name
-      i, node.name = verify_kind(tokens, i, errs, "word")
-      node.kind = "module_function"
-   elseif tokens[i].tk == ":" then
-      i = i + 1
-      node.record_name = node.name
-      i, node.name = verify_kind(tokens, i, errs, "word")
-      node.kind = "record_method"
+      i, names[#names + 1] = verify_kind(tokens, i, errs, "word", "variable")
    end
+   if tokens[i].tk == ":" then
+      i = i + 1
+      i, names[#names + 1] = verify_kind(tokens, i, errs, "word", "variable")
+      fn.is_method = true
+   end
+   if #names > 1 then
+      fn.kind = "record_function"
+      local owner = names[1]
+      for i = 2,#names - 1 do
+         local dot = {
+            ["y"] = names[i].y,
+            ["x"] = names[i].x - 1,
+            ["arity"] = 2,
+            ["op"] = ".",
+         }
+         names[i].kind = "word"
+         local op = {
+            ["y"] = names[i].y,
+            ["x"] = names[i].x,
+            ["kind"] = "op",
+            ["op"] = dot,
+            ["e1"] = owner,
+            ["e2"] = names[i],
+         }
+         owner = op
+      end
+      fn.fn_owner = owner
+   end
+   fn.name = names[#names]
    local selfx, selfy = tokens[i].x, tokens[i].y
-   i = parse_function_args_rets_body(tokens, i, errs, node)
-   if node.kind == "record_method" then
-      table.insert(node.args,1, {
+   i = parse_function_args_rets_body(tokens, i, errs, fn)
+   if fn.is_method then
+      table.insert(fn.args,1, {
          ["x"] = selfx,
          ["y"] = selfy,
          ["tk"] = "self",
@@ -1109,14 +1134,14 @@ local function parse_forin(tokens, i, errs)
       ["in"] = true,
    }, true, parse_local_variable)
    i = verify_tk(tokens, i, errs, "in")
-   i, node.exp = parse_expression(tokens, i, errs)
-   if tokens[i].tk == "," then
-      i = i + 1
-      i, node.exp2 = parse_expression(tokens, i, errs)
-   end
-   if tokens[i].tk == "," then
-      i = i + 1
-      i, node.exp3 = parse_expression(tokens, i, errs)
+   node.exps = new_node(tokens, i, "expression_list")
+   i = parse_list(tokens, i, errs, node.exps, {
+      ["do"] = true,
+   }, true, parse_expression)
+   if #node.exps < 1 then
+      return fail(tokens, i, errs, "missing iterator expression in generic for")
+   elseif #node.exps > 3 then
+      return fail(tokens, i, errs, "too many expressions in generic for")
    end
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
@@ -1229,18 +1254,12 @@ local is_newtype = {
    ["record"] = true,
    ["functiontype"] = true,
 }
-local function parse_call_or_assignment(tokens, i, errs, is_local)
+local function parse_call_or_assignment(tokens, i, errs)
    local asgn = new_node(tokens, i, "assignment")
-   if is_local then
-      asgn.kind = "local_declaration"
-   end
    asgn.vars = new_node(tokens, i, "variables")
-   i = parse_trying_list(tokens, i, errs, asgn.vars, is_local and parse_local_variable or parse_expression)
+   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_expression)
    assert(#asgn.vars >= 1)
    local lhs = asgn.vars[1]
-   if is_local then
-      i, asgn.decltype = parse_type_list(tokens, i, errs)
-   end
    if tokens[i].tk == "=" then
       asgn.exps = new_node(tokens, i, "values")
       repeat
@@ -1257,13 +1276,36 @@ local function parse_call_or_assignment(tokens, i, errs, is_local)
       table.insert(asgn.exps, val)
       until tokens[i].tk ~= ","
       return i, asgn
-   elseif is_local then
-      return i, asgn
    end
    if lhs.op and lhs.op.op == "@funcall" then
       return i, lhs
    end
    return fail(tokens, i, errs)
+end
+local function parse_local_variables(tokens, i, errs)
+   local asgn = new_node(tokens, i, "local_declaration")
+   asgn.vars = new_node(tokens, i, "variables")
+   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_local_variable)
+   assert(#asgn.vars >= 1)
+   local lhs = asgn.vars[1]
+   i, asgn.decltype = parse_type_list(tokens, i, errs)
+   if tokens[i].tk == "=" then
+      asgn.exps = new_node(tokens, i, "values")
+      repeat
+      i = i + 1
+      local val
+      if is_newtype[tokens[i].tk] then
+         if #asgn.vars > 1 then
+            return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
+         end
+         i, val = parse_newtype(tokens, i, errs)
+      else
+         i, val = parse_expression(tokens, i, errs)
+      end
+      table.insert(asgn.exps, val)
+      until tokens[i].tk ~= ","
+   end
+   return i, asgn
 end
 local function parse_statement(tokens, i, errs)
    if tokens[i].tk == "local" then
@@ -1271,7 +1313,7 @@ local function parse_statement(tokens, i, errs)
          return parse_local_function(tokens, i, errs)
       else
          i = i + 1
-         return parse_call_or_assignment(tokens, i, errs, true)
+         return parse_local_variables(tokens, i, errs)
       end
    elseif tokens[i].tk == "function" then
       return parse_function(tokens, i, errs)
@@ -1289,8 +1331,8 @@ local function parse_statement(tokens, i, errs)
       return parse_break(tokens, i, errs)
    elseif tokens[i].tk == "return" then
       return parse_return(tokens, i, errs)
-   elseif tokens[i].kind == "word" then
-      return parse_call_or_assignment(tokens, i, errs, false)
+   else
+      return parse_call_or_assignment(tokens, i, errs)
    end
    return fail(tokens, i, errs)
 end
@@ -1399,7 +1441,7 @@ local function recurse_node(ast, visit_node, visit_type)
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "forin" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
-      xs[2] = recurse_node(ast.exp, visit_node, visit_type)
+      xs[2] = recurse_node(ast.exps, visit_node, visit_type)
       if visit_node["forin"].before_statements then
          visit_node["forin"].before_statements(ast)
       end
@@ -1426,19 +1468,13 @@ local function recurse_node(ast, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
       xs[3] = recurse_type(ast.rets, visit_type)
       xs[4] = recurse_node(ast.body, visit_node, visit_type)
-   elseif ast.kind == "module_function" then
-      xs[1] = recurse_node(ast.module, visit_node, visit_type)
+   elseif ast.kind == "record_function" then
+      xs[1] = recurse_node(ast.fn_owner, visit_node, visit_type)
       xs[2] = recurse_node(ast.name, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
       xs[4] = recurse_type(ast.rets, visit_type)
-      xs[5] = recurse_node(ast.body, visit_node, visit_type)
-   elseif ast.kind == "record_method" then
-      xs[1] = recurse_node(ast.record_name, visit_node, visit_type)
-      xs[2] = recurse_node(ast.name, visit_node, visit_type)
-      xs[3] = recurse_node(ast.args, visit_node, visit_type)
-      xs[4] = recurse_type(ast.rets, visit_type)
-      if visit_node["record_method"].before_statements then
-         visit_node["record_method"].before_statements(ast, xs)
+      if visit_node["record_function"].before_statements then
+         visit_node["record_function"].before_statements(ast, xs)
       end
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "op" then
@@ -1754,7 +1790,7 @@ function tl.pretty_print_ast(ast)
             return table.concat(out)
          end,
       },
-      ["module_function"] = {
+      ["record_function"] = {
          ["before"] = function ()
             indent = indent + 1
          end,
@@ -1762,27 +1798,7 @@ function tl.pretty_print_ast(ast)
             local out = {}
             table.insert(out, "function ")
             table.insert(out, children[1])
-            table.insert(out, ".")
-            table.insert(out, children[2])
-            table.insert(out, "(")
-            table.insert(out, children[3])
-            table.insert(out, ")\n")
-            table.insert(out, children[5])
-            indent = indent - 1
-            table.insert(out,("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
-         end,
-      },
-      ["record_method"] = {
-         ["before"] = function ()
-            indent = indent + 1
-         end,
-         ["after"] = function (node, children)
-            local out = {}
-            table.insert(out, "function ")
-            table.insert(out, children[1])
-            table.insert(out, ":")
+            table.insert(out, node.is_method and ":" or ".")
             table.insert(out, children[2])
             table.insert(out, "(")
             table.insert(out, children[3])
@@ -3227,23 +3243,12 @@ function tl.type_check(ast)
       end
       return ret
    end
-   local function get_self_type(node)
-      local name = node.kind == "record_method" and node.record_name.tk or node.module.tk
-      local rtype = find_var(name)
-      if rtype == nil then
-         table.insert(errors, {
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["err"] = "unknown variable: " .. name,
-         })
-         rtype = {
-            ["typename"] = "unknown",
-         }
+   local function get_self_type(t)
+      if t.typename == "typetype" then
+         return t.def
+      else
+         return t
       end
-      if rtype.typename == "typetype" then
-         rtype = rtype.def
-      end
-      return rtype
    end
    local visit_node = {
       ["statements"] = {
@@ -3309,29 +3314,28 @@ function tl.type_check(ast)
             table.insert(st, {})
          end,
          ["before_statements"] = function (node)
-            local exptype = resolve_tuple(node.exp.type)
-            if exptype.typename == "function" then
-               add_var(node.vars[1].tk, exptype.rets[1])
+            local exp1 = node.exps[1]
+            local exp1type = resolve_tuple(exp1.type)
+            if exp1type.typename == "function" then
+               add_var(node.vars[1].tk, exp1type.rets[1])
                if node.vars[2] then
-                  add_var(node.vars[2].tk, exptype.rets[2])
+                  add_var(node.vars[2].tk, exp1type.rets[2])
                end
-               if node.exp.op and node.exp.op.op == "@funcall" then
-                  local t = resolve_unary(node.exp.e2.type)
-                  if node.exp.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
+               if exp1.op and exp1.op.op == "@funcall" then
+                  local t = resolve_unary(exp1.e2.type)
+                  if exp1.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
                      table.insert(errors, {
                         ["y"] = node.y,
                         ["x"] = node.x,
-                        ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(node.exp.e2.type),
+                        ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(exp1.e2.type),
                      })
-                  elseif node.exp.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
+                  elseif exp1.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
                      table.insert(errors, {
                         ["y"] = node.y,
                         ["x"] = node.x,
-                        ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(node.exp.e2.type),
+                        ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(exp1.e2.type),
                      })
                   end
-               else
-
                end
             else
                table.insert(errors, {
@@ -3478,26 +3482,26 @@ function tl.type_check(ast)
             }
          end,
       },
-      ["module_function"] = {
+      ["record_function"] = {
          ["before"] = function (node)
             begin_function_scope(node)
          end,
          ["before_statements"] = function (node, children)
-            if node.kind == "record_method" then
-               local rtype = get_self_type(node)
+            if node.is_method then
+               local rtype = get_self_type(children[1])
                children[3][1] = rtype
                add_var("self", rtype)
             end
          end,
          ["after"] = function (node, children)
             end_function_scope()
-            local rtype = get_self_type(node)
+            local rtype = get_self_type(children[1])
             if rtype.typename == "record" or rtype.typename == "arrayrecord" then
                rtype.fields = rtype.fields or {}
                rtype.field_order = rtype.field_order or {}
                rtype.fields[node.name.tk] = {
                   ["typename"] = "function",
-                  ["is_method"] = node.kind == "record_method",
+                  ["is_method"] = node.is_method,
                   ["args"] = children[3],
                   ["rets"] = children[4],
                }
@@ -3717,7 +3721,6 @@ function tl.type_check(ast)
    visit_node["values"] = visit_node["variables"]
    visit_node["expression_list"] = visit_node["variables"]
    visit_node["argument_list"] = visit_node["variables"]
-   visit_node["record_method"] = visit_node["module_function"]
    visit_node["string"] = {
       ["after"] = function (node, children)
          node.type = {
@@ -3762,7 +3765,7 @@ function tl.type_check(ast)
    }
    recurse_node(ast, visit_node, visit_type)
    local redundant = {}
-   local lastx, lasty
+   local lastx, lasty = 0,0
    for i, err in ipairs(errors) do
       if err.x == lastx and err.y == lasty then
          table.insert(redundant, i)
