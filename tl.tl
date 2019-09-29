@@ -2306,6 +2306,18 @@ local function show_type(t: Type): string
    end
 end
 
+local Error = record
+   y: number
+   x: number
+   err: string
+end
+
+local Unknown = record
+   y: number
+   x: number
+   name: string
+end
+
 function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
    local st: {{string:Type}} = {
       {
@@ -2331,7 +2343,15 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
             def = {
                typename = "record",
                fields = {
-                  ["write"] = { typename = "function", args = { NOMINAL_FILE, STRING }, rets = {} },
+                  ["read"] = {
+                     typename = "poly",
+                     poly = {
+                        { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
+                        { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
+                     }
+                  },
+                  ["write"] = { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { BOOLEAN, STRING } },
+                  ["close"] = { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
                   -- TODO complete...
                },
             },
@@ -2352,6 +2372,7 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
             typename = "record",
             fields = {
                ["stderr"] = NOMINAL_FILE,
+               ["open"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
             },
          },
          ["table"] = {
@@ -2483,18 +2504,6 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
       if t.typename == "typetype" then
          fill_field_order(t.def)
       end
-   end
-
-   local Error = record
-      y: number
-      x: number
-      err: string
-   end
-
-   local Unknown = record
-      y: number
-      x: number
-      name: string
    end
 
    local errors: {Error} = {}
@@ -3594,6 +3603,38 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
    end
 
    return errors, unknowns
+end
+
+local Result = record
+   syntax_errors: {ParseError}
+   type_errors: {Error}
+   unknowns: {Unknown}
+end
+
+function tl.process(filename: string): Result, string
+   local fd, err = io.open(filename, "r")
+   if not fd then
+      return nil, "could not open " .. filename .. ": " .. err
+   end
+
+   local input, err = fd:read("*a")
+   if not input then
+      fd:close()
+      return nil, "could not read " .. filename .. ": " .. err
+   end
+
+   local tokens = tl.lex(input)
+
+   local result: Result = {
+      syntax_errors = {}
+   }
+   local i, program = tl.parse_program(tokens, result.syntax_errors)
+
+   local is_lua = filename:match("%.lua$") ~= nil
+
+   result.type_errors, result.unknowns = tl.type_check(program, is_lua)
+
+   return result
 end
 
 return tl

@@ -16,24 +16,13 @@ if not filename then
    os.exit(1)
 end
 
-local fd, err = io.open(filename, "r")
-if not fd then
-   io.stderr:write("could not open " .. filename .. ": " .. err .. "\n")
+local result, err = tl.process(filename)
+if err then
+   io.stderr:write(err .. "\n")
    os.exit(1)
 end
 
-local input, err = fd:read("*a")
-if not input then
-   io.stderr:write("could not read " .. filename .. ": " .. err .. "\n")
-   os.exit(1)
-end
-
-local tokens = tl.lex(input)
-
-local errs = {}
-local i, program = tl.parse_program(tokens, errs)
-
-for _, err in ipairs(errs) do
+for _, err in ipairs(result.syntax_errors) do
    print(err.y, err.x, err.msg)
 end
 
@@ -42,25 +31,22 @@ end
 --local tokens2 = lex(pretty_print_ast(program))
 --print(pretty_print_tokens(tokens2))
 
-local is_lua = filename:match("%.lua$") ~= nil
 
 print("========================================")
-local errors, unknowns = tl.type_check(program, is_lua)
-
-print(#errors .. " error" .. (#errors ~= 1 and "s" or "") .. ":")
-for _, err in ipairs(errors) do
+print(#result.type_errors .. " error" .. (#result.type_errors ~= 1 and "s" or "") .. ":")
+for _, err in ipairs(result.type_errors) do
    print(filename .. ":" .. err.y .. ":" .. err.x .. ": " .. err.err)
 end
 
-if is_lua and #unknowns > 0 then
+if #result.unknowns > 0 then
    print("----------------------------------------")
-   print(#unknowns .. " unknown variable" .. (#unknowns ~= 1 and "s" or "") .. ":")
-   for _, var in ipairs(unknowns) do
+   print(#result.unknowns .. " unknown variable" .. (#result.unknowns ~= 1 and "s" or "") .. ":")
+   for _, var in ipairs(result.unknowns) do
       print(filename .. ":" .. var.y .. ":" .. var.x .. ": " .. var.name)
    end
 end
 
-if #errors == 0 then
+if #result.syntax_errors == 0 and #result.type_errors == 0 then
    os.exit(0)
 else
    os.exit(1)

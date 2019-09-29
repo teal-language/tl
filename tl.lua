@@ -2205,6 +2205,8 @@ local function show_type(t)
       return inspect(t)
    end
 end
+local Error = {}
+local Unknown = {}
 function tl.type_check(ast, lax)
    local st = {
       [1] = {
@@ -2313,13 +2315,53 @@ function tl.type_check(ast, lax)
             ["def"] = {
                ["typename"] = "record",
                ["fields"] = {
+                  ["read"] = {
+                     ["typename"] = "poly",
+                     ["poly"] = {
+                        [1] = {
+                           ["typename"] = "function",
+                           ["args"] = {
+                              [1] = NOMINAL_FILE,
+                              [2] = STRING,
+                           },
+                           ["rets"] = {
+                              [1] = STRING,
+                              [2] = STRING,
+                           },
+                        },
+                        [2] = {
+                           ["typename"] = "function",
+                           ["args"] = {
+                              [1] = NOMINAL_FILE,
+                              [2] = NUMBER,
+                           },
+                           ["rets"] = {
+                              [1] = STRING,
+                              [2] = STRING,
+                           },
+                        },
+                     },
+                  },
                   ["write"] = {
                      ["typename"] = "function",
                      ["args"] = {
                         [1] = NOMINAL_FILE,
                         [2] = STRING,
                      },
-                     ["rets"] = {},
+                     ["rets"] = {
+                        [1] = BOOLEAN,
+                        [2] = STRING,
+                     },
+                  },
+                  ["close"] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = NOMINAL_FILE,
+                     },
+                     ["rets"] = {
+                        [1] = BOOLEAN,
+                        [2] = STRING,
+                     },
                   },
                },
             },
@@ -2347,6 +2389,17 @@ function tl.type_check(ast, lax)
             ["typename"] = "record",
             ["fields"] = {
                ["stderr"] = NOMINAL_FILE,
+               ["open"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = NOMINAL_FILE,
+                     [2] = STRING,
+                  },
+               },
             },
          },
          ["table"] = {
@@ -2845,8 +2898,6 @@ function tl.type_check(ast, lax)
          fill_field_order(t.def)
       end
    end
-   local Error = {}
-   local Unknown = {}
    local errors = {}
    local unknowns = {}
    local function find_var(name)
@@ -4053,5 +4104,25 @@ function tl.type_check(ast, lax)
       table.remove(errors, redundant[i])
    end
    return errors, unknowns
+end
+local Result = {}
+function tl.process(filename)
+   local fd, err = io.open(filename, "r")
+   if not fd then
+      return nil, "could not open " .. filename .. ": " .. err
+   end
+   local input, err = fd:read("*a")
+   if not input then
+      fd:close()
+      return nil, "could not read " .. filename .. ": " .. err
+   end
+   local tokens = tl.lex(input)
+   local result = {
+      ["syntax_errors"] = {},
+   }
+   local i, program = tl.parse_program(tokens, result.syntax_errors)
+   local is_lua = filename:match("%.lua$") ~= nil
+   result.type_errors, result.unknowns = tl.type_check(program, is_lua)
+   return result
 end
 return tl
