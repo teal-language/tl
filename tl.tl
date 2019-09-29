@@ -609,7 +609,7 @@ local function fail(tokens: {Token}, i: number, errs: {ParseError}, msg: string)
       table.insert(errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
       return #tokens
    end
-   table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = msg or "syntax error" .. debug.traceback() })
+   table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = msg or "syntax error" })
    return i + 1
 end
 
@@ -2318,7 +2318,7 @@ local Unknown = record
    name: string
 end
 
-function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
+function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}, Type
    local st: {{string:Type}} = {
       {
          ["..."] = { typename = "tuple", STRING, STRING, STRING, STRING, STRING },
@@ -2508,6 +2508,7 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
 
    local errors: {Error} = {}
    local unknowns: {Unknown} = {}
+   local module_type: Type
 
    local function find_var(name: string): Type
       if name == "_G" then
@@ -3258,6 +3259,9 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
             for i = 1, math.min(#children[1], #rets) do
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
+            if #st == 2 then
+               module_type = resolve_unary(children[1])
+            end
             node.type = { typename = "none" }
          end,
       },
@@ -3415,6 +3419,13 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
                      end
                   else
                      table.insert(errors, { y = node.y, x = node.x, err = "rawget expects two arguments" })
+                     node.type = INVALID
+                  end
+               elseif node.e1.tk == "require" then
+                  if #b == 1 then
+
+                  else
+                     table.insert(errors, { y = node.y, x = node.x, err = "require expects one argument" })
                      node.type = INVALID
                   end
                elseif node.e1.op and node.e1.op.op == ":" then
@@ -3602,10 +3613,11 @@ function tl.type_check(ast: Node, lax: boolean): {Error}, {Unknown}
       table.remove(errors, redundant[i])
    end
 
-   return errors, unknowns
+   return errors, unknowns, module_type
 end
 
 local Result = record
+   type: Type
    syntax_errors: {ParseError}
    type_errors: {Error}
    unknowns: {Unknown}
@@ -3632,7 +3644,7 @@ function tl.process(filename: string): Result, string
 
    local is_lua = filename:match("%.lua$") ~= nil
 
-   result.type_errors, result.unknowns = tl.type_check(program, is_lua)
+   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua)
 
    return result
 end

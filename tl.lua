@@ -460,7 +460,7 @@ local function fail(tokens, i, errs, msg)
    table.insert(errs, {
       ["y"] = tokens[i].y,
       ["x"] = tokens[i].x,
-      ["msg"] = msg or "syntax error" .. debug.traceback(),
+      ["msg"] = msg or "syntax error",
    })
    return i + 1
 end
@@ -2900,6 +2900,7 @@ function tl.type_check(ast, lax)
    end
    local errors = {}
    local unknowns = {}
+   local module_type
    local function find_var(name)
       if name == "_G" then
          local field_order = {}
@@ -3712,6 +3713,9 @@ function tl.type_check(ast, lax)
             for i = 1, math.min(#children[1],#rets) do
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
+            if #st == 2 then
+               module_type = resolve_unary(children[1])
+            end
             node.type = {
                ["typename"] = "none",
             }
@@ -3893,6 +3897,17 @@ function tl.type_check(ast, lax)
                         ["y"] = node.y,
                         ["x"] = node.x,
                         ["err"] = "rawget expects two arguments",
+                     })
+                     node.type = INVALID
+                  end
+               elseif node.e1.tk == "require" then
+                  if #b == 1 then
+
+                  else
+                     table.insert(errors, {
+                        ["y"] = node.y,
+                        ["x"] = node.x,
+                        ["err"] = "require expects one argument",
                      })
                      node.type = INVALID
                   end
@@ -4103,7 +4118,7 @@ function tl.type_check(ast, lax)
    for i = #redundant,1,- 1 do
       table.remove(errors, redundant[i])
    end
-   return errors, unknowns
+   return errors, unknowns, module_type
 end
 local Result = {}
 function tl.process(filename)
@@ -4122,7 +4137,7 @@ function tl.process(filename)
    }
    local i, program = tl.parse_program(tokens, result.syntax_errors)
    local is_lua = filename:match("%.lua$") ~= nil
-   result.type_errors, result.unknowns = tl.type_check(program, is_lua)
+   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua)
    return result
 end
 return tl
