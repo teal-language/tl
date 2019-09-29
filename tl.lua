@@ -3130,6 +3130,9 @@ function tl.type_check(ast, lax, modules)
    end
    local function resolve_nominal(t, typevars)
       local typetype = find_var(t.name)
+      if not typetype then
+         return UNKNOWN
+      end
       local y, x =- 1,- 1
       if typetype.typename == "typetype" then
          local def = typetype.def
@@ -4120,6 +4123,9 @@ function tl.type_check(ast, lax, modules)
                      if node.e2[1].kind == "string" then
                         local module_name = node.e2[1].tk:sub(2,- 2)
                         node.type = require_module(module_name)
+                        if not node.type then
+                           node.type = BOOLEAN
+                        end
                         modules[module_name] = node.type
                      else
                         node.type = UNKNOWN
