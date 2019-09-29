@@ -2372,10 +2372,10 @@ function tl.type_check(ast, lax, modules)
                      ["typename"] = "function",
                      ["args"] = {
                         [1] = NOMINAL_FILE,
-                        [2] = STRING,
+                        [2] = VARARG_STRING,
                      },
                      ["rets"] = {
-                        [1] = BOOLEAN,
+                        [1] = NOMINAL_FILE,
                         [2] = STRING,
                      },
                   },
@@ -2388,6 +2388,13 @@ function tl.type_check(ast, lax, modules)
                         [1] = BOOLEAN,
                         [2] = STRING,
                      },
+                  },
+                  ["flush"] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = NOMINAL_FILE,
+                     },
+                     ["rets"] = {},
                   },
                },
             },
@@ -2415,6 +2422,7 @@ function tl.type_check(ast, lax, modules)
             ["typename"] = "record",
             ["fields"] = {
                ["stderr"] = NOMINAL_FILE,
+               ["stdout"] = NOMINAL_FILE,
                ["open"] = {
                   ["typename"] = "function",
                   ["args"] = {
@@ -2424,6 +2432,41 @@ function tl.type_check(ast, lax, modules)
                   ["rets"] = {
                      [1] = NOMINAL_FILE,
                      [2] = STRING,
+                  },
+               },
+               ["popen"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = NOMINAL_FILE,
+                     [2] = STRING,
+                  },
+               },
+               ["write"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = VARARG_STRING,
+                  },
+                  ["rets"] = {
+                     [1] = NOMINAL_FILE,
+                     [2] = STRING,
+                  },
+               },
+               ["flush"] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
+                  ["rets"] = {},
+               },
+               ["type"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ANY,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
                   },
                },
             },
@@ -2440,17 +2483,96 @@ function tl.type_check(ast, lax, modules)
                      [1] = STRING,
                   },
                },
+               ["execute"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = BOOLEAN,
+                     [2] = STRING,
+                     [3] = NUMBER,
+                  },
+               },
+               ["remove"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = BOOLEAN,
+                     [2] = STRING,
+                  },
+               },
+               ["time"] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
+                  ["rets"] = {
+                     [1] = NUMBER,
+                  },
+               },
+               ["exit"] = {
+                  ["typename"] = "poly",
+                  ["poly"] = {
+                     [1] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = NUMBER,
+                           [2] = BOOLEAN,
+                        },
+                        ["rets"] = {},
+                     },
+                     [2] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = BOOLEAN,
+                           [2] = BOOLEAN,
+                        },
+                        ["rets"] = {},
+                     },
+                  },
+               },
             },
          },
          ["package"] = {
             ["typename"] = "record",
             ["fields"] = {
                ["path"] = STRING,
+               ["config"] = STRING,
+               ["loaded"] = {
+                  ["typename"] = "map",
+                  ["keys"] = STRING,
+                  ["values"] = ANY,
+               },
             },
          },
          ["table"] = {
             ["typename"] = "record",
             ["fields"] = {
+               ["pack"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = VARARG_ANY,
+                  },
+                  ["rets"] = {
+                     [1] = TABLE,
+                  },
+               },
+               ["unpack"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                     [2] = NUMBER,
+                     [3] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = {
+                        ["typename"] = "typevar",
+                        ["typevar"] = "`a",
+                        ["is_va"] = true,
+                     },
+                  },
+               },
                ["insert"] = {
                   ["typename"] = "poly",
                   ["poly"] = {
@@ -2729,6 +2851,13 @@ function tl.type_check(ast, lax, modules)
                   ["rets"] = {
                      [1] = NUMBER,
                   },
+               },
+               ["randomseed"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = NUMBER,
+                  },
+                  ["rets"] = {},
                },
                ["huge"] = NUMBER,
             },

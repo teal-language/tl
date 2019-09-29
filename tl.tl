@@ -2385,8 +2385,9 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                         { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
                      }
                   },
-                  ["write"] = { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { BOOLEAN, STRING } },
+                  ["write"] = { typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
                   ["close"] = { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
+                  ["flush"] = { typename = "function", args = { NOMINAL_FILE }, rets = {} },
                   -- TODO complete...
                },
             },
@@ -2407,24 +2408,49 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             typename = "record",
             fields = {
                ["stderr"] = NOMINAL_FILE,
+               ["stdout"] = NOMINAL_FILE,
                ["open"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+               ["popen"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+               ["write"] = { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+               ["flush"] = { typename = "function", args = {}, rets = {} },
+               ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
             },
          },
          ["os"] = {
             typename = "record",
             fields = {
                ["getenv"] = { typename = "function", args = { STRING }, rets = { STRING } },
+               ["execute"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
+               ["remove"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
+               ["time"] = { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+               ["exit"] = {
+                  typename = "poly",
+                  poly = {
+                     { typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
+                     { typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
+                  }
+               },
             },
          },
          ["package"] = {
             typename = "record",
             fields = {
                ["path"] = STRING,
+               ["config"] = STRING,
+               ["loaded"] = {
+                  typename = "map",
+                  keys = STRING,
+                  values = ANY,
+               }
             },
          },
          ["table"] = {
             typename = "record",
             fields = {
+               ["pack"] = { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
+               ["unpack"] = { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = {
+                  { typename = "typevar", typevar = "`a", is_va = true }
+               } },
                ["insert"] = {
                   typename = "poly",
                   poly = {
@@ -2491,6 +2517,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                ["max"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
                ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
                ["floor"] = { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+               ["randomseed"] = { typename = "function", args = { NUMBER }, rets = {} },
                ["huge"] = NUMBER,
             },
          },
