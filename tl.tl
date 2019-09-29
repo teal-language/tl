@@ -2490,8 +2490,8 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                ["gsub"] = {
                   typename = "poly",
                   poly = {
-                     { typename = "function", args = { STRING, STRING, STRING }, rets = { STRING } },
-                     { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING } }, rets = { STRING } },
+                     { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
+                     { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
                      -- FIXME any other modes
                   }
                },

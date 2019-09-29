@@ -2717,9 +2717,11 @@ function tl.type_check(ast, lax, modules)
                            [1] = STRING,
                            [2] = STRING,
                            [3] = STRING,
+                           [4] = NUMBER,
                         },
                         ["rets"] = {
                            [1] = STRING,
+                           [2] = NUMBER,
                         },
                      },
                      [2] = {
@@ -2732,9 +2734,11 @@ function tl.type_check(ast, lax, modules)
                               ["keys"] = STRING,
                               ["values"] = STRING,
                            },
+                           [4] = NUMBER,
                         },
                         ["rets"] = {
                            [1] = STRING,
+                           [2] = NUMBER,
                         },
                      },
                   },
