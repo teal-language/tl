@@ -1,4 +1,6 @@
-local tl = {}
+local tl = {
+   ["process"] = nil,
+}
 local inspect = function (x)
    return tostring(x)
 end
@@ -447,6 +449,7 @@ local parse_expression
 local parse_statements
 local parse_type_list
 local parse_argument_list
+local parse_type
 local function fail(tokens, i, errs, msg)
    if not tokens[i] then
       local eof = tokens[#tokens]
@@ -512,12 +515,30 @@ local function parse_table_item(tokens, i, errs, n)
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
-   else
-      node.key = new_node(tokens, i, "number")
-      node.key.tk = tostring(n)
-      i, node.value = parse_expression(tokens, i, errs)
-      return i, node, n + 1
+   elseif tokens[i].kind == "word" and tokens[i + 1].tk == ":" then
+      local orig_i = i
+      local try_errs = {}
+      i, node.key = verify_kind(tokens, i, try_errs, "word", "string")
+      node.key.tk = "\"" .. node.key.tk .. "\""
+      i = verify_tk(tokens, i, try_errs, ":")
+      i, node.decltype = parse_type(tokens, i, try_errs)
+      if node.decltype and tokens[i].tk == "=" then
+         i = verify_tk(tokens, i, try_errs, "=")
+         i, node.value = parse_expression(tokens, i, try_errs)
+         if node.value then
+            for _, e in ipairs(try_errs) do
+               table.insert(errs, e)
+            end
+            return i, node, n
+         end
+      end
+      node.decltype = nil
+      i = orig_i
    end
+   node.key = new_node(tokens, i, "number")
+   node.key.tk = tostring(n)
+   i, node.value = parse_expression(tokens, i, errs)
+   return i, node, n + 1
 end
 local ParseItem = {}
 local function parse_list(tokens, i, errs, list, close, is_sep, parse_item)
@@ -604,7 +625,6 @@ local function parse_typevar_list(tokens, i, errs)
    local typ = new_type(tokens, i, "typevar_list")
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", true, parse_typevar_type)
 end
-local parse_type
 local function parse_typeval_list(tokens, i, errs)
    local typ = new_type(tokens, i, "typeval_list")
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", true, parse_type)
@@ -1258,7 +1278,9 @@ local function parse_call_or_assignment(tokens, i, errs)
    local asgn = new_node(tokens, i, "assignment")
    asgn.vars = new_node(tokens, i, "variables")
    i = parse_trying_list(tokens, i, errs, asgn.vars, parse_expression)
-   assert(#asgn.vars >= 1)
+   if #asgn.vars < 1 then
+      return fail(tokens, i, errs)
+   end
    local lhs = asgn.vars[1]
    if tokens[i].tk == "=" then
       asgn.exps = new_node(tokens, i, "values")
@@ -1406,6 +1428,9 @@ local function recurse_type(ast, visit_type)
    return visit_after(ast, ast.kind, visit_type, xs)
 end
 local function recurse_node(ast, visit_node, visit_type)
+   if not ast then
+      return
+   end
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
    if ast.kind == "statements" or ast.kind == "variables" or ast.kind == "values" or ast.kind == "argument_list" or ast.kind == "expression_list" or ast.kind == "table_literal" then
@@ -2207,7 +2232,8 @@ local function show_type(t)
 end
 local Error = {}
 local Unknown = {}
-function tl.type_check(ast, lax)
+local Result = {}
+function tl.type_check(ast, lax, modules)
    local st = {
       [1] = {
          ["..."] = {
@@ -2402,6 +2428,26 @@ function tl.type_check(ast, lax)
                },
             },
          },
+         ["os"] = {
+            ["typename"] = "record",
+            ["fields"] = {
+               ["getenv"] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
+                  },
+               },
+            },
+         },
+         ["package"] = {
+            ["typename"] = "record",
+            ["fields"] = {
+               ["path"] = STRING,
+            },
+         },
          ["table"] = {
             ["typename"] = "record",
             ["fields"] = {
@@ -2575,6 +2621,7 @@ function tl.type_check(ast, lax)
                   ["typename"] = "function",
                   ["args"] = {
                      [1] = STRING,
+                     [2] = STRING,
                   },
                   ["rets"] = {
                      [1] = {
@@ -3570,6 +3617,40 @@ function tl.type_check(ast, lax)
          node.type = INVALID
       end
    end
+   local function require_module(module_name)
+      if modules[module_name] then
+         return modules[module_name]
+      end
+      modules[module_name] = UNKNOWN
+      local found
+      local fd
+      local tried = {}
+      local path = os.getenv("TL_PATH") or package.path
+      for entry in path:gmatch("[^;]+") do
+         local filename = entry:gsub("?", module_name:gsub("%.", "/"))
+         local tl_filename = filename:gsub("%.lua$", ".tl")
+         if tl_filename ~= filename then
+            fd = io.open(tl_filename, "r")
+            if fd then
+               found = tl_filename
+               break
+            end
+            table.insert(tried, tl_filename)
+         end
+         fd = io.open(filename, "r")
+         if fd then
+            found = filename
+            break
+         end
+         table.insert(tried, filename)
+      end
+      if found then
+         fd:close()
+         local result = tl.process(found, modules)
+         return result.type
+      end
+      return UNKNOWN
+   end
    local visit_node = {
       ["statements"] = {
          ["before"] = function ()
@@ -3771,11 +3852,16 @@ function tl.type_check(ast, lax)
       ["table_item"] = {
          ["after"] = function (node, children)
             local key = node.key.tk
+            local vtype = children[2]
+            if node.decltype then
+               vtype = node.decltype
+               assert_is_a(node.value, children[2], node.decltype, {}, "table item")
+            end
             if children[1].typename == "number" then
                node.type = {
                   ["typename"] = "iv",
                   ["i"] = tonumber(key),
-                  ["v"] = children[2],
+                  ["v"] = vtype,
                }
                return
             end
@@ -3785,7 +3871,7 @@ function tl.type_check(ast, lax)
             node.type = {
                ["typename"] = "kv",
                ["k"] = assert(key),
-               ["v"] = children[2],
+               ["v"] = vtype,
             }
          end,
       },
@@ -3887,7 +3973,7 @@ function tl.type_check(ast, lax)
                      if b[1].typename == "record" and node.e2[2].kind == "string" then
                         node.type = match_record_key(node, b[1], {
                            ["typename"] = "string",
-                           ["tk"] = node.e2.tk:sub(2,- 2),
+                           ["tk"] = node.e2[2].tk:sub(2,- 2),
                         }, b[1])
                      else
                         do_index(node, b[1], b[2])
@@ -3902,12 +3988,18 @@ function tl.type_check(ast, lax)
                   end
                elseif node.e1.tk == "require" then
                   if #b == 1 then
-
+                     if node.e2[1].kind == "string" then
+                        local module_name = node.e2[1].tk:sub(2,- 2)
+                        node.type = require_module(module_name)
+                        modules[module_name] = node.type
+                     else
+                        node.type = UNKNOWN
+                     end
                   else
                      table.insert(errors, {
                         ["y"] = node.y,
                         ["x"] = node.x,
-                        ["err"] = "require expects one argument",
+                        ["err"] = "require expects one literal argument",
                      })
                      node.type = INVALID
                   end
@@ -4120,8 +4212,8 @@ function tl.type_check(ast, lax)
    end
    return errors, unknowns, module_type
 end
-local Result = {}
-function tl.process(filename)
+function tl.process(filename, modules)
+   modules = modules or {}
    local fd, err = io.open(filename, "r")
    if not fd then
       return nil, "could not open " .. filename .. ": " .. err
@@ -4137,7 +4229,7 @@ function tl.process(filename)
    }
    local i, program = tl.parse_program(tokens, result.syntax_errors)
    local is_lua = filename:match("%.lua$") ~= nil
-   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua)
+   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua, modules)
    return result
 end
 return tl
