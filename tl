@@ -12,7 +12,7 @@ local tl = require("tl")
 local filename = arg[1]
 
 if not filename then
-   io.stderr:write("error: no input files\n")
+   io.stderr:write("usage: tl <file>\n")
    os.exit(1)
 end
 
