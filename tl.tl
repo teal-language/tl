@@ -2353,6 +2353,33 @@ local Result = record
    unknowns: {Unknown}
 end
 
+local function search_module(module_name: string): string, FILE, {string}
+   local found: string
+   local fd: FILE
+   local tried: {string} = {}
+   local path = os.getenv("TL_PATH") or package.path
+   for entry in path:gmatch("[^;]+") do
+      local slash_name = module_name:gsub("%.", "/")
+      local filename = entry:gsub("?", slash_name)
+      local tl_filename = filename:gsub("%.lua$", ".tl")
+      if tl_filename ~= filename then
+         fd = io.open(tl_filename, "r")
+         if fd then
+            found = tl_filename
+            break
+         end
+         table.insert(tried, tl_filename)
+      end
+      fd = io.open(filename, "r")
+      if fd then
+         found = filename
+         break
+      end
+      table.insert(tried, filename)
+   end
+   return found, fd, tried
+end
+
 function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error}, {Unknown}, Type
    local st: {{string:Type}} = {
       {
@@ -3235,28 +3262,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       end
       modules[module_name] = UNKNOWN
 
-      local found: string
-      local fd: FILE
-      local tried: {string} = {}
-      local path = os.getenv("TL_PATH") or package.path
-      for entry in path:gmatch("[^;]+") do
-         local filename = entry:gsub("?", module_name:gsub("%.", "/"))
-         local tl_filename = filename:gsub("%.lua$", ".tl")
-         if tl_filename ~= filename then
-            fd = io.open(tl_filename, "r")
-            if fd then
-               found = tl_filename
-               break
-            end
-            table.insert(tried, tl_filename)
-         end
-         fd = io.open(filename, "r")
-         if fd then
-            found = filename
-            break
-         end
-         table.insert(tried, filename)
-      end
+      local found, fd, tried = search_module(module_name)
       if found then
          fd:close()
          local result: Result = tl.process(found, modules)
