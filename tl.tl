@@ -2400,6 +2400,12 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                { typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
             },
          },
+         ["load"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { STRING }, rets = { FUNCTION } },
+            },
+         },
          ["FILE"] = {
             typename = "typetype",
             def = {
@@ -2450,6 +2456,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                ["execute"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
                ["remove"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
                ["time"] = { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+               ["clock"] = { typename = "function", args = {}, rets = { NUMBER } },
                ["exit"] = {
                   typename = "poly",
                   poly = {
@@ -2468,7 +2475,15 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                   typename = "map",
                   keys = STRING,
                   values = ANY,
-               }
+               },
+               ["searchers"] = {
+                  typename = "array",
+                  elements = { typename = "function", args = { STRING }, rets = { ANY } }
+               },
+               ["loaders"] = {
+                  typename = "array",
+                  elements = { typename = "function", args = { STRING }, rets = { ANY } }
+               },
             },
          },
          ["table"] = {

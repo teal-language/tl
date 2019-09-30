@@ -2362,6 +2362,20 @@ function tl.type_check(ast, lax, modules)
                },
             },
          },
+         ["load"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = FUNCTION,
+                  },
+               },
+            },
+         },
          ["FILE"] = {
             ["typename"] = "typetype",
             ["def"] = {
@@ -2537,6 +2551,13 @@ function tl.type_check(ast, lax, modules)
                      [1] = NUMBER,
                   },
                },
+               ["clock"] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
+                  ["rets"] = {
+                     [1] = NUMBER,
+                  },
+               },
                ["exit"] = {
                   ["typename"] = "poly",
                   ["poly"] = {
@@ -2569,6 +2590,30 @@ function tl.type_check(ast, lax, modules)
                   ["typename"] = "map",
                   ["keys"] = STRING,
                   ["values"] = ANY,
+               },
+               ["searchers"] = {
+                  ["typename"] = "array",
+                  ["elements"] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = STRING,
+                     },
+                     ["rets"] = {
+                        [1] = ANY,
+                     },
+                  },
+               },
+               ["loaders"] = {
+                  ["typename"] = "array",
+                  ["elements"] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = STRING,
+                     },
+                     ["rets"] = {
+                        [1] = ANY,
+                     },
+                  },
                },
             },
          },
