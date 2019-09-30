@@ -13,4 +13,21 @@ describe("assignment to array", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+   pending("catches a syntax error", function()
+      local tokens = tl.lex([[
+         local self = {
+            ["fmt"] = {
+               x = 123,
+               y = 234,
+            }
+            ["bla"] = {
+               z = 345,
+               w = 456,
+            }
+         }
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
 end)
