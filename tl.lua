@@ -511,7 +511,8 @@ local function parse_table_item(tokens, i, errs, n)
       return i, node, n
    elseif tokens[i].kind == "word" and tokens[i + 1].tk == "=" then
       i, node.key = verify_kind(tokens, i, errs, "word", "string")
-      node.key.tk = "\"" .. node.key.tk .. "\""
+      node.key.conststr = node.key.tk
+      node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
@@ -519,7 +520,8 @@ local function parse_table_item(tokens, i, errs, n)
       local orig_i = i
       local try_errs = {}
       i, node.key = verify_kind(tokens, i, try_errs, "word", "string")
-      node.key.tk = "\"" .. node.key.tk .. "\""
+      node.key.conststr = node.key.tk
+      node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, try_errs, ":")
       i, node.decltype = parse_type(tokens, i, try_errs)
       if node.decltype and tokens[i].tk == "=" then
@@ -536,6 +538,7 @@ local function parse_table_item(tokens, i, errs, n)
       i = orig_i
    end
    node.key = new_node(tokens, i, "number")
+   node.key.constnum = n
    node.key.tk = tostring(n)
    i, node.value = parse_expression(tokens, i, errs)
    return i, node, n + 1
@@ -701,17 +704,34 @@ local function parse_function_value(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "function")
    return parse_function_args_rets_body(tokens, i, errs, node)
 end
+local function unquote(str)
+   local f = str:sub(1,1)
+   if f == '"' or f == "'" then
+      return str:sub(2,- 2)
+   end
+   f = str:match("^%[=*%[")
+   local l = #f + 1
+   return str:sub(l,- l)
+end
 local function parse_literal(tokens, i, errs)
    if tokens[i].tk == "{" then
       return parse_table_literal(tokens, i, errs)
    elseif tokens[i].kind == "..." then
       return verify_kind(tokens, i, errs, "...")
    elseif tokens[i].kind == "string" then
-      return verify_kind(tokens, i, errs, "string")
+      local tk = unquote(tokens[i].tk)
+      local node
+      i, node = verify_kind(tokens, i, errs, "string")
+      node.conststr = tk
+      return i, node
    elseif tokens[i].kind == "word" then
       return verify_kind(tokens, i, errs, "word", "variable")
    elseif tokens[i].kind == "number" then
-      return verify_kind(tokens, i, errs, "number")
+      local n = tonumber(tokens[i].tk)
+      local node
+      i, node = verify_kind(tokens, i, errs, "number")
+      node.constnum = n
+      return i, node
    elseif tokens[i].tk == "true" then
       return verify_kind(tokens, i, errs, "keyword", "boolean")
    elseif tokens[i].tk == "false" then
@@ -1018,7 +1038,20 @@ local function parse_variable(tokens, i, errs)
    return verify_kind(tokens, i, errs, "word", "variable")
 end
 local function parse_local_variable(tokens, i, errs)
-   return verify_kind(tokens, i, errs, "word")
+   local is_const = false
+   if tokens[i].tk == "<" then
+      i = i + 1
+      local annotation
+      i, annotation = verify_kind(tokens, i, errs, "word")
+      if annotation and annotation.tk == "const" then
+         is_const = true
+      end
+      i = verify_kind(tokens, i, errs, ">")
+   end
+   local node
+   i, node = verify_kind(tokens, i, errs, "word")
+   node.is_const = is_const
+   return i, node
 end
 local function parse_argument(tokens, i, errs)
    local node
@@ -2259,683 +2292,254 @@ local function search_module(module_name)
    end
    return found, fd, tried
 end
-function tl.type_check(ast, lax, modules)
-   local st = {
-      [1] = {
-         ["..."] = {
-            ["typename"] = "tuple",
-            [1] = STRING,
-            [2] = STRING,
-            [3] = STRING,
-            [4] = STRING,
-            [5] = STRING,
+local Variable = {}
+local function fill_field_order(t)
+   if t.typename == "record" then
+      t.field_order = {}
+      for k, v in pairs(t.fields) do
+         table.insert(t.field_order, k)
+      end
+      table.sort(t.field_order)
+   end
+end
+local standard_library = {
+   ["..."] = {
+      ["typename"] = "tuple",
+      [1] = STRING,
+      [2] = STRING,
+      [3] = STRING,
+      [4] = STRING,
+      [5] = STRING,
+   },
+   ["@return"] = {
+      ["typename"] = "tuple",
+      [1] = ANY,
+   },
+   ["any"] = {
+      ["typename"] = "typetype",
+      ["def"] = ANY,
+   },
+   ["arg"] = ARRAY_OF_STRING,
+   ["require"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = STRING,
+      },
+      ["rets"] = {},
+   },
+   ["setmetatable"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ALPHA,
+         [2] = METATABLE,
+      },
+      ["rets"] = {
+         [1] = ALPHA,
+      },
+   },
+   ["getmetatable"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ANY,
+      },
+      ["rets"] = {
+         [1] = METATABLE,
+      },
+   },
+   ["rawget"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = TABLE,
+         [2] = ANY,
+      },
+      ["rets"] = {
+         [1] = ANY,
+      },
+   },
+   ["next"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = MAP_OF_ALPHA_TO_BETA,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+               [2] = BETA,
+            },
          },
-         ["@return"] = {
-            ["typename"] = "tuple",
-            [1] = ANY,
+         [2] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = MAP_OF_ALPHA_TO_BETA,
+               [2] = ALPHA,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+               [2] = BETA,
+            },
          },
-         ["any"] = {
-            ["typename"] = "typetype",
-            ["def"] = ANY,
+         [3] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ARRAY_OF_ALPHA,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+               [2] = ALPHA,
+            },
          },
-         ["arg"] = ARRAY_OF_STRING,
-         ["require"] = {
+         [4] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ARRAY_OF_ALPHA,
+               [2] = ALPHA,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+               [2] = ALPHA,
+            },
+         },
+      },
+   },
+   ["load"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = {
             ["typename"] = "function",
             ["args"] = {
                [1] = STRING,
             },
+            ["rets"] = {
+               [1] = FUNCTION,
+            },
+         },
+      },
+   },
+   ["FILE"] = {
+      ["typename"] = "typetype",
+      ["def"] = {
+         ["typename"] = "record",
+         ["fields"] = {
+            ["read"] = {
+               ["typename"] = "poly",
+               ["poly"] = {
+                  [1] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = NOMINAL_FILE,
+                        [2] = STRING,
+                     },
+                     ["rets"] = {
+                        [1] = STRING,
+                        [2] = STRING,
+                     },
+                  },
+                  [2] = {
+                     ["typename"] = "function",
+                     ["args"] = {
+                        [1] = NOMINAL_FILE,
+                        [2] = NUMBER,
+                     },
+                     ["rets"] = {
+                        [1] = STRING,
+                        [2] = STRING,
+                     },
+                  },
+               },
+            },
+            ["write"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = NOMINAL_FILE,
+                  [2] = VARARG_STRING,
+               },
+               ["rets"] = {
+                  [1] = NOMINAL_FILE,
+                  [2] = STRING,
+               },
+            },
+            ["close"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = NOMINAL_FILE,
+               },
+               ["rets"] = {
+                  [1] = BOOLEAN,
+                  [2] = STRING,
+               },
+            },
+            ["flush"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = NOMINAL_FILE,
+               },
+               ["rets"] = {},
+            },
+         },
+      },
+   },
+   ["METATABLE"] = {
+      ["typename"] = "typetype",
+      ["def"] = {
+         ["typename"] = "record",
+         ["fields"] = {
+            ["__index"] = ANY,
+            ["__tostring"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = ANY,
+               },
+               ["rets"] = {
+                  [1] = STRING,
+               },
+            },
+            ["__call"] = FUNCTION,
+         },
+      },
+   },
+   ["io"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["stderr"] = NOMINAL_FILE,
+         ["stdout"] = NOMINAL_FILE,
+         ["open"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = STRING,
+            },
+            ["rets"] = {
+               [1] = NOMINAL_FILE,
+               [2] = STRING,
+            },
+         },
+         ["popen"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = STRING,
+            },
+            ["rets"] = {
+               [1] = NOMINAL_FILE,
+               [2] = STRING,
+            },
+         },
+         ["write"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = VARARG_STRING,
+            },
+            ["rets"] = {
+               [1] = NOMINAL_FILE,
+               [2] = STRING,
+            },
+         },
+         ["flush"] = {
+            ["typename"] = "function",
+            ["args"] = {},
             ["rets"] = {},
-         },
-         ["setmetatable"] = {
-            ["typename"] = "function",
-            ["args"] = {
-               [1] = ALPHA,
-               [2] = METATABLE,
-            },
-            ["rets"] = {
-               [1] = ALPHA,
-            },
-         },
-         ["getmetatable"] = {
-            ["typename"] = "function",
-            ["args"] = {
-               [1] = ANY,
-            },
-            ["rets"] = {
-               [1] = METATABLE,
-            },
-         },
-         ["rawget"] = {
-            ["typename"] = "function",
-            ["args"] = {
-               [1] = TABLE,
-               [2] = ANY,
-            },
-            ["rets"] = {
-               [1] = ANY,
-            },
-         },
-         ["next"] = {
-            ["typename"] = "poly",
-            ["poly"] = {
-               [1] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = MAP_OF_ALPHA_TO_BETA,
-                  },
-                  ["rets"] = {
-                     [1] = ALPHA,
-                     [2] = BETA,
-                  },
-               },
-               [2] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = MAP_OF_ALPHA_TO_BETA,
-                     [2] = ALPHA,
-                  },
-                  ["rets"] = {
-                     [1] = ALPHA,
-                     [2] = BETA,
-                  },
-               },
-               [3] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ARRAY_OF_ALPHA,
-                  },
-                  ["rets"] = {
-                     [1] = NUMBER,
-                     [2] = ALPHA,
-                  },
-               },
-               [4] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ARRAY_OF_ALPHA,
-                     [2] = ALPHA,
-                  },
-                  ["rets"] = {
-                     [1] = NUMBER,
-                     [2] = ALPHA,
-                  },
-               },
-            },
-         },
-         ["load"] = {
-            ["typename"] = "poly",
-            ["poly"] = {
-               [1] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = FUNCTION,
-                  },
-               },
-            },
-         },
-         ["FILE"] = {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "record",
-               ["fields"] = {
-                  ["read"] = {
-                     ["typename"] = "poly",
-                     ["poly"] = {
-                        [1] = {
-                           ["typename"] = "function",
-                           ["args"] = {
-                              [1] = NOMINAL_FILE,
-                              [2] = STRING,
-                           },
-                           ["rets"] = {
-                              [1] = STRING,
-                              [2] = STRING,
-                           },
-                        },
-                        [2] = {
-                           ["typename"] = "function",
-                           ["args"] = {
-                              [1] = NOMINAL_FILE,
-                              [2] = NUMBER,
-                           },
-                           ["rets"] = {
-                              [1] = STRING,
-                              [2] = STRING,
-                           },
-                        },
-                     },
-                  },
-                  ["write"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = NOMINAL_FILE,
-                        [2] = VARARG_STRING,
-                     },
-                     ["rets"] = {
-                        [1] = NOMINAL_FILE,
-                        [2] = STRING,
-                     },
-                  },
-                  ["close"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = NOMINAL_FILE,
-                     },
-                     ["rets"] = {
-                        [1] = BOOLEAN,
-                        [2] = STRING,
-                     },
-                  },
-                  ["flush"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = NOMINAL_FILE,
-                     },
-                     ["rets"] = {},
-                  },
-               },
-            },
-         },
-         ["METATABLE"] = {
-            ["typename"] = "typetype",
-            ["def"] = {
-               ["typename"] = "record",
-               ["fields"] = {
-                  ["__index"] = ANY,
-                  ["__tostring"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = ANY,
-                     },
-                     ["rets"] = {
-                        [1] = STRING,
-                     },
-                  },
-                  ["__call"] = FUNCTION,
-               },
-            },
-         },
-         ["io"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["stderr"] = NOMINAL_FILE,
-               ["stdout"] = NOMINAL_FILE,
-               ["open"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = NOMINAL_FILE,
-                     [2] = STRING,
-                  },
-               },
-               ["popen"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = NOMINAL_FILE,
-                     [2] = STRING,
-                  },
-               },
-               ["write"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = VARARG_STRING,
-                  },
-                  ["rets"] = {
-                     [1] = NOMINAL_FILE,
-                     [2] = STRING,
-                  },
-               },
-               ["flush"] = {
-                  ["typename"] = "function",
-                  ["args"] = {},
-                  ["rets"] = {},
-               },
-               ["type"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ANY,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-            },
-         },
-         ["os"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["getenv"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-               ["execute"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = BOOLEAN,
-                     [2] = STRING,
-                     [3] = NUMBER,
-                  },
-               },
-               ["remove"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = BOOLEAN,
-                     [2] = STRING,
-                  },
-               },
-               ["time"] = {
-                  ["typename"] = "function",
-                  ["args"] = {},
-                  ["rets"] = {
-                     [1] = NUMBER,
-                  },
-               },
-               ["clock"] = {
-                  ["typename"] = "function",
-                  ["args"] = {},
-                  ["rets"] = {
-                     [1] = NUMBER,
-                  },
-               },
-               ["exit"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = NUMBER,
-                           [2] = BOOLEAN,
-                        },
-                        ["rets"] = {},
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = BOOLEAN,
-                           [2] = BOOLEAN,
-                        },
-                        ["rets"] = {},
-                     },
-                  },
-               },
-            },
-         },
-         ["package"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["path"] = STRING,
-               ["config"] = STRING,
-               ["loaded"] = {
-                  ["typename"] = "map",
-                  ["keys"] = STRING,
-                  ["values"] = ANY,
-               },
-               ["searchers"] = {
-                  ["typename"] = "array",
-                  ["elements"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = STRING,
-                     },
-                     ["rets"] = {
-                        [1] = ANY,
-                     },
-                  },
-               },
-               ["loaders"] = {
-                  ["typename"] = "array",
-                  ["elements"] = {
-                     ["typename"] = "function",
-                     ["args"] = {
-                        [1] = STRING,
-                     },
-                     ["rets"] = {
-                        [1] = ANY,
-                     },
-                  },
-               },
-            },
-         },
-         ["table"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["pack"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = VARARG_ANY,
-                  },
-                  ["rets"] = {
-                     [1] = TABLE,
-                  },
-               },
-               ["unpack"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ARRAY_OF_ALPHA,
-                     [2] = NUMBER,
-                     [3] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = {
-                        ["typename"] = "typevar",
-                        ["typevar"] = "`a",
-                        ["is_va"] = true,
-                     },
-                  },
-               },
-               ["insert"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                           [2] = NUMBER,
-                           [3] = ANY,
-                        },
-                        ["rets"] = {},
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                           [2] = ANY,
-                        },
-                        ["rets"] = {},
-                     },
-                  },
-               },
-               ["remove"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                           [2] = NUMBER,
-                        },
-                        ["rets"] = {
-                           [1] = ALPHA,
-                        },
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                        },
-                        ["rets"] = {
-                           [1] = ALPHA,
-                        },
-                     },
-                  },
-               },
-               ["concat"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_STRING,
-                           [2] = STRING,
-                        },
-                        ["rets"] = {
-                           [1] = STRING,
-                        },
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_STRING,
-                        },
-                        ["rets"] = {
-                           [1] = STRING,
-                        },
-                     },
-                  },
-               },
-               ["sort"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                        },
-                        ["rets"] = {},
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = ARRAY_OF_ALPHA,
-                           [2] = {
-                              ["typename"] = "function",
-                              ["args"] = {
-                                 [1] = ALPHA,
-                                 [2] = ALPHA,
-                              },
-                              ["rets"] = {
-                                 [1] = BOOLEAN,
-                              },
-                           },
-                        },
-                        ["rets"] = {},
-                     },
-                  },
-               },
-            },
-         },
-         ["string"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["sub"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = NUMBER,
-                     [3] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-               ["match"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-               ["rep"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-               ["gsub"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = STRING,
-                           [2] = STRING,
-                           [3] = STRING,
-                           [4] = NUMBER,
-                        },
-                        ["rets"] = {
-                           [1] = STRING,
-                           [2] = NUMBER,
-                        },
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = STRING,
-                           [2] = STRING,
-                           [3] = {
-                              ["typename"] = "map",
-                              ["keys"] = STRING,
-                              ["values"] = STRING,
-                           },
-                           [4] = NUMBER,
-                        },
-                        ["rets"] = {
-                           [1] = STRING,
-                           [2] = NUMBER,
-                        },
-                     },
-                  },
-               },
-               ["gmatch"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = STRING,
-                  },
-                  ["rets"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {},
-                        ["rets"] = {
-                           [1] = STRING,
-                        },
-                     },
-                  },
-               },
-               ["find"] = {
-                  ["typename"] = "poly",
-                  ["poly"] = {
-                     [1] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = STRING,
-                           [2] = STRING,
-                        },
-                        ["rets"] = {
-                           [1] = NUMBER,
-                           [2] = NUMBER,
-                           [3] = VARARG_STRING,
-                        },
-                     },
-                     [2] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = STRING,
-                           [2] = STRING,
-                           [3] = NUMBER,
-                        },
-                        ["rets"] = {
-                           [1] = NUMBER,
-                           [2] = NUMBER,
-                           [3] = VARARG_STRING,
-                        },
-                     },
-                     [3] = {
-                        ["typename"] = "function",
-                        ["args"] = {
-                           [1] = STRING,
-                           [2] = STRING,
-                           [3] = NUMBER,
-                           [4] = BOOLEAN,
-                        },
-                        ["rets"] = {
-                           [1] = NUMBER,
-                           [2] = NUMBER,
-                           [3] = VARARG_STRING,
-                        },
-                     },
-                  },
-               },
-               ["char"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-               ["format"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = STRING,
-                     [2] = VARARG_ANY,
-                  },
-                  ["rets"] = {
-                     [1] = STRING,
-                  },
-               },
-            },
-         },
-         ["math"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["max"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                     [2] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = NUMBER,
-                  },
-               },
-               ["min"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                     [2] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = NUMBER,
-                  },
-               },
-               ["floor"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                  },
-                  ["rets"] = {
-                     [1] = NUMBER,
-                  },
-               },
-               ["randomseed"] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                  },
-                  ["rets"] = {},
-               },
-               ["huge"] = NUMBER,
-            },
          },
          ["type"] = {
             ["typename"] = "function",
@@ -2946,59 +2550,171 @@ function tl.type_check(ast, lax, modules)
                [1] = STRING,
             },
          },
-         ["ipairs"] = {
+      },
+   },
+   ["os"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["getenv"] = {
             ["typename"] = "function",
             ["args"] = {
-               [1] = ARRAY_OF_ALPHA,
+               [1] = STRING,
             },
             ["rets"] = {
+               [1] = STRING,
+            },
+         },
+         ["execute"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+            },
+            ["rets"] = {
+               [1] = BOOLEAN,
+               [2] = STRING,
+               [3] = NUMBER,
+            },
+         },
+         ["remove"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+            },
+            ["rets"] = {
+               [1] = BOOLEAN,
+               [2] = STRING,
+            },
+         },
+         ["time"] = {
+            ["typename"] = "function",
+            ["args"] = {},
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+         ["clock"] = {
+            ["typename"] = "function",
+            ["args"] = {},
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+         ["exit"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
                [1] = {
                   ["typename"] = "function",
-                  ["args"] = {},
-                  ["rets"] = {
+                  ["args"] = {
                      [1] = NUMBER,
-                     [2] = ALPHA,
+                     [2] = BOOLEAN,
                   },
+                  ["rets"] = {},
                },
-            },
-         },
-         ["pairs"] = {
-            ["typename"] = "function",
-            ["args"] = {
-               [1] = {
-                  ["typename"] = "map",
-                  ["keys"] = ALPHA,
-                  ["values"] = BETA,
-               },
-            },
-            ["rets"] = {
-               [1] = {
+               [2] = {
                   ["typename"] = "function",
-                  ["args"] = {},
-                  ["rets"] = {
-                     [1] = ALPHA,
-                     [2] = BETA,
+                  ["args"] = {
+                     [1] = BOOLEAN,
+                     [2] = BOOLEAN,
                   },
+                  ["rets"] = {},
                },
             },
          },
-         ["pcall"] = {
+      },
+   },
+   ["package"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["path"] = STRING,
+         ["config"] = STRING,
+         ["loaded"] = {
+            ["typename"] = "map",
+            ["keys"] = STRING,
+            ["values"] = ANY,
+         },
+         ["searchers"] = {
+            ["typename"] = "array",
+            ["elements"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = STRING,
+               },
+               ["rets"] = {
+                  [1] = ANY,
+               },
+            },
+         },
+         ["loaders"] = {
+            ["typename"] = "array",
+            ["elements"] = {
+               ["typename"] = "function",
+               ["args"] = {
+                  [1] = STRING,
+               },
+               ["rets"] = {
+                  [1] = ANY,
+               },
+            },
+         },
+      },
+   },
+   ["table"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["pack"] = {
             ["typename"] = "function",
             ["args"] = {
                [1] = VARARG_ANY,
             },
             ["rets"] = {
-               [1] = BOOLEAN,
-               [2] = ANY,
+               [1] = TABLE,
             },
          },
-         ["assert"] = {
+         ["unpack"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ARRAY_OF_ALPHA,
+               [2] = NUMBER,
+               [3] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = {
+                  ["typename"] = "typevar",
+                  ["typevar"] = "`a",
+                  ["is_va"] = true,
+               },
+            },
+         },
+         ["insert"] = {
             ["typename"] = "poly",
             ["poly"] = {
                [1] = {
                   ["typename"] = "function",
                   ["args"] = {
-                     [1] = ALPHA,
+                     [1] = ARRAY_OF_ALPHA,
+                     [2] = NUMBER,
+                     [3] = ANY,
+                  },
+                  ["rets"] = {},
+               },
+               [2] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                     [2] = ANY,
+                  },
+                  ["rets"] = {},
+               },
+            },
+         },
+         ["remove"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                     [2] = NUMBER,
                   },
                   ["rets"] = {
                      [1] = ALPHA,
@@ -3007,167 +2723,496 @@ function tl.type_check(ast, lax, modules)
                [2] = {
                   ["typename"] = "function",
                   ["args"] = {
+                     [1] = ARRAY_OF_ALPHA,
+                  },
+                  ["rets"] = {
                      [1] = ALPHA,
+                  },
+               },
+            },
+         },
+         ["concat"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_STRING,
                      [2] = STRING,
                   },
                   ["rets"] = {
-                     [1] = ALPHA,
-                  },
-               },
-            },
-         },
-         ["select"] = {
-            ["typename"] = "poly",
-            ["poly"] = {
-               [1] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = NUMBER,
-                     [2] = ALPHA,
-                  },
-                  ["rets"] = {
-                     [1] = ALPHA,
-                  },
-               },
-               [2] = {
-                  ["typename"] = "function",
-                  ["args"] = {
                      [1] = STRING,
-                     [2] = VARARG_ANY,
+                  },
+               },
+               [2] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = ARRAY_OF_STRING,
                   },
                   ["rets"] = {
-                     [1] = NUMBER,
+                     [1] = STRING,
                   },
                },
             },
          },
-         ["print"] = {
+         ["sort"] = {
             ["typename"] = "poly",
             ["poly"] = {
                [1] = {
                   ["typename"] = "function",
                   ["args"] = {
-                     [1] = ANY,
+                     [1] = ARRAY_OF_ALPHA,
                   },
                   ["rets"] = {},
                },
                [2] = {
                   ["typename"] = "function",
                   ["args"] = {
-                     [1] = ANY,
-                     [2] = ANY,
-                  },
-                  ["rets"] = {},
-               },
-               [3] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ANY,
-                     [2] = ANY,
-                     [3] = ANY,
-                  },
-                  ["rets"] = {},
-               },
-               [4] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ANY,
-                     [2] = ANY,
-                     [3] = ANY,
-                     [4] = ANY,
-                  },
-                  ["rets"] = {},
-               },
-               [5] = {
-                  ["typename"] = "function",
-                  ["args"] = {
-                     [1] = ANY,
-                     [2] = ANY,
-                     [3] = ANY,
-                     [4] = ANY,
-                     [5] = ANY,
+                     [1] = ARRAY_OF_ALPHA,
+                     [2] = {
+                        ["typename"] = "function",
+                        ["args"] = {
+                           [1] = ALPHA,
+                           [2] = ALPHA,
+                        },
+                        ["rets"] = {
+                           [1] = BOOLEAN,
+                        },
+                     },
                   },
                   ["rets"] = {},
                },
             },
          },
-         ["tostring"] = {
+      },
+   },
+   ["string"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["sub"] = {
             ["typename"] = "function",
             ["args"] = {
-               [1] = ANY,
+               [1] = STRING,
+               [2] = NUMBER,
+               [3] = NUMBER,
             },
             ["rets"] = {
                [1] = STRING,
             },
          },
-         ["tonumber"] = {
+         ["match"] = {
             ["typename"] = "function",
             ["args"] = {
-               [1] = ANY,
+               [1] = STRING,
+               [2] = STRING,
             },
             ["rets"] = {
-               [1] = NUMBER,
+               [1] = STRING,
             },
          },
-         ["error"] = {
+         ["rep"] = {
             ["typename"] = "function",
             ["args"] = {
                [1] = STRING,
                [2] = NUMBER,
             },
-            ["rets"] = {},
+            ["rets"] = {
+               [1] = STRING,
+            },
          },
-         ["debug"] = {
-            ["typename"] = "record",
-            ["fields"] = {
-               ["traceback"] = {
+         ["gsub"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
                   ["typename"] = "function",
                   ["args"] = {
                      [1] = STRING,
+                     [2] = STRING,
+                     [3] = STRING,
+                     [4] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
                      [2] = NUMBER,
                   },
+               },
+               [2] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                     [3] = {
+                        ["typename"] = "map",
+                        ["keys"] = STRING,
+                        ["values"] = STRING,
+                     },
+                     [4] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = STRING,
+                     [2] = NUMBER,
+                  },
+               },
+            },
+         },
+         ["gmatch"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = STRING,
+            },
+            ["rets"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {},
                   ["rets"] = {
                      [1] = STRING,
                   },
                },
             },
          },
+         ["find"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                     [2] = NUMBER,
+                     [3] = VARARG_STRING,
+                  },
+               },
+               [2] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                     [3] = NUMBER,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                     [2] = NUMBER,
+                     [3] = VARARG_STRING,
+                  },
+               },
+               [3] = {
+                  ["typename"] = "function",
+                  ["args"] = {
+                     [1] = STRING,
+                     [2] = STRING,
+                     [3] = NUMBER,
+                     [4] = BOOLEAN,
+                  },
+                  ["rets"] = {
+                     [1] = NUMBER,
+                     [2] = NUMBER,
+                     [3] = VARARG_STRING,
+                  },
+               },
+            },
+         },
+         ["char"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = STRING,
+            },
+         },
+         ["format"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = VARARG_ANY,
+            },
+            ["rets"] = {
+               [1] = STRING,
+            },
+         },
       },
-   }
-   local function fill_field_order(t)
-      if t.typename == "record" then
-         t.field_order = {}
-         for k, v in pairs(t.fields) do
-            table.insert(t.field_order, k)
-         end
-         table.sort(t.field_order)
-      end
+   },
+   ["math"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["max"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+               [2] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+         ["min"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+               [2] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+         ["floor"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+         ["randomseed"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+            },
+            ["rets"] = {},
+         },
+         ["huge"] = NUMBER,
+      },
+   },
+   ["type"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ANY,
+      },
+      ["rets"] = {
+         [1] = STRING,
+      },
+   },
+   ["ipairs"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ARRAY_OF_ALPHA,
+      },
+      ["rets"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {},
+            ["rets"] = {
+               [1] = NUMBER,
+               [2] = ALPHA,
+            },
+         },
+      },
+   },
+   ["pairs"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = {
+            ["typename"] = "map",
+            ["keys"] = ALPHA,
+            ["values"] = BETA,
+         },
+      },
+      ["rets"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {},
+            ["rets"] = {
+               [1] = ALPHA,
+               [2] = BETA,
+            },
+         },
+      },
+   },
+   ["pcall"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = VARARG_ANY,
+      },
+      ["rets"] = {
+         [1] = BOOLEAN,
+         [2] = ANY,
+      },
+   },
+   ["assert"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ALPHA,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+            },
+         },
+         [2] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ALPHA,
+               [2] = STRING,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+            },
+         },
+      },
+   },
+   ["select"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = NUMBER,
+               [2] = ALPHA,
+            },
+            ["rets"] = {
+               [1] = ALPHA,
+            },
+         },
+         [2] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = VARARG_ANY,
+            },
+            ["rets"] = {
+               [1] = NUMBER,
+            },
+         },
+      },
+   },
+   ["print"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+            },
+            ["rets"] = {},
+         },
+         [2] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+               [2] = ANY,
+            },
+            ["rets"] = {},
+         },
+         [3] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+               [2] = ANY,
+               [3] = ANY,
+            },
+            ["rets"] = {},
+         },
+         [4] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+               [2] = ANY,
+               [3] = ANY,
+               [4] = ANY,
+            },
+            ["rets"] = {},
+         },
+         [5] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = ANY,
+               [2] = ANY,
+               [3] = ANY,
+               [4] = ANY,
+               [5] = ANY,
+            },
+            ["rets"] = {},
+         },
+      },
+   },
+   ["tostring"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ANY,
+      },
+      ["rets"] = {
+         [1] = STRING,
+      },
+   },
+   ["tonumber"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = ANY,
+      },
+      ["rets"] = {
+         [1] = NUMBER,
+      },
+   },
+   ["error"] = {
+      ["typename"] = "function",
+      ["args"] = {
+         [1] = STRING,
+         [2] = NUMBER,
+      },
+      ["rets"] = {},
+   },
+   ["debug"] = {
+      ["typename"] = "record",
+      ["fields"] = {
+         ["traceback"] = {
+            ["typename"] = "function",
+            ["args"] = {
+               [1] = STRING,
+               [2] = NUMBER,
+            },
+            ["rets"] = {
+               [1] = STRING,
+            },
+         },
+      },
+   },
+}
+for _, t in pairs(standard_library) do
+   fill_field_order(t)
+   if t.typename == "typetype" then
+      fill_field_order(t.def)
    end
-   for _, t in pairs(st[1]) do
-      fill_field_order(t)
-      if t.typename == "typetype" then
-         fill_field_order(t.def)
-      end
+end
+function tl.type_check(ast, lax, modules)
+   local st = {
+      [1] = {},
+   }
+   for name, typ in pairs(standard_library) do
+      st[1][name] = {
+         ["t"] = typ,
+         ["is_const"] = true,
+      }
    end
    local errors = {}
    local unknowns = {}
    local module_type
    local function find_var(name)
       if name == "_G" then
+         local globals = {}
+         for k, v in pairs(st[1]) do
+            globals[k] = v.t
+         end
          local field_order = {}
-         for k, _ in pairs(st[1]) do
+         for k, _ in pairs(globals) do
             table.insert(field_order, k)
          end
          return {
             ["typename"] = "record",
             ["field_order"] = field_order,
-            ["fields"] = st[1],
-         }
+            ["fields"] = globals,
+         }, false
       end
       for i = #st,1,- 1 do
          local scope = st[i]
          if scope[name] then
-            return scope[name]
+            return scope[name].t, scope[name].is_const
          end
       end
    end
@@ -3665,11 +3710,17 @@ function tl.type_check(ast, lax, modules)
       })
       return INVALID
    end
-   local function add_var(var, valtype)
-      st[#st][var] = valtype
+   local function add_var(var, valtype, is_const)
+      st[#st][var] = {
+         ["t"] = valtype,
+         ["is_const"] = is_const,
+      }
    end
-   local function add_global(var, valtype)
-      st[1][var] = valtype
+   local function add_global(var, valtype, is_const)
+      st[1][var] = {
+         ["t"] = valtype,
+         ["is_const"] = is_const,
+      }
    end
    local function begin_function_scope(node, recurse)
       table.insert(st, {})
@@ -3786,7 +3837,7 @@ function tl.type_check(ast, lax, modules)
       elseif node.e2.kind == "string" then
          node.type = match_record_key(node, a, {
             ["typename"] = "string",
-            ["tk"] = node.e2.tk:sub(2,- 2),
+            ["tk"] = assert(node.e2.conststr),
          }, orig_a)
       elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
          local ff
@@ -3837,6 +3888,26 @@ function tl.type_check(ast, lax, modules)
       end
       return UNKNOWN
    end
+   local function expand_type(old, new)
+      if not old then
+         return new
+      else
+         if not is_a(new, old) then
+            if old.typename == "poly" then
+               table.insert(old.poly, new)
+            else
+               return {
+                  ["typename"] = "poly",
+                  ["poly"] = {
+                     [1] = old,
+                     [2] = new,
+                  },
+               }
+            end
+         end
+      end
+      return old
+   end
    local visit_node = {
       ["statements"] = {
          ["before"] = function ()
@@ -3871,7 +3942,7 @@ function tl.type_check(ast, lax, modules)
                      })
                   end
                end
-               add_var(var.tk, t)
+               add_var(var.tk, t, var.is_const)
             end
             node.type = {
                ["typename"] = "none",
@@ -3883,6 +3954,13 @@ function tl.type_check(ast, lax, modules)
             local vals = get_assignment_values(children[2],#children[1])
             local exps = flatten_list(vals)
             for i, var in ipairs(children[1]) do
+               if node.vars[i].is_const then
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "cannot assign to <const> variable",
+                  })
+               end
                if var then
                   local val = exps[i] or NIL
                   assert_is_a(node.vars[i], val, var, {}, "assignment")
@@ -3999,65 +4077,80 @@ function tl.type_check(ast, lax, modules)
             node.type = {
                ["typename"] = "record",
             }
+            local is_record = false
+            local is_array = false
+            local is_map = false
             for _, child in ipairs(children) do
-               if child.typename == "kv" then
+               assert(child.typename == "table_item")
+               if child.kname then
+                  is_record = true
                   if not node.type.fields then
                      node.type.fields = {}
                      node.type.field_order = {}
                   end
-                  node.type.fields[child.k] = child.v
-                  table.insert(node.type.field_order, child.k)
-               elseif child.typename == "iv" then
-                  if not node.type.items then
-                     node.type.items = {}
-                  end
-                  node.type.items[tonumber(child.i)] = child.v
-                  if not node.type.elements then
-                     node.type.typename = "arrayrecord"
-                     node.type.elements = assert(child.v)
-                  else
-                     if not is_a(child.v, node.type.elements) then
-                        node.type.elements = {
-                           ["typename"] = "poly",
-                           ["poly"] = node.type.items,
-                        }
-                     end
-                  end
+                  node.type.fields[child.kname] = child.vtype
+                  table.insert(node.type.field_order, child.kname)
+               elseif child.ktype.typename == "number" then
+                  is_array = true
+                  node.type.elements = expand_type(node.type.elements, child.vtype)
+               else
+                  is_map = true
+                  node.type.keys = expand_type(node.type.keys, child.ktype)
+                  node.type.values = expand_type(node.type.values, child.vtype)
                end
             end
-            if not node.type.fields then
-               if node.type.elements then
-                  node.type.typename = "array"
+            if is_array and is_map then
+               node.type = UNKNOWN
+               table.insert(errors, {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
+                  ["err"] = "cannot determine type of table literal",
+               })
+            elseif is_record and is_array then
+               node.type.typename = "arrayrecord"
+            elseif is_record and is_map then
+               if node.type.keys.typename == "string" then
+                  node.type.typename = "map"
+                  for _, ftype in pairs(node.type.fields) do
+                     node.type.values = expand_type(node.type.values, ftype)
+                  end
+                  node.type.fields = nil
+                  node.type.field_order = nil
                else
-                  node.type.fields = {}
-                  node.type.field_order = {}
+                  node.type = UNKNOWN
+                  table.insert(errors, {
+                     ["y"] = node.y,
+                     ["x"] = node.x,
+                     ["err"] = "cannot determine type of table literal",
+                  })
                end
+            elseif is_array then
+               node.type.typename = "array"
+            elseif is_record then
+               node.type.typename = "record"
+            elseif is_map then
+               node.type.typename = "map"
+            else
+               node.type.typename = "record"
+               node.type.fields = {}
+               node.type.field_order = {}
             end
          end,
       },
       ["table_item"] = {
          ["after"] = function (node, children)
-            local key = node.key.tk
+            local kname = node.key.conststr
+            local ktype = children[1]
             local vtype = children[2]
             if node.decltype then
                vtype = node.decltype
                assert_is_a(node.value, children[2], node.decltype, {}, "table item")
             end
-            if children[1].typename == "number" then
-               node.type = {
-                  ["typename"] = "iv",
-                  ["i"] = tonumber(key),
-                  ["v"] = vtype,
-               }
-               return
-            end
-            if node.key.kind == "string" then
-               key = key:sub(2,- 2)
-            end
             node.type = {
-               ["typename"] = "kv",
-               ["k"] = assert(key),
-               ["v"] = vtype,
+               ["typename"] = "table_item",
+               ["kname"] = kname,
+               ["ktype"] = ktype,
+               ["vtype"] = vtype,
             }
          end,
       },
@@ -4159,7 +4252,7 @@ function tl.type_check(ast, lax, modules)
                      if b[1].typename == "record" and node.e2[2].kind == "string" then
                         node.type = match_record_key(node, b[1], {
                            ["typename"] = "string",
-                           ["tk"] = node.e2[2].tk:sub(2,- 2),
+                           ["tk"] = assert(node.e2[2].conststr),
                         }, b[1])
                      else
                         do_index(node, b[1], b[2])
@@ -4175,7 +4268,7 @@ function tl.type_check(ast, lax, modules)
                elseif node.e1.tk == "require" then
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
-                        local module_name = node.e2[1].tk:sub(2,- 2)
+                        local module_name = assert(node.e2[1].conststr)
                         node.type = require_module(module_name)
                         if not node.type then
                            node.type = BOOLEAN
@@ -4302,7 +4395,7 @@ function tl.type_check(ast, lax, modules)
       },
       ["variable"] = {
          ["after"] = function (node, children)
-            node.type = find_var(node.tk)
+            node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
                node.type = {
                   ["typename"] = "unknown",

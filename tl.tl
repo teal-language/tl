@@ -535,11 +535,10 @@ local Type = record
    -- typevar
    typevar: string
 
-   -- array and record entries
-   i: number
-   k: string
-   v: Type
-   items: {Type}
+   -- table items
+   kname: string
+   ktype: Type
+   vtype: Type
 end
 
 local Operator = record
@@ -566,6 +565,9 @@ local Node = record
 
    name: Node
 
+   -- local
+   is_const: boolean
+
    fn_owner: Node
    is_method: boolean
 
@@ -591,6 +593,8 @@ local Node = record
    op: Operator
    e1: Node
    e2: Node
+   constnum: number
+   conststr: string
 
    casttype: Type
 
@@ -655,7 +659,8 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       return i, node, n
    elseif tokens[i].kind == "word" and tokens[i+1].tk == "=" then
       i, node.key = verify_kind(tokens, i, errs, "word", "string")
-      node.key.tk = "\"" .. node.key.tk .. "\""
+      node.key.conststr = node.key.tk
+      node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
@@ -663,7 +668,8 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       local orig_i = i
       local try_errs: {ParseError} = {}
       i, node.key = verify_kind(tokens, i, try_errs, "word", "string")
-      node.key.tk = "\"" .. node.key.tk .. "\""
+      node.key.conststr = node.key.tk
+      node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, try_errs, ":")
       i, node.decltype = parse_type(tokens, i, try_errs)
       if node.decltype and tokens[i].tk == "=" then
@@ -682,6 +688,7 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
    end
 
    node.key = new_node(tokens, i, "number")
+   node.key.constnum = n
    node.key.tk = tostring(n)
    i, node.value = parse_expression(tokens, i, errs)
    return i, node, n + 1
@@ -844,18 +851,35 @@ local function parse_function_value(tokens: {Token}, i: number, errs: {ParseErro
    return parse_function_args_rets_body(tokens, i, errs, node)
 end
 
+local function unquote(str: string): string
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2)
+   end
+   f = str:match("^%[=*%[")
+   local l = #f + 1
+   return str:sub(l, -l)
+end
+
 local function parse_literal(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    if tokens[i].tk == "{" then
       return parse_table_literal(tokens, i, errs)
    elseif tokens[i].kind == "..." then
       return verify_kind(tokens, i, errs, "...")
    elseif tokens[i].kind == "string" then
-      return verify_kind(tokens, i, errs, "string")
+      local tk = unquote(tokens[i].tk)
+      local node: Node
+      i, node = verify_kind(tokens, i, errs, "string")
+      node.conststr = tk
+      return i, node
    elseif tokens[i].kind == "word" then
-      -- TODO function call
       return verify_kind(tokens, i, errs, "word", "variable")
    elseif tokens[i].kind == "number" then
-      return verify_kind(tokens, i, errs, "number")
+      local n = tonumber(tokens[i].tk)
+      local node: Node
+      i, node = verify_kind(tokens, i, errs, "number")
+      node.constnum = n
+      return i, node
    elseif tokens[i].tk == "true" then
       return verify_kind(tokens, i, errs, "keyword", "boolean")
    elseif tokens[i].tk == "false" then
@@ -1133,7 +1157,20 @@ local function parse_variable(tokens: {Token}, i: number, errs: {ParseError}): n
 end
 
 local function parse_local_variable(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
-   return verify_kind(tokens, i, errs, "word")
+   local is_const: boolean = false
+   if tokens[i].tk == "<" then
+      i = i + 1
+      local annotation: Node
+      i, annotation = verify_kind(tokens, i, errs, "word")
+      if annotation and annotation.tk == "const" then
+         is_const = true
+      end
+      i = verify_kind(tokens, i, errs, ">")
+   end
+   local node: Node
+   i, node = verify_kind(tokens, i, errs, "word")
+   node.is_const = is_const
+   return i, node
 end
 
 local function parse_argument(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
@@ -2380,268 +2417,284 @@ local function search_module(module_name: string): string, FILE, {string}
    return found, fd, tried
 end
 
-function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error}, {Unknown}, Type
-   local st: {{string:Type}} = {
-      {
-         ["..."] = { typename = "tuple", STRING, STRING, STRING, STRING, STRING },
-         ["@return"] = { typename = "tuple", ANY },
-         ["any"] = { typename = "typetype", def = ANY },
-         ["arg"] = ARRAY_OF_STRING,
-         ["require"] = { typename = "function", args = { STRING }, rets = {} },
-         ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
-         ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },
-         ["rawget"] = { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
-         ["next"] = {
-            typename = "poly",
-            poly = {
-               { typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
-               { typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
-               { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
-               { typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
-            },
-         },
-         ["load"] = {
-            typename = "poly",
-            poly = {
-               { typename = "function", args = { STRING }, rets = { FUNCTION } },
-            },
-         },
-         ["FILE"] = {
-            typename = "typetype",
-            def = {
-               typename = "record",
-               fields = {
-                  ["read"] = {
-                     typename = "poly",
-                     poly = {
-                        { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
-                        { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
-                     }
-                  },
-                  ["write"] = { typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
-                  ["close"] = { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
-                  ["flush"] = { typename = "function", args = { NOMINAL_FILE }, rets = {} },
-                  -- TODO complete...
-               },
-            },
-         },
-         ["METATABLE"] = {
-            typename = "typetype",
-            def = {
-               typename = "record",
-               fields = {
-                  ["__index"] = ANY, -- FIXME
-                  ["__tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
-                  ["__call"] = FUNCTION,
-                  -- TODO complete...
-               },
-            },
-         },
-         ["io"] = {
-            typename = "record",
-            fields = {
-               ["stderr"] = NOMINAL_FILE,
-               ["stdout"] = NOMINAL_FILE,
-               ["open"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-               ["popen"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-               ["write"] = { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
-               ["flush"] = { typename = "function", args = {}, rets = {} },
-               ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
-            },
-         },
-         ["os"] = {
-            typename = "record",
-            fields = {
-               ["getenv"] = { typename = "function", args = { STRING }, rets = { STRING } },
-               ["execute"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
-               ["remove"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
-               ["time"] = { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
-               ["clock"] = { typename = "function", args = {}, rets = { NUMBER } },
-               ["exit"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
-                     { typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
-                  }
-               },
-            },
-         },
-         ["package"] = {
-            typename = "record",
-            fields = {
-               ["path"] = STRING,
-               ["config"] = STRING,
-               ["loaded"] = {
-                  typename = "map",
-                  keys = STRING,
-                  values = ANY,
-               },
-               ["searchers"] = {
-                  typename = "array",
-                  elements = { typename = "function", args = { STRING }, rets = { ANY } }
-               },
-               ["loaders"] = {
-                  typename = "array",
-                  elements = { typename = "function", args = { STRING }, rets = { ANY } }
-               },
-            },
-         },
-         ["table"] = {
-            typename = "record",
-            fields = {
-               ["pack"] = { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
-               ["unpack"] = { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = {
-                  { typename = "typevar", typevar = "`a", is_va = true }
-               } },
-               ["insert"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ANY }, rets = {} },
-                     { typename = "function", args = { ARRAY_OF_ALPHA, ANY }, rets = {} },
-                  }
-               },
-               ["remove"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER }, rets = { ALPHA } },
-                     { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { ALPHA } },
-                  }
-               },
-               ["concat"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { ARRAY_OF_STRING, STRING }, rets = { STRING } },
-                     { typename = "function", args = { ARRAY_OF_STRING }, rets = { STRING } },
-                  }
-               },
-               ["sort"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {} },
-                     { typename = "function", args = { ARRAY_OF_ALPHA, { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
-                  }
+local Variable = record
+   t: Type
+   is_const: boolean
+end
+
+local function fill_field_order(t: Type)
+   if t.typename == "record" then
+      t.field_order = {}
+      for k, v in pairs(t.fields) do
+         table.insert(t.field_order, k)
+      end
+      table.sort(t.field_order)
+   end
+end
+
+local standard_library: {string:Type} = {
+   ["..."] = { typename = "tuple", STRING, STRING, STRING, STRING, STRING },
+   ["@return"] = { typename = "tuple", ANY },
+   ["any"] = { typename = "typetype", def = ANY },
+   ["arg"] = ARRAY_OF_STRING,
+   ["require"] = { typename = "function", args = { STRING }, rets = {} },
+   ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
+   ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },
+   ["rawget"] = { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
+   ["next"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
+         { typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
+         { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
+         { typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
+      },
+   },
+   ["load"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { STRING }, rets = { FUNCTION } },
+      },
+   },
+   ["FILE"] = {
+      typename = "typetype",
+      def = {
+         typename = "record",
+         fields = {
+            ["read"] = {
+               typename = "poly",
+               poly = {
+                  { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
+                  { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
                }
             },
+            ["write"] = { typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+            ["close"] = { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
+            ["flush"] = { typename = "function", args = { NOMINAL_FILE }, rets = {} },
+            -- TODO complete...
          },
-         ["string"] = {
-            typename = "record",
-            fields = {
-               ["sub"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
-               ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
-               ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
-               ["gsub"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
-                     { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
-                     -- FIXME any other modes
-                  }
-               },
-               ["gmatch"] = { typename = "function", args = { STRING, STRING }, rets = {
-                  { typename = "function", args = {}, rets = { STRING } },
-               } },
-               ["find"] = {
-                  typename = "poly",
-                  poly = {
-                     { typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-                     { typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-                     { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-                     -- FIXME any other modes
-                  }
-               },
-               ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
-               ["format"] = { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
-            },
+      },
+   },
+   ["METATABLE"] = {
+      typename = "typetype",
+      def = {
+         typename = "record",
+         fields = {
+            ["__index"] = ANY, -- FIXME
+            ["__tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
+            ["__call"] = FUNCTION,
+            -- TODO complete...
          },
-         ["math"] = {
-            typename = "record",
-            fields = {
-               ["max"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-               ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-               ["floor"] = { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-               ["randomseed"] = { typename = "function", args = { NUMBER }, rets = {} },
-               ["huge"] = NUMBER,
-            },
-         },
+      },
+   },
+   ["io"] = {
+      typename = "record",
+      fields = {
+         ["stderr"] = NOMINAL_FILE,
+         ["stdout"] = NOMINAL_FILE,
+         ["open"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["popen"] = { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["write"] = { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["flush"] = { typename = "function", args = {}, rets = {} },
          ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
-         ["ipairs"] = { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {
-            { typename = "function", args = {}, rets = { NUMBER, ALPHA } },
+      },
+   },
+   ["os"] = {
+      typename = "record",
+      fields = {
+         ["getenv"] = { typename = "function", args = { STRING }, rets = { STRING } },
+         ["execute"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
+         ["remove"] = { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
+         ["time"] = { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+         ["clock"] = { typename = "function", args = {}, rets = { NUMBER } },
+         ["exit"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
+               { typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
+            }
+         },
+      },
+   },
+   ["package"] = {
+      typename = "record",
+      fields = {
+         ["path"] = STRING,
+         ["config"] = STRING,
+         ["loaded"] = {
+            typename = "map",
+            keys = STRING,
+            values = ANY,
+         },
+         ["searchers"] = {
+            typename = "array",
+            elements = { typename = "function", args = { STRING }, rets = { ANY } }
+         },
+         ["loaders"] = {
+            typename = "array",
+            elements = { typename = "function", args = { STRING }, rets = { ANY } }
+         },
+      },
+   },
+   ["table"] = {
+      typename = "record",
+      fields = {
+         ["pack"] = { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
+         ["unpack"] = { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = {
+            { typename = "typevar", typevar = "`a", is_va = true }
          } },
-         ["pairs"] = { typename = "function", args = { { typename = "map", keys = ALPHA, values = BETA } }, rets = {
-            { typename = "function", args = {}, rets = { ALPHA, BETA } },
-         } },
-         ["pcall"] = { typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
-         ["assert"] = {
+         ["insert"] = {
             typename = "poly",
             poly = {
-               { typename = "function", args = { ALPHA }, rets = { ALPHA } },
-               { typename = "function", args = { ALPHA, STRING }, rets = { ALPHA } },
+               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ANY }, rets = {} },
+               { typename = "function", args = { ARRAY_OF_ALPHA, ANY }, rets = {} },
             }
          },
-         ["select"] = {
+         ["remove"] = {
             typename = "poly",
             poly = {
-               { typename = "function", args = { NUMBER, ALPHA }, rets = { ALPHA } },
-               { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
+               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER }, rets = { ALPHA } },
+               { typename = "function", args = { ARRAY_OF_ALPHA }, rets = { ALPHA } },
             }
          },
-         ["print"] = {
+         ["concat"] = {
             typename = "poly",
             poly = {
-               { typename = "function", args = { ANY }, rets = {} },
-               { typename = "function", args = { ANY, ANY }, rets = {} },
-               { typename = "function", args = { ANY, ANY, ANY }, rets = {} },
-               { typename = "function", args = { ANY, ANY, ANY, ANY }, rets = {} },
-               { typename = "function", args = { ANY, ANY, ANY, ANY, ANY }, rets = {} },
+               { typename = "function", args = { ARRAY_OF_STRING, STRING }, rets = { STRING } },
+               { typename = "function", args = { ARRAY_OF_STRING }, rets = { STRING } },
             }
          },
-         ["tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
-         ["tonumber"] = { typename = "function", args = { ANY }, rets = { NUMBER } },
-         ["error"] = { typename = "function", args = { STRING, NUMBER }, rets = {} },
-         ["debug"] = {
-            typename = "record",
-            fields = {
-               ["traceback"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
-            },
+         ["sort"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {} },
+               { typename = "function", args = { ARRAY_OF_ALPHA, { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
+            }
          }
+      },
+   },
+   ["string"] = {
+      typename = "record",
+      fields = {
+         ["sub"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
+         ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
+         ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["gsub"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
+               { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
+               -- FIXME any other modes
+            }
+         },
+         ["gmatch"] = { typename = "function", args = { STRING, STRING }, rets = {
+            { typename = "function", args = {}, rets = { STRING } },
+         } },
+         ["find"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               { typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               -- FIXME any other modes
+            }
+         },
+         ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
+         ["format"] = { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
+      },
+   },
+   ["math"] = {
+      typename = "record",
+      fields = {
+         ["max"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         ["min"] = { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         ["floor"] = { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+         ["randomseed"] = { typename = "function", args = { NUMBER }, rets = {} },
+         ["huge"] = NUMBER,
+      },
+   },
+   ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
+   ["ipairs"] = { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {
+      { typename = "function", args = {}, rets = { NUMBER, ALPHA } },
+   } },
+   ["pairs"] = { typename = "function", args = { { typename = "map", keys = ALPHA, values = BETA } }, rets = {
+      { typename = "function", args = {}, rets = { ALPHA, BETA } },
+   } },
+   ["pcall"] = { typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
+   ["assert"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { ALPHA }, rets = { ALPHA } },
+         { typename = "function", args = { ALPHA, STRING }, rets = { ALPHA } },
       }
+   },
+   ["select"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { NUMBER, ALPHA }, rets = { ALPHA } },
+         { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
+      }
+   },
+   ["print"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { ANY }, rets = {} },
+         { typename = "function", args = { ANY, ANY }, rets = {} },
+         { typename = "function", args = { ANY, ANY, ANY }, rets = {} },
+         { typename = "function", args = { ANY, ANY, ANY, ANY }, rets = {} },
+         { typename = "function", args = { ANY, ANY, ANY, ANY, ANY }, rets = {} },
+      }
+   },
+   ["tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
+   ["tonumber"] = { typename = "function", args = { ANY }, rets = { NUMBER } },
+   ["error"] = { typename = "function", args = { STRING, NUMBER }, rets = {} },
+   ["debug"] = {
+      typename = "record",
+      fields = {
+         ["traceback"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+      },
    }
-   local function fill_field_order(t: Type)
-      if t.typename == "record" then
-         t.field_order = {}
-         for k, v in pairs(t.fields) do
-            table.insert(t.field_order, k)
-         end
-         table.sort(t.field_order)
-      end
+}
+
+for _, t in pairs(standard_library) do
+   fill_field_order(t)
+   if t.typename == "typetype" then
+      fill_field_order(t.def)
    end
-   for _, t in pairs(st[1]) do
-      fill_field_order(t)
-      if t.typename == "typetype" then
-         fill_field_order(t.def)
-      end
+end
+
+function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error}, {Unknown}, Type
+
+   local st: {{string:Variable}} = {{}}
+   for name, typ in pairs(standard_library) do
+      st[1][name] = { t = typ, is_const = true }
    end
 
    local errors: {Error} = {}
    local unknowns: {Unknown} = {}
    local module_type: Type
 
-   local function find_var(name: string): Type
+   local function find_var(name: string): Type, boolean
       if name == "_G" then
+         -- this is a static approximation of _G
+         local globals: {string:Type} = {}
+         for k, v in pairs(st[1]) do
+            globals[k] = v.t
+         end
          local field_order: {string} = {}
-         for k, _ in pairs(st[1]) do
+         for k, _ in pairs(globals) do
             table.insert(field_order, k)
          end
          return {
             typename = "record",
             field_order = field_order,
-            fields = st[1],
-         }
+            fields = globals,
+         }, false
       end
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
-            return scope[name]
+            return scope[name].t, scope[name].is_const
          end
       end
    end
@@ -3127,12 +3180,12 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       return INVALID
    end
 
-   local function add_var(var: string, valtype: Type)
-      st[#st][var] = valtype
+   local function add_var(var: string, valtype: Type, is_const: boolean)
+      st[#st][var] = { t = valtype, is_const = is_const }
    end
 
-   local function add_global(var: string, valtype: Type)
-      st[1][var] = valtype
+   local function add_global(var: string, valtype: Type, is_const: boolean)
+      st[1][var] = { t = valtype, is_const = is_const }
    end
 
    local function begin_function_scope(node: Node, recurse: boolean)
@@ -3241,7 +3294,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             node.type = INVALID
          end
       elseif node.e2.kind == "string" then
-         node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk:sub(2, -2) }, orig_a)
+         node.type = match_record_key(node, a, { typename = "string", tk = assert(node.e2.conststr) }, orig_a)
       elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
          local ff: Type
          local typevars: {string: Type} = {}
@@ -3289,6 +3342,27 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       return UNKNOWN
    end
 
+   local function expand_type(old: Type, new: Type): Type
+      if not old then
+         return new
+      else
+         if not is_a(new, old) then
+            if old.typename == "poly" then
+               table.insert(old.poly, new)
+            else
+               return {
+                  typename = "poly",
+                  poly = {
+                     old,
+                     new
+                  }
+               }
+            end
+         end
+      end
+      return old
+   end
+
    local visit_node: {string:VisitorCallbacks<Node,Type>} = {
       ["statements"] = {
          before = function()
@@ -3316,7 +3390,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                     table.insert(unknowns, { y = node.y, x = node.x, name = var.tk })
                   end
                end
-               add_var(var.tk, t)
+               add_var(var.tk, t, var.is_const)
             end
             node.type = { typename = "none" }
          end,
@@ -3326,6 +3400,9 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             local vals: {Type} = get_assignment_values(children[2], #children[1])
             local exps = flatten_list(vals)
             for i, var in ipairs(children[1]) do
+               if node.vars[i].is_const then
+                  table.insert(errors, { y = node.y, x = node.x, err = "cannot assign to <const> variable" })
+               end
                if var then
                   local val = exps[i] or NIL
                   assert_is_a(node.vars[i], val, var, {}, "assignment")
@@ -3413,65 +3490,73 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             node.type = {
                typename = "record",
             }
+            local is_record = false
+            local is_array = false
+            local is_map = false
             for _, child in ipairs(children) do
-               if child.typename == "kv" then
+               assert(child.typename == "table_item")
+               if child.kname then
+                  is_record = true
                   if not node.type.fields then
                      node.type.fields = {}
                      node.type.field_order = {}
                   end
-                  node.type.fields[child.k] = child.v
-                  table.insert(node.type.field_order, child.k)
-               elseif child.typename == "iv" then
-                  if not node.type.items then
-                     node.type.items = {}
-                  end
-                  node.type.items[tonumber(child.i)] = child.v
-                  if not node.type.elements then
-                     node.type.typename = "arrayrecord"
-                     node.type.elements = assert(child.v)
-                  else
-                     if not is_a(child.v, node.type.elements) then
-                        node.type.elements = {
-                           typename = "poly",
-                           poly = node.type.items,
-                        }
-                     end
-                  end
+                  node.type.fields[child.kname] = child.vtype
+                  table.insert(node.type.field_order, child.kname)
+               elseif child.ktype.typename == "number" then
+                  is_array = true
+                  node.type.elements = expand_type(node.type.elements, child.vtype)
+               else
+                  is_map = true
+                  node.type.keys = expand_type(node.type.keys, child.ktype)
+                  node.type.values = expand_type(node.type.values, child.vtype)
                end
             end
-            if not node.type.fields then
-               if node.type.elements then
-                  node.type.typename = "array"
+            if is_array and is_map then
+               node.type = UNKNOWN
+               table.insert(errors, { y = node.y, x = node.x, err = "cannot determine type of table literal" })
+            elseif is_record and is_array then
+               node.type.typename = "arrayrecord"
+            elseif is_record and is_map then
+               if node.type.keys.typename == "string" then
+                  node.type.typename = "map"
+                  for _, ftype in pairs(node.type.fields) do
+                     node.type.values = expand_type(node.type.values, ftype)
+                  end
+                  node.type.fields = nil
+                  node.type.field_order = nil
                else
-                  node.type.fields = {}
-                  node.type.field_order = {}
+                  node.type = UNKNOWN
+                  table.insert(errors, { y = node.y, x = node.x, err = "cannot determine type of table literal" })
                end
+            elseif is_array then
+               node.type.typename = "array"
+            elseif is_record then
+               node.type.typename = "record"
+            elseif is_map then
+               node.type.typename = "map"
+            else
+               -- TODO magic handling for {}
+               node.type.typename = "record"
+               node.type.fields = {}
+               node.type.field_order = {}
             end
          end,
       },
       ["table_item"] = {
          after = function(node: Node, children: {Type}): Type
-            local key = node.key.tk
+            local kname = node.key.conststr
+            local ktype = children[1]
             local vtype = children[2]
             if node.decltype then
                vtype = node.decltype
                assert_is_a(node.value, children[2], node.decltype, {}, "table item")
             end
-            if children[1].typename == "number" then
-               node.type = {
-                  ["typename"] = "iv",
-                  ["i"] = tonumber(key),
-                  ["v"] = vtype,
-               }
-               return
-            end
-            if node.key.kind == "string" then
-               key = key:sub(2,- 2)
-            end
             node.type = {
-               ["typename"] = "kv",
-               ["k"] = assert(key),
-               ["v"] = vtype,
+               typename = "table_item",
+               kname = kname,
+               ktype = ktype,
+               vtype = vtype,
             }
          end,
       },
@@ -3563,7 +3648,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                if node.e1.tk == "rawget" then
                   if #b == 2 then
                      if b[1].typename == "record" and node.e2[2].kind == "string" then
-                        node.type = match_record_key(node, b[1], { typename = "string", tk = node.e2[2].tk:sub(2, -2) }, b[1])
+                        node.type = match_record_key(node, b[1], { typename = "string", tk = assert(node.e2[2].conststr) }, b[1])
                      else
                         do_index(node, b[1], b[2])
                      end
@@ -3574,7 +3659,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                elseif node.e1.tk == "require" then
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
-                        local module_name = node.e2[1].tk:sub(2, -2)
+                        local module_name = assert(node.e2[1].conststr)
                         node.type = require_module(module_name)
                         if not node.type then
                            node.type = BOOLEAN
@@ -3678,7 +3763,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       },
       ["variable"] = {
          after = function(node: Node, children: {Type}): Type
-            node.type = find_var(node.tk)
+            node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
                node.type = { typename = "unknown" }
                if lax then
