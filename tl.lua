@@ -4514,4 +4514,40 @@ function tl.process(filename, modules)
    result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua, modules)
    return result
 end
+local function tl_package_loader(module_name)
+   local found, fd, tried = search_module(module_name)
+   io.stderr:write(module_name .. "\n")
+   if found then
+      local input = fd:read("*a")
+      local t1 = os.clock()
+      local tokens = tl.lex(input)
+      io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1))
+      t1 = os.clock()
+      local errs = {}
+      local i, program = tl.parse_program(tokens, errs)
+      io.stderr:write(string.format("parse\t%.4f\n", os.clock() - t1))
+      t1 = os.clock()
+      local input2 = tl.pretty_print_ast(program)
+      io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1))
+      t1 = os.clock()
+      local tokens2 = tl.lex(input2)
+      io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1))
+      t1 = os.clock()
+      local loaded = load(tl.pretty_print_tokens(tokens2))
+      io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1))
+      t1 = os.clock()
+      if loaded then
+         return function ()
+            io.stderr:write("\n")
+            return loaded()
+         end
+      end
+   end
+   return table.concat(tried, "\n\t")
+end
+if package.searchers then
+   table.insert(package.searchers,1, tl_package_loader)
+else
+   table.insert(package.loaders,1, tl_package_loader)
+end
 return tl
