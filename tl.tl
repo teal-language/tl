@@ -502,6 +502,8 @@ local Type = record
    typename: string
    tk: string
 
+   yend: number
+
    -- vararg
    is_va: boolean
 
@@ -555,6 +557,8 @@ local Node = record
    x: number
    tk: string
    kind: string
+
+   yend: number
 
    key: Node
    value: Node
@@ -700,6 +704,7 @@ local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: 
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
+         (list as Node).yend = tokens[i].y
          break
       end
       local item: `T
@@ -802,12 +807,14 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
       if tokens[i].tk == "}" then
          decl.typename = "array"
          decl.elements = t
+         decl.yend = tokens[i].y
          i = verify_tk(tokens, i, errs, "}")
       elseif tokens[i].tk == ":" then
          decl.typename = "map"
          i = i + 1
          decl.keys = t
          i, decl.values = parse_type(tokens, i, errs)
+         decl.yend = tokens[i].y
          i = verify_tk(tokens, i, errs, "}")
       end
       return i, decl
@@ -841,6 +848,7 @@ local function parse_function_args_rets_body(tokens: {Token}, i: number, errs: {
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.rets = parse_type_list(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1246,19 +1254,20 @@ local function parse_if(tokens: {Token}, i: number, errs: {ParseError}): number,
    i, node.thenpart = parse_statements(tokens, i, errs)
    node.elseifs = {}
    while tokens[i].tk == "elseif" do
-      i = i + 1
       local subnode = new_node(tokens, i, "elseif")
+      i = i + 1
       i, subnode.exp = parse_expression(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "then")
       i, subnode.thenpart = parse_statements(tokens, i, errs)
       table.insert(node.elseifs, subnode)
    end
    if tokens[i].tk == "else" then
-      i = i + 1
       local subnode = new_node(tokens, i, "else")
+      i = i + 1
       i, subnode.elsepart = parse_statements(tokens, i, errs)
       node.elsepart = subnode
    end
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1269,6 +1278,7 @@ local function parse_while(tokens: {Token}, i: number, errs: {ParseError}): numb
    i, node.exp = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1287,6 +1297,7 @@ local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): num
    end
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1306,6 +1317,7 @@ local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): numb
    end
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1322,6 +1334,7 @@ local function parse_repeat(tokens: {Token}, i: number, errs: {ParseError}): num
    local node = new_node(tokens, i, "repeat")
    i = verify_tk(tokens, i, errs, "repeat")
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "until")
    i, node.exp = parse_expression(tokens, i, errs)
    return i, node
@@ -1331,6 +1344,7 @@ local function parse_do(tokens: {Token}, i: number, errs: {ParseError}): number,
    local node = new_node(tokens, i, "do")
    i = verify_tk(tokens, i, errs, "do")
    i, node.body = parse_statements(tokens, i, errs)
+   node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
    return i, node
 end
@@ -1379,6 +1393,7 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
             local t: Type
             i, t = parse_type(tokens, i, errs)
             if tokens[i].tk == "}" then
+               node.yend = tokens[i].y
                i = verify_tk(tokens, i, errs, "}")
             else
                return fail(tokens, i, errs, "expected an array declaration")
@@ -1401,6 +1416,7 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
             table.insert(def.field_order, v.tk)
          end
       end
+      node.yend = tokens[i].y
       i = verify_tk(tokens, i, errs, "end")
       return i, node
    elseif tokens[i].tk == "functiontype" then
@@ -1709,378 +1725,417 @@ end
 -- Pretty-print AST
 --------------------------------------------------------------------------------
 
-local tight_op: {string:boolean} = {
-   ["."] = true,
-   ["-"] = true,
-   ["~"] = true,
-   ["#"] = true,
-   [":"] = true,
+local tight_op: {number:{string:boolean}} = {
+   [1] = {
+      ["-"] = true,
+      ["~"] = true,
+      ["#"] = true,
+   },
+   [2] = {
+      ["."] = true,
+      [":"] = true,
+   },
 }
 
-local spaced_op: {string:boolean} = {
-   ["not"] = true,
-   ["or"] = true,
-   ["and"] = true,
-   ["<"] = true,
-   [">"] = true,
-   ["<="] = true,
-   [">="] = true,
-   ["~="] = true,
-   ["=="] = true,
-   ["|"] = true,
-   ["~"] = true,
-   ["&"] = true,
-   ["<<"] = true,
-   [">>"] = true,
-   [".."] = true,
-   ["+"] = true,
-   ["-"] = true,
-   ["*"] = true,
-   ["/"] = true,
-   ["//"] = true,
-   ["%"] = true,
-   ["^"] = true,
+local spaced_op: {number:{string:boolean}} = {
+   [1] = {
+      ["not"] = true,
+   },
+   [2] = {
+      ["or"] = true,
+      ["and"] = true,
+      ["<"] = true,
+      [">"] = true,
+      ["<="] = true,
+      [">="] = true,
+      ["~="] = true,
+      ["=="] = true,
+      ["|"] = true,
+      ["~"] = true,
+      ["&"] = true,
+      ["<<"] = true,
+      [">>"] = true,
+      [".."] = true,
+      ["+"] = true,
+      ["-"] = true,
+      ["*"] = true,
+      ["/"] = true,
+      ["//"] = true,
+      ["%"] = true,
+      ["^"] = true,
+   },
 }
 
 function tl.pretty_print_ast(ast: Node): string
    local indent = 0
 
-   local visit_node: {string:VisitorCallbacks<Node, string>} = {
+   local Output = record
+      {string}
+      y: number
+      h: number
+   end
+
+   local function add(out: Output, s: string)
+      table.insert(out, s)
+   end
+
+   local function add_string(out: Output, s: string)
+      table.insert(out, s)
+      if string.find(s, "\n", 1, true) then
+         for nl in s:gmatch("\n") do
+            out.h = out.h + 1
+         end
+      end
+   end
+
+   local function add_child(out: Output, child: Output, space: string, indent: number): number
+      if child.y > out.y + out.h then
+         while child.y > out.y + out.h do
+            table.insert(out, "\n")
+            out.h = out.h + 1
+         end
+      else
+         if space then
+            table.insert(out, space)
+            indent = nil
+         end
+      end
+      if indent then
+         table.insert(out, ("   "):rep(indent))
+      end
+      if table.move then
+         table.move(child, 1, #child, #out + 1, out)
+      else
+         for _, s in ipairs(child) do
+            table.insert(out, s)
+         end
+      end
+      out.h = out.h + child.h
+   end
+
+   local visit_node: {string:VisitorCallbacks<Node, Output>} = {
       ["statements"] = {
-         after = function(node: Node, children: {string}): string
-            local out: {string} = {}
-            for _, child in ipairs(children) do
-               table.insert(out, ("   "):rep(indent))
-               table.insert(out, child)
-               table.insert(out, "\n")
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            local space: string
+            for i, child in ipairs(children) do
+               add_child(out, children[i], space, indent)
+               space = "; "
             end
-            if #children == 0 then
-               table.insert(out, "\n")
-            end
-            return table.concat(out)
+            return out
          end
       },
       ["local_declaration"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "local ")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "local")
+            add_child(out, children[1], " ")
             if children[2] then
-               table.insert(out, " = ")
-               table.insert(out, children[2])
+               table.insert(out, " =")
+               add_child(out, children[2], " ")
             end
-            return table.concat(out)
+            return out
          end,
       },
       ["assignment"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, children[1])
-            table.insert(out, " = ")
-            table.insert(out, children[2])
-            return table.concat(out)
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            add_child(out, children[1])
+            table.insert(out, " =")
+            add_child(out, children[2], " ")
+            return out
          end,
       },
       ["if"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "if ")
-            table.insert(out, children[1])
-            table.insert(out, " then\n")
-            table.insert(out, children[2])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "if")
+            add_child(out, children[1], " ")
+            table.insert(out, " then")
+            add_child(out, children[2], " ")
             indent = indent - 1
             for i = 3, #children do
-               table.insert(out, ("   "):rep(indent))
-               table.insert(out, children[i])
+               add_child(out, children[i], " ", indent)
             end
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["while"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "while ")
-            table.insert(out, children[1])
-            table.insert(out, " do\n")
-            table.insert(out, children[2])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "while")
+            add_child(out, children[1], " ")
+            table.insert(out, " do")
+            add_child(out, children[2], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["repeat"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "repeat\n")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "repeat")
+            add_child(out, children[1], " ")
             indent = indent - 1
             table.insert(out, ("   "):rep(indent))
-            table.insert(out, "until ")
-            table.insert(out, children[2])
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
+            add_child(out, children[2])
+            return out
          end,
       },
       ["do"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "do\n")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "do")
+            add_child(out, children[1], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["forin"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "for ")
-            table.insert(out, children[1])
-            table.insert(out, " in ")
-            table.insert(out, children[2])
-            table.insert(out, " do\n")
-            table.insert(out, children[3])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "for")
+            add_child(out, children[1], " ")
+            table.insert(out, " in")
+            add_child(out, children[2], " ")
+            table.insert(out, " do")
+            add_child(out, children[3], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["fornum"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "for ")
-            table.insert(out, children[1])
-            table.insert(out, " = ")
-            table.insert(out, children[2])
-            table.insert(out, ", ")
-            table.insert(out, children[3])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "for")
+            add_child(out, children[1], " ")
+            table.insert(out, " =")
+            add_child(out, children[2], " ")
+            table.insert(out, ",")
+            add_child(out, children[3], " ")
             if children[4] then
-               table.insert(out, ", ")
-               table.insert(out, children[4])
+               table.insert(out, ",")
+               add_child(out, children[4], " ")
             end
-            table.insert(out, " do\n")
-            table.insert(out, children[5])
+            table.insert(out, " do")
+            add_child(out, children[5], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["return"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "return ")
-            table.insert(out, children[1])
-            return table.concat(out)
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "return")
+            add_child(out, children[1], " ")
+            return out
          end,
       },
       ["break"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
             table.insert(out, "break")
-            return table.concat(out)
+            return out
          end,
       },
       ["elseif"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "elseif ")
-            table.insert(out, children[1])
-            table.insert(out, " then\n")
-            table.insert(out, children[2])
-            return table.concat(out)
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "elseif")
+            add_child(out, children[1], " ")
+            table.insert(out, " then")
+            add_child(out, children[2], " ")
+            return out
          end,
       },
       ["else"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "else\n")
-            table.insert(out, children[1])
-            return table.concat(out)
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "else")
+            add_child(out, children[1], " ")
+            return out
          end,
       },
       ["variables"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            local space: string
             for i, child in ipairs(children) do
                if i > 1 then
-                  table.insert(out, ", ")
+                  table.insert(out, ",")
+                  space = " "
                end
-               table.insert(out, tostring(child))
+               add_child(out, child, space)
             end
-            return table.concat(out)
+            return out
          end,
       },
       ["table_literal"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
             if #children == 0 then
                indent = indent - 1
-               return "{}"
+               table.insert(out, "{}")
+               return out
             end
-            table.insert(out, "{\n")
-            for _, child in ipairs(children) do
-               table.insert(out, ("   "):rep(indent))
-               table.insert(out, child)
-               table.insert(out, "\n")
+            table.insert(out, "{")
+            for i, child in ipairs(children) do
+               add_child(out, child, " ", child.y ~= node.y and indent)
+               table.insert(out, ",")
             end
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "}")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
+            return out
          end,
       },
       ["table_item"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
             table.insert(out, "[")
-            table.insert(out, children[1])
+            add_child(out, children[1])
             table.insert(out, "] = ")
-            table.insert(out, children[2])
-            table.insert(out, ", ")
-            return table.concat(out)
+            add_child(out, children[2])
+            return out
          end,
       },
       ["local_function"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "local function ")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "local function")
+            add_child(out, children[1], " ")
             table.insert(out, "(")
-            table.insert(out, children[2])
-            table.insert(out, ")\n")
-            table.insert(out, children[4])
+            add_child(out, children[2])
+            table.insert(out, ")")
+            add_child(out, children[4], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["global_function"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "function ")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "function")
+            add_child(out, children[1], " ")
             table.insert(out, "(")
-            table.insert(out, children[2])
-            table.insert(out, ")\n")
-            table.insert(out, children[4])
+            add_child(out, children[2])
+            table.insert(out, ")")
+            add_child(out, children[4], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["record_function"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, "function ")
-            table.insert(out, children[1])
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "function")
+            add_child(out, children[1], " ")
             table.insert(out, node.is_method and ":" or ".")
-            table.insert(out, children[2])
+            add_child(out, children[2])
             table.insert(out, "(")
-            table.insert(out, children[3])
-            table.insert(out, ")\n")
-            table.insert(out, children[5])
+            add_child(out, children[3])
+            table.insert(out, ")")
+            add_child(out, children[5], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["function"] = {
          before = function()
             indent = indent + 1
          end,
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
             table.insert(out, "function(")
-            table.insert(out, children[1])
-            table.insert(out, ")\n")
-            table.insert(out, children[3])
+            add_child(out, children[1])
+            table.insert(out, ")")
+            add_child(out, children[3], " ")
             indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
-            table.insert(out, "end")
-            return table.concat(out)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
          end,
       },
       ["cast"] = {
       },
       ["op"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
-               table.insert(out, children[1])
+               add_child(out, children[1])
                table.insert(out, "(")
-               table.insert(out, children[3])
+               add_child(out, children[3])
                table.insert(out, ")")
             elseif node.op.op == "@index" then
-               table.insert(out, children[1])
+               add_child(out, children[1])
                table.insert(out, "[")
-               table.insert(out, children[3])
+               add_child(out, children[3])
                table.insert(out, "]")
             elseif node.op.op == "as" then
-               table.insert(out, children[1])
-            elseif tight_op[node.op.op] or spaced_op[node.op.op] then
+               add_child(out, children[1])
+            elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
                if node.op.arity == 1 then
                   table.insert(out, node.op.op)
-                  if spaced_op[node.op.op] then
+                  if spaced_op[1][node.op.op] then
                      table.insert(out, " ")
                   end
                end
                if children[2] and node.op.prec > tonumber(children[2]) then
                   table.insert(out, "(")
                end
-               table.insert(out, children[1])
+               add_child(out, children[1])
                if children[2] and node.op.prec > tonumber(children[2]) then
                   table.insert(out, ")")
                end
                if node.op.arity == 2 then
-                  if spaced_op[node.op.op] then
+                  if spaced_op[2][node.op.op] then
                      table.insert(out, " ")
                   end
                   table.insert(out, node.op.op)
-                  if spaced_op[node.op.op] then
+                  if spaced_op[2][node.op.op] then
                      table.insert(out, " ")
                   end
                   if children[4] and node.op.prec > tonumber(children[4]) then
                      table.insert(out, "(")
                   end
-                  table.insert(out, children[3])
+                  add_child(out, children[3])
                   if children[4] and node.op.prec > tonumber(children[4]) then
                      table.insert(out, ")")
                   end
@@ -2088,27 +2143,30 @@ function tl.pretty_print_ast(ast: Node): string
             else
                error("unknown node op " .. node.op.op)
             end
-            return table.concat(out)
+            return out
          end,
       },
       ["variable"] = {
-         after = function(node: Node, children: {string}): string
-            local out = {}
-            table.insert(out, node.tk)
-            return table.concat(out)
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            add_string(out, node.tk)
+            return out
          end,
       },
       ["newtype"] = {
-         after = function(node: Node, children: {string}): string
-            return "{}"
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "{}")
+            return out
          end,
       },
    }
 
-   local visit_type: {string:VisitorCallbacks<Type, string>} = {
+   local visit_type: {string:VisitorCallbacks<Type, Output>} = {
       ["type_list"] = {
-         after = function(typ: Type, children: {string}): string
-            return ""
+         after = function(typ: Type, children: {Output}): Output
+            local out: Output = { y = typ.y, h = 0 }
+            return out
          end,
       },
    }
@@ -2126,7 +2184,8 @@ function tl.pretty_print_ast(ast: Node): string
 
    visit_type["typedecl"] = visit_type["type_list"]
 
-   return recurse_node(ast, visit_node, visit_type)
+   local out = recurse_node(ast, visit_node, visit_type)
+   return table.concat(out)
 end
 
 --------------------------------------------------------------------------------
@@ -2543,6 +2602,13 @@ local standard_library: {string:Type} = {
          ["unpack"] = { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = {
             { typename = "typevar", typevar = "`a", is_va = true }
          } },
+         ["move"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
+               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
+            }
+         },
          ["insert"] = {
             typename = "poly",
             poly = {
@@ -3890,24 +3956,30 @@ end
 
 local function tl_package_loader(module_name: string): any
    local found, fd, tried = search_module(module_name)
-io.stderr:write(module_name .. "\n")
+--io.stderr:write(module_name .. "\n")
    if found then
       local input = fd:read("*a")
-local t1 = os.clock()
-      local tokens = tl.lex(input)
-io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+--local t1 = os.clock()
+      local tokens: {Token}
+--for i = 1, 100 do
+      tokens = tl.lex(input)
+--end
+--io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+      local i, program: number, Node
+--for _ = 1, 100 do
       local errs = {}
-      local i, program = tl.parse_program(tokens, errs)
-io.stderr:write(string.format("parse\t%.4f\n", os.clock() - t1)); t1 = os.clock();
-      local input2 = tl.pretty_print_ast(program)
-io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1)); t1 = os.clock();
-      local tokens2 = tl.lex(input2)
-io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1)); t1 = os.clock();
-      local loaded = load(tl.pretty_print_tokens(tokens2))
-io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+      i, program = tl.parse_program(tokens, errs)
+--end
+--io.stderr:write(string.format("parse\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+      local code: string
+--for i = 1, 100 do
+      code = tl.pretty_print_ast(program)
+--end
+--io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+      local loaded = load(code)
+--io.stderr:write(string.format("load\t%.4f\n", os.clock() - t1)); t1 = os.clock();
       if loaded then
          return function(): any
-io.stderr:write("\n")
             return loaded()
          end
       end
