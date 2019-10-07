@@ -1148,6 +1148,7 @@ do
             local arg
             if tokens[i].kind == "string" then
                arg = new_node(tokens, i)
+               arg.conststr = unquote(tokens[i].tk)
                i = i + 1
             else
                i, arg = parse_table_literal(tokens, i, errs)
