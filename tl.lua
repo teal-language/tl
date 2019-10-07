@@ -1804,14 +1804,17 @@ function tl.pretty_print_ast(ast)
       if indent then
          table.insert(out, ("   "):rep(indent))
       end
-      if table.move then
-         table.move(child, 1, #child, #out + 1, out)
-      else
-         for _, s in ipairs(child) do
-            table.insert(out, s)
+      table.insert(out, child)
+      out.h = out.h + child.h
+   end
+
+   local function concat_output(out)
+      for i, s in ipairs(out) do
+         if type(s) == "table" then
+            out[i] = concat_output(s)
          end
       end
-      out.h = out.h + child.h
+      return table.concat(out)
    end
 
    local visit_node = {
@@ -2177,7 +2180,7 @@ function tl.pretty_print_ast(ast)
    visit_type["typedecl"] = visit_type["type_list"]
 
    local out = recurse_node(ast, visit_node, visit_type)
-   return table.concat(out)
+   return concat_output(out)
 end
 
 
