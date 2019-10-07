@@ -784,8 +784,7 @@ local function parse_table_literal(tokens: {Token}, i: number, errs: {ParseError
 end
 
 local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, parse_item: ParseItem<`T>): number, {`T}
-   local item
-   i, item = parse_item(tokens, i, errs)
+   local i, item = parse_item(tokens, i, errs)
    table.insert(list, item)
    if tokens[i].tk == "," then
       while tokens[i].tk == "," do
@@ -3419,7 +3418,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             if not ff then
                ff = f
             else
-               local match, why_not = same_type(f, ff, typevars)
+               local match = same_type(f, ff, typevars)
                if not match then
                   ff = nil
                   break
