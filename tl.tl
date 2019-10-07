@@ -45,6 +45,58 @@ local Token = record
    kind: string
 end
 
+local lex_word_start: {string:boolean} = {}
+for c = string.byte("a"), string.byte("z") do
+   lex_word_start[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("Z") do
+   lex_word_start[string.char(c)] = true
+end
+lex_word_start["_"] = true
+
+local lex_word: {string:boolean} = {}
+for c = string.byte("a"), string.byte("z") do
+   lex_word[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("Z") do
+   lex_word[string.char(c)] = true
+end
+for c = string.byte("0"), string.byte("9") do
+   lex_word[string.char(c)] = true
+end
+lex_word["_"] = true
+
+local lex_decimal_start: {string:boolean} = {}
+for c = string.byte("1"), string.byte("9") do
+   lex_decimal_start[string.char(c)] = true
+end
+
+local lex_decimals: {string:boolean} = {}
+for c = string.byte("0"), string.byte("9") do
+   lex_decimals[string.char(c)] = true
+end
+
+local lex_hexadecimals: {string:boolean} = {}
+for c = string.byte("0"), string.byte("9") do
+   lex_hexadecimals[string.char(c)] = true
+end
+for c = string.byte("a"), string.byte("f") do
+   lex_hexadecimals[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("F") do
+   lex_hexadecimals[string.char(c)] = true
+end
+
+local lex_char_symbols: {string:boolean} = {}
+for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", ":", "#", "`"}) do
+   lex_char_symbols[c] = true
+end
+
+local lex_op_start: {string:boolean} = {}
+for _, c in ipairs({"+", "*", "/", "|", "&", "%", "^"}) do
+   lex_op_start[c] = true
+end
+
 function tl.lex(input: string): {Token}
    local tokens: {Token} = {}
 
@@ -80,9 +132,9 @@ function tl.lex(input: string): {Token}
    while i <= #input do
       if fwd then
          i = i + 1
-      end
-      if i > #input then
-         break
+         if i > #input then
+            break
+         end
       end
 
       local c: string = input:sub(i, i)
@@ -111,13 +163,13 @@ function tl.lex(input: string): {Token}
          elseif c == "'" then
             state = "singlequote_string"
             begin_token()
-         elseif c:match("[a-zA-Z_]") then
+         elseif lex_word_start[c] then
             state = "word"
             begin_token()
          elseif c == "0" then
             state = "decimal_or_hex"
             begin_token()
-         elseif c:match("[1-9]") then
+         elseif lex_decimal_start[c] then
             state = "decimal_number"
             begin_token()
          elseif c == "<" then
@@ -126,16 +178,16 @@ function tl.lex(input: string): {Token}
          elseif c == ">" then
             state = "gt"
             begin_token()
-         elseif c:match("[=~]") then
+         elseif c == "=" or c == "~" then
             state = "maybeequals"
             begin_token()
          elseif c == "[" then
             state = "maybelongstring"
             begin_token()
-         elseif c:match("[][(){},:#`]") then
+         elseif lex_char_symbols[c] then
             begin_token()
             end_token(c)
-         elseif c:match("[+*/|&%%^]") then
+         elseif lex_op_start[c] then
             begin_token()
             end_token("op")
          end
@@ -256,10 +308,9 @@ function tl.lex(input: string): {Token}
          if c == "." then
             end_token("op")
             state = "maybedotdotdot"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "decimal_float"
          else
-            -- TODO floating point
             end_token(".", i - 1)
             fwd = false
             state = "any"
@@ -278,7 +329,7 @@ function tl.lex(input: string): {Token}
             state = "any"
          end
       elseif state == "word" then
-         if not c:match("[a-zA-Z0-9_]") then
+         if not lex_word[c] then
             end_token("word", i - 1)
             fwd = false
             state = "any"
@@ -289,7 +340,7 @@ function tl.lex(input: string): {Token}
             state = "hex_number"
          elseif c == "e" or c == "E" then
             state = "power_sign"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "decimal_number"
          elseif c == "." then
             state = "decimal_float"
@@ -303,7 +354,7 @@ function tl.lex(input: string): {Token}
             state = "hex_float"
          elseif c == "p" or c == "P" then
             state = "power_sign"
-         elseif not c:match("[0-9a-fA-F]") then
+         elseif not lex_hexadecimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -311,7 +362,7 @@ function tl.lex(input: string): {Token}
       elseif state == "hex_float" then
          if c == "p" or c == "P" then
             state = "power_sign"
-         elseif not c:match("[0-9a-fA-F]") then
+         elseif not lex_hexadecimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -321,7 +372,7 @@ function tl.lex(input: string): {Token}
             state = "decimal_float"
          elseif c == "e" or c == "E" then
             state = "power_sign"
-         elseif not c:match("[0-9]") then
+         elseif not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -329,7 +380,7 @@ function tl.lex(input: string): {Token}
       elseif state == "decimal_float" then
          if c == "e" or c == "E" then
             state = "power_sign"
-         elseif not c:match("[0-9]") then
+         elseif not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -337,13 +388,13 @@ function tl.lex(input: string): {Token}
       elseif state == "power_sign" then
          if c == "-" or c == "+" then
             state = "power"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "power"
          else
             state = "any" -- FIXME report malformed number
          end
       elseif state == "power" then
-         if not c:match("[0-9]") then
+         if not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -2688,6 +2739,7 @@ local standard_library: {string:Type} = {
             }
          },
          ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
+         ["byte"] = { typename = "function", args = { STRING }, rets = { NUMBER } },
          ["format"] = { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
       },
    },

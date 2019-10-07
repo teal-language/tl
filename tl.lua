@@ -45,6 +45,58 @@ local Token = {}
 
 
 
+local lex_word_start = {}
+for c = string.byte("a"), string.byte("z") do
+   lex_word_start[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("Z") do
+   lex_word_start[string.char(c)] = true
+end
+lex_word_start["_"] = true
+
+local lex_word = {}
+for c = string.byte("a"), string.byte("z") do
+   lex_word[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("Z") do
+   lex_word[string.char(c)] = true
+end
+for c = string.byte("0"), string.byte("9") do
+   lex_word[string.char(c)] = true
+end
+lex_word["_"] = true
+
+local lex_decimal_start = {}
+for c = string.byte("1"), string.byte("9") do
+   lex_decimal_start[string.char(c)] = true
+end
+
+local lex_decimals = {}
+for c = string.byte("0"), string.byte("9") do
+   lex_decimals[string.char(c)] = true
+end
+
+local lex_hexadecimals = {}
+for c = string.byte("0"), string.byte("9") do
+   lex_hexadecimals[string.char(c)] = true
+end
+for c = string.byte("a"), string.byte("f") do
+   lex_hexadecimals[string.char(c)] = true
+end
+for c = string.byte("A"), string.byte("F") do
+   lex_hexadecimals[string.char(c)] = true
+end
+
+local lex_char_symbols = {}
+for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = ":", [9] = "#", [10] = "`", }) do
+   lex_char_symbols[c] = true
+end
+
+local lex_op_start = {}
+for _, c in ipairs({ [1] = "+", [2] = "*", [3] = "/", [4] = "|", [5] = "&", [6] = "%", [7] = "^", }) do
+   lex_op_start[c] = true
+end
+
 function tl.lex(input)
    local tokens = {}
 
@@ -80,9 +132,9 @@ function tl.lex(input)
    while i <= #input do
       if fwd then
          i = i + 1
-      end
-      if i > #input then
-         break
+         if i > #input then
+            break
+         end
       end
 
       local c = input:sub(i, i)
@@ -111,13 +163,13 @@ function tl.lex(input)
          elseif c == "'" then
             state = "singlequote_string"
             begin_token()
-         elseif c:match("[a-zA-Z_]") then
+         elseif lex_word_start[c] then
             state = "word"
             begin_token()
          elseif c == "0" then
             state = "decimal_or_hex"
             begin_token()
-         elseif c:match("[1-9]") then
+         elseif lex_decimal_start[c] then
             state = "decimal_number"
             begin_token()
          elseif c == "<" then
@@ -126,16 +178,16 @@ function tl.lex(input)
          elseif c == ">" then
             state = "gt"
             begin_token()
-         elseif c:match("[=~]") then
+         elseif c == "=" or c == "~" then
             state = "maybeequals"
             begin_token()
          elseif c == "[" then
             state = "maybelongstring"
             begin_token()
-         elseif c:match("[][(){},:#`]") then
+         elseif lex_char_symbols[c] then
             begin_token()
             end_token(c)
-         elseif c:match("[+*/|&%%^]") then
+         elseif lex_op_start[c] then
             begin_token()
             end_token("op")
          end
@@ -256,10 +308,9 @@ function tl.lex(input)
          if c == "." then
             end_token("op")
             state = "maybedotdotdot"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "decimal_float"
          else
-
             end_token(".", i - 1)
             fwd = false
             state = "any"
@@ -278,7 +329,7 @@ function tl.lex(input)
             state = "any"
          end
       elseif state == "word" then
-         if not c:match("[a-zA-Z0-9_]") then
+         if not lex_word[c] then
             end_token("word", i - 1)
             fwd = false
             state = "any"
@@ -289,7 +340,7 @@ function tl.lex(input)
             state = "hex_number"
          elseif c == "e" or c == "E" then
             state = "power_sign"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "decimal_number"
          elseif c == "." then
             state = "decimal_float"
@@ -303,7 +354,7 @@ function tl.lex(input)
             state = "hex_float"
          elseif c == "p" or c == "P" then
             state = "power_sign"
-         elseif not c:match("[0-9a-fA-F]") then
+         elseif not lex_hexadecimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -311,7 +362,7 @@ function tl.lex(input)
       elseif state == "hex_float" then
          if c == "p" or c == "P" then
             state = "power_sign"
-         elseif not c:match("[0-9a-fA-F]") then
+         elseif not lex_hexadecimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -321,7 +372,7 @@ function tl.lex(input)
             state = "decimal_float"
          elseif c == "e" or c == "E" then
             state = "power_sign"
-         elseif not c:match("[0-9]") then
+         elseif not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -329,7 +380,7 @@ function tl.lex(input)
       elseif state == "decimal_float" then
          if c == "e" or c == "E" then
             state = "power_sign"
-         elseif not c:match("[0-9]") then
+         elseif not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -337,13 +388,13 @@ function tl.lex(input)
       elseif state == "power_sign" then
          if c == "-" or c == "+" then
             state = "power"
-         elseif c:match("[0-9]") then
+         elseif lex_decimals[c] then
             state = "power"
          else
             state = "any"
          end
       elseif state == "power" then
-         if not c:match("[0-9]") then
+         if not lex_decimals[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -2688,6 +2739,7 @@ local standard_library = {
             },
          },
          ["char"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["byte"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
          ["format"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = STRING, }, },
       },
    },
