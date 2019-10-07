@@ -173,6 +173,27 @@ describe("generic function", function()
       assert.same(1, #errors)
       assert.match("boolean is not a `T", errors[1].err, 1, true)
    end)
+   it("will catch if argument value does not match the typevar", function()
+      -- fail
+      local tokens = tl.lex([[
+         local Output = record
+            {string}
+            x: number
+         end
+
+         local function insert(list: {`a}, item: `a)
+            table.insert(list, item)
+         end
+
+         local out: Output = { x = 1 }
+         local out2: Output = { x = 2 }
+         insert(out, out2)
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(1, #errors)
+      assert.match("Output is not a string", errors[1].err, 1, true)
+   end)
    it("will catch if resolved typevar does not match", function()
       -- fail
       local tokens = tl.lex([[

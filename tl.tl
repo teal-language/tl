@@ -2341,7 +2341,34 @@ local binop_types: {string:{string:{string:Type}}} = {
    },
 }
 
-local function show_type(t: Type): string
+local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Type:boolean}): Type
+   has_cycle = has_cycle or {}
+   if has_cycle[t] then
+      error("HAS CYCLE IN TYPE " .. inspect(t))
+   end
+   has_cycle[t] = true
+   if t.typename == "typevar" then
+      if not typevars[t.typevar] then
+         return t -- leave it unresolved
+      end
+      return typevars[t.typevar]
+   end
+   local copy: {string:Type} = {}
+   for k, v in pairs(t as {string:Type}) do
+      if type(v) == "table" and k ~= "type" then
+         copy[k] = resolve_typevars(v, typevars, has_cycle)
+      else
+         copy[k] = v
+      end
+   end
+   has_cycle[t] = nil
+   return copy as Type
+end
+
+local function show_type(t: Type, typevars: {string:Type}): string
+   if typevars then
+      t = resolve_typevars(t, typevars)
+   end
    if t.typename == "nominal" then
       if t.typevals then
          local out = { t.name, "<" }
@@ -2604,8 +2631,8 @@ local standard_library: {string:Type} = {
          ["insert"] = {
             typename = "poly",
             poly = {
-               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ANY }, rets = {} },
-               { typename = "function", args = { ARRAY_OF_ALPHA, ANY }, rets = {} },
+               { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+               { typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
             }
          },
          ["remove"] = {
@@ -2765,30 +2792,6 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
          return NIL
       end
       return t
-   end
-
-   local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Type:boolean}): Type
-      has_cycle = has_cycle or {}
-      if has_cycle[t] then
-         error("HAS CYCLE IN TYPE " .. inspect(t))
-      end
-      has_cycle[t] = true
-      if t.typename == "typevar" then
-         if not typevars[t.typevar] then
-            return t -- leave it unresolved
-         end
-         return typevars[t.typevar]
-      end
-      local copy: {string:Type} = {}
-      for k, v in pairs(t as {string:Type}) do
-         if type(v) == "table" and k ~= "type" then
-            copy[k] = resolve_typevars(v, typevars, has_cycle)
-         else
-            copy[k] = v
-         end
-      end
-      has_cycle[t] = nil
-      return copy as Type
    end
 
    local function resolve_nominal(t: Type, typevars: {string:Type}): Type
@@ -3100,14 +3103,14 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
             end
             if not lax then
                ok = false
-               table.insert(errs, { y = node.y, x = node.x, err = "error in argument " .. (is_method and a-1 or a) .. ": missing argument of type " .. show_type(farg) })
+               table.insert(errs, { y = node.y, x = node.x, err = "error in argument " .. (is_method and a-1 or a) .. ": missing argument of type " .. show_type(farg, typevars) })
             end
          else
             local matches, why_not = is_a(arg, farg, typevars)
             if not matches then
                errs = errs or {}
                local at = node.e2 and node.e2[a] or node
-               table.insert(errs, { y = at.y, x = at.x, err = "error in argument " .. (is_method and a-1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg) .. (why_not and ": " .. why_not or "") })
+               table.insert(errs, { y = at.y, x = at.x, err = "error in argument " .. (is_method and a-1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or "") })
                ok = false
                break
             end

@@ -2341,7 +2341,34 @@ local binop_types = {
    },
 }
 
-local function show_type(t)
+local function resolve_typevars(t, typevars, has_cycle)
+   has_cycle = has_cycle or {}
+   if has_cycle[t] then
+      error("HAS CYCLE IN TYPE " .. inspect(t))
+   end
+   has_cycle[t] = true
+   if t.typename == "typevar" then
+      if not typevars[t.typevar] then
+         return t
+      end
+      return typevars[t.typevar]
+   end
+   local copy = {}
+   for k, v in pairs(t) do
+      if type(v) == "table" and k ~= "type" then
+         copy[k] = resolve_typevars(v, typevars, has_cycle)
+      else
+         copy[k] = v
+      end
+   end
+   has_cycle[t] = nil
+   return copy
+end
+
+local function show_type(t, typevars)
+   if typevars then
+      t = resolve_typevars(t, typevars)
+   end
    if t.typename == "nominal" then
       if t.typevals then
          local out = { [1] = t.name, [2] = "<", }
@@ -2604,8 +2631,8 @@ local standard_library = {
          ["insert"] = {
             ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ANY, }, ["rets"] = {}, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ANY, }, ["rets"] = {}, },
+               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
+               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, },
             },
          },
          ["remove"] = {
@@ -2765,30 +2792,6 @@ function tl.type_check(ast, lax, modules)
          return NIL
       end
       return t
-   end
-
-   local function resolve_typevars(t, typevars, has_cycle)
-      has_cycle = has_cycle or {}
-      if has_cycle[t] then
-         error("HAS CYCLE IN TYPE " .. inspect(t))
-      end
-      has_cycle[t] = true
-      if t.typename == "typevar" then
-         if not typevars[t.typevar] then
-            return t
-         end
-         return typevars[t.typevar]
-      end
-      local copy = {}
-      for k, v in pairs(t) do
-         if type(v) == "table" and k ~= "type" then
-            copy[k] = resolve_typevars(v, typevars, has_cycle)
-         else
-            copy[k] = v
-         end
-      end
-      has_cycle[t] = nil
-      return copy
    end
 
    local function resolve_nominal(t, typevars)
@@ -3100,14 +3103,14 @@ function tl.type_check(ast, lax, modules)
             end
             if not lax then
                ok = false
-               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": missing argument of type " .. show_type(farg), })
+               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": missing argument of type " .. show_type(farg, typevars), })
             end
          else
             local matches, why_not = is_a(arg, farg, typevars)
             if not matches then
                errs = errs or {}
                local at = node.e2 and node.e2[a] or node
-               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg) .. (why_not and ": " .. why_not or ""), })
+               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), })
                ok = false
                break
             end
