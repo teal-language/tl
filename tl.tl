@@ -1712,6 +1712,7 @@ local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node
           or ast.kind == "nil"
           or ast.kind == "..."
           or ast.kind == "boolean" then
+      -- no subtrees
    else
       if not ast.kind then
          error("wat: " .. inspect(ast))
@@ -2099,46 +2100,37 @@ function tl.pretty_print_ast(ast: Node): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
                table.insert(out, "(")
-               add_child(out, children[3])
+               add_child(out, children[3], "", indent)
                table.insert(out, ")")
             elseif node.op.op == "@index" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
                table.insert(out, "[")
-               add_child(out, children[3])
+               add_child(out, children[3], "", indent)
                table.insert(out, "]")
             elseif node.op.op == "as" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
             elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
+               local space = spaced_op[node.op.arity][node.op.op] and " " or ""
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(children[1], 1, "(")
+                  table.insert(children[1], ")")
+               end
                if node.op.arity == 1 then
                   table.insert(out, node.op.op)
-                  if spaced_op[1][node.op.op] then
-                     table.insert(out, " ")
-                  end
-               end
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, "(")
-               end
-               add_child(out, children[1])
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, ")")
-               end
-               if node.op.arity == 2 then
-                  if spaced_op[2][node.op.op] then
+                  add_child(out, children[1], space, indent)
+               elseif node.op.arity == 2 then
+                  add_child(out, children[1], "", indent)
+                  if space == " " then
                      table.insert(out, " ")
                   end
                   table.insert(out, node.op.op)
-                  if spaced_op[2][node.op.op] then
-                     table.insert(out, " ")
-                  end
                   if children[4] and node.op.prec > tonumber(children[4]) then
-                     table.insert(out, "(")
+                     table.insert(children[3], 1, "(")
+                     table.insert(children[3], ")")
                   end
-                  add_child(out, children[3])
-                  if children[4] and node.op.prec > tonumber(children[4]) then
-                     table.insert(out, ")")
-                  end
+                  add_child(out, children[3], space, indent)
                end
             else
                error("unknown node op " .. node.op.op)
@@ -2449,7 +2441,7 @@ local Result = record
    unknowns: {Unknown}
 end
 
-local function search_module(module_name: string): string, FILE, {string}
+function tl.search_module(module_name: string): string, FILE, {string}
    local found: string
    local fd: FILE
    local tried: {string} = {}
@@ -3396,7 +3388,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       end
       modules[module_name] = UNKNOWN
 
-      local found, fd, tried = search_module(module_name)
+      local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
          local result: Result = tl.process(found, modules)
@@ -3955,7 +3947,7 @@ function tl.process(filename: string, modules:{string:Type}): Result, string
 end
 
 local function tl_package_loader(module_name: string): any
-   local found, fd, tried = search_module(module_name)
+   local found, fd, tried = tl.search_module(module_name)
 --io.stderr:write(module_name .. "\n")
    if found then
       local input = fd:read("*a")
@@ -3987,11 +3979,11 @@ local function tl_package_loader(module_name: string): any
    return table.concat(tried, "\n\t")
 end
 
-if package.searchers then
-   table.insert(package.searchers, 1, tl_package_loader)
-else
-   table.insert(package.loaders, 1, tl_package_loader)
-end
+--if package.searchers then
+--   table.insert(package.searchers, 1, tl_package_loader)
+--else
+--   table.insert(package.loaders, 1, tl_package_loader)
+--end
 
 return tl
 

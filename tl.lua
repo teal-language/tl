@@ -786,9 +786,9 @@ local function parse_typeval_list(tokens, i, errs)
 end
 
 parse_type = function(tokens, i, errs)
-   if tokens[i].tk == "string" or 
-tokens[i].tk == "boolean" or 
-tokens[i].tk == "number" then
+   if tokens[i].tk == "string" or
+      tokens[i].tk == "boolean" or
+      tokens[i].tk == "number" then
       return i + 1, { ["kind"] = "typedecl", ["typename"] = tokens[i].tk, }
    elseif tokens[i].tk == "table" then
       return i + 1, {
@@ -1616,17 +1616,17 @@ local function recurse_node(ast, visit_node, visit_type)
  end
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
-   if ast.kind == "statements" or 
-ast.kind == "variables" or 
-ast.kind == "values" or 
-ast.kind == "argument_list" or 
-ast.kind == "expression_list" or 
-ast.kind == "table_literal" then
+   if ast.kind == "statements" or
+      ast.kind == "variables" or
+      ast.kind == "values" or
+      ast.kind == "argument_list" or
+      ast.kind == "expression_list" or
+      ast.kind == "table_literal" then
       for i, child in ipairs(ast) do
          xs[i] = recurse_node(child, visit_node, visit_type)
       end
-   elseif ast.kind == "local_declaration" or 
-ast.kind == "assignment" then
+   elseif ast.kind == "local_declaration" or
+      ast.kind == "assignment" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       if ast.exps then
          xs[2] = recurse_node(ast.exps, visit_node, visit_type)
@@ -1676,8 +1676,8 @@ ast.kind == "assignment" then
    elseif ast.kind == "do" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "cast" then
- elseif ast.kind == "local_function" or 
-ast.kind == "global_function" then
+ elseif ast.kind == "local_function" or
+      ast.kind == "global_function" then
       xs[1] = recurse_node(ast.name, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
       xs[3] = recurse_type(ast.rets, visit_type)
@@ -1704,14 +1704,15 @@ ast.kind == "global_function" then
       end
    elseif ast.kind == "newtype" then
       xs[1] = recurse_type(ast.newtype, visit_type)
-   elseif ast.kind == "variable" or 
-ast.kind == "word" or 
-ast.kind == "string" or 
-ast.kind == "number" or 
-ast.kind == "break" or 
-ast.kind == "nil" or 
-ast.kind == "..." or 
-ast.kind == "boolean" then
+   elseif ast.kind == "variable" or
+      ast.kind == "word" or
+      ast.kind == "string" or
+      ast.kind == "number" or
+      ast.kind == "break" or
+      ast.kind == "nil" or
+      ast.kind == "..." or
+      ast.kind == "boolean" then
+
  else
       if not ast.kind then
          error("wat: " .. inspect(ast))
@@ -2099,46 +2100,37 @@ function tl.pretty_print_ast(ast)
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
             if node.op.op == "@funcall" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
                table.insert(out, "(")
-               add_child(out, children[3])
+               add_child(out, children[3], "", indent)
                table.insert(out, ")")
             elseif node.op.op == "@index" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
                table.insert(out, "[")
-               add_child(out, children[3])
+               add_child(out, children[3], "", indent)
                table.insert(out, "]")
             elseif node.op.op == "as" then
-               add_child(out, children[1])
+               add_child(out, children[1], "", indent)
             elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
+               local space = spaced_op[node.op.arity][node.op.op] and " " or ""
+               if children[2] and node.op.prec > tonumber(children[2]) then
+                  table.insert(children[1], 1, "(")
+                  table.insert(children[1], ")")
+               end
                if node.op.arity == 1 then
                   table.insert(out, node.op.op)
-                  if spaced_op[1][node.op.op] then
-                     table.insert(out, " ")
-                  end
-               end
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, "(")
-               end
-               add_child(out, children[1])
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(out, ")")
-               end
-               if node.op.arity == 2 then
-                  if spaced_op[2][node.op.op] then
+                  add_child(out, children[1], space, indent)
+               elseif node.op.arity == 2 then
+                  add_child(out, children[1], "", indent)
+                  if space == " " then
                      table.insert(out, " ")
                   end
                   table.insert(out, node.op.op)
-                  if spaced_op[2][node.op.op] then
-                     table.insert(out, " ")
-                  end
                   if children[4] and node.op.prec > tonumber(children[4]) then
-                     table.insert(out, "(")
+                     table.insert(children[3], 1, "(")
+                     table.insert(children[3], ")")
                   end
-                  add_child(out, children[3])
-                  if children[4] and node.op.prec > tonumber(children[4]) then
-                     table.insert(out, ")")
-                  end
+                  add_child(out, children[3], space, indent)
                end
             else
                error("unknown node op " .. node.op.op)
@@ -2409,9 +2401,9 @@ local function show_type(t)
          table.insert(out, table.concat(rets, ","))
       end
       return table.concat(out)
-   elseif t.typename == "string" or 
-t.typename == "number" or 
-t.typename == "boolean" then
+   elseif t.typename == "string" or
+      t.typename == "number" or
+      t.typename == "boolean" then
       return t.typename
    elseif t.typename == "typevar" then
       return t.typevar
@@ -2449,7 +2441,7 @@ local Result = {}
 
 
 
-local function search_module(module_name)
+function tl.search_module(module_name)
    local found
    local fd
    local tried = {}
@@ -3095,9 +3087,9 @@ function tl.type_check(ast, lax, modules)
       end
 
       local va = is_vararg(f)
-      local nargs = va and 
-math.max(#args, #f.args) or 
-math.min(#args, #f.args)
+      local nargs = va and
+      math.max(#args, #f.args) or
+      math.min(#args, #f.args)
 
       for a = 1, nargs do
          local arg = args[a]
@@ -3396,7 +3388,7 @@ math.min(#args, #f.args)
       end
       modules[module_name] = UNKNOWN
 
-      local found, fd, tried = search_module(module_name)
+      local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
          local result = tl.process(found, modules)
@@ -3955,7 +3947,7 @@ function tl.process(filename, modules)
 end
 
 local function tl_package_loader(module_name)
-   local found, fd, tried = search_module(module_name)
+   local found, fd, tried = tl.search_module(module_name)
 
    if found then
       local input = fd:read("*a")
@@ -3987,10 +3979,10 @@ local function tl_package_loader(module_name)
    return table.concat(tried, "\n\t")
 end
 
-if package.searchers then
-   table.insert(package.searchers, 1, tl_package_loader)
-else
-   table.insert(package.loaders, 1, tl_package_loader)
-end
+
+
+
+
+
 
 return tl
