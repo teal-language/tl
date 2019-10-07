@@ -66,7 +66,7 @@ function tl.lex(input: string): {Token}
       table.remove(tokens)
    end
 
-   local function end_token(kind: string, t: string, last: number)
+   local function end_token(kind: string, last: number, t: string)
       assert(type(kind) == "string")
 
       local token: Token = tokens[#tokens]
@@ -134,16 +134,16 @@ function tl.lex(input: string): {Token}
             begin_token()
          elseif c:match("[][(){},:#`]") then
             begin_token()
-            end_token(c, nil, nil)
+            end_token(c)
          elseif c:match("[+*/|&%%^]") then
             begin_token()
-            end_token("op", nil, nil)
+            end_token("op")
          end
       elseif state == "maybecomment" then
          if c == "-" then
             state = "maybecomment2"
          else
-            end_token("op", "-")
+            end_token("op", nil, "-")
             fwd = false
             state = "any"
          end
@@ -203,7 +203,7 @@ function tl.lex(input: string): {Token}
             end_token("op")
             state = "any"
          else
-            end_token("op", nil, i - 1)
+            end_token("op", i - 1)
             fwd = false
             state = "any"
          end
@@ -212,7 +212,7 @@ function tl.lex(input: string): {Token}
             end_token("op")
             state = "any"
          else
-            end_token("op", nil, i - 1)
+            end_token("op", i - 1)
             fwd = false
             state = "any"
          end
@@ -221,7 +221,7 @@ function tl.lex(input: string): {Token}
             end_token("op")
             state = "any"
          else
-            end_token("op", nil, i - 1)
+            end_token("op", i - 1)
             fwd = false
             state = "any"
          end
@@ -231,7 +231,7 @@ function tl.lex(input: string): {Token}
          elseif c == "=" then
             ls_open_lvl = ls_open_lvl + 1
          else
-            end_token("[", nil, i - 1)
+            end_token("[", i - 1)
             fwd = false
             state = "any"
             ls_open_lvl = 0
@@ -260,7 +260,7 @@ function tl.lex(input: string): {Token}
             state = "decimal_float"
          else
             -- TODO floating point
-            end_token(".", nil, i - 1)
+            end_token(".", i - 1)
             fwd = false
             state = "any"
          end
@@ -269,7 +269,7 @@ function tl.lex(input: string): {Token}
             end_token("...")
             state = "any"
          else
-            end_token("op", nil, i - 1)
+            end_token("op", i - 1)
             fwd = false
             state = "any"
          end
@@ -279,7 +279,7 @@ function tl.lex(input: string): {Token}
          end
       elseif state == "word" then
          if not c:match("[a-zA-Z0-9_]") then
-            end_token("word", nil, i - 1)
+            end_token("word", i - 1)
             fwd = false
             state = "any"
          end
@@ -294,7 +294,7 @@ function tl.lex(input: string): {Token}
          elseif c == "." then
             state = "decimal_float"
          else
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -304,7 +304,7 @@ function tl.lex(input: string): {Token}
          elseif c == "p" or c == "P" then
             state = "power_sign"
          elseif not c:match("[0-9a-fA-F]") then
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -312,7 +312,7 @@ function tl.lex(input: string): {Token}
          if c == "p" or c == "P" then
             state = "power_sign"
          elseif not c:match("[0-9a-fA-F]") then
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -322,7 +322,7 @@ function tl.lex(input: string): {Token}
          elseif c == "e" or c == "E" then
             state = "power_sign"
          elseif not c:match("[0-9]") then
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -330,7 +330,7 @@ function tl.lex(input: string): {Token}
          if c == "e" or c == "E" then
             state = "power_sign"
          elseif not c:match("[0-9]") then
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -344,7 +344,7 @@ function tl.lex(input: string): {Token}
          end
       elseif state == "power" then
          if not c:match("[0-9]") then
-            end_token("number", nil, i - 1)
+            end_token("number", i - 1)
             fwd = false
             state = "any"
          end
@@ -363,7 +363,7 @@ function tl.lex(input: string): {Token}
 
    if #tokens > 0 and tokens[#tokens].tk == nil then
       if terminals[state] then
-         end_token(terminals[state], nil, i - 1)
+         end_token(terminals[state], i - 1)
       else
          drop_token()
       end
