@@ -4006,28 +4006,14 @@ end
 
 local function tl_package_loader(module_name)
    local found, fd, tried = tl.search_module(module_name)
-
    if found then
       local input = fd:read("*a")
-
-      local tokens
-
-      tokens = tl.lex(input)
-
-
-      local i, program
-
+      fd:close()
+      local tokens = tl.lex(input)
       local errs = {}
-      i, program = tl.parse_program(tokens, errs)
-
-
-      local code
-
-      code = tl.pretty_print_ast(program)
-
-
+      local i, program = tl.parse_program(tokens, errs)
+      local code = tl.pretty_print_ast(program)
       local loaded = load(code)
-
       if loaded then
          return function()
             return loaded()

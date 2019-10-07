@@ -4006,28 +4006,14 @@ end
 
 local function tl_package_loader(module_name: string): any
    local found, fd, tried = tl.search_module(module_name)
---io.stderr:write(module_name .. "\n")
    if found then
       local input = fd:read("*a")
---local t1 = os.clock()
-      local tokens: {Token}
---for i = 1, 100 do
-      tokens = tl.lex(input)
---end
---io.stderr:write(string.format("lex\t%.4f\n", os.clock() - t1)); t1 = os.clock();
-      local i, program: number, Node
---for _ = 1, 100 do
+      fd:close()
+      local tokens = tl.lex(input)
       local errs = {}
-      i, program = tl.parse_program(tokens, errs)
---end
---io.stderr:write(string.format("parse\t%.4f\n", os.clock() - t1)); t1 = os.clock();
-      local code: string
---for i = 1, 100 do
-      code = tl.pretty_print_ast(program)
---end
---io.stderr:write(string.format("print\t%.4f\n", os.clock() - t1)); t1 = os.clock();
+      local i, program = tl.parse_program(tokens, errs)
+      local code = tl.pretty_print_ast(program)
       local loaded = load(code)
---io.stderr:write(string.format("load\t%.4f\n", os.clock() - t1)); t1 = os.clock();
       if loaded then
          return function(): any
             return loaded()
@@ -4038,9 +4024,9 @@ local function tl_package_loader(module_name: string): any
 end
 
 --if package.searchers then
---   table.insert(package.searchers, 1, tl_package_loader)
+--   table.insert(package.searchers, 2, tl_package_loader)
 --else
---   table.insert(package.loaders, 1, tl_package_loader)
+--   table.insert(package.loaders, 2, tl_package_loader)
 --end
 
 return tl
