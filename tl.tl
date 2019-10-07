@@ -2537,14 +2537,14 @@ function tl.search_module(module_name: string): string, FILE, {string}
             found = tl_filename
             break
          end
-         table.insert(tried, tl_filename)
+         table.insert(tried, "no file '" .. tl_filename .. "'")
       end
       fd = io.open(filename, "r")
       if fd then
          found = filename
          break
       end
-      table.insert(tried, filename)
+      table.insert(tried, "no file '" .. filename .. "'")
    end
    return found, fd, tried
 end
