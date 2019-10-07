@@ -50,14 +50,14 @@ describe("lexer", function()
    gen_all_passes(passes, "0X", hexs, "p", decs)
    gen_all_passes(passes, "0X", hexs, "P", decs)
 
-   for _, p in ipairs(passes) do
-      it("accepts " .. p, function()
+   it("accepts valid literals", function()
+      for _, p in ipairs(passes) do
          local syntax_errors = {}
          local tokens = tl.lex("local x = " .. p)
          local _, ast = tl.parse_program(tokens, syntax_errors)
-         assert.same({}, syntax_errors)
+         assert.same({}, syntax_errors, "no syntax error for " .. p)
          local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
-   end
+         assert.same({}, errors, "no type error for " .. p)
+      end
+   end)
 end)
