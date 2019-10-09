@@ -2402,6 +2402,7 @@ local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Ty
    end
    has_cycle[t] = true
    if t.typename == "typevar" then
+      has_cycle[t] = nil
       if not typevars[t.typevar] then
          return t -- leave it unresolved
       end

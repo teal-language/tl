@@ -316,5 +316,39 @@ describe("generic function", function()
       assert.same(1, #errors)
       assert.match("error in argument", errors[1].err, 1, true)
    end)
+   it("inference trickles down to function arguments", function()
+      -- pass
+      local tokens = tl.lex([[
+         local R = record
+            arch: string
+         end
+         local data: {R} = {
+            { arch = "foo" },
+            { arch = "bar" },
+         }
+         table.sort(data, function(a:R,b:R):boolean return a.arch < b.arch end)
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+      -- fail
+      local tokens = tl.lex([[
+         local R = record
+            arch: string
+         end
+         local S = record
+            different: string
+         end
+         local data: {R} = {
+            { arch = "foo" },
+            { arch = "bar" },
+         }
+         table.sort(data, function(a:R,b:S):boolean return a.arch < b.different end)
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(1, #errors)
+      assert.match("error in argument 2", errors[1].err, 1, true)
+   end)
 end)
 
