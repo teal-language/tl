@@ -2449,6 +2449,8 @@ local function show_type(t, typevars)
          table.insert(out, show_type(v))
       end
       return table.concat(out, " or ")
+   elseif t.typename == "emptytable" then
+      return "{}"
    elseif t.typename == "map" then
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
@@ -3605,7 +3607,7 @@ function tl.type_check(ast, lax, modules)
       ["table_literal"] = {
          ["after"] = function(node, children)
             node.type = {
-               ["typename"] = "record",
+               ["typename"] = "emptytable",
             }
             local is_record = false
             local is_array = false
