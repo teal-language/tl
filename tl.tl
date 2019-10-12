@@ -672,7 +672,7 @@ local function fail(tokens: {Token}, i: number, errs: {ParseError}, msg: string)
       return #tokens
    end
    table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = msg or "syntax error" })
-   return i + 1
+   return math.min(#tokens, i + 1)
 end
 
 local function verify_tk(tokens: {Token}, i: number, errs: {ParseError}, tk: string): number
@@ -774,7 +774,7 @@ end
 local function parse_bracket_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, is_sep: boolean, parse_item: ParseItem<`T>): number, {`T}
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, list, { [close] = true }, is_sep, parse_item)
-   i = i + 1
+   i = verify_tk(tokens, i, errs, close)
    return i, list
 end
 
@@ -1220,6 +1220,11 @@ end
 
 local function parse_local_variable(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
    local is_const: boolean = false
+   local node: Node
+   i, node = verify_kind(tokens, i, errs, "word")
+   if not node then
+      return i
+   end
    if tokens[i].tk == "<" then
       i = i + 1
       local annotation: Node
@@ -1229,8 +1234,6 @@ local function parse_local_variable(tokens: {Token}, i: number, errs: {ParseErro
       end
       i = verify_kind(tokens, i, errs, ">")
    end
-   local node: Node
-   i, node = verify_kind(tokens, i, errs, "word")
    node.is_const = is_const
    return i, node
 end
@@ -1532,7 +1535,9 @@ local function parse_local_variables(tokens: {Token}, i: number, errs: {ParseErr
 
    asgn.vars = new_node(tokens, i, "variables")
    i = parse_trying_list(tokens, i, errs, asgn.vars, parse_local_variable)
-   assert(#asgn.vars >= 1)
+   if #asgn.vars == 0 then
+      return fail(tokens, i, errs, "expected a local variable definition")
+   end
    local lhs: Node = asgn.vars[1]
 
    i, asgn.decltype = parse_type_list(tokens, i, errs)

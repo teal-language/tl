@@ -1,7 +1,7 @@
 local tl = require("tl")
 
 describe("call", function()
-   pending("catches a syntax error", function()
+   it("catches a syntax error", function()
       local tokens = tl.lex([[
          print("hello", "world",)
       ]])
