@@ -1051,6 +1051,9 @@ do
          table.insert(operands, { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = operator, ["e1"] = t1, ["e2"] = t2, })
       else
          local t1 = table.remove(operands)
+         if not t1 then
+            return false
+         end
          table.insert(operands, { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = table.remove(operators), ["e1"] = t1, })
       end
       return true
