@@ -3328,6 +3328,9 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
          end
          if arg.tk == "..." then
             t.is_va = true
+            if i ~= #node.args then
+               table.insert(errors, { y = node.y, x = node.x, err = "'...' can only be last argument" })
+            end
          end
          table.insert(args, t)
          add_var(arg.tk, t)
