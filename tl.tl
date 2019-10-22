@@ -1,5 +1,5 @@
 local tl = {
-   process: function(string, {string:Type}): Result, string = nil
+   process: function(string, {string:Type}, Result): Result, string = nil
 }
 
 --------------------------------------------------------------------------------
@@ -2814,15 +2814,20 @@ for _, t in pairs(standard_library) do
    end
 end
 
-function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error}, {Unknown}, Type
+function tl.type_check(ast: Node, lax: boolean, modules: {string:Type}, result: Result): {Error}, {Unknown}, Type
+   result = result or {
+      syntax_errors = {},
+      type_errors = {},
+      unknowns = {},
+   }
 
    local st: {{string:Variable}} = {{}}
    for name, typ in pairs(standard_library) do
       st[1][name] = { t = typ, is_const = true }
    end
 
-   local errors: {Error} = {}
-   local unknowns: {Unknown} = {}
+   local errors: {Error} = result.type_errors or {}
+   local unknowns: {Unknown} = result.unknowns or {}
    local module_type: Type
 
    local function find_var(name: string): Type, boolean
@@ -3454,7 +3459,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       end
    end
 
-   local function require_module(module_name: string): Type
+   local function require_module(module_name: string, result: Result): Type
       if modules[module_name] then
          return modules[module_name]
       end
@@ -3463,10 +3468,10 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
       local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
-         local result: Result = tl.process(found, modules)
-         -- FIXME result.errors
-         -- FIXME result.unknowns
-         return result.type
+         local _result, err: Result, string = tl.process(found, modules, result)
+         assert(_result, err)
+
+         return _result.type
       end
 
       return UNKNOWN
@@ -3790,7 +3795,7 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
-                        node.type = require_module(module_name)
+                        node.type = require_module(module_name, result)
                         if not node.type then
                            node.type = BOOLEAN
                         end
@@ -3990,8 +3995,13 @@ function tl.type_check(ast: Node, lax: boolean, modules:{string:Type}): {Error},
    return errors, unknowns, module_type
 end
 
-function tl.process(filename: string, modules:{string:Type}): Result, string
+function tl.process(filename: string, modules: {string:Type}, result: Result): Result, string
    modules = modules or {}
+   local result: Result = {
+      syntax_errors = {},
+      type_errors = {},
+      unknowns = {},
+   }
 
    local fd, err = io.open(filename, "r")
    if not fd then
@@ -4005,15 +4015,12 @@ function tl.process(filename: string, modules:{string:Type}): Result, string
    end
 
    local tokens = tl.lex(input)
-
-   local result: Result = {
-      syntax_errors = {}
-   }
    local i, program = tl.parse_program(tokens, result.syntax_errors)
 
    local is_lua = filename:match("%.lua$") ~= nil
 
-   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua, modules)
+   local error, unknown: {Error}, {Unknown}
+   error, unknown, result.type = tl.type_check(program, is_lua, modules, result)
 
    return result
 end

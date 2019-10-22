@@ -2814,15 +2814,20 @@ for _, t in pairs(standard_library) do
    end
 end
 
-function tl.type_check(ast, lax, modules)
+function tl.type_check(ast, lax, modules, result)
+   result = result or {
+      ["syntax_errors"] = {},
+      ["type_errors"] = {},
+      ["unknowns"] = {},
+   }
 
    local st = { [1] = {}, }
    for name, typ in pairs(standard_library) do
       st[1][name] = { ["t"] = typ, ["is_const"] = true, }
    end
 
-   local errors = {}
-   local unknowns = {}
+   local errors = result.type_errors or {}
+   local unknowns = result.unknowns or {}
    local module_type
 
    local function find_var(name)
@@ -3454,7 +3459,7 @@ function tl.type_check(ast, lax, modules)
       end
    end
 
-   local function require_module(module_name)
+   local function require_module(module_name, result)
       if modules[module_name] then
          return modules[module_name]
       end
@@ -3463,10 +3468,10 @@ function tl.type_check(ast, lax, modules)
       local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
-         local result = tl.process(found, modules)
+         local _result, err = tl.process(found, modules, result)
+         assert(_result, err)
 
-
-         return result.type
+         return _result.type
       end
 
       return UNKNOWN
@@ -3790,7 +3795,7 @@ function tl.type_check(ast, lax, modules)
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
-                        node.type = require_module(module_name)
+                        node.type = require_module(module_name, result)
                         if not node.type then
                            node.type = BOOLEAN
                         end
@@ -3990,8 +3995,13 @@ function tl.type_check(ast, lax, modules)
    return errors, unknowns, module_type
 end
 
-function tl.process(filename, modules)
+function tl.process(filename, modules, result)
    modules = modules or {}
+   local result = {
+      ["syntax_errors"] = {},
+      ["type_errors"] = {},
+      ["unknowns"] = {},
+   }
 
    local fd, err = io.open(filename, "r")
    if not fd then
@@ -4005,15 +4015,12 @@ function tl.process(filename, modules)
    end
 
    local tokens = tl.lex(input)
-
-   local result = {
-      ["syntax_errors"] = {},
-   }
    local i, program = tl.parse_program(tokens, result.syntax_errors)
 
    local is_lua = filename:match("%.lua$") ~= nil
 
-   result.type_errors, result.unknowns, result.type = tl.type_check(program, is_lua, modules)
+   local error, unknown
+   error, unknown, result.type = tl.type_check(program, is_lua, modules, result)
 
    return result
 end
