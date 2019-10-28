@@ -23,7 +23,7 @@ if err then
 end
 
 for _, err in ipairs(result.syntax_errors) do
-   print(err.y, err.x, err.msg)
+   print(err.filename, err.y, err.x, err.msg)
 end
 
 --print(pretty_print_ast(program))
@@ -35,14 +35,14 @@ end
 print("========================================")
 print(#result.type_errors .. " error" .. (#result.type_errors ~= 1 and "s" or "") .. ":")
 for _, err in ipairs(result.type_errors) do
-   print(filename .. ":" .. err.y .. ":" .. err.x .. ": " .. err.err)
+   print(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. err.err)
 end
 
 if #result.unknowns > 0 then
    print("----------------------------------------")
    print(#result.unknowns .. " unknown variable" .. (#result.unknowns ~= 1 and "s" or "") .. ":")
    for _, var in ipairs(result.unknowns) do
-      print(filename .. ":" .. var.y .. ":" .. var.x .. ": " .. var.name)
+      print(var.filename .. ":" .. var.y .. ":" .. var.x .. ": " .. var.name)
    end
 end
 
