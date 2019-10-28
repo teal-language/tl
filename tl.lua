@@ -545,6 +545,7 @@ local ParseError = {}
 
 
 
+
 local Type = {}
 
 
@@ -1591,7 +1592,7 @@ local function parse_statement(tokens, i, errs)
    return fail(tokens, i, errs)
 end
 
-parse_statements = function(tokens, i, errs)
+parse_statements = function(tokens, i, errs, filename)
    local node = new_node(tokens, i, "statements")
    while tokens[i].kind ~= "$EOF$" do
       if stop_statement_list[tokens[i].tk] then
@@ -1599,6 +1600,11 @@ parse_statements = function(tokens, i, errs)
       end
       local item
       i, item = parse_statement(tokens, i, errs)
+      if filename then
+         for j = 1, #errs do
+            errs[j].filename = filename
+         end
+      end
       if not item then
          break
       end
@@ -1607,11 +1613,11 @@ parse_statements = function(tokens, i, errs)
    return i, node
 end
 
-function tl.parse_program(tokens, errs)
+function tl.parse_program(tokens, errs, filename)
    errs = errs or {}
    local last = tokens[#tokens]
    table.insert(tokens, { ["y"] = last.y, ["x"] = last.x + #last.tk, ["tk"] = "$EOF$", ["kind"] = "$EOF$", })
-   return parse_statements(tokens, 1, errs)
+   return parse_statements(tokens, 1, errs, filename)
 end
 
 
@@ -2520,7 +2526,9 @@ local Error = {}
 
 
 
+
 local Unknown = {}
+
 
 
 
@@ -2814,7 +2822,7 @@ for _, t in pairs(standard_library) do
    end
 end
 
-function tl.type_check(ast, lax, modules, result)
+function tl.type_check(ast, lax, filename, modules, result)
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
@@ -2875,7 +2883,7 @@ function tl.type_check(ast, lax, modules, result)
          local def = typetype.def
          if t.typevals and def.typevars then
             if #t.typevals ~= #def.typevars then
-               table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "mismatch in number of type arguments", })
+               table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "mismatch in number of type arguments", ["filename"] = filename, })
                return { ["typename"] = "bad_nominal", ["name"] = t.name, }
             end
 
@@ -2888,9 +2896,9 @@ function tl.type_check(ast, lax, modules, result)
             end
             return resolve_typevars(def, newtypevars)
          elseif t.typevals then
-            table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "spurious type arguments", })
+            table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "spurious type arguments", ["filename"] = filename, })
          elseif def.typevars then
-            table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "missing type arguments in " .. show_type(def), })
+            table.insert(errors, { ["y"] = y, ["x"] = x, ["err"] = "missing type arguments in " .. show_type(def), ["filename"] = filename, })
          end
          return def
       else
@@ -3146,7 +3154,7 @@ function tl.type_check(ast, lax, modules, result)
  end
       local match, why_not = is_a(t1, t2, typevars)
       if not match then
-         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or ""), })
+         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
       end
    end
 
@@ -3156,7 +3164,7 @@ function tl.type_check(ast, lax, modules, result)
       local errs = {}
 
       if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
-         table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invoked method as a regular function: use ':' instead of '.'", })
+         table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invoked method as a regular function: use ':' instead of '.'", ["filename"] = filename, })
          return nil, errs
       end
 
@@ -3174,14 +3182,14 @@ function tl.type_check(ast, lax, modules, result)
             end
             if not lax then
                ok = false
-               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": missing argument of type " .. show_type(farg, typevars), })
+               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
             end
          else
             local matches, why_not = is_a(arg, farg, typevars)
             if not matches then
                errs = errs or {}
                local at = node.e2 and node.e2[a] or node
-               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), })
+               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
                ok = false
                break
             end
@@ -3210,7 +3218,7 @@ function tl.type_check(ast, lax, modules, result)
             if lax and f.typename == "unknown" then
                return UNKNOWN
             end
-            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "not a function: " .. show_type(f), })
+            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "not a function: " .. show_type(f), ["filename"] = filename, })
             return INVALID
          end
          table.insert(expects, tostring(#f.args or 0))
@@ -3245,7 +3253,7 @@ function tl.type_check(ast, lax, modules, result)
       end
 
       if not first_errs then
-         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")", })
+         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")", ["filename"] = filename, })
       else
          for _, err in ipairs(first_errs) do
             table.insert(errors, err)
@@ -3261,7 +3269,7 @@ function tl.type_check(ast, lax, modules, result)
    local function add_unknown_dot(node, name)
       if not unknown_dots[name] then
          unknown_dots[name] = true
-         table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = name, })
+         table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = name, ["filename"] = filename, })
       end
    end
 
@@ -3282,7 +3290,7 @@ function tl.type_check(ast, lax, modules, result)
       end
 
       if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
-         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index something that is not a record: " .. show_type(tbl), })
+         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index something that is not a record: " .. show_type(tbl), ["filename"] = filename, })
          return INVALID
       end
 
@@ -3308,7 +3316,7 @@ function tl.type_check(ast, lax, modules, result)
          description = "type " .. show_type(orig_tbl)
       end
 
-      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invalid key '" .. key.tk .. "' in record " .. description, })
+      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invalid key '" .. key.tk .. "' in record " .. description, ["filename"] = filename, })
       return INVALID
    end
 
@@ -3328,13 +3336,13 @@ function tl.type_check(ast, lax, modules, result)
          if not t then
             t = { ["typename"] = "unknown", }
             if lax and not (i == 1 and arg.tk == "self") then
-               table.insert(unknowns, { ["y"] = arg.y, ["x"] = arg.x, ["name"] = arg.tk, })
+               table.insert(unknowns, { ["y"] = arg.y, ["x"] = arg.x, ["name"] = arg.tk, ["filename"] = filename, })
             end
          end
          if arg.tk == "..." then
             t.is_va = true
             if i ~= #node.args then
-               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "'...' can only be last argument", })
+               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "'...' can only be last argument", ["filename"] = filename, })
             end
          end
          table.insert(args, t)
@@ -3425,7 +3433,7 @@ function tl.type_check(ast, lax, modules, result)
          if is_a(b, a.keys) then
             node.type = a.values
          else
-            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys), })
+            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys), ["filename"] = filename, })
             node.type = INVALID
          end
       elseif node.e2.kind == "string" then
@@ -3448,13 +3456,13 @@ function tl.type_check(ast, lax, modules, result)
          if ff then
             node.type = ff
          else
-            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index, not all fields in record have the same type", })
+            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index, not all fields in record have the same type", ["filename"] = filename, })
             node.type = INVALID
          end
       elseif lax and a.typename == "unknown" then
          node.type = UNKNOWN
       else
-         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index object of type " .. show_type(orig_a) .. " with " .. show_type(orig_b), })
+         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index object of type " .. show_type(orig_a) .. " with " .. show_type(orig_b), ["filename"] = filename, })
          node.type = INVALID
       end
    end
@@ -3522,7 +3530,7 @@ function tl.type_check(ast, lax, modules, result)
                if t == nil then
                   t = { ["typename"] = "unknown", }
                   if lax then
-                     table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, })
+                     table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
                   end
                end
                add_var(var.tk, t, var.is_const)
@@ -3536,13 +3544,13 @@ function tl.type_check(ast, lax, modules, result)
             local exps = flatten_list(vals)
             for i, var in ipairs(children[1]) do
                if node.vars[i].is_const then
-                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot assign to <const> variable", })
+                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot assign to <const> variable", ["filename"] = filename, })
                end
                if var then
                   local val = exps[i] or NIL
                   assert_is_a(node.vars[i], val, var, {}, "assignment")
                else
-                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unknown variable", })
+                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unknown variable", ["filename"] = filename, })
                end
             end
             node.type = { ["typename"] = "none", }
@@ -3570,17 +3578,17 @@ function tl.type_check(ast, lax, modules, result)
                   local t = resolve_unary(exp1.e2.type)
                   if exp1.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
                      if not (lax and t.typename == "unknown") then
-                        table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(exp1.e2.type), })
+                        table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(exp1.e2.type), ["filename"] = filename, })
                      end
                   elseif exp1.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
                      if not (lax and t.typename == "unknown") then
-                        table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(exp1.e2.type), })
+                        table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(exp1.e2.type), ["filename"] = filename, })
                      end
                   end
                end
             else
                if not (lax and exp1type.typename == "unknown") then
-                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "expression in for loop does not return an iterator", })
+                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "expression in for loop does not return an iterator", ["filename"] = filename, })
                end
             end
          end,
@@ -3603,7 +3611,7 @@ function tl.type_check(ast, lax, modules, result)
          ["after"] = function(node, children)
             local rets = assert(find_var("@return"))
             if #children[1] > #rets and not lax then
-               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "excess return values, expected " .. #rets .. " got " .. #children[1], })
+               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "excess return values, expected " .. #rets .. " got " .. #children[1], ["filename"] = filename, })
             end
             for i = 1, math.min(#children[1], #rets) do
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
@@ -3649,7 +3657,7 @@ function tl.type_check(ast, lax, modules, result)
             end
             if is_array and is_map then
                node.type = UNKNOWN
-               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot determine type of table literal", })
+               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot determine type of table literal", ["filename"] = filename, })
             elseif is_record and is_array then
                node.type.typename = "arrayrecord"
             elseif is_record and is_map then
@@ -3662,7 +3670,7 @@ function tl.type_check(ast, lax, modules, result)
                   node.type.field_order = nil
                else
                   node.type = UNKNOWN
-                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot determine type of table literal", })
+                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot determine type of table literal", ["filename"] = filename, })
                end
             elseif is_array then
                node.type.typename = "array"
@@ -3748,7 +3756,7 @@ function tl.type_check(ast, lax, modules, result)
                }
                table.insert(rtype.field_order, node.name.tk)
             else
-               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "not a module: " .. show_type(rtype), })
+               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "not a module: " .. show_type(rtype), ["filename"] = filename, })
             end
             node.type = { ["typename"] = "none", }
          end,
@@ -3788,7 +3796,7 @@ function tl.type_check(ast, lax, modules, result)
                         do_index(node, b[1], b[2])
                      end
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "rawget expects two arguments", })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "rawget expects two arguments", ["filename"] = filename, })
                      node.type = INVALID
                   end
                elseif node.e1.tk == "require" then
@@ -3804,7 +3812,7 @@ function tl.type_check(ast, lax, modules, result)
                         node.type = UNKNOWN
                      end
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "require expects one literal argument", })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "require expects one literal argument", ["filename"] = filename, })
                      node.type = INVALID
                   end
                elseif node.e1.op and node.e1.op.op == ":" then
@@ -3835,7 +3843,7 @@ function tl.type_check(ast, lax, modules, result)
                   if is_a(STRING, a.keys) then
                      node.type = a.values
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use . index, expects keys of type " .. show_type(a.keys), })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use . index, expects keys of type " .. show_type(a.keys), ["filename"] = filename, })
                      node.type = INVALID
                   end
                else
@@ -3862,7 +3870,7 @@ function tl.type_check(ast, lax, modules, result)
                   if lax and (a.typename == "unknown" or b.typename == "unknown") then
                      node.type = UNKNOWN
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "types are not comparable for equality: " .. show_type(a) .. " " .. show_type(b), })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "types are not comparable for equality: " .. show_type(a) .. " " .. show_type(b), ["filename"] = filename, })
                      node.type = INVALID
                   end
                end
@@ -3874,7 +3882,7 @@ function tl.type_check(ast, lax, modules, result)
                   if lax and a.typename == "unknown" then
                      node.type = UNKNOWN
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename, })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename, ["filename"] = filename, })
                      node.type = INVALID
                   end
                end
@@ -3887,7 +3895,7 @@ function tl.type_check(ast, lax, modules, result)
                   if lax and (a.typename == "unknown" or b.typename == "unknown") then
                      node.type = UNKNOWN
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "binop mismatch for " .. node.op.op .. ": " .. show_type(orig_a) .. " " .. show_type(orig_b), })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "binop mismatch for " .. node.op.op .. ": " .. show_type(orig_a) .. " " .. show_type(orig_b), ["filename"] = filename, })
                      node.type = INVALID
                   end
                end
@@ -3902,10 +3910,10 @@ function tl.type_check(ast, lax, modules, result)
             if node.type == nil then
                node.type = { ["typename"] = "unknown", }
                if lax then
-                  table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = node.tk, })
+                  table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = node.tk, ["filename"] = filename, })
 
                else
-                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unknown variable: " .. node.tk, })
+                  table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unknown variable: " .. node.tk, ["filename"] = filename, })
                end
             end
          end,
@@ -3997,7 +4005,7 @@ end
 
 function tl.process(filename, modules, result)
    modules = modules or {}
-   local result = {
+   result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
       ["unknowns"] = {},
@@ -4015,24 +4023,24 @@ function tl.process(filename, modules, result)
    end
 
    local tokens = tl.lex(input)
-   local i, program = tl.parse_program(tokens, result.syntax_errors)
+   local i, program = tl.parse_program(tokens, result.syntax_errors, filename)
 
    local is_lua = filename:match("%.lua$") ~= nil
 
    local error, unknown
-   error, unknown, result.type = tl.type_check(program, is_lua, modules, result)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result)
 
    return result
 end
 
 local function tl_package_loader(module_name)
-   local found, fd, tried = tl.search_module(module_name)
-   if found then
+   local found_filename, fd, tried = tl.search_module(module_name)
+   if found_filename then
       local input = fd:read("*a")
       fd:close()
       local tokens = tl.lex(input)
       local errs = {}
-      local i, program = tl.parse_program(tokens, errs)
+      local i, program = tl.parse_program(tokens, errs, found_filename)
       local code = tl.pretty_print_ast(program)
       local loaded = load(code)
       if loaded then
