@@ -10,6 +10,7 @@ describe("typecheck errors", function()
 
    it("type errors in a required package include filename of required file", function ()
       local io_open = io.open
+      finally(function() io.open = io_open end)
       io.open = function (filename, mode)
          if string.match(filename, "bar.tl$") then
             -- Return a stub file handle
@@ -45,6 +46,7 @@ describe("typecheck errors", function()
 
    it("unknowns in a required package include filename of required file", function ()
       local io_open = io.open
+      finally(function() io.open = io_open end)
       io.open = function (filename, mode)
          if string.match(filename, "bar.tl$") then
             -- Return a stub file handle
