@@ -2823,6 +2823,7 @@ for _, t in pairs(standard_library) do
 end
 
 function tl.type_check(ast, lax, filename, modules, result)
+   modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
