@@ -1498,36 +1498,76 @@ local is_newtype = {
    ["functiontype"] = true,
 }
 
-local function parse_call_or_assignment(tokens, i, errs)
+local function parse_assignment_rvalues(tokens, i, errs, asgn)
+   asgn.exps = new_node(tokens, i, "values")
+   repeat
+      i = i + 1
+      local val
+      if is_newtype[tokens[i].tk] then
+         if #asgn.vars > 1 then
+            return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
+         end
+         i, val = parse_newtype(tokens, i, errs)
+      else
+         i, val = parse_expression(tokens, i, errs)
+      end
+      table.insert(asgn.exps, val)   
+   until tokens[i].tk ~= ","
+   return i, asgn
+end
+
+local function parse_call_or_assignment(tokens, i, errs, toplevel)
    local asgn = new_node(tokens, i, "assignment")
 
    asgn.vars = new_node(tokens, i, "variables")
+
+   local globals
+   local errors_g = {}
+   local ig = 0
+   if toplevel then
+      globals = new_node(tokens, i, "global_declaration")
+      globals.vars = new_node(tokens, i, "variables")
+      ig = parse_trying_list(tokens, i, errors_g, globals.vars, parse_local_variable)
+   end
+
    i = parse_trying_list(tokens, i, errs, asgn.vars, parse_expression)
    if #asgn.vars < 1 then
       return fail(tokens, i, errs)
    end
-   local lhs = asgn.vars[1]
 
-   if tokens[i].tk == "=" then
-      asgn.exps = new_node(tokens, i, "values")
-      repeat
-         i = i + 1
-         local val
-         if is_newtype[tokens[i].tk] then
-            if #asgn.vars > 1 then
-               return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
-            end
-            i, val = parse_newtype(tokens, i, errs)
-         else
-            i, val = parse_expression(tokens, i, errs)
+   local colon = false
+   if toplevel then
+      for _, v in ipairs(asgn.vars) do
+         if v.op and v.op.op == ":" then
+            colon = true
+            break
          end
-         table.insert(asgn.exps, val)      
-      until tokens[i].tk ~= ","
-      return i, asgn
+      end
    end
-   if lhs.op and lhs.op.op == "@funcall" then
+
+   if not colon and tokens[i].tk == "=" then
+      return parse_assignment_rvalues(tokens, i, errs, asgn)
+   end
+
+   local lhs = asgn.vars[1]
+   if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs
    end
+
+   if toplevel and colon then
+      if #errors_g == 0 and #globals.vars > 0 and tokens[ig].tk == ":" then
+         if tokens[ig + 1].tk == "=" then
+            ig = ig + 1
+         else
+            ig, globals.decltype = parse_type_list(tokens, ig, errs)
+         end
+         if tokens[ig].tk == "=" then
+            return parse_assignment_rvalues(tokens, ig, errs, globals)
+         end
+         return ig, globals
+      end
+   end
+
    return fail(tokens, i, errs)
 end
 
@@ -1562,7 +1602,7 @@ local function parse_local_variables(tokens, i, errs)
    return i, asgn
 end
 
-local function parse_statement(tokens, i, errs)
+local function parse_statement(tokens, i, errs, toplevel)
    if tokens[i].tk == "local" then
       if tokens[i + 1].tk == "function" then
          return parse_local_function(tokens, i, errs)
@@ -1587,19 +1627,19 @@ local function parse_statement(tokens, i, errs)
    elseif tokens[i].tk == "return" then
       return parse_return(tokens, i, errs)
    else
-      return parse_call_or_assignment(tokens, i, errs)
+      return parse_call_or_assignment(tokens, i, errs, toplevel)
    end
    return fail(tokens, i, errs)
 end
 
-parse_statements = function(tokens, i, errs, filename)
+parse_statements = function(tokens, i, errs, filename, toplevel)
    local node = new_node(tokens, i, "statements")
    while tokens[i].kind ~= "$EOF$" do
       if stop_statement_list[tokens[i].tk] then
          break
       end
       local item
-      i, item = parse_statement(tokens, i, errs)
+      i, item = parse_statement(tokens, i, errs, toplevel)
       if filename then
          for j = 1, #errs do
             errs[j].filename = filename
@@ -1617,7 +1657,7 @@ function tl.parse_program(tokens, errs, filename)
    errs = errs or {}
    local last = tokens[#tokens]
    table.insert(tokens, { ["y"] = last.y, ["x"] = last.x + #last.tk, ["tk"] = "$EOF$", ["kind"] = "$EOF$", })
-   return parse_statements(tokens, 1, errs, filename)
+   return parse_statements(tokens, 1, errs, filename, true)
 end
 
 
@@ -1691,6 +1731,7 @@ local function recurse_node(ast, visit_node, visit_type)
          xs[i] = recurse_node(child, visit_node, visit_type)
       end
    elseif ast.kind == "local_declaration" or
+      ast.kind == "global_declaration" or
       ast.kind == "assignment" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       if ast.exps then
@@ -2234,6 +2275,8 @@ function tl.pretty_print_ast(ast)
    visit_node["values"] = visit_node["variables"]
    visit_node["expression_list"] = visit_node["variables"]
    visit_node["argument_list"] = visit_node["variables"]
+
+   visit_node["global declaration"] = visit_node["assignment"]
 
    visit_node["word"] = visit_node["variable"]
    visit_node["string"] = visit_node["variable"]
@@ -2861,6 +2904,13 @@ function tl.type_check(ast, lax, filename, modules, result)
          if scope[name] then
             return scope[name].t, scope[name].is_const
          end
+      end
+   end
+
+   local function find_global(name)
+      local scope = st[1]
+      if scope[name] then
+         return scope[name].t, scope[name].is_const
       end
    end
 
@@ -3535,6 +3585,34 @@ function tl.type_check(ast, lax, filename, modules, result)
                   end
                end
                add_var(var.tk, t, var.is_const)
+            end
+            node.type = { ["typename"] = "none", }
+         end,
+      },
+      ["global_declaration"] = {
+         ["after"] = function(node, children)
+            local vals = get_assignment_values(children[2], #node.vars)
+            for i, var in ipairs(node.vars) do
+               local decltype = node.decltype and node.decltype[i]
+               local infertype = vals and vals[i]
+               if decltype and infertype then
+                  assert_is_a(node.vars[i], infertype, decltype, {}, "global declaration")
+               end
+               local t = decltype or infertype
+               local existing = find_global(var.tk)
+               if existing then
+                  if not same_type(existing, t) then
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot redeclare global with a different type: previous type of " .. var.tk .. " is " .. show_type(existing), ["filename"] = filename, })
+                  end
+               else
+                  if t == nil then
+                     t = { ["typename"] = "unknown", }
+                     if lax then
+                        table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
+                     end
+                  end
+                  add_global(var.tk, t, var.is_const)
+               end
             end
             node.type = { ["typename"] = "none", }
          end,
