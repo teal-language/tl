@@ -40,7 +40,7 @@ end
 
 if #result.unknowns > 0 then
    print("----------------------------------------")
-   print(#result.unknowns .. " unknown variable" .. (#result.unknowns ~= 1 and "s" or "") .. ":")
+   print(#result.unknowns .. " variable" .. (#result.unknowns ~= 1 and "s" or "") .. " of unknown type:")
    for _, var in ipairs(result.unknowns) do
       print(var.filename .. ":" .. var.y .. ":" .. var.x .. ": " .. var.name)
    end
