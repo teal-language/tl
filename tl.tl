@@ -35,6 +35,8 @@ local keywords: {string:boolean} = {
    ["true"] = true,
    ["until"] = true,
    ["while"] = true,
+
+   ["global"] = true,
 }
 
 local Token = record
@@ -1219,7 +1221,7 @@ local function parse_variable(tokens: {Token}, i: number, errs: {ParseError}): n
    return verify_kind(tokens, i, errs, "word", "variable")
 end
 
-local function parse_local_variable(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
+local function parse_variable_name(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
    local is_const: boolean = false
    local node: Node
    i, node = verify_kind(tokens, i, errs, "word")
@@ -1364,7 +1366,7 @@ local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): numb
    local node = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
-   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, true, parse_local_variable)
+   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, true, parse_variable_name)
    i = verify_tk(tokens, i, errs, "in")
    node.exps = new_node(tokens, i, "expression_list")
    i = parse_list(tokens, i, errs, node.exps, { ["do"] = true }, true, parse_expression)
@@ -1531,11 +1533,11 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
    return fail(tokens, i, errs)
 end
 
-local function parse_local_variables(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local asgn: Node = new_node(tokens, i, "local_declaration")
+local function parse_variable_declarations(tokens: {Token}, i: number, errs: {ParseError}, node_name: string): number, Node
+   local asgn: Node = new_node(tokens, i, node_name)
 
    asgn.vars = new_node(tokens, i, "variables")
-   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_local_variable)
+   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_variable_name)
    if #asgn.vars == 0 then
       return fail(tokens, i, errs, "expected a local variable definition")
    end
@@ -1568,8 +1570,11 @@ local function parse_statement(tokens: {Token}, i: number, errs: {ParseError}): 
          return parse_local_function(tokens, i, errs)
       else
          i = i + 1
-         return parse_local_variables(tokens, i, errs)
+         return parse_variable_declarations(tokens, i, errs, "local_declaration")
       end
+   elseif tokens[i].tk == "global" then
+      i = i + 1
+      return parse_variable_declarations(tokens, i, errs, "global_declaration")
    elseif tokens[i].tk == "function" then
       return parse_function(tokens, i, errs)
    elseif tokens[i].tk == "if" then
@@ -1691,6 +1696,7 @@ local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node
          xs[i] = recurse_node(child, visit_node, visit_type)
       end
    elseif ast.kind == "local_declaration"
+          or ast.kind == "global_declaration"
           or ast.kind == "assignment" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       if ast.exps then
@@ -1900,6 +1906,17 @@ function tl.pretty_print_ast(ast: Node): string
             table.insert(out, "local")
             add_child(out, children[1], " ")
             if children[2] then
+               table.insert(out, " =")
+               add_child(out, children[2], " ")
+            end
+            return out
+         end,
+      },
+      ["global_declaration"] = {
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            if children[2] then
+               add_child(out, children[1], " ")
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
@@ -2234,7 +2251,6 @@ function tl.pretty_print_ast(ast: Node): string
    visit_node["values"] = visit_node["variables"]
    visit_node["expression_list"] = visit_node["variables"]
    visit_node["argument_list"] = visit_node["variables"]
-
    visit_node["word"] = visit_node["variable"]
    visit_node["string"] = visit_node["variable"]
    visit_node["number"] = visit_node["variable"]
@@ -2861,6 +2877,13 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if scope[name] then
             return scope[name].t, scope[name].is_const
          end
+      end
+   end
+
+   local function find_global(name: string): Type, boolean
+      local scope = st[1]
+      if scope[name] then
+         return scope[name].t, scope[name].is_const
       end
    end
 
@@ -3535,6 +3558,43 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   end
                end
                add_var(var.tk, t, var.is_const)
+            end
+            node.type = { typename = "none" }
+         end,
+      },
+      ["global_declaration"] = {
+         after = function(node: Node, children: {Type}): Type
+            local vals: {Type} = get_assignment_values(children[2], #node.vars)
+            for i, var in ipairs(node.vars) do
+               local decltype = node.decltype and node.decltype[i]
+               local infertype = vals and vals[i]
+               if decltype and infertype then
+                  assert_is_a(node.vars[i], infertype, decltype, {}, "global declaration")
+               end
+               local t = decltype or infertype
+               local existing, existing_is_const = find_global(var.tk)
+               if existing then
+                  if infertype and existing_is_const then
+                     table.insert(errors, { y = node.y, x = node.x, err = "cannot reassign to <const> global: " .. var.tk, filename = filename })
+                  end
+                  if existing_is_const == true and not var.is_const then
+                     table.insert(errors, { y = node.y, x = node.x, err = "global was previously declared as <const>: " .. var.tk, filename = filename })
+                  end
+                  if existing_is_const == false and var.is_const then
+                     table.insert(errors, { y = node.y, x = node.x, err = "global was previously declared as not <const>: " .. var.tk, filename = filename })
+                  end
+                  if not same_type(existing, t) then
+                     table.insert(errors, { y = node.y, x = node.x, err = "cannot redeclare global with a different type: previous type of " .. var.tk .. " is " .. show_type(existing), filename = filename })
+                  end
+               else
+                  if t == nil then
+                     t = { typename = "unknown" }
+                     if lax then
+                       table.insert(unknowns, { y = node.y, x = node.x, name = var.tk, filename = filename })
+                     end
+                  end
+                  add_global(var.tk, t, var.is_const)
+               end
             end
             node.type = { typename = "none" }
          end,

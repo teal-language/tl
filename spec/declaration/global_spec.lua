@@ -1,0 +1,152 @@
+local tl = require("tl")
+
+describe("global", function()
+   describe("undeclared", function()
+      it("fails for single assignment", function()
+         local tokens = tl.lex([[
+            x = 1
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same("unknown variable: x", errors[1].err)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails for multiple assignment", function()
+         local tokens = tl.lex([[
+            x, y = 1, 2
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same("unknown variable: x", errors[1].err)
+         assert.same("unknown variable: y", errors[2].err)
+         assert.same(0, #unknowns)
+      end)
+   end)
+
+   describe("declared at top level", function()
+      it("works for single assignment", function()
+         local tokens = tl.lex([[
+            global x: number = 1
+            x = 2
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("works for multiple assignment", function()
+         local tokens = tl.lex([[
+            global x, y: number, string = 1, "hello"
+            x = 2
+            y = "world"
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(#unknowns, 0)
+      end)
+   end)
+
+   describe("declared at a deeper level", function()
+      it("works for single assignment", function()
+         local tokens = tl.lex([[
+            local function foo()
+               global x: number = 1
+               x = 2
+            end
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("works for multiple assignment", function()
+         local tokens = tl.lex([[
+            local function foo()
+               global x, y: number, string = 1, "hello"
+               x = 2
+               y = "world"
+            end
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(#unknowns, 0)
+      end)
+   end)
+
+   describe("redeclared", function()
+      it("works if types are the same", function()
+         local tokens = tl.lex([[
+            global x: number = 1
+            global x: number
+            x = 2
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("works for const if not reassigning", function()
+         local tokens = tl.lex([[
+            global x <const>: number = 1
+            global x <const>: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails for const if reassigning", function()
+         local tokens = tl.lex([[
+            global x <const>: number = 1
+            global x <const>: number = 9
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("cannot reassign to <const> global", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if adding const", function()
+         local tokens = tl.lex([[
+            global x: number
+            global x <const>: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("global was previously declared as not <const>", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if removing const", function()
+         local tokens = tl.lex([[
+            global x <const>: number
+            global x: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("global was previously declared as <const>", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if types don't match", function()
+         local tokens = tl.lex([[
+            global x, y: number, string = 1, "hello"
+            global x: string
+            x = 2
+            y = "world"
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("cannot redeclare global with a different type", errors[1].err, 1, true)
+         assert.same(#unknowns, 0)
+      end)
+   end)
+
+end)
