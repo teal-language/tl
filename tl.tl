@@ -1,5 +1,5 @@
 local tl = {
-   process: function(string, {string:Type}, Result): Result, string = nil
+   process: function(string, {string:Type}, Result, {string:Variable}): Result, string = nil
 }
 
 --------------------------------------------------------------------------------
@@ -2838,7 +2838,7 @@ for _, t in pairs(standard_library) do
    end
 end
 
-function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result): {Error}, {Unknown}, Type
+function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}): {Error}, {Unknown}, Type
    modules = modules or {}
    result = result or {
       syntax_errors = {},
@@ -2846,9 +2846,14 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       unknowns = {},
    }
 
-   local st: {{string:Variable}} = {{}}
-   for name, typ in pairs(standard_library) do
-      st[1][name] = { t = typ, is_const = true }
+   local st: {{string:Variable}}
+   if globals then
+      st = { globals }
+   else
+      st = {{}}
+      for name, typ in pairs(standard_library) do
+         st[1][name] = { t = typ, is_const = true }
+      end
    end
 
    local errors: {Error} = result.type_errors or {}
@@ -3500,7 +3505,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
-         local _result, err: Result, string = tl.process(found, modules, result)
+         local _result, err: Result, string = tl.process(found, modules, result, st[1])
          assert(_result, err)
 
          return _result.type
@@ -4064,7 +4069,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    return errors, unknowns, module_type
 end
 
-function tl.process(filename: string, modules: {string:Type}, result: Result): Result, string
+function tl.process(filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}): Result, string
    modules = modules or {}
    result = result or {
       syntax_errors = {},
@@ -4089,7 +4094,7 @@ function tl.process(filename: string, modules: {string:Type}, result: Result): R
    local is_lua = filename:match("%.lua$") ~= nil
 
    local error, unknown: {Error}, {Unknown}
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
 
    return result
 end

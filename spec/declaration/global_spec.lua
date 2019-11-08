@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("global", function()
    describe("undeclared", function()
@@ -138,6 +139,95 @@ describe("global", function()
       it("fails if types don't match", function()
          local tokens = tl.lex([[
             global x, y: number, string = 1, "hello"
+            global x: string
+            x = 2
+            y = "world"
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("cannot redeclare global with a different type", errors[1].err, 1, true)
+         assert.same(#unknowns, 0)
+      end)
+   end)
+
+   describe("redeclared across files", function()
+      it("works if types are the same", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x: number = 1"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
+            global x: number
+            x = 2
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("works for const if not reassigning", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x <const>: number = 1"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
+            global x <const>: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails for const if reassigning", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x <const>: number = 1"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
+            global x <const>: number = 9
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("cannot reassign to <const> global", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if adding const", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x: number"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
+            global x <const>: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("global was previously declared as not <const>", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if removing const", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x <const>: number"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
+            global x: number
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.match("global was previously declared as <const>", errors[1].err, 1, true)
+         assert.same(0, #unknowns)
+      end)
+
+      it("fails if types don't match", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = "global x, y: number, string = 1, 'hello'"
+         })
+         local tokens = tl.lex([[
+            local foo = require("foo")
             global x: string
             x = 2
             y = "world"
