@@ -2838,7 +2838,7 @@ for _, t in pairs(standard_library) do
    end
 end
 
-function tl.type_check(ast, lax, filename, modules, result)
+function tl.type_check(ast, lax, filename, modules, result, globals)
    modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
@@ -2846,9 +2846,14 @@ function tl.type_check(ast, lax, filename, modules, result)
       ["unknowns"] = {},
    }
 
-   local st = { [1] = {}, }
-   for name, typ in pairs(standard_library) do
-      st[1][name] = { ["t"] = typ, ["is_const"] = true, }
+   local st
+   if globals then
+      st = { [1] = globals, }
+   else
+      st = { [1] = {}, }
+      for name, typ in pairs(standard_library) do
+         st[1][name] = { ["t"] = typ, ["is_const"] = true, }
+      end
    end
 
    local errors = result.type_errors or {}
@@ -3500,7 +3505,7 @@ function tl.type_check(ast, lax, filename, modules, result)
       local found, fd, tried = tl.search_module(module_name)
       if found then
          fd:close()
-         local _result, err = tl.process(found, modules, result)
+         local _result, err = tl.process(found, modules, result, st[1])
          assert(_result, err)
 
          return _result.type
@@ -4064,7 +4069,7 @@ function tl.type_check(ast, lax, filename, modules, result)
    return errors, unknowns, module_type
 end
 
-function tl.process(filename, modules, result)
+function tl.process(filename, modules, result, globals)
    modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
@@ -4089,7 +4094,7 @@ function tl.process(filename, modules, result)
    local is_lua = filename:match("%.lua$") ~= nil
 
    local error, unknown
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
 
    return result
 end

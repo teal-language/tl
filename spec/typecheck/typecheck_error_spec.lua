@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("typecheck errors", function()
    it("type errors include filename", function ()
@@ -9,29 +10,12 @@ describe("typecheck errors", function()
    end)
 
    it("type errors in a required package include filename of required file", function ()
-      local io_open = io.open
-      finally(function() io.open = io_open end)
-      io.open = function (filename, mode)
-         if string.match(filename, "bar.tl$") then
-            -- Return a stub file handle
-            return {
-               read = function (_, format)
-                  if format == "*a" then
-                     return "local x: string = 1"        -- Return fake bar.tl content
-                  else
-                     error("Not implemented!")  -- Implement other modes if needed
-                  end
-               end,
-               close = function () end,
-            }
-         else
-            return io_open(filename, mode)
-         end
-      end
-
       local tokens = tl.lex([[
          local bar = require "bar"
       ]])
+      util.mock_io(finally, {
+         ["bar.tl"] = "local x: string = 1",
+      })
       local _, ast = tl.parse_program(tokens, {}, "foo.tl")
       local errors, unknowns = tl.type_check(ast, true, "foo.tl")
       assert.is_not_nil(string.match(errors[1].filename, "bar.tl$"), "type errors should contain .filename property")
@@ -45,29 +29,12 @@ describe("typecheck errors", function()
    end)
 
    it("unknowns in a required package include filename of required file", function ()
-      local io_open = io.open
-      finally(function() io.open = io_open end)
-      io.open = function (filename, mode)
-         if string.match(filename, "bar.tl$") then
-            -- Return a stub file handle
-            return {
-               read = function (_, format)
-                  if format == "*a" then
-                     return "local x: string = b"        -- Return fake bar.tl content
-                  else
-                     error("Not implemented!")  -- Implement other modes if needed
-                  end
-               end,
-               close = function () end,
-            }
-         else
-            return io_open(filename, mode)
-         end
-      end
-
       local tokens = tl.lex([[
          local bar = require "bar"
       ]])
+      util.mock_io(finally, {
+         ["bar.tl"] = "local x: string = b"
+      })
       local _, ast = tl.parse_program(tokens, {}, "foo.tl")
       local errors, unknowns = tl.type_check(ast, true, "foo.tl")
       assert.is_not_nil(string.match(errors[1].filename, "bar.tl$"), "unknowns should contain .filename property")
