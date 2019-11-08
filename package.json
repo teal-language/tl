@@ -4,8 +4,8 @@
   "description": "Typed Lua docs",
   "main": "index.js",
   "scripts": {
-    "docs:dev": "vuepress dev docs",
-    "docs:build": "vuepress build docs"
+    "docs:dev": "npx vuepress@1.2.0 dev docs",
+    "docs:build": "npx vuepress@1.2.0 build docs"
   },
   "repository": {
     "type": "git",
@@ -20,8 +20,5 @@
   "bugs": {
     "url": "https://github.com/hishamhm/tl/issues"
   },
-  "homepage": "https://github.com/hishamhm/tl#readme",
-  "devDependencies": {
-    "vuepress": "^1.2.0"
-  }
+  "homepage": "https://github.com/hishamhm/tl#readme"
 }
