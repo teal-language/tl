@@ -2636,6 +2636,7 @@ local standard_library: {string:Type} = {
       typename = "poly",
       poly = {
          { typename = "function", args = { STRING }, rets = { FUNCTION } },
+         { typename = "function", args = { STRING, STRING }, rets = { FUNCTION } },
       },
    },
    ["FILE"] = {
@@ -4123,21 +4124,25 @@ local function tl_package_loader(module_name: string): any
       local errs = {}
       local i, program = tl.parse_program(tokens, errs, found_filename)
       local code = tl.pretty_print_ast(program)
-      local loaded = load(code)
-      if loaded then
+      local chunk = load(code, found_filename)
+      if chunk then
          return function(): any
-            return loaded()
+            local ret = chunk()
+            package.loaded[module_name] = ret
+            return ret
          end
       end
    end
    return table.concat(tried, "\n\t")
 end
 
---if package.searchers then
---   table.insert(package.searchers, 2, tl_package_loader)
---else
---   table.insert(package.loaders, 2, tl_package_loader)
---end
+function tl.loader()
+   if package.searchers then
+      table.insert(package.searchers, 2, tl_package_loader)
+   else
+      table.insert(package.loaders, 2, tl_package_loader)
+   end
+end
 
 return tl
 
