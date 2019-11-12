@@ -218,6 +218,7 @@ function tl.lex(input: string): {Token}
          if c == "[" then
             state = "maybelongcomment"
          else
+            fwd = false
             state = "comment"
             drop_token()
          end
@@ -227,6 +228,7 @@ function tl.lex(input: string): {Token}
          elseif c == "=" then
             lc_open_lvl = lc_open_lvl + 1
          else
+            fwd = false
             state = "comment"
             drop_token()
             lc_open_lvl = 0
