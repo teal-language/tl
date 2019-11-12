@@ -1853,13 +1853,21 @@ local spaced_op: {number:{string:boolean}} = {
    },
 }
 
-function tl.pretty_print_ast(ast: Node): string
+function tl.pretty_print_ast(ast: Node, fast: boolean): string
    local indent = 0
 
    local Output = record
       {string}
       y: number
       h: number
+   end
+
+   local function increment_indent()
+      indent = indent + 1
+   end
+
+   if fast then
+      increment_indent = nil
    end
 
    local function add(out: Output, s: string)
@@ -1886,7 +1894,7 @@ function tl.pretty_print_ast(ast: Node): string
             indent = nil
          end
       end
-      if indent then
+      if indent and (not fast) then
          table.insert(out, ("   "):rep(indent))
       end
       table.insert(out, child as string)
@@ -1947,9 +1955,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["if"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "if")
@@ -1965,9 +1971,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["while"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "while")
@@ -1980,24 +1984,22 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["repeat"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "repeat")
             add_child(out, children[1], " ")
-            indent = indent - 1
-            table.insert(out, ("   "):rep(indent))
+            if not fast then
+               indent = indent - 1
+               table.insert(out, ("   "):rep(indent))
+            end
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
             return out
          end,
       },
       ["do"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "do")
@@ -2008,9 +2010,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["forin"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "for")
@@ -2025,9 +2025,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["fornum"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "for")
@@ -2095,9 +2093,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["table_literal"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if #children == 0 then
@@ -2126,9 +2122,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["local_function"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "local function")
@@ -2143,9 +2137,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["global_function"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "function")
@@ -2160,9 +2152,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["record_function"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "function")
@@ -2179,9 +2169,7 @@ function tl.pretty_print_ast(ast: Node): string
          end,
       },
       ["function"] = {
-         before = function()
-            indent = indent + 1
-         end,
+         before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "function(")
@@ -4122,7 +4110,7 @@ local function tl_package_loader(module_name: string): any
       local tokens = tl.lex(input)
       local errs = {}
       local i, program = tl.parse_program(tokens, errs, found_filename)
-      local code = tl.pretty_print_ast(program)
+      local code = tl.pretty_print_ast(program, true)
       local chunk = load(code, found_filename)
       if chunk then
          return function(): any
