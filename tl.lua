@@ -1877,10 +1877,9 @@ function tl.pretty_print_ast(ast)
 
    local function add_child(out, child, space, indent)
       if child.y > out.y + out.h then
-         while child.y > out.y + out.h do
-            table.insert(out, "\n")
-            out.h = out.h + 1
-         end
+         local delta = child.y - (out.y + out.h)
+         out.h = out.h + delta
+         table.insert(out, ("\n"):rep(delta))
       else
          if space then
             table.insert(out, space)
