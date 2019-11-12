@@ -102,7 +102,7 @@ end
 function tl.lex(input: string): {Token}
    local tokens: {Token} = {}
 
-   local state = "any"
+   local state = "start"
    local fwd = true
    local y = 1
    local x = 0
@@ -150,6 +150,19 @@ function tl.lex(input: string): {Token}
          end
       else
          fwd = true
+      end
+
+      if state == "start" then
+         if input:sub(1,2) == "#!" then
+            i = input:find("\n")
+            if not i then
+               break
+            end
+            c = "\n"
+            y = 2
+            x = 0
+         end
+         state = "any"
       end
 
       if state == "any" then
