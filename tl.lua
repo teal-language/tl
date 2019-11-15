@@ -3555,6 +3555,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
+               if lax and infertype and infertype.typename == "nil" then
+                  infertype = nil
+               end
                if decltype and infertype then
                   assert_is_a(node.vars[i], infertype, decltype, {}, "local declaration")
                end
@@ -3576,6 +3579,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
+               if lax and infertype and infertype.typename == "nil" then
+                  infertype = nil
+               end
                if decltype and infertype then
                   assert_is_a(node.vars[i], infertype, decltype, {}, "global declaration")
                end
