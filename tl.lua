@@ -612,6 +612,15 @@ local Type = {}
 
 
 
+
+
+
+
+
+
+
+
+
 local Operator = {}
 
 
@@ -1538,7 +1547,7 @@ local function parse_call_or_assignment(tokens, i, errs)
          else
             i, val = parse_expression(tokens, i, errs)
          end
-         table.insert(asgn.exps, val)
+         table.insert(asgn.exps, val)      
       until tokens[i].tk ~= ","
       return i, asgn
    end
@@ -1573,7 +1582,7 @@ local function parse_variable_declarations(tokens, i, errs, node_name)
          else
             i, val = parse_expression(tokens, i, errs)
          end
-         table.insert(asgn.exps, val)
+         table.insert(asgn.exps, val)      
       until tokens[i].tk ~= ","
    end
    return i, asgn
@@ -2322,22 +2331,26 @@ local equality_binop = {
       ["nil"] = BOOLEAN,
    },
    ["record"] = {
+      ["emptytable"] = BOOLEAN,
       ["arrayrecord"] = BOOLEAN,
       ["record"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
    ["array"] = {
+      ["emptytable"] = BOOLEAN,
       ["arrayrecord"] = BOOLEAN,
       ["array"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
    ["arrayrecord"] = {
+      ["emptytable"] = BOOLEAN,
       ["arrayrecord"] = BOOLEAN,
       ["record"] = BOOLEAN,
       ["array"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
    ["map"] = {
+      ["emptytable"] = BOOLEAN,
       ["map"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
@@ -2349,6 +2362,7 @@ local unop_types = {
       ["string"] = NUMBER,
       ["array"] = NUMBER,
       ["map"] = NUMBER,
+      ["emptytable"] = NUMBER,
    },
    ["-"] = {
       ["number"] = NUMBER,
@@ -2361,6 +2375,7 @@ local unop_types = {
       ["arrayrecord"] = BOOLEAN,
       ["array"] = BOOLEAN,
       ["map"] = BOOLEAN,
+      ["emptytable"] = BOOLEAN,
    },
 }
 
@@ -2452,7 +2467,13 @@ local function resolve_typevars(t, typevars, has_cycle)
    return copy
 end
 
-local function show_type(t, typevars)
+local function is_unknown(t)
+   return t.typename == "unknown" or t.typename == "unknown_emptytable_value"
+end
+
+local show_type
+
+local function show_type_base(t, typevars)
    if typevars then
       t = resolve_typevars(t, typevars)
    end
@@ -2523,7 +2544,7 @@ local function show_type(t, typevars)
       return t.typename
    elseif t.typename == "typevar" then
       return t.typevar
-   elseif t.typename == "unknown" then
+   elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
       return "<invalid type>"
@@ -2536,6 +2557,14 @@ local function show_type(t, typevars)
    else
       return inspect(t)
    end
+end
+
+show_type = function(t, typevars)
+   local ret = show_type_base(t, typevars)
+   if t.inferred_at then
+      ret = ret .. " (inferred at " .. t.inferred_at_file .. ":" .. t.inferred_at.y .. ":" .. t.inferred_at.x .. ": )"
+   end
+   return ret
 end
 
 local Error = {}
@@ -2890,6 +2919,22 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       end
    end
 
+   local function infer_var(emptytable, t, node)
+      local is_global = emptytable.declared_at and emptytable.declared_at.kind == "global_declaration"
+      local scopes = is_global and 1 or #st
+      for i = scopes, 1, -1 do
+         local scope = st[i]
+         if scope[emptytable.assigned_to] then
+            scope[emptytable.assigned_to] = {
+               ["t"] = t,
+               ["is_const"] = false,
+            }
+            t.inferred_at = node
+            t.inferred_at_file = filename
+         end
+      end
+   end
+
    local function find_global(name)
       local scope = st[1]
       if scope[name] then
@@ -2995,10 +3040,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       return true
    end
 
-   local function is_empty_table(t)
-      return t.typename == "record" and next(t.fields) == nil
-   end
-
    local TypeGetter = {}
 
    local is_a
@@ -3041,7 +3082,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
-      if lax and (t1.typename == "unknown" or t2.typename == "unknown") then
+      if lax and (is_unknown(t1) or is_unknown(t2)) then
          return true
       end
 
@@ -3099,7 +3140,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          t1 = resolve_unary(t1, typevars)
          t2 = resolve_unary(t2, typevars)
          return is_a(t1, t2, typevars)
-      elseif is_empty_table(t1) and (t2.typename == "array" or t2.typename == "map" or t2.typename == "record" or t2.typename == "arrayrecord") then
+      elseif t1.typename == "emptytable" and (t2.typename == "array" or t2.typename == "map" or t2.typename == "record" or t2.typename == "arrayrecord") then
          return true
       elseif t2.typename == "array" then
          if t1.typename == "array" or t1.typename == "arrayrecord" then
@@ -3183,9 +3224,26 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    local function assert_is_a(node, t1, t2, typevars, context)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
-      if lax and (t1.typename == "unknown" or t2.typename == "unknown") then
+      if lax and (is_unknown(t1) or is_unknown(t2)) then
          return
  end
+
+      if t2.typename == "unknown_emptytable_value" then
+         if same_type(t2.emptytable_type.keys, NUMBER) then
+            infer_var(t2.emptytable_type, { ["typename"] = "array", ["elements"] = t1, }, node)
+         else
+            infer_var(t2.emptytable_type, { ["typename"] = "map", ["keys"] = t2.emptytable_type.keys, ["values"] = t1, }, node)
+         end
+         return
+ elseif t2.typename == "emptytable" then
+         if t1.typename == "array" or t1.typename == "map" or t1.typename == "record" or t1.typename == "arrayrecord" then
+            infer_var(t2, t1, node)
+         elseif t1.typename ~= "emptytable" then
+            table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": assigning " .. show_type(t1) .. " to a variable declared with {}", ["filename"] = filename, })
+         end
+         return
+ end
+
       local match, why_not = is_a(t1, t2, typevars)
       if not match then
          table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": got " .. show_type(t1) .. ", expected " .. show_type(t2) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
@@ -3255,7 +3313,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 
       for _, f in ipairs(poly.poly) do
          if f.typename ~= "function" then
-            if lax and f.typename == "unknown" then
+            if lax and is_unknown(f) then
                return UNKNOWN
             end
             table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "not a function: " .. show_type(f), ["filename"] = filename, })
@@ -3323,7 +3381,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          tbl = find_var("string")
       end
 
-      if lax and (tbl.typename == "unknown" or tbl.typename == "typevar") then
+      if lax and (is_unknown(tbl) or tbl.typename == "typevar") then
          if node.e1.kind == "variable" and node.op.op ~= "@funcall" then
             add_unknown_dot(node, node.e1.tk .. "." .. key.tk)
          end
@@ -3468,8 +3526,23 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       local orig_b = b
       a = resolve_unary(a)
       b = resolve_unary(b)
+
       if a.typename == "array" or a.typename == "arrayrecord" and is_a(b, NUMBER) then
          node.type = a.elements
+      elseif a.typename == "emptytable" then
+         if a.keys == nil then
+            a.keys = b
+            a.keys_inferred_at = node
+            a.keys_inferred_at_file = filename
+         else
+            if not is_a(b, a.keys) then
+               local inferred = " (type of keys inferred at " .. a.keys_inferred_at_file .. ":" .. a.keys_inferred_at.y .. ":" .. a.keys_inferred_at.x .. ": )"
+               table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "inconsistent index type: " .. show_type(b) .. ", expected " .. show_type(a.keys) .. inferred, ["filename"] = filename, })
+               node.type = INVALID
+               return
+ end
+         end
+         node.type = { ["typename"] = "unknown_emptytable_value", ["emptytable_type"] = a, }
       elseif a.typename == "map" then
          if is_a(b, a.keys) then
             node.type = a.values
@@ -3500,7 +3573,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index, not all fields in record have the same type", ["filename"] = filename, })
             node.type = INVALID
          end
-      elseif lax and a.typename == "unknown" then
+      elseif lax and is_unknown(a) then
          node.type = UNKNOWN
       else
          table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index object of type " .. show_type(orig_a) .. " with " .. show_type(orig_b), ["filename"] = filename, })
@@ -3576,6 +3649,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   if lax then
                      table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
                   end
+               elseif t.typename == "emptytable" then
+                  t.declared_at = node
+                  t.assigned_to = var.tk
                end
                add_var(var.tk, t, var.is_const)
             end
@@ -3615,6 +3691,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                      if lax then
                         table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
                      end
+                  elseif t.typename == "emptytable" then
+                     t.declared_at = node
+                     t.assigned_to = var.tk
                   end
                   add_global(var.tk, t, var.is_const)
                end
@@ -3661,17 +3740,17 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_unary(exp1.e2.type)
                   if exp1.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
-                     if not (lax and t.typename == "unknown") then
+                     if not (lax and is_unknown(t)) then
                         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting pairs loop on something that's not a map or record: " .. show_type(exp1.e2.type), ["filename"] = filename, })
                      end
                   elseif exp1.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
-                     if not (lax and t.typename == "unknown") then
+                     if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
                         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "attempting ipairs loop on something that's not an array: " .. show_type(exp1.e2.type), ["filename"] = filename, })
                      end
                   end
                end
             else
-               if not (lax and exp1type.typename == "unknown") then
+               if not (lax and is_unknown(exp1type)) then
                   table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "expression in for loop does not return an iterator", ["filename"] = filename, })
                end
             end
@@ -3762,11 +3841,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                node.type.typename = "record"
             elseif is_map then
                node.type.typename = "map"
-            else
-
-               node.type.typename = "record"
-               node.type.fields = {}
-               node.type.field_order = {}
             end
          end,
       },
@@ -3829,6 +3903,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          ["after"] = function(node, children)
             end_function_scope()
             local rtype = get_self_type(children[1])
+            if rtype.typename == "emptytable" then
+               rtype.typename = "record"
+            end
             if rtype.typename == "record" or rtype.typename == "arrayrecord" then
                rtype.fields = rtype.fields or {}
                rtype.field_order = rtype.field_order or {}
@@ -3913,7 +3990,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                      table.insert(b, 1, node.e1.e1.type)
                      node.type = match_func_args(node, func, b, true)
                   else
-                     if lax and func.typename == "unknown" then
+                     if lax and is_unknown(func) then
                         if node.e1.e1.kind == "variable" then
                            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                         end
@@ -3947,7 +4024,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                node.type = BOOLEAN
             elseif node.op.op == "and" then
                node.type = b
-            elseif node.op.op == "or" and is_empty_table(b) then
+            elseif node.op.op == "or" and b.typename == "emptytable" then
                node.type = a
             elseif node.op.op == "or" and same_type(a, b) then
                node.type = a
@@ -3962,7 +4039,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
                   node.type = BOOLEAN
                else
-                  if lax and (a.typename == "unknown" or b.typename == "unknown") then
+                  if lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
                      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "types are not comparable for equality: " .. show_type(a) .. " " .. show_type(b), ["filename"] = filename, })
@@ -3974,7 +4051,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
                if not node.type then
-                  if lax and a.typename == "unknown" then
+                  if lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
                      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use operator " .. node.op.op .. " on type " .. show_type(orig_a), ["filename"] = filename, })
@@ -3987,7 +4064,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                if not node.type then
-                  if lax and (a.typename == "unknown" or b.typename == "unknown") then
+                  if lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
                      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use operator " .. node.op.op .. " for types " .. show_type(orig_a) .. " and " .. show_type(orig_b), ["filename"] = filename, })
