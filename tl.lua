@@ -3192,10 +3192,16 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       end
    end
 
-   local function try_match_func_args(node, f, args, is_method)
+   local function try_match_func_args(node, f, args, is_method, argdelta)
       local ok = true
       local typevars = {}
       local errs = {}
+
+      if is_method then
+         argdelta = -1
+      elseif not argdelta then
+         argdelta = 0
+      end
 
       if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
          table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invoked method as a regular function: use ':' instead of '.'", ["filename"] = filename, })
@@ -3216,14 +3222,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             end
             if not lax then
                ok = false
-               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
+               table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. a + argdelta .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
             end
          else
             local matches, why_not = is_a(arg, farg, typevars)
             if not matches then
                errs = errs or {}
                local at = node.e2 and node.e2[a] or node
-               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. (is_method and a - 1 or a) .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
+               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. a + argdelta .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
                ok = false
                break
             end
@@ -3236,7 +3242,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       return nil, errs
    end
 
-   local function match_func_args(node, func, args, is_method)
+   local function match_func_args(node, func, args, is_method, argdelta)
       assert(type(func) == "table")
       assert(type(args) == "table")
 
@@ -3258,7 +3264,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          table.insert(expects, tostring(#f.args or 0))
          local va = is_vararg(f)
          if #args == (#f.args or 0) or va and #args > #f.args then
-            local matched, errs = try_match_func_args(node, f, args, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
             if matched then
                return matched
             end
@@ -3268,7 +3274,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 
       for _, f in ipairs(poly.poly) do
          if #args < (#f.args or 0) then
-            local matched, errs = try_match_func_args(node, f, args, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
             if matched then
                return matched
             end
@@ -3278,7 +3284,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 
       for _, f in ipairs(poly.poly) do
          if is_vararg(f) and #args > (#f.args or 0) then
-            local matched, errs = try_match_func_args(node, f, args, is_method)
+            local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
             if matched then
                return matched
             end
@@ -3892,6 +3898,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "require expects one literal argument", ["filename"] = filename, })
                      node.type = INVALID
                   end
+               elseif node.e1.tk == "pcall" then
+                  local ftype = table.remove(b, 1)
+                  local rets = match_func_args(node, ftype, b, false, 1)
+                  if rets.typename ~= "tuple" then
+                     rets = { ["typename"] = "tuple", [1] = rets, }
+                  end
+                  table.insert(rets, 1, BOOLEAN)
+                  node.type = rets
                elseif node.e1.op and node.e1.op.op == ":" then
                   local func = node.e1.type
                   if func.typename == "function" or func.typename == "poly" then
