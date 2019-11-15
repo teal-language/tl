@@ -2756,6 +2756,8 @@ local standard_library = {
          ["sub"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["match"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = STRING, }, },
          ["rep"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["lower"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
+         ["upper"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
          ["gsub"] = {
             ["typename"] = "poly",
             ["poly"] = {

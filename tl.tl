@@ -2756,6 +2756,8 @@ local standard_library: {string:Type} = {
          ["sub"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
          ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
          ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["lower"] = { typename = "function", args = { STRING }, rets = { STRING } },
+         ["upper"] = { typename = "function", args = { STRING }, rets = { STRING } },
          ["gsub"] = {
             typename = "poly",
             poly = {
