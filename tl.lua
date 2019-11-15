@@ -3318,6 +3318,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       assert(type(key) == "table")
 
       tbl = resolve_unary(tbl)
+      local type_description = tbl.typename
       if tbl.typename == "string" then
          tbl = find_var("string")
       end
@@ -3351,12 +3352,12 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 
       local description
       if node.e1.kind == "variable" then
-         description = "'" .. node.e1.tk .. "'"
+         description = type_description .. " '" .. node.e1.tk .. "'"
       else
-         description = "type " .. show_type(orig_tbl)
+         description = "type " .. show_type(resolve_tuple(orig_tbl))
       end
 
-      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invalid key '" .. key.tk .. "' in record " .. description, ["filename"] = filename, })
+      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invalid key '" .. key.tk .. "' in " .. description, ["filename"] = filename, })
       return INVALID
    end
 
