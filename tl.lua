@@ -1538,7 +1538,7 @@ local function parse_call_or_assignment(tokens, i, errs)
          else
             i, val = parse_expression(tokens, i, errs)
          end
-         table.insert(asgn.exps, val)      
+         table.insert(asgn.exps, val)
       until tokens[i].tk ~= ","
       return i, asgn
    end
@@ -1573,7 +1573,7 @@ local function parse_variable_declarations(tokens, i, errs, node_name)
          else
             i, val = parse_expression(tokens, i, errs)
          end
-         table.insert(asgn.exps, val)      
+         table.insert(asgn.exps, val)
       until tokens[i].tk ~= ","
    end
    return i, asgn
@@ -3188,7 +3188,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
  end
       local match, why_not = is_a(t1, t2, typevars)
       if not match then
-         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": " .. show_type(t1) .. " is not a " .. show_type(t2) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
+         table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": got " .. show_type(t1) .. ", expected " .. show_type(t2) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
       end
    end
 
@@ -3229,7 +3229,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             if not matches then
                errs = errs or {}
                local at = node.e2 and node.e2[a] or node
-               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. a + argdelta .. ": " .. show_type(arg) .. " is not a " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
+               table.insert(errs, { ["y"] = at.y, ["x"] = at.x, ["err"] = "error in argument " .. a + argdelta .. ": got " .. show_type(arg) .. ", expected " .. show_type(farg, typevars) .. (why_not and ": " .. why_not or ""), ["filename"] = filename, })
                ok = false
                break
             end

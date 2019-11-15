@@ -69,8 +69,8 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("x: number is not a string", errors[1].err, 1, true)
-      assert.match("y: string is not a number", errors[2].err, 1, true)
+      assert.match("x: got number, expected string", errors[1].err, 1, true)
+      assert.match("y: got string, expected number", errors[2].err, 1, true)
       -- fail
       local tokens = tl.lex([[
          local x, y: number, string = 1, "a"

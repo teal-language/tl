@@ -30,7 +30,7 @@ describe("[]", function()
          _, ast = tl.parse_program(tokens)
          errors = tl.type_check(ast)
          assert.same(1, #errors)
-         assert.match("number is not a string", errors[1].err, 1, true)
+         assert.match("got number, expected string", errors[1].err, 1, true)
       end)
       it("fail if indexing by invalid string", function()
          local tokens = tl.lex([[
