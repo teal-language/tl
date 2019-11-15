@@ -3930,7 +3930,10 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                node.type = a
             elseif node.op.op == "or" and b.typename == "nil" then
                node.type = a
-            elseif node.op.op == "or" and a.typename == "nominal" and (b.typename == "record" or b.typename == "arrayrecord") and is_a(b, a) then
+            elseif node.op.op == "or" and
+               (a.typename == "nominal" or a.typename == "map") and
+               (b.typename == "record" or b.typename == "arrayrecord") and
+               is_a(b, a) then
                node.type = a
             elseif node.op.op == "==" or node.op.op == "~=" then
                if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
@@ -3951,7 +3954,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   if lax and a.typename == "unknown" then
                      node.type = UNKNOWN
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "unop mismatch: " .. node.op.op .. " " .. a.typename, ["filename"] = filename, })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use operator " .. node.op.op .. " on type " .. show_type(orig_a), ["filename"] = filename, })
                      node.type = INVALID
                   end
                end
@@ -3964,7 +3967,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   if lax and (a.typename == "unknown" or b.typename == "unknown") then
                      node.type = UNKNOWN
                   else
-                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "binop mismatch for " .. node.op.op .. ": " .. show_type(orig_a) .. " " .. show_type(orig_b), ["filename"] = filename, })
+                     table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use operator " .. node.op.op .. " for types " .. show_type(orig_a) .. " and " .. show_type(orig_b), ["filename"] = filename, })
                      node.type = INVALID
                   end
                end
@@ -4073,7 +4076,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 end
 
 function tl.process(filename, modules, result, globals)
-   modules = modules or {}
+   modules = modules or { ["tl"] = UNKNOWN, }
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
