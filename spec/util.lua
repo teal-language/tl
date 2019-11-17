@@ -4,7 +4,7 @@ function util.mock_io(finally, files)
    local io_open = io.open
    finally(function() io.open = io_open end)
    io.open = function (filename, mode)
-      local basename = string.match(filename, "/([^/]+)$")
+      local basename = string.match(filename, "([^/]+)$")
       if files[basename] then
          -- Return a stub file handle
          return {
