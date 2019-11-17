@@ -20,6 +20,6 @@ describe("assignment to const", function()
       ]])
       local errors = {}
       tl.parse_program(tokens, errors)
-      assert.match("expected a local variable definition", errors[2].msg, 1, true)
+      assert.match("expected a local variable definition", errors[1].msg, 1, true)
    end)
 end)

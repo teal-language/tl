@@ -811,7 +811,15 @@ local function parse_table_literal(tokens, i, errs)
 end
 
 local function parse_trying_list(tokens, i, errs, list, parse_item)
-   local i, item = parse_item(tokens, i, errs)
+   local tryerrs = {}
+   local tryi, item = parse_item(tokens, i, tryerrs)
+   if not item then
+      return i, list
+   end
+   for _, e in ipairs(tryerrs) do
+      table.insert(errs, e)
+   end
+   i = tryi
    table.insert(list, item)
    if tokens[i].tk == "," then
       while tokens[i].tk == "," do
