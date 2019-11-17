@@ -2838,6 +2838,13 @@ local standard_library: {string:Type} = {
       },
    },
    ["type"] = { typename = "function", args = { ANY }, rets = { STRING } },
+   ["utf8"] = {
+      typename = "record",
+      fields = {
+         ["len"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
+         ["offset"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
+      },
+   },
    ["ipairs"] = { typename = "function", args = { ARRAY_OF_ALPHA }, rets = {
       { typename = "function", args = {}, rets = { NUMBER, ALPHA } },
    } },
