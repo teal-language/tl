@@ -1259,7 +1259,7 @@ local function parse_variable_name(tokens, i, errs)
       if annotation and annotation.tk == "const" then
          is_const = true
       end
-      i = verify_kind(tokens, i, errs, ">")
+      i = verify_tk(tokens, i, errs, ">")
    end
    node.is_const = is_const
    return i, node
