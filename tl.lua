@@ -3395,17 +3395,18 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          return UNKNOWN
       end
 
-      if not (tbl.typename == "record" or tbl.typename == "arrayrecord") then
+      if tbl.typename == "emptytable" then
+ elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
+         assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
+
+         if key.typename == "string" or key.kind == "word" then
+            if tbl.fields[key.tk] then
+               return tbl.fields[key.tk]
+            end
+         end
+      else
          table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot index something that is not a record: " .. show_type(tbl), ["filename"] = filename, })
          return INVALID
-      end
-
-      assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
-
-      if key.typename == "string" or key.kind == "word" then
-         if tbl.fields[key.tk] then
-            return tbl.fields[key.tk]
-         end
       end
 
       if lax then
@@ -3909,7 +3910,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          end,
          ["after"] = function(node, children)
             end_function_scope()
-            local rtype = get_self_type(children[1])
+            local rtype = resolve_unary(get_self_type(children[1]))
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
             end
