@@ -706,7 +706,7 @@ local function verify_tk(tokens: {Token}, i: number, errs: {ParseError}, tk: str
    if tokens[i].tk == tk then
       return i + 1
    end
-   return fail(tokens, i, errs)
+   return fail(tokens, i, errs, "syntax error, expected '" .. tk .. "'")
 end
 
 local function new_node(tokens: {Token}, i: number, kind: string): Node
@@ -723,7 +723,7 @@ local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind:
    if tokens[i].kind == kind then
       return i + 1, new_node(tokens, i, node_kind)
    end
-   return fail(tokens, i, errs)
+   return fail(tokens, i, errs, "syntax error, expected " .. kind)
 end
 
 local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, n: number): number, Node, number

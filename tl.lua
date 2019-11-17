@@ -706,7 +706,7 @@ local function verify_tk(tokens, i, errs, tk)
    if tokens[i].tk == tk then
       return i + 1
    end
-   return fail(tokens, i, errs)
+   return fail(tokens, i, errs, "syntax error, expected '" .. tk .. "'")
 end
 
 local function new_node(tokens, i, kind)
@@ -723,7 +723,7 @@ local function verify_kind(tokens, i, errs, kind, node_kind)
    if tokens[i].kind == kind then
       return i + 1, new_node(tokens, i, node_kind)
    end
-   return fail(tokens, i, errs)
+   return fail(tokens, i, errs, "syntax error, expected " .. kind)
 end
 
 local function parse_table_item(tokens, i, errs, n)
