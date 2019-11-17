@@ -1636,7 +1636,9 @@ parse_statements = function(tokens, i, errs, filename)
       i, item = parse_statement(tokens, i, errs)
       if filename then
          for j = 1, #errs do
-            errs[j].filename = filename
+            if not errs[j].filename then
+               errs[j].filename = filename
+            end
          end
       end
       if not item then
