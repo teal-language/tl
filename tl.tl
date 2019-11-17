@@ -4042,7 +4042,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                node.type = b
             elseif node.op.op == "or" and b.typename == "emptytable" then
                node.type = a
-            elseif node.op.op == "or" and same_type(a, b) then
+            elseif node.op.op == "or" and same_type(resolve_unary(a), resolve_unary(b)) then
                node.type = a
             elseif node.op.op == "or" and b.typename == "nil" then
                node.type = a
