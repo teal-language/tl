@@ -4191,8 +4191,26 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    return errors, unknowns, module_type
 end
 
+local function init_modules()
+   local modules = {
+      ["tl"] = {
+         ["typename"] = "record",
+         ["fields"] = {
+            ["loader"] = { ["typename"] = "function", ["args"] = {}, ["rets"] = {}, },
+         },
+      },
+   }
+   fill_field_order(modules["tl"])
+   for k, m in pairs(standard_library) do
+      if m.typename == "record" then
+         modules[k] = m
+      end
+   end
+   return modules
+end
+
 function tl.process(filename, modules, result, globals)
-   modules = modules or { ["tl"] = UNKNOWN, }
+   modules = modules or init_modules()
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
