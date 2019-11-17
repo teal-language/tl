@@ -1327,6 +1327,11 @@ local function parse_function(tokens, i, errs)
    if fn.is_method then
       table.insert(fn.args, 1, { ["x"] = selfx, ["y"] = selfy, ["tk"] = "self", ["kind"] = "variable", })
    end
+
+   if not fn.name then
+      return i
+   end
+
    return i, node
 end
 
