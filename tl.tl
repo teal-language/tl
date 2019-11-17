@@ -179,7 +179,7 @@ function tl.lex(input: string): {Token}
             state = "singlequote_string"
             begin_token()
          elseif lex_word_start[c] then
-            state = "word"
+            state = "identifier"
             begin_token()
          elseif c == "0" then
             state = "decimal_or_hex"
@@ -345,9 +345,9 @@ function tl.lex(input: string): {Token}
          if c == "\n" then
             state = "any"
          end
-      elseif state == "word" then
+      elseif state == "identifier" then
          if not lex_word[c] then
-            end_token("word", i - 1)
+            end_token("identifier", i - 1)
             fwd = false
             state = "any"
          end
@@ -420,7 +420,7 @@ function tl.lex(input: string): {Token}
    end
 
    local terminals = {
-      ["word"] = "word",
+      ["identifier"] = "identifier",
       ["decimal_or_hex"] = "number",
       ["decimal_number"] = "number",
       ["decimal_float"] = "number",
@@ -739,17 +739,17 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
-   elseif tokens[i].kind == "word" and tokens[i+1].tk == "=" then
-      i, node.key = verify_kind(tokens, i, errs, "word", "string")
+   elseif tokens[i].kind == "identifier" and tokens[i+1].tk == "=" then
+      i, node.key = verify_kind(tokens, i, errs, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, errs, "=")
       i, node.value = parse_expression(tokens, i, errs)
       return i, node, n
-   elseif tokens[i].kind == "word" and tokens[i+1].tk == ":" then
+   elseif tokens[i].kind == "identifier" and tokens[i+1].tk == ":" then
       local orig_i = i
       local try_errs: {ParseError} = {}
-      i, node.key = verify_kind(tokens, i, try_errs, "word", "string")
+      i, node.key = verify_kind(tokens, i, try_errs, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, try_errs, ":")
@@ -844,7 +844,7 @@ end
 
 local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
    i = i + 1
-   i = verify_kind(tokens, i, errs, "word")
+   i = verify_kind(tokens, i, errs, "identifier")
    return i, {
       kind = "typedecl",
       typename = "typevar",
@@ -897,7 +897,7 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
       return i, decl
    elseif tokens[i].tk == "`" then
       return parse_typevar_type(tokens, i, errs)
-   elseif tokens[i].kind == "word" then
+   elseif tokens[i].kind == "identifier" then
       local typ: Type = {
          kind = "typedecl",
          typename = "nominal",
@@ -957,8 +957,8 @@ local function parse_literal(tokens: {Token}, i: number, errs: {ParseError}): nu
       i, node = verify_kind(tokens, i, errs, "string")
       node.conststr = tk
       return i, node
-   elseif tokens[i].kind == "word" then
-      return verify_kind(tokens, i, errs, "word", "variable")
+   elseif tokens[i].kind == "identifier" then
+      return verify_kind(tokens, i, errs, "identifier", "variable")
    elseif tokens[i].kind == "number" then
       local n = tonumber(tokens[i].tk)
       local node: Node
@@ -1150,7 +1150,7 @@ do
    local function push_dot(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
       local arg: Node
       i = i + 1
-      i, arg = verify_kind(tokens, i, errs, "word")
+      i, arg = verify_kind(tokens, i, errs, "identifier")
       table.insert(operands, arg)
       return i
    end
@@ -1242,20 +1242,20 @@ local function parse_variable(tokens: {Token}, i: number, errs: {ParseError}): n
    if tokens[i].tk == "..." then
       return verify_kind(tokens, i, errs, "...")
    end
-   return verify_kind(tokens, i, errs, "word", "variable")
+   return verify_kind(tokens, i, errs, "identifier", "variable")
 end
 
 local function parse_variable_name(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
    local is_const: boolean = false
    local node: Node
-   i, node = verify_kind(tokens, i, errs, "word")
+   i, node = verify_kind(tokens, i, errs, "identifier")
    if not node then
       return i
    end
    if tokens[i].tk == "<" then
       i = i + 1
       local annotation: Node
-      i, annotation = verify_kind(tokens, i, errs, "word")
+      i, annotation = verify_kind(tokens, i, errs, "identifier")
       if annotation and annotation.tk == "const" then
          is_const = true
       end
@@ -1270,7 +1270,7 @@ local function parse_argument(tokens: {Token}, i: number, errs: {ParseError}): n
    if tokens[i].tk == "..." then
       i, node = verify_kind(tokens, i, errs, "...")
    else
-      i, node = verify_kind(tokens, i, errs, "word", "variable")
+      i, node = verify_kind(tokens, i, errs, "identifier", "variable")
    end
    if tokens[i].tk == ":" then
       i = i + 1
@@ -1288,7 +1288,7 @@ local function parse_local_function(tokens: {Token}, i: number, errs: {ParseErro
    local node = new_node(tokens, i, "local_function")
    i = verify_tk(tokens, i, errs, "local")
    i = verify_tk(tokens, i, errs, "function")
-   i, node.name = verify_kind(tokens, i, errs, "word")
+   i, node.name = verify_kind(tokens, i, errs, "identifier")
    return parse_function_args_rets_body(tokens, i, errs, node)
 end
 
@@ -1298,14 +1298,14 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
    local node = fn
    i = verify_tk(tokens, i, errs, "function")
    local names: {Node} = {}
-   i, names[1] = verify_kind(tokens, i, errs, "word", "variable")
+   i, names[1] = verify_kind(tokens, i, errs, "identifier", "variable")
    while tokens[i].tk == "." do
       i = i + 1
-      i, names[#names + 1] = verify_kind(tokens, i, errs, "word")
+      i, names[#names + 1] = verify_kind(tokens, i, errs, "identifier")
    end
    if tokens[i].tk == ":" then
       i = i + 1
-      i, names[#names + 1] = verify_kind(tokens, i, errs, "word")
+      i, names[#names + 1] = verify_kind(tokens, i, errs, "identifier")
       fn.is_method = true
    end
 
@@ -1314,7 +1314,7 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
       local owner = names[1]
       for i = 2, #names - 1 do
          local dot = { y = names[i].y, x = names[i].x - 1, arity = 2, op = "." }
-         names[i].kind = "word"
+         names[i].kind = "identifier"
          local op = { y = names[i].y, x = names[i].x, kind = "op", op = dot, e1 = owner, e2 = names[i] }
          owner = op
       end
@@ -1375,7 +1375,7 @@ end
 local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    local node = new_node(tokens, i, "fornum")
    i = i + 1
-   i, node.var = verify_kind(tokens, i, errs, "word")
+   i, node.var = verify_kind(tokens, i, errs, "identifier")
    i = verify_tk(tokens, i, errs, "=")
    i, node.from = parse_expression(tokens, i, errs)
    i = verify_tk(tokens, i, errs, ",")
@@ -1412,7 +1412,7 @@ local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): numb
 end
 
 local function parse_for(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if tokens[i+1].kind == "word" and tokens[i+2].tk == "=" then
+   if tokens[i+1].kind == "identifier" and tokens[i+2].tk == "=" then
       return parse_fornum(tokens, i, errs)
    else
       return parse_forin(tokens, i, errs)
@@ -1491,7 +1491,7 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
             def.elements = t
          else
             local v: Node
-            i, v = verify_kind(tokens, i, errs, "word", "variable")
+            i, v = verify_kind(tokens, i, errs, "identifier", "variable")
             if not v then
                return fail(tokens, i, errs, "expected a variable name")
             end
@@ -1807,7 +1807,7 @@ local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node
    elseif ast.kind == "newtype" then
       xs[1] = recurse_type(ast.newtype, visit_type)
    elseif ast.kind == "variable"
-          or ast.kind == "word"
+          or ast.kind == "identifier"
           or ast.kind == "string"
           or ast.kind == "number"
           or ast.kind == "break"
@@ -2269,7 +2269,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    visit_node["values"] = visit_node["variables"]
    visit_node["expression_list"] = visit_node["variables"]
    visit_node["argument_list"] = visit_node["variables"]
-   visit_node["word"] = visit_node["variable"]
+   visit_node["identifier"] = visit_node["variable"]
    visit_node["string"] = visit_node["variable"]
    visit_node["number"] = visit_node["variable"]
    visit_node["nil"] = visit_node["variable"]
@@ -3399,7 +3399,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
          assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
 
-         if key.typename == "string" or key.kind == "word" then -- "word" is a plain atom (e.g 'insert' in 'table.insert')
+         if key.typename == "string" or key.kind == "identifier" then -- "identifier" is a plain atom (e.g 'insert' in 'table.insert')
             if tbl.fields[key.tk] then
                return tbl.fields[key.tk]
             end
@@ -4098,7 +4098,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             end
          end,
       },
-      ["word"] = {
+      ["identifier"] = {
          after = function(node: Node, children: {Type}): Type
             node.type = { typename = "none" } -- type is resolved elsewhere
          end,
