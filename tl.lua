@@ -874,12 +874,11 @@ parse_type = function(tokens, i, errs)
       tokens[i].tk == "number" then
       return i + 1, { ["kind"] = "typedecl", ["typename"] = tokens[i].tk, }
    elseif tokens[i].tk == "table" then
-      return i + 1, {
-         ["kind"] = "typedecl",
-         ["typename"] = "map",
-         ["keys"] = { ["typename"] = "any", },
-         ["values"] = { ["typename"] = "any", },
-      }
+      local typ = new_type(tokens, i, "typedecl")
+      typ.typename = "map"
+      typ.keys = { ["typename"] = "any", }
+      typ.values = { ["typename"] = "any", }
+      return i + 1, typ
    elseif tokens[i].tk == "function" then
       return parse_function_type(tokens, i, errs)
    elseif tokens[i].tk == "{" then
@@ -904,11 +903,9 @@ parse_type = function(tokens, i, errs)
    elseif tokens[i].tk == "`" then
       return parse_typevar_type(tokens, i, errs)
    elseif tokens[i].kind == "identifier" then
-      local typ = {
-         ["kind"] = "typedecl",
-         ["typename"] = "nominal",
-         ["name"] = tokens[i].tk,
-      }
+      local typ = new_type(tokens, i, "typedecl")
+      typ.typename = "nominal"
+      typ.name = tokens[i].tk
       i = i + 1
       if tokens[i].tk == "<" then
          i, typ.typevals = parse_typeval_list(tokens, i, errs)
@@ -1820,8 +1817,10 @@ local function recurse_node(ast, visit_node, visit_type)
       ast.kind == "nil" or
       ast.kind == "..." or
       ast.kind == "boolean" then
-
- else
+      if ast.decltype then
+         xs[1] = recurse_type(ast.decltype, visit_type)
+      end
+   else
       if not ast.kind then
          error("wat: " .. inspect(ast))
       end
@@ -4162,6 +4161,11 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    local visit_type = {
       ["typedecl"] = {
          ["after"] = function(typ, children)
+            if typ.typename == "nominal" then
+               if not find_var(typ.name) then
+                  table.insert(errors, { ["y"] = typ.y, ["x"] = typ.x, ["err"] = "unknown type " .. typ.name, ["filename"] = filename, })
+               end
+            end
             return typ
          end,
       },

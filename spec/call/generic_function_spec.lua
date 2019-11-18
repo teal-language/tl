@@ -263,6 +263,9 @@ describe("generic function", function()
    end)
    it("propagates resolved typevar in return type", function()
       local tokens = tl.lex([[
+         local Node = record
+         end
+
          local VisitorCallbacks = record<`N, `X>
          end
 
@@ -282,6 +285,9 @@ describe("generic function", function()
    it("checks that typevars that appear in multiple arguments must match", function()
       -- pass
       local tokens = tl.lex([[
+         local Node = record
+         end
+
          local VisitorCallbacks = record<`X, `Y>
          end
 
@@ -299,6 +305,9 @@ describe("generic function", function()
       assert.same({}, errors)
       -- fail
       local tokens = tl.lex([[
+         local Node = record
+         end
+
          local VisitorCallbacks = record<`X, `Y>
          end
 
