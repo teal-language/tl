@@ -1669,39 +1669,38 @@ local VisitorCallbacks = record<`N, `T>
    after: function(`N, {`T}, `T): `T
 end
 
-local function visit_before(ast: `N, kind: string, visit: {string:VisitorCallbacks<`N,`T>}): `T
-   assert(visit[kind], "no visitor for " .. kind)
-   if visit["@before"] and visit["@before"].before then
-      visit["@before"].before(ast)
-   end
-   if visit[kind].before then
-      visit[kind].before(ast)
-   end
-   if visit["@before"] and visit["@before"].after then
-      visit["@before"].after(ast)
+local Visitor = record<`K, `N, `T>
+   cbs: {`K:VisitorCallbacks<`N, `T>}
+   after: VisitorCallbacks<`N, `T>
+end
+
+local function visit_before(ast: `N, kind: `K, visit: Visitor<`K,`N,`T>): `T
+   assert(visit.cbs[kind], "no visitor for " .. (kind as string))
+   if visit.cbs[kind].before then
+      visit.cbs[kind].before(ast)
    end
 end
 
-local function visit_after(ast: `N, kind: string, visit: {string:VisitorCallbacks<`N,`T>}, xs: {`T}): `T
-   if visit["@after"] and visit["@after"].before then
-      visit["@after"].before(ast, xs)
+local function visit_after(ast: `N, kind: `K, visit: Visitor<`K, `N,`T>, xs: {`T}): `T
+   if visit.after and visit.after.before then
+      visit.after.before(ast, xs)
    end
    local ret: `T
-   if visit[kind].after then
-      ret = visit[kind].after(ast, xs)
+   if visit.cbs[kind].after then
+      ret = visit.cbs[kind].after(ast, xs)
    end
-   if visit["@after"] and visit["@after"].after then
-      ret = visit["@after"].after(ast, xs, ret)
+   if visit.after and visit.after.after then
+      ret = visit.after.after(ast, xs, ret)
    end
    return ret
 end
 
-local function recurse_type(ast: Type, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
-   visit_before(ast, ast.kind, visit_type)
+local function recurse_type(ast: Type, visit: Visitor<string, Type, `T>): `T
+   visit_before(ast, ast.kind, visit)
    local xs: {`T} = {}
    if ast.kind == "type_list" then
       for i, child in ipairs(ast) do
-         xs[i] = recurse_type(child, visit_type)
+         xs[i] = recurse_type(child, visit)
       end
    elseif ast.kind == "typedecl" then
    else
@@ -1710,10 +1709,12 @@ local function recurse_type(ast: Type, visit_type: {string:VisitorCallbacks<Type
       end
       error("unknown node kind " .. ast.kind)
    end
-   return visit_after(ast, ast.kind, visit_type, xs)
+   return visit_after(ast, ast.kind, visit, xs)
 end
 
-local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+local function recurse_node(ast: Node,
+                            visit_node: Visitor<string, Node, `T>,
+                            visit_type: Visitor<string, Type, `T>): `T
    if not ast then
       -- parse error
       return
@@ -1761,8 +1762,8 @@ local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node
    elseif ast.kind == "forin" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       xs[2] = recurse_node(ast.exps, visit_node, visit_type)
-      if visit_node["forin"].before_statements then
-         visit_node["forin"].before_statements(ast)
+      if visit_node.cbs["forin"].before_statements then
+         visit_node.cbs["forin"].before_statements(ast)
       end
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "fornum" then
@@ -1792,8 +1793,8 @@ local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node
       xs[2] = recurse_node(ast.name, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
       xs[4] = recurse_type(ast.rets, visit_type)
-      if visit_node["record_function"].before_statements then
-         visit_node["record_function"].before_statements(ast, xs)
+      if visit_node.cbs["record_function"].before_statements then
+         visit_node.cbs["record_function"].before_statements(ast, xs)
       end
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "op" then
@@ -1931,7 +1932,9 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       return table.concat(out)
    end
 
-   local visit_node: {string:VisitorCallbacks<Node, Output>} = {
+   local visit_node: Visitor<string, Node, Output> = {}
+
+   visit_node.cbs = {
       ["statements"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
@@ -2263,7 +2266,8 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       },
    }
 
-   local visit_type: {string:VisitorCallbacks<Type, Output>} = {
+   local visit_type: Visitor<string, Type, Output> = {}
+   visit_type.cbs = {
       ["type_list"] = {
          after = function(typ: Type, children: {Output}): Output
             local out: Output = { y = typ.y, h = 0 }
@@ -2272,17 +2276,17 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       },
    }
 
-   visit_node["values"] = visit_node["variables"]
-   visit_node["expression_list"] = visit_node["variables"]
-   visit_node["argument_list"] = visit_node["variables"]
-   visit_node["identifier"] = visit_node["variable"]
-   visit_node["string"] = visit_node["variable"]
-   visit_node["number"] = visit_node["variable"]
-   visit_node["nil"] = visit_node["variable"]
-   visit_node["boolean"] = visit_node["variable"]
-   visit_node["..."] = visit_node["variable"]
+   visit_node.cbs["values"] = visit_node.cbs["variables"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["identifier"] = visit_node.cbs["variable"]
+   visit_node.cbs["string"] = visit_node.cbs["variable"]
+   visit_node.cbs["number"] = visit_node.cbs["variable"]
+   visit_node.cbs["nil"] = visit_node.cbs["variable"]
+   visit_node.cbs["boolean"] = visit_node.cbs["variable"]
+   visit_node.cbs["..."] = visit_node.cbs["variable"]
 
-   visit_type["typedecl"] = visit_type["type_list"]
+   visit_type.cbs["typedecl"] = visit_type.cbs["type_list"]
 
    local out = recurse_node(ast, visit_node, visit_type)
    return concat_output(out)
@@ -3011,8 +3015,6 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       t = resolve_tuple(t)
       if t.typename == "nominal" then
          return resolve_nominal(t, typevars)
-      elseif t.typename == "typevar" then
-         return UNKNOWN
       end
       return t
    end
@@ -3570,7 +3572,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if is_a(b, a.keys) then
             node.type = a.values
          else
-            table.insert(errors, { y = node.y, x = node.x, err = "wrong index type: " .. show_type(b) .. ", expected " .. show_type(a.keys), filename = filename })
+            table.insert(errors, { y = node.y, x = node.x, err = "wrong index type: " .. show_type(orig_b) .. ", expected " .. show_type(a.keys), filename = filename })
             node.type = INVALID
          end
       elseif node.e2.kind == "string" then
@@ -3643,7 +3645,9 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return old
    end
 
-   local visit_node: {string:VisitorCallbacks<Node,Type>} = {
+   local visit_node: Visitor<string, Node, Type> = {}
+
+   visit_node.cbs = {
       ["statements"] = {
          before = function()
             table.insert(st, {})
@@ -4127,18 +4131,18 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       }
    }
 
-   visit_node["while"] = visit_node["if"]
-   visit_node["repeat"] = visit_node["if"]
-   visit_node["do"] = visit_node["if"]
-   visit_node["break"] = visit_node["if"]
-   visit_node["elseif"] = visit_node["if"]
-   visit_node["else"] = visit_node["if"]
+   visit_node.cbs["while"] = visit_node.cbs["if"]
+   visit_node.cbs["repeat"] = visit_node.cbs["if"]
+   visit_node.cbs["do"] = visit_node.cbs["if"]
+   visit_node.cbs["break"] = visit_node.cbs["if"]
+   visit_node.cbs["elseif"] = visit_node.cbs["if"]
+   visit_node.cbs["else"] = visit_node.cbs["if"]
 
-   visit_node["values"] = visit_node["variables"]
-   visit_node["expression_list"] = visit_node["variables"]
-   visit_node["argument_list"] = visit_node["variables"]
+   visit_node.cbs["values"] = visit_node.cbs["variables"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
 
-   visit_node["string"] = {
+   visit_node.cbs["string"] = {
       after = function(node: Node, children: {Type}): Type
          node.type = {
             typename = node.kind,
@@ -4147,13 +4151,13 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          return node.type
       end,
    }
-   visit_node["number"] = visit_node["string"]
-   visit_node["nil"] = visit_node["string"]
-   visit_node["boolean"] = visit_node["string"]
-   visit_node["array"] = visit_node["string"]
-   visit_node["..."] = visit_node["variable"]
+   visit_node.cbs["number"] = visit_node.cbs["string"]
+   visit_node.cbs["nil"] = visit_node.cbs["string"]
+   visit_node.cbs["boolean"] = visit_node.cbs["string"]
+   visit_node.cbs["array"] = visit_node.cbs["string"]
+   visit_node.cbs["..."] = visit_node.cbs["variable"]
 
-   visit_node["@after"] = {
+   visit_node.after = {
       after = function(node: Node, children: {Type}): Type
          assert(type(node.type) == "table", node.kind .. " did not produce a type")
          assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
@@ -4161,31 +4165,33 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       end
    }
 
-   local visit_type: {string:VisitorCallbacks<Type,Type>} = {
-      ["typedecl"] = {
-         after = function(typ: Type, children: {Type}): Type
-            if typ.typename == "nominal" then
-               if not find_var(typ.name) then
-                  table.insert(errors, { ["y"] = typ.y, ["x"] = typ.x, ["err"] = "unknown type " .. typ.name, ["filename"] = filename, })
+   local visit_type: Visitor<string,Type,Type> = {
+      cbs = {
+         ["typedecl"] = {
+            after = function(typ: Type, children: {Type}): Type
+               if typ.typename == "nominal" then
+                  if not find_var(typ.name) then
+                     table.insert(errors, { ["y"] = typ.y, ["x"] = typ.x, ["err"] = "unknown type " .. typ.name, ["filename"] = filename, })
+                  end
                end
-            end
-            return typ
-         end,
+               return typ
+            end,
+         },
+         ["type_list"] = {
+            after = function(typ: Type, children: {Type}): Type
+               local ret: Type = children
+               ret.typename = "tuple"
+               return ret
+            end,
+         },
       },
-      ["type_list"] = {
-         after = function(typ: Type, children: {Type}): Type
-            local ret: Type = children
-            ret.typename = "tuple"
-            return ret
-         end,
-      },
-      ["@after"] = {
+      after = {
          after = function(typ: Type, children: {Type}, ret: Type): Type
             assert(type(ret) == "table", typ.kind .. " did not produce a type")
             assert(type(ret.typename) == "string", typ.kind .. " type does not have a typename")
             return ret
          end
-      },
+      }
    }
 
    recurse_node(ast, visit_node, visit_type)
