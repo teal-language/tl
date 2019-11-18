@@ -3237,10 +3237,10 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          return true
       elseif (not for_equality) and t2.typename == "boolean" then -- all values can be used in a boolean context (but not in == or ~=)
          return true
-      elseif t1.typename ~= t2.typename then
-         return false
+      elseif t1.typename == t2.typename then
+         return true
       end
-      return true
+      return false
    end
 
    local function assert_is_a(node: Node, t1: Type, t2: Type, typevars: {string:Type}, context: string)

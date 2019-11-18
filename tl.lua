@@ -3237,10 +3237,10 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          return true
       elseif not for_equality and t2.typename == "boolean" then
          return true
-      elseif t1.typename ~= t2.typename then
-         return false
+      elseif t1.typename == t2.typename then
+         return true
       end
-      return true
+      return false
    end
 
    local function assert_is_a(node, t1, t2, typevars, context)
