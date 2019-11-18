@@ -39,12 +39,23 @@ local keywords: {string:boolean} = {
    ["global"] = true,
 }
 
+local TokenKind = enum
+   "keyword"
+   "op"
+   "string"
+   "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "."
+   "..."
+   "identifier"
+   "number"
+   "$EOF$"
+end
+
 local Token = record
    x: number
    y: number
    i: number
    tk: string
-   kind: string
+   kind: TokenKind
 end
 
 local lex_word_start: {string:boolean} = {}
@@ -99,10 +110,42 @@ for _, c in ipairs({"+", "*", "/", "|", "&", "%", "^"}) do
    lex_op_start[c] = true
 end
 
+local LexState = enum
+   "start"
+   "any"
+   "identifier"
+   "maybecomment"
+   "maybecomment2"
+   "maybedotdot"
+   "maybedotdotdot"
+   "decimal_number"
+   "decimal_or_hex"
+   "decimal_float"
+   "power"
+   "power_sign"
+   "hex_number"
+   "hex_float"
+   "lt"
+   "gt"
+   "maybeequals"
+   "maybelongstring"
+   "dblquote_string"
+   "singlequote_string"
+   "escape_dblquote_string"
+   "escape_singlequote_string"
+   "comment"
+   "longcomment"
+   "maybelongcomment"
+   "maybelongcommentend"
+   "longstring"
+   "maybelongstring"
+   "maybelongstringend"
+end
+
 function tl.lex(input: string): {Token}
    local tokens: {Token} = {}
 
-   local state = "start"
+   local state: LexState = "start"
    local fwd = true
    local y = 1
    local x = 0
@@ -120,7 +163,7 @@ function tl.lex(input: string): {Token}
       table.remove(tokens)
    end
 
-   local function end_token(kind: string, last: number, t: string)
+   local function end_token(kind: TokenKind, last: number, t: string)
       local token: Token = tokens[#tokens]
       token.tk = t or input:sub(token.i, last or i) or ""
       if keywords[token.tk] then
@@ -199,7 +242,7 @@ function tl.lex(input: string): {Token}
             begin_token()
          elseif lex_char_symbols[c] then
             begin_token()
-            end_token(c)
+            end_token(c as TokenKind)
          elseif lex_op_start[c] then
             begin_token()
             end_token("op")
@@ -561,12 +604,45 @@ local ParseError = record
    filename: string
 end
 
+local TypeKind = enum
+   "typedecl"
+   "typevar_list"
+   "typeval_list"
+   "type_list"
+end
+
+local TypeName = enum
+   "typetype"
+   "typevar"
+   "function"
+   "array"
+   "map"
+   "arrayrecord"
+   "record"
+   "enum"
+   "boolean"
+   "string"
+   "nil"
+   "number"
+   "nominal"
+   "bad_nominal"
+   "emptytable"
+   "table_item"
+   "unknown_emptytable_value"
+   "tuple"
+   "poly"
+   "any"
+   "unknown"
+   "invalid"
+   "none"
+end
+
 local Type = record
    {Type}
    y: number
    x: number
-   kind: string
-   typename: string
+   kind: TypeKind
+   typename: TypeName
    tk: string
 
    yend: number
@@ -630,12 +706,50 @@ local Operator = record
    prec: number
 end
 
+local NodeKind = enum
+   "op"
+   "nil"
+   "string"
+   "number"
+   "boolean"
+   "table_literal"
+   "table_item"
+   "function"
+   "expression_list"
+   "enum_item"
+   "if"
+   "elseif"
+   "else"
+   "while"
+   "fornum"
+   "forin"
+   "repeat"
+   "do"
+   "break"
+   "return"
+   "values"
+   "newtype"
+   "variable"
+   "variables"
+   "statements"
+   "assignment"
+   "argument_list"
+   "local_function"
+   "global_function"
+   "record_function"
+   "local_declaration"
+   "global_declaration"
+   "identifier"
+   "cast"
+   "..."
+end
+
 local Node = record
    {Node}
    y: number
    x: number
    tk: string
-   kind: string
+   kind: NodeKind
 
    yend: number
 
@@ -710,17 +824,17 @@ local function verify_tk(tokens: {Token}, i: number, errs: {ParseError}, tk: str
    return fail(tokens, i, errs, "syntax error, expected '" .. tk .. "'")
 end
 
-local function new_node(tokens: {Token}, i: number, kind: string): Node
+local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
 
-local function new_type(tokens: {Token}, i: number, kind: string): Type
+local function new_type(tokens: {Token}, i: number, kind: TypeKind): Type
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
 
-local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind: string, node_kind: string): number, Node
+local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind: TokenKind, node_kind: NodeKind): number, Node
    if tokens[i].kind == kind then
       return i + 1, new_node(tokens, i, node_kind)
    end
@@ -877,7 +991,7 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
    if tokens[i].tk == "string"
       or tokens[i].tk == "boolean"
       or tokens[i].tk == "number" then
-      return i + 1, { kind = "typedecl", typename = tokens[i].tk }
+      return i + 1, { kind = "typedecl", typename = tokens[i].tk as TypeName }
    elseif tokens[i].tk == "table" then
       local typ = new_type(tokens, i, "typedecl")
       typ.typename = "map"
@@ -1590,7 +1704,7 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
    return fail(tokens, i, errs)
 end
 
-local function parse_variable_declarations(tokens: {Token}, i: number, errs: {ParseError}, node_name: string): number, Node
+local function parse_variable_declarations(tokens: {Token}, i: number, errs: {ParseError}, node_name: NodeKind): number, Node
    local asgn: Node = new_node(tokens, i, node_name)
 
    asgn.vars = new_node(tokens, i, "variables")
@@ -1720,7 +1834,7 @@ local function visit_after(ast: `N, kind: `K, visit: Visitor<`K, `N,`T>, xs: {`T
    return ret
 end
 
-local function recurse_type(ast: Type, visit: Visitor<string, Type, `T>): `T
+local function recurse_type(ast: Type, visit: Visitor<TypeKind, Type, `T>): `T
    visit_before(ast, ast.kind, visit)
    local xs: {`T} = {}
    if ast.kind == "type_list" then
@@ -1738,8 +1852,8 @@ local function recurse_type(ast: Type, visit: Visitor<string, Type, `T>): `T
 end
 
 local function recurse_node(ast: Node,
-                            visit_node: Visitor<string, Node, `T>,
-                            visit_type: Visitor<string, Type, `T>): `T
+                            visit_node: Visitor<NodeKind, Node, `T>,
+                            visit_type: Visitor<TypeKind, Type, `T>): `T
    if not ast then
       -- parse error
       return
@@ -1957,7 +2071,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       return table.concat(out)
    end
 
-   local visit_node: Visitor<string, Node, Output> = {}
+   local visit_node: Visitor<NodeKind, Node, Output> = {}
 
    visit_node.cbs = {
       ["statements"] = {
@@ -2291,7 +2405,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       },
    }
 
-   local visit_type: Visitor<string, Type, Output> = {}
+   local visit_type: Visitor<TypeKind, Type, Output> = {}
    visit_type.cbs = {
       ["type_list"] = {
          after = function(typ: Type, children: {Output}): Output
@@ -2421,7 +2535,7 @@ local unop_types: {string:{string:Type}} = {
    },
 }
 
-local binop_types: {string:{string:{string:Type}}} = {
+local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    ["+"] = numeric_binop,
    ["-"] = {
       ["number"] = {
@@ -3784,7 +3898,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return old
    end
 
-   local visit_node: Visitor<string, Node, Type> = {}
+   local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
       ["statements"] = {
@@ -4305,7 +4419,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          node.type = {
             y = node.y,
             x = node.x,
-            typename = node.kind,
+            typename = node.kind as TypeName,
             tk = node.tk,
          }
          return node.type
@@ -4314,7 +4428,6 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    visit_node.cbs["number"] = visit_node.cbs["string"]
    visit_node.cbs["nil"] = visit_node.cbs["string"]
    visit_node.cbs["boolean"] = visit_node.cbs["string"]
-   visit_node.cbs["array"] = visit_node.cbs["string"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
 
    visit_node.after = {
@@ -4325,7 +4438,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       end
    }
 
-   local visit_type: Visitor<string,Type,Type> = {
+   local visit_type: Visitor<TypeKind,Type,Type> = {
       cbs = {
          ["typedecl"] = {
             after = function(typ: Type, children: {Type}): Type

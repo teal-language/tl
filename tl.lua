@@ -39,6 +39,17 @@ local keywords = {
    ["global"] = true,
 }
 
+local TokenKind = {}
+
+
+
+
+
+
+
+
+
+
 local Token = {}
 
 
@@ -98,6 +109,38 @@ local lex_op_start = {}
 for _, c in ipairs({ [1] = "+", [2] = "*", [3] = "/", [4] = "|", [5] = "&", [6] = "%", [7] = "^", }) do
    lex_op_start[c] = true
 end
+
+local LexState = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function tl.lex(input)
    local tokens = {}
@@ -561,6 +604,39 @@ local ParseError = {}
 
 
 
+local TypeKind = {}
+
+
+
+
+
+
+local TypeName = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local Type = {}
 
 
@@ -623,6 +699,44 @@ local Type = {}
 
 
 local Operator = {}
+
+
+
+
+
+
+
+local NodeKind = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4314,7 +4428,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    visit_node.cbs["number"] = visit_node.cbs["string"]
    visit_node.cbs["nil"] = visit_node.cbs["string"]
    visit_node.cbs["boolean"] = visit_node.cbs["string"]
-   visit_node.cbs["array"] = visit_node.cbs["string"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
 
    visit_node.after = {
