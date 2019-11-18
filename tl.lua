@@ -3204,9 +3204,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             local matchvalues = is_a(t2.values, t1.values, typevars)
             return matchkeys and matchvalues
          elseif t1.typename == "array" then
-            return is_a(NUMBER, t2.keys, typevars) and is_a(t1.elements, t2.values, typevars)
+            return is_a(t2.keys, NUMBER, typevars) and is_a(t1.elements, t2.values, typevars)
          elseif t1.typename == "record" or t1.typename == "arrayrecord" then
-            if not is_a(STRING, t2.keys, typevars) then
+            if not is_a(t2.keys, STRING, typevars) then
                return false, "can't match a record to a map with non-string keys"
             end
             return match_fields_to_map(t1, t2, typevars)
@@ -4034,7 +4034,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             elseif node.op.op == "." then
                a = resolve_unary(a, {})
                if a.typename == "map" then
-                  if is_a(STRING, a.keys) then
+                  if is_a(a.keys, STRING) then
                      node.type = a.values
                   else
                      table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "cannot use . index, expects keys of type " .. show_type(a.keys), ["filename"] = filename, })
