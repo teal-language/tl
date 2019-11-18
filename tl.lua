@@ -619,6 +619,9 @@ local Type = {}
 
 
 
+
+
+
 local Operator = {}
 
 
@@ -1080,7 +1083,11 @@ do
             return false
          end
          local operator = table.remove(operators)
-         table.insert(operands, { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = operator, ["e1"] = t1, ["e2"] = t2, })
+         local o = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = operator, ["e1"] = t1, ["e2"] = t2, }
+         if operator.op == "as" and t1.conststr then
+            o.conststr = t1.conststr
+         end
+         table.insert(operands, o)
       else
          local t1 = table.remove(operands)
          if not t1 then
@@ -1513,6 +1520,21 @@ local function parse_newtype(tokens, i, errs)
       node.yend = tokens[i].y
       i = verify_tk(tokens, i, errs, "end")
       return i, node
+   elseif tokens[i].tk == "enum" then
+      local def = new_type(tokens, i, "typedecl")
+      node.newtype.def = def
+      def.typename = "enum"
+      def.enumset = {}
+      i = i + 1
+      while not (not tokens[i] or tokens[i].tk == "end") do
+         local item
+         i, item = verify_kind(tokens, i, errs, "string", "enum_item")
+         table.insert(node, item)
+         def.enumset[unquote(item.tk)] = true
+      end
+      node.yend = tokens[i].y
+      i = verify_tk(tokens, i, errs, "end")
+      return i, node
    elseif tokens[i].tk == "functiontype" then
       local typevars
       i = i + 1
@@ -1530,6 +1552,7 @@ local function parse_newtype(tokens, i, errs)
 end
 
 local is_newtype = {
+   ["enum"] = true,
    ["record"] = true,
    ["functiontype"] = true,
 }
@@ -2448,15 +2471,28 @@ local binop_types = {
       ["map"] = {
          ["boolean"] = BOOLEAN,
       },
+      ["enum"] = {
+         ["string"] = STRING,
+      },
+      ["string"] = {
+         ["enum"] = STRING,
+      },
    },
    [".."] = {
       ["string"] = {
          ["string"] = STRING,
+         ["enum"] = STRING,
          ["number"] = STRING,
       },
       ["number"] = {
          ["number"] = STRING,
          ["string"] = STRING,
+         ["enum"] = STRING,
+      },
+      ["enum"] = {
+         ["number"] = STRING,
+         ["string"] = STRING,
+         ["enum"] = STRING,
       },
    },
 }
@@ -3197,14 +3233,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          return true
       elseif t2.typename == "poly" then
          for _, t in ipairs(t2.poly) do
-            if is_a(t1, t, typevars) then
+            if is_a(t1, t, typevars, for_equality) then
                return true
             end
          end
          return false, terr(t1, "no match with poly")
       elseif t1.typename == "poly" then
          for _, t in ipairs(t1.poly) do
-            if is_a(t, t2, typevars) then
+            if is_a(t, t2, typevars, for_equality) then
                return true
             end
          end
@@ -3229,6 +3265,22 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             end
          end
          return false, terr(t1, t1.name .. " is not a " .. t2.name)
+      elseif t1.typename == "enum" and t2.typename == "string" then
+         local ok = for_equality and
+         t2.tk and t1.enumset[unquote(t2.tk)] or
+         true
+         if ok then
+            return true
+         else
+            return false, terr(t1, "enum is incompatible with " .. show_type(t2))
+         end
+      elseif t1.typename == "string" and t2.typename == "enum" then
+         local ok = t1.tk and t2.enumset[unquote(t1.tk)]
+         if ok then
+            return true
+         else
+            return false, terr(t1, show_type(t1) .. " is not an enum")
+         end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1, typevars)
          local t2u = resolve_unary(t2, typevars)
@@ -3289,6 +3341,13 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          elseif t1.typename == "record" or t1.typename == "arrayrecord" then
             if not is_a(t2.keys, STRING, typevars) then
                return false, terr(t1, "can't match a record to a map with non-string keys")
+            end
+            if t2.keys.typename == "enum" then
+               for _, k in ipairs(t1.field_order) do
+                  if not t2.keys.enumset[k] then
+                     return false, terr(t1, "key is not an enum value: " .. k)
+                  end
+               end
             end
             return match_fields_to_map(t1, t2, typevars)
          end
