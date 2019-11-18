@@ -75,7 +75,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got string, expected number", errors[1].err, 1, true)
+      assert.match("got string \"hello\", expected number", errors[1].err, 1, true)
    end)
 
    it("can use the function along with an indirect typevar", function()
@@ -115,7 +115,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got string, expected number", errors[1].err, 1, true)
+      assert.match("got string \"hello\", expected number", errors[1].err, 1, true)
    end)
 
 

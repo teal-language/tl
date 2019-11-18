@@ -25,7 +25,7 @@ describe("<", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.same("cannot use operator < for types number and string", errors[1].err)
+      assert.same("cannot use operator < for types number and string \"hello\"", errors[1].err)
    end)
    it("fails with not gotcha", function()
       local tokens = tl.lex([[

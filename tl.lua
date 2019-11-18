@@ -121,8 +121,6 @@ function tl.lex(input)
    end
 
    local function end_token(kind, last, t)
-      assert(type(kind) == "string")
-
       local token = tokens[#tokens]
       token.tk = t or input:sub(token.i, last or i) or ""
       if keywords[token.tk] then
@@ -2553,10 +2551,12 @@ local function show_type_base(t, typevars)
          table.insert(out, table.concat(rets, ","))
       end
       return table.concat(out)
-   elseif t.typename == "string" or
-      t.typename == "number" or
+   elseif t.typename == "number" or
       t.typename == "boolean" then
       return t.typename
+   elseif t.typename == "string" then
+      return t.typename ..
+      (t.tk and " " .. t.tk or "")
    elseif t.typename == "typevar" then
       return t.typevar
    elseif is_unknown(t) then

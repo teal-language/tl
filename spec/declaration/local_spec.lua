@@ -70,7 +70,7 @@ describe("local", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.match("x: got number, expected string", errors[1].err, 1, true)
-      assert.match("y: got string, expected number", errors[2].err, 1, true)
+      assert.match("y: got string \"a\", expected number", errors[2].err, 1, true)
       -- fail
       local tokens = tl.lex([[
          local x, y: number, string = 1, "a"
