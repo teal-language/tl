@@ -1717,7 +1717,7 @@ local function recurse_node(ast, visit_node, visit_type)
    if not ast then
 
       return
- end
+   end
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
    if ast.kind == "statements" or
@@ -2070,7 +2070,9 @@ function tl.pretty_print_ast(ast, fast)
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
             table.insert(out, "return")
-            add_child(out, children[1], " ")
+            if #children[1] > 0 then
+               add_child(out, children[1], " ")
+            end
             return out
          end,
       },
@@ -3247,7 +3249,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       t2 = resolve_tuple(t2)
       if lax and (is_unknown(t1) or is_unknown(t2)) then
          return
- end
+      end
 
       if t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
@@ -3256,14 +3258,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             infer_var(t2.emptytable_type, { ["typename"] = "map", ["keys"] = t2.emptytable_type.keys, ["values"] = t1, }, node)
          end
          return
- elseif t2.typename == "emptytable" then
+      elseif t2.typename == "emptytable" then
          if t1.typename == "array" or t1.typename == "map" or t1.typename == "record" or t1.typename == "arrayrecord" then
             infer_var(t2, t1, node)
          elseif t1.typename ~= "emptytable" then
             table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = context .. " mismatch: " .. (node.tk or node.op.op) .. ": assigning " .. show_type(t1) .. " to a variable declared with {}", ["filename"] = filename, })
          end
          return
- end
+      end
 
       local match, why_not = is_a(t1, t2, typevars)
       if not match then
@@ -3562,7 +3564,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                table.insert(errors, { ["y"] = node.y, ["x"] = node.x, ["err"] = "inconsistent index type: " .. show_type(b) .. ", expected " .. show_type(a.keys) .. inferred, ["filename"] = filename, })
                node.type = INVALID
                return
- end
+            end
          end
          node.type = { ["typename"] = "unknown_emptytable_value", ["emptytable_type"] = a, }
       elseif a.typename == "map" then

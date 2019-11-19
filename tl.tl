@@ -2070,7 +2070,9 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "return")
-            add_child(out, children[1], " ")
+            if #children[1] > 0 then
+               add_child(out, children[1], " ")
+            end
             return out
          end,
       },
