@@ -2012,7 +2012,6 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             add_child(out, children[1], " ")
             if not fast then
                indent = indent - 1
-               table.insert(out, ("   "):rep(indent))
             end
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
