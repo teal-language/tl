@@ -11,7 +11,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       local tokens = tl.lex([[
          local x = 1
          local y = 2
@@ -20,7 +20,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       -- pass
       local tokens = tl.lex([[
          local x = 1
@@ -41,7 +41,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       local tokens = tl.lex([[
          local x, y = 1, 2
          local z: table
@@ -49,7 +49,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       -- pass
       local tokens = tl.lex([[
          local x, y = 1, 2
@@ -79,7 +79,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       local tokens = tl.lex([[
          local x, y: number, string = 1, "a"
          local z: table
@@ -87,7 +87,7 @@ describe("local", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("mismatch: z", errors[1].err, 1, true)
+      assert.match("in assignment: got number", errors[1].err, 1, true)
       -- pass
       local tokens = tl.lex([[
          local x, y: number, string = 1, "a"

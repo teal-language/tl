@@ -10,7 +10,7 @@ describe("pcall", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast, false, "test.lua")
-      assert.match("error in argument 2: got number, expected string", errors[1].err, 1, true)
+      assert.match("argument 2: got number, expected string", errors[1].err, 1, true)
    end)
 
    it("returns the correct output arguments", function()
