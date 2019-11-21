@@ -3922,9 +3922,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                children[3][1] = rtype
                add_var("self", rtype)
             end
-         end,
-         after = function(node: Node, children: {Type}): Type
-            end_function_scope()
+
             local rtype = resolve_unary(get_self_type(children[1]))
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
@@ -3942,6 +3940,10 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             else
                table.insert(errors, { y = node.y, x = node.x, err = "not a module: " .. show_type(rtype), filename = filename })
             end
+         end,
+         after = function(node: Node, children: {Type}): Type
+            end_function_scope()
+
             node.type = { typename = "none" }
          end,
       },
