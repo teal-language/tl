@@ -2860,7 +2860,7 @@ local standard_library = {
       ["typename"] = "poly",
       ["poly"] = {
          [1] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = STRING, }, ["rets"] = { [1] = ALPHA, }, },
+         [2] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = BETA, }, ["rets"] = { [1] = ALPHA, }, },
       },
    },
    ["select"] = {
@@ -3806,15 +3806,28 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             for i = 1, math.min(#children[1], #rets) do
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
+
+
             if #st == 2 then
                module_type = resolve_unary(children[1])
             end
+
             node.type = { ["typename"] = "none", }
          end,
       },
       ["variables"] = {
          ["after"] = function(node, children)
             node.type = children
+
+
+            local n = #children
+            if n > 0 and children[n].typename == "tuple" then
+               local tuple = children[n]
+               for i, c in ipairs(tuple) do
+                  children[n + i - 1] = c
+               end
+            end
+
             node.type.typename = "tuple"
          end,
       },

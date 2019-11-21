@@ -2860,7 +2860,7 @@ local standard_library: {string:Type} = {
       typename = "poly",
       poly = {
          { typename = "function", args = { ALPHA }, rets = { ALPHA } },
-         { typename = "function", args = { ALPHA, STRING }, rets = { ALPHA } },
+         { typename = "function", args = { ALPHA, BETA }, rets = { ALPHA } },
       }
    },
    ["select"] = {
@@ -3806,15 +3806,28 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             for i = 1, math.min(#children[1], #rets) do
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
+
+            -- if at the toplevel
             if #st == 2 then
                module_type = resolve_unary(children[1])
             end
+
             node.type = { typename = "none" }
          end,
       },
       ["variables"] = {
          after = function(node: Node, children: {Type}): Type
             node.type = children
+
+            -- explode last tuple: (1, 2, (3, 4)) becomes (1, 2, 3, 4)
+            local n = #children
+            if n > 0 and children[n].typename == "tuple" then
+               local tuple = children[n]
+               for i, c in ipairs(tuple) do
+                  children[n + i - 1] = c
+               end
+            end
+
             node.type.typename = "tuple"
          end,
       },

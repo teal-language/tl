@@ -36,7 +36,7 @@ describe("record method call", function()
             return "what"
          end
          function foo()
-            r:f(r:f(...))
+            r:f(r:f("hello"))
          end
       ]])
       local errs = {}
