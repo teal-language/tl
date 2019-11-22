@@ -57,6 +57,65 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+   it("does not mix up typevars with the same name in different scopes", function()
+      -- pass
+      local tokens = tl.lex([[
+         local Convert = functiontype<`a, `b>(`a): `b
+
+         local function id(x: `a): `a
+            return x
+         end
+
+         local function convert_num_str(n: number): string
+            return tostring(n)
+         end
+
+         local function use_conv(x: `X, cvt: Convert<`X, `Y>): `Y
+            return id(cvt(x))
+         end
+
+         print(use_conv(122, convert_num_str) .. "!")
+      ]])
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors)
+      assert.same({}, syntax_errors)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+   it("catches incorrect typevars, does not mix up multiple uses", function()
+      -- fail
+      local tokens = tl.lex([[
+         local Convert = functiontype<`a, `b>(`a): `b
+
+         local function convert_num_str(n: number): string
+            return tostring(n)
+         end
+
+         local function convert_str_num(s: string): number
+            return tonumber(s)
+         end
+
+         local function use_conv(x: `X, cvt: Convert<`X, `Y>, tvc: Convert<`X, `Y>): `Y -- tvc is not flipped!
+            return cvt(tvc(cvt(x)))
+         end
+
+         print(use_conv(122, convert_num_str, convert_str_num) .. "!")
+      ]])
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors)
+      assert.same({}, syntax_errors)
+      local errors = tl.type_check(ast)
+      assert.same(2, #errors)
+
+      assert.match("cannot use operator ..", errors[1].err, 1, true)
+      assert.same(15, errors[1].y)
+      assert.same(16, errors[1].x)
+
+      -- not the ideal message...
+      assert.match("argument 3: return 1: got number, expected string", errors[2].err, 1, true)
+      assert.same(15, errors[2].y)
+      assert.same(47, errors[2].x)
+   end)
    it("will catch if resolved typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
@@ -75,7 +134,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got string \"hello\", expected number", errors[1].err, 1, true)
+      assert.match("got string, expected number", errors[1].err, 1, true)
    end)
 
    it("can use the function along with an indirect typevar", function()
@@ -115,7 +174,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got string \"hello\", expected number", errors[1].err, 1, true)
+      assert.match("got string, expected number", errors[1].err, 1, true)
    end)
 
 

@@ -852,6 +852,8 @@ local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}
    i = i + 1
    i = verify_kind(tokens, i, errs, "identifier")
    return i, {
+      y = tokens[i - 2].y,
+      x = tokens[i - 2].x,
       kind = "typedecl",
       typename = "typevar",
       typevar = "`" .. tokens[i-1].tk,
@@ -2480,6 +2482,7 @@ local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Ty
          copy[k] = v
       end
    end
+   copy.tk = nil
    has_cycle[t] = nil
    return copy as Type
 end
@@ -3039,7 +3042,14 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
 
    local function compare_typevars(t1: Type, t2: Type, typevars: {string:Type}, comp: CompareTypes): boolean, {Error}
       if t1.typevar == t2.typevar then
-         return true
+         if not typevars then
+            return true
+         end
+         local has_t1 = not not typevars[t1.typevar]
+         local has_t2 = not not typevars[t2.typevar]
+         if has_t1 == has_t2 then
+            return true
+         end
       end
       if not typevars then
          return false, terr(t1, "got " .. show_type(t1) .. ", expected " .. show_type(t2))
@@ -3048,14 +3058,14 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if typevars[k] then
             return comp(a, b, typevars)
          else
-            typevars[k] = v
+            typevars[k] = resolve_typevars(v, typevars)
             return true
          end
       end
-      if t1.typename == "typevar" then
-         return cmp(t1.typevar, t2, typevars[t1.typevar], t2)
-      else
+      if t2.typename == "typevar" then
          return cmp(t2.typevar, t1, t1, typevars[t2.typevar])
+      else
+         return cmp(t1.typevar, t2, typevars[t1.typevar], t2)
       end
    end
 
