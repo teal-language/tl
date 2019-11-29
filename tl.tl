@@ -1718,6 +1718,7 @@ local function parse_variable_declarations(tokens: {Token}, i: number, errs: {Pa
 
    if tokens[i].tk == "=" then
       asgn.exps = new_node(tokens, i, "values")
+      local v = 1
       repeat
          i = i + 1
          local val: Node
@@ -1726,10 +1727,12 @@ local function parse_variable_declarations(tokens: {Token}, i: number, errs: {Pa
                return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
             end
             i, val = parse_newtype(tokens, i, errs)
+            val.newtype.def.name = asgn.vars[v].tk
          else
             i, val = parse_expression(tokens, i, errs)
          end
          table.insert(asgn.exps, val)
+         v = v + 1
       until tokens[i].tk ~= ","
    end
    return i, asgn
@@ -3393,7 +3396,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if ok then
             return true
          else
-            return false, terr(t1, show_type(t1) .. " is not an enum")
+            return false, terr(t1, show_type(t1) .. " is not a member of " .. t2.name)
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1, typevars)
