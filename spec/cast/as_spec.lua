@@ -25,6 +25,27 @@ describe("cast", function()
       assert.same({}, errors)
    end)
 
+   it("can cast to enum", function()
+      local tokens = tl.lex([[
+         local Direction = enum
+            "north"
+            "south"
+            "east"
+            "west"
+         end
+
+         local function go(d: Direction)
+            print("I am going " .. d .. "!") -- d works as a string!
+         end
+
+         -- a cast can force an invalid value into an enum type
+         go("up" as Direction)
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast, false, "test.lua")
+      assert.same({}, errors)
+   end)
+
    it("can be used inside table literals", function()
       local tokens = tl.lex([[
          local flux = {
