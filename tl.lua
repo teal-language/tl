@@ -698,6 +698,9 @@ local Type = {}
 
 
 
+
+
+
 local Operator = {}
 
 
@@ -3003,6 +3006,7 @@ local standard_library = {
    ["type"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
    ["utf8"] = {
       ["typename"] = "record",
+      ["needs_compat53"] = true,
       ["fields"] = {
          ["len"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
          ["offset"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
@@ -3057,6 +3061,28 @@ for _, t in pairs(standard_library) do
    end
 end
 
+local function add_compat53_entries(program, used_set)
+   if not next(used_set) then
+      return
+   end
+
+   local used_list = {}
+   for name, _ in pairs(used_set) do
+      table.insert(used_list, name)
+   end
+   table.sort(used_list)
+
+
+
+   for i, name in ipairs(used_list) do
+      local errs = {}
+      local text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
+      local tokens = tl.lex(text)
+      local _, code = tl.parse_program(tokens, {}, "@internal")
+      table.insert(program, i, code[1])
+   end
+end
+
 function tl.type_check(ast, lax, filename, modules, result, globals)
    modules = modules or {}
    result = result or {
@@ -3074,6 +3100,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          st[1][name] = { ["t"] = typ, ["is_const"] = true, }
       end
    end
+
+   local all_needs_compat53 = {}
 
    local errors = result.type_errors or {}
    local unknowns = result.unknowns or {}
@@ -3099,6 +3127,10 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
+            if i == 1 and scope[name].t.needs_compat53 then
+               all_needs_compat53[name] = true
+            end
+
             return scope[name].t, scope[name].is_const
          end
       end
@@ -4487,6 +4519,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    for i = #redundant, 1, -1 do
       table.remove(errors, redundant[i])
    end
+
+   add_compat53_entries(ast, all_needs_compat53)
 
    return errors, unknowns, module_type
 end
