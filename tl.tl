@@ -2969,6 +2969,7 @@ local standard_library: {string:Type} = {
             poly = {
                { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
                { typename = "function", args = { STRING, STRING, { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
+               { typename = "function", args = { STRING, STRING, { typename = "function", args = { VARARG_STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
                -- FIXME any other modes
             }
          },

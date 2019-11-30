@@ -2969,6 +2969,7 @@ local standard_library = {
             ["poly"] = {
                [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = STRING, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
                [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typename"] = "map", ["keys"] = STRING, ["values"] = STRING, }, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
+               [3] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = STRING, }, }, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
 
             },
          },
