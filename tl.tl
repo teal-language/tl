@@ -4288,10 +4288,12 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             if node.op.op == "@funcall" then
                if node.e1.tk == "rawget" then
                   if #b == 2 then
-                     if b[1].typename == "record" and node.e2[2].kind == "string" then
-                        node.type = match_record_key(node, b[1], { typename = "string", tk = assert(node.e2[2].conststr) }, b[1])
+                     local b1 = resolve_unary(b[1], {})
+                     local b2 = resolve_unary(b[2], {})
+                     if b1.typename == "record" and node.e2[2].conststr then
+                        node.type = match_record_key(node, b1, { typename = "string", tk = assert(node.e2[2].conststr) }, b1)
                      else
-                        do_index(node, b[1], b[2])
+                        do_index(node, b1, b2)
                      end
                   else
                      table.insert(errors, { y = node.y, x = node.x, err = "rawget expects two arguments", filename = filename })
