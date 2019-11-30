@@ -2644,7 +2644,8 @@ local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Ty
 end
 
 local function is_unknown(t: Type): boolean
-   return t.typename == "unknown" or t.typename == "unknown_emptytable_value"
+   return t.typename == "unknown"
+       or t.typename == "unknown_emptytable_value"
 end
 
 local show_type: function(Type, {string:Type}): string
@@ -2762,6 +2763,7 @@ local Unknown = record
 end
 
 local Result = record
+   ast: Node
    type: Type
    syntax_errors: {ParseError}
    type_errors: {Error}
@@ -3902,7 +3904,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       modules[module_name] = UNKNOWN
 
       local found, fd, tried = tl.search_module(module_name)
-      if found then
+      if found and (lax or found:match("tl$") as boolean) then
          fd:close()
          local _result, err: Result, string = tl.process(found, modules, result, st[1])
          assert(_result, err)
@@ -4571,6 +4573,8 @@ function tl.process(filename: string, modules: {string:Type}, result: Result, gl
 
    local error, unknown: {Error}, {Unknown}
    error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+
+   result.ast = program
 
    return result
 end

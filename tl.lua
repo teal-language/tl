@@ -2644,7 +2644,8 @@ local function resolve_typevars(t, typevars, has_cycle)
 end
 
 local function is_unknown(t)
-   return t.typename == "unknown" or t.typename == "unknown_emptytable_value"
+   return t.typename == "unknown" or
+   t.typename == "unknown_emptytable_value"
 end
 
 local show_type
@@ -2762,6 +2763,7 @@ local Unknown = {}
 
 
 local Result = {}
+
 
 
 
@@ -3902,7 +3904,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       modules[module_name] = UNKNOWN
 
       local found, fd, tried = tl.search_module(module_name)
-      if found then
+      if found and (lax or found:match("tl$")) then
          fd:close()
          local _result, err = tl.process(found, modules, result, st[1])
          assert(_result, err)
@@ -4571,6 +4573,8 @@ function tl.process(filename, modules, result, globals)
 
    local error, unknown
    error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+
+   result.ast = program
 
    return result
 end
