@@ -12,7 +12,6 @@ before_install:
   - pip install hererocks
   - hererocks lua_install -r^ --$LUA
   - export PATH=$PATH:$PWD/lua_install/bin # Add directory with all installed binaries to PATH
-  - ln -s $PWD/lua_install/bin/lua $PWD/lua_install/bin/lua_no_tailcalls
 
 install:
   - luarocks install busted
