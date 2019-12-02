@@ -2965,7 +2965,7 @@ local standard_library: {string:Type} = {
       typename = "record",
       fields = {
          ["sub"] = { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
-         ["match"] = { typename = "function", args = { STRING, STRING }, rets = { STRING } },
+         ["match"] = { typename = "function", args = { STRING, STRING }, rets = { VARARG_STRING } },
          ["rep"] = { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
          ["lower"] = { typename = "function", args = { STRING }, rets = { STRING } },
          ["upper"] = { typename = "function", args = { STRING }, rets = { STRING } },
