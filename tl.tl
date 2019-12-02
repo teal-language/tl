@@ -2921,8 +2921,11 @@ local standard_library: {string:Type} = {
       typename = "record",
       fields = {
          ["pack"] = { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
-         ["unpack"] = { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = {
-            { typename = "typevar", typevar = "`a", is_va = true }
+         ["unpack"] = {
+            typename = "function",
+            needs_compat53 = true,
+            args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
+            rets = { { typename = "typevar", typevar = "`a", is_va = true }
          } },
          ["move"] = {
             typename = "poly",
@@ -3063,6 +3066,8 @@ for _, t in pairs(standard_library) do
    end
 end
 
+local compat53_code_cache: {string:Node} = {}
+
 local function add_compat53_entries(program: Node, used_set: {string: boolean})
    if not next(used_set) then
       return
@@ -3077,11 +3082,23 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
    -- TODO this supports only top-level modules; need to add support for functions as well
    -- (e.g. string.pack, etc.)
    for i, name in ipairs(used_list) do
+      local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
-      local text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
-      local tokens = tl.lex(text)
-      local _, code = tl.parse_program(tokens, {}, "@internal")
-      table.insert(program, i, code[1])
+      local text: string
+      local code: Node = compat53_code_cache[name]
+      if not code then
+         if name == "table.unpack" then
+            text = "local _tl_table_unpack = unpack or table.unpack"
+         else
+            text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
+         end
+         local tokens = tl.lex(text)
+         local _: number
+         _, code = tl.parse_program(tokens, {}, "@internal")
+         code = code[1]
+         compat53_code_cache[name] = code
+      end
+      table.insert(program, i, code)
    end
 end
 
@@ -4378,6 +4395,12 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   end
                else
                   node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk }, orig_a)
+                  if node.type.needs_compat53 then
+                     local key = node.e1.tk .. "." .. node.e2.tk
+                     node.kind = "variable"
+                     node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
+                     all_needs_compat53[key] = true
+                  end
                end
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)

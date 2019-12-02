@@ -1,4 +1,4 @@
-local tl = {
+local _tl_table_unpack = unpack or table.unpack; local tl = {
    ["process"] = nil,
 }
 
@@ -2921,8 +2921,11 @@ local standard_library = {
       ["typename"] = "record",
       ["fields"] = {
          ["pack"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = TABLE, }, },
-         ["unpack"] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = {
-               [1] = { ["typename"] = "typevar", ["typevar"] = "`a", ["is_va"] = true, },
+         ["unpack"] = {
+            ["typename"] = "function",
+            ["needs_compat53"] = true,
+            ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, },
+            ["rets"] = { [1] = { ["typename"] = "typevar", ["typevar"] = "`a", ["is_va"] = true, },
             }, },
          ["move"] = {
             ["typename"] = "poly",
@@ -3063,6 +3066,8 @@ for _, t in pairs(standard_library) do
    end
 end
 
+local compat53_code_cache = {}
+
 local function add_compat53_entries(program, used_set)
    if not next(used_set) then
       return
@@ -3077,11 +3082,23 @@ local function add_compat53_entries(program, used_set)
 
 
    for i, name in ipairs(used_list) do
+      local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
-      local text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
-      local tokens = tl.lex(text)
-      local _, code = tl.parse_program(tokens, {}, "@internal")
-      table.insert(program, i, code[1])
+      local text
+      local code = compat53_code_cache[name]
+      if not code then
+         if name == "table.unpack" then
+            text = "local _tl_table_unpack = unpack or table.unpack"
+         else
+            text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
+         end
+         local tokens = tl.lex(text)
+         local _
+         _, code = tl.parse_program(tokens, {}, "@internal")
+         code = code[1]
+         compat53_code_cache[name] = code
+      end
+      table.insert(program, i, code)
    end
 end
 
@@ -3182,7 +3199,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             end
             showt[i] = show_type(t)
          end
-         msg = msg:format(table.unpack(showt))
+         msg = msg:format(_tl_table_unpack(showt))
       end
 
       return {
@@ -4378,6 +4395,12 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   end
                else
                   node.type = match_record_key(node, a, { ["typename"] = "string", ["tk"] = node.e2.tk, }, orig_a)
+                  if node.type.needs_compat53 then
+                     local key = node.e1.tk .. "." .. node.e2.tk
+                     node.kind = "variable"
+                     node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
+                     all_needs_compat53[key] = true
+                  end
                end
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
