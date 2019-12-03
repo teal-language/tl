@@ -460,7 +460,7 @@ function tl.lex(input: string): {Token}
       end
    end
 
-   local terminals = {
+   local terminals: {LexState:TokenKind} = {
       ["identifier"] = "identifier",
       ["decimal_or_hex"] = "number",
       ["decimal_number"] = "number",
@@ -952,6 +952,8 @@ end
 local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type
    i = i + 1
    local node: Type = {
+      y = tokens[i - 1].y,
+      x = tokens[i - 1].x,
       kind = "typedecl",
       typename = "function",
       args = {},
@@ -994,7 +996,12 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
    if tokens[i].tk == "string"
       or tokens[i].tk == "boolean"
       or tokens[i].tk == "number" then
-      return i + 1, { kind = "typedecl", typename = tokens[i].tk as TypeName }
+      return i + 1, {
+         y = tokens[i].y,
+         x = tokens[i].x,
+         kind = "typedecl",
+         typename = tokens[i].tk as TypeName
+      }
    elseif tokens[i].tk == "table" then
       local typ = new_type(tokens, i, "typedecl")
       typ.typename = "map"
@@ -3369,6 +3376,27 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          return t1.name == t2.name
       elseif t1.typename == "record" then
          return match_fields_to_record(t1, t2, typevars, same_type)
+      elseif t1.typename == "function" then
+         if #t1.args ~= #t2.args then
+            return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
+         end
+         if #t1.rets ~= #t2.rets then
+            return false, terr(t1, "different number of return values: got " .. #t1.args .. ", expected " .. #t2.args)
+         end
+         local all_errs = {}
+         for i = 1, #t1.args do
+            local ok, errs = same_type(t1.args[i], t2.args[i])
+            add_errs_prefixing(errs, all_errs, "argument " .. i, t1 as Node)
+         end
+         for i = 1, #t1.rets do
+            local ok, errs = same_type(t1.rets[i], t2.rets[i])
+            add_errs_prefixing(errs, all_errs, "return " .. i, t1 as Node)
+         end
+         if #all_errs == 0 then
+            return true
+         else
+            return false, all_errs
+         end
       elseif t1.typename == "arrayrecord" then
          local ok, errs = same_type(t1.elements, t2.elements)
          if not ok then
@@ -3884,6 +3912,27 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return rets
    end
 
+   local function match_all_record_field_names(node: Node, a: Type, field_names: {string}, errmsg: string): Type
+      local t: Type
+      local typevars: {string: Type} = {}
+      for _ k in ipairs(field_names) do
+         local f = a.fields[k]
+         if not t then
+            t = f
+         else
+            if not same_type(f, t, typevars) then
+               t = nil
+               break
+            end
+         end
+      end
+      if t then
+         return t
+      else
+         return node_error(node, errmsg)
+      end
+   end
+
    local function type_check_index(node: Node, idxnode: Node, a: Type, b: Type): Type
       local orig_a = a
       local orig_b = b
@@ -3912,26 +3961,22 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end
       elseif node.e2.kind == "string" then
          return match_record_key(node, a, { typename = "string", tk = assert(node.e2.conststr) }, orig_a)
-      elseif a.typename == "record" or a.typename == "arrayrecord" and is_a(b, STRING) then
-         local ff: Type
-         local typevars: {string: Type} = {}
-         for _ k in ipairs(a.field_order) do
-            local f = a.fields[k]
-            if not ff then
-               ff = f
-            else
-               local match = same_type(f, ff, typevars)
-               if not match then
-                  ff = nil
-                  break
-               end
+      elseif (a.typename == "record" or a.typename == "arrayrecord") and b.typename == "enum" then
+         local field_names: {string} = {}
+         for k, _ in pairs(b.enumset) do
+            table.insert(field_names, k)
+         end
+         table.sort(field_names)
+         for _, k in ipairs(field_names) do
+            if not a.fields[k] then
+               return node_error(idxnode, "enum value '" .. k .. "' is not a field in %s", a)
             end
          end
-         if ff then
-            return ff
-         else
-            return node_error(idxnode, "cannot index, not all fields in record have the same type")
-         end
+         return match_all_record_field_names(idxnode, a, field_names,
+"cannot index, not all enum values map to record fields of the same type")
+     elseif (a.typename == "record" or a.typename == "arrayrecord") and is_a(b, STRING) then
+         return match_all_record_field_names(idxnode, a, a.field_order,
+                   "cannot index, not all fields in record have the same type")
       elseif lax and is_unknown(a) then
          return UNKNOWN
       else
