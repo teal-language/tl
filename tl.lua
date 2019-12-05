@@ -110,6 +110,11 @@ for _, c in ipairs({ [1] = "+", [2] = "*", [3] = "/", [4] = "|", [5] = "&", [6] 
    lex_op_start[c] = true
 end
 
+local lex_space = {}
+for _, c in ipairs({ [1] = " ", [2] = "\t", [3] = "\v", [4] = "\n", [5] = "\r", }) do
+   lex_space[c] = true
+end
+
 local LexState = {}
 
 
@@ -154,22 +159,37 @@ function tl.lex(input)
    local lc_close_lvl = 0
    local ls_open_lvl = 0
    local ls_close_lvl = 0
+   local errs = {}
+
+   local tx
+   local ty
+   local ti
+   local in_token = false
 
    local function begin_token()
-      table.insert(tokens, { ["x"] = x, ["y"] = y, ["i"] = i, })
-   end
-
-   local function drop_token()
-      table.remove(tokens)
+      tx = x
+      ty = y
+      ti = i
+      in_token = true
    end
 
    local function end_token(kind, last, t)
-      local token = tokens[#tokens]
-      token.tk = t or input:sub(token.i, last or i) or ""
-      if keywords[token.tk] then
+      local tk = t or input:sub(ti, last or i) or ""
+      if keywords[tk] then
          kind = "keyword"
       end
-      token.kind = kind
+      table.insert(tokens, {
+         ["x"] = tx,
+         ["y"] = ty,
+         ["i"] = ti,
+         ["tk"] = tk,
+         ["kind"] = kind,
+      })
+      in_token = false
+   end
+
+   local function drop_token()
+      in_token = false
    end
 
    while i <= #input do
@@ -246,6 +266,12 @@ function tl.lex(input)
          elseif lex_op_start[c] then
             begin_token()
             end_token("op")
+         elseif lex_space[c] then
+
+ else
+            begin_token()
+            end_token("$invalid$")
+            table.insert(errs, tokens[#tokens])
          end
       elseif state == "maybecomment" then
          if c == "-" then
@@ -364,7 +390,6 @@ function tl.lex(input)
          end
       elseif state == "maybedotdot" then
          if c == "." then
-            end_token("op")
             state = "maybedotdotdot"
          elseif lex_decimals[c] then
             state = "decimal_float"
@@ -393,7 +418,6 @@ function tl.lex(input)
             state = "any"
          end
       elseif state == "decimal_or_hex" then
-
          if c == "x" or c == "X" then
             state = "hex_number"
          elseif c == "e" or c == "E" then
@@ -449,6 +473,8 @@ function tl.lex(input)
          elseif lex_decimals[c] then
             state = "power"
          else
+            end_token("$invalid$")
+            table.insert(errs, tokens[#tokens])
             state = "any"
          end
       elseif state == "power" then
@@ -470,7 +496,7 @@ function tl.lex(input)
       ["power"] = "number",
    }
 
-   if #tokens > 0 and tokens[#tokens].tk == nil then
+   if in_token then
       if terminals[state] then
          end_token(terminals[state], i - 1)
       else
@@ -478,7 +504,7 @@ function tl.lex(input)
       end
    end
 
-   return tokens
+   return tokens, #errs > 0 and errs
 end
 
 
@@ -4651,7 +4677,18 @@ function tl.process(filename, modules, result, globals)
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   local tokens = tl.lex(input)
+   local tokens, errs = tl.lex(input)
+   if errs then
+      for i, err in ipairs(errs) do
+         table.insert(result.syntax_errors, {
+            ["y"] = err.y,
+            ["x"] = err.x,
+            ["msg"] = "invalid token '" .. err.tk .. "'",
+            ["filename"] = filename,
+         })
+      end
+   end
+
    local i, program = tl.parse_program(tokens, result.syntax_errors, filename)
 
    local is_lua = filename:match("%.lua$") ~= nil
