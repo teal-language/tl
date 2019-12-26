@@ -759,6 +759,7 @@ local NodeKind = enum
    "return"
    "values"
    "newtype"
+   "argument"
    "variable"
    "variables"
    "statements"
@@ -1433,7 +1434,7 @@ local function parse_argument(tokens: {Token}, i: number, errs: {ParseError}): n
    if tokens[i].tk == "..." then
       i, node = verify_kind(tokens, i, errs, "...")
    else
-      i, node = verify_kind(tokens, i, errs, "identifier", "variable")
+      i, node = verify_kind(tokens, i, errs, "identifier", "argument")
    end
    if tokens[i].tk == ":" then
       i = i + 1
@@ -1492,7 +1493,7 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
    end
 
    if not fn.name then
-      return i
+      return orig_i
    end
 
    return i, node
@@ -1845,6 +1846,7 @@ end
 local VisitorCallbacks = record<`N, `T>
    before: function(`N, {`T})
    before_statements: function({`N}, {`T})
+   before_else: function({`N}, {`T})
    after: function(`N, {`T}, `T): `T
 end
 
@@ -1921,11 +1923,17 @@ local function recurse_node(ast: Node,
       xs[2] = recurse_node(ast.value, visit_node, visit_type)
    elseif ast.kind == "if" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
+      if visit_node.cbs["if"].before_statements then
+         visit_node.cbs["if"].before_statements(ast, xs)
+      end
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
       for i, e in ipairs(ast.elseifs) do
          table.insert(xs, recurse_node(e, visit_node, visit_type))
       end
       if ast.elsepart then
+         if visit_node.cbs["if"].before_else then
+            visit_node.cbs["if"].before_else(ast, xs)
+         end
          table.insert(xs, recurse_node(ast.elsepart, visit_node, visit_type))
       end
    elseif ast.kind == "while" then
@@ -1953,6 +1961,9 @@ local function recurse_node(ast: Node,
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "elseif" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
+      if visit_node.cbs["elseif"].before_statements then
+         visit_node.cbs["elseif"].before_statements(ast, xs)
+      end
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
    elseif ast.kind == "else" then
       xs[1] = recurse_node(ast.elsepart, visit_node, visit_type)
@@ -1990,6 +2001,7 @@ local function recurse_node(ast: Node,
    elseif ast.kind == "newtype" then
       xs[1] = recurse_type(ast.newtype, visit_type)
    elseif ast.kind == "variable"
+          or ast.kind == "argument"
           or ast.kind == "identifier"
           or ast.kind == "string"
           or ast.kind == "number"
@@ -2464,6 +2476,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    visit_node.cbs["nil"] = visit_node.cbs["variable"]
    visit_node.cbs["boolean"] = visit_node.cbs["variable"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
+   visit_node.cbs["argument"] = visit_node.cbs["variable"]
 
    visit_type.cbs["typedecl"] = visit_type.cbs["type_list"]
 
@@ -2608,6 +2621,7 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
       ["string"] = {
          ["string"] = STRING,
          ["boolean"] = BOOLEAN,
+         ["enum"] = STRING,
       },
       ["function"] = {
          ["function"] = FUNCTION,
@@ -2627,9 +2641,6 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
       },
       ["enum"] = {
          ["string"] = STRING,
-      },
-      ["string"] = {
-         ["enum"] = STRING,
       },
    },
    [".."] = {
@@ -3191,8 +3202,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
 
    local function infer_var(emptytable: Type, t: Type, node: Node)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
-      local scopes = is_global and 1 or #st
-      for i = scopes, 1, -1 do
+      local nst = is_global and 1 or #st
+      for i = nst, 1, -1 do
          local scope = st[i]
          if scope[emptytable.assigned_to] then
             scope[emptytable.assigned_to] = {
@@ -4565,6 +4576,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    visit_node.cbs["values"] = visit_node.cbs["variables"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["argument"] = visit_node.cbs["variable"]
 
    visit_node.cbs["string"] = {
       after = function(node: Node, children: {Type}): Type
