@@ -36,7 +36,7 @@ local keywords: {string:boolean} = {
    ["until"] = true,
    ["while"] = true,
 
-   ["global"] = true,
+--   ["global"] = true,
 }
 
 local TokenKind = enum

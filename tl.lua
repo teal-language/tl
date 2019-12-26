@@ -36,7 +36,7 @@ local keywords = {
    ["until"] = true,
    ["while"] = true,
 
-   ["global"] = true,
+
 }
 
 local TokenKind = {}

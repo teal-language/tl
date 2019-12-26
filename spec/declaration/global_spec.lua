@@ -2,6 +2,46 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("global", function()
+   describe("is not a keyword and", function()
+      it("works as a table key", function()
+         local tokens = tl.lex([[
+            local t = {
+               global = 12
+            }
+            print(t.global)
+         ]])
+         local syntax_errors = {}
+         local _, ast = tl.parse_program(tokens, syntax_errors)
+         assert.same({}, syntax_errors)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+
+      it("works in calls", function()
+         local tokens = tl.lex([[
+            local global = 12
+            print(global)
+         ]])
+         local syntax_errors = {}
+         local _, ast = tl.parse_program(tokens, syntax_errors)
+         assert.same({}, syntax_errors)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+
+      pending("works as a variable", function()
+         local tokens = tl.lex([[
+            local global = 12
+            global = 13
+         ]])
+         local syntax_errors = {}
+         local _, ast = tl.parse_program(tokens, syntax_errors)
+         assert.same({}, syntax_errors)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+   end)
+
    describe("undeclared", function()
       it("fails for single assignment", function()
          local tokens = tl.lex([[
