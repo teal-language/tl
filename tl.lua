@@ -102,7 +102,7 @@ for c = string.byte("A"), string.byte("F") do
 end
 
 local lex_char_symbols = {}
-for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = ":", [9] = "#", [10] = "`", }) do
+for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = ":", [9] = "#", [10] = "`", [11] = ";", }) do
    lex_char_symbols[c] = true
 end
 
@@ -1620,6 +1620,9 @@ local function parse_return(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
    i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
+   if tokens[i].kind == ";" then
+      i = i + 1
+   end
    return i, node
 end
 
@@ -1811,7 +1814,13 @@ end
 
 parse_statements = function(tokens, i, errs, filename)
    local node = new_node(tokens, i, "statements")
-   while tokens[i].kind ~= "$EOF$" do
+   while true do
+      while tokens[i].kind == ";" do
+         i = i + 1
+      end
+      if tokens[i].kind == "$EOF$" then
+         break
+      end
       if stop_statement_list[tokens[i].tk] then
          break
       end
