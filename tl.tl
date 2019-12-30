@@ -3417,6 +3417,15 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return true
    end
 
+   local function arg_check(cmp: CompareTypes, a: Type, b: Type, typevars: {string:Type}, at: Node, n: number, errs: {Error}): boolean
+      local matches, match_errs = cmp(a, b, typevars)
+      if not matches then
+         add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", at)
+         return false
+      end
+      return true
+   end
+
    local function same_type(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -3445,8 +3454,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end
          local all_errs = {}
          for i = 1, #t1.args do
-            local ok, errs = same_type(t1.args[i], t2.args[i])
-            add_errs_prefixing(errs, all_errs, "argument " .. i, t1 as Node)
+            arg_check(same_type, t1.args[i], t2.args[i], typevars, t1 as Node, i, all_errs)
          end
          for i = 1, #t1.rets do
             local ok, errs = same_type(t1.rets[i], t2.rets[i])
@@ -3643,8 +3651,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments"))
          else
             for i = (t1.is_method and 2 or 1), #t1.args do
-               local ok, errs = is_a(t1.args[i], t2.args[i] or ANY, typevars)
-               add_errs_prefixing(errs, all_errs, "argument " .. i .. ": ")
+               arg_check(is_a, t1.args[i], t2.args[i] or ANY, typevars, nil, i, all_errs)
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets[#t2.rets].is_va
@@ -3735,10 +3742,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   table.insert(errs, { y = node.y, x = node.x, err = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg, typevars), filename = filename })
                end
             else
-               local matches, match_errs = is_a(arg, farg, typevars)
-               if not matches then
-                  local at = node.e2 and node.e2[a] or node
-                  add_errs_prefixing(match_errs, errs, "argument " .. (a + argdelta) .. ": ", at)
+               local at = node.e2 and node.e2[a] or node
+               if not arg_check(is_a, arg, farg, typevars, at, (a + argdelta), errs) then
                   ok = false
                   break
                end
