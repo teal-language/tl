@@ -12,4 +12,47 @@ describe("local function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+
+   describe("with function arguments", function()
+      it("has ambiguity without parentheses in function type return", function()
+         local tokens = tl.lex([[
+            local function map(f: function(`a):`b, xs: {`a}): {`b}
+               local r = {}
+               for i, x in ipairs(xs) do
+                  r[i] = f(x)
+               end
+               return r
+            end
+            local function quoted(s: string): string
+               return "'" .. s .. "'"
+            end
+
+            print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
+         ]])
+         local syntax_errors = {}
+         tl.parse_program(tokens, syntax_errors)
+         assert.same(1, syntax_errors[1].y)
+         assert.same(54, syntax_errors[1].x)
+      end)
+
+      it("has no ambiguity with parentheses in function type return", function()
+         local tokens = tl.lex([[
+            local function map(f: function(`a):(`b), xs: {`a}): {`b}
+               local r = {}
+               for i, x in ipairs(xs) do
+                  r[i] = f(x)
+               end
+               return r
+            end
+            local function quoted(s: string): string
+               return "'" .. s .. "'"
+            end
+
+            print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+   end)
 end)

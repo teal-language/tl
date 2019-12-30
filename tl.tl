@@ -1076,7 +1076,17 @@ parse_type_list = function(tokens: {Token}, i: number, errs: {ParseError}, open:
    local list = new_type(tokens, i, "type_list")
    if tokens[i].tk == (open or ":") then
       i = i + 1
+      local optional_paren = false
+      if tokens[i - 1].tk == ":" then
+         if tokens[i].tk == "(" then
+            optional_paren = true
+            i = i + 1
+         end
+      end
       i = parse_trying_list(tokens, i, errs, list, parse_type)
+      if optional_paren then
+         i = verify_tk(tokens, i, errs, ")")
+      end
    end
    return i, list
 end
