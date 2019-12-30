@@ -3411,7 +3411,10 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    end
 
    local function match_fields_to_map(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
-      return match_record_fields(t1, function(_: string): Type return t2.values end, typevars)
+      if not match_record_fields(t1, function(_: string): Type return t2.values end, typevars) then
+         return false, { error_in_type(t1, "not all fields have type %s", t2.values) }
+      end
+      return true
    end
 
    local function same_type(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}

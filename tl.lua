@@ -3411,7 +3411,10 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
    end
 
    local function match_fields_to_map(t1, t2, typevars)
-      return match_record_fields(t1, function(_)          return t2.values end, typevars)
+      if not match_record_fields(t1, function(_)             return t2.values end, typevars) then
+         return false, { [1] = error_in_type(t1, "not all fields have type %s", t2.values), }
+      end
+      return true
    end
 
    local function same_type(t1, t2, typevars)
