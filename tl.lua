@@ -4159,15 +4159,16 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          ["after"] = function(node, children)
             local vals = get_assignment_values(children[2], #children[1])
             local exps = flatten_list(vals)
-            for i, var in ipairs(children[1]) do
-               if node.vars[i].is_const then
-                  node_error(node.vars[i], "cannot assign to <const> variable")
+            for i, vartype in ipairs(children[1]) do
+               local varnode = node.vars[i]
+               if varnode.is_const then
+                  node_error(varnode, "cannot assign to <const> variable")
                end
-               if var then
+               if vartype then
                   local val = exps[i] or NIL
-                  assert_is_a(node.vars[i], val, var, {}, "assignment")
+                  assert_is_a(varnode, val, vartype, {}, "assignment")
                else
-                  node_error(node.vars[i], "unknown variable")
+                  node_error(varnode, "unknown variable")
                end
             end
             node.type = { ["typename"] = "none", }
