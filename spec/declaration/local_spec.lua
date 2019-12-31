@@ -88,5 +88,47 @@ describe("local", function()
             assert.same({}, errors)
          end)
       end)
+
+      it("reports unset and untyped values as errors in tl mode", function()
+         local tokens = tl.lex([[
+            local T = record
+               x: number
+               y: number
+            end
+
+            function T:returnsTwo(): number, number
+               return self.x, self.y
+            end
+
+            function T:method()
+               local a, b = self.returnsTwo and self:returnsTwo()
+            end
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast)
+         assert.same(1, #errors)
+      end)
+
+      it("reports unset values as unknown in Lua mode", function()
+         local tokens = tl.lex([[
+            local T = record
+               x: number
+               y: number
+            end
+
+            function T:returnsTwo(): number, number
+               return self.x, self.y
+            end
+
+            function T:method()
+               local a, b = self.returnsTwo and self:returnsTwo()
+            end
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors, unknowns = tl.type_check(ast, true)
+         assert.same({}, errors)
+         assert.same(1, #unknowns)
+         assert.same("b", unknowns[1].name)
+      end)
    end)
 end)

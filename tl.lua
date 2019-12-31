@@ -4100,6 +4100,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   t = { ["typename"] = "unknown", }
                   if lax then
                      table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
+                  else
+                     node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
                   end
                elseif t.typename == "emptytable" then
                   t.declared_at = node
@@ -4499,18 +4501,18 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             elseif node.op.op == "not" then
                node.type = BOOLEAN
             elseif node.op.op == "and" then
-               node.type = b
+               node.type = resolve_tuple(b)
             elseif node.op.op == "or" and b.typename == "emptytable" then
-               node.type = a
+               node.type = resolve_tuple(a)
             elseif node.op.op == "or" and same_type(resolve_unary(a), resolve_unary(b)) then
-               node.type = a
+               node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
-               node.type = a
+               node.type = resolve_tuple(a)
             elseif node.op.op == "or" and
                (a.typename == "nominal" or a.typename == "map") and
                (b.typename == "record" or b.typename == "arrayrecord") and
                is_a(b, a) then
-               node.type = a
+               node.type = resolve_tuple(a)
             elseif node.op.op == "==" or node.op.op == "~=" then
                if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
                   node.type = BOOLEAN
