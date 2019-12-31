@@ -4529,7 +4529,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   if lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator " .. node.op.op .. " on type %s", orig_a)
+                     node_error(node, "cannot use operator '" .. node.op.op .. "' on type %s", orig_a)
                   end
                end
             elseif node.op.arity == 2 and binop_types[node.op.op] then
@@ -4541,7 +4541,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   if lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator " .. node.op.op .. " for types %s and %s", orig_a, orig_b)
+                     node_error(node, "cannot use operator '" .. node.op.op .. "' for types %s and %s", orig_a, orig_b)
                   end
                end
             else

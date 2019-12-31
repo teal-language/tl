@@ -107,7 +107,7 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same(2, #errors)
 
-      assert.match("cannot use operator ..", errors[1].err, 1, true)
+      assert.match("cannot use operator '..'", errors[1].err, 1, true)
       assert.same(15, errors[1].y)
       assert.same(16, errors[1].x)
 
