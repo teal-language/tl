@@ -4165,8 +4165,12 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   node_error(varnode, "cannot assign to <const> variable")
                end
                if vartype then
-                  local val = exps[i] or NIL
-                  assert_is_a(varnode, val, vartype, {}, "assignment")
+                  local val = exps[i]
+                  if val then
+                     assert_is_a(varnode, val, vartype, {}, "assignment")
+                  else
+                     node_error(varnode, "variable is not being assigned a value")
+                  end
                else
                   node_error(varnode, "unknown variable")
                end
