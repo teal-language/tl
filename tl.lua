@@ -3149,17 +3149,21 @@ local function add_compat53_entries(program, used_set)
       local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
       local text
+      local typ
       local code = compat53_code_cache[name]
       if not code then
          if name == "table.unpack" then
             text = "local _tl_table_unpack = unpack or table.unpack"
+            typ = standard_library["table"].fields["unpack"]
          else
             text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
+            typ = standard_library[name]
          end
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
          code = code[1]
+         code.vars[1].type = typ
          compat53_code_cache[name] = code
       end
       table.insert(program, i, code)
