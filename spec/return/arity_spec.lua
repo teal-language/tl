@@ -15,7 +15,7 @@ describe("return arity", function()
 
       it("rejects in strict", function()
          local errors = tl.type_check(ast)
-         assert.match("excess return values", errors[1].err)
+         assert.match("excess return values", errors[1].msg)
       end)
 
       it("accepts in lax", function()
@@ -63,7 +63,7 @@ describe("return arity", function()
 
       it("rejects in strict", function()
          local errors = tl.type_check(ast)
-         assert.match("excess return values", errors[1].err)
+         assert.match("excess return values", errors[1].msg)
       end)
 
       it("accepts in lax", function()

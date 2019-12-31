@@ -2815,14 +2815,7 @@ end
 local Error = record
    y: number
    x: number
-   err: string
-   filename: string
-end
-
-local Unknown = record
-   y: number
-   x: number
-   name: string
+   msg: string
    filename: string
 end
 
@@ -2831,7 +2824,7 @@ local Result = record
    type: Type
    syntax_errors: {ParseError}
    type_errors: {Error}
-   unknowns: {Unknown}
+   unknowns: {Error}
 end
 
 function tl.search_module(module_name: string): string, FILE, {string}
@@ -3149,24 +3142,28 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
       local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
       local text: string
+      local typ: Type
       local code: Node = compat53_code_cache[name]
       if not code then
          if name == "table.unpack" then
             text = "local _tl_table_unpack = unpack or table.unpack"
+            typ = standard_library["table"].fields["unpack"]
          else
             text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
+            typ = standard_library[name]
          end
          local tokens = tl.lex(text)
          local _: number
          _, code = tl.parse_program(tokens, {}, "@internal")
          code = code[1]
+         code.vars[1].type = typ
          compat53_code_cache[name] = code
       end
       table.insert(program, i, code)
    end
 end
 
-function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}): {Error}, {Unknown}, Type
+function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}): {Error}, {Error}, Type
    modules = modules or {}
    result = result or {
       syntax_errors = {},
@@ -3187,7 +3184,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    local all_needs_compat53 = {}
 
    local errors: {Error} = result.type_errors or {}
-   local unknowns: {Unknown} = result.unknowns or {}
+   local unknowns: {Error} = result.unknowns or {}
    local module_type: Type
 
    local function find_var(name: string): Type, boolean
@@ -3269,7 +3266,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return {
          y = t.y,
          x = t.x,
-         err = msg,
+         msg = msg,
          filename = filename,
       }
    end
@@ -3372,7 +3369,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          return
       end
       for i, err in ipairs(src) do
-         err.err = prefix .. err.err
+         err.msg = prefix .. err.msg
          if node and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
@@ -3580,7 +3577,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          local t2u = resolve_unary(t2, typevars)
          local ok, errs = is_a(t1u, t2u, typevars)
          if errs and #errs == 1 then
-            if errs[1].err:match("^got ") then
+            if errs[1].msg:match("^got ") then
                --local got = t1.typename == "nominal" and t1.name or show_type(t1, typevars)
                --local expected = t2.typename == "nominal" and t2.name or show_type(t2, typevars)
                errs = terr(t1, "got %s, expected %s", t1, t2) -- FIXME typevars
@@ -3721,7 +3718,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end
 
          if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
-            table.insert(errs, { y = node.y, x = node.x, err = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
+            table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
             return nil, errs
          end
 
@@ -3739,7 +3736,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                end
                if not lax then
                   ok = false
-                  table.insert(errs, { y = node.y, x = node.x, err = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg, typevars), filename = filename })
+                  table.insert(errs, { y = node.y, x = node.x, msg = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg, typevars), filename = filename })
                end
             else
                local at = node.e2 and node.e2[a] or node
@@ -3820,10 +3817,14 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
 
    local unknown_dots: {string:boolean} = {}
 
+   local function add_unknown(node: Node, name: string)
+      table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
+   end
+
    local function add_unknown_dot(node: Node, name: string)
       if not unknown_dots[name] then
          unknown_dots[name] = true
-         table.insert(unknowns, { y = node.y, x = node.x, name = name, filename = filename })
+         add_unknown(node, name)
       end
    end
 
@@ -3891,7 +3892,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if not t then
             t = { typename = "unknown" }
             if lax and (not (i == 1 and arg.tk == "self")) then
-               table.insert(unknowns, { y = arg.y, x = arg.x, name = arg.tk, filename = filename })
+               add_unknown(arg, arg.tk)
             end
          end
          if arg.tk == "..." then
@@ -4117,7 +4118,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                if t == nil then
                   t = { typename = "unknown" }
                   if lax then
-                     table.insert(unknowns, { y = node.y, x = node.x, name = var.tk, filename = filename })
+                     add_unknown(node, var.tk)
                   else
                      node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
                   end
@@ -4161,7 +4162,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   if t == nil then
                      t = { typename = "unknown" }
                      if lax then
-                       table.insert(unknowns, { y = node.y, x = node.x, name = var.tk, filename = filename })
+                       add_unknown(node, var.tk)
                      end
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
@@ -4580,8 +4581,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             if node.type == nil then
                node.type = { typename = "unknown" }
                if lax then
-                  table.insert(unknowns, { y = node.y, x = node.x, name = node.tk, filename = filename })
-                  --add_var(node.tk, node.type)
+                  add_unknown(node, node.tk)
                else
                   node_error(node, "unknown variable: " .. node.tk)
                end
@@ -4740,7 +4740,7 @@ function tl.process(filename: string, modules: {string:Type}, result: Result, gl
 
    local is_lua = filename:match("%.lua$") ~= nil
 
-   local error, unknown: {Error}, {Unknown}
+   local error, unknown: {Error}, {Error}
    error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
 
    result.ast = program

@@ -38,39 +38,27 @@ if not filename then
    os.exit(1)
 end
 
-local function title_errors(category, n)
-   category = category and (category .. " ") or ""
-   printerr("========================================")
-   printerr(n .. " " .. category .. "error" .. (n ~= 1 and "s" or "") .. ":")
-end
-
-local function report_syntax_errors(syntax_errors)
-   if #syntax_errors > 0 then
-      title_errors("syntax", #syntax_errors)
-      for _, err in ipairs(syntax_errors) do
-         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. err.msg)
-      end
-      os.exit(1)
+local function report_errors(category, errors)
+   if not errors then
+      return false
    end
+   if #errors > 0 then
+      local n = #errors
+      printerr("========================================")
+      printerr(n .. " " .. category .. (n ~= 1 and "s" or "") .. ":")
+      for _, err in ipairs(errors) do
+         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
+      end
+      return true
+   end
+   return false
 end
 
 local function report_type_errors(result)
-   if #result.type_errors > 0 then
-      title_errors(nil, #result.type_errors)
-      for _, err in ipairs(result.type_errors) do
-         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. err.err)
-      end
-   end
+   local has_type_errors = report_errors("error", result.type_errors)
+   report_errors("unknown variable", result.unknowns)
 
-   if #result.unknowns > 0 then
-      printerr("----------------------------------------")
-      printerr(#result.unknowns .. " variable" .. (#result.unknowns ~= 1 and "s" or "") .. " of unknown type:")
-      for _, var in ipairs(result.unknowns) do
-         printerr(var.filename .. ":" .. var.y .. ":" .. var.x .. ": " .. var.name)
-      end
-   end
-
-   if #result.type_errors > 0 then
+   if has_type_errors then
       os.exit(1)
    end
 end
@@ -85,7 +73,10 @@ if err then
    die(err)
 end
 
-report_syntax_errors(result.syntax_errors)
+local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
+if has_syntax_errors then
+   os.exit(1)
+end
 
 local lua_name = filename:gsub(".tl$", ".lua")
 

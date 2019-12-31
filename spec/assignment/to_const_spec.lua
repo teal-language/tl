@@ -9,7 +9,7 @@ describe("assignment to const", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.match("cannot assign to <const> variable", errors[1].err, 1, true)
+      assert.match("cannot assign to <const> variable", errors[1].msg, 1, true)
    end)
 
    it("catches a syntax error", function()

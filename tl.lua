@@ -2819,14 +2819,9 @@ local Error = {}
 
 
 
-local Unknown = {}
-
-
-
-
-
-
 local Result = {}
+
+
 
 
 
@@ -3273,7 +3268,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       return {
          ["y"] = t.y,
          ["x"] = t.x,
-         ["err"] = msg,
+         ["msg"] = msg,
          ["filename"] = filename,
       }
    end
@@ -3376,7 +3371,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          return
       end
       for i, err in ipairs(src) do
-         err.err = prefix .. err.err
+         err.msg = prefix .. err.msg
          if node and (not err.y or node.y > err.y or node.y == err.y and node.x > err.x) then
             err.y = node.y
             err.x = node.x
@@ -3584,7 +3579,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          local t2u = resolve_unary(t2, typevars)
          local ok, errs = is_a(t1u, t2u, typevars)
          if errs and #errs == 1 then
-            if errs[1].err:match("^got ") then
+            if errs[1].msg:match("^got ") then
 
 
                errs = terr(t1, "got %s, expected %s", t1, t2)
@@ -3725,7 +3720,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          end
 
          if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
-            table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "invoked method as a regular function: use ':' instead of '.'", ["filename"] = filename, })
+            table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "invoked method as a regular function: use ':' instead of '.'", ["filename"] = filename, })
             return nil, errs
          end
 
@@ -3743,7 +3738,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                end
                if not lax then
                   ok = false
-                  table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["err"] = "error in argument " .. a + argdelta .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
+                  table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "error in argument " .. a + argdelta .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
                end
             else
                local at = node.e2 and node.e2[a] or node
@@ -3824,10 +3819,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
 
    local unknown_dots = {}
 
+   local function add_unknown(node, name)
+      table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["msg"] = name, ["filename"] = filename, })
+   end
+
    local function add_unknown_dot(node, name)
       if not unknown_dots[name] then
          unknown_dots[name] = true
-         table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = name, ["filename"] = filename, })
+         add_unknown(node, name)
       end
    end
 
@@ -3895,7 +3894,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
          if not t then
             t = { ["typename"] = "unknown", }
             if lax and not (i == 1 and arg.tk == "self") then
-               table.insert(unknowns, { ["y"] = arg.y, ["x"] = arg.x, ["name"] = arg.tk, ["filename"] = filename, })
+               add_unknown(arg, arg.tk)
             end
          end
          if arg.tk == "..." then
@@ -4121,7 +4120,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                if t == nil then
                   t = { ["typename"] = "unknown", }
                   if lax then
-                     table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
+                     add_unknown(node, var.tk)
                   else
                      node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
                   end
@@ -4165,7 +4164,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   if t == nil then
                      t = { ["typename"] = "unknown", }
                      if lax then
-                        table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = var.tk, ["filename"] = filename, })
+                        add_unknown(node, var.tk)
                      end
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
@@ -4584,8 +4583,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
             if node.type == nil then
                node.type = { ["typename"] = "unknown", }
                if lax then
-                  table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["name"] = node.tk, ["filename"] = filename, })
-
+                  add_unknown(node, node.tk)
                else
                   node_error(node, "unknown variable: " .. node.tk)
                end

@@ -53,7 +53,7 @@ describe("array declarations", function()
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
-      assert.same("cannot determine type of table literal", errors[1].err, 1, true)
+      assert.same("cannot determine type of table literal", errors[1].msg, 1, true)
    end)
 
    it("indirect works array-records", function()
