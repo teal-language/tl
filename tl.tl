@@ -2681,30 +2681,53 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    },
 }
 
-local function resolve_typevars(t: Type, typevars: {string:Type}, has_cycle: {Type:boolean}): Type
-   has_cycle = has_cycle or {}
-   if has_cycle[t] then
-      error("HAS CYCLE IN TYPE " .. inspect(t))
-   end
-   has_cycle[t] = true
-   if t.typename == "typevar" then
-      has_cycle[t] = nil
-      if not typevars[t.typevar] then
-         return t -- leave it unresolved
-      end
-      return typevars[t.typevar]
-   end
+local show_type: function(Type, {string:Type}): string
+
+local function copy_type(t: Type, seen: {any:any}): Type
+   seen = seen or {}
    local copy: {string:Type} = {}
+   seen[t] = copy
    for k, v in pairs(t as {string:Type}) do
-      if type(v) == "table" and k ~= "type" then
-         copy[k] = resolve_typevars(v, typevars, has_cycle)
+      if type(v) == "table" then
+         if seen[v] then
+            copy[k] = seen[v] as Type
+         else
+            copy[k] = copy_type(v, seen)
+         end
       else
          copy[k] = v
       end
    end
-   copy.tk = nil
-   has_cycle[t] = nil
    return copy as Type
+end
+
+local function resolve_typevars(t: Type, typevars: {string:Type}, seen: {Type:Type}): Type
+   seen = seen or {}
+   if seen[t] then
+      return seen[t]
+   end
+
+   local orig_t = t
+   if t.typename == "typevar" and typevars[t.typevar] then
+      t = typevars[t.typevar]
+   end
+
+   local copy: Type = {}
+   seen[orig_t] = copy
+
+   for k, v in pairs(t as {string:Type}) do
+      local cp = copy as {string:Type}
+      if type(v) == "table" then
+         cp[k] = resolve_typevars(v, typevars, seen)
+      else
+         cp[k] = v
+      end
+   end
+
+   copy.tk = nil
+   copy.opt = orig_t.opt
+
+   return copy
 end
 
 local function is_unknown(t: Type): boolean

@@ -2681,29 +2681,52 @@ local binop_types = {
    },
 }
 
-local function resolve_typevars(t, typevars, has_cycle)
-   has_cycle = has_cycle or {}
-   if has_cycle[t] then
-      error("HAS CYCLE IN TYPE " .. inspect(t))
-   end
-   has_cycle[t] = true
-   if t.typename == "typevar" then
-      has_cycle[t] = nil
-      if not typevars[t.typevar] then
-         return t
-      end
-      return typevars[t.typevar]
-   end
+local show_type
+
+local function copy_type(t, seen)
+   seen = seen or {}
    local copy = {}
+   seen[t] = copy
    for k, v in pairs(t) do
-      if type(v) == "table" and k ~= "type" then
-         copy[k] = resolve_typevars(v, typevars, has_cycle)
+      if type(v) == "table" then
+         if seen[v] then
+            copy[k] = seen[v]
+         else
+            copy[k] = copy_type(v, seen)
+         end
       else
          copy[k] = v
       end
    end
+   return copy
+end
+
+local function resolve_typevars(t, typevars, seen)
+   seen = seen or {}
+   if seen[t] then
+      return seen[t]
+   end
+
+   local orig_t = t
+   if t.typename == "typevar" and typevars[t.typevar] then
+      t = typevars[t.typevar]
+   end
+
+   local copy = {}
+   seen[orig_t] = copy
+
+   for k, v in pairs(t) do
+      local cp = copy
+      if type(v) == "table" then
+         cp[k] = resolve_typevars(v, typevars, seen)
+      else
+         cp[k] = v
+      end
+   end
+
    copy.tk = nil
-   has_cycle[t] = nil
+   copy.opt = orig_t.opt
+
    return copy
 end
 
