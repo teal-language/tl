@@ -4086,7 +4086,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             end
          end
          return match_all_record_field_names(idxnode, a, field_names,
-"cannot index, not all enum values map to record fields of the same type")
+                   "cannot index, not all enum values map to record fields of the same type")
      elseif (a.typename == "record" or a.typename == "arrayrecord") and is_a(b, STRING) then
          return match_all_record_field_names(idxnode, a, a.field_order,
                    "cannot index, not all fields in record have the same type")
