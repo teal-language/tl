@@ -1,5 +1,6 @@
-local _tl_table_unpack = unpack or table.unpack; local tl = {
+local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local tl = {
    ["process"] = nil,
+   ["type_check"] = nil,
 }
 
 
@@ -3093,7 +3094,6 @@ local standard_library = {
    ["type"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
    ["utf8"] = {
       ["typename"] = "record",
-      ["needs_compat53"] = true,
       ["fields"] = {
          ["len"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
          ["offset"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
@@ -3161,34 +3161,30 @@ local function add_compat53_entries(program, used_set)
    end
    table.sort(used_list)
 
-
-
    for i, name in ipairs(used_list) do
       local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
       local text
-      local typ
       local code = compat53_code_cache[name]
       if not code then
+
          if name == "table.unpack" then
             text = "local _tl_table_unpack = unpack or table.unpack"
-            typ = standard_library["table"].fields["unpack"]
          else
-            text = ("local $NAME = $NAME or require('compat53.module').$NAME"):gsub("$NAME", name)
-            typ = standard_library[name]
+            text = ("local $NAME = require('compat53.module').$NAME or $NAME"):gsub("$NAME", name)
          end
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
+         tl.type_check(code, nil, nil, nil, nil, nil, true)
          code = code[1]
-         code.vars[1].type = typ
          compat53_code_cache[name] = code
       end
       table.insert(program, i, code)
    end
 end
 
-function tl.type_check(ast, lax, filename, modules, result, globals)
+function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion)
    modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
@@ -3196,13 +3192,40 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       ["unknowns"] = {},
    }
 
+   local stdlib_compat53 = {}
+   if lax then
+      stdlib_compat53 = {
+         ["utf8"] = true,
+      }
+   else
+      stdlib_compat53 = {
+         ["io"] = true,
+         ["math"] = true,
+         ["string"] = true,
+         ["table"] = true,
+         ["utf8"] = true,
+         ["coroutine"] = true,
+         ["os"] = true,
+         ["package"] = true,
+         ["debug"] = true,
+         ["load"] = true,
+         ["loadfile"] = true,
+         ["assert"] = true,
+         ["pairs"] = true,
+         ["ipairs"] = true,
+         ["pcall"] = true,
+         ["xpcall"] = true,
+         ["rawlen"] = true,
+      }
+   end
+
    local st
    if globals then
       st = { [1] = globals, }
    else
       st = { [1] = {}, }
       for name, typ in pairs(standard_library) do
-         st[1][name] = { ["t"] = typ, ["is_const"] = true, }
+         st[1][name] = { ["t"] = typ, ["needs_compat53"] = stdlib_compat53[name], ["is_const"] = true, }
       end
    end
 
@@ -3232,7 +3255,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
-            if i == 1 and scope[name].t.needs_compat53 then
+            if i == 1 and scope[name].needs_compat53 then
                all_needs_compat53[name] = true
             end
 
@@ -4538,7 +4561,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
                   end
                else
                   node.type = match_record_key(node, a, { ["typename"] = "string", ["tk"] = node.e2.tk, }, orig_a)
-                  if node.type.needs_compat53 then
+                  if node.type.needs_compat53 and not compat53_recursion then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
                      node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
@@ -4707,7 +4730,9 @@ function tl.type_check(ast, lax, filename, modules, result, globals)
       table.remove(errors, redundant[i])
    end
 
-   add_compat53_entries(ast, all_needs_compat53)
+   if not compat53_recursion then
+      add_compat53_entries(ast, all_needs_compat53)
+   end
 
    return errors, unknowns, module_type
 end
