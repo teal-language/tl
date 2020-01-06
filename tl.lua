@@ -2726,7 +2726,6 @@ local function resolve_typevars(t, typevars, seen)
    end
 
    copy.tk = nil
-   copy.opt = orig_t.opt
 
    return copy
 end
@@ -2904,6 +2903,14 @@ local standard_library = {
    ["setmetatable"] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = METATABLE, }, ["rets"] = { [1] = ALPHA, }, },
    ["getmetatable"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = METATABLE, }, },
    ["rawget"] = { ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, }, ["rets"] = { [1] = ANY, }, },
+   ["rawset"] = {
+      ["typename"] = "poly",
+      ["poly"] = {
+         [1] = { ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, [3] = BETA, }, ["rets"] = {}, },
+         [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
+         [3] = { ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, [3] = ANY, }, ["rets"] = {}, },
+      },
+   },
    ["next"] = {
       ["typename"] = "poly",
       ["poly"] = {
@@ -2945,8 +2952,15 @@ local standard_library = {
          ["typename"] = "record",
          ["fields"] = {
             ["__index"] = ANY,
+            ["__newindex"] = ANY,
             ["__tostring"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
+            ["__mode"] = { ["typename"] = "enum", ["enumset"] = { ["k"] = true, ["v"] = true, ["kv"] = true, }, },
             ["__call"] = FUNCTION,
+            ["__gc"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = {}, },
+            ["__len"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = NUMBER, }, },
+            ["__pairs"] = { ["typename"] = "function", ["args"] = { [1] = { ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }, }, ["rets"] = {
+                  [1] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
+               }, },
 
          },
       },

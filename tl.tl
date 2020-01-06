@@ -2726,7 +2726,6 @@ local function resolve_typevars(t: Type, typevars: {string:Type}, seen: {Type:Ty
    end
 
    copy.tk = nil
-   copy.opt = orig_t.opt
 
    return copy
 end
@@ -2903,6 +2902,14 @@ local standard_library: {string:Type} = {
    ["setmetatable"] = { typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
    ["getmetatable"] = { typename = "function", args = { ANY }, rets = { METATABLE } },
    ["rawget"] = { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
+   ["rawset"] = {
+      typename = "poly",
+      poly = {
+         { typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
+         { typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+         { typename = "function", args = { TABLE, ANY, ANY }, rets = {} },
+      }
+   },
    ["next"] = {
       typename = "poly",
       poly = {
@@ -2944,8 +2951,15 @@ local standard_library: {string:Type} = {
          typename = "record",
          fields = {
             ["__index"] = ANY, -- FIXME
+            ["__newindex"] = ANY, -- FIXME
             ["__tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
+            ["__mode"] = { typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true, } },
             ["__call"] = FUNCTION,
+            ["__gc"] = { typename = "function", args = { ANY }, rets = {} },
+            ["__len"] = { typename = "function", args = { ANY }, rets = { NUMBER } },
+            ["__pairs"] = { typename = "function", args = { { typename = "map", keys = ALPHA, values = BETA } }, rets = {
+                  { typename = "function", args = {}, rets = { ALPHA, BETA } },
+            } },
             -- TODO complete...
          },
       },
