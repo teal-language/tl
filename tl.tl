@@ -3181,6 +3181,7 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
       end
       table.insert(program, i, code)
    end
+   program.y = 1
 end
 
 function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, compat53_recursion: boolean): {Error}, {Error}, Type

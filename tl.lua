@@ -3182,6 +3182,7 @@ local function add_compat53_entries(program, used_set)
       end
       table.insert(program, i, code)
    end
+   program.y = 1
 end
 
 function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion)
