@@ -4569,7 +4569,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
             elseif node.op.op == "." then
                a = resolve_unary(a, {})
                if a.typename == "map" then
-                  if is_a(a.keys, STRING) then
+                  if is_a(a.keys, STRING) or is_a(a.keys, ANY) then
                      node.type = a.values
                   else
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)
