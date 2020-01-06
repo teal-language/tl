@@ -4802,6 +4802,9 @@ function tl.process(filename, modules, result, globals)
    end
 
    local i, program = tl.parse_program(tokens, result.syntax_errors, filename)
+   if #result.syntax_errors > 0 then
+      return result
+   end
 
    local is_lua = filename:match("%.lua$") ~= nil
 

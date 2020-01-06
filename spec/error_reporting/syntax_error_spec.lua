@@ -7,9 +7,10 @@ describe("syntax errors", function()
          ["aaa.tl"] = [[
             local bbb = require "bbb"
 
-            function function() end
-
             local x: string = 1
+         ]],
+         ["ccc.tl"] = [[
+            function function() end
          ]],
          ["bbb.tl"] = [[
             local bbb = {}
@@ -22,14 +23,15 @@ describe("syntax errors", function()
          ]],
          ["foo.tl"] = [[
             local aaa = require "aaa"
+            local ccc = require "ccc"
          ]],
       })
       local result, err = tl.process("foo.tl")
 
       local expected = {
-         { filename = "aaa.tl", y = 3 },
          { filename = "bbb.tl", y = 5 },
          { filename = "bbb.tl", y = 7 },
+         { filename = "ccc.tl", y = 1 },
       }
       assert.same(#expected, #result.syntax_errors)
       for i, err in ipairs(result.syntax_errors) do
