@@ -15,6 +15,7 @@ before_install:
 
 install:
   - luarocks install busted
+  - luarocks install compat53
 
 script:
   - make
