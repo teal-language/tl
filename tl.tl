@@ -1148,8 +1148,6 @@ local function parse_literal(tokens: {Token}, i: number, errs: {ParseError}): nu
    return fail(tokens, i, errs)
 end
 
--- Shunting-yard algorithm for parsing expressions, as described in
--- https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#shunting_yard
 do
    local precedences: {number:{string:number}} = {
       [1] = {
@@ -1188,168 +1186,41 @@ do
       },
    }
 
-   local sentinel: Operator = { op = "sentinel" }
+   local is_right_assoc: {string:boolean} = {
+      ["^"] = true,
+      [".."] = true,
+   }
 
-   local function is_unop(token: Token): boolean
-      return precedences[1][token.tk] ~= nil
+   local function new_operator(tk: Token, arity: number, op: string): Operator
+      op = op or tk.tk
+      return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
-   local function is_binop(token: Token): boolean
-      return precedences[2][token.tk] ~= nil
-   end
+   local E: function({Token}, number, {ParseError}): number, Node
 
-   local function prec(op: Operator): number
-      if op == sentinel then
-         return -9999
-      end
-      return precedences[op.arity][op.op]
-   end
-
-   local function debug_op(name: string, op: Operator, level: number)
-      level = level or 0
-      io.stderr:write(("| "):rep(level - 1) .. ("+-") .. name .. "\n")
-      io.stderr:write(("| "):rep(level) .. ("+-") .. "op...: " .. tostring(op.op) .. "\n")
-      io.stderr:write(("| "):rep(level) .. ("+-") .. "prec.: " .. op.prec .. "\n")
-      io.stderr:write(("| "):rep(level) .. ("+-") .. "arity: " .. op.arity .. "\n")
-   end
-
-   local function debug_exp(name: string, node: Node, level: number)
-      level = level or 0
-      io.stderr:write(("| "):rep(level - 1) .. ("+-") .. name .. "\n")
-      if node.kind then
-         io.stderr:write(("| "):rep(level) .. ("+-") .. "kind.: " .. node.kind .. "\n")
-      end
-      if node.tk then
-         io.stderr:write(("| "):rep(level) .. ("+-") .. "tk...: " .. node.tk .. "\n")
-      end
-      if type(node.op) == "table" then
-         debug_op("op", node.op, level + 1)
-      end
-      if node.e1 then
-         debug_exp("e1", node.e1, level + 1)
-      end
-      if node.e2 then
-         debug_exp("e2", node.e2, level + 1)
-      end
-      if node[1] then
-         for i = 1, #node do
-            debug_exp(tostring(i), node[i], level + 1)
-         end
-      end
-   end
-
-   local function pop_operator(operators: {Operator}, operands: {Node}): boolean
-      if operators[#operators].arity == 2 then
-         local t2: Node = table.remove(operands)
-         local t1: Node = table.remove(operands)
-         if not t1 or not t2 then
-            return false
-         end
-         local operator: Operator = table.remove(operators)
-         local o: Node = { y = t1.y, x = t1.x, kind = "op", op = operator, e1 = t1, e2 = t2 }
-         if operator.op == "as" and t1.conststr then
-            o.conststr = t1.conststr
-         end
-         table.insert(operands, o)
-      else
-         local t1: Node = table.remove(operands)
-         if not t1 then
-            return false
-         end
-         table.insert(operands, { y = t1.y, x = t1.x, kind = "op", op = table.remove(operators), e1 = t1 })
-      end
-      return true
-   end
-
-   local function push_operator(op: Operator, operators: {Operator}, operands: {Node}): boolean
-      while #operands > 0 and prec(operators[#operators]) >= prec(op) do
-         local ok = pop_operator(operators, operands)
-         if not ok then
-            return false
-         end
-      end
-      op.prec = assert(precedences[op.arity][op.op])
-      table.insert(operators, op)
-      return true
-   end
-
-   local P: function({Token}, number, {ParseError}, {Operator}, {Node}): number
-   local E: function({Token}, number, {ParseError}, {Operator}, {Node}): number
-
-   P = function(tokens: {Token}, i: number, errs: {ParseError}, operators: {Operator}, operands: {Node}): number
+   local function P(tokens: {Token}, i: number, errs: {ParseError}): number, Node
       if tokens[i].kind == "$EOF$" then
          return i
       end
-      if is_unop(tokens[i]) then
-         local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 1, op = tokens[i].tk }, operators, operands)
-         if not ok then
-            return fail(tokens, i, errs)
-         end
+      local e1: Node
+      local t1 = tokens[i]
+      if precedences[1][tokens[i].tk] ~= nil then
+         local op: Operator = new_operator(tokens[i], 1)
          i = i + 1
-         i = P(tokens, i, errs, operators, operands)
-         return i
+         i, e1 = P(tokens, i, errs)
+         e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif tokens[i].tk == "(" then
          i = i + 1
-         table.insert(operators, sentinel)
-         i = E(tokens, i, errs, operators, operands)
+         i, e1 = parse_expression(tokens, i, errs)
          i = verify_tk(tokens, i, errs, ")")
-         table.remove(operators)
-         return i
       else
-         local leaf: Node
-         i, leaf = parse_literal(tokens, i, errs)
-         if leaf then
-            table.insert(operands, leaf)
-         end
-         return i
+         i, e1 = parse_literal(tokens, i, errs)
       end
-   end
 
-   local function push_arguments(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
-      local args: Node
-      local node = new_node(tokens, i, "expression_list")
-      i, args = parse_bracket_list(tokens, i, errs, node, "(", ")", true, parse_expression)
-      table.insert(operands, args)
-      return i
-   end
-
-   local function push_index(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
-      local arg: Node
-      i = verify_tk(tokens, i, errs, "[")
-      i, arg = parse_expression(tokens, i, errs)
-      i = verify_tk(tokens, i, errs, "]")
-      table.insert(operands, arg)
-      return i
-   end
-
-   local function push_dot(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
-      local arg: Node
-      i = i + 1
-      i, arg = verify_kind(tokens, i, errs, "identifier")
-      table.insert(operands, arg)
-      return i
-   end
-
-   local function push_cast(tokens: {Token}, i: number, errs: {ParseError}, operands: {Node}): number
-      i = verify_tk(tokens, i, errs, "as")
-      local node = new_node(tokens, i, "cast")
-      i, node.casttype = parse_type(tokens, i, errs)
-      table.insert(operands, node)
-      return i
-   end
-
-   E = function(tokens: {Token}, i: number, errs: {ParseError}, operators: {Operator}, operands: {Node}): number
-      if tokens[i].kind == "$EOF$" then
-         return i
-      end
-      i = P(tokens, i, errs, operators, operands)
-      while tokens[i].kind ~= "$EOF$" do
+      while true do
          if tokens[i].kind == "string" or tokens[i].kind == "{" then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "@funcall" }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
-            local arglist: Node = new_node(tokens, i, "argument_list")
+            local op: Operator = new_operator(tokens[i], 2, "@funcall")
+            local args = new_node(tokens, i, "expression_list")
             local arg: Node
             if tokens[i].kind == "string" then
                arg = new_node(tokens, i)
@@ -1358,58 +1229,71 @@ do
             else
                i, arg = parse_table_literal(tokens, i, errs)
             end
-            table.insert(arglist, arg)
-            table.insert(operands, arglist)
+            table.insert(args, arg)
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif tokens[i].tk == "(" then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "@funcall" }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
-            i = push_arguments(tokens, i, errs, operands)
+            local op: Operator = new_operator(tokens[i], 2, "@funcall")
+
+            local args = new_node(tokens, i, "expression_list")
+            i, args = parse_bracket_list(tokens, i, errs, args, "(", ")", true, parse_expression)
+
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif tokens[i].tk == "[" then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "@index" }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
-            i = push_index(tokens, i, errs, operands)
-         elseif tokens[i].tk == "." or tokens[i].tk == ":" then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = tokens[i].tk }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
-            i = push_dot(tokens, i, errs, operands)
-         elseif tokens[i].tk == "as" then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = "as" }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
-            i = push_cast(tokens, i, errs, operands)
-         elseif is_binop(tokens[i]) then
-            local ok = push_operator({ y = tokens[i].y, x = tokens[i].x, arity = 2, op = tokens[i].tk }, operators, operands)
-            if not ok then
-               return fail(tokens, i, errs)
-            end
+            local op: Operator = new_operator(tokens[i], 2, "@index")
+
+            local idx: Node
             i = i + 1
-            i = P(tokens, i, errs, operators, operands)
+            i, idx = parse_expression(tokens, i, errs)
+            i = verify_tk(tokens, i, errs, "]")
+
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = idx }
+         elseif tokens[i].tk == "." or tokens[i].tk == ":" then
+            local op: Operator = new_operator(tokens[i], 2)
+
+            local key: Node
+            i = i + 1
+            i, key = verify_kind(tokens, i, errs, "identifier")
+
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
+         elseif tokens[i].tk == "as" then
+            local op: Operator = new_operator(tokens[i], 2, "as")
+
+            i = i + 1
+            local cast = new_node(tokens, i, "cast")
+            i, cast.casttype = parse_type(tokens, i, errs)
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
             break
          end
       end
-      while operators[#operators] ~= sentinel do
-         local ok = pop_operator(operators, operands)
-         if not ok then
-            return fail(tokens, i, errs)
+
+      return i, e1
+   end
+
+   local function E(tokens: {Token}, i: number, errs: {ParseError}, lhs: Node, min_precedence: number): number, Node
+      local lookahead = tokens[i].tk
+      while precedences[2][lookahead] and precedences[2][lookahead] >= min_precedence do
+         local t1 = tokens[i]
+         local op: Operator = new_operator(t1, 2)
+         i = i + 1
+         local rhs: Node
+         i, rhs = P(tokens, i, errs)
+         lookahead = tokens[i].tk
+         while precedences[2][lookahead] and ((precedences[2][lookahead] > (precedences[2][op.op]))
+            or (is_right_assoc[lookahead] and (precedences[2][lookahead] == precedences[2][op.op]))) do
+            i, rhs = E(tokens, i, errs, rhs, precedences[2][lookahead])
+            lookahead = tokens[i].tk
          end
+         lhs = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = lhs, e2 = rhs, }
       end
-      return i
+      return i, lhs
    end
 
    parse_expression = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
-      local operands: {Node} = {}
-      local operators: {Operator} = {}
-      table.insert(operators, sentinel)
-      i = E(tokens, i, errs, operators, operands)
-      return i, operands[#operands], 0
+      local lhs: Node
+      i, lhs = P(tokens, i, errs)
+      i, lhs = E(tokens, i, errs, lhs, 0)
+      return i, lhs, 0
    end
 end
 
@@ -2117,6 +2001,10 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    end
 
    local function add_child(out: Output, child: Output, space: string, indent: number): number
+      if child.y < out.y then
+         out.y = child.y
+      end
+
       if child.y > out.y + out.h then
          local delta = child.y - (out.y + out.h)
          out.h = out.h + delta

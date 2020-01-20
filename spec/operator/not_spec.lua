@@ -36,7 +36,7 @@ describe("not", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
-   pending("handles precedence of sequential unaries correctly", function()
+   it("handles precedence of sequential unaries correctly", function()
       local code = [[
          local y = not -a == not -b
          local x = not not a == not not b
@@ -48,7 +48,7 @@ describe("not", function()
 
       assert.same(trim_code(code), trim_code(output))
    end)
-   pending("handles complex expression with not", function()
+   it("handles complex expression with not", function()
       local code = [[
          if t1.typevar == t2.typevar and
             (not not typevars or

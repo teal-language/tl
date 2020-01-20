@@ -107,14 +107,14 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same(2, #errors)
 
-      assert.match("cannot use operator '..'", errors[1].msg, 1, true)
-      assert.same(15, errors[1].y)
-      assert.same(16, errors[1].x)
-
       -- not the ideal message...
-      assert.match("argument 3: return 1: got number, expected string", errors[2].msg, 1, true)
+      assert.match("argument 3: argument 1: got string, expected number", errors[1].msg, 1, true)
+      assert.same(15, errors[1].y)
+      assert.same(47, errors[1].x)
+
+      assert.match("cannot use operator '..'", errors[2].msg, 1, true)
       assert.same(15, errors[2].y)
-      assert.same(47, errors[2].x)
+      assert.same(64, errors[2].x)
    end)
    it("will catch if resolved typevar does not match", function()
       -- pass
