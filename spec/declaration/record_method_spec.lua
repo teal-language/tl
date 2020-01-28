@@ -5,6 +5,20 @@ local function unindent(code)
    return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function assert_line_by_line(s1, s2)
+   local l1 = {}
+   for l in s1:gmatch("[^\n]*") do
+      table.insert(l1, l)
+   end
+   local l2 = {}
+   for l in s2:gmatch("[^\n]*") do
+      table.insert(l2, l)
+   end
+   for i in ipairs(l1) do
+      assert.same(l1[i], l2[i], "mismatch at line " .. i .. ":")
+   end
+end
+
 describe("record method", function()
    it("valid declaration", function()
       local tokens = tl.lex([[
@@ -177,5 +191,68 @@ describe("record method", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same({}, errors)
+   end)
+
+   it("allows functions declared on method tables (#27)", function()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local Point = record
+               x: number
+               y: number
+            end
+
+            local PointMetatable: METATABLE = {
+               __index = Point
+            }
+
+            function Point.new(x: number, y: number): Point
+               local self = setmetatable({}, PointMetatable) as Point
+
+               self.x = x or 0
+               self.y = y or 0
+
+               return self
+            end
+
+            function Point.move(self: Point, dx: number, dy: number)
+               self.x = self.x + dx
+               self.y = self.y + dy
+            end
+
+            local pt: Point = Point.new(1, 2)
+            pt:move(3, 4)
+         ]]
+      })
+      local result, err = tl.process("foo.tl")
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      local output = tl.pretty_print_ast(result.ast)
+      assert_line_by_line(unindent[[
+         local Point = {}
+
+
+
+
+         local PointMetatable = {
+            ["__index"] = Point,
+         }
+
+         function Point.new(x, y)
+            local self = setmetatable({}, PointMetatable)
+
+            self.x = x or 0
+            self.y = y or 0
+
+            return self
+         end
+
+         function Point.move(self, dx, dy)
+            self.x = self.x + dx
+            self.y = self.y + dy
+         end
+
+         local pt = Point.new(1, 2)
+         pt:move(3, 4)
+      ]], unindent(output))
    end)
 end)

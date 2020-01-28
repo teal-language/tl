@@ -3786,6 +3786,14 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       end
    end
 
+   local function get_self_type(t)
+      if t.typename == "typetype" then
+         return t.def
+      else
+         return t
+      end
+   end
+
    local function match_record_key(node, tbl, key, orig_tbl)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
@@ -3802,6 +3810,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          end
          return UNKNOWN
       end
+
+      tbl = get_self_type(tbl)
 
       if tbl.typename == "emptytable" then
  elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
@@ -3919,14 +3929,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          table.insert(ret, last)
       end
       return ret
-   end
-
-   local function get_self_type(t)
-      if t.typename == "typetype" then
-         return t.def
-      else
-         return t
-      end
    end
 
    local function get_rets(rets)
