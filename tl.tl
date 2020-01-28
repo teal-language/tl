@@ -2284,6 +2284,14 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             table.insert(out, node.is_method and ":" or ".")
             add_child(out, children[2])
             table.insert(out, "(")
+            if node.is_method then
+               -- remove self
+               table.remove(children[3], 1)
+               if children[3][1] == "," then
+                  table.remove(children[3], 1)
+                  table.remove(children[3], 1)
+               end
+            end
             add_child(out, children[3])
             table.insert(out, ")")
             add_child(out, children[5], " ")
