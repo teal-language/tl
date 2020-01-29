@@ -774,6 +774,7 @@ local NodeKind = enum
    "identifier"
    "cast"
    "..."
+   "paren"
 end
 
 local Node = record
@@ -1212,6 +1213,7 @@ do
       elseif tokens[i].tk == "(" then
          i = i + 1
          i, e1 = parse_expression(tokens, i, errs)
+         e1 = { y = t1.y, x = t1.x, kind = "paren", e1 = e1 }
          i = verify_tk(tokens, i, errs, ")")
       else
          i, e1 = parse_literal(tokens, i, errs)
@@ -1891,6 +1893,8 @@ local function recurse_node(ast: Node,
          visit_node.cbs["record_function"].before_statements(ast, xs)
       end
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
+   elseif ast.kind == "paren" then
+      xs[1] = recurse_node(ast.e1, visit_node, visit_type)
    elseif ast.kind == "op" then
       xs[1] = recurse_node(ast.e1, visit_node, visit_type)
       local p1 = ast.e1.op and ast.e1.op.prec or nil
@@ -2314,6 +2318,15 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          end,
       },
       ["cast"] = {
+      },
+      ["paren"] = {
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "(")
+            add_child(out, children[1], "", indent)
+            table.insert(out, ")")
+            return out
+         end,
       },
       ["op"] = {
          after = function(node: Node, children: {Output}): Output
@@ -4398,6 +4411,11 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          after = function(node: Node, children: {Type}): Type
             node.type = node.casttype
          end
+      },
+      ["paren"] = {
+         after = function(node: Node, children: {Type}): Type
+            node.type = resolve_unary(children[1])
+         end,
       },
       ["op"] = {
          after = function(node: Node, children: {Type}): Type

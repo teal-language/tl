@@ -506,7 +506,7 @@ function tl.lex(input)
       end
    end
 
-   return tokens, #errs > 0 and errs
+   return tokens, (#errs > 0) and errs
 end
 
 
@@ -738,6 +738,7 @@ local Operator = {}
 
 
 local NodeKind = {}
+
 
 
 
@@ -1212,6 +1213,7 @@ do
       elseif tokens[i].tk == "(" then
          i = i + 1
          i, e1 = parse_expression(tokens, i, errs)
+         e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "paren", ["e1"] = e1, }
          i = verify_tk(tokens, i, errs, ")")
       else
          i, e1 = parse_literal(tokens, i, errs)
@@ -1279,8 +1281,8 @@ do
          local rhs
          i, rhs = P(tokens, i, errs)
          lookahead = tokens[i].tk
-         while precedences[2][lookahead] and (precedences[2][lookahead] > precedences[2][op.op] or
-            is_right_assoc[lookahead] and precedences[2][lookahead] == precedences[2][op.op]) do
+         while precedences[2][lookahead] and ((precedences[2][lookahead] > (precedences[2][op.op])) or
+            (is_right_assoc[lookahead] and (precedences[2][lookahead] == precedences[2][op.op]))) do
             i, rhs = E(tokens, i, errs, rhs, precedences[2][lookahead])
             lookahead = tokens[i].tk
          end
@@ -1535,7 +1537,7 @@ local function parse_newtype(tokens, i, errs)
       if tokens[i].tk == "<" then
          i, def.typevars = parse_typevar_list(tokens, i, errs)
       end
-      while not (not tokens[i] or tokens[i].tk == "end") do
+      while not ((not tokens[i]) or tokens[i].tk == "end") do
          if tokens[i].tk == "{" then
             if def.typename == "arrayrecord" then
                return fail(tokens, i, errs, "duplicated declaration of array element type in record")
@@ -1576,7 +1578,7 @@ local function parse_newtype(tokens, i, errs)
       def.typename = "enum"
       def.enumset = {}
       i = i + 1
-      while not (not tokens[i] or tokens[i].tk == "end") do
+      while not ((not tokens[i]) or tokens[i].tk == "end") do
          local item
          i, item = verify_kind(tokens, i, errs, "string", "enum_item")
          table.insert(node, item)
@@ -1760,7 +1762,7 @@ local Visitor = {}
 
 
 local function visit_before(ast, kind, visit)
-   assert(visit.cbs[kind], "no visitor for " .. kind)
+   assert(visit.cbs[kind], "no visitor for " .. (kind))
    if visit.cbs[kind].before then
       visit.cbs[kind].before(ast)
    end
@@ -1891,6 +1893,8 @@ visit_type)
          visit_node.cbs["record_function"].before_statements(ast, xs)
       end
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
+   elseif ast.kind == "paren" then
+      xs[1] = recurse_node(ast.e1, visit_node, visit_type)
    elseif ast.kind == "op" then
       xs[1] = recurse_node(ast.e1, visit_node, visit_type)
       local p1 = ast.e1.op and ast.e1.op.prec or nil
@@ -2015,7 +2019,7 @@ function tl.pretty_print_ast(ast, fast)
             indent = nil
          end
       end
-      if indent and not fast then
+      if indent and (not fast) then
          table.insert(out, ("   "):rep(indent))
       end
       table.insert(out, child)
@@ -2315,6 +2319,15 @@ function tl.pretty_print_ast(ast, fast)
       },
       ["cast"] = {},
 
+      ["paren"] = {
+         ["after"] = function(node, children)
+            local out = { ["y"] = node.y, ["h"] = 0, }
+            table.insert(out, "(")
+            add_child(out, children[1], "", indent)
+            table.insert(out, ")")
+            return out
+         end,
+      },
       ["op"] = {
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
@@ -3175,7 +3188,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
    end
 
    local function infer_var(emptytable, t, node)
-      local is_global = emptytable.declared_at and emptytable.declared_at.kind == "global_declaration"
+      local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
       local nst = is_global and 1 or #st
       for i = nst, 1, -1 do
          local scope = st[i]
@@ -3328,7 +3341,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       end
       for i, err in ipairs(src) do
          err.msg = prefix .. err.msg
-         if node and (not err.y or node.y > err.y or node.y == err.y and node.x > err.x) then
+         if node and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
          end
@@ -3515,8 +3528,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          end
          return false, terr(t1, t1.name .. " is not a " .. t2.name)
       elseif t1.typename == "enum" and t2.typename == "string" then
-         local ok = for_equality and
-         t2.tk and t1.enumset[unquote(t2.tk)] or
+         local ok = (for_equality) and
+         (t2.tk and t1.enumset[unquote(t2.tk)]) or
          true
          if ok then
             return true
@@ -3602,10 +3615,10 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          end
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
-         if not is_vararg(t2) and #t1.args > #t2.args then
+         if (not is_vararg(t2)) and #t1.args > #t2.args then
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments"))
          else
-            for i = t1.is_method and 2 or 1, #t1.args do
+            for i = (t1.is_method and 2 or 1), #t1.args do
                arg_check(is_a, t1.args[i], t2.args[i] or ANY, typevars, nil, i, all_errs)
             end
          end
@@ -3627,7 +3640,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          else
             return false, all_errs
          end
-      elseif not for_equality and t2.typename == "boolean" then
+      elseif (not for_equality) and t2.typename == "boolean" then
          return true
       elseif t1.typename == t2.typename then
          return true
@@ -3653,13 +3666,13 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          if t1.typename == "array" or t1.typename == "map" or t1.typename == "record" or t1.typename == "arrayrecord" then
             infer_var(t2, t1, node)
          elseif t1.typename ~= "emptytable" then
-            node_error(node, "in " .. context .. ": " .. (name and name .. ": " or "") .. "assigning %s to a variable declared with {}", t1)
+            node_error(node, "in " .. context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
          end
          return
       end
 
       local match, match_errs = is_a(t1, t2, typevars)
-      add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and name .. ": " or ""), node)
+      add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and (name .. ": ") or ""), node)
    end
 
    local type_check_function_call
@@ -3687,18 +3700,18 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
 
          for a = 1, nargs do
             local arg = args[a]
-            local farg = f.args[a] or va and f.args[#f.args]
+            local farg = f.args[a] or (va and f.args[#f.args])
             if arg == nil then
                if farg.is_va then
                   break
                end
                if not lax then
                   ok = false
-                  table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "error in argument " .. a + argdelta .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
+                  table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg, typevars), ["filename"] = filename, })
                end
             else
                local at = node.e2 and node.e2[a] or node
-               if not arg_check(is_a, arg, farg, typevars, at, a + argdelta, errs) then
+               if not arg_check(is_a, arg, farg, typevars, at, (a + argdelta), errs) then
                   ok = false
                   break
                end
@@ -3731,7 +3744,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
             end
             table.insert(expects, tostring(#f.args or 0))
             local va = is_vararg(f)
-            if #args == (#f.args or 0) or va and #args > #f.args then
+            if #args == (#f.args or 0) or (va and #args > #f.args) then
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
                   return matched
@@ -3859,7 +3872,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          local t = arg.decltype
          if not t then
             t = { ["typename"] = "unknown", }
-            if lax and not (i == 1 and arg.tk == "self") then
+            if lax and (not (i == 1 and arg.tk == "self")) then
                add_unknown(arg, arg.tk)
             end
          end
@@ -3932,7 +3945,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
    end
 
    local function get_rets(rets)
-      if lax and #rets == 0 then
+      if lax and (#rets == 0) then
          return { [1] = { ["typename"] = "unknown", ["is_va"] = true, }, }
       end
       return rets
@@ -4357,7 +4370,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
             end
-            if rtype.typename == "record" or rtype.typename == "arrayrecord" then
+            if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
                rtype.fields = rtype.fields or {}
                rtype.field_order = rtype.field_order or {}
                rtype.fields[node.name.tk] = {
@@ -4397,6 +4410,11 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       ["cast"] = {
          ["after"] = function(node, children)
             node.type = node.casttype
+         end,
+      },
+      ["paren"] = {
+         ["after"] = function(node, children)
+            node.type = resolve_unary(children[1])
          end,
       },
       ["op"] = {
@@ -4447,7 +4465,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
                      table.insert(b, 1, node.e1.e1.type)
                      node.type = type_check_function_call(node, func, b, true)
                   else
-                     if lax and is_unknown(func) then
+                     if lax and (is_unknown(func)) then
                         if node.e1.e1.kind == "variable" then
                            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                         end
@@ -4630,7 +4648,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
    local redundant = {}
    local lastx, lasty = 0, 0
    table.sort(errors, function(a, b)
-      return a.y < b.y or a.y == b.y and a.x < b.x
+      return (a.y < b.y) or (a.y == b.y and a.x < b.x)
    end)
    for i, err in ipairs(errors) do
       if err.x == lastx and err.y == lasty then
