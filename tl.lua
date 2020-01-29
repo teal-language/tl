@@ -2759,7 +2759,7 @@ local Result = {}
 
 
 
-function tl.search_module(module_name)
+function tl.search_module(module_name, search_dtl)
    local found
    local fd
    local tried = {}
@@ -2775,6 +2775,17 @@ function tl.search_module(module_name)
             break
          end
          table.insert(tried, "no file '" .. tl_filename .. "'")
+      end
+      if search_dtl then
+         local dtl_filename = filename:gsub("%.lua$", ".d.tl")
+         if dtl_filename ~= filename then
+            fd = io.open(dtl_filename, "r")
+            if fd then
+               found = dtl_filename
+               break
+            end
+            table.insert(tried, "no file '" .. dtl_filename .. "'")
+         end
       end
       fd = io.open(filename, "r")
       if fd then
@@ -4029,7 +4040,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       end
       modules[module_name] = UNKNOWN
 
-      local found, fd, tried = tl.search_module(module_name)
+      local found, fd, tried = tl.search_module(module_name, true)
       if found and (lax or found:match("tl$")) then
          fd:close()
          local _result, err = tl.process(found, modules, result, st[1])
@@ -4732,7 +4743,7 @@ function tl.process(filename, modules, result, globals)
 end
 
 local function tl_package_loader(module_name)
-   local found_filename, fd, tried = tl.search_module(module_name)
+   local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
       local input = fd:read("*a")
       fd:close()
