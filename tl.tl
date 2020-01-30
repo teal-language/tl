@@ -1592,8 +1592,22 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
             if not t then
                return fail(tokens, i, errs, "expected a type")
             end
-            def.fields[v.tk] = t
-            table.insert(def.field_order, v.tk)
+            if not def.fields[v.tk] then
+               def.fields[v.tk] = t
+               table.insert(def.field_order, v.tk)
+            else
+               local prev_t = def.fields[v.tk]
+               if t.typename == "function" and prev_t.typename == "function" then
+                  def.fields[v.tk] = {
+                     typename = "poly",
+                     poly = { prev_t, t }
+                  }
+               elseif t.typename == "function" and prev_t.typename == "poly" then
+                  table.insert(prev_t.poly, t)
+               else
+                  return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+               end
+            end
          end
       end
       node.yend = tokens[i].y
@@ -1692,7 +1706,11 @@ local function parse_variable_declarations(tokens: {Token}, i: number, errs: {Pa
                return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
             end
             i, val = parse_newtype(tokens, i, errs)
-            val.newtype.def.name = asgn.vars[v].tk
+            if val then
+               val.newtype.def.name = asgn.vars[v].tk
+            else
+               return i, val
+            end
          else
             i, val = parse_expression(tokens, i, errs)
          end
