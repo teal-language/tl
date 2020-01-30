@@ -13,6 +13,55 @@ describe("local function", function()
       assert.same({}, errors)
    end)
 
+   it("declaration with nil as return", function()
+      local tokens = tl.lex([[
+         local function f(a: number, b: string): nil
+            return
+         end
+         local ok = f(3, "abc")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
+   it("declaration with no return", function()
+      local tokens = tl.lex([[
+         local function f(a: number, b: string): ()
+            return
+         end
+         f(3, "abc")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
+   it("declaration with no return cannot be used in assignment", function()
+      local tokens = tl.lex([[
+         local function f(a: number, b: string): ()
+            return
+         end
+         local x = f(3, "abc")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(1, #errors)
+      assert.same("assignment in declaration did not produce an initial value for variable 'x'", errors[1].msg)
+   end)
+
+   it("declaration with return nil can be used in assignment", function()
+      local tokens = tl.lex([[
+         local function f(a: number, b: string): nil
+            return
+         end
+         local x = f(3, "abc")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(0, #errors)
+   end)
+
    describe("with function arguments", function()
       it("has ambiguity without parentheses in function type return", function()
          local tokens = tl.lex([[
