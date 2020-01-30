@@ -837,6 +837,7 @@ local parse_expression: function({Token}, number, {ParseError}): number, Node, n
 local parse_statements: function({Token}, number, {ParseError}, string): number, Node
 local parse_type_list: function({Token}, number, {ParseError}, string): number, Type
 local parse_argument_list: function({Token}, number, {ParseError}): number, Node
+local parse_argument_type_list: function({Token}, number, {ParseError}): number, Type
 local parse_type: function({Token}, number, {ParseError}): number, Type, number
 
 
@@ -990,8 +991,7 @@ local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError
       rets = {},
    }
    if tokens[i].tk == "(" then
-      i, node.args = parse_type_list(tokens, i, errs, "(")
-      i = verify_tk(tokens, i, errs, ")")
+      i, node.args = parse_argument_type_list(tokens, i, errs)
       i, node.rets = parse_type_list(tokens, i, errs)
    else
       node.args = { { typename = "any", is_va = true } }
@@ -1344,6 +1344,32 @@ end
 parse_argument_list = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    local node = new_node(tokens, i, "argument_list")
    return parse_bracket_list(tokens, i, errs, node, "(", ")", true, parse_argument)
+end
+
+local function parse_argument_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
+   local is_va = false
+   if tokens[i].kind == "identifier" and tokens[i + 1].tk == ":" then
+      i = i + 2
+   elseif tokens[i].tk == "..." then
+      if tokens[i + 1].tk == ":" then
+         i = i + 2
+         is_va = true
+      else
+         return fail(tokens, i, errs, "cannot have untyped '...' when declaring the type of an argument")
+      end
+   end
+
+   local i, typ = parse_type(tokens, i, errs)
+   if typ then
+      typ.is_va = is_va
+   end
+
+   return i, typ, 0
+end
+
+parse_argument_type_list = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type
+   local list = new_type(tokens, i, "type_list")
+   return parse_bracket_list(tokens, i, errs, list, "(", ")", true, parse_argument_type)
 end
 
 local function parse_local_function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
