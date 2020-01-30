@@ -705,7 +705,7 @@ local Type = record
    rets: Type
 
    -- nominal
-   name: string
+   names: {string}
    typevals: Type
 
    -- typevar
@@ -839,6 +839,7 @@ local parse_type_list: function({Token}, number, {ParseError}, string): number, 
 local parse_argument_list: function({Token}, number, {ParseError}): number, Node
 local parse_argument_type_list: function({Token}, number, {ParseError}): number, Type
 local parse_type: function({Token}, number, {ParseError}): number, Type, number
+local parse_newtype: function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
 
 
 local function fail(tokens: {Token}, i: number, errs: {ParseError}, msg: string): number
@@ -875,6 +876,21 @@ local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind:
    return fail(tokens, i, errs, "syntax error, expected " .. kind)
 end
 
+local is_newtype: {string:boolean} = {
+   ["enum"] = true,
+   ["record"] = true,
+   ["functiontype"] = true,
+}
+
+local function parse_table_value(tokens: {Token}, i: number, errs: {ParseError}): number, Node
+   if is_newtype[tokens[i].tk] then
+      return parse_newtype(tokens, i, errs)
+   else
+      local i, node, _ = parse_expression(tokens, i, errs)
+      return i, node
+   end
+end
+
 local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, n: number): number, Node, number
    local node = new_node(tokens, i, "table_item")
    if tokens[i].kind == "$EOF$" then
@@ -886,14 +902,14 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       i, node.key = parse_expression(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "]")
       i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_expression(tokens, i, errs)
+      i, node.value = parse_table_value(tokens, i, errs)
       return i, node, n
    elseif tokens[i].kind == "identifier" and tokens[i+1].tk == "=" then
       i, node.key = verify_kind(tokens, i, errs, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_expression(tokens, i, errs)
+      i, node.value = parse_table_value(tokens, i, errs)
       return i, node, n
    elseif tokens[i].kind == "identifier" and tokens[i+1].tk == ":" then
       local orig_i = i
@@ -905,7 +921,7 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       i, node.decltype = parse_type(tokens, i, try_errs)
       if node.decltype and tokens[i].tk == "=" then
          i = verify_tk(tokens, i, try_errs, "=")
-         i, node.value = parse_expression(tokens, i, try_errs)
+         i, node.value = parse_table_value(tokens, i, try_errs)
          if node.value then
             for _, e in ipairs(try_errs) do
                table.insert(errs, e)
@@ -1065,8 +1081,18 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
    elseif tokens[i].kind == "identifier" then
       local typ = new_type(tokens, i, "typedecl")
       typ.typename = "nominal"
-      typ.name = tokens[i].tk
+      typ.names = { tokens[i].tk }
       i = i + 1
+      while tokens[i].tk == "." do
+         i = i + 1
+         if tokens[i].kind == "identifier" then
+            table.insert(typ.names, tokens[i].tk)
+            i = i + 1
+         else
+            return fail(tokens, i, errs, "syntax error, expected identifier")
+         end
+      end
+
       if tokens[i].tk == "<" then
          i, typ.typevals = parse_typeval_list(tokens, i, errs)
       end
@@ -1550,7 +1576,7 @@ local function parse_return(tokens: {Token}, i: number, errs: {ParseError}): num
    return i, node
 end
 
-local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): number, Node
+parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    local node: Node = new_node(tokens, i, "newtype")
    node.newtype = new_type(tokens, i, "typedecl")
    node.newtype.typename = "typetype"
@@ -1630,12 +1656,6 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
    return fail(tokens, i, errs)
 end
 
-local is_newtype: {string:boolean} = {
-   ["enum"] = true,
-   ["record"] = true,
-   ["functiontype"] = true,
-}
-
 local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {ParseError}): number, Node
    local asgn: Node = new_node(tokens, i, "assignment")
 
@@ -1692,7 +1712,7 @@ local function parse_variable_declarations(tokens: {Token}, i: number, errs: {Pa
                return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
             end
             i, val = parse_newtype(tokens, i, errs)
-            val.newtype.def.name = asgn.vars[v].tk
+            val.newtype.def.names = { asgn.vars[v].tk }
          else
             i, val = parse_expression(tokens, i, errs)
          end
@@ -2461,8 +2481,8 @@ local TABLE = { typename = "map", keys = ANY, values = ANY }
 local FUNCTION = { typename = "function", args = { { typename = "any", is_va = true } }, rets = { { typename = "any", is_va = true } } }
 local INVALID = { typename = "invalid" }
 local UNKNOWN = { typename = "unknown" }
-local NOMINAL_FILE = { typename = "nominal", name = "FILE" }
-local METATABLE = { typename = "nominal", name = "METATABLE" }
+local NOMINAL_FILE = { typename = "nominal", names = {"FILE"} }
+local METATABLE = { typename = "nominal", names = {"METATABLE"} }
 
 local numeric_binop = {
    ["number"] = {
@@ -2679,7 +2699,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
    end
    if t.typename == "nominal" then
       if t.typevals then
-         local out = { t.name, "<" }
+         local out = { table.concat(t.names, "."), "<" }
          local vals: {string} = {}
          for _, v in ipairs(t.typevals) do
             table.insert(vals, show_type(v))
@@ -2688,7 +2708,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
          table.insert(out, ">")
          return table.concat(out)
       else
-         return t.name
+         return table.concat(t.names, ".")
       end
    elseif t.typename == "tuple" then
       local out: {string} = {}
@@ -2708,6 +2728,8 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show_type(t.elements) .. "}"
+   elseif t.typename == "enum" then
+      return table.concat(t.names, ".")
    elseif t.typename == "record" then
       local out: {string} = {}
       for _, k in ipairs(t.field_order) do
@@ -2757,7 +2779,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
    elseif t.typename == "typetype" then
       return "type " .. show_type(t.def)
    elseif t.typename == "bad_nominal" then
-      return t.name .. " (an unknown type)"
+      return table.concat(t.names, ".") .. " (an unknown type)"
    else
       return inspect(t)
    end
@@ -3225,6 +3247,24 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       end
    end
 
+   local function find_type(names: {string}): Type
+      local typ = find_var(names[1])
+      for i = 2, #names do
+         if typ.fields then
+            typ = typ.fields[names[i]]
+            if typ == nil then
+               return nil
+            end
+         else
+            break
+         end
+      end
+      if typ and typ.typename ~= "typetype" then
+         return nil
+      end
+      return typ
+   end
+
    local function infer_var(emptytable: Type, t: Type, node: Node)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
       local nst = is_global and 1 or #st
@@ -3297,17 +3337,17 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    end
 
    local function resolve_nominal(t: Type, typevars: {string:Type}): Type
-      local typetype = find_var(t.name)
+      local typetype = find_type(t.names)
       if not typetype then
-         type_error(t, "unknown type " .. t.name)
-         return { typename = "bad_nominal", name = t.name }
+         type_error(t, "unknown type %s", t)
+         return { typename = "bad_nominal", names = t.names }
       end
       if typetype.typename == "typetype" then
          local def = typetype.def
          if t.typevals and def.typevars then
             if #t.typevals ~= #def.typevars then
                type_error(t, "mismatch in number of type arguments")
-               return { typename = "bad_nominal", name = t.name }
+               return { typename = "bad_nominal", names = t.names }
             end
 
             local newtypevars: {string:Type} = {}
@@ -3325,8 +3365,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end
          return def
       else
-         type_error(t, t.name .. " is not a type")
-         return { typename = "bad_nominal", name = t.name }
+         type_error(t, table.concat(t.names, ".") .. " is not a type")
+         return { typename = "bad_nominal", names = t.names }
       end
    end
 
@@ -3432,6 +3472,15 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return true
    end
 
+   local function same_names(n1: {string}, n2: {string}): boolean
+      for i = 1, math.max(#n1, #n2) do
+         if n1[i] ~= n2[i] then
+            return false
+         end
+      end
+      return true
+   end
+
    local function same_type(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -3448,7 +3497,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       elseif t1.typename == "map" then
          return same_type(t1.keys, t2.keys) and same_type(t1.values, t2.values)
       elseif t1.typename == "nominal" then
-         return t1.name == t2.name
+         return same_names(t1.names, t2.names)
       elseif t1.typename == "record" then
          return match_fields_to_record(t1, t2, typevars, same_type)
       elseif t1.typename == "function" then
@@ -3545,10 +3594,10 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             end
          end
          return false, terr(t1, "poly has no match") -- don't expect these errors to show, should fix if they do
-      elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
+      elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         if t1.name == t2.name then
+         if same_names(t1.names, t2.names) then
             if t1.typevals == nil and t2.typevals == nil then
                return true
             elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
@@ -3564,7 +3613,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                end
             end
          end
-         return false, terr(t1, t1.name .. " is not a " .. t2.name)
+         return false, terr(t1, "%s is not a %s", t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok = (for_equality)
                     and (t2.tk and t1.enumset[unquote(t2.tk)])
@@ -3579,7 +3628,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if ok then
             return true
          else
-            return false, terr(t1, "%s is not a member of " .. t2.name, t1)
+            return false, terr(t1, "%s is not a member of %s", t1, t2)
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1, typevars)
@@ -4661,8 +4710,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          ["typedecl"] = {
             after = function(typ: Type, children: {Type}): Type
                if typ.typename == "nominal" then
-                  if not find_var(typ.name) then
-                     type_error(typ, "unknown type " .. typ.name)
+                  if not find_type(typ.names) then
+                     type_error(typ, "unknown type %s", typ)
                   end
                end
                return typ
@@ -4690,7 +4739,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
    local redundant: {number} = {}
    local lastx, lasty = 0, 0
    table.sort(errors, function(a: Error, b: Error): boolean
-      return (a.y < b.y) or (a.y == b.y and a.x < b.x)
+      return (a.filename < b.filename) or (a.filename == b.filename and ((a.y < b.y) or (a.y == b.y and a.x < b.x)))
    end)
    for i, err in ipairs(errors) do
       if err.x == lastx and err.y == lasty then

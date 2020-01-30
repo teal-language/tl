@@ -27,6 +27,41 @@ describe("require", function()
       assert.same(0, #result.unknowns)
    end)
 
+   it("exports types", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["point.tl"] = [[
+            local point = {
+               Point = record
+                  x: number
+                  y: number
+               end
+            }
+
+            local Point = point.Point
+
+            function Point:move(x: number, y: number)
+               self.x = self.x + x
+               self.y = self.y + y
+            end
+
+            return point
+         ]],
+         ["foo.tl"] = [[
+            local point = require "point"
+
+            function bla(p: point.Point)
+               print(p.x, p.y)
+            end
+         ]],
+      })
+      local result, err = tl.process("foo.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
    it("catches errors in exported functions", function ()
       util.mock_io(finally, {
          ["box.tl"] = [[

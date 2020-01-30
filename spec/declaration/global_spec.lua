@@ -58,7 +58,7 @@ describe("global", function()
             x, y = 1, 2
          ]])
          local _, ast = tl.parse_program(tokens)
-         local errors, unknowns = tl.type_check(ast)
+         local errors, unknowns = tl.type_check(ast, nil, "bla.tl")
          assert.same("unknown variable: x", errors[1].msg)
          assert.same("unknown variable: y", errors[2].msg)
          assert.same(0, #unknowns)

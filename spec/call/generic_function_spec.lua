@@ -104,7 +104,7 @@ describe("generic function", function()
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors)
-      local errors = tl.type_check(ast)
+      local errors = tl.type_check(ast, nil, "bla.tl")
       assert.same(2, #errors)
 
       -- not the ideal message...
