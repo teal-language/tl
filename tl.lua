@@ -1025,6 +1025,7 @@ end
 parse_type = function(tokens, i, errs)
    if tokens[i].tk == "string" or
       tokens[i].tk == "boolean" or
+      tokens[i].tk == "nil" or
       tokens[i].tk == "number" then
       return i + 1, {
          ["y"] = tokens[i].y,
@@ -3484,7 +3485,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          return true
       end
 
-      if t1.typename == "nil" or t2.typename == "nil" then
+      if t1.typename == "nil" then
          return true
       end
 
@@ -4104,7 +4105,11 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
                   if lax then
                      add_unknown(node, var.tk)
                   else
-                     node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
+                     if node.exps then
+                        node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
+                     else
+                        node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
+                     end
                   end
                elseif t.typename == "emptytable" then
                   t.declared_at = node
