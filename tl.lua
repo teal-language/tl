@@ -2840,6 +2840,24 @@ local function fill_field_order(t)
    end
 end
 
+local function require_module(module_name, lax, modules, result, globals)
+   if modules[module_name] then
+      return modules[module_name]
+   end
+   modules[module_name] = UNKNOWN
+
+   local found, fd, tried = tl.search_module(module_name, true)
+   if found and (lax or found:match("tl$")) then
+      fd:close()
+      local _result, err = tl.process(found, modules, result, globals)
+      assert(_result, err)
+
+      return _result.type
+   end
+
+   return UNKNOWN
+end
+
 local standard_library = {
    ["..."] = { ["typename"] = "tuple", [1] = STRING, [2] = STRING, [3] = STRING, [4] = STRING, [5] = STRING, },
    ["@return"] = { ["typename"] = "tuple", [1] = ANY, },
@@ -3145,22 +3163,13 @@ local function add_compat53_entries(program, used_set)
    program.y = 1
 end
 
-function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion, preload_modules)
-   modules = modules or {}
-   result = result or {
-      ["syntax_errors"] = {},
-      ["type_errors"] = {},
-      ["unknowns"] = {},
-   }
-   preload_modules = preload_modules or {}
-
-   local stdlib_compat53 = {}
+local function get_stdlib_compat53(lax)
    if lax then
-      stdlib_compat53 = {
+      return {
          ["utf8"] = true,
       }
    else
-      stdlib_compat53 = {
+      return {
          ["io"] = true,
          ["math"] = true,
          ["string"] = true,
@@ -3180,16 +3189,31 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          ["rawlen"] = true,
       }
    end
+end
 
-   local st
-   if globals then
-      st = { [1] = globals, }
-   else
-      st = { [1] = {}, }
-      for name, typ in pairs(standard_library) do
-         st[1][name] = { ["t"] = typ, ["needs_compat53"] = stdlib_compat53[name], ["is_const"] = true, }
-      end
+local function init_globals(lax)
+   local globals = {}
+   local stdlib_compat53 = get_stdlib_compat53(lax)
+
+   for name, typ in pairs(standard_library) do
+      globals[name] = { ["t"] = typ, ["needs_compat53"] = stdlib_compat53[name], ["is_const"] = true, }
    end
+
+   return globals
+end
+
+function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion)
+   modules = modules or {}
+   result = result or {
+      ["syntax_errors"] = {},
+      ["type_errors"] = {},
+      ["unknowns"] = {},
+   }
+   globals = globals or init_globals()
+
+   local stdlib_compat53 = get_stdlib_compat53(lax)
+
+   local st = { [1] = globals, }
 
    local all_needs_compat53 = {}
 
@@ -4062,24 +4086,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       end
    end
 
-   local function require_module(module_name, result)
-      if modules[module_name] then
-         return modules[module_name]
-      end
-      modules[module_name] = UNKNOWN
-
-      local found, fd, tried = tl.search_module(module_name, true)
-      if found and (lax or found:match("tl$")) then
-         fd:close()
-         local _result, err = tl.process(found, modules, result, st[1])
-         assert(_result, err)
-
-         return _result.type
-      end
-
-      return UNKNOWN
-   end
-
    local function expand_type(old, new)
       if not old then
          return new
@@ -4099,18 +4105,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
          end
       end
       return old
-   end
-
-   for _, module_name in ipairs(preload_modules) do
-      local module_type = require_module(module_name, result)
-
-      assert(module_type ~= UNKNOWN, string.format("Error: could not preload module '%s'", module_name))
-
-      if not module_type then
-         module_type = BOOLEAN
-      end
-
-      modules[module_name] = module_type
    end
 
    local visit_node = {}
@@ -4495,7 +4489,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
-                        node.type = require_module(module_name, result)
+                        node.type = require_module(module_name, lax, modules, result, st[1])
                         if not node.type then
                            node.type = BOOLEAN
                         end
@@ -4741,12 +4735,16 @@ local function init_modules()
 end
 
 function tl.process(filename, modules, result, globals, preload_modules)
+   local is_lua = filename:match("%.lua$") ~= nil
+
    modules = modules or init_modules()
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
       ["unknowns"] = {},
    }
+   globals = globals or init_globals(is_lua)
+   preload_modules = preload_modules or {}
 
    local fd, err = io.open(filename, "r")
    if not fd then
@@ -4776,10 +4774,23 @@ function tl.process(filename, modules, result, globals, preload_modules)
       return result
    end
 
-   local is_lua = filename:match("%.lua$") ~= nil
+
+   for _, module_name in ipairs(preload_modules) do
+      local module_type = require_module(module_name, is_lua, modules, result, globals)
+
+      if module_type == UNKNOWN then
+         return nil, string.format("Error: could not preload module '%s'", module_name)
+      end
+
+      if not module_type then
+         module_type = BOOLEAN
+      end
+
+      modules[module_name] = module_type
+   end
 
    local error, unknown
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals, false, preload_modules)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
 
    result.ast = program
 
