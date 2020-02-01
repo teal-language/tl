@@ -3163,13 +3163,14 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
    program.y = 1
 end
 
-function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, compat53_recursion: boolean): {Error}, {Error}, Type
+function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, compat53_recursion: boolean, preload_modules: {string}): {Error}, {Error}, Type
    modules = modules or {}
    result = result or {
       syntax_errors = {},
       type_errors = {},
       unknowns = {},
    }
+   preload_modules = preload_modules or {}
 
    local stdlib_compat53: {string:boolean} = {}
    if lax then
@@ -4118,6 +4119,18 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return old
    end
 
+   for _, module_name in ipairs(preload_modules) do
+      local module_type = require_module(module_name, result)
+
+      assert(module_type ~= UNKNOWN, string.format("Error: could not preload module '%s'", module_name))
+
+      if not module_type then
+         module_type = BOOLEAN
+      end
+
+      modules[module_name] = module_type
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -4745,7 +4758,7 @@ local function init_modules(): {string:Type}
    return modules
 end
 
-function tl.process(filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}): Result, string
+function tl.process(filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, preload_modules: {string}): Result, string
    modules = modules or init_modules()
    result = result or {
       syntax_errors = {},
@@ -4784,7 +4797,7 @@ function tl.process(filename: string, modules: {string:Type}, result: Result, gl
    local is_lua = filename:match("%.lua$") ~= nil
 
    local error, unknown: {Error}, {Error}
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals, false, preload_modules)
 
    result.ast = program
 

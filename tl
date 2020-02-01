@@ -5,9 +5,53 @@ local function script_path()
    return str:match("(.*[/\\])") or "."
 end
 
+-- FIXME
+local function validate_config(config)
+   local valid_keys = {
+      preload_modules = true
+   }
+
+   for k, _ in pairs(config) do
+      if not valid_keys[k] then
+         print(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
+      end
+   end
+
+   -- TODO: could we type-check the config file using tl?
+
+   return nil
+end
+
+local function get_config()
+   local config = {
+      preload_modules = {}
+   }
+
+   local status, user_config = pcall(require, "tlconfig")
+
+   if not status then
+      return config
+   end
+
+   -- Merge tlconfig with the default config
+   for k, v in pairs(user_config) do
+      config[k] = v
+   end
+
+   local err = validate_config(config)
+
+   if err then
+      die("Error while loading config: " .. err)
+   end
+
+   return config
+end
+
 package.path = script_path() .. "/?.lua;" .. package.path
 
 local tl = require("tl")
+
+local tlconfig = get_config()
 
 local cmd
 local filename
@@ -68,7 +112,7 @@ local function die(msg)
    os.exit(1)
 end
 
-local result, err = tl.process(filename)
+local result, err = tl.process(filename, nil, nil, nil, tlconfig["preload_modules"])
 if err then
    die(err)
 end

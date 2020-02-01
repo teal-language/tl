@@ -3163,13 +3163,14 @@ local function add_compat53_entries(program, used_set)
    program.y = 1
 end
 
-function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion)
+function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion, preload_modules)
    modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
       ["unknowns"] = {},
    }
+   preload_modules = preload_modules or {}
 
    local stdlib_compat53 = {}
    if lax then
@@ -4118,6 +4119,18 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       return old
    end
 
+   for _, module_name in ipairs(preload_modules) do
+      local module_type = require_module(module_name, result)
+
+      assert(module_type ~= UNKNOWN, string.format("Error: could not preload module '%s'", module_name))
+
+      if not module_type then
+         module_type = BOOLEAN
+      end
+
+      modules[module_name] = module_type
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -4745,7 +4758,7 @@ local function init_modules()
    return modules
 end
 
-function tl.process(filename, modules, result, globals)
+function tl.process(filename, modules, result, globals, preload_modules)
    modules = modules or init_modules()
    result = result or {
       ["syntax_errors"] = {},
@@ -4784,7 +4797,7 @@ function tl.process(filename, modules, result, globals)
    local is_lua = filename:match("%.lua$") ~= nil
 
    local error, unknown
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals, false, preload_modules)
 
    result.ast = program
 
