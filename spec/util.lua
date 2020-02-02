@@ -63,4 +63,12 @@ function util.read_file(name)
    return output
 end
 
+function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
+   if _VERSION == "Lua 5.3" then
+      assert.same(want1, ret1)
+      assert.same(want2, ret2)
+      assert.same(want3, ret3)
+   end
+end
+
 return util
