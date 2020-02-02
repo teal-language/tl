@@ -63,7 +63,7 @@ local argparse = require("argparse")
 
 local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-parser:option("-l", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
       :argname("<modulename>")
       :count("*")
 
@@ -84,8 +84,8 @@ local tlconfig = get_config()
 
 local cmd = args["command"]
 
-if cmd["preload"] then
-   tlconfig["preload_modules"] = cmd["preload"]
+if args["preload"] then
+   tlconfig["preload_modules"] = args["preload"]
 end
 
 local function report_errors(category, errors)
