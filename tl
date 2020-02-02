@@ -9,10 +9,6 @@ local function printerr(s)
    io.stderr:write(s .. "\n")
 end
 
-local function starts_with(str, start)
-   return str:sub(1, #start) == start
-end
-
 local function trim(str)
    return str:gsub("^%s*(.-)%s*$", "%1")
 end
@@ -69,7 +65,13 @@ package.path = script_path() .. "/?.lua;" .. package.path
 local tl = require("tl")
 local argparse = require("argparse")
 
-local function setup_commands(parser)
+local function get_args_parser()
+   local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
+
+   parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+         :argname("<modulename>")
+         :count("*")
+
    parser:command_target("command")
 
    local check_command = parser:command("check", "Type-check one or more tl script.")
@@ -84,40 +86,12 @@ local function setup_commands(parser)
          assert(type(arg) == "string")
          return { arg }
    end)
-end
-
-local function get_parser(explicit_command)
-   local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
-
-   parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
-        :argname("<modulename>")
-        :count("*")
-
-   if explicit_command then
-      setup_commands(parser)
-   else
-      parser:argument("script", "The tl script."):args("+")
-   end
 
    return parser
 end
 
-local parser = get_parser(true)
-
-local success, args = parser:pparse()
-
-if not success then
-   local err = args
-   if starts_with(err, "unknown command") then -- Assume the command was actually a file
-      parser = get_parser(false) -- Reset the parser
-      args = parser:parse()
-   else
-      print(parser:get_usage())
-      print()
-      print(string.format("Error: %s", err))
-      os.exit(1)
-   end
-end
+local parser = get_args_parser()
+local args = parser:parse()
 
 local tlconfig = get_config()
 
