@@ -1,24 +1,6 @@
 local tl = require("tl")
 local util = require("spec.util")
 
-local function unindent(code)
-   return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function assert_line_by_line(s1, s2)
-   local l1 = {}
-   for l in s1:gmatch("[^\n]*") do
-      table.insert(l1, l)
-   end
-   local l2 = {}
-   for l in s2:gmatch("[^\n]*") do
-      table.insert(l2, l)
-   end
-   for i in ipairs(l1) do
-      assert.same(l1[i], l2[i], "mismatch at line " .. i .. ":")
-   end
-end
-
 describe("record method", function()
    it("valid declaration", function()
       local tokens = tl.lex([[
@@ -130,7 +112,7 @@ describe("record method", function()
       })
       local result, err = tl.process("foo.tl")
       local output = tl.pretty_print_ast(result.ast)
-      assert.same(unindent[[
+      util.assert_line_by_line([[
          local r = {
             ["x"] = 2,
             ["b"] = true,
@@ -142,7 +124,7 @@ describe("record method", function()
             return
          end
          local ok = r:f(3, "abc")
-      ]], unindent(output))
+      ]], output)
    end)
 
    it("catches invocation style", function()
@@ -227,7 +209,7 @@ describe("record method", function()
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
       local output = tl.pretty_print_ast(result.ast)
-      assert_line_by_line(unindent[[
+      util.assert_line_by_line([[
          local Point = {}
 
 
@@ -253,6 +235,6 @@ describe("record method", function()
 
          local pt = Point.new(1, 2)
          pt:move(3, 4)
-      ]], unindent(output))
+      ]], output)
    end)
 end)
