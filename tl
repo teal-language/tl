@@ -9,6 +9,10 @@ local function printerr(s)
    io.stderr:write(s .. "\n")
 end
 
+local function starts_with(str, start)
+	return str:sub(1, #start) == start
+end
+
 local function die(msg)
    printerr(msg)
    os.exit(1)
@@ -61,28 +65,53 @@ package.path = script_path() .. "/?.lua;" .. package.path
 local tl = require("tl")
 local argparse = require("argparse")
 
-local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
+local function setup_commands(parser)
+	local check_command = parser:command("check", "Type-check one or more tl script.")
+	check_command:argument("script", "The tl script."):args("+")
 
-parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
-      :argname("<modulename>")
-      :count("*")
+	local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
+	gen_command:argument("script", "The tl script."):args("+")
 
-parser:command_target("command")
+	local run_command = parser:command("run", "Run a tl script.")
+	run_command:argument("script", "The tl script."):args(1)
+end
 
-local check_command = parser:command("check", "Type-check one or more tl script.")
-check_command:argument("script", "The tl script."):args("+")
+local function get_parser(explicit_command)
+	local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
-gen_command:argument("script", "The tl script."):args("+")
+	parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+		  :argname("<modulename>")
+		  :count("*")
 
-local run_command = parser:command("run", "Run a tl script.")
-run_command:argument("script", "The tl script."):args(1)
+	parser:command_target("command")
 
-local args = parser:parse()
+	if explicit_command then
+		setup_commands(parser)
+	else
+		parser:argument("script", "The tl script."):args("+")
+	end
+
+	return parser
+end
+
+local parser = get_parser(true)
+
+local success, args = parser:pparse()
+
+if not success then
+   local err = args
+   if starts_with(err, "unknown command") then -- Assume the command was actually a file
+      parser = get_parser(false) -- Reset the parser
+      args = parser:parse()
+   else
+      print(err)
+      os.exit(1)
+   end
+end
 
 local tlconfig = get_config()
 
-local cmd = args["command"]
+local cmd = args["command"] or "check"
 
 if args["preload"] then
    tlconfig["preload_modules"] = args["preload"]
