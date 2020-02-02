@@ -13,6 +13,10 @@ local function starts_with(str, start)
    return str:sub(1, #start) == start
 end
 
+local function trim(str)
+   return str:gsub("^%s*(.-)%s*$", "%1")
+end
+
 local function die(msg)
    printerr(msg)
    os.exit(1)
@@ -113,8 +117,19 @@ local tlconfig = get_config()
 
 local cmd = args["command"] or "check"
 
-if args["preload"] then
-   tlconfig["preload_modules"] = args["preload"]
+for _, preload_module_cli in ipairs(args["preload"]) do
+   local found_in_config = false
+
+   for _, preload_module_config in ipairs(tlconfig.preload_modules) do
+      if trim(preload_module_cli) == trim(preload_module_config) then
+         found_in_config = true
+         break;
+      end
+   end
+
+   if not found_in_config then
+      table.insert(tlconfig.preload_modules, preload_module_cli)
+   end
 end
 
 local function report_errors(category, errors)
@@ -143,7 +158,7 @@ local function report_type_errors(result)
 end
 
 for _, filename in ipairs(args["script"]) do
-   local result, err = tl.process(filename, nil, nil, nil, tlconfig["preload_modules"])
+   local result, err = tl.process(filename, nil, nil, nil, tlconfig.preload_modules)
    if err then
       die(err)
    end
