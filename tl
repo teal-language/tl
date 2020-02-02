@@ -146,8 +146,15 @@ for _, filename in ipairs(args["script"]) do
 
       print("========================================")
       print("Type checked " .. filename)
-      print("0 errors detected")
+      print("0 errors detected -- you can use:")
       print()
+      print("   tl run " .. filename)
+      print()
+      print("       to run " .. filename .. " as a program")
+      print()
+      print("   tl gen " .. filename)
+      print()
+      print("       to generate " .. lua_name)
 
    elseif cmd == "gen" then
       local ofd, err = io.open(lua_name, "w")
