@@ -130,7 +130,7 @@ if cmd == "run" then
       report_type_errors(result)
    end
 
-   local chunk = load(tl.pretty_print_ast(result.ast), "@" .. filename)
+   local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
 
    local narg = #arg
    for i = -5, narg do
