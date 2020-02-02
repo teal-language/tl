@@ -80,6 +80,10 @@ local function setup_commands(parser)
 
    local run_command = parser:command("run", "Run a tl script.")
    run_command:argument("script", "The tl script."):args(1)
+      :convert(function(arg)
+         assert(type(arg) == "string")
+         return { arg }
+   end)
 end
 
 local function get_parser(explicit_command)
@@ -187,6 +191,7 @@ for _, filename in ipairs(args["script"]) do
       arg[narg - 1] = nil
 
       return chunk()
+
    elseif cmd == "check" then
       report_type_errors(result)
 
