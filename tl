@@ -10,7 +10,7 @@ local function printerr(s)
 end
 
 local function starts_with(str, start)
-	return str:sub(1, #start) == start
+   return str:sub(1, #start) == start
 end
 
 local function die(msg)
@@ -66,32 +66,32 @@ local tl = require("tl")
 local argparse = require("argparse")
 
 local function setup_commands(parser)
-	local check_command = parser:command("check", "Type-check one or more tl script.")
-	check_command:argument("script", "The tl script."):args("+")
+   parser:command_target("command")
 
-	local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
-	gen_command:argument("script", "The tl script."):args("+")
+   local check_command = parser:command("check", "Type-check one or more tl script.")
+   check_command:argument("script", "The tl script."):args("+")
 
-	local run_command = parser:command("run", "Run a tl script.")
-	run_command:argument("script", "The tl script."):args(1)
+   local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
+   gen_command:argument("script", "The tl script."):args("+")
+
+   local run_command = parser:command("run", "Run a tl script.")
+   run_command:argument("script", "The tl script."):args(1)
 end
 
 local function get_parser(explicit_command)
-	local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
+   local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-	parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
-		  :argname("<modulename>")
-		  :count("*")
+   parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+        :argname("<modulename>")
+        :count("*")
 
-	parser:command_target("command")
+   if explicit_command then
+      setup_commands(parser)
+   else
+      parser:argument("script", "The tl script."):args("+")
+   end
 
-	if explicit_command then
-		setup_commands(parser)
-	else
-		parser:argument("script", "The tl script."):args("+")
-	end
-
-	return parser
+   return parser
 end
 
 local parser = get_parser(true)
