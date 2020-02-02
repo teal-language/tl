@@ -108,7 +108,9 @@ if not success then
       parser = get_parser(false) -- Reset the parser
       args = parser:parse()
    else
-      print(err)
+      print(parser:get_usage())
+      print()
+      print(string.format("Error: %s", err))
       os.exit(1)
    end
 end
