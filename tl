@@ -5,6 +5,15 @@ local function script_path()
    return str:match("(.*[/\\])") or "."
 end
 
+local function printerr(s)
+   io.stderr:write(s .. "\n")
+end
+
+local function die(msg)
+   printerr(msg)
+   os.exit(1)
+end
+
 -- FIXME
 local function validate_config(config)
    local valid_keys = {
@@ -50,36 +59,33 @@ end
 package.path = script_path() .. "/?.lua;" .. package.path
 
 local tl = require("tl")
+local argparse = require("argparse")
+
+local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
+
+parser:option("-l", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+      :argname("<modulename>")
+      :count("*")
+
+parser:command_target("command")
+
+local check_command = parser:command("check", "Type-check one or more tl script.")
+check_command:argument("script", "The tl script."):args("+")
+
+local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
+gen_command:argument("script", "The tl script."):args("+")
+
+local run_command = parser:command("run", "Run a tl script.")
+run_command:argument("script", "The tl script."):args(1)
+
+local args = parser:parse()
 
 local tlconfig = get_config()
 
-local cmd
-local filename
+local cmd = args["command"]
 
-local is_cmd = {
-   run = true,
-   check = true,
-   gen = true,
-}
-
-if is_cmd[arg[1]] then
-   cmd = arg[1]
-   filename = arg[2]
-else
-   cmd = "check"
-   filename = arg[1]
-end
-
-local function printerr(s)
-   io.stderr:write(s .. "\n")
-end
-
-if not filename then
-   printerr("usage:")
-   printerr("   tl run <file>")
-   printerr("   tl check <file>")
-   printerr("   tl gen <file>")
-   os.exit(1)
+if cmd["preload"] then
+   tlconfig["preload_modules"] = cmd["preload"]
 end
 
 local function report_errors(category, errors)
@@ -107,70 +113,62 @@ local function report_type_errors(result)
    end
 end
 
-local function die(msg)
-   printerr(msg)
-   os.exit(1)
-end
-
-local result, err = tl.process(filename, nil, nil, nil, tlconfig["preload_modules"])
-if err then
-   die(err)
-end
-
-local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
-if has_syntax_errors then
-   os.exit(1)
-end
-
-local lua_name = filename:gsub(".tl$", ".lua")
-
-if cmd == "run" then
-
-   if filename:match("%.tl$") then
-      report_type_errors(result)
-   end
-
-   local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
-
-   local narg = #arg
-   for i = -5, narg do
-      arg[i-2] = arg[i]
-   end
-   arg[narg] = nil
-   arg[narg - 1] = nil
-
-   return chunk()
-
-elseif cmd == "check" then
-
-   report_type_errors(result)
-
-   print("========================================")
-   print("Type checked " .. filename)
-   print("0 errors detected -- you can use:")
-   print()
-   print("   tl run " .. filename )
-   print()
-   print("       to run " .. filename .. " as a program")
-   print()
-   print("   tl gen " .. filename)
-   print()
-   print("       to generate " .. lua_name)
-   os.exit(0)
-
-elseif cmd == "gen" then
-
-   local ofd, err = io.open(lua_name, "w")
-   if not ofd then
-      die("cannot write " .. lua_name .. ": " .. err)
-   end
-
-   local ok, err = ofd:write(tl.pretty_print_ast(result.ast))
+for _, filename in ipairs(args["script"]) do
+   local result, err = tl.process(filename, nil, nil, nil, tlconfig["preload_modules"])
    if err then
-      die("error writing " .. lua_name .. ": " .. err)
+      die(err)
    end
 
-   ofd:close()
-   print("Wrote: " .. lua_name)
-   os.exit(0)
+   local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
+   if has_syntax_errors then
+      os.exit(1)
+   end
+
+   local lua_name = filename:gsub(".tl$", ".lua")
+
+   if cmd == "run" then
+      if filename:match("%.tl$") then
+         report_type_errors(result)
+      end
+
+      local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
+
+      local narg = #arg
+      for i = -5, narg do
+         arg[i - 2] = arg[i]
+      end
+      arg[narg] = nil
+      arg[narg - 1] = nil
+
+      return chunk()
+   elseif cmd == "check" then
+      report_type_errors(result)
+
+      print("========================================")
+      print("Type checked " .. filename)
+      print("0 errors detected -- you can use:")
+      print()
+      print("   tl run " .. filename)
+      print()
+      print("       to run " .. filename .. " as a program")
+      print()
+      print("   tl gen " .. filename)
+      print()
+      print("       to generate " .. lua_name)
+      os.exit(0)
+   elseif cmd == "gen" then
+      local ofd, err = io.open(lua_name, "w")
+      if not ofd then
+         die("cannot write " .. lua_name .. ": " .. err)
+      end
+
+      local ok, err = ofd:write(tl.pretty_print_ast(result.ast))
+      if err then
+         die("error writing " .. lua_name .. ": " .. err)
+      end
+
+      ofd:close()
+      print("Wrote: " .. lua_name)
+      os.exit(0)
+   end
 end
