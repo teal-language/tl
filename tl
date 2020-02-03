@@ -103,7 +103,7 @@ for _, preload_module_cli in ipairs(args["preload"]) do
    for _, preload_module_config in ipairs(tlconfig.preload_modules) do
       if trim(preload_module_cli) == trim(preload_module_config) then
          found_in_config = true
-         break;
+         break
       end
    end
 
