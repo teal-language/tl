@@ -3220,7 +3220,7 @@ local function init_globals(lax)
    return globals
 end
 
-function tl.type_check(ast, lax, filename, modules, result, globals, compat53_recursion)
+function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat53)
    modules = modules or {}
    result = result or {
       ["syntax_errors"] = {},
@@ -4561,7 +4561,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
                   end
                else
                   node.type = match_record_key(node, a, { ["typename"] = "string", ["tk"] = node.e2.tk, }, orig_a)
-                  if node.type.needs_compat53 and not compat53_recursion then
+                  if node.type.needs_compat53 and not skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
                      node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
@@ -4730,7 +4730,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, compat53_re
       table.remove(errors, redundant[i])
    end
 
-   if not compat53_recursion then
+   if not skip_compat53 then
       add_compat53_entries(ast, all_needs_compat53)
    end
 
