@@ -26,7 +26,7 @@ describe(".", function()
    describe("on raw tables", function()
       it("using table", function()
          local tokens = tl.lex([[
-            local x: table = {}
+            local x: table = { [true] = 12, [false] = 13 }
             x.foo = 9
             print(x.foo)
          ]])
@@ -36,8 +36,10 @@ describe(".", function()
       end)
       it("using {any:any}", function()
          local tokens = tl.lex([[
-            local x: {any:any} = { [true] = true, [false] = true }
+            local x: {any:any} = {}
             x.foo = 9
+            x["hello"] = 12
+            x[false] = "world"
             print(x.foo)
          ]])
          local _, ast = tl.parse_program(tokens)

@@ -3676,6 +3676,9 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          if t1.typename == "map" then
             local _, errs_keys = is_a(t1.keys, t2.keys, typevars)
             local _, errs_values = is_a(t2.values, t1.values, typevars)
+            if t2.values.typename == "any" then -- special-case hack for {any:any}
+               errs_values = {}
+            end
             return combine_errs(errs_keys, errs_values)
          elseif t1.typename == "array" then
             local _, errs_keys = is_a(NUMBER, t2.keys, typevars)
