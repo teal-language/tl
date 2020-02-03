@@ -1785,7 +1785,7 @@ end
 
 function tl.parse_program(tokens, errs, filename)
    errs = errs or {}
-   local last = tokens[#tokens]
+   local last = tokens[#tokens] or { ["y"] = 1, ["x"] = 1, ["tk"] = "", }
    table.insert(tokens, { ["y"] = last.y, ["x"] = last.x + #last.tk, ["tk"] = "$EOF$", ["kind"] = "$EOF$", })
    return parse_statements(tokens, 1, errs, filename)
 end
