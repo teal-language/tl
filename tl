@@ -95,7 +95,7 @@ local args = parser:parse()
 
 local tlconfig = get_config()
 
-local cmd = args["command"] or "check"
+local cmd = args["command"]
 
 for _, preload_module_cli in ipairs(args["preload"]) do
    local found_in_config = false
