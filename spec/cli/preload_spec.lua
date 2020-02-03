@@ -24,10 +24,10 @@ describe("-l --preload argument", function()
     it("can be used more than once", function ()
       local name = util.write_tmp_file(finally, "foo.tl", [[
          print(add(10, 20))
-         print(substract(20, 10))
+         print(subtract(20, 10))
       ]])
 
-      local pd = io.popen("./tl -l spec.add --preload spec.substract check " .. name, "r")
+      local pd = io.popen("./tl -l spec.add --preload spec.subtract check " .. name, "r")
       local output = pd:read("*a")
       util.assert_popen_close(true, "exit", 0, pd:close())
       assert.match("0 errors detected", output, 1, true)
