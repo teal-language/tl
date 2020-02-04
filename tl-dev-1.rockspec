@@ -13,6 +13,9 @@ dependencies = {
    -- but if you're using LuaRocks, pulling it shouldn't be too much
    -- trouble anyway.
    "compat53",
+
+   -- needed for the cli tool
+   "argparse"
 }
 build = {
    modules = {
