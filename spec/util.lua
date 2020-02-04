@@ -1,6 +1,13 @@
 local util = {}
 
+local tl = require("tl")
 local assert = require("luassert")
+
+local it
+
+function util.init(it_)
+   it = it_
+end
 
 function util.mock_io(finally, files)
    local io_open = io.open
@@ -69,6 +76,55 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
       assert.same(want2, ret2)
       assert.same(want3, ret3)
    end
+end
+
+function util.check(title, code)
+   it(title, function()
+      local tokens = tl.lex(code)
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+end
+
+function util.check_type_error(title, code, type_errors)
+   it(title, function()
+      local tokens = tl.lex(code)
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(#errors, #type_errors)
+      for i, err in ipairs(type_errors) do
+         if err.y then
+            assert.same(err.y, errors[i].y)
+         end
+         if err.x then
+            assert.same(err.x, errors[i].x)
+         end
+         if err.msg then
+            assert.match(err.msg, errors[i].msg, 1, true)
+         end
+      end
+   end)
+end
+
+function util.check_syntax_error(title, code, syntax_errors)
+   it(title, function()
+      local tokens = tl.lex(code)
+      local errors = {}
+      tl.parse_program(tokens, errors)
+      assert.same(#errors, #syntax_errors)
+      for i, err in ipairs(syntax_errors) do
+         if err.y then
+            assert.same(err.y, errors[i].y)
+         end
+         if err.x then
+            assert.same(err.x, errors[i].x)
+         end
+         if err.msg then
+            assert.match(err.msg, errors[i].msg, 1, true)
+         end
+      end
+   end)
 end
 
 return util
