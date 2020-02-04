@@ -3724,7 +3724,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          else
             return false, all_errs
          end
-      elseif (not for_equality) and t2.typename == "boolean" then -- all values can be used in a boolean context (but not in == or ~=)
+      elseif lax and ((not for_equality) and t2.typename == "boolean") then
+         -- in .lua files, all values can be used in a boolean context (but not in == or ~=)
          return true
       elseif t1.typename == t2.typename then
          return true
