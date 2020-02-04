@@ -11,6 +11,7 @@ describe("preload", function()
             end
 
             global love = record
+               draw: function()
                graphics: love_graphics
             end
          ]],
@@ -24,9 +25,9 @@ describe("preload", function()
       local result, err = tl.process("foo.tl", nil, nil, nil, {"love"})
 
       assert.same(nil, err)
-      assert.same(0, #result.syntax_errors)
-      assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
    end)
    it("can require multiple modules", function()
       -- ok
@@ -37,6 +38,7 @@ describe("preload", function()
             end
 
             global love = record
+               draw: function()
                graphics: love_graphics
             end
          ]],
@@ -46,6 +48,7 @@ describe("preload", function()
             end
 
             global hate = record
+               draw: function()
                graphics: hate_graphics
             end
          ]],
@@ -63,9 +66,9 @@ describe("preload", function()
       local result, err = tl.process("foo.tl", nil, nil, nil, {"love", "hate"})
 
       assert.same(nil, err)
-      assert.same(0, #result.syntax_errors)
-      assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
    end)
    it("returns an error when a module doesn't exist", function ()
       -- ok

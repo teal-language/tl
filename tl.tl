@@ -3262,8 +3262,9 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             if i == 1 and scope[name].needs_compat53 then
                all_needs_compat53[name] = true
             end
+            local typ = scope[name].t
 
-            return scope[name].t, scope[name].is_const
+            return typ, scope[name].is_const
          end
       end
    end
@@ -4128,6 +4129,32 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return old
    end
 
+   local function find_in_scope(exp: Node): Type
+      if exp.kind == "variable" then
+         local name = exp.tk
+         local parent_scope = st[#st - 1]
+         local type_in_scope = parent_scope[name] and parent_scope[name].t
+         if type_in_scope and type_in_scope.typename == "typetype" then
+            type_in_scope = type_in_scope.def
+         end
+         return type_in_scope
+      elseif exp.kind == "op" and exp.op.op == "." then
+         local t = find_in_scope(exp.e1)
+         if not t then
+            return nil
+         end
+         while exp.e2.kind == "op" and exp.e2.op.op == "." do
+            t = t.fields[exp.e2.e1.tk]
+            if not t then
+               return nil
+            end
+            exp = exp.e2
+         end
+         t = t.fields[exp.e2.tk]
+         return t
+      end
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -4441,15 +4468,31 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                rtype.typename = "record"
             end
             if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
-               rtype.fields = rtype.fields or {}
-               rtype.field_order = rtype.field_order or {}
-               rtype.fields[node.name.tk] = {
+               local fn_type = {
                   typename = "function",
                   is_method = node.is_method,
                   args = children[3],
                   rets = get_rets(children[4]),
                }
-               table.insert(rtype.field_order, node.name.tk)
+
+               local ok = false
+               if lax then
+                  ok = true
+               elseif rtype.fields and rtype.fields[node.name.tk] and is_a(fn_type, rtype.fields[node.name.tk]) then
+                  ok = true
+               elseif find_in_scope(node.fn_owner) == rtype then
+                  ok = true
+               end
+
+               if ok then
+                  rtype.fields = rtype.fields or {}
+                  rtype.field_order = rtype.field_order or {}
+                  rtype.fields[node.name.tk] = fn_type
+                  table.insert(rtype.field_order, node.name.tk)
+               else
+                  local name = tl.pretty_print_ast(node.fn_owner)
+                  node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
+               end
             else
                node_error(node, "not a module: %s", rtype)
             end
