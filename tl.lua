@@ -3724,7 +3724,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
          else
             return false, all_errs
          end
-      elseif (not for_equality) and t2.typename == "boolean" then
+      elseif lax and ((not for_equality) and t2.typename == "boolean") then
+
          return true
       elseif t1.typename == t2.typename then
          return true
