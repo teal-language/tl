@@ -2080,6 +2080,11 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       return table.concat(out)
    end
 
+   local function strip_excess_newlines(str: string): string
+      local s, n = str:gsub("\n\n+", "\n\n")
+      return s
+   end
+
    local visit_node: Visitor<NodeKind, Node, Output> = {}
 
    visit_node.cbs = {
@@ -2455,7 +2460,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    visit_type.cbs["typedecl"] = visit_type.cbs["type_list"]
 
    local out = recurse_node(ast, visit_node, visit_type)
-   return concat_output(out)
+   return strip_excess_newlines(concat_output(out))
 end
 
 --------------------------------------------------------------------------------
