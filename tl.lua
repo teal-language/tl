@@ -3,12 +3,6 @@ local assert = require('compat53.module').assert or assert; local io = require('
    ["type_check"] = nil,
 }
 
-
-
-
-
-
-
 local inspect = function(x)
    return tostring(x)
 end
@@ -37,28 +31,11 @@ local keywords = {
    ["until"] = true,
    ["while"] = true,
 
-
 }
 
 local TokenKind = {}
 
-
-
-
-
-
-
-
-
-
-
 local Token = {}
-
-
-
-
-
-
 
 local lex_word_start = {}
 for c = string.byte("a"), string.byte("z") do
@@ -118,36 +95,6 @@ for _, c in ipairs({ [1] = " ", [2] = "\t", [3] = "\v", [4] = "\n", [5] = "\r", 
 end
 
 local LexState = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function tl.lex(input)
    local tokens = {}
@@ -509,10 +456,6 @@ function tl.lex(input)
    return tokens, (#errs > 0) and errs
 end
 
-
-
-
-
 local add_space = {
    ["word:keyword"] = true,
    ["word:word"] = true,
@@ -621,217 +564,19 @@ function tl.pretty_print_tokens(tokens)
    return table.concat(out)
 end
 
-
-
-
-
 local ParseError = {}
-
-
-
-
-
 
 local TypeKind = {}
 
-
-
-
-
-
 local TypeName = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local Type = {}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local Operator = {}
-
-
-
-
-
-
 
 local NodeKind = {}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local Node = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local parse_expression
 local parse_statements
@@ -839,7 +584,6 @@ local parse_type_list
 local parse_argument_list
 local parse_argument_type_list
 local parse_type
-
 
 local function fail(tokens, i, errs, msg)
    if not tokens[i] then
@@ -1790,21 +1534,9 @@ function tl.parse_program(tokens, errs, filename)
    return parse_statements(tokens, 1, errs, filename)
 end
 
-
-
-
-
 local VisitorCallbacks = {}
 
-
-
-
-
-
 local Visitor = {}
-
-
-
 
 local function visit_before(ast, kind, visit)
    assert(visit.cbs[kind], "no visitor for " .. (kind))
@@ -1974,10 +1706,6 @@ visit_type)
    return visit_after(ast, ast.kind, visit_node, xs)
 end
 
-
-
-
-
 local tight_op = {
    [1] = {
       ["-"] = true,
@@ -2023,10 +1751,6 @@ function tl.pretty_print_ast(ast, fast)
    local indent = 0
 
    local Output = {}
-
-
-
-
 
    local function increment_indent()
       indent = indent + 1
@@ -2078,6 +1802,11 @@ function tl.pretty_print_ast(ast, fast)
          end
       end
       return table.concat(out)
+   end
+
+   local function strip_excess_newlines(str)
+      local s, n = str:gsub("\n\n+", "\n\n")
+      return s
    end
 
    local visit_node = {}
@@ -2455,12 +2184,8 @@ function tl.pretty_print_ast(ast, fast)
    visit_type.cbs["typedecl"] = visit_type.cbs["type_list"]
 
    local out = recurse_node(ast, visit_node, visit_type)
-   return concat_output(out)
+   return strip_excess_newlines(concat_output(out))
 end
-
-
-
-
 
 local ANY = { ["typename"] = "any", }
 local NIL = { ["typename"] = "nil", }
@@ -2791,18 +2516,7 @@ end
 
 local Error = {}
 
-
-
-
-
-
 local Result = {}
-
-
-
-
-
-
 
 function tl.search_module(module_name, search_dtl)
    local found
@@ -2843,10 +2557,6 @@ function tl.search_module(module_name, search_dtl)
 end
 
 local Variable = {}
-
-
-
-
 
 local function fill_field_order(t)
    if t.typename == "record" then
@@ -3632,7 +3342,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
          if errs and #errs == 1 then
             if errs[1].msg:match("^got ") then
 
-
                errs = terr(t1, "got %s, expected %s", t1, t2)
             end
          end
@@ -4329,7 +4038,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
                assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
             end
 
-
             if #st == 2 then
                module_type = resolve_unary(children[1])
             end
@@ -4340,7 +4048,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
       ["variables"] = {
          ["after"] = function(node, children)
             node.type = children
-
 
             local n = #children
             if n > 0 and children[n].typename == "tuple" then
@@ -4510,7 +4217,6 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
          end,
          ["after"] = function(node, children)
             end_function_scope()
-
 
             node.type = {
                ["y"] = node.y,
@@ -4838,7 +4544,6 @@ function tl.process(filename, modules, result, globals, preload_modules)
    if #result.syntax_errors > 0 then
       return result
    end
-
 
    for _, module_name in ipairs(preload_modules) do
       local module_type = require_module(module_name, is_lua, modules, result, globals)
