@@ -927,7 +927,12 @@ end
 
 local ParseItem = {}
 
-local function parse_list(tokens, i, errs, list, close, is_sep, parse_item)
+local SeparatorMode = {}
+
+
+
+
+local function parse_list(tokens, i, errs, list, close, sep, parse_item)
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
@@ -939,24 +944,26 @@ local function parse_list(tokens, i, errs, list, close, is_sep, parse_item)
       table.insert(list, item)
       if tokens[i].tk == "," then
          i = i + 1
-         if is_sep and close[tokens[i].tk] then
+         if sep == "sep" and close[tokens[i].tk] then
             return fail(tokens, i, errs)
          end
+      elseif sep == "term" and tokens[i].tk == ";" then
+         i = i + 1
       end
    end
    return i, list
 end
 
-local function parse_bracket_list(tokens, i, errs, list, open, close, is_sep, parse_item)
+local function parse_bracket_list(tokens, i, errs, list, open, close, sep, parse_item)
    i = verify_tk(tokens, i, errs, open)
-   i = parse_list(tokens, i, errs, list, { [close] = true, }, is_sep, parse_item)
+   i = parse_list(tokens, i, errs, list, { [close] = true, }, sep, parse_item)
    i = verify_tk(tokens, i, errs, close)
    return i, list
 end
 
 local function parse_table_literal(tokens, i, errs)
    local node = new_node(tokens, i, "table_literal")
-   return parse_bracket_list(tokens, i, errs, node, "{", "}", false, parse_table_item)
+   return parse_bracket_list(tokens, i, errs, node, "{", "}", "term", parse_table_item)
 end
 
 local function parse_trying_list(tokens, i, errs, list, parse_item)
@@ -1014,12 +1021,12 @@ end
 
 local function parse_typevar_list(tokens, i, errs)
    local typ = new_type(tokens, i, "typevar_list")
-   return parse_bracket_list(tokens, i, errs, typ, "<", ">", true, parse_typevar_type)
+   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typevar_type)
 end
 
 local function parse_typeval_list(tokens, i, errs)
    local typ = new_type(tokens, i, "typeval_list")
-   return parse_bracket_list(tokens, i, errs, typ, "<", ">", true, parse_type)
+   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
 end
 
 parse_type = function(tokens, i, errs)
@@ -1238,7 +1245,7 @@ do
             local op = new_operator(tokens[i], 2, "@funcall")
 
             local args = new_node(tokens, i, "expression_list")
-            i, args = parse_bracket_list(tokens, i, errs, args, "(", ")", true, parse_expression)
+            i, args = parse_bracket_list(tokens, i, errs, args, "(", ")", "sep", parse_expression)
 
             e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = args, }
          elseif tokens[i].tk == "[" then
@@ -1343,7 +1350,7 @@ end
 
 parse_argument_list = function(tokens, i, errs)
    local node = new_node(tokens, i, "argument_list")
-   return parse_bracket_list(tokens, i, errs, node, "(", ")", true, parse_argument)
+   return parse_bracket_list(tokens, i, errs, node, "(", ")", "sep", parse_argument)
 end
 
 local function parse_argument_type(tokens, i, errs)
@@ -1369,7 +1376,7 @@ end
 
 parse_argument_type_list = function(tokens, i, errs)
    local list = new_type(tokens, i, "type_list")
-   return parse_bracket_list(tokens, i, errs, list, "(", ")", true, parse_argument_type)
+   return parse_bracket_list(tokens, i, errs, list, "(", ")", "sep", parse_argument_type)
 end
 
 local function parse_local_function(tokens, i, errs)
@@ -1483,10 +1490,10 @@ local function parse_forin(tokens, i, errs)
    local node = new_node(tokens, i, "forin")
    i = i + 1
    node.vars = new_node(tokens, i, "variables")
-   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true, }, true, parse_variable_name)
+   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true, }, "sep", parse_variable_name)
    i = verify_tk(tokens, i, errs, "in")
    node.exps = new_node(tokens, i, "expression_list")
-   i = parse_list(tokens, i, errs, node.exps, { ["do"] = true, }, true, parse_expression)
+   i = parse_list(tokens, i, errs, node.exps, { ["do"] = true, }, "sep", parse_expression)
    if #node.exps < 1 then
       return fail(tokens, i, errs, "missing iterator expression in generic for")
    elseif #node.exps > 3 then
@@ -1551,7 +1558,7 @@ local function parse_return(tokens, i, errs)
    local node = new_node(tokens, i, "return")
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
-   i = parse_list(tokens, i, errs, node.exps, stop_return_list, true, parse_expression)
+   i = parse_list(tokens, i, errs, node.exps, stop_return_list, "sep", parse_expression)
    if tokens[i].kind == ";" then
       i = i + 1
    end
