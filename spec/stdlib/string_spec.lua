@@ -9,4 +9,11 @@ describe("string", function()
          print(n1 + n2)
       ]])
    end)
+
+   describe("char", function()
+      util.check("can take multiple intputs", [[
+         print(string.char(104, 101, 108, 108, 111) .. "!")
+      ]])
+   end)
+
 end)

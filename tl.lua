@@ -3083,7 +3083,7 @@ local standard_library = {
 
             },
          },
-         ["char"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["char"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["byte"] = {
             ["typename"] = "poly",
             ["poly"] = {

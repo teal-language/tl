@@ -3083,7 +3083,7 @@ local standard_library: {string:Type} = {
                -- FIXME any other modes
             }
          },
-         ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
+         ["char"] = { typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
          ["byte"] = {
             typename = "poly",
             poly = {
