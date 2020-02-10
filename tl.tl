@@ -4808,17 +4808,6 @@ local function init_modules(): {string:Type}
 end
 
 function tl.process(filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, preload_modules: {string}): Result, string
-   local is_lua = filename:match("%.lua$") ~= nil
-
-   modules = modules or init_modules()
-   result = result or {
-      syntax_errors = {},
-      type_errors = {},
-      unknowns = {},
-   }
-   globals = globals or init_globals(is_lua)
-   preload_modules = preload_modules or {}
-
    local fd, err = io.open(filename, "r")
    if not fd then
       return nil, "could not open " .. filename .. ": " .. err
@@ -4829,6 +4818,27 @@ function tl.process(filename: string, modules: {string:Type}, result: Result, gl
       fd:close()
       return nil, "could not read " .. filename .. ": " .. err
    end
+
+   local extension = filename:match("%.([a-z]+)$")
+   extension = extension and extension:lower()
+
+   local is_lua: boolean
+   if extension == "tl" then
+      is_lua = false
+   elseif extension == "lua" then
+      is_lua = true
+   else
+      is_lua = input:match("^#![^\n]*lua[^\n]*\n") as boolean
+   end
+
+   modules = modules or init_modules()
+   result = result or {
+      syntax_errors = {},
+      type_errors = {},
+      unknowns = {},
+   }
+   globals = globals or init_globals(is_lua)
+   preload_modules = preload_modules or {}
 
    local tokens, errs = tl.lex(input)
    if errs then
