@@ -16,6 +16,20 @@ describe("local function", function()
          assert.same({}, errors)
       end)
 
+      it("can have type variables", function()
+         local tokens = tl.lex([[
+            local f: function<`a, `b, `c>(`a, `b): `c
+
+            f = function(a: number, b: string): boolean
+               return #b == a
+            end
+            local ok = f(3, "abc")
+         ]])
+         local _, ast = tl.parse_program(tokens)
+         local errors = tl.type_check(ast)
+         assert.same({}, errors)
+      end)
+
       it("can take names in arguments but names are ignored", function()
          local tokens = tl.lex([[
             local f: function(x: number, y: string): boolean
@@ -65,6 +79,22 @@ describe("local function", function()
             return #b == a
          end
          local ok = f(3, "abc")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
+   it("declaration with type variables", function()
+      local tokens = tl.lex([[
+         local function f<`a, `b>(a1: `a, a2: `a, b1: `b, b2: `b): `b
+            if a1 == a2 then
+               return b1
+            else
+               return b2
+            end
+         end
+         local ok = f(10, 20, "hello", "world")
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
@@ -144,7 +174,7 @@ describe("local function", function()
 
       it("has no ambiguity with parentheses in function type return", function()
          local tokens = tl.lex([[
-            local function map(f: function(`a):(`b), xs: {`a}): {`b}
+            local function map<`a,`b>(f: function(`a):(`b), xs: {`a}): {`b}
                local r = {}
                for i, x in ipairs(xs) do
                   r[i] = f(x)

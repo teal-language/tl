@@ -22,6 +22,27 @@ describe("record method", function()
       assert.same({}, errors)
    end)
 
+   it("valid declaration with type variables", function()
+      local tokens = tl.lex([[
+         local r = {
+            x = 2,
+            b = true,
+         }
+         function r:f<`T>(a: number, b: string, xs: {`T}): boolean, `T
+            if self.b then
+               return #b == 3, xs[1]
+            else
+               return a > self.x, xs[2]
+            end
+         end
+         local ok, s = r:f(3, "abc", {"what"})
+         print(s .. "!")
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
    it("nested declaration", function()
       local tokens = tl.lex([[
          local r = {
