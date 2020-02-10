@@ -2478,6 +2478,7 @@ local NUMBER = { ["typename"] = "number", }
 local STRING = { ["typename"] = "string", }
 local VARARG_ANY = { ["typename"] = "any", ["is_va"] = true, }
 local VARARG_STRING = { ["typename"] = "string", ["is_va"] = true, }
+local VARARG_NUMBER = { ["typename"] = "number", ["is_va"] = true, }
 local BOOLEAN = { ["typename"] = "boolean", }
 local ALPHA = { ["typename"] = "typevar", ["typevar"] = "`a", }
 local BETA = { ["typename"] = "typevar", ["typevar"] = "`b", }
@@ -3083,7 +3084,14 @@ local standard_library = {
             },
          },
          ["char"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
-         ["byte"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
+         ["byte"] = {
+            ["typename"] = "poly",
+            ["poly"] = {
+               [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
+               [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+               [3] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_NUMBER, }, },
+            },
+         },
          ["format"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = STRING, }, },
       },
    },

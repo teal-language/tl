@@ -2478,6 +2478,7 @@ local NUMBER = { typename = "number" }
 local STRING = { typename = "string" }
 local VARARG_ANY = { typename = "any", is_va = true }
 local VARARG_STRING = { typename = "string", is_va = true }
+local VARARG_NUMBER = { typename = "number", is_va = true }
 local BOOLEAN = { typename = "boolean" }
 local ALPHA = { typename = "typevar", typevar = "`a" }
 local BETA = { typename = "typevar", typevar = "`b" }
@@ -3083,7 +3084,14 @@ local standard_library: {string:Type} = {
             }
          },
          ["char"] = { typename = "function", args = { NUMBER }, rets = { STRING } },
-         ["byte"] = { typename = "function", args = { STRING }, rets = { NUMBER } },
+         ["byte"] = {
+            typename = "poly",
+            poly = {
+               { typename = "function", args = { STRING }, rets = { NUMBER } },
+               { typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
+               { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } },
+            }
+         },
          ["format"] = { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
       },
    },
