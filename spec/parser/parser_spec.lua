@@ -13,4 +13,13 @@ describe("parser", function()
          y = 1,
       }, ast)
    end)
+
+   it("accepts 'return;' (regression test for #52)", function ()
+      local tokens = tl.lex("return;")
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors, "foo.tl")
+      assert.same({}, syntax_errors)
+      assert.same(1, #ast)
+      assert.same("return", ast[1].kind)
+   end)
 end)

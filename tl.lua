@@ -1539,11 +1539,19 @@ local stop_statement_list = {
    ["until"] = true,
 }
 
+local stop_return_list = {
+   [";"] = true,
+}
+
+for k, v in pairs(stop_statement_list) do
+   stop_return_list[k] = v
+end
+
 local function parse_return(tokens, i, errs)
    local node = new_node(tokens, i, "return")
    i = verify_tk(tokens, i, errs, "return")
    node.exps = new_node(tokens, i, "expression_list")
-   i = parse_list(tokens, i, errs, node.exps, stop_statement_list, true, parse_expression)
+   i = parse_list(tokens, i, errs, node.exps, stop_return_list, true, parse_expression)
    if tokens[i].kind == ";" then
       i = i + 1
    end
