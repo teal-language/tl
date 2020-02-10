@@ -22,6 +22,17 @@ describe("forin", function()
             end
          end
       ]])
+      it("unknown with nested ipairs", util.lax_check([[
+         local t = {}
+         for i, a in ipairs(t) do
+            for j, b in ipairs(a) do
+               print(i, j, "value: " .. b)
+            end
+         end
+      ]], {
+         { msg = "a" },
+         { msg = "b" },
+      }))
       it("rejects nested unknown ipairs", util.check_type_error([[
          local t = {}
          for i, a in ipairs(t) do
