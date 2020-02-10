@@ -48,7 +48,7 @@ describe("generic function", function()
             return a
          end
 
-         local function use_id(v: `T, id: Id<`T>): `T
+         local function use_id<`T>(v: `T, id: Id<`T>): `T
             return id(v)
          end
 
