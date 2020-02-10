@@ -1,42 +1,49 @@
-local tl = require("tl")
 local util = require("spec.util")
 
 describe("forin", function()
-   it("with a single variable", function()
-      local tokens = tl.lex([[
+   describe("ipairs", function()
+      it("with a single variable", util.check [[
          local t = { 1, 2, 3 }
          for i in ipairs(t) do
             print(i)
          end
       ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-   it("with two variables", function()
-      local tokens = tl.lex([[
+      it("with two variables", util.check [[
          local t = { 1, 2, 3 }
          for i, v in ipairs(t) do
             print(i, v)
          end
       ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-   it("with an explicit iterator", function()
-      local tokens = tl.lex([[
-         local function iter(t): number
-         end
-         local t = { 1, 2, 3 }
-         for i in iter, t do
-            print(i + 1)
+      it("with nested ipairs", util.check [[
+         local t = { {"a", "b"}, {"c"} }
+         for i, a in ipairs(t) do
+            for j, b in ipairs(a) do
+               print(i, j, "value: " .. b)
+            end
          end
       ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
+      it("rejects nested unknown ipairs", util.check_type_error([[
+         local t = {}
+         for i, a in ipairs(t) do
+            for j, b in ipairs(a) do
+               print(i, j, "value: " .. b)
+            end
+         end
+      ]], {
+         { msg = "attempting ipairs loop" },
+         { msg = "attempting ipairs loop" },
+         { msg = "argument 1: got <unknown type>" },
+         { msg = "cannot use operator '..'" },
+      }))
    end)
+   it("with an explicit iterator", util.check [[
+      local function iter(t): number
+      end
+      local t = { 1, 2, 3 }
+      for i in iter, t do
+         print(i + 1)
+      end
+   ]])
    describe("regressions", function()
       it("accepts nested unresolved values", util.lax_check([[
          function fun(xss)
