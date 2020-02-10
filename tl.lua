@@ -1607,6 +1607,8 @@ local function parse_newtype(tokens, i, errs)
                local prev_t = def.fields[v.tk]
                if t.typename == "function" and prev_t.typename == "function" then
                   def.fields[v.tk] = {
+                     ["y"] = v.y,
+                     ["x"] = v.x,
                      ["typename"] = "poly",
                      ["poly"] = { [1] = prev_t, [2] = t, },
                   }
@@ -3431,7 +3433,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
       end
       for i, err in ipairs(src) do
          err.msg = prefix .. err.msg
-         if node and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
+
+         if node and node.y and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
          end
@@ -4478,6 +4481,8 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
             end
             if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
                local fn_type = {
+                  ["y"] = node.y,
+                  ["x"] = node.x,
                   ["typename"] = "function",
                   ["is_method"] = node.is_method,
                   ["args"] = children[3],

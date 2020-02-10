@@ -1607,6 +1607,8 @@ local function parse_newtype(tokens: {Token}, i: number, errs: {ParseError}): nu
                local prev_t = def.fields[v.tk]
                if t.typename == "function" and prev_t.typename == "function" then
                   def.fields[v.tk] = {
+                     y = v.y,
+                     x = v.x,
                      typename = "poly",
                      poly = { prev_t, t }
                   }
@@ -3431,7 +3433,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       end
       for i, err in ipairs(src) do
          err.msg = prefix .. err.msg
-         if node and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
+         -- node.y may be nil because of `typ as Node` casts and not all types have .y set
+         if node and node.y and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
          end
@@ -4478,6 +4481,8 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             end
             if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
                local fn_type = {
+                  y = node.y,
+                  x = node.x,
                   typename = "function",
                   is_method = node.is_method,
                   args = children[3],
