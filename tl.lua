@@ -3933,7 +3933,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
 
       if tbl.typename == "emptytable" then
  elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
-         assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
+         assert(tbl.fields, "record has no fields!?")
 
          if key.typename == "string" or key.kind == "identifier" then
             if tbl.fields[key.tk] then

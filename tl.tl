@@ -3933,7 +3933,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
 
       if tbl.typename == "emptytable" then
       elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
-         assert(tbl.fields, "record has no fields!? " .. show_type(tbl))
+         assert(tbl.fields, "record has no fields!?")
 
          if key.typename == "string" or key.kind == "identifier" then -- "identifier" is a plain atom (e.g 'insert' in 'table.insert')
             if tbl.fields[key.tk] then
