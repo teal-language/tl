@@ -3145,7 +3145,7 @@ local standard_library = {
       },
    },
    ["tostring"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
-   ["tonumber"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = NUMBER, }, },
+   ["tonumber"] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
    ["error"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = {}, },
    ["debug"] = {
       ["typename"] = "record",

@@ -3145,7 +3145,7 @@ local standard_library: {string:Type} = {
       }
    },
    ["tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
-   ["tonumber"] = { typename = "function", args = { ANY }, rets = { NUMBER } },
+   ["tonumber"] = { typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } },
    ["error"] = { typename = "function", args = { STRING, NUMBER }, rets = {} },
    ["debug"] = {
       typename = "record",
