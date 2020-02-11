@@ -3,13 +3,10 @@ local util = {}
 local tl = require("tl")
 local assert = require("luassert")
 
-local it
-
-function util.init(it_)
-   it = it_
-end
-
 function util.mock_io(finally, files)
+   assert(type(finally) == "function")
+   assert(type(files) == "table")
+
    local io_open = io.open
    finally(function() io.open = io_open end)
    io.open = function (filename, mode)
@@ -33,10 +30,15 @@ function util.mock_io(finally, files)
 end
 
 local function unindent(code)
+   assert(type(code) == "string")
+
    return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
 function util.assert_line_by_line(s1, s2)
+   assert(type(s1) == "string")
+   assert(type(s2) == "string")
+
    s1 = unindent(s1)
    s2 = unindent(s2)
    local l1 = {}
@@ -53,6 +55,10 @@ function util.assert_line_by_line(s1, s2)
 end
 
 function util.write_tmp_file(finally, name, content)
+   assert(type(finally) == "function")
+   assert(type(name) == "string")
+   assert(type(content) == "string")
+
    local full_name = "/tmp/" .. name
    local fd = io.open(full_name, "w")
    fd:write(content)
@@ -64,6 +70,8 @@ function util.write_tmp_file(finally, name, content)
 end
 
 function util.read_file(name)
+   assert(type(name) == "string")
+
    local fd = io.open(name, "r")
    local output = fd:read("*a")
    fd:close()
@@ -71,6 +79,10 @@ function util.read_file(name)
 end
 
 function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
+   assert(want1 == nil or type(want1) == "boolean")
+   assert(type(want2) == "string")
+   assert(type(want3) == "number")
+
    if _VERSION == "Lua 5.3" then
       assert.same(want1, ret1)
       assert.same(want2, ret2)
@@ -78,21 +90,35 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
    end
 end
 
-function util.check(title, code)
-   it(title, function()
+local function check(lax, code, unknowns)
+   return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
+      local errors, unks = tl.type_check(ast, lax)
       assert.same({}, errors)
-   end)
+      if unknowns then
+         assert.same(#unknowns, #unks)
+         for i, u in ipairs(unknowns) do
+            if u.y then
+               assert.same(u.y, unks[i].y)
+            end
+            if u.x then
+               assert.same(u.x, unks[i].x)
+            end
+            if u.msg then
+               assert.same(u.msg, unks[i].msg)
+            end
+         end
+      end
+   end
 end
 
-function util.check_type_error(title, code, type_errors)
-   it(title, function()
+local function check_type_error(lax, code, type_errors)
+   return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same(#errors, #type_errors)
+      local errors = tl.type_check(ast, lax)
+      assert.same(#type_errors, #errors)
       for i, err in ipairs(type_errors) do
          if err.y then
             assert.same(err.y, errors[i].y)
@@ -104,15 +130,45 @@ function util.check_type_error(title, code, type_errors)
             assert.match(err.msg, errors[i].msg, 1, true)
          end
       end
-   end)
+   end
 end
 
-function util.check_syntax_error(title, code, syntax_errors)
-   it(title, function()
+function util.check(code)
+   assert(type(code) == "string")
+
+   return check(false, code)
+end
+
+function util.lax_check(code, unknowns)
+   assert(type(code) == "string")
+   assert(type(unknowns) == "table")
+
+   return check(true, code, unknowns)
+end
+
+function util.check_type_error(code, type_errors)
+   assert(type(code) == "string")
+   assert(type(type_errors) == "table")
+
+   return check_type_error(false, code, type_errors)
+end
+
+function util.lax_check_type_error(code, type_errors)
+   assert(type(code) == "string")
+   assert(type(type_errors) == "table")
+
+   return check_type_error(true, code, type_errors)
+end
+
+function util.check_syntax_error(code, syntax_errors)
+   assert(type(code) == "string")
+   assert(type(syntax_errors) == "table")
+
+   return function()
       local tokens = tl.lex(code)
       local errors = {}
       tl.parse_program(tokens, errors)
-      assert.same(#errors, #syntax_errors)
+      assert.same(#syntax_errors, #errors)
       for i, err in ipairs(syntax_errors) do
          if err.y then
             assert.same(err.y, errors[i].y)
@@ -124,7 +180,7 @@ function util.check_syntax_error(title, code, syntax_errors)
             assert.match(err.msg, errors[i].msg, 1, true)
          end
       end
-   end)
+   end
 end
 
 return util

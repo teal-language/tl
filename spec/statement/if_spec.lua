@@ -1,30 +1,29 @@
 local util = require("spec.util")
 
 describe("if", function()
-   util.init(it)
 
-   util.check("accepts a boolean", [[
+   it("accepts a boolean", util.check [[
       local b = true
       if b then
          print(b)
       end
    ]])
 
-   util.check("accepts a non-boolean", [[
+   it("accepts a non-boolean", util.check [[
       local n = 123
       if n then
          print(n)
       end
    ]])
 
-   util.check("accepts boolean expressions", [[
+   it("accepts boolean expressions", util.check [[
       local s = "Hallo, Welt"
       if string.match(s, "world") or s == "Hallo, Welt" then
          print(s)
       end
    ]])
 
-   util.check("accepts boolean expressions in elseif", [[
+   it("accepts boolean expressions in elseif", util.check [[
       local s = "Hallo, Welt"
       if 1 == 2 then
          print("wat")
@@ -33,14 +32,14 @@ describe("if", function()
       end
    ]])
 
-   util.check("accepts non-boolean expressions", [[
+   it("accepts non-boolean expressions", util.check [[
       local s = "Hello, world"
       if string.match(s, "world") then
          print(s)
       end
    ]])
 
-   util.check("accepts non-boolean expressions in elseif", [[
+   it("accepts non-boolean expressions in elseif", util.check [[
       local s = "Hello, world"
       if 1 == 2 then
          print("wat")
@@ -49,16 +48,16 @@ describe("if", function()
       end
    ]])
 
-   util.check_type_error("rejects a bad expression", [[
+   it("rejects a bad expression", util.check_type_error([[
       local x = 12
       if not x == 123 then
          print(x)
       end
    ]], {
       { msg = "types are not comparable for equality: boolean and number" }
-   })
+   }))
 
-   util.check_type_error("rejects a bad expression in else if", [[
+   it("rejects a bad expression in else if", util.check_type_error([[
       local x = 12
       if x == 123 then
          print(x)
@@ -67,5 +66,5 @@ describe("if", function()
       end
    ]], {
       { msg = "types are not comparable for equality: boolean and number" }
-   })
+   }))
 end)
