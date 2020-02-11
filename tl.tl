@@ -3141,16 +3141,7 @@ local standard_library: {string:Type} = {
          { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
       }
    },
-   ["print"] = {
-      typename = "poly",
-      poly = {
-         { typename = "function", args = { ANY }, rets = {} },
-         { typename = "function", args = { ANY, ANY }, rets = {} },
-         { typename = "function", args = { ANY, ANY, ANY }, rets = {} },
-         { typename = "function", args = { ANY, ANY, ANY, ANY }, rets = {} },
-         { typename = "function", args = { ANY, ANY, ANY, ANY, ANY }, rets = {} },
-      }
-   },
+   ["print"] = { typename = "function", args = { VARARG_ANY }, rets = {} },
    ["tostring"] = { typename = "function", args = { ANY }, rets = { STRING } },
    ["tonumber"] = { typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } },
    ["error"] = { typename = "function", args = { STRING, NUMBER }, rets = {} },

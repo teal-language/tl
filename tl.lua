@@ -3141,16 +3141,7 @@ local standard_library = {
          [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = NUMBER, }, },
       },
    },
-   ["print"] = {
-      ["typename"] = "poly",
-      ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = {}, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = ANY, }, ["rets"] = {}, },
-         [3] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = ANY, [3] = ANY, }, ["rets"] = {}, },
-         [4] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = ANY, [3] = ANY, [4] = ANY, }, ["rets"] = {}, },
-         [5] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = ANY, [3] = ANY, [4] = ANY, [5] = ANY, }, ["rets"] = {}, },
-      },
-   },
+   ["print"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = {}, },
    ["tostring"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
    ["tonumber"] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
    ["error"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = {}, },
