@@ -2486,6 +2486,7 @@ local STRING = { typename = "string" }
 local VARARG_ANY = { typename = "any", is_va = true }
 local VARARG_STRING = { typename = "string", is_va = true }
 local VARARG_NUMBER = { typename = "number", is_va = true }
+local VARARG_UNKNOWN = { typename = "unknown", is_va = true }
 local BOOLEAN = { typename = "boolean" }
 local ALPHA = { typename = "typevar", typevar = "`a" }
 local BETA = { typename = "typevar", typevar = "`b" }
@@ -3831,6 +3832,10 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          assert(type(func) == "table")
          assert(type(args) == "table")
 
+         if lax and is_unknown(func) then
+            func = { typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } }
+         end
+
          func = resolve_unary(func, {}) -- FIXME propagate typevars?
 
          args = args or {}
@@ -3960,11 +3965,17 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       return node_error(node, "invalid key '" .. key.tk .. "' in " .. description)
    end
 
-   local function add_var(var: string, valtype: Type, is_const: boolean)
+   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean)
+      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
+         add_unknown(node, var)
+      end
       st[#st][var] = { t = valtype, is_const = is_const }
    end
 
-   local function add_global(var: string, valtype: Type, is_const: boolean)
+   local function add_global(node: Node, var: string, valtype: Type, is_const: boolean)
+      if lax and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
+         add_unknown(node, var)
+      end
       st[1][var] = { t = valtype, is_const = is_const }
    end
 
@@ -3975,9 +3986,6 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          local t = arg.decltype
          if not t then
             t = { typename = "unknown" }
-            if lax and (not (i == 1 and arg.tk == "self")) then
-               add_unknown(arg, arg.tk)
-            end
          end
          if arg.tk == "..." then
             t.is_va = true
@@ -3986,11 +3994,11 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             end
          end
          table.insert(args, t)
-         add_var(arg.tk, t)
+         add_var(arg, arg.tk, t)
       end
-      add_var("@return", node.rets or { typename = "tuple" })
+      add_var(nil, "@return", node.rets or { typename = "tuple" })
       if recurse then
-         add_var(node.name.tk, {
+         add_var(nil, node.name.tk, {
             typename = "function",
             args = args,
             rets = node.rets,
@@ -4201,9 +4209,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                local t = decltype or infertype
                if t == nil then
                   t = { typename = "unknown" }
-                  if lax then
-                     add_unknown(node, var.tk)
-                  else
+                  if not lax then
                      if node.exps then
                         node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
                      else
@@ -4214,7 +4220,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   t.declared_at = node
                   t.assigned_to = var.tk
                end
-               add_var(var.tk, t, var.is_const)
+               add_var(var, var.tk, t, var.is_const)
             end
             node.type = { typename = "none" }
          end,
@@ -4249,14 +4255,11 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                else
                   if t == nil then
                      t = { typename = "unknown" }
-                     if lax then
-                       add_unknown(node, var.tk)
-                     end
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
                      t.assigned_to = var.tk
                   end
-                  add_global(var.tk, t, var.is_const)
+                  add_global(var, var.tk, t, var.is_const)
                end
             end
             node.type = { typename = "none" }
@@ -4298,9 +4301,9 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             local exp1 = node.exps[1]
             local exp1type = resolve_tuple(exp1.type)
             if exp1type.typename == "function" then
-               add_var(node.vars[1].tk, exp1type.rets[1])
+               add_var(node.vars[1], node.vars[1].tk, exp1type.rets[1])
                if node.vars[2] then
-                  add_var(node.vars[2].tk, exp1type.rets[2])
+                  add_var(node.vars[2], node.vars[2].tk, exp1type.rets[2])
                end
                -- check common errors:
                if exp1.op and exp1.op.op == "@funcall" then
@@ -4329,7 +4332,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       ["fornum"] = {
          before = function(node: Node)
             table.insert(st, {})
-            add_var(node.var.tk, NUMBER)
+            add_var(nil, node.var.tk, NUMBER)
          end,
          after = function(node: Node, children: {Type}): Type
             table.remove(st)
@@ -4448,7 +4451,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
-            add_var(node.name.tk, {
+            add_var(nil, node.name.tk, {
                typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
@@ -4462,7 +4465,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
-            add_global(node.name.tk, {
+            add_global(nil, node.name.tk, {
                typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
@@ -4478,7 +4481,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
             if node.is_method then
                local rtype = get_self_type(children[1])
                children[3][1] = rtype
-               add_var("self", rtype)
+               add_var(nil, "self", rtype)
             end
 
             local rtype = resolve_unary(get_self_type(children[1]))
