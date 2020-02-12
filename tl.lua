@@ -3066,7 +3066,7 @@ local standard_library = {
       ["typename"] = "record",
       ["fields"] = {
          ["sub"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
-         ["match"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = VARARG_STRING, }, },
+         ["match"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_STRING, }, },
          ["rep"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["lower"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
          ["upper"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
@@ -4465,7 +4465,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
          end,
          ["after"] = function(node, children)
             end_function_scope()
-            add_global(node.name, node.name.tk, {
+            add_global(nil, node.name.tk, {
                ["typename"] = "function",
                ["args"] = children[2],
                ["rets"] = get_rets(children[3]),
