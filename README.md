@@ -4,24 +4,23 @@ tl
 
 [![Build Status](https://travis-ci.org/hishamhm/tl.svg?branch=master)](https://travis-ci.org/hishamhm/tl)
 
-This is the repository of **tl**, an ongoing project to develop a minimalistic typed dialect of Lua.
+This is the repository of **tl**, an ongoing project to develop a typed dialect of Lua.
 
 ## Introduction
 
-Here's a video of a talk given at FOSDEM 2019 which discusses the history of Lua and types,
-and outlines the motivations behind tl:
+Here are videos of talks given at FOSDEM 2019 and 2020 which discuss the
+history of Lua and types, outline the motivations behind tl and talk about
+the project's progress:
 
-* [Minimalism versus types](https://www.youtube.com/watch?v=OPyBQRndLUk)
+* [Minimalism versus types (2019)](https://www.youtube.com/watch?v=OPyBQRndLUk)
+* [Minimalistic typed Lua is here (2020)](https://www.youtube.com/watch?v=HfnjUCRzRKU)
 
 ## Installing
 
-Since there is no published release yet, you need to install it straight
-from this repository. Install Lua and LuaRocks, then run:
+Install Lua and LuaRocks, then run:
 
 ```
-git clone https://github.com/hishamhm/tl
-cd tl
-luarocks make
+luarocks install tl
 ```
 
 This should put a `tl` command in your `$PATH` (run `eval $(luarocks path)` if
@@ -37,6 +36,10 @@ Once `tl` is in your path, there are a few subcommands:
 * `tl gen module.tl` will type check a tl module, and if there's no errors,
   generate a `module.lua` file in plain Lua with all type annotations
   stripped.
+
+## Documentation
+
+You can learn more about programming with tl in the [tutorial](docs/tutorial.md).
 
 ## Credits and license
 
