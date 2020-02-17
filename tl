@@ -169,17 +169,19 @@ for _, filename in ipairs(args["script"]) do
    elseif cmd == "check" then
       report_type_errors(result)
 
-      print("========================================")
-      print("Type checked " .. filename)
-      print("0 errors detected -- you can use:")
-      print()
-      print("   tl run " .. filename)
-      print()
-      print("       to run " .. filename .. " as a program")
-      print()
-      print("   tl gen " .. filename)
-      print()
-      print("       to generate " .. lua_name)
+      if #args["script"] == 1 then
+         print("========================================")
+         print("Type checked " .. filename)
+         print("0 errors detected -- you can use:")
+         print()
+         print("   tl run " .. filename)
+         print()
+         print("       to run " .. filename .. " as a program")
+         print()
+         print("   tl gen " .. filename)
+         print()
+         print("       to generate " .. lua_name)
+      end
 
    elseif cmd == "gen" then
       local ofd, err = io.open(lua_name, "w")
