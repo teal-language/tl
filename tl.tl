@@ -1,6 +1,15 @@
+local TypeCheckOptions = record
+   lax: boolean
+   filename: string
+   skip_compat53: boolean
+   globals: {string:Variable}
+   modules: {string:Type}
+   result: Result
+end
+
 local tl = {
-   process: function(string, {string:Type}, Result, {string:Variable}): (Result, string) = nil,
-   type_check: function(Node, boolean, string, {string:Type}, Result, {string:Variable}, boolean): ({Error}, {Error}, Type) = nil,
+   process: function(string, {string:Type}, Result, {string:Variable}, {string}): (Result, string) = nil,
+   type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type) = nil,
 }
 
 --------------------------------------------------------------------------------
@@ -3188,7 +3197,7 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
          local tokens = tl.lex(text)
          local _: number
          _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, nil, nil, nil, nil, nil, true)
+         tl.type_check(code, { lax = false, skip_compat53 = true })
          code = code[1]
          compat53_code_cache[name] = code
       end
@@ -3236,14 +3245,17 @@ local function init_globals(lax: boolean): {string:Variable}
    return globals
 end
 
-function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {string:Type}, result: Result, globals: {string:Variable}, skip_compat53: boolean): {Error}, {Error}, Type
-   modules = modules or {}
-   result = result or {
+function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Type
+   opts = opts or {}
+   local lax = opts.lax
+   local filename = opts.filename
+   local modules = opts.modules or {}
+   local globals = opts.globals or init_globals()
+   local result = opts.result or {
       syntax_errors = {},
       type_errors = {},
       unknowns = {},
    }
-   globals = globals or init_globals()
 
    local stdlib_compat53 = get_stdlib_compat53(lax)
 
@@ -4626,7 +4638,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
                   end
                else
                   node.type = match_record_key(node, a, { typename = "string", tk = node.e2.tk }, orig_a)
-                  if node.type.needs_compat53 and not skip_compat53 then
+                  if node.type.needs_compat53 and not opts.skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
                      node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
@@ -4795,7 +4807,7 @@ function tl.type_check(ast: Node, lax: boolean, filename: string, modules: {stri
       table.remove(errors, redundant[i])
    end
 
-   if not skip_compat53 then
+   if not opts.skip_compat53 then
       add_compat53_entries(ast, all_needs_compat53)
    end
 
@@ -4886,7 +4898,14 @@ function tl.process(filename: string, modules: {string:Type}, result: Result, gl
    end
 
    local error, unknown: {Error}, {Error}
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+   local opts: TypeCheckOptions = {
+      lax = is_lua,
+      filename = filename,
+      modules = modules,
+      globals = globals,
+      result = result,
+   }
+   error, unknown, result.type = tl.type_check(program, opts)
 
    result.ast = program
 

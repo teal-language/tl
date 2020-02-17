@@ -1,4 +1,13 @@
-local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local tl = {
+local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local TypeCheckOptions = {}
+
+
+
+
+
+
+
+
+local tl = {
    ["process"] = nil,
    ["type_check"] = nil,
 }
@@ -3188,7 +3197,7 @@ local function add_compat53_entries(program, used_set)
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, nil, nil, nil, nil, nil, true)
+         tl.type_check(code, { ["lax"] = false, ["skip_compat53"] = true, })
          code = code[1]
          compat53_code_cache[name] = code
       end
@@ -3236,14 +3245,17 @@ local function init_globals(lax)
    return globals
 end
 
-function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat53)
-   modules = modules or {}
-   result = result or {
+function tl.type_check(ast, opts)
+   opts = opts or {}
+   local lax = opts.lax
+   local filename = opts.filename
+   local modules = opts.modules or {}
+   local globals = opts.globals or init_globals()
+   local result = opts.result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
       ["unknowns"] = {},
    }
-   globals = globals or init_globals()
 
    local stdlib_compat53 = get_stdlib_compat53(lax)
 
@@ -4626,7 +4638,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
                   end
                else
                   node.type = match_record_key(node, a, { ["typename"] = "string", ["tk"] = node.e2.tk, }, orig_a)
-                  if node.type.needs_compat53 and not skip_compat53 then
+                  if node.type.needs_compat53 and not opts.skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
                      node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
@@ -4795,7 +4807,7 @@ function tl.type_check(ast, lax, filename, modules, result, globals, skip_compat
       table.remove(errors, redundant[i])
    end
 
-   if not skip_compat53 then
+   if not opts.skip_compat53 then
       add_compat53_entries(ast, all_needs_compat53)
    end
 
@@ -4886,7 +4898,14 @@ function tl.process(filename, modules, result, globals, preload_modules)
    end
 
    local error, unknown
-   error, unknown, result.type = tl.type_check(program, is_lua, filename, modules, result, globals)
+   local opts = {
+      ["lax"] = is_lua,
+      ["filename"] = filename,
+      ["modules"] = modules,
+      ["globals"] = globals,
+      ["result"] = result,
+   }
+   error, unknown, result.type = tl.type_check(program, opts)
 
    result.ast = program
 

@@ -38,7 +38,7 @@ describe("parser errors", function()
          type_errors = {},
          unknowns = {},
       }
-      tl.type_check(ast, true, "foo.tl", {}, result)
+      tl.type_check(ast, { lax = true, filename = "foo.tl" , result = result })
       assert.is_not_nil(string.match(result.syntax_errors[1].filename, "bar.tl$"), "type errors should contain .filename property")
    end)
 end)

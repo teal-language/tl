@@ -61,7 +61,7 @@ describe("record method call", function()
          local errs = {}
          local _, ast = tl.parse_program(tokens, errs)
          assert.same({}, errs)
-         local errors = tl.type_check(ast, true)
+         local errors = tl.type_check(ast, { lax = true })
          assert.same({}, errors)
       end)
    end)

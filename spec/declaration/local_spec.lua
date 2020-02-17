@@ -125,7 +125,7 @@ describe("local", function()
             end
          ]])
          local _, ast = tl.parse_program(tokens)
-         local errors, unknowns = tl.type_check(ast, true)
+         local errors, unknowns = tl.type_check(ast, { lax = true })
          assert.same({}, errors)
          assert.same(1, #unknowns)
          assert.same("b", unknowns[1].msg)

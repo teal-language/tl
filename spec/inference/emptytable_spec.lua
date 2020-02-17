@@ -11,7 +11,7 @@ describe("empty table without type annotation", function()
          t.foo = "bar"
       ]])
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, false, "test.lua")
+      local errors = tl.type_check(ast, { filename = "test.lua" })
       assert.match("cannot index something that is not a record: {number}", errors[1].msg, 1, true)
    end)
 
@@ -27,7 +27,7 @@ describe("empty table without type annotation", function()
          end
       ]])
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, false, "test.lua")
+      local errors = tl.type_check(ast, { filename = "test.lua" })
       assert.same({}, errors)
    end)
 
@@ -43,7 +43,7 @@ describe("empty table without type annotation", function()
          end
       ]])
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, false, "test.lua")
+      local errors = tl.type_check(ast, { lax = false, filename = "test.lua" })
       assert.match("assigning number to a variable declared with {}", errors[1].msg, 1, true)
    end)
 
@@ -60,7 +60,7 @@ describe("empty table without type annotation", function()
          end
       ]])
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, false, "test.lua")
+      local errors = tl.type_check(ast, { lax = false, filename = "test.lua" })
       assert.match("cannot index something that is not a record: {number} (inferred at test.lua:5:", errors[1].msg, 1, true)
    end)
 end)

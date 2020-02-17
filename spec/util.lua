@@ -94,7 +94,7 @@ local function check(lax, code, unknowns)
    return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors, unks = tl.type_check(ast, lax)
+      local errors, unks = tl.type_check(ast, { lax = lax })
       assert.same({}, errors)
       if unknowns then
          assert.same(#unknowns, #unks)
@@ -117,7 +117,7 @@ local function check_type_error(lax, code, type_errors)
    return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, lax)
+      local errors = tl.type_check(ast, { lax = lax })
       assert.same(#type_errors, #errors)
       for i, err in ipairs(type_errors) do
          if err.y then
