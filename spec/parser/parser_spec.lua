@@ -1,5 +1,16 @@
 local tl = require("tl")
 
+local function strip_typeids(t)
+   for k,v in pairs(t) do
+      if type(v) == "table" then
+         strip_typeids(v)
+      elseif k == "typeid" then
+         t[k] = nil
+      end
+   end
+   return t
+end
+
 describe("parser", function()
    it("accepts an empty file (regression test for #43)", function ()
       local tokens = tl.lex("")
@@ -45,6 +56,6 @@ describe("parser", function()
       local _, ast2 = tl.parse_program(tokens, syntax_errors, "foo.tl")
       assert.same({}, syntax_errors)
       assert.same(1, #ast)
-      assert.same(ast, ast2)
+      assert.same(strip_typeids(ast), strip_typeids(ast2))
    end)
 end)

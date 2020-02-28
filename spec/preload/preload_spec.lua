@@ -22,7 +22,7 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, nil, {"love"})
+      local result, err = tl.process("foo.tl", nil, nil, {"love"})
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -63,7 +63,7 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, nil, {"love", "hate"})
+      local result, err = tl.process("foo.tl", nil, nil, {"love", "hate"})
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -80,7 +80,7 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, nil, {"love"})
+      local result, err = tl.process("foo.tl", nil, nil, {"love"})
 
       assert.same(nil, result)
       assert.is_not_nil(err)

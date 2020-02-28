@@ -138,7 +138,7 @@ local function report_type_errors(result)
 end
 
 for _, filename in ipairs(args["script"]) do
-   local result, err = tl.process(filename, nil, nil, nil, tlconfig.preload_modules)
+   local result, err = tl.process(filename, nil, nil, tlconfig.preload_modules)
    if err then
       die(err)
    end

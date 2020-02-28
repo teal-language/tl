@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("generic function", function()
    it("can declare a generic functiontype", function()
@@ -104,7 +105,7 @@ describe("generic function", function()
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors)
-      local errors = tl.type_check(ast)
+      local errors = tl.type_check(ast, nil, "bla.tl")
       assert.same(2, #errors)
 
       -- not the ideal message...
@@ -320,9 +321,31 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+   it("checks that missing typevars are caught", util.check_type_error([[
+      local Node = record
+      end
+
+      local VisitorCallbacks = record<`X, `Y>
+      end
+
+      local function recurse_node(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+      end
+
+      local function pretty_print_ast(ast: Node): string
+         local visit_node: {string:VisitorCallbacks<Node, string>} = {}
+         local visit_type: {string:VisitorCallbacks<Type, string>} = {}
+         return recurse_node(ast, visit_node, visit_type)
+      end
+   ]], {
+      { msg = "unknown type Type", x = 132 },
+      { msg = "unknown type Type", x = 53 }
+   }))
    it("propagates resolved typevar in return type", function()
       local tokens = tl.lex([[
          local Node = record
+         end
+
+         local Type = record
          end
 
          local VisitorCallbacks = record<`N, `X>
@@ -347,6 +370,9 @@ describe("generic function", function()
          local Node = record
          end
 
+         local Type = record
+         end
+
          local VisitorCallbacks = record<`X, `Y>
          end
 
@@ -365,6 +391,9 @@ describe("generic function", function()
       -- fail
       local tokens = tl.lex([[
          local Node = record
+         end
+
+         local Type = record
          end
 
          local VisitorCallbacks = record<`X, `Y>

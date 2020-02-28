@@ -1,5 +1,9 @@
-local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local TypeCheckOptions = {}
+local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local Env = {}
 
+
+
+
+local TypeCheckOptions = {}
 
 
 
@@ -634,6 +638,13 @@ end
 
 
 
+local last_typeid = 0
+
+local function new_typeid()
+   last_typeid = last_typeid + 1
+   return last_typeid
+end
+
 local ParseError = {}
 
 
@@ -675,6 +686,9 @@ local TypeName = {}
 
 
 local Type = {}
+
+
+
 
 
 
@@ -848,6 +862,7 @@ local parse_type_list
 local parse_argument_list
 local parse_argument_type_list
 local parse_type
+local parse_newtype
 
 
 local function fail(tokens, i, errs, msg)
@@ -874,7 +889,7 @@ end
 
 local function new_type(tokens, i, kind)
    local t = tokens[i]
-   return { ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, ["kind"] = kind or t.kind, }
+   return { ["typeid"] = new_typeid(), ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, ["kind"] = kind or t.kind, }
 end
 
 local function verify_kind(tokens, i, errs, kind, node_kind)
@@ -882,6 +897,21 @@ local function verify_kind(tokens, i, errs, kind, node_kind)
       return i + 1, new_node(tokens, i, node_kind)
    end
    return fail(tokens, i, errs, "syntax error, expected " .. kind)
+end
+
+local is_newtype = {
+   ["enum"] = true,
+   ["record"] = true,
+   ["functiontype"] = true,
+}
+
+local function parse_table_value(tokens, i, errs)
+   if is_newtype[tokens[i].tk] then
+      return parse_newtype(tokens, i, errs)
+   else
+      local i, node, _ = parse_expression(tokens, i, errs)
+      return i, node
+   end
 end
 
 local function parse_table_item(tokens, i, errs, n)
@@ -895,14 +925,14 @@ local function parse_table_item(tokens, i, errs, n)
       i, node.key = parse_expression(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "]")
       i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_expression(tokens, i, errs)
+      i, node.value = parse_table_value(tokens, i, errs)
       return i, node, n
    elseif tokens[i].kind == "identifier" and tokens[i + 1].tk == "=" then
       i, node.key = verify_kind(tokens, i, errs, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
       i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_expression(tokens, i, errs)
+      i, node.value = parse_table_value(tokens, i, errs)
       return i, node, n
    elseif tokens[i].kind == "identifier" and tokens[i + 1].tk == ":" then
       local orig_i = i
@@ -914,7 +944,7 @@ local function parse_table_item(tokens, i, errs, n)
       i, node.decltype = parse_type(tokens, i, try_errs)
       if node.decltype and tokens[i].tk == "=" then
          i = verify_tk(tokens, i, try_errs, "=")
-         i, node.value = parse_expression(tokens, i, try_errs)
+         i, node.value = parse_table_value(tokens, i, try_errs)
          if node.value then
             for _, e in ipairs(try_errs) do
                table.insert(errs, e)
@@ -999,6 +1029,7 @@ end
 local function parse_function_type(tokens, i, errs)
    i = i + 1
    local node = {
+      ["typeid"] = new_typeid(),
       ["y"] = tokens[i - 1].y,
       ["x"] = tokens[i - 1].x,
       ["kind"] = "typedecl",
@@ -1010,8 +1041,8 @@ local function parse_function_type(tokens, i, errs)
       i, node.args = parse_argument_type_list(tokens, i, errs)
       i, node.rets = parse_type_list(tokens, i, errs)
    else
-      node.args = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }
-      node.rets = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }
+      node.args = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }, }
+      node.rets = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }, }
    end
    return i, node
 end
@@ -1020,6 +1051,7 @@ local function parse_typevar_type(tokens, i, errs)
    i = i + 1
    i = verify_kind(tokens, i, errs, "identifier")
    return i, {
+      ["typeid"] = new_typeid(),
       ["y"] = tokens[i - 2].y,
       ["x"] = tokens[i - 2].x,
       ["kind"] = "typedecl",
@@ -1044,6 +1076,7 @@ parse_type = function(tokens, i, errs)
       tokens[i].tk == "nil" or
       tokens[i].tk == "number" then
       return i + 1, {
+         ["typeid"] = new_typeid(),
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
          ["kind"] = "typedecl",
@@ -1052,8 +1085,8 @@ parse_type = function(tokens, i, errs)
    elseif tokens[i].tk == "table" then
       local typ = new_type(tokens, i, "typedecl")
       typ.typename = "map"
-      typ.keys = { ["typename"] = "any", }
-      typ.values = { ["typename"] = "any", }
+      typ.keys = { ["typeid"] = new_typeid(), ["typename"] = "any", }
+      typ.values = { ["typeid"] = new_typeid(), ["typename"] = "any", }
       return i + 1, typ
    elseif tokens[i].tk == "function" then
       return parse_function_type(tokens, i, errs)
@@ -1081,8 +1114,18 @@ parse_type = function(tokens, i, errs)
    elseif tokens[i].kind == "identifier" then
       local typ = new_type(tokens, i, "typedecl")
       typ.typename = "nominal"
-      typ.name = tokens[i].tk
+      typ.names = { [1] = tokens[i].tk, }
       i = i + 1
+      while tokens[i].tk == "." do
+         i = i + 1
+         if tokens[i].kind == "identifier" then
+            table.insert(typ.names, tokens[i].tk)
+            i = i + 1
+         else
+            return fail(tokens, i, errs, "syntax error, expected identifier")
+         end
+      end
+
       if tokens[i].tk == "<" then
          i, typ.typevals = parse_typeval_list(tokens, i, errs)
       end
@@ -1574,7 +1617,7 @@ local function parse_return(tokens, i, errs)
    return i, node
 end
 
-local function parse_newtype(tokens, i, errs)
+parse_newtype = function(tokens, i, errs)
    local node = new_node(tokens, i, "newtype")
    node.newtype = new_type(tokens, i, "typedecl")
    node.newtype.typename = "typetype"
@@ -1623,6 +1666,7 @@ local function parse_newtype(tokens, i, errs)
                local prev_t = def.fields[v.tk]
                if t.typename == "function" and prev_t.typename == "function" then
                   def.fields[v.tk] = {
+                     ["typeid"] = new_typeid(),
                      ["y"] = v.y,
                      ["x"] = v.x,
                      ["typename"] = "poly",
@@ -1669,12 +1713,6 @@ local function parse_newtype(tokens, i, errs)
    end
    return fail(tokens, i, errs)
 end
-
-local is_newtype = {
-   ["enum"] = true,
-   ["record"] = true,
-   ["functiontype"] = true,
-}
 
 local function parse_call_or_assignment(tokens, i, errs)
    local asgn = new_node(tokens, i, "assignment")
@@ -1733,7 +1771,7 @@ local function parse_variable_declarations(tokens, i, errs, node_name)
             end
             i, val = parse_newtype(tokens, i, errs)
             if val then
-               val.newtype.def.name = asgn.vars[v].tk
+               val.newtype.def.names = { [1] = asgn.vars[v].tk, }
             else
                return i, val
             end
@@ -2488,27 +2526,27 @@ end
 
 
 
-local ANY = { ["typename"] = "any", }
-local NIL = { ["typename"] = "nil", }
-local NUMBER = { ["typename"] = "number", }
-local STRING = { ["typename"] = "string", }
-local VARARG_ANY = { ["typename"] = "any", ["is_va"] = true, }
-local VARARG_STRING = { ["typename"] = "string", ["is_va"] = true, }
-local VARARG_NUMBER = { ["typename"] = "number", ["is_va"] = true, }
-local VARARG_UNKNOWN = { ["typename"] = "unknown", ["is_va"] = true, }
-local BOOLEAN = { ["typename"] = "boolean", }
-local ALPHA = { ["typename"] = "typevar", ["typevar"] = "`a", }
-local BETA = { ["typename"] = "typevar", ["typevar"] = "`b", }
-local ARRAY_OF_ANY = { ["typename"] = "array", ["elements"] = ANY, }
-local ARRAY_OF_STRING = { ["typename"] = "array", ["elements"] = STRING, }
-local ARRAY_OF_ALPHA = { ["typename"] = "array", ["elements"] = ALPHA, }
-local MAP_OF_ALPHA_TO_BETA = { ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }
-local TABLE = { ["typename"] = "map", ["keys"] = ANY, ["values"] = ANY, }
-local FUNCTION = { ["typename"] = "function", ["args"] = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }, ["rets"] = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }, }
-local INVALID = { ["typename"] = "invalid", }
-local UNKNOWN = { ["typename"] = "unknown", }
-local NOMINAL_FILE = { ["typename"] = "nominal", ["name"] = "FILE", }
-local METATABLE = { ["typename"] = "nominal", ["name"] = "METATABLE", }
+local ANY = { ["typeid"] = new_typeid(), ["typename"] = "any", }
+local NIL = { ["typeid"] = new_typeid(), ["typename"] = "nil", }
+local NUMBER = { ["typeid"] = new_typeid(), ["typename"] = "number", }
+local STRING = { ["typeid"] = new_typeid(), ["typename"] = "string", }
+local VARARG_ANY = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }
+local VARARG_STRING = { ["typeid"] = new_typeid(), ["typename"] = "string", ["is_va"] = true, }
+local VARARG_NUMBER = { ["typeid"] = new_typeid(), ["typename"] = "number", ["is_va"] = true, }
+local VARARG_UNKNOWN = { ["typeid"] = new_typeid(), ["typename"] = "unknown", ["is_va"] = true, }
+local BOOLEAN = { ["typeid"] = new_typeid(), ["typename"] = "boolean", }
+local ALPHA = { ["typeid"] = new_typeid(), ["typename"] = "typevar", ["typevar"] = "`a", }
+local BETA = { ["typeid"] = new_typeid(), ["typename"] = "typevar", ["typevar"] = "`b", }
+local ARRAY_OF_ANY = { ["typeid"] = new_typeid(), ["typename"] = "array", ["elements"] = ANY, }
+local ARRAY_OF_STRING = { ["typeid"] = new_typeid(), ["typename"] = "array", ["elements"] = STRING, }
+local ARRAY_OF_ALPHA = { ["typeid"] = new_typeid(), ["typename"] = "array", ["elements"] = ALPHA, }
+local MAP_OF_ALPHA_TO_BETA = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }
+local TABLE = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = ANY, ["values"] = ANY, }
+local FUNCTION = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }, }, ["rets"] = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }, }, }
+local INVALID = { ["typeid"] = new_typeid(), ["typename"] = "invalid", }
+local UNKNOWN = { ["typeid"] = new_typeid(), ["typename"] = "unknown", }
+local NOMINAL_FILE = { ["typeid"] = new_typeid(), ["typename"] = "nominal", ["names"] = { [1] = "FILE", }, }
+local METATABLE = { ["typeid"] = new_typeid(), ["typename"] = "nominal", ["names"] = { [1] = "METATABLE", }, }
 
 local numeric_binop = {
    ["number"] = {
@@ -2724,7 +2762,7 @@ local function show_type_base(t, typevars)
    end
    if t.typename == "nominal" then
       if t.typevals then
-         local out = { [1] = t.name, [2] = "<", }
+         local out = { [1] = table.concat(t.names, "."), [2] = "<", }
          local vals = {}
          for _, v in ipairs(t.typevals) do
             table.insert(vals, show_type(v))
@@ -2733,7 +2771,7 @@ local function show_type_base(t, typevars)
          table.insert(out, ">")
          return table.concat(out)
       else
-         return t.name
+         return table.concat(t.names, ".")
       end
    elseif t.typename == "tuple" then
       local out = {}
@@ -2753,6 +2791,8 @@ local function show_type_base(t, typevars)
       return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show_type(t.elements) .. "}"
+   elseif t.typename == "enum" then
+      return table.concat(t.names, ".")
    elseif t.typename == "record" then
       local out = {}
       for _, k in ipairs(t.field_order) do
@@ -2802,7 +2842,7 @@ local function show_type_base(t, typevars)
    elseif t.typename == "typetype" then
       return "type " .. show_type(t.def)
    elseif t.typename == "bad_nominal" then
-      return t.name .. " (an unknown type)"
+      return table.concat(t.names, ".") .. " (an unknown type)"
    else
       return inspect(t)
    end
@@ -2885,7 +2925,9 @@ local function fill_field_order(t)
    end
 end
 
-local function require_module(module_name, lax, modules, result, globals)
+local function require_module(module_name, lax, env, result)
+   local modules = env.modules
+
    if modules[module_name] then
       return modules[module_name]
    end
@@ -2894,8 +2936,14 @@ local function require_module(module_name, lax, modules, result, globals)
    local found, fd, tried = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$")) then
       fd:close()
-      local _result, err = tl.process(found, modules, result, globals)
+      local _result, err = tl.process(found, env, result)
       assert(_result, err)
+
+      if not _result.type then
+         _result.type = BOOLEAN
+      end
+
+      modules[module_name] = _result.type
 
       return _result.type
    end
@@ -2904,260 +2952,260 @@ local function require_module(module_name, lax, modules, result, globals)
 end
 
 local standard_library = {
-   ["..."] = { ["typename"] = "tuple", [1] = STRING, [2] = STRING, [3] = STRING, [4] = STRING, [5] = STRING, },
-   ["@return"] = { ["typename"] = "tuple", [1] = ANY, },
-   ["any"] = { ["typename"] = "typetype", ["def"] = ANY, },
+   ["..."] = { ["typeid"] = new_typeid(), ["typename"] = "tuple", [1] = STRING, [2] = STRING, [3] = STRING, [4] = STRING, [5] = STRING, },
+   ["@return"] = { ["typeid"] = new_typeid(), ["typename"] = "tuple", [1] = ANY, },
+   ["any"] = { ["typeid"] = new_typeid(), ["typename"] = "typetype", ["def"] = ANY, },
    ["arg"] = ARRAY_OF_STRING,
-   ["require"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = {}, },
-   ["setmetatable"] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = METATABLE, }, ["rets"] = { [1] = ALPHA, }, },
-   ["getmetatable"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = METATABLE, }, },
-   ["rawget"] = { ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, }, ["rets"] = { [1] = ANY, }, },
+   ["require"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = {}, },
+   ["setmetatable"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = METATABLE, }, ["rets"] = { [1] = ALPHA, }, },
+   ["getmetatable"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = METATABLE, }, },
+   ["rawget"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, }, ["rets"] = { [1] = ANY, }, },
    ["rawset"] = {
-      ["typename"] = "poly",
+      ["typeid"] = new_typeid(), ["typename"] = "poly",
       ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, [3] = BETA, }, ["rets"] = {}, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
-         [3] = { ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, [3] = ANY, }, ["rets"] = {}, },
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, [3] = BETA, }, ["rets"] = {}, },
+         [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
+         [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, [3] = ANY, }, ["rets"] = {}, },
       },
    },
    ["next"] = {
-      ["typename"] = "poly",
+      ["typeid"] = new_typeid(), ["typename"] = "poly",
       ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
-         [3] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
-         [4] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
+         [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
+         [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
+         [4] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
       },
    },
    ["load"] = {
-      ["typename"] = "poly",
+      ["typeid"] = new_typeid(), ["typename"] = "poly",
       ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
+         [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
       },
    },
    ["FILE"] = {
-      ["typename"] = "typetype",
+      ["typeid"] = new_typeid(), ["typename"] = "typetype",
       ["def"] = {
-         ["typename"] = "record",
+         ["typeid"] = new_typeid(), ["typename"] = "record",
          ["fields"] = {
             ["read"] = {
-               ["typename"] = "poly",
+               ["typeid"] = new_typeid(), ["typename"] = "poly",
                ["poly"] = {
-                  [1] = { ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
-                  [2] = { ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
+                  [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
+                  [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
                },
             },
-            ["write"] = { ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
-            ["close"] = { ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, },
-            ["flush"] = { ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = {}, },
+            ["write"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
+            ["close"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, },
+            ["flush"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = {}, },
 
          },
       },
    },
    ["METATABLE"] = {
-      ["typename"] = "typetype",
+      ["typeid"] = new_typeid(), ["typename"] = "typetype",
       ["def"] = {
-         ["typename"] = "record",
+         ["typeid"] = new_typeid(), ["typename"] = "record",
          ["fields"] = {
             ["__index"] = ANY,
             ["__newindex"] = ANY,
-            ["__tostring"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
-            ["__mode"] = { ["typename"] = "enum", ["enumset"] = { ["k"] = true, ["v"] = true, ["kv"] = true, }, },
+            ["__tostring"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
+            ["__mode"] = { ["typeid"] = new_typeid(), ["typename"] = "enum", ["enumset"] = { ["k"] = true, ["v"] = true, ["kv"] = true, }, },
             ["__call"] = FUNCTION,
-            ["__gc"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = {}, },
-            ["__len"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = NUMBER, }, },
-            ["__pairs"] = { ["typename"] = "function", ["args"] = { [1] = { ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }, }, ["rets"] = {
-                  [1] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
+            ["__gc"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = {}, },
+            ["__len"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = NUMBER, }, },
+            ["__pairs"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }, }, ["rets"] = {
+                  [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
                }, },
 
          },
       },
    },
    ["io"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
          ["stderr"] = NOMINAL_FILE,
          ["stdout"] = NOMINAL_FILE,
-         ["open"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
-         ["popen"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
-         ["write"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
-         ["flush"] = { ["typename"] = "function", ["args"] = {}, ["rets"] = {}, },
-         ["type"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
+         ["open"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
+         ["popen"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
+         ["write"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, },
+         ["flush"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = {}, },
+         ["type"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
       },
    },
    ["os"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["getenv"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
-         ["execute"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, [3] = NUMBER, }, },
-         ["remove"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, },
-         ["time"] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
-         ["clock"] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
+         ["getenv"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
+         ["execute"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, [3] = NUMBER, }, },
+         ["remove"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, },
+         ["time"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
+         ["clock"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
          ["exit"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = BOOLEAN, }, ["rets"] = {}, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = BOOLEAN, [2] = BOOLEAN, }, ["rets"] = {}, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = BOOLEAN, }, ["rets"] = {}, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = BOOLEAN, [2] = BOOLEAN, }, ["rets"] = {}, },
             },
          },
       },
    },
    ["package"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
          ["path"] = STRING,
          ["config"] = STRING,
          ["loaded"] = {
-            ["typename"] = "map",
+            ["typeid"] = new_typeid(), ["typename"] = "map",
             ["keys"] = STRING,
             ["values"] = ANY,
          },
          ["searchers"] = {
-            ["typename"] = "array",
-            ["elements"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, },
+            ["typeid"] = new_typeid(), ["typename"] = "array",
+            ["elements"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, },
          },
          ["loaders"] = {
-            ["typename"] = "array",
-            ["elements"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, },
+            ["typeid"] = new_typeid(), ["typename"] = "array",
+            ["elements"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, },
          },
       },
    },
    ["table"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["pack"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = TABLE, }, },
+         ["pack"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = TABLE, }, },
          ["unpack"] = {
-            ["typename"] = "function",
+            ["typeid"] = new_typeid(), ["typename"] = "function",
             ["needs_compat53"] = true,
             ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, },
-            ["rets"] = { [1] = { ["typename"] = "typevar", ["typevar"] = "`a", ["is_va"] = true, },
+            ["rets"] = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "typevar", ["typevar"] = "`a", ["is_va"] = true, },
             }, },
          ["move"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, [5] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, [5] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
             },
          },
          ["insert"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, },
             },
          },
          ["remove"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, }, ["rets"] = { [1] = ALPHA, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, }, ["rets"] = { [1] = ALPHA, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
             },
          },
          ["concat"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = STRING, }, ["rets"] = { [1] = STRING, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, }, ["rets"] = { [1] = STRING, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = STRING, }, ["rets"] = { [1] = STRING, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, }, ["rets"] = { [1] = STRING, }, },
             },
          },
          ["sort"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {}, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = BOOLEAN, }, }, }, ["rets"] = {}, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {}, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = BOOLEAN, }, }, }, ["rets"] = {}, },
             },
          },
       },
    },
    ["string"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["sub"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
-         ["match"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_STRING, }, },
-         ["rep"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
-         ["lower"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
-         ["upper"] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
+         ["sub"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["match"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_STRING, }, },
+         ["rep"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["lower"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
+         ["upper"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
          ["gsub"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = STRING, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typename"] = "map", ["keys"] = STRING, ["values"] = STRING, }, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
-               [3] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = STRING, }, }, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = STRING, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = STRING, ["values"] = STRING, }, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
+               [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = STRING, }, }, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
 
             },
          },
-         ["gmatch"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = {
-               [1] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, },
+         ["gmatch"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = {
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, },
             }, },
          ["find"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
-               [3] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, [4] = BOOLEAN, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
+               [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, [4] = BOOLEAN, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
 
             },
          },
-         ["char"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["char"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["byte"] = {
-            ["typename"] = "poly",
+            ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {
-               [1] = { ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
-               [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-               [3] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_NUMBER, }, },
+               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
+               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+               [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_NUMBER, }, },
             },
          },
-         ["format"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = STRING, }, },
+         ["format"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = STRING, }, },
       },
    },
    ["math"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["max"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-         ["min"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-         ["floor"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-         ["randomseed"] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = {}, },
+         ["max"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+         ["min"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+         ["floor"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+         ["randomseed"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = {}, },
          ["huge"] = NUMBER,
       },
    },
-   ["type"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
+   ["type"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
    ["utf8"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["len"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-         ["offset"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+         ["len"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+         ["offset"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
       },
    },
-   ["ipairs"] = { ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {
-         [1] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
+   ["ipairs"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
       }, },
-   ["pairs"] = { ["typename"] = "function", ["args"] = { [1] = { ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }, }, ["rets"] = {
-         [1] = { ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
+   ["pairs"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }, }, ["rets"] = {
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
       }, },
-   ["pcall"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = BOOLEAN, [2] = ANY, }, },
+   ["pcall"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = BOOLEAN, [2] = ANY, }, },
    ["assert"] = {
-      ["typename"] = "poly",
+      ["typeid"] = new_typeid(), ["typename"] = "poly",
       ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = BETA, }, ["rets"] = { [1] = ALPHA, }, },
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
+         [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = BETA, }, ["rets"] = { [1] = ALPHA, }, },
       },
    },
    ["select"] = {
-      ["typename"] = "poly",
+      ["typeid"] = new_typeid(), ["typename"] = "poly",
       ["poly"] = {
-         [1] = { ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
-         [2] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = NUMBER, }, },
+         [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
+         [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = NUMBER, }, },
       },
    },
-   ["print"] = { ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = {}, },
-   ["tostring"] = { ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
-   ["tonumber"] = { ["typename"] = "function", ["args"] = { [1] = ANY, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
-   ["error"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = {}, },
+   ["print"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = {}, },
+   ["tostring"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, },
+   ["tonumber"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ANY, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
+   ["error"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = {}, },
    ["debug"] = {
-      ["typename"] = "record",
+      ["typeid"] = new_typeid(), ["typename"] = "record",
       ["fields"] = {
-         ["traceback"] = { ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
+         ["traceback"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, },
       },
    },
 }
@@ -3245,12 +3293,18 @@ local function init_globals(lax)
    return globals
 end
 
+local function init_env(lax)
+   return {
+      ["modules"] = {},
+      ["globals"] = init_globals(lax),
+   }
+end
+
 function tl.type_check(ast, opts)
    opts = opts or {}
+   opts.env = opts.env or init_env(opts.lax)
    local lax = opts.lax
    local filename = opts.filename
-   local modules = opts.modules or {}
-   local globals = opts.globals or init_globals()
    local result = opts.result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
@@ -3259,7 +3313,7 @@ function tl.type_check(ast, opts)
 
    local stdlib_compat53 = get_stdlib_compat53(lax)
 
-   local st = { [1] = globals, }
+   local st = { [1] = opts.env.globals, }
 
    local all_needs_compat53 = {}
 
@@ -3279,7 +3333,7 @@ function tl.type_check(ast, opts)
             table.insert(field_order, k)
          end
          return {
-            ["typename"] = "record",
+            ["typeid"] = new_typeid(), ["typename"] = "record",
             ["field_order"] = field_order,
             ["fields"] = globals,
          }, false
@@ -3295,6 +3349,27 @@ function tl.type_check(ast, opts)
             return typ, scope[name].is_const
          end
       end
+   end
+
+   local function find_type(names)
+      local typ = find_var(names[1])
+      if not typ then
+         return nil
+      end
+      for i = 2, #names do
+         if typ.fields then
+            typ = typ.fields[names[i]]
+            if typ == nil then
+               return nil
+            end
+         else
+            break
+         end
+      end
+      if typ and typ.typename ~= "typetype" then
+         return nil
+      end
+      return typ
    end
 
    local function infer_var(emptytable, t, node)
@@ -3368,38 +3443,59 @@ function tl.type_check(ast, opts)
       return node.type
    end
 
-   local function resolve_nominal(t, typevars)
-      local typetype = find_var(t.name)
-      if not typetype then
-         type_error(t, "unknown type " .. t.name)
-         return { ["typename"] = "bad_nominal", ["name"] = t.name, }
-      end
-      if typetype.typename == "typetype" then
-         local def = typetype.def
-         if t.typevals and def.typevars then
-            if #t.typevals ~= #def.typevars then
-               type_error(t, "mismatch in number of type arguments")
-               return { ["typename"] = "bad_nominal", ["name"] = t.name, }
-            end
 
-            local newtypevars = {}
-            for k, v in pairs(typevars or {}) do
-               newtypevars[k] = v
-            end
-            for i, tt in ipairs(t.typevals) do
-               newtypevars[def.typevars[i].typevar] = tt
-            end
-            return resolve_typevars(def, newtypevars)
-         elseif t.typevals then
-            type_error(t, "spurious type arguments")
-         elseif def.typevars then
-            type_error(t, "missing type arguments in %s", def)
-         end
+   local function match_typevals(t, def, typevars)
+      if not typevars then
          return def
-      else
-         type_error(t, t.name .. " is not a type")
-         return { ["typename"] = "bad_nominal", ["name"] = t.name, }
       end
+
+      if t.typevals and def.typevars then
+         if #t.typevals ~= #def.typevars then
+            type_error(t, "mismatch in number of type arguments")
+            return nil
+         end
+
+         local newtypevars = {}
+         for k, v in pairs(typevars) do
+            newtypevars[k] = v
+         end
+         for i, tt in ipairs(t.typevals) do
+            newtypevars[def.typevars[i].typevar] = tt
+         end
+         return resolve_typevars(def, newtypevars)
+      elseif t.typevals then
+         type_error(t, "spurious type arguments")
+         return nil
+      elseif def.typevars then
+         type_error(t, "missing type arguments in %s", def)
+         return nil
+      else
+         return def
+      end
+   end
+
+   local function resolve_nominal(t, typevars)
+      if t.resolved then
+         return t.resolved
+      end
+
+      local resolved
+
+      local typetype = find_type(t.names)
+      if not typetype then
+         type_error(t, "unknown type %s", t)
+      elseif typetype.typename == "typetype" then
+         resolved = match_typevals(t, typetype.def, typevars)
+      else
+         type_error(t, table.concat(t.names, ".") .. " is not a type")
+      end
+
+      if not resolved then
+         resolved = { ["typeid"] = new_typeid(), ["typename"] = "bad_nominal", ["names"] = t.names, }
+      end
+
+      t.resolved = resolved
+      return resolved
    end
 
    local function resolve_unary(t, typevars)
@@ -3505,6 +3601,27 @@ function tl.type_check(ast, opts)
       return true
    end
 
+
+   local function same_names(t1, t2)
+      if t1.resolved and t2.resolved then
+         return t1.resolved.typeid == t2.resolved.typeid
+      end
+
+      local ft1 = find_type(t1.names)
+      local ft2 = find_type(t2.names)
+      if ft1 and ft2 then
+         return ft1 == ft2
+      else
+         if not ft1 then
+            type_error(t1, "unknown type %s", t1)
+         end
+         if not ft2 then
+            type_error(t2, "unknown type %s", t2)
+         end
+         return table.concat(t1.names, ".") == table.concat(t2.names, ".")
+      end
+   end
+
    local function same_type(t1, t2, typevars)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -3521,7 +3638,7 @@ function tl.type_check(ast, opts)
       elseif t1.typename == "map" then
          return same_type(t1.keys, t2.keys) and same_type(t1.values, t2.values)
       elseif t1.typename == "nominal" then
-         return t1.name == t2.name
+         return same_names(t1, t2)
       elseif t1.typename == "record" then
          return match_fields_to_record(t1, t2, typevars, same_type)
       elseif t1.typename == "function" then
@@ -3593,7 +3710,7 @@ function tl.type_check(ast, opts)
       end
       if t2.typename == "tuple" and t1.typename ~= "tuple" then
          t1 = {
-            ["typename"] = "tuple",
+            ["typeid"] = new_typeid(), ["typename"] = "tuple",
             [1] = t1,
          }
       end
@@ -3618,10 +3735,10 @@ function tl.type_check(ast, opts)
             end
          end
          return false, terr(t1, "poly has no match")
-      elseif t1.typename == "nominal" and t2.typename == "nominal" and t2.name == "any" then
+      elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         if t1.name == t2.name then
+         if same_names(t1, t2) then
             if t1.typevals == nil and t2.typevals == nil then
                return true
             elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
@@ -3637,7 +3754,7 @@ function tl.type_check(ast, opts)
                end
             end
          end
-         return false, terr(t1, t1.name .. " is not a " .. t2.name)
+         return false, terr(t1, "%s is not a %s", t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok = (for_equality) and
          (t2.tk and t1.enumset[unquote(t2.tk)]) or
@@ -3652,7 +3769,7 @@ function tl.type_check(ast, opts)
          if ok then
             return true
          else
-            return false, terr(t1, "%s is not a member of " .. t2.name, t1)
+            return false, terr(t1, "%s is not a member of %s", t1, t2)
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1, typevars)
@@ -3772,9 +3889,9 @@ function tl.type_check(ast, opts)
 
       if t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
-            infer_var(t2.emptytable_type, { ["typename"] = "array", ["elements"] = t1, }, node)
+            infer_var(t2.emptytable_type, { ["typeid"] = new_typeid(), ["typename"] = "array", ["elements"] = t1, }, node)
          else
-            infer_var(t2.emptytable_type, { ["typename"] = "map", ["keys"] = t2.emptytable_type.keys, ["values"] = t1, }, node)
+            infer_var(t2.emptytable_type, { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = t2.emptytable_type.keys, ["values"] = t1, }, node)
          end
          return
       elseif t2.typename == "emptytable" then
@@ -3844,7 +3961,7 @@ function tl.type_check(ast, opts)
          assert(type(args) == "table")
 
          if lax and is_unknown(func) then
-            func = { ["typename"] = "function", ["args"] = { [1] = VARARG_UNKNOWN, }, ["rets"] = { [1] = VARARG_UNKNOWN, }, }
+            func = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_UNKNOWN, }, ["rets"] = { [1] = VARARG_UNKNOWN, }, }
          end
 
          func = resolve_unary(func, {})
@@ -3949,7 +4066,7 @@ function tl.type_check(ast, opts)
  elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
          assert(tbl.fields, "record has no fields!?")
 
-         if key.typename == "string" or key.kind == "identifier" then
+         if key.kind == "string" or key.kind == "identifier" then
             if tbl.fields[key.tk] then
                return tbl.fields[key.tk]
             end
@@ -3996,7 +4113,7 @@ function tl.type_check(ast, opts)
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
-            t = { ["typename"] = "unknown", }
+            t = { ["typeid"] = new_typeid(), ["typename"] = "unknown", }
          end
          if arg.tk == "..." then
             t.is_va = true
@@ -4007,10 +4124,11 @@ function tl.type_check(ast, opts)
          table.insert(args, t)
          add_var(arg, arg.tk, t)
       end
-      add_var(nil, "@return", node.rets or { ["typename"] = "tuple", })
+
+      add_var(nil, "@return", node.rets or { ["typeid"] = new_typeid(), ["typename"] = "tuple", })
       if recurse then
          add_var(nil, node.name.tk, {
-            ["typename"] = "function",
+            ["typeid"] = new_typeid(), ["typename"] = "function",
             ["args"] = args,
             ["rets"] = node.rets,
          })
@@ -4068,7 +4186,7 @@ function tl.type_check(ast, opts)
 
    local function get_rets(rets)
       if lax and (#rets == 0) then
-         return { [1] = { ["typename"] = "unknown", ["is_va"] = true, }, }
+         return { [1] = { ["typeid"] = new_typeid(), ["typename"] = "unknown", ["is_va"] = true, }, }
       end
       return rets
    end
@@ -4113,7 +4231,7 @@ function tl.type_check(ast, opts)
                return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, b, a.keys)
             end
          end
-         return { ["y"] = node.y, ["x"] = node.x, ["typename"] = "unknown_emptytable_value", ["emptytable_type"] = a, }
+         return { ["y"] = node.y, ["x"] = node.x, ["typeid"] = new_typeid(), ["typename"] = "unknown_emptytable_value", ["emptytable_type"] = a, }
       elseif a.typename == "map" then
          if is_a(b, a.keys) then
             return a.values
@@ -4121,7 +4239,7 @@ function tl.type_check(ast, opts)
             return node_error(idxnode, "wrong index type: %s, expected %s", orig_b, a.keys)
          end
       elseif node.e2.kind == "string" then
-         return match_record_key(node, a, { ["typename"] = "string", ["tk"] = assert(node.e2.conststr), }, orig_a)
+         return match_record_key(node, a, { ["kind"] = "string", ["tk"] = assert(node.e2.conststr), }, orig_a)
       elseif (a.typename == "record" or a.typename == "arrayrecord") and b.typename == "enum" then
          local field_names = {}
          for k, _ in pairs(b.enumset) do
@@ -4154,7 +4272,7 @@ function tl.type_check(ast, opts)
                table.insert(old.poly, new)
             else
                return {
-                  ["typename"] = "poly",
+                  ["typeid"] = new_typeid(), ["typename"] = "poly",
                   ["poly"] = {
                      [1] = old,
                      [2] = new,
@@ -4202,7 +4320,7 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             table.remove(st)
 
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["local_declaration"] = {
@@ -4219,7 +4337,7 @@ function tl.type_check(ast, opts)
                end
                local t = decltype or infertype
                if t == nil then
-                  t = { ["typename"] = "unknown", }
+                  t = { ["typeid"] = new_typeid(), ["typename"] = "unknown", }
                   if not lax then
                      if node.exps then
                         node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
@@ -4233,7 +4351,7 @@ function tl.type_check(ast, opts)
                end
                add_var(var, var.tk, t, var.is_const)
             end
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["global_declaration"] = {
@@ -4265,7 +4383,7 @@ function tl.type_check(ast, opts)
                   end
                else
                   if t == nil then
-                     t = { ["typename"] = "unknown", }
+                     t = { ["typeid"] = new_typeid(), ["typename"] = "unknown", }
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
                      t.assigned_to = var.tk
@@ -4273,7 +4391,7 @@ function tl.type_check(ast, opts)
                   add_global(var, var.tk, t, var.is_const)
                end
             end
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["assignment"] = {
@@ -4296,12 +4414,12 @@ function tl.type_check(ast, opts)
                   node_error(varnode, "unknown variable")
                end
             end
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["if"] = {
          ["after"] = function(node, children)
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["forin"] = {
@@ -4337,7 +4455,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             table.remove(st)
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["fornum"] = {
@@ -4347,7 +4465,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             table.remove(st)
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["return"] = {
@@ -4365,7 +4483,7 @@ function tl.type_check(ast, opts)
                module_type = resolve_unary(children[1])
             end
 
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["variables"] = {
@@ -4389,7 +4507,7 @@ function tl.type_check(ast, opts)
             node.type = {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["typename"] = "emptytable",
+               ["typeid"] = new_typeid(), ["typename"] = "emptytable",
             }
             local is_record = false
             local is_array = false
@@ -4449,7 +4567,7 @@ function tl.type_check(ast, opts)
             node.type = {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["typename"] = "table_item",
+               ["typeid"] = new_typeid(), ["typename"] = "table_item",
                ["kname"] = kname,
                ["ktype"] = ktype,
                ["vtype"] = vtype,
@@ -4463,11 +4581,11 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             end_function_scope()
             add_var(nil, node.name.tk, {
-               ["typename"] = "function",
+               ["typeid"] = new_typeid(), ["typename"] = "function",
                ["args"] = children[2],
                ["rets"] = get_rets(children[3]),
             })
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["global_function"] = {
@@ -4477,11 +4595,11 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             end_function_scope()
             add_global(nil, node.name.tk, {
-               ["typename"] = "function",
+               ["typeid"] = new_typeid(), ["typename"] = "function",
                ["args"] = children[2],
                ["rets"] = get_rets(children[3]),
             })
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["record_function"] = {
@@ -4503,7 +4621,7 @@ function tl.type_check(ast, opts)
                local fn_type = {
                   ["y"] = node.y,
                   ["x"] = node.x,
-                  ["typename"] = "function",
+                  ["typeid"] = new_typeid(), ["typename"] = "function",
                   ["is_method"] = node.is_method,
                   ["args"] = children[3],
                   ["rets"] = get_rets(children[4]),
@@ -4534,7 +4652,7 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             end_function_scope()
 
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["function"] = {
@@ -4548,7 +4666,7 @@ function tl.type_check(ast, opts)
             node.type = {
                ["y"] = node.y,
                ["x"] = node.x,
-               ["typename"] = "function",
+               ["typeid"] = new_typeid(), ["typename"] = "function",
                ["args"] = children[1],
                ["rets"] = children[2],
             }
@@ -4576,7 +4694,7 @@ function tl.type_check(ast, opts)
                      local b1 = resolve_unary(b[1], {})
                      local b2 = resolve_unary(b[2], {})
                      if b1.typename == "record" and node.e2[2].conststr then
-                        node.type = match_record_key(node, b1, { ["typename"] = "string", ["tk"] = assert(node.e2[2].conststr), }, b1)
+                        node.type = match_record_key(node, b1, { ["kind"] = "string", ["tk"] = assert(node.e2[2].conststr), }, b1)
                      else
                         node.type = type_check_index(node, node.e2[2], b1, b2)
                      end
@@ -4587,11 +4705,11 @@ function tl.type_check(ast, opts)
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
-                        node.type = require_module(module_name, lax, modules, result, st[1])
+                        node.type = require_module(module_name, lax, opts.env, result)
                         if not node.type then
                            node.type = BOOLEAN
                         end
-                        modules[module_name] = node.type
+                        opts.env.modules[module_name] = node.type
                      else
                         node.type = UNKNOWN
                      end
@@ -4602,7 +4720,7 @@ function tl.type_check(ast, opts)
                   local ftype = table.remove(b, 1)
                   local rets = type_check_function_call(node, ftype, b, false, 1)
                   if rets.typename ~= "tuple" then
-                     rets = { ["typename"] = "tuple", [1] = rets, }
+                     rets = { ["typeid"] = new_typeid(), ["typename"] = "tuple", [1] = rets, }
                   end
                   table.insert(rets, 1, BOOLEAN)
                   node.type = rets
@@ -4637,7 +4755,7 @@ function tl.type_check(ast, opts)
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)
                   end
                else
-                  node.type = match_record_key(node, a, { ["typename"] = "string", ["tk"] = node.e2.tk, }, orig_a)
+                  node.type = match_record_key(node, a, { ["kind"] = "string", ["tk"] = node.e2.tk, }, orig_a)
                   if node.type.needs_compat53 and not opts.skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
@@ -4704,7 +4822,7 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
-               node.type = { ["typename"] = "unknown", }
+               node.type = { ["typeid"] = new_typeid(), ["typename"] = "unknown", }
                if lax then
                   add_unknown(node, node.tk)
                else
@@ -4715,7 +4833,7 @@ function tl.type_check(ast, opts)
       },
       ["identifier"] = {
          ["after"] = function(node, children)
-            node.type = { ["typename"] = "none", }
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["newtype"] = {
@@ -4742,7 +4860,7 @@ function tl.type_check(ast, opts)
          node.type = {
             ["y"] = node.y,
             ["x"] = node.x,
-            ["typename"] = node.kind,
+            ["typeid"] = new_typeid(), ["typename"] = node.kind,
             ["tk"] = node.tk,
          }
          return node.type
@@ -4766,8 +4884,8 @@ function tl.type_check(ast, opts)
          ["typedecl"] = {
             ["after"] = function(typ, children)
                if typ.typename == "nominal" then
-                  if not find_var(typ.name) then
-                     type_error(typ, "unknown type " .. typ.name)
+                  if not find_type(typ.names) then
+                     type_error(typ, "unknown type %s", typ)
                   end
                end
                return typ
@@ -4795,7 +4913,8 @@ function tl.type_check(ast, opts)
    local redundant = {}
    local lastx, lasty = 0, 0
    table.sort(errors, function(a, b)
-      return (a.y < b.y) or (a.y == b.y and a.x < b.x)
+      return ((a.filename and b.filename) and a.filename < b.filename) or
+      (a.filename == b.filename and ((a.y < b.y) or (a.y == b.y and a.x < b.x)))
    end)
    for i, err in ipairs(errors) do
       if err.x == lastx and err.y == lasty then
@@ -4817,9 +4936,9 @@ end
 local function init_modules()
    local modules = {
       ["tl"] = {
-         ["typename"] = "record",
+         ["typeid"] = new_typeid(), ["typename"] = "record",
          ["fields"] = {
-            ["loader"] = { ["typename"] = "function", ["args"] = {}, ["rets"] = {}, },
+            ["loader"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = {}, },
          },
       },
    }
@@ -4832,7 +4951,7 @@ local function init_modules()
    return modules
 end
 
-function tl.process(filename, modules, result, globals, preload_modules)
+function tl.process(filename, env, result, preload_modules)
    local fd, err = io.open(filename, "r")
    if not fd then
       return nil, "could not open " .. filename .. ": " .. err
@@ -4844,7 +4963,7 @@ function tl.process(filename, modules, result, globals, preload_modules)
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   local extension = filename:match("%.([a-z]+)$")
+   local basename, extension = filename:match("(.*)%.([a-z]+)$")
    extension = extension and extension:lower()
 
    local is_lua
@@ -4856,13 +4975,12 @@ function tl.process(filename, modules, result, globals, preload_modules)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   modules = modules or init_modules()
+   env = env or init_env(is_lua)
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
       ["unknowns"] = {},
    }
-   globals = globals or init_globals(is_lua)
    preload_modules = preload_modules or {}
 
    local tokens, errs = tl.lex(input)
@@ -4883,26 +5001,19 @@ function tl.process(filename, modules, result, globals, preload_modules)
    end
 
 
-   for _, module_name in ipairs(preload_modules) do
-      local module_type = require_module(module_name, is_lua, modules, result, globals)
+   for _, name in ipairs(preload_modules) do
+      local module_type = require_module(name, is_lua, env, result)
 
       if module_type == UNKNOWN then
-         return nil, string.format("Error: could not preload module '%s'", module_name)
+         return nil, string.format("Error: could not preload module '%s'", name)
       end
-
-      if not module_type then
-         module_type = BOOLEAN
-      end
-
-      modules[module_name] = module_type
    end
 
    local error, unknown
    local opts = {
       ["lax"] = is_lua,
       ["filename"] = filename,
-      ["modules"] = modules,
-      ["globals"] = globals,
+      ["env"] = env,
       ["result"] = result,
    }
    error, unknown, result.type = tl.type_check(program, opts)
