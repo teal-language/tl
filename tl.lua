@@ -2684,6 +2684,7 @@ local function resolve_typevars(t, typevars, seen)
    local orig_t = t
    if t.typename == "typevar" and typevars[t.typevar] then
       t = typevars[t.typevar]
+      t.tk = nil
    end
 
    local copy = {}
@@ -2697,8 +2698,6 @@ local function resolve_typevars(t, typevars, seen)
          cp[k] = v
       end
    end
-
-   copy.tk = nil
 
    return copy
 end
