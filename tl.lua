@@ -2704,24 +2704,6 @@ local binop_types = {
 
 local show_type
 
-local function copy_type(t, seen)
-   seen = seen or {}
-   local copy = {}
-   seen[t] = copy
-   for k, v in pairs(t) do
-      if type(v) == "table" then
-         if seen[v] then
-            copy[k] = seen[v]
-         else
-            copy[k] = copy_type(v, seen)
-         end
-      else
-         copy[k] = v
-      end
-   end
-   return copy
-end
-
 local function resolve_typevars(t, typevars, seen)
    seen = seen or {}
    if seen[t] then

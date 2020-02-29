@@ -2704,24 +2704,6 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
 
 local show_type: function(Type, {string:Type}): string
 
-local function copy_type(t: Type, seen: {any:any}): Type
-   seen = seen or {}
-   local copy: {string:Type} = {}
-   seen[t] = copy
-   for k, v in pairs(t as {string:Type}) do
-      if type(v) == "table" then
-         if seen[v] then
-            copy[k] = seen[v] as Type
-         else
-            copy[k] = copy_type(v, seen)
-         end
-      else
-         copy[k] = v
-      end
-   end
-   return copy as Type
-end
-
 local function resolve_typevars(t: Type, typevars: {string:Type}, seen: {Type:Type}): Type
    seen = seen or {}
    if seen[t] then
