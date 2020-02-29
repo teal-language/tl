@@ -298,7 +298,7 @@ syntax for it (the dot and colon notations for indexing): tables with a set of
 string keys known in advance, each of them corresponding to a possibly
 different value type. Records (named as such in honor of the Algol/Pascal
 tradition from which Lua gets much of the feel of its syntax) can be used
-represent objects, "structs", etc.
+to represent objects, "structs", etc.
 
 To declare a record variable you need to refer by name to a record type, which
 describes the set of valid fields (keys of type string and their values of
@@ -312,7 +312,7 @@ end
 ```
 
 Tables that match the shape of the record type will be accepted as an
-initializer pf variables declared with the record type:
+initializer of variables declared with the record type:
 
 ```
 local p: Point = { x = 100, y = 100 }
@@ -533,7 +533,7 @@ tl supports a fair subset the Lua 5.3 standard library (even in other Lua
 versions, using compat-5.3), avoiding 5.3-isms that are difficult to reproduce
 in other Lua implementations.
 
-It declares all entries of the standard library as <const>, and assumes that
+It declares all entries of the standard library as `<const>`, and assumes that
 Lua libraries don't modify it. If your environment modifies the Lua standard
 library with incompatible behaviors, tl will be oblivious to it and you're on
 your own.
