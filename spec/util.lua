@@ -94,7 +94,7 @@ local function check(lax, code, unknowns)
    return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors, unks = tl.type_check(ast, { lax = lax })
+      local errors, unks = tl.type_check(ast, { filename = "foo.tl", lax = lax })
       assert.same({}, errors)
       if unknowns then
          assert.same(#unknowns, #unks)
@@ -117,17 +117,17 @@ local function check_type_error(lax, code, type_errors)
    return function()
       local tokens = tl.lex(code)
       local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast, { lax = lax })
-      assert.same(#type_errors, #errors)
+      local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      assert.same(#type_errors, #errors, "Expected same number of errors:")
       for i, err in ipairs(type_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y)
+            assert.same(err.y, errors[i].y, "Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x)
+            assert.same(err.x, errors[i].x, "Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true)
+            assert.match(err.msg, errors[i].msg, 1, true, "Expected messages to match:")
          end
       end
    end
@@ -168,16 +168,16 @@ function util.check_syntax_error(code, syntax_errors)
       local tokens = tl.lex(code)
       local errors = {}
       tl.parse_program(tokens, errors)
-      assert.same(#syntax_errors, #errors)
+      assert.same(#syntax_errors, #errors, "Expected same amount of syntax errors:")
       for i, err in ipairs(syntax_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y)
+            assert.same(err.y, errors[i].y, "Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x)
+            assert.same(err.x, errors[i].x, "Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true)
+            assert.match(err.msg, errors[i].msg, 1, true, "Expected messages to match:")
          end
       end
    end
