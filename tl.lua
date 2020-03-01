@@ -856,6 +856,8 @@ local Node = {}
 
 
 
+
+
 local parse_expression
 local parse_statements
 local parse_type_list
@@ -1489,8 +1491,12 @@ local function parse_if(tokens, i, errs)
    i = verify_tk(tokens, i, errs, "then")
    i, node.thenpart = parse_statements(tokens, i, errs)
    node.elseifs = {}
+   local n = 0
    while tokens[i].tk == "elseif" do
+      n = n + 1
       local subnode = new_node(tokens, i, "elseif")
+      subnode.parent_if = node
+      subnode.elseif_n = n
       i = i + 1
       i, subnode.exp = parse_expression(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "then")
@@ -1499,6 +1505,7 @@ local function parse_if(tokens, i, errs)
    end
    if tokens[i].tk == "else" then
       local subnode = new_node(tokens, i, "else")
+      subnode.parent_if = node
       i = i + 1
       i, subnode.elsepart = parse_statements(tokens, i, errs)
       node.elsepart = subnode
@@ -1864,7 +1871,6 @@ local VisitorCallbacks = {}
 
 
 
-
 local Visitor = {}
 
 
@@ -1917,6 +1923,7 @@ visit_type)
    end
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
+   local cbs = visit_node.cbs[ast.kind]
    if ast.kind == "statements" or
       ast.kind == "variables" or
       ast.kind == "values" or
@@ -1938,21 +1945,21 @@ visit_type)
       xs[2] = recurse_node(ast.value, visit_node, visit_type)
    elseif ast.kind == "if" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      if visit_node.cbs["if"].before_statements then
-         visit_node.cbs["if"].before_statements(ast, xs)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
       end
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
       for i, e in ipairs(ast.elseifs) do
          table.insert(xs, recurse_node(e, visit_node, visit_type))
       end
       if ast.elsepart then
-         if visit_node.cbs["if"].before_else then
-            visit_node.cbs["if"].before_else(ast, xs)
-         end
          table.insert(xs, recurse_node(ast.elsepart, visit_node, visit_type))
       end
    elseif ast.kind == "while" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
+      end
       xs[2] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "repeat" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
@@ -1964,8 +1971,8 @@ visit_type)
    elseif ast.kind == "forin" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       xs[2] = recurse_node(ast.exps, visit_node, visit_type)
-      if visit_node.cbs["forin"].before_statements then
-         visit_node.cbs["forin"].before_statements(ast)
+      if cbs.before_statements then
+         cbs.before_statements(ast)
       end
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "fornum" then
@@ -1976,8 +1983,8 @@ visit_type)
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "elseif" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      if visit_node.cbs["elseif"].before_statements then
-         visit_node.cbs["elseif"].before_statements(ast, xs)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
       end
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
    elseif ast.kind == "else" then
@@ -1998,8 +2005,8 @@ visit_type)
       xs[2] = recurse_node(ast.name, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
       xs[4] = recurse_type(ast.rets, visit_type)
-      if visit_node.cbs["record_function"].before_statements then
-         visit_node.cbs["record_function"].before_statements(ast, xs)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
       end
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "paren" then
