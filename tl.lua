@@ -685,7 +685,11 @@ local TypeName = {}
 
 
 
+
 local Type = {}
+
+
+
 
 
 
@@ -800,7 +804,19 @@ local NodeKind = {}
 
 
 
+local FactType = {}
+
+
+
+local Fact = {}
+
+
+
+
+
 local Node = {}
+
+
 
 
 
@@ -1072,7 +1088,7 @@ local function parse_typeval_list(tokens, i, errs)
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
 end
 
-parse_type = function(tokens, i, errs)
+local function parse_base_type(tokens, i, errs)
    if tokens[i].tk == "string" or
       tokens[i].tk == "boolean" or
       tokens[i].tk == "nil" or
@@ -1134,6 +1150,31 @@ parse_type = function(tokens, i, errs)
       return i, typ
    end
    return fail(tokens, i, errs)
+end
+
+parse_type = function(tokens, i, errs)
+   local istart = i
+   local bt
+   i, bt = parse_base_type(tokens, i, errs)
+   if not bt then
+      return i
+   end
+   if tokens[i].tk == "|" then
+      local u = new_type(tokens, istart, "typedecl")
+      u.typename = "union"
+      u.types = { [1] = bt, }
+      while tokens[i].tk == "|" do
+         i = i + 1
+         i, bt = parse_base_type(tokens, i, errs)
+         if not bt then
+            return i
+         end
+         table.insert(u.types, bt)
+      end
+      return i, u
+   else
+      return i, bt
+   end
 end
 
 parse_type_list = function(tokens, i, errs, open)
@@ -1220,6 +1261,7 @@ do
          ["~"] = 11,
       },
       [2] = {
+         ["is"] = 0,
          ["or"] = 1,
          ["and"] = 2,
          ["<"] = 3,
@@ -1319,8 +1361,8 @@ do
             i, key = verify_kind(tokens, i, errs, "identifier")
 
             e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = key, }
-         elseif tokens[i].tk == "as" then
-            local op = new_operator(tokens[i], 2, "as")
+         elseif tokens[i].tk == "as" or tokens[i].tk == "is" then
+            local op = new_operator(tokens[i], 2, tokens[i].tk)
 
             i = i + 1
             local cast = new_node(tokens, i, "cast")
@@ -2465,6 +2507,12 @@ function tl.pretty_print_ast(ast, fast)
                table.insert(out, "]")
             elseif node.op.op == "as" then
                add_child(out, children[1], "", indent)
+            elseif node.op.op == "is" then
+               table.insert(out, "type(")
+               add_child(out, children[1], "", indent)
+               table.insert(out, ") == \"")
+               add_child(out, children[3], "", indent)
+               table.insert(out, "\"")
             elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
                local space = spaced_op[node.op.arity][node.op.op] and " " or ""
                if children[2] and node.op.prec > tonumber(children[2]) then
@@ -2780,6 +2828,12 @@ local function show_type_base(t, typevars)
          table.insert(out, show_type(v))
       end
       return table.concat(out, " or ")
+   elseif t.typename == "union" then
+      local out = {}
+      for _, v in ipairs(t.types) do
+         table.insert(out, show_type(v))
+      end
+      return table.concat(out, " | ")
    elseif t.typename == "emptytable" then
       return "{}"
    elseif t.typename == "map" then
@@ -2905,6 +2959,8 @@ function tl.search_module(module_name, search_dtl)
 end
 
 local Variable = {}
+
+
 
 
 
@@ -3618,7 +3674,25 @@ function tl.type_check(ast, opts)
       end
    end
 
-   local function same_type(t1, t2, typevars)
+   local same_type
+
+   local function has_all_types_of(t1s, t2s, typevars)
+      for _, t1 in ipairs(t1s) do
+         local found = false
+         for _, t2 in ipairs(t2s) do
+            if same_type(t1, t2, typevars) then
+               found = true
+               break
+            end
+         end
+         if not found then
+            return false
+         end
+      end
+      return true
+   end
+
+   same_type = function(t1, t2, typevars)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -3633,6 +3707,13 @@ function tl.type_check(ast, opts)
          return same_type(t1.elements, t2.elements)
       elseif t1.typename == "map" then
          return same_type(t1.keys, t2.keys) and same_type(t1.values, t2.values)
+      elseif t1.typename == "union" then
+         if has_all_types_of(t1.types, t2.types, typevars) and
+            has_all_types_of(t2.types, t1.types, typevars) then
+            return true
+         else
+            return false, terr(t1, "got %s, expected %s", t1, t2)
+         end
       elseif t1.typename == "nominal" then
          return same_names(t1, t2)
       elseif t1.typename == "record" then
@@ -3724,6 +3805,18 @@ function tl.type_check(ast, opts)
             end
          end
          return false, terr(t1, "no match with poly")
+      elseif t1.typename == "union" and t2.typename == "union" then
+         if has_all_types_of(t1.types, t2.types, typevars) then
+            return true
+         else
+            return false, terr(t1, "got %s, expected %s", t1, t2)
+         end
+      elseif t2.typename == "union" then
+         for _, t in ipairs(t2.types) do
+            if is_a(t1, t, typevars, for_equality) then
+               return true
+            end
+         end
       elseif t1.typename == "poly" then
          for _, t in ipairs(t1.poly) do
             if is_a(t, t2, typevars, for_equality) then
@@ -4089,11 +4182,55 @@ function tl.type_check(ast, opts)
       return node_error(node, "invalid key '" .. key.tk .. "' in " .. description)
    end
 
-   local function add_var(node, var, valtype, is_const)
+   local function add_var(node, var, valtype, is_const, is_narrowing)
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
       end
-      st[#st][var] = { ["t"] = valtype, ["is_const"] = is_const, }
+      if st[#st][var] and is_narrowing then
+         if not st[#st][var].is_narrowed then
+            st[#st][var].narrowed_from = st[#st][var].t
+         end
+         st[#st][var].is_narrowed = true
+         st[#st][var].t = valtype
+      else
+         st[#st][var] = { ["t"] = valtype, ["is_const"] = is_const, ["is_narrowed"] = is_narrowing, }
+      end
+   end
+
+   local function widen_in_scope(scope, var)
+      if scope[var].is_narrowed then
+         if scope[var].narrowed_from then
+            scope[var].t = scope[var].narrowed_from
+            scope[var].narrowed_from = nil
+            scope[var].is_narrowed = false
+         else
+            scope[var] = nil
+         end
+         return true
+      end
+      return false
+   end
+
+   local function widen_back_var(var)
+      local widened = false
+      for i = #st, 1, -1 do
+         if st[i][var] then
+            if widen_in_scope(st[i], var) then
+               widened = true
+            else
+               break
+            end
+         end
+      end
+      return widened
+   end
+
+   local function widen_all_unions()
+      for i = #st, 1, -1 do
+         for var, _ in pairs(st[i]) do
+            widen_in_scope(st[i], var)
+         end
+      end
    end
 
    local function add_global(node, var, valtype, is_const)
@@ -4306,6 +4443,218 @@ function tl.type_check(ast, opts)
       end
    end
 
+   local facts_and
+   local facts_or
+   local facts_not
+   do
+      local function join_facts(fss)
+         local vars = {}
+
+         for _, fs in ipairs(fss) do
+            for _, f in ipairs(fs) do
+               if not vars[f.var] then
+                  vars[f.var] = {}
+               end
+               table.insert(vars[f.var], f)
+            end
+         end
+         return vars
+      end
+
+      local function intersect(xs, ys, same)
+         local rs = {}
+         for i = #xs, 1, -1 do
+            local x = xs[i]
+            for _, y in ipairs(ys) do
+               if same(x, y) then
+                  table.insert(rs, x)
+                  break
+               end
+            end
+         end
+         return rs
+      end
+
+      local function same_type_for_intersect(t, u)
+         return (same_type(t, u, nil))
+      end
+
+      local function intersect_facts(fs, errnode)
+         local all_is = true
+         local types = {}
+         for i, f in ipairs(fs) do
+            if f.fact ~= "is" then
+               all_is = false
+               break
+            end
+            if f.typ.typename == "union" then
+               if i == 1 then
+                  types = f.typ.types
+               else
+                  types = intersect(types, f.typ.types, same_type_for_intersect)
+               end
+            else
+               if i == 1 then
+                  types = { [1] = f.typ, }
+               else
+                  types = intersect(types, { [1] = f.typ, }, same_type_for_intersect)
+               end
+            end
+         end
+
+         if #types == 0 then
+            node_error(errnode, "branch is always false")
+            return false
+         end
+
+         if all_is then
+            if #types == 1 then
+               return true, types[1]
+            else
+               return true, {
+                  ["typeid"] = new_typeid(),
+                  ["typename"] = "union",
+                  ["types"] = types,
+               }
+            end
+         else
+            return false
+         end
+      end
+
+      local function sum_facts(fs)
+         local all_is = true
+         local types = {}
+         for _, f in ipairs(fs) do
+            if f.fact ~= "is" then
+               all_is = false
+               break
+            end
+            table.insert(types, f.typ)
+         end
+
+         if all_is then
+            if #types == 1 then
+               return true, types[1]
+            else
+               return true, {
+                  ["typeid"] = new_typeid(),
+                  ["typename"] = "union",
+                  ["types"] = types,
+               }
+            end
+         else
+            return false
+         end
+      end
+
+      local function subtract_types(u1, u2, errt)
+         local types = {}
+         for _, rt in ipairs(u1.types or { [1] = u1, }) do
+            local not_present = true
+            for _, ft in ipairs(u2.types or { [1] = u2, }) do
+               if same_type(rt, ft) then
+                  not_present = false
+                  break
+               end
+            end
+            if not_present then
+               table.insert(types, rt)
+            end
+         end
+
+         if #types == 0 then
+            type_error(errt, "branch is always false")
+            return INVALID
+         end
+
+         if #types == 1 then
+            return types[1]
+         else
+            return {
+               ["typeid"] = new_typeid(),
+               ["typename"] = "union",
+               ["types"] = types,
+            }
+         end
+      end
+
+      facts_and = function(f1, f2, errnode)
+         if not f1 then
+            return f2
+         end
+         if not f2 then
+            return f1
+         end
+
+         local out = {}
+         for v, fs in pairs(join_facts({ [1] = f1, [2] = f2, })) do
+            local ok, u = intersect_facts(fs, errnode)
+
+            if ok then
+               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = u, })
+            else
+
+               for _, f in ipairs(fs) do
+                  table.insert(out, f)
+               end
+            end
+         end
+         return out
+      end
+
+      facts_or = function(f1, f2)
+         if not f1 or not f2 then
+            return nil
+         end
+
+         local out = {}
+         for v, fs in pairs(join_facts({ [1] = f1, [2] = f2, })) do
+            local ok, u = sum_facts(fs)
+            if ok then
+               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = u, })
+            else
+
+               for _, f in ipairs(fs) do
+                  table.insert(out, f)
+               end
+            end
+         end
+         return out
+      end
+
+      facts_not = function(f1)
+         if not f1 then
+            return nil
+         end
+
+         local out = {}
+         for v, fs in pairs(join_facts({ [1] = f1, })) do
+            local realtype = find_var(v)
+            local ok, u = sum_facts(fs)
+            if ok then
+               local not_typ = subtract_types(realtype, u, fs[1].typ)
+               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = not_typ, })
+            end
+         end
+         return out
+      end
+   end
+
+   local function apply_facts(where, facts)
+      if not facts then
+         return
+      end
+      for _, f in ipairs(facts) do
+         if f.fact == "is" then
+            local t = resolve_typevars(f.typ, {})
+            t.inferred_at = where
+            t.inferred_at_file = filename
+            add_var(nil, f.var, t, nil, true)
+         end
+      end
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -4345,6 +4694,7 @@ function tl.type_check(ast, opts)
                   t.declared_at = node
                   t.assigned_to = var.tk
                end
+               assert(var)
                add_var(var, var.tk, t, var.is_const)
             end
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
@@ -4399,10 +4749,19 @@ function tl.type_check(ast, opts)
                if varnode.is_const then
                   node_error(varnode, "cannot assign to <const> variable")
                end
+               if varnode.kind == "variable" then
+                  if widen_back_var(varnode.tk) then
+                     vartype = find_var(varnode.tk)
+                  end
+               end
                if vartype then
                   local val = exps[i]
                   if val then
                      assert_is_a(varnode, val, vartype, {}, "assignment")
+                     if varnode.kind == "variable" and vartype.typename == "union" then
+
+                        add_var(varnode, varnode.tk, val, false, true)
+                     end
                   else
                      node_error(varnode, "variable is not being assigned a value")
                   end
@@ -4413,7 +4772,71 @@ function tl.type_check(ast, opts)
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
+      ["do"] = {
+         ["after"] = function(node, children)
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
       ["if"] = {
+         ["before_statements"] = function(node)
+            table.insert(st, {})
+            apply_facts(node.exp, node.exp.facts)
+         end,
+         ["after"] = function(node, children)
+            table.remove(st)
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
+      ["elseif"] = {
+         ["before"] = function(node)
+            table.remove(st)
+            table.insert(st, {})
+         end,
+         ["before_statements"] = function(node)
+            local f = facts_not(node.parent_if.exp.facts)
+            for e = 1, node.elseif_n - 1 do
+               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.facts), node)
+            end
+            f = facts_and(f, node.exp.facts, node)
+            apply_facts(node.exp, f)
+         end,
+         ["after"] = function(node, children)
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
+      ["else"] = {
+         ["before"] = function(node)
+            table.remove(st)
+            table.insert(st, {})
+            local f = facts_not(node.parent_if.exp.facts)
+            for _, elseifnode in ipairs(node.parent_if.elseifs) do
+               f = facts_and(f, facts_not(elseifnode.exp.facts), node)
+            end
+            apply_facts(node, f)
+         end,
+         ["after"] = function(node, children)
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
+      ["while"] = {
+         ["before"] = function()
+
+            widen_all_unions()
+         end,
+         ["before_statements"] = function(node)
+            table.insert(st, {})
+            apply_facts(node.exp, node.exp.facts)
+         end,
+         ["after"] = function(node, children)
+            table.remove(st)
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
+      ["repeat"] = {
+         ["before"] = function()
+
+            widen_all_unions()
+         end,
          ["after"] = function(node, children)
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
@@ -4742,6 +5165,13 @@ function tl.type_check(ast, opts)
                node.type = type_check_index(node, node.e2, a, b)
             elseif node.op.op == "as" then
                node.type = b
+            elseif node.op.op == "is" then
+               if node.e1.kind == "variable" then
+                  node.facts = { [1] = { ["fact"] = "is", ["var"] = node.e1.tk, ["typ"] = b, }, }
+               else
+                  node_error(node, "can only use 'is' on variables")
+               end
+               node.type = BOOLEAN
             elseif node.op.op == "." then
                a = resolve_unary(a, {})
                if a.typename == "map" then
@@ -4762,19 +5192,25 @@ function tl.type_check(ast, opts)
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
             elseif node.op.op == "not" then
+               node.facts = facts_not(node.e1.facts)
                node.type = BOOLEAN
             elseif node.op.op == "and" then
+               node.facts = facts_and(node.e1.facts, node.e2.facts, node)
                node.type = resolve_tuple(b)
             elseif node.op.op == "or" and b.typename == "emptytable" then
+               node.facts = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and same_type(resolve_unary(a), resolve_unary(b)) then
+               node.facts = facts_or(node.e1.facts, node.e2.facts)
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
+               node.facts = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and
                (a.typename == "nominal" or a.typename == "map") and
                (b.typename == "record" or b.typename == "arrayrecord") and
                is_a(b, a) then
+               node.facts = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "==" or node.op.op == "~=" then
                if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
@@ -4798,6 +5234,10 @@ function tl.type_check(ast, opts)
                   end
                end
             elseif node.op.arity == 2 and binop_types[node.op.op] then
+               if node.op.op == "or" then
+                  node.facts = facts_or(node.e1.facts, node.e2.facts)
+               end
+
                a = resolve_unary(a)
                b = resolve_unary(b)
                local types_op = binop_types[node.op.op]
@@ -4839,12 +5279,7 @@ function tl.type_check(ast, opts)
       },
    }
 
-   visit_node.cbs["while"] = visit_node.cbs["if"]
-   visit_node.cbs["repeat"] = visit_node.cbs["if"]
-   visit_node.cbs["do"] = visit_node.cbs["if"]
-   visit_node.cbs["break"] = visit_node.cbs["if"]
-   visit_node.cbs["elseif"] = visit_node.cbs["if"]
-   visit_node.cbs["else"] = visit_node.cbs["if"]
+   visit_node.cbs["break"] = visit_node.cbs["do"]
 
    visit_node.cbs["values"] = visit_node.cbs["variables"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
