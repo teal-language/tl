@@ -3148,6 +3148,7 @@ local standard_library: {string:Type} = {
          ["min"] = { typeid = new_typeid(), typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["floor"] = { typeid = new_typeid(), typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["randomseed"] = { typeid = new_typeid(), typename = "function", args = { NUMBER }, rets = {} },
+         ["random"] = { typeid = new_typeid(), typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["huge"] = NUMBER,
       },
    },

@@ -3148,6 +3148,7 @@ local standard_library = {
          ["min"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
          ["floor"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
          ["randomseed"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = {}, },
+         ["random"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
          ["huge"] = NUMBER,
       },
    },
