@@ -17,8 +17,8 @@ describe("string", function()
 
    describe("match", function()
       it("can take an optional init position", util.check [[
-         local s1: string = string.match("hello world", "world"))
-         local s2: string = string.match("hello world", "world", 2))
+         local s1: string = string.match("hello world", "world")
+         local s2: string = string.match("hello world", "world", 2)
       ]])
    end)
 
