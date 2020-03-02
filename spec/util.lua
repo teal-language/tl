@@ -93,7 +93,9 @@ end
 local function check(lax, code, unknowns)
    return function()
       local tokens = tl.lex(code)
-      local _, ast = tl.parse_program(tokens)
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors)
+      assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local errors, unks = tl.type_check(ast, { filename = "foo.tl", lax = lax })
       assert.same({}, errors)
       if unknowns then
