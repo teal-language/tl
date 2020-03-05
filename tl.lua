@@ -65,6 +65,7 @@ local TokenKind = {}
 
 
 
+
 local Token = {}
 
 
@@ -116,7 +117,7 @@ for c = string.byte("A"), string.byte("F") do
 end
 
 local lex_char_symbols = {}
-for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = ":", [9] = "#", [10] = "`", [11] = ";", }) do
+for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = "#", [9] = "`", [10] = ";", }) do
    lex_char_symbols[c] = true
 end
 
@@ -131,6 +132,7 @@ for _, c in ipairs({ [1] = " ", [2] = "\t", [3] = "\v", [4] = "\n", [5] = "\r", 
 end
 
 local LexState = {}
+
 
 
 
@@ -266,6 +268,9 @@ function tl.lex(input)
          elseif c == "<" then
             state = "lt"
             begin_token()
+         elseif c == ":" then
+            state = "colon"
+            begin_token()
          elseif c == ">" then
             state = "gt"
             begin_token()
@@ -364,6 +369,15 @@ function tl.lex(input)
             state = "any"
          else
             end_token("op", i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "colon" then
+         if c == ":" then
+            end_token("::")
+            state = "any"
+         else
+            end_token(":", i - 1)
             fwd = false
             state = "any"
          end
@@ -686,7 +700,11 @@ local TypeName = {}
 
 
 
+
 local Type = {}
+
+
+
 
 
 
@@ -804,6 +822,8 @@ local NodeKind = {}
 
 
 
+
+
 local FactType = {}
 
 
@@ -815,6 +835,9 @@ local Fact = {}
 
 
 local Node = {}
+
+
+
 
 
 
@@ -1644,6 +1667,23 @@ local function parse_break(tokens, i, errs)
    return i, node
 end
 
+local function parse_goto(tokens, i, errs)
+   local node = new_node(tokens, i, "goto")
+   i = verify_tk(tokens, i, errs, "goto")
+   node.label = tokens[i].tk
+   i = verify_kind(tokens, i, errs, "identifier")
+   return i, node
+end
+
+local function parse_label(tokens, i, errs)
+   local node = new_node(tokens, i, "label")
+   i = verify_tk(tokens, i, errs, "::")
+   node.label = tokens[i].tk
+   i = verify_kind(tokens, i, errs, "identifier")
+   i = verify_tk(tokens, i, errs, "::")
+   return i, node
+end
+
 local stop_statement_list = {
    ["end"] = true,
    ["else"] = true,
@@ -1867,6 +1907,10 @@ local function parse_statement(tokens, i, errs)
       return parse_break(tokens, i, errs)
    elseif tokens[i].tk == "return" then
       return parse_return(tokens, i, errs)
+   elseif tokens[i].tk == "goto" then
+      return parse_goto(tokens, i, errs)
+   elseif tokens[i].tk == "::" then
+      return parse_label(tokens, i, errs)
    else
       return parse_call_or_assignment(tokens, i, errs)
    end
@@ -2078,6 +2122,8 @@ visit_type)
       ast.kind == "string" or
       ast.kind == "number" or
       ast.kind == "break" or
+      ast.kind == "goto" or
+      ast.kind == "label" or
       ast.kind == "nil" or
       ast.kind == "..." or
       ast.kind == "boolean" then
@@ -2551,6 +2597,23 @@ function tl.pretty_print_ast(ast, fast)
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
             table.insert(out, "{}")
+            return out
+         end,
+      },
+      ["goto"] = {
+         ["after"] = function(node, children)
+            local out = { ["y"] = node.y, ["h"] = 0, }
+            table.insert(out, "goto ")
+            table.insert(out, node.label)
+            return out
+         end,
+      },
+      ["label"] = {
+         ["after"] = function(node, children)
+            local out = { ["y"] = node.y, ["h"] = 0, }
+            table.insert(out, "::")
+            table.insert(out, node.label)
+            table.insert(out, "::")
             return out
          end,
       },
@@ -4240,8 +4303,30 @@ function tl.type_check(ast, opts)
       st[1][var] = { ["t"] = valtype, ["is_const"] = is_const, }
    end
 
-   local function begin_function_scope(node, recurse)
+   local function begin_scope()
       table.insert(st, {})
+   end
+
+   local function end_scope()
+      local unresolved = st[#st]["@unresolved"]
+      if unresolved then
+         local upper = st[#st - 1]["@unresolved"]
+         if upper then
+            for name, nodes in pairs(unresolved.t.labels) do
+               for _, node in ipairs(nodes) do
+                  upper.t.labels[name] = upper.t.labels[name] or {}
+                  table.insert(upper.t.labels[name], node)
+               end
+            end
+         else
+            st[#st - 1]["@unresolved"] = unresolved
+         end
+      end
+      table.remove(st)
+   end
+
+   local function begin_function_scope(node, recurse)
+      begin_scope()
       local args = {}
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
@@ -4268,8 +4353,21 @@ function tl.type_check(ast, opts)
       end
    end
 
+   local function fail_unresolved_labels()
+      local unresolved = st[#st]["@unresolved"]
+      if unresolved then
+         st[#st]["@unresolved"] = nil
+         for name, nodes in pairs(unresolved.t.labels) do
+            for _, node in ipairs(nodes) do
+               node_error(node, "no visible label '" .. name .. "' for goto")
+            end
+         end
+      end
+   end
+
    local function end_function_scope()
-      table.remove(st)
+      fail_unresolved_labels()
+      end_scope()
    end
 
    local function flatten_list(list)
@@ -4660,10 +4758,15 @@ function tl.type_check(ast, opts)
    visit_node.cbs = {
       ["statements"] = {
          ["before"] = function()
-            table.insert(st, {})
+            begin_scope()
          end,
          ["after"] = function(node, children)
-            table.remove(st)
+
+            if #st == 2 then
+               fail_unresolved_labels()
+            end
+
+            end_scope()
 
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
@@ -4779,18 +4882,18 @@ function tl.type_check(ast, opts)
       },
       ["if"] = {
          ["before_statements"] = function(node)
-            table.insert(st, {})
+            begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
          ["after"] = function(node, children)
-            table.remove(st)
+            end_scope()
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["elseif"] = {
          ["before"] = function(node)
-            table.remove(st)
-            table.insert(st, {})
+            end_scope()
+            begin_scope()
          end,
          ["before_statements"] = function(node)
             local f = facts_not(node.parent_if.exp.facts)
@@ -4806,8 +4909,8 @@ function tl.type_check(ast, opts)
       },
       ["else"] = {
          ["before"] = function(node)
-            table.remove(st)
-            table.insert(st, {})
+            end_scope()
+            begin_scope()
             local f = facts_not(node.parent_if.exp.facts)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
                f = facts_and(f, facts_not(elseifnode.exp.facts), node)
@@ -4824,11 +4927,41 @@ function tl.type_check(ast, opts)
             widen_all_unions()
          end,
          ["before_statements"] = function(node)
-            table.insert(st, {})
+            begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
          ["after"] = function(node, children)
-            table.remove(st)
+            end_scope()
+            node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
+         end,
+      },
+      ["label"] = {
+         ["before"] = function(node)
+
+            widen_all_unions()
+            local label_id = "::" .. node.label .. "::"
+            if st[#st][label_id] then
+               node_error(node, "label '" .. node.label .. "' already defined at " .. filename)
+            end
+            local unresolved = st[#st]["@unresolved"]
+            if unresolved then
+               unresolved.t.labels[node.label] = nil
+            end
+            node.type = { ["y"] = node.y, ["x"] = node.x, ["typeid"] = new_typeid(), ["typename"] = "none", }
+            add_var(node, label_id, node.type)
+         end,
+      },
+      ["goto"] = {
+         ["after"] = function(node, children)
+            if not find_var("::" .. node.label .. "::") then
+               local unresolved = find_var("@unresolved")
+               if not unresolved then
+                  unresolved = { ["typename"] = "unresolved_labels", ["labels"] = {}, }
+                  add_var(node, "@unresolved", unresolved)
+               end
+               unresolved.labels[node.label] = unresolved.labels[node.label] or {}
+               table.insert(unresolved.labels[node.label], node)
+            end
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
@@ -4843,7 +4976,7 @@ function tl.type_check(ast, opts)
       },
       ["forin"] = {
          ["before"] = function()
-            table.insert(st, {})
+            begin_scope()
          end,
          ["before_statements"] = function(node)
             local exp1 = node.exps[1]
@@ -4873,17 +5006,17 @@ function tl.type_check(ast, opts)
             end
          end,
          ["after"] = function(node, children)
-            table.remove(st)
+            end_scope()
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
       ["fornum"] = {
          ["before"] = function(node)
-            table.insert(st, {})
+            begin_scope()
             add_var(nil, node.var.tk, NUMBER)
          end,
          ["after"] = function(node, children)
-            table.remove(st)
+            end_scope()
             node.type = { ["typeid"] = new_typeid(), ["typename"] = "none", }
          end,
       },
