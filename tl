@@ -128,13 +128,13 @@ local function report_errors(category, errors)
    return false
 end
 
+local exit = 0
+
 local function report_type_errors(result)
    local has_type_errors = report_errors("error", result.type_errors)
    report_errors("unknown variable", result.unknowns)
 
-   if has_type_errors then
-      os.exit(1)
-   end
+   return not has_type_errors
 end
 
 for _, filename in ipairs(args["script"]) do
@@ -145,14 +145,19 @@ for _, filename in ipairs(args["script"]) do
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
-      os.exit(1)
+      exit = 1
+      break
    end
 
    local lua_name = filename:gsub(".tl$", ".lua")
 
    if cmd == "run" then
       if filename:match("%.tl$") then
-         report_type_errors(result)
+         local ok = report_type_errors(result)
+         if not ok then
+            exit = 1
+            break
+         end
       end
 
       local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
@@ -163,11 +168,13 @@ for _, filename in ipairs(args["script"]) do
       end
       arg[narg] = nil
       arg[narg - 1] = nil
-
       return chunk()
 
    elseif cmd == "check" then
-      report_type_errors(result)
+      local ok = report_type_errors(result)
+      if not ok then
+         exit = 1
+      end
 
       if #args["script"] == 1 then
          print("========================================")
@@ -199,3 +206,5 @@ for _, filename in ipairs(args["script"]) do
 
    end
 end
+
+os.exit(exit)

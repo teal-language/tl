@@ -31,6 +31,30 @@ describe("tl check", function()
          assert.match("2 errors:", output, 1, true)
       end)
 
+      it("reports errors in multiple files", function()
+         local name1 = util.write_tmp_file(finally, "add.tl", [[
+            local function add(a: number, b: number): number
+               return a + b
+            end
+
+            print(add("string", 20))
+            print(add(10, true))
+         ]])
+         local name2 = util.write_tmp_file(finally, "foo.tl", [[
+            local function add(a: number, b: number): number
+               return a + b
+            end
+
+            print(add("string", 20))
+            print(add(10, true))
+         ]])
+         local pd = io.popen("./tl check " .. name1 .. " " .. name2 .. " 2>&1 1>/dev/null", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(nil, "exit", 1, pd:close())
+         assert.match("add.tl:", output, 1, true)
+         assert.match("foo.tl:", output, 1, true)
+      end)
+
       it("reports number of errors in stderr and code 1 on syntax errors", function()
          local name = util.write_tmp_file(finally, "add.tl", [[
             print(add("string", 20))))))
