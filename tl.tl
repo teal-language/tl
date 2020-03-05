@@ -2854,9 +2854,19 @@ local function is_unknown(t: Type): boolean
        or t.typename == "unknown_emptytable_value"
 end
 
-local show_type: function(Type, {string:Type}): string
+local show_type: function(Type, {string:Type}, {Type:boolean}): string
 
-local function show_type_base(t: Type, typevars: {string:Type}): string
+local function show_type_base(t: Type, typevars: {string:Type}, seen: {Type:boolean}): string
+   -- FIXME this is a control for recursively built types, which should in principle not exist
+   if seen[t] then
+      return "..."
+   end
+   seen[t] = true
+
+   local function show(t: Type): string
+      return show_type(t, typevars, seen)
+   end
+
    if typevars then
       t = resolve_typevars(t, typevars)
    end
@@ -2865,7 +2875,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
          local out = { table.concat(t.names, "."), "<" }
          local vals: {string} = {}
          for _, v in ipairs(t.typevals) do
-            table.insert(vals, show_type(v))
+            table.insert(vals, show(v))
          end
          table.insert(out, table.concat(vals, ", "))
          table.insert(out, ">")
@@ -2876,34 +2886,34 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
    elseif t.typename == "tuple" then
       local out: {string} = {}
       for _, v in ipairs(t) do
-         table.insert(out, show_type(v))
+         table.insert(out, show(v))
       end
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "poly" then
       local out: {string} = {}
       for _, v in ipairs(t.poly) do
-         table.insert(out, show_type(v))
+         table.insert(out, show(v))
       end
       return table.concat(out, " or ")
    elseif t.typename == "union" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
-         table.insert(out, show_type(v))
+         table.insert(out, show(v))
       end
       return table.concat(out, " | ")
    elseif t.typename == "emptytable" then
       return "{}"
    elseif t.typename == "map" then
-      return "{" .. show_type(t.keys) .. " : " .. show_type(t.values) .. "}"
+      return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
    elseif t.typename == "array" then
-      return "{" .. show_type(t.elements) .. "}"
+      return "{" .. show(t.elements) .. "}"
    elseif t.typename == "enum" then
-      return table.concat(t.names, ".")
+      return t.names and table.concat(t.names, ".") or "enum"
    elseif t.typename == "record" then
       local out: {string} = {}
       for _, k in ipairs(t.field_order) do
          local v = t.fields[k]
-         table.insert(out, k .. ": " .. show_type(v))
+         table.insert(out, k .. ": " .. show(v))
       end
       return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "function" then
@@ -2915,7 +2925,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
       end
       for i, v in ipairs(t.args) do
          if not t.is_method or i > 1 then
-            table.insert(args, show_type(v))
+            table.insert(args, show(v))
          end
       end
       table.insert(out, table.concat(args, ","))
@@ -2924,7 +2934,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
          table.insert(out, ":")
          local rets = {}
          for _, v in ipairs(t.rets) do
-            table.insert(rets, show_type(v))
+            table.insert(rets, show(v))
          end
          table.insert(out, table.concat(rets, ","))
       end
@@ -2946,7 +2956,7 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
    elseif t.typename == "nil" then
       return "nil"
    elseif t.typename == "typetype" then
-      return "type " .. show_type(t.def)
+      return "type " .. show(t.def)
    elseif t.typename == "bad_nominal" then
       return table.concat(t.names, ".") .. " (an unknown type)"
    else
@@ -2954,8 +2964,8 @@ local function show_type_base(t: Type, typevars: {string:Type}): string
    end
 end
 
-show_type = function(t: Type, typevars: {string:Type}): string
-   local ret = show_type_base(t, typevars)
+show_type = function(t: Type, typevars: {string:Type}, seen: {Type:boolean}): string
+   local ret = show_type_base(t, typevars, seen or {})
    if t.inferred_at then
       ret = ret .. " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..": )"
    end
