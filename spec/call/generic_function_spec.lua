@@ -450,5 +450,19 @@ describe("generic function", function()
       assert.same(11, errors[1].y, 1, true)
       assert.same(42, errors[1].x, 1, true)
    end)
+   it("does not produce a recursive type", util.lax_check([[
+      function mypairs(map: {`a:`b}): (`a, `b)
+      end
+      function myipairs(array: {`a}): (`a)
+      end
+
+      local _, xs = mypairs(xss)
+      local _, x = mypairs(xs)
+      local u = myipairs({})
+      local v = x[u]
+      _, v = next(v)
+   ]], {
+      { msg = "xss" }
+   }))
 end)
 

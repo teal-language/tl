@@ -4992,10 +4992,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             local exp1 = node.exps[1]
             local exp1type = resolve_tuple(exp1.type)
             if exp1type.typename == "function" then
-               add_var(node.vars[1], node.vars[1].tk, exp1type.rets[1])
-               if node.vars[2] then
-                  add_var(node.vars[2], node.vars[2].tk, exp1type.rets[2])
-               end
+               local r1 = exp1type.rets[1]
+               local r2 = exp1type.rets[2]
                -- check common errors:
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_unary(exp1.e2.type)
@@ -5003,11 +5001,18 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      if not (lax and is_unknown(t)) then
                         node_error(exp1, "attempting pairs loop on something that's not a map or record: %s", exp1.e2.type)
                      end
+                     r1 = UNKNOWN
+                     r2 = UNKNOWN
                   elseif exp1.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
                      if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
                         node_error(exp1, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
                      end
+                     r2 = UNKNOWN
                   end
+               end
+               add_var(node.vars[1], node.vars[1].tk, r1)
+               if node.vars[2] then
+                  add_var(node.vars[2], node.vars[2].tk, r2)
                end
             else
                if not (lax and is_unknown(exp1type)) then
@@ -5263,6 +5268,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   else
                      node_error(node, "rawget expects two arguments")
                   end
+               elseif node.e1.tk == "print_type" then
+                  print(show_type(b))
+                  node.type = BOOLEAN
                elseif node.e1.tk == "require" then
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
