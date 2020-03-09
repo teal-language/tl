@@ -668,7 +668,7 @@ end
 
 local TypeKind = enum
    "typedecl"
-   "typevar_list"
+   "typearg_list"
    "typeval_list"
    "type_list"
 end
@@ -676,6 +676,7 @@ end
 local TypeName = enum
    "typetype"
    "typevar"
+   "typearg"
    "function"
    "array"
    "map"
@@ -731,7 +732,7 @@ local Type = record
    values: Type
 
    -- records
-   typevars: {Type}
+   typeargs: {Type}
    fields: {string: Type}
    field_order: {string}
 
@@ -752,6 +753,9 @@ local Type = record
 
    -- typevar
    typevar: string
+
+   -- typearg
+   typearg: string
 
    -- table items
    kname: string
@@ -848,7 +852,7 @@ local Node = record
    key: Node
    value: Node
 
-   typevars: Type
+   typeargs: Type
    args: Node
    rets: Type
    body: Node
@@ -1013,7 +1017,7 @@ local SeparatorMode = enum
    "term"
 end
 
-local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
+local function parse_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
@@ -1035,7 +1039,7 @@ local function parse_list(tokens: {Token}, i: number, errs: {ParseError}, list: 
    return i, list
 end
 
-local function parse_bracket_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
+local function parse_bracket_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, list, { [close] = true }, sep, parse_item)
    i = verify_tk(tokens, i, errs, close)
@@ -1047,7 +1051,7 @@ local function parse_table_literal(tokens: {Token}, i: number, errs: {ParseError
    return parse_bracket_list(tokens, i, errs, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, parse_item: ParseItem<`T>): number, {`T}
+local function parse_trying_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, parse_item: ParseItem<`T>): number, {`T}
    local tryerrs: {ParseError} = {}
    local tryi, item = parse_item(tokens, i, tryerrs)
    if not item then
@@ -1068,6 +1072,19 @@ local function parse_trying_list(tokens: {Token}, i: number, errs: {ParseError},
    return i, list
 end
 
+local function parse_typearg_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
+   i = verify_tk(tokens, i, errs, "`")
+   i = verify_kind(tokens, i, errs, "identifier")
+   return i, {
+      typeid = new_typeid(),
+      y = tokens[i - 2].y,
+      x = tokens[i - 2].x,
+      kind = "typedecl",
+      typename = "typearg",
+      typearg = "`" .. tokens[i-1].tk,
+   }
+end
+
 local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
    i = verify_tk(tokens, i, errs, "`")
    i = verify_kind(tokens, i, errs, "identifier")
@@ -1081,9 +1098,9 @@ local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}
    }
 end
 
-local function parse_typevar_list(tokens: {Token}, i: number, errs: {ParseError}): number, Type
-   local typ = new_type(tokens, i, "typevar_list")
-   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typevar_type)
+local function parse_typearg_list(tokens: {Token}, i: number, errs: {ParseError}): number, Type
+   local typ = new_type(tokens, i, "typearg_list")
+   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typearg_type)
 end
 
 local function parse_typeval_list(tokens: {Token}, i: number, errs: {ParseError}): number, Type
@@ -1102,7 +1119,7 @@ local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError
       rets = {},
    }
    if tokens[i].tk == "<" then
-      i, node.typevars = parse_typevar_list(tokens, i, errs)
+      i, node.typeargs = parse_typearg_list(tokens, i, errs)
    end
    if tokens[i].tk == "(" then
       i, node.args = parse_argument_type_list(tokens, i, errs)
@@ -1205,6 +1222,7 @@ end
 
 parse_type_list = function(tokens: {Token}, i: number, errs: {ParseError}, open: string): number, Type
    local list = new_type(tokens, i, "type_list")
+   list.typename = "tuple"
    if tokens[i].tk == (open or ":") then
       i = i + 1
       local optional_paren = false
@@ -1224,7 +1242,7 @@ end
 
 local function parse_function_args_rets_body(tokens: {Token}, i: number, errs: {ParseError}, node: Node): number, Node
    if tokens[i].tk == "<" then
-      i, node.typevars = parse_typevar_list(tokens, i, errs)
+      i, node.typeargs = parse_typearg_list(tokens, i, errs)
    end
    i, node.args = parse_argument_list(tokens, i, errs)
    i, node.rets = parse_type_list(tokens, i, errs)
@@ -1501,6 +1519,7 @@ end
 
 parse_argument_type_list = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type
    local list = new_type(tokens, i, "type_list")
+   list.typename = "tuple"
    return parse_bracket_list(tokens, i, errs, list, "(", ")", "sep", parse_argument_type)
 end
 
@@ -1724,7 +1743,7 @@ parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number
       def.field_order = {}
       i = i + 1
       if tokens[i].tk == "<" then
-         i, def.typevars = parse_typevar_list(tokens, i, errs)
+         i, def.typeargs = parse_typearg_list(tokens, i, errs)
       end
       while not ((not tokens[i]) or tokens[i].tk == "end") do
          if tokens[i].tk == "{" then
@@ -1959,14 +1978,14 @@ local Visitor = record<`K, `N, `T>
    after: VisitorCallbacks<`N, `T>
 end
 
-local function visit_before(ast: `N, kind: `K, visit: Visitor<`K,`N,`T>): `T
+local function visit_before<`K,`N,`T>(ast: `N, kind: `K, visit: Visitor<`K,`N,`T>): `T
    assert(visit.cbs[kind], "no visitor for " .. (kind as string))
    if visit.cbs[kind].before then
       visit.cbs[kind].before(ast)
    end
 end
 
-local function visit_after(ast: `N, kind: `K, visit: Visitor<`K, `N,`T>, xs: {`T}): `T
+local function visit_after<`K,`N,`T>(ast: `N, kind: `K, visit: Visitor<`K, `N,`T>, xs: {`T}): `T
    if visit.after and visit.after.before then
       visit.after.before(ast, xs)
    end
@@ -1983,7 +2002,9 @@ end
 local function recurse_type(ast: Type, visit: Visitor<TypeKind, Type, `T>): `T
    visit_before(ast, ast.kind, visit)
    local xs: {`T} = {}
-   if ast.kind == "type_list" then
+   if ast.kind == "type_list"
+   or ast.kind == "typevar_list"
+   or ast.kind == "typearg_list" then
       for i, child in ipairs(ast) do
          xs[i] = recurse_type(child, visit)
       end
@@ -1997,9 +2018,9 @@ local function recurse_type(ast: Type, visit: Visitor<TypeKind, Type, `T>): `T
    return visit_after(ast, ast.kind, visit, xs)
 end
 
-local function recurse_node(ast: Node,
-                            visit_node: Visitor<NodeKind, Node, `T>,
-                            visit_type: Visitor<TypeKind, Type, `T>): `T
+local function recurse_node<`T>(ast: Node,
+                                visit_node: Visitor<NodeKind, Node, `T>,
+                                visit_type: Visitor<TypeKind, Type, `T>): `T
    if not ast then
       -- parse error
       return
@@ -2100,10 +2121,10 @@ local function recurse_node(ast: Node,
       if ast.op.op == ":" and ast.e1.kind == "string" then
          p1 = -999
       end
-      xs[2] = p1
+      xs[2] = p1 as `T
       if ast.op.arity == 2 then
          xs[3] = recurse_node(ast.e2, visit_node, visit_type)
-         xs[4] = ast.e2.op and ast.e2.op.prec
+         xs[4] = (ast.e2.op and ast.e2.op.prec) as `T
       end
    elseif ast.kind == "newtype" then
       xs[1] = recurse_type(ast.newtype, visit_type)
@@ -2650,6 +2671,8 @@ local VARARG_STRING = { typeid = new_typeid(), typename = "string", is_va = true
 local VARARG_NUMBER = { typeid = new_typeid(), typename = "number", is_va = true }
 local VARARG_UNKNOWN = { typeid = new_typeid(), typename = "unknown", is_va = true }
 local BOOLEAN = { typeid = new_typeid(), typename = "boolean" }
+local ARG_ALPHA = { typeid = new_typeid(), typename = "typearg", typearg = "`a" }
+local ARG_BETA = { typeid = new_typeid(), typename = "typearg", typearg = "`b" }
 local ALPHA = { typeid = new_typeid(), typename = "typevar", typevar = "`a" }
 local BETA = { typeid = new_typeid(), typename = "typevar", typevar = "`b" }
 local ARRAY_OF_ANY = { typeid = new_typeid(), typename = "array", elements = ANY }
@@ -2817,43 +2840,16 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    },
 }
 
-local show_type: function(Type, {string:Type}): string
-
-local function resolve_typevars(t: Type, typevars: {string:Type}, seen: {Type:Type}): Type
-   seen = seen or {}
-   if seen[t] then
-      return seen[t]
-   end
-
-   local orig_t = t
-   if t.typename == "typevar" and typevars[t.typevar] then
-      t = typevars[t.typevar]
-      t.tk = nil
-   end
-
-   local copy: Type = {}
-   seen[orig_t] = copy
-
-   for k, v in pairs(t as {string:Type}) do
-      local cp = copy as {string:Type}
-      if type(v) == "table" then
-         cp[k] = resolve_typevars(v, typevars, seen)
-      else
-         cp[k] = v
-      end
-   end
-
-   return copy
-end
+local show_type: function(Type): string
 
 local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
        or t.typename == "unknown_emptytable_value"
 end
 
-local show_type: function(Type, {string:Type}, {Type:boolean}): string
+local show_type: function(Type, {Type:boolean}): string
 
-local function show_type_base(t: Type, typevars: {string:Type}, seen: {Type:boolean}): string
+local function show_type_base(t: Type, seen: {Type:boolean}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist
    if seen[t] then
       return "..."
@@ -2861,12 +2857,9 @@ local function show_type_base(t: Type, typevars: {string:Type}, seen: {Type:bool
    seen[t] = true
 
    local function show(t: Type): string
-      return show_type(t, typevars, seen)
+      return show_type(t, seen)
    end
 
-   if typevars then
-      t = resolve_typevars(t, typevars)
-   end
    if t.typename == "nominal" then
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
@@ -2944,6 +2937,8 @@ local function show_type_base(t: Type, typevars: {string:Type}, seen: {Type:bool
              (t.tk and " " .. t.tk or "")
    elseif t.typename == "typevar" then
       return t.typevar
+   elseif t.typename == "typearg" then
+      return t.typearg
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -2961,8 +2956,8 @@ local function show_type_base(t: Type, typevars: {string:Type}, seen: {Type:bool
    end
 end
 
-show_type = function(t: Type, typevars: {string:Type}, seen: {Type:boolean}): string
-   local ret = show_type_base(t, typevars, seen or {})
+show_type = function(t: Type, seen: {Type:boolean}): string
+   local ret = show_type_base(t, seen or {})
    if t.inferred_at then
       ret = ret .. " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..": )"
    end
@@ -3072,24 +3067,24 @@ local standard_library: {string:Type} = {
    ["any"] = { typeid = new_typeid(), typename = "typetype", def = ANY },
    ["arg"] = ARRAY_OF_STRING,
    ["require"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = {} },
-   ["setmetatable"] = { typeid = new_typeid(), typevars = { ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
+   ["setmetatable"] = { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
    ["getmetatable"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { METATABLE } },
    ["rawget"] = { typeid = new_typeid(), typename = "function", args = { TABLE, ANY }, rets = { ANY } },
    ["rawset"] = {
       typeid = new_typeid(), typename = "poly",
       poly = {
-         { typeid = new_typeid(), typevars = { ALPHA, BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
-         { typeid = new_typeid(), typevars = { ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
          { typeid = new_typeid(), typename = "function", args = { TABLE, ANY, ANY }, rets = {} },
       }
    },
    ["next"] = {
       typeid = new_typeid(), typename = "poly",
       poly = {
-         { typeid = new_typeid(), typevars = { ALPHA, BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
-         { typeid = new_typeid(), typevars = { ALPHA, BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
-         { typeid = new_typeid(), typevars = { ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
-         { typeid = new_typeid(), typevars = { ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
+         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
       },
    },
    ["load"] = {
@@ -3130,7 +3125,7 @@ local standard_library: {string:Type} = {
             ["__call"] = FUNCTION,
             ["__gc"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = {} },
             ["__len"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { NUMBER } },
-            ["__pairs"] = { typeid = new_typeid(), typevars = { ALPHA, BETA }, typename = "function", args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
+            ["__pairs"] = { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
                   { typeid = new_typeid(), typename = "function", args = {}, rets = { ALPHA, BETA } },
             } },
             -- TODO complete...
@@ -3193,29 +3188,29 @@ local standard_library: {string:Type} = {
          ["unpack"] = {
             typeid = new_typeid(), typename = "function",
             needs_compat53 = true,
-            typevars = { ALPHA },
+            typeargs = { ARG_ALPHA },
             args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
             rets = { { typeid = new_typeid(), typename = "typevar", typevar = "`a", is_va = true }
          } },
          ["move"] = {
             typeid = new_typeid(), typename = "poly",
             poly = {
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
             }
          },
          ["insert"] = {
             typeid = new_typeid(), typename = "poly",
             poly = {
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
             }
          },
          ["remove"] = {
             typeid = new_typeid(), typename = "poly",
             poly = {
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER }, rets = { ALPHA } },
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA }, rets = { ALPHA } },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER }, rets = { ALPHA } },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = { ALPHA } },
             }
          },
          ["concat"] = {
@@ -3228,8 +3223,8 @@ local standard_library: {string:Type} = {
          ["sort"] = {
             typeid = new_typeid(), typename = "poly",
             poly = {
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
-               { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA, { typeid = new_typeid(), typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
+               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, { typeid = new_typeid(), typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
             }
          }
       },
@@ -3294,24 +3289,24 @@ local standard_library: {string:Type} = {
          ["offset"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
       },
    },
-   ["ipairs"] = { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
+   ["ipairs"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
       { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER, ALPHA } },
    } },
-   ["pairs"] = { typeid = new_typeid(), typename = "function", typevars = { ALPHA, BETA }, args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
+   ["pairs"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
       { typeid = new_typeid(), typename = "function", args = {}, rets = { ALPHA, BETA } },
    } },
    ["pcall"] = { typeid = new_typeid(), typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
    ["assert"] = {
       typeid = new_typeid(), typename = "poly",
       poly = {
-         { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { ALPHA }, rets = { ALPHA } },
-         { typeid = new_typeid(), typename = "function", typevars = { ALPHA, BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
+         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
+         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
       }
    },
    ["select"] = {
       typeid = new_typeid(), typename = "poly",
       poly = {
-         { typeid = new_typeid(), typename = "function", typevars = { ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
+         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
          { typeid = new_typeid(), typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
       }
    },
@@ -3468,6 +3463,43 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
+   local function resolve_typevars(t: Type, seen: {Type:Type}): Type
+      seen = seen or {}
+      if seen[t] then
+         return seen[t]
+      end
+
+      local orig_t = t
+      local clear_tk = false
+      if t.typename == "typevar" then
+         local tv = find_var(t.typevar)
+         if tv then
+            t = tv
+            clear_tk = true
+         else
+            t = UNKNOWN
+         end
+      end
+
+      local copy: Type = {}
+      seen[orig_t] = copy
+
+      for k, v in pairs(t as {string:Type}) do
+         local cp = copy as {string:Type}
+         if type(v) == "table" then
+            cp[k] = resolve_typevars(v, seen)
+         else
+            cp[k] = v
+         end
+      end
+
+      if clear_tk then
+         copy.tk = nil
+      end
+
+      return copy
+   end
+
    local function find_type(names: {string}): Type
       local typ = find_var(names[1])
       if not typ then
@@ -3560,101 +3592,53 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return node.type
    end
 
-
-   local function match_typevals(t: Type, def: Type, typevars: {string:Type}): Type
-      if not typevars then
-         return def
-      end
-
-      if t.typevals and def.typevars then
-         if #t.typevals ~= #def.typevars then
-            type_error(t, "mismatch in number of type arguments")
-            return nil
-         end
-
-         local newtypevars: {string:Type} = {}
-         for k,v in pairs(typevars) do
-            newtypevars[k] = v
-         end
-         for i, tt in ipairs(t.typevals) do
-            newtypevars[def.typevars[i].typevar] = tt
-         end
-         return resolve_typevars(def, newtypevars)
-      elseif t.typevals then
-         type_error(t, "spurious type arguments")
-         return nil
-      elseif def.typevars then
-         type_error(t, "missing type arguments in %s", def)
-         return nil
-      else
-         return def
-      end
-   end
-
-   local function resolve_nominal(t: Type, typevars: {string:Type}): Type
-      if t.resolved then
-         return t.resolved
-      end
-
-      local resolved: Type
-
-      local typetype = find_type(t.names)
-      if not typetype then
-         type_error(t, "unknown type %s", t)
-      elseif typetype.typename == "typetype" then
-         resolved = match_typevals(t, typetype.def, typevars)
-      else
-         type_error(t, table.concat(t.names, ".") .. " is not a type")
-      end
-
-      if not resolved then
-         resolved = { typeid = new_typeid(), typename = "bad_nominal", names = t.names }
-      end
-
-      t.resolved = resolved
-      return resolved
-   end
-
-   local function resolve_unary(t: Type, typevars: {string:Type}): Type
-      t = resolve_tuple(t)
-      if t.typename == "nominal" then
-         return resolve_nominal(t, typevars)
-      end
-      return t
-   end
-
    local function terr(t: Type, s: string, ...: Type): {Error}
       return { error_in_type(t, s, ...) }
    end
 
-   local CompareTypes = functiontype(Type, Type, {string:Type}, boolean): boolean, {Error}
+   local function add_unknown(node: Node, name: string)
+      table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
+   end
 
-   local function compare_typevars(t1: Type, t2: Type, typevars: {string:Type}, comp: CompareTypes): boolean, {Error}
-      if t1.typevar == t2.typevar then
-         if not typevars then
-            return true
+   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean)
+      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
+         add_unknown(node, var)
+      end
+      if st[#st][var] and is_narrowing then
+         if not st[#st][var].is_narrowed then
+            st[#st][var].narrowed_from = st[#st][var].t
          end
-         local has_t1 = not not typevars[t1.typevar]
-         local has_t2 = not not typevars[t2.typevar]
+         st[#st][var].is_narrowed = true
+         st[#st][var].t = valtype
+      else
+         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing }
+      end
+   end
+
+   local CompareTypes = functiontype(Type, Type, boolean): boolean, {Error}
+
+   local function compare_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
+      local tv1 = find_var(t1.typevar)
+      local tv2 = find_var(t2.typevar)
+      if t1.typevar == t2.typevar then
+         local has_t1 = not not tv1
+         local has_t2 = not not tv2
          if has_t1 == has_t2 then
             return true
          end
       end
-      if not typevars then
-         return false, terr(t1, "got %s, expected %s", t1, t2)
-      end
       local function cmp(k: string, v: Type, a: Type, b: Type): boolean, {Error}
-         if typevars[k] then
-            return comp(a, b, typevars)
+         if find_var(k) then
+            return comp(a, b)
          else
-            typevars[k] = resolve_typevars(v, typevars)
+            add_var(nil, k, resolve_typevars(v))
             return true
          end
       end
       if t2.typename == "typevar" then
-         return cmp(t2.typevar, t1, t1, typevars[t2.typevar])
+         return cmp(t2.typevar, t1, t1, tv2)
       else
-         return cmp(t1.typevar, t2, typevars[t1.typevar], t2)
+         return cmp(t1.typevar, t2, tv1, t2)
       end
    end
 
@@ -3673,11 +3657,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   local is_a: function(Type, Type, {string:Type}, boolean): boolean, {Error}
+   local is_a: function(Type, Type, boolean): boolean, {Error}
 
    local TypeGetter = functiontype(string): Type
 
-   local function match_record_fields(t1: Type, t2: TypeGetter, typevars: {string:Type}, cmp: CompareTypes): boolean, {Error}
+   local function match_record_fields(t1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
       cmp = cmp or is_a
       local fielderrs: {Error} = {}
       for _, k in ipairs(t1.field_order) do
@@ -3688,7 +3672,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                table.insert(fielderrs, error_in_type(f, "unknown field " .. k))
             end
          else
-            local match, errs = is_a(f, t2k, typevars)
+            local match, errs = is_a(f, t2k)
             add_errs_prefixing(errs, fielderrs, "record field doesn't match: " .. k .. ": ")
          end
       end
@@ -3698,19 +3682,19 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return true
    end
 
-   local function match_fields_to_record(t1: Type, t2: Type, typevars: {string:Type}, cmp: CompareTypes): boolean, {Error}
-      return match_record_fields(t1, function(k: string): Type return t2.fields[k] end, typevars, cmp)
+   local function match_fields_to_record(t1: Type, t2: Type, cmp: CompareTypes): boolean, {Error}
+      return match_record_fields(t1, function(k: string): Type return t2.fields[k] end, cmp)
    end
 
-   local function match_fields_to_map(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
-      if not match_record_fields(t1, function(_: string): Type return t2.values end, typevars) then
+   local function match_fields_to_map(t1: Type, t2: Type): boolean, {Error}
+      if not match_record_fields(t1, function(_: string): Type return t2.values end) then
          return false, { error_in_type(t1, "not all fields have type %s", t2.values) }
       end
       return true
    end
 
-   local function arg_check(cmp: CompareTypes, a: Type, b: Type, typevars: {string:Type}, at: Node, n: number, errs: {Error}): boolean
-      local matches, match_errs = cmp(a, b, typevars)
+   local function arg_check(cmp: CompareTypes, a: Type, b: Type, at: Node, n: number, errs: {Error}): boolean
+      local matches, match_errs = cmp(a, b)
       if not matches then
          add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", at)
          return false
@@ -3718,7 +3702,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return true
    end
 
-   -- only check names, not typevars
+   -- only check names, not type variables
    local function same_names(t1: Type, t2: Type): boolean
       if t1.resolved and t2.resolved then
          return t1.resolved.typeid == t2.resolved.typeid
@@ -3739,13 +3723,13 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   local same_type: function(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
+   local same_type: function(t1: Type, t2: Type): boolean, {Error}
 
-   local function has_all_types_of(t1s: {Type}, t2s: {Type}, typevars: {string:Type}): boolean
+   local function has_all_types_of(t1s: {Type}, t2s: {Type}): boolean
       for _, t1 in ipairs(t1s) do
          local found = false
          for _, t2 in ipairs(t2s) do
-            if same_type(t1, t2, typevars) then
+            if same_type(t1, t2) then
                found = true
                break
             end
@@ -3757,12 +3741,20 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return true
    end
 
-   same_type = function(t1: Type, t2: Type, typevars: {string:Type}): boolean, {Error}
+   local function any_errors(all_errs: {Error}): boolean, {Error}
+      if #all_errs == 0 then
+         return true
+      else
+         return false, all_errs
+      end
+   end
+
+   same_type = function(t1: Type, t2: Type): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
       if t1.typename == "typevar" or t2.typename == "typevar" then
-         return compare_typevars(t1, t2, typevars, same_type)
+         return compare_typevars(t1, t2, same_type)
       end
 
       if t1.typename ~= t2.typename then
@@ -3771,10 +3763,19 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       if t1.typename == "array" then
          return same_type(t1.elements, t2.elements)
       elseif t1.typename == "map" then
-         return same_type(t1.keys, t2.keys) and same_type(t1.values, t2.values)
+         local all_errs = {}
+         local k_ok, k_errs = same_type(t1.keys, t2.keys)
+         if not k_ok then
+            add_errs_prefixing(k_errs, all_errs, "keys", t1 as Node)
+         end
+         local v_ok, v_errs = same_type(t1.values, t2.values)
+         if not v_ok then
+            add_errs_prefixing(v_errs, all_errs, "values", t1 as Node)
+         end
+         return any_errors(all_errs)
       elseif t1.typename == "union" then
-         if  has_all_types_of(t1.types, t2.types, typevars)
-         and has_all_types_of(t2.types, t1.types, typevars) then
+         if  has_all_types_of(t1.types, t2.types)
+         and has_all_types_of(t2.types, t1.types) then
             return true
          else
             return false, terr(t1, "got %s, expected %s", t1, t2)
@@ -3782,7 +3783,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       elseif t1.typename == "nominal" then
          return same_names(t1, t2)
       elseif t1.typename == "record" then
-         return match_fields_to_record(t1, t2, typevars, same_type)
+         return match_fields_to_record(t1, t2, same_type)
       elseif t1.typename == "function" then
          if #t1.args ~= #t2.args then
             return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
@@ -3792,23 +3793,19 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
          local all_errs = {}
          for i = 1, #t1.args do
-            arg_check(same_type, t1.args[i], t2.args[i], typevars, t1 as Node, i, all_errs)
+            arg_check(same_type, t1.args[i], t2.args[i], t1 as Node, i, all_errs)
          end
          for i = 1, #t1.rets do
             local ok, errs = same_type(t1.rets[i], t2.rets[i])
             add_errs_prefixing(errs, all_errs, "return " .. i, t1 as Node)
          end
-         if #all_errs == 0 then
-            return true
-         else
-            return false, all_errs
-         end
+         return any_errors(all_errs)
       elseif t1.typename == "arrayrecord" then
          local ok, errs = same_type(t1.elements, t2.elements)
          if not ok then
             return ok, errs
          end
-         return match_fields_to_record(t1, t2, typevars, same_type)
+         return match_fields_to_record(t1, t2, same_type)
       end
       return true
    end
@@ -3835,7 +3832,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   is_a = function(t1: Type, t2: Type, typevars: {string:Type}, for_equality: boolean): boolean, {Error}
+   local resolve_unary: function(t: Type): Type = nil
+
+   is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -3858,33 +3857,33 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
 
       if t1.typename == "typevar" or t2.typename == "typevar" then
-         return compare_typevars(t1, t2, typevars, is_a)
+         return compare_typevars(t1, t2, is_a)
       end
 
       if t2.typename == "any" then
          return true
       elseif t2.typename == "poly" then
          for _, t in ipairs(t2.poly) do
-            if is_a(t1, t, typevars, for_equality) then
+            if is_a(t1, t, for_equality) then
                return true
             end
          end
          return false, terr(t1, "no match with poly") -- don't expect these errors to show, should fix if they do
       elseif t1.typename == "union" and t2.typename == "union" then
-         if has_all_types_of(t1.types, t2.types, typevars) then
+         if has_all_types_of(t1.types, t2.types) then
             return true
          else
             return false, terr(t1, "got %s, expected %s", t1, t2)
          end
       elseif t2.typename == "union" then
          for _, t in ipairs(t2.types) do
-            if is_a(t1, t, typevars, for_equality) then
+            if is_a(t1, t, for_equality) then
                return true
             end
          end
       elseif t1.typename == "poly" then
          for _, t in ipairs(t1.poly) do
-            if is_a(t, t2, typevars, for_equality) then
+            if is_a(t, t2, for_equality) then
                return true
             end
          end
@@ -3898,7 +3897,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
                local all_errs = {}
                for i = 1, #t1.typevals do
-                  local ok, errs = same_type(t2.typevals[i], t1.typevals[i], typevars)
+                  local ok, errs = same_type(t2.typevals[i], t1.typevals[i])
                   add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t1.typevals[i]) .. ">: ", t1 as Node)
                end
                if #all_errs == 0 then
@@ -3926,14 +3925,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             return false, terr(t1, "%s is not a member of %s", t1, t2)
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
-         local t1u = resolve_unary(t1, typevars)
-         local t2u = resolve_unary(t2, typevars)
-         local ok, errs = is_a(t1u, t2u, typevars)
+         local t1u = resolve_unary(t1)
+         local t2u = resolve_unary(t2)
+         local ok, errs = is_a(t1u, t2u)
          if errs and #errs == 1 then
             if errs[1].msg:match("^got ") then
-               --local got = t1.typename == "nominal" and t1.name or show_type(t1, typevars)
-               --local expected = t2.typename == "nominal" and t2.name or show_type(t2, typevars)
-               errs = terr(t1, "got %s, expected %s", t1, t2) -- FIXME typevars
+               --local got = t1.typename == "nominal" and t1.name or show_type(t1)
+               --local expected = t2.typename == "nominal" and t2.name or show_type(t2)
+               errs = terr(t1, "got %s, expected %s", t1, t2)
             end
          end
          return ok, errs
@@ -3941,22 +3940,22 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          return true
       elseif t2.typename == "array" then
          if t1.typename == "array" or t1.typename == "arrayrecord" then
-            return is_a(t1.elements, t2.elements, typevars)
+            return is_a(t1.elements, t2.elements)
          elseif t1.typename == "map" then
-            local _, errs_keys = is_a(t1.keys, NUMBER, typevars)
-            local _, errs_values = is_a(t1.values, t2.elements, typevars)
+            local _, errs_keys = is_a(t1.keys, NUMBER)
+            local _, errs_values = is_a(t1.values, t2.elements)
             return combine_errs(errs_keys, errs_values)
          end
       elseif t2.typename == "record" then
          if t1.typename == "record" or t1.typename == "arrayrecord" then
-            return match_fields_to_record(t1, t2, typevars)
+            return match_fields_to_record(t1, t2)
          elseif t1.typename == "map" then
-            if not is_a(t1.keys, STRING, typevars) then
+            if not is_a(t1.keys, STRING) then
                return false, terr(t1, "map has non-string keys")
             end
             for _, fname in ipairs(t2.field_order) do
                local ftype = t2.fields[fname]
-               if not is_a(t1.values, ftype, typevars) then
+               if not is_a(t1.values, ftype) then
                   return false, terr(t1, "field " .. fname .. " is of type %s", ftype)
                end
             end
@@ -3964,29 +3963,29 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
       elseif t2.typename == "arrayrecord" then
          if t1.typename == "array" then
-            return is_a(t1.elements, t2.elements, typevars)
+            return is_a(t1.elements, t2.elements)
          elseif t1.typename == "record" then
-            return match_fields_to_record(t1, t2, typevars)
+            return match_fields_to_record(t1, t2)
          elseif t1.typename == "arrayrecord" then
-            if not is_a(t1.elements, t2.elements, typevars) then
+            if not is_a(t1.elements, t2.elements) then
                return false, terr(t1, "array parts have incompatible element types")
             end
-            return match_fields_to_record(t1, t2, typevars)
+            return match_fields_to_record(t1, t2)
          end
       elseif t2.typename == "map" then
          if t1.typename == "map" then
-            local _, errs_keys = is_a(t1.keys, t2.keys, typevars)
-            local _, errs_values = is_a(t2.values, t1.values, typevars)
+            local _, errs_keys = is_a(t1.keys, t2.keys)
+            local _, errs_values = is_a(t2.values, t1.values)
             if t2.values.typename == "any" then -- special-case hack for {any:any}
                errs_values = {}
             end
             return combine_errs(errs_keys, errs_values)
          elseif t1.typename == "array" then
-            local _, errs_keys = is_a(NUMBER, t2.keys, typevars)
-            local _, errs_values = is_a(t1.elements, t2.values, typevars)
+            local _, errs_keys = is_a(NUMBER, t2.keys)
+            local _, errs_values = is_a(t1.elements, t2.values)
             return combine_errs(errs_keys, errs_values)
          elseif t1.typename == "record" or t1.typename == "arrayrecord" then -- FIXME
-            if not is_a(t2.keys, STRING, typevars) then
+            if not is_a(t2.keys, STRING) then
                return false, terr(t1, "can't match a record to a map with non-string keys")
             end
             if t2.keys.typename == "enum" then
@@ -3996,7 +3995,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   end
                end
             end
-            return match_fields_to_map(t1, t2, typevars)
+            return match_fields_to_map(t1, t2)
          end
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
@@ -4004,7 +4003,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments"))
          else
             for i = (t1.is_method and 2 or 1), #t1.args do
-               arg_check(is_a, t1.args[i], t2.args[i] or ANY, typevars, nil, i, all_errs)
+               arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets[#t2.rets].is_va
@@ -4016,7 +4015,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                nrets = nrets - 1
             end
             for i = 1, nrets do
-               local ok, errs = is_a(t1.rets[i], t2.rets[i], typevars)
+               local ok, errs = is_a(t1.rets[i], t2.rets[i])
                add_errs_prefixing(errs, all_errs, "return " .. i .. ": ")
             end
          end
@@ -4034,7 +4033,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return false, terr(t1, "got %s, expected %s", t1, t2)
    end
 
-   local function assert_is_a(node: Node, t1: Type, t2: Type, typevars: {string:Type}, context: string, name: string)
+   local function assert_is_a(node: Node, t1: Type, t2: Type, context: string, name: string)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
       if lax and (is_unknown(t1) or is_unknown(t2)) then
@@ -4057,15 +4056,36 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          return
       end
 
-      local match, match_errs = is_a(t1, t2, typevars)
+      local match, match_errs = is_a(t1, t2)
       add_errs_prefixing(match_errs, errors, "in " .. context .. ": ".. (name and (name .. ": ") or ""), node)
+   end
+
+   local function begin_scope()
+      table.insert(st, {})
+   end
+
+   local function end_scope()
+      local unresolved = st[#st]["@unresolved"]
+      if unresolved then
+         local upper = st[#st - 1]["@unresolved"]
+         if upper then
+            for name, nodes in pairs(unresolved.t.labels) do
+               for _, node in ipairs(nodes) do
+                  upper.t.labels[name] = upper.t.labels[name] or {}
+                  table.insert(upper.t.labels[name], node)
+               end
+            end
+         else
+            st[#st - 1]["@unresolved"] = unresolved
+         end
+      end
+      table.remove(st)
    end
 
    local type_check_function_call: function(Node, Type, {Type}, boolean, number): Type
    do
       local function try_match_func_args(node: Node, f: Type, args: {Type}, is_method: boolean, argdelta: number): Type, {Error}
          local ok = true
-         local typevars = {}
          local errs = {}
 
          if is_method then
@@ -4074,7 +4094,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             argdelta = 0
          end
 
-         if f.is_method and not is_method and not is_a(args[1], f.args[1], typevars) then
+         if f.is_method and not is_method and not is_a(args[1], f.args[1]) then
             table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
             return nil, errs
          end
@@ -4093,11 +4113,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                end
                if not lax then
                   ok = false
-                  table.insert(errs, { y = node.y, x = node.x, msg = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg, typevars), filename = filename })
+                  table.insert(errs, { y = node.y, x = node.x, msg = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg), filename = filename })
                end
             else
                local at = node.e2 and node.e2[a] or node
-               if not arg_check(is_a, arg, farg, typevars, at, (a + argdelta), errs) then
+               if not arg_check(is_a, arg, farg, at, (a + argdelta), errs) then
                   ok = false
                   break
                end
@@ -4105,12 +4125,22 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
          if ok == true then
             f.rets.typename = "tuple"
-            return resolve_typevars(f.rets, typevars)
+            return resolve_typevars(f.rets)
          end
          return nil, errs
       end
 
-      type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
+      local function revert_typeargs(func: Type)
+         if func.typeargs then
+            for _, arg in ipairs(func.typeargs) do
+               if st[#st][arg.typearg] then
+                  st[#st][arg.typearg] = nil
+               end
+            end
+         end
+      end
+
+      local function check_call(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
          assert(type(func) == "table")
          assert(type(args) == "table")
 
@@ -4118,7 +4148,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             func = { typeid = new_typeid(), typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } }
          end
 
-         func = resolve_unary(func, {}) -- FIXME propagate typevars?
+         func = resolve_unary(func)
 
          args = args or {}
          local poly: Type = func.typename == "poly" and func or { poly = { func } }
@@ -4138,6 +4168,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
                   return matched
+               else
+                  revert_typeargs(f)
                end
                first_errs = first_errs or errs
             end
@@ -4148,6 +4180,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
                   return matched
+               else
+                  revert_typeargs(f)
                end
                first_errs = first_errs or errs
             end
@@ -4158,6 +4192,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
                   return matched
+               else
+                  revert_typeargs(f)
                end
                first_errs = first_errs or errs
             end
@@ -4172,15 +4208,18 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
 
          poly.poly[1].rets.typename = "tuple"
-         return poly.poly[1].rets
+         return resolve_typevars(poly.poly[1].rets)
+      end
+
+      type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
+         begin_scope()
+         local ret = check_call(node, func, args, is_method, argdelta)
+         end_scope()
+         return ret
       end
    end
 
    local unknown_dots: {string:boolean} = {}
-
-   local function add_unknown(node: Node, name: string)
-      table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
-   end
 
    local function add_unknown_dot(node: Node, name: string)
       if not unknown_dots[name] then
@@ -4247,21 +4286,6 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return node_error(node, "invalid key '" .. key.tk .. "' in " .. description)
    end
 
-   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean)
-      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
-         add_unknown(node, var)
-      end
-      if st[#st][var] and is_narrowing then
-         if not st[#st][var].is_narrowed then
-            st[#st][var].narrowed_from = st[#st][var].t
-         end
-         st[#st][var].is_narrowed = true
-         st[#st][var].t = valtype
-      else
-         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing }
-      end
-   end
-
    local function widen_in_scope(scope: {string:Variable}, var: string): boolean
       if scope[var].is_narrowed then
          if scope[var].narrowed_from then
@@ -4305,31 +4329,42 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       st[1][var] = { t = valtype, is_const = is_const }
    end
 
-   local function begin_scope()
-      table.insert(st, {})
-   end
+   local check_typevars: function(node: Node, t: Type)
 
-   local function end_scope()
-      local unresolved = st[#st]["@unresolved"]
-      if unresolved then
-         local upper = st[#st - 1]["@unresolved"]
-         if upper then
-            for name, nodes in pairs(unresolved.t.labels) do
-               for _, node in ipairs(nodes) do
-                  upper.t.labels[name] = upper.t.labels[name] or {}
-                  table.insert(upper.t.labels[name], node)
-               end
-            end
-         else
-            st[#st - 1]["@unresolved"] = unresolved
+   local function check_all_typevars(node: Node, ts: {Type})
+      if ts ~= nil then
+         for _, arg in ipairs(ts) do
+            check_typevars(node, arg)
          end
       end
-      table.remove(st)
+   end
+
+   check_typevars = function(node: Node, t: Type)
+      if t == nil then
+         return
+      end
+      if t.typename == "typevar" then
+         if not find_var(t.typevar) then
+            node_error(node, "unknown type variable " .. t.typevar)
+         end
+         return
+      end
+      check_typevars(node, t.elements)
+      check_typevars(node, t.keys)
+      check_typevars(node, t.values)
+      check_all_typevars(node, t.typeargs)
+      check_all_typevars(node, t.args)
+      check_all_typevars(node, t.rets)
    end
 
    local function begin_function_scope(node: Node, recurse: boolean)
       begin_scope()
       local args = {}
+      if node.typeargs then
+         for i, arg in ipairs(node.typeargs) do
+            add_var(nil, arg.typearg, arg)
+         end
+      end
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
@@ -4341,6 +4376,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                node_error(node, "'...' can only be last argument")
             end
          end
+         check_typevars(arg, t)
          table.insert(args, t)
          add_var(arg, arg.tk, t)
       end
@@ -4370,6 +4406,63 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
    local function end_function_scope()
       fail_unresolved_labels()
       end_scope()
+   end
+
+   local function match_typevals(t: Type, def: Type): Type
+      if t.typevals and def.typeargs then
+         if #t.typevals ~= #def.typeargs then
+            type_error(t, "mismatch in number of type arguments")
+            return nil
+         end
+
+         begin_scope()
+         for i, tt in ipairs(t.typevals) do
+            add_var(nil, def.typeargs[i].typearg, tt)
+         end
+         local ret = resolve_typevars(def)
+         end_scope()
+         return ret
+      elseif t.typevals then
+         type_error(t, "spurious type arguments")
+         return nil
+      elseif def.typeargs then
+         type_error(t, "missing type arguments in %s", def)
+         return nil
+      else
+         return def
+      end
+   end
+
+   local function resolve_nominal(t: Type): Type
+      if t.resolved then
+         return t.resolved
+      end
+
+      local resolved: Type
+
+      local typetype = find_type(t.names)
+      if not typetype then
+         type_error(t, "unknown type %s", t)
+      elseif typetype.typename == "typetype" then
+         resolved = match_typevals(t, typetype.def)
+      else
+         type_error(t, table.concat(t.names, ".") .. " is not a type")
+      end
+
+      if not resolved then
+         resolved = { typeid = new_typeid(), typename = "bad_nominal", names = t.names }
+      end
+
+      t.resolved = resolved
+      return resolved
+   end
+
+   resolve_unary = function(t: Type): Type
+      t = resolve_tuple(t)
+      if t.typename == "nominal" then
+         return resolve_nominal(t)
+      end
+      return t
    end
 
    local function flatten_list(list: {Type}): {Type}
@@ -4426,13 +4519,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    local function match_all_record_field_names(node: Node, a: Type, field_names: {string}, errmsg: string): Type
       local t: Type
-      local typevars: {string: Type} = {}
       for _ k in ipairs(field_names) do
          local f = a.fields[k]
          if not t then
             t = f
          else
-            if not same_type(f, t, typevars) then
+            if not same_type(f, t) then
                t = nil
                break
             end
@@ -4561,7 +4653,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          return vars
       end
 
-      local function intersect(xs: {`T}, ys: {`T}, same: function(`T, `T): boolean): {`T}
+      local function intersect<`T>(xs: {`T}, ys: {`T}, same: function(`T, `T): boolean): {`T}
          local rs = {}
          for i = #xs, 1, -1 do
             local x = xs[i]
@@ -4576,7 +4668,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
 
       local function same_type_for_intersect(t: Type, u: Type): boolean
-         return (same_type(t, u, nil))
+         return (same_type(t, u))
       end
 
       local function intersect_facts(fs: {Fact}, errnode: Node): boolean, Type
@@ -4747,7 +4839,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
       for _, f in ipairs(facts) do
          if f.fact == "is" then
-            local t = resolve_typevars(f.typ, {}) -- new type object
+            local t = resolve_typevars(f.typ) -- new type object
             t.inferred_at = where
             t.inferred_at_file = filename
             add_var(nil, f.var, t, nil, true)
@@ -4783,7 +4875,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   infertype = nil
                end
                if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, {}, "local declaration", var.tk)
+                  assert_is_a(node.vars[i], infertype, decltype, "local declaration", var.tk)
                end
                local t = decltype or infertype
                if t == nil then
@@ -4815,7 +4907,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   infertype = nil
                end
                if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, {}, "global declaration", var.tk)
+                  assert_is_a(node.vars[i], infertype, decltype, "global declaration", var.tk)
                end
                local t = decltype or infertype
                local existing, existing_is_const = find_global(var.tk)
@@ -4862,7 +4954,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                if vartype then
                   local val = exps[i]
                   if val then
-                     assert_is_a(varnode, val, vartype, {}, "assignment")
+                     assert_is_a(varnode, val, vartype, "assignment")
                      if varnode.kind == "variable" and vartype.typename == "union" then
                         -- narrow union
                         add_var(varnode, varnode.tk, val, false, true)
@@ -5034,7 +5126,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                node_error(node, "excess return values, expected " .. #rets .. " got " .. #children[1])
             end
             for i = 1, math.min(#children[1], #rets) do
-               assert_is_a(node.exps[i], children[1][i], rets[i], nil, "return value")
+               assert_is_a(node.exps[i], children[1][i], rets[i], "return value")
             end
 
             -- if at the toplevel
@@ -5121,7 +5213,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             local vtype = children[2]
             if node.decltype then
                vtype = node.decltype
-               assert_is_a(node.value, children[2], node.decltype, {}, "table item")
+               assert_is_a(node.value, children[2], node.decltype, "table item")
             end
             node.type = {
                y = node.y,
@@ -5250,8 +5342,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             if node.op.op == "@funcall" then
                if node.e1.tk == "rawget" then
                   if #b == 2 then
-                     local b1 = resolve_unary(b[1], {})
-                     local b2 = resolve_unary(b[2], {})
+                     local b1 = resolve_unary(b[1])
+                     local b2 = resolve_unary(b[2])
                      if b1.typename == "record" and node.e2[2].conststr then
                         node.type = match_record_key(node, b1, { kind = "string", tk = assert(node.e2[2].conststr) }, b1)
                      else
@@ -5316,7 +5408,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                end
                node.type = BOOLEAN
             elseif node.op.op == "." then
-               a = resolve_unary(a, {}) -- FIXME propagate typevars?
+               a = resolve_unary(a)
                if a.typename == "map" then
                   if is_a(a.keys, STRING) or is_a(a.keys, ANY) then
                      node.type = a.values
@@ -5356,7 +5448,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                node.facts = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "==" or node.op.op == "~=" then
-               if is_a(a, b, {}, true) or is_a(b, a, {}, true) then
+               if is_a(a, b, true) or is_a(b, a, true) then
                   node.type = BOOLEAN
                else
                   if lax and (is_unknown(a) or is_unknown(b)) then
