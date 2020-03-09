@@ -106,16 +106,11 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors)
       local errors = tl.type_check(ast, nil, "bla.tl")
-      assert.same(2, #errors)
+      assert.same(1, #errors)
 
-      -- not the ideal message...
       assert.match("argument 3: argument 1: got string, expected number", errors[1].msg, 1, true)
       assert.same(15, errors[1].y)
       assert.same(47, errors[1].x)
-
-      assert.match("cannot use operator '..'", errors[2].msg, 1, true)
-      assert.same(15, errors[2].y)
-      assert.same(64, errors[2].x)
    end)
    it("will catch if resolved typevar does not match", function()
       -- pass
@@ -215,6 +210,31 @@ describe("generic function", function()
       local tokens = tl.lex([[
          local function parse_list<`T>(list: {`T}): `T
             return list[1]
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(0, #errors)
+   end)
+   it("will catch if typevar is unbound", function()
+      -- fail
+      local tokens = tl.lex([[
+         local function parse_list<`T>(list: {`T}): `T
+            return true
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same(1, #errors)
+      assert.match("got boolean, expected `T", errors[1].msg, 1, true)
+   end)
+   it("will accept if typevar is bound at a higher level", function()
+      -- fail
+      local tokens = tl.lex([[
+         local function fun<`T>()
+            local function parse_list<`T>(list: {`T}): `T
+               return list[1]
+            end
          end
       ]])
       local _, ast = tl.parse_program(tokens)
@@ -450,7 +470,7 @@ describe("generic function", function()
       assert.same(11, errors[1].y, 1, true)
       assert.same(42, errors[1].x, 1, true)
    end)
-   pending("does not leak an unresolved generic type", function()
+   it("does not leak an unresolved generic type", function()
       local tokens = tl.lex([[
          function mypairs<`a, `b>(map: {`a:`b}): (`a, `b)
          end
@@ -468,7 +488,7 @@ describe("generic function", function()
       assert.same("unknown", ast[3].exps[1].type[1].typename)
       assert.same("unknown", ast[3].exps[1].type[2].typename)
    end)
-   pending("does not produce a recursive type", util.lax_check([[
+   it("does not produce a recursive type", util.lax_check([[
       function mypairs<`a, `b>(map: {`a:`b}): (`a, `b)
       end
       function myipairs<`a>(array: {`a}): (`a)
@@ -480,7 +500,13 @@ describe("generic function", function()
       local v = x[u]
       _, v = next(v)
    ]], {
-      { msg = "xss" }
+      { msg = "xss" },
+      { msg = "_" },
+      { msg = "xs" },
+      { msg = "_" },
+      { msg = "x" },
+      { msg = "u" },
+      { msg = "v" },
    }))
 end)
 
