@@ -1,6 +1,26 @@
 local util = require("spec.util")
 
 describe("flow analysis with is", function()
+   describe("on expressions", function()
+      it("narrows type on expressions with and", util.check [[
+         local x: number | string
+
+         local s = x is string and x:lower()
+      ]])
+
+      it("narrows type on expressions with or", util.check [[
+         local x: number | string
+
+         local s = x is number and tostring(x + 1) or x:lower()
+      ]])
+
+      it("narrows type on expressions with not", util.check [[
+         local x: number | string
+
+         local s = not x is string and tostring(x + 1) or x:lower()
+      ]])
+   end)
+
    describe("on if", function()
       it("resolves both then and else branches", util.check [[
          local t: number | string

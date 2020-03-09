@@ -1979,6 +1979,7 @@ local VisitorCallbacks = {}
 
 
 
+
 local Visitor = {}
 
 
@@ -2129,6 +2130,9 @@ visit_type)
       end
       xs[2] = p1
       if ast.op.arity == 2 then
+         if cbs.before_e2 then
+            cbs.before_e2(ast, xs)
+         end
          xs[3] = recurse_node(ast.e2, visit_node, visit_type)
          xs[4] = (ast.e2.op and ast.e2.op.prec)
       end
@@ -5340,7 +5344,19 @@ function tl.type_check(ast, opts)
          end,
       },
       ["op"] = {
+         ["before"] = function(node)
+            begin_scope()
+         end,
+         ["before_e2"] = function(node)
+            if node.op.op == "and" then
+               apply_facts(node, node.e1.facts)
+            elseif node.op.op == "or" then
+               apply_facts(node, facts_not(node.e1.facts))
+            end
+         end,
          ["after"] = function(node, children)
+            end_scope()
+
             local a = children[1]
             local b = children[3]
             local orig_a = a

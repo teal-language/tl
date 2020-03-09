@@ -1976,6 +1976,7 @@ end
 local VisitorCallbacks = record<`N, `T>
    before: function(`N, {`T})
    before_statements: function({`N}, {`T})
+   before_e2: function({`N}, {`T})
    after: function(`N, {`T}, `T): `T
 end
 
@@ -2129,6 +2130,9 @@ local function recurse_node<`T>(ast: Node,
       end
       xs[2] = p1 as `T
       if ast.op.arity == 2 then
+         if cbs.before_e2 then
+            cbs.before_e2(ast, xs)
+         end
          xs[3] = recurse_node(ast.e2, visit_node, visit_type)
          xs[4] = (ast.e2.op and ast.e2.op.prec) as `T
       end
@@ -5340,7 +5344,19 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
       },
       ["op"] = {
+         before = function(node: Node)
+            begin_scope()
+         end,
+         before_e2 = function(node: Node)
+            if node.op.op == "and" then
+               apply_facts(node, node.e1.facts)
+            elseif node.op.op == "or" then
+               apply_facts(node, facts_not(node.e1.facts))
+            end
+         end,
          after = function(node: Node, children: {Type}): Type
+            end_scope()
+
             local a: Type = children[1]
             local b: Type = children[3]
             local orig_a = a
