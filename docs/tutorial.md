@@ -462,6 +462,83 @@ declarations and multiple returns:
 f: function(function():(number, number), number)
 ```
 
+## Union types
+
+The language supports a basic form of union types. You can register a type
+that is a logical "or" of multiple types: it will accept values from multiple
+types, and you can discriminate them at runtime.
+
+You can declare union types like this:
+
+```
+local a: string | number | MyRecord
+local b: {boolean} | MyEnum
+local c: number | {string:number}
+```
+
+To use a value of this type, you need to discriminate the variable, using
+the `is` operator, which takes a variable of a union type and one of its types:
+
+```
+local a: string | number | MyRecord
+
+if a is string then
+   print("Hello, " .. a)
+elseif a is number then
+   print(a + 10)
+else
+   print(a.my_record_field)
+end
+```
+
+As you can see in the example above, each use of the `is` operator causes the
+type of the variable to be properly narrowed to the type tested in its
+respective block.
+
+The flow analysis of `is` also takes effect within expressions:
+
+```
+local a: string | number
+
+local x: number = a is number and a + 1 or 0
+```
+
+### Current limitations of union types
+
+In the current version, there are two main limitations regarding support
+for union types in tl.
+
+The first one is that the `is` operator always matches a variable, not arbitrary
+expressions. This limitation is there to avoid aliasing
+
+
+Since code generation for the `is` operator used for
+discrimination of union types translates into a runtime `type()` check, we can
+only discriminates across primitive types and at most one table type.
+
+This means that these unions not accepted:
+
+```
+local invalid1: MyRecord | MyOtherRecord
+local invalid2: {string} | {number}
+local invalid3: {string} | {string:string}
+local invalid4: {string} | MyRecord
+```
+
+Also, since `is` checks for enums currently also translate into
+`type()` checks, this means they are indistinguishable from strings
+at runtime. So, for now this is also not accepted:
+
+```
+local invalid5: string | MyEnum
+```
+
+This restriction between strings and enums may be removed in the future.
+The restriction on records may also be lifted in the future if we start
+registering metatables for them (it may be that a future release may
+start supporting unions of records _with_ metatables, if we add a form
+of record constructors with metatables).
+
 ## The type `any`
 
 The type `any`, as it name implies, accepts any value, like a
@@ -583,3 +660,4 @@ to your code.
 Note that even though adding type annotations to .lua files makes it invalid
 Lua, you can still do so and load them from the Lua VM once the tl package
 loader is installed by calling tl.loader().
+
