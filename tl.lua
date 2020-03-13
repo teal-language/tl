@@ -702,6 +702,14 @@ local TypeName = {}
 
 
 
+local table_types = {
+   ["array"] = true,
+   ["map"] = true,
+   ["arrayrecord"] = true,
+   ["record"] = true,
+   ["emptytable"] = true,
+}
+
 local Type = {}
 
 
@@ -1308,9 +1316,9 @@ do
          ["~"] = 11,
       },
       [2] = {
-         ["is"] = 0,
          ["or"] = 1,
          ["and"] = 2,
+         ["is"] = 3,
          ["<"] = 3,
          [">"] = 3,
          ["<="] = 3,
@@ -2045,6 +2053,9 @@ visit_type)
       if ast.exps then
          xs[2] = recurse_node(ast.exps, visit_node, visit_type)
       end
+      if ast.decltype then
+         xs[3] = recurse_type(ast.decltype, visit_type)
+      end
    elseif ast.kind == "table_item" then
       xs[1] = recurse_node(ast.key, visit_node, visit_type)
       xs[2] = recurse_node(ast.value, visit_node, visit_type)
@@ -2127,7 +2138,11 @@ visit_type)
          if cbs.before_e2 then
             cbs.before_e2(ast, xs)
          end
-         xs[3] = recurse_node(ast.e2, visit_node, visit_type)
+         if ast.op.op == "is" then
+            xs[3] = recurse_type(ast.e2.casttype, visit_type)
+         else
+            xs[3] = recurse_node(ast.e2, visit_node, visit_type)
+         end
          xs[4] = (ast.e2.op and ast.e2.op.prec)
       end
    elseif ast.kind == "newtype" then
@@ -2635,11 +2650,27 @@ function tl.pretty_print_ast(ast, fast)
       },
    }
 
+   local primitive = {
+      ["function"] = "function",
+      ["enum"] = "string",
+      ["boolean"] = "boolean",
+      ["string"] = "string",
+      ["nil"] = "nil",
+      ["number"] = "number",
+   }
+
    local visit_type = {}
    visit_type.cbs = {
       ["type_list"] = {
          ["after"] = function(typ, children)
             local out = { ["y"] = typ.y, ["h"] = 0, }
+            return out
+         end,
+      },
+      ["typedecl"] = {
+         ["after"] = function(typ, children)
+            local out = { ["y"] = typ.y, ["h"] = 0, }
+            table.insert(out, primitive[typ.typename] or "table")
             return out
          end,
       },
@@ -2655,8 +2686,6 @@ function tl.pretty_print_ast(ast, fast)
    visit_node.cbs["boolean"] = visit_node.cbs["variable"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
    visit_node.cbs["argument"] = visit_node.cbs["variable"]
-
-   visit_type.cbs["typedecl"] = visit_type.cbs["type_list"]
 
    local out = recurse_node(ast, visit_node, visit_type)
    return concat_output(out)
@@ -5569,7 +5598,29 @@ function tl.type_check(ast, opts)
                   if not find_type(typ.names) then
                      type_error(typ, "unknown type %s", typ)
                   end
+               elseif typ.typename == "union" then
+
+
+                  local n_table_types = 0
+                  local n_string_enum = 0
+                  for _, t in ipairs(typ.types) do
+                     t = resolve_unary(t)
+                     if table_types[t.typename] then
+                        n_table_types = n_table_types + 1
+                        if n_table_types > 1 then
+                           type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
+                           break
+                        end
+                     elseif t.typename == "string" or t.typename == "enum" then
+                        n_string_enum = n_string_enum + 1
+                        if n_string_enum > 1 then
+                           type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
+                           break
+                        end
+                     end
+                  end
                end
+
                return typ
             end,
          },

@@ -185,4 +185,29 @@ function util.check_syntax_error(code, syntax_errors)
    end
 end
 
+local function gen(lax, code, expected)
+   return function()
+      local tokens = tl.lex(code)
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors)
+      assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
+      local errors, unks = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      assert.same({}, errors)
+      local output_code = tl.pretty_print_ast(ast)
+
+      local expected_tokens = tl.lex(expected)
+      local _, expected_ast = tl.parse_program(expected_tokens, {})
+      local expected_code = tl.pretty_print_ast(expected_ast)
+
+      assert.same(expected_code, output_code)
+   end
+end
+
+function util.gen(code, expected)
+   assert(type(code) == "string")
+   assert(type(expected) == "string")
+
+   return gen(false, code, expected)
+end
+
 return util

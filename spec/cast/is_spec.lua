@@ -179,4 +179,83 @@ describe("flow analysis with is", function()
       ]])
    end)
 
+   describe("code gen", function()
+      describe("limitations", function()
+         it("cannot discriminate a union between multiple table types", util.check_type_error([[
+            local t: {number} | {string}
+            if t is {number} then
+               print(t)
+            end
+         ]], {
+            { y = 1, msg = [[cannot discriminate a union between multiple table types: {number} | {string}]] },
+         }))
+
+         it("cannot discriminate a union between records", util.check_type_error([[
+            local R1 = record
+               foo: string
+            end
+            local R2 = record
+               foo: string
+            end
+            local t: R1 | R2
+         ]], {
+            { y = 7, msg = [[cannot discriminate a union between multiple table types: R1 | R2]] },
+         }))
+
+         it("cannot discriminate a union between multiple string/enum types", util.check_type_error([[
+            local Enum = enum
+               "hello"
+               "world"
+            end
+            local t: string | Enum
+         ]], {
+            { y = 5, msg = [[cannot discriminate a union between multiple string/enum types: string | Enum]] },
+         }))
+      end)
+
+      it("generates type checks for primitive types", util.gen([[
+         function process(ts: {number | string | boolean})
+            local t: number | string | boolean
+            t = ts[1]
+            if t is number then
+               print(t + 1)
+            elseif t is string or t is boolean then
+               print(t)
+            end
+         end
+      ]], [[
+         function process(ts)
+            local t
+            t = ts[1]
+            if type(t) == "number" do
+               print(t + 1)
+            elseif type(t) == "string" or type(t) == "boolean" then
+               print(t)
+            end
+         end
+      ]]))
+
+      it("generates type checks for non-primitive types", util.gen([[
+         function process(ts: {number | {string} | boolean})
+            local t: number | {string} | boolean
+            t = ts[1]
+            if t is number then
+               print(t + 1)
+            elseif t is {string} or t is boolean then
+               print(t)
+            end
+         end
+      ]], [[
+         function process(ts)
+            local t
+            t = ts[1]
+            if type(t) == "number" do
+               print(t + 1)
+            elseif type(t) == "table" or type(t) == "boolean" then
+               print(t)
+            end
+         end
+      ]]))
+   end)
+
 end)
