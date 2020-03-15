@@ -1357,7 +1357,11 @@ do
       local lhs
       i, lhs = P(tokens, i, errs)
       i, lhs = E(tokens, i, errs, lhs, 0)
-      return i, lhs, 0
+      if lhs then
+         return i, lhs, 0
+      else
+         return fail(tokens, i, errs, "expected an expression")
+      end
    end
 end
 

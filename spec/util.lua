@@ -121,13 +121,13 @@ local function check_type_error(lax, code, type_errors)
       assert.same(#type_errors, #errors, "Expected same number of errors:")
       for i, err in ipairs(type_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y, "Expected same y location:")
+            assert.same(err.y, errors[i].y,  "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x, "Expected same x location:")
+            assert.same(err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true, "Expected messages to match:")
+            assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
       end
    end
@@ -171,13 +171,13 @@ function util.check_syntax_error(code, syntax_errors)
       assert.same(#syntax_errors, #errors, "Expected same amount of syntax errors:")
       for i, err in ipairs(syntax_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y, "Expected same y location:")
+            assert.same(err.y, errors[i].y, "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x, "Expected same x location:")
+            assert.same(err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true, "Expected messages to match:")
+            assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
       end
    end

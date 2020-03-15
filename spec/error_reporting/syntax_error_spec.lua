@@ -2,6 +2,12 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("syntax errors", function()
+   it("missing expression", util.check_syntax_error([[
+      local x =
+   ]], {
+      { y = 1, msg = "expected an expression" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[
