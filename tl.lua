@@ -1703,8 +1703,10 @@ parse_newtype = function(tokens, i, errs)
       while not ((not tokens[i]) or tokens[i].tk == "end") do
          local item
          i, item = verify_kind(tokens, i, errs, "string", "enum_item")
-         table.insert(node, item)
-         def.enumset[unquote(item.tk)] = true
+         if item then
+            table.insert(node, item)
+            def.enumset[unquote(item.tk)] = true
+         end
       end
       node.yend = tokens[i].y
       i = verify_tk(tokens, i, errs, "end")

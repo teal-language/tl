@@ -8,6 +8,19 @@ describe("syntax errors", function()
       { y = 1, msg = "expected an expression" },
    }))
 
+   it("in enum", util.check_syntax_error([[
+      local Direction = enum
+         "north",
+         "south",
+         "east",
+         "west"
+      end
+   ]], {
+      { y = 2, msg = "syntax error, expected string" },
+      { y = 3, msg = "syntax error, expected string" },
+      { y = 4, msg = "syntax error, expected string" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[
