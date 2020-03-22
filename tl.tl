@@ -1037,9 +1037,8 @@ local function parse_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, li
       table.insert(list, item)
       if tokens[i].tk == "," then
          i = i + 1
-         if sep == "sep" and close[tokens[i].tk] then
-            return fail(tokens, i, errs)
-         end
+      elseif sep == "sep" and not close[tokens[i].tk] then
+         return fail(tokens, i, errs)
       elseif sep == "term" and tokens[i].tk == ";" then
          i = i + 1
       end
@@ -1726,6 +1725,7 @@ local stop_statement_list: {string:boolean} = {
 
 local stop_return_list: {string:boolean} = {
    [";"] = true,
+   ["$EOF$"] = true,
 }
 
 for k, v in pairs(stop_statement_list) do
@@ -4558,7 +4558,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    local function match_all_record_field_names(node: Node, a: Type, field_names: {string}, errmsg: string): Type
       local t: Type
-      for _ k in ipairs(field_names) do
+      for _, k in ipairs(field_names) do
          local f = a.fields[k]
          if not t then
             t = f

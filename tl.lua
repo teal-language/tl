@@ -1037,9 +1037,8 @@ local function parse_list(tokens, i, errs, list, close, sep, parse_item)
       table.insert(list, item)
       if tokens[i].tk == "," then
          i = i + 1
-         if sep == "sep" and close[tokens[i].tk] then
-            return fail(tokens, i, errs)
-         end
+      elseif sep == "sep" and not close[tokens[i].tk] then
+         return fail(tokens, i, errs)
       elseif sep == "term" and tokens[i].tk == ";" then
          i = i + 1
       end
@@ -1726,6 +1725,7 @@ local stop_statement_list = {
 
 local stop_return_list = {
    [";"] = true,
+   ["$EOF$"] = true,
 }
 
 for k, v in pairs(stop_statement_list) do
