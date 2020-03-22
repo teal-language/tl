@@ -1914,6 +1914,9 @@ local function parse_statement(tokens, i, errs)
       end
    elseif tokens[i].tk == "global" then
       i = i + 1
+      if tokens[i].tk == "function" then
+         return parse_function(tokens, i, errs)
+      end
       return parse_variable_declarations(tokens, i, errs, "global_declaration")
    elseif tokens[i].tk == "function" then
       return parse_function(tokens, i, errs)
