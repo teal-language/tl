@@ -18,8 +18,8 @@ Minimalism (for some vague definition of minimalism!) is a design goal for
 both conceptual and practical reasons: conceptually to match the nature of
 Lua, and practical so that I can manage developing it. :)
 
-My very first concrete goal for tl's development was to have the compiler
-typecheck itself; that was achieved already: tl is written in tl.
+My very first concrete goal for Teal's development was to have the compiler
+typecheck itself; that was achieved already: Teal is written in Teal.
 
 The next big goal is to have it typecheck the source code of a complete Lua
 application such as LuaRocks. That's something I wanted since the Typed Lua
@@ -28,7 +28,6 @@ days back in 2015. That's a big goal and once I get there I'll dare call this
 be usable even before we get there! The language has already proven useful
 when creating [a new Lua module](https://github.com/hishamhm/tabular).
 
-This project is being created in hopes it will be useful for myself and
-hopefully others. I'm trying to keep it small and long-term manageable, and
-would love to see a community of users and contributors grow around it over
-time!
+Teal is being created in hopes it will be useful for myself and hopefully
+others. I'm trying to keep it small and long-term manageable, and would love
+to see a community of users and contributors grow around it over time!

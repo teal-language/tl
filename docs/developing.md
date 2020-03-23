@@ -1,6 +1,6 @@
 # Hacking on tl itself
 
-As correctly pointed out in [#51](https://github.com/hishamhm/tl/issues/51):
+As correctly pointed out in [#51](https://github.com/teal-language/tl/issues/51):
 
 > Creating and testing edits to `tl.tl` can feel a bit awkward because
 > changing `tl` itself requires bootstrapping from a "working" version

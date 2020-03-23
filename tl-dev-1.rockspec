@@ -2,11 +2,11 @@ rockspec_format = "3.0"
 package = "tl"
 version = "dev-1"
 source = {
-   url = "git://github.com/hishamhm/tl"
+   url = "git://github.com/teal-language/tl"
 }
 description = {
-   summary = "A typed dialect of Lua",
-   homepage = "https://github.com/hishamhm/tl",
+   summary = "Teal, a typed dialect of Lua",
+   homepage = "https://github.com/teal-language/tl",
 }
 dependencies = {
    -- this is really an optional dependency if you're running Lua 5.3,
