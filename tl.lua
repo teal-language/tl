@@ -3018,6 +3018,7 @@ local Result = {}
 
 
 
+
 function tl.search_module(module_name, search_dtl)
    local found
    local fd
@@ -5758,6 +5759,7 @@ function tl.process(filename, env, result, preload_modules)
    error, unknown, result.type = tl.type_check(program, opts)
 
    result.ast = program
+   result.env = env
 
    return result
 end

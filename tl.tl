@@ -3016,6 +3016,7 @@ local Result = record
    syntax_errors: {ParseError}
    type_errors: {Error}
    unknowns: {Error}
+   env: Env
 end
 
 function tl.search_module(module_name: string, search_dtl: boolean): string, FILE, {string}
@@ -5758,6 +5759,7 @@ function tl.process(filename: string, env: Env, result: Result, preload_modules:
    error, unknown, result.type = tl.type_check(program, opts)
 
    result.ast = program
+   result.env = env
 
    return result
 end

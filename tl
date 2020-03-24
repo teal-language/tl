@@ -137,11 +137,15 @@ local function report_type_errors(result)
    return not has_type_errors
 end
 
-for _, filename in ipairs(args["script"]) do
-   local result, err = tl.process(filename, nil, nil, tlconfig.preload_modules)
+local env = nil
+
+for i, filename in ipairs(args["script"]) do
+   local modules = i == 1 and tlconfig.preload_modules
+   local result, err = tl.process(filename, env, nil, modules)
    if err then
       die(err)
    end
+   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
