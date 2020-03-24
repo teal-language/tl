@@ -1848,14 +1848,7 @@ local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {Parse
       repeat
          i = i + 1
          local val: Node
-         if is_newtype[tokens[i].tk] then
-            if #asgn.vars > 1 then
-               return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
-            end
-            i, val = parse_newtype(tokens, i, errs)
-         else
-            i, val = parse_expression(tokens, i, errs)
-         end
+         i, val = parse_expression(tokens, i, errs)
          table.insert(asgn.exps, val)
       until tokens[i].tk ~= ","
       return i, asgn
