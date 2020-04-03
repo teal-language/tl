@@ -77,8 +77,7 @@ describe("tl gen", function()
       end)
    end)
 
-   describe("with/without --skip-compat53", function()
-
+   describe("with --skip-compat53", function()
       it("does not add compat53 insertions", function()
          local name = util.write_tmp_file(finally, "test.tl", [[
             local t = {1, 2, 3, 4}
@@ -94,8 +93,9 @@ describe("tl gen", function()
             print(table.unpack(t))
          ]], util.read_file(lua_name))
       end)
+   end)
 
-
+   describe("without --skip-compat53", function()
       it("adds compat53 insertions by default", function()
          local name = util.write_tmp_file(finally, "test.tl", [[
             local t = {1, 2, 3, 4}
@@ -111,6 +111,6 @@ describe("tl gen", function()
             print(_tl_table_unpack(t))
          ]], util.read_file(lua_name))
       end)
-
    end)
+
 end)
