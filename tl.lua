@@ -3,6 +3,7 @@ local assert = require('compat53.module').assert or assert; local io = require('
 
 
 
+
 local TypeCheckOptions = {}
 
 
@@ -14,6 +15,7 @@ local TypeCheckOptions = {}
 local tl = {
    ["process"] = nil,
    ["type_check"] = nil,
+   ["init_env"] = nil,
 }
 
 
@@ -3441,16 +3443,17 @@ local function init_globals(lax)
    return globals
 end
 
-local function init_env(lax)
+function tl.init_env(lax, skip_compat53)
    return {
       ["modules"] = {},
       ["globals"] = init_globals(lax),
+      ["skip_compat53"] = skip_compat53,
    }
 end
 
 function tl.type_check(ast, opts)
    opts = opts or {}
-   opts.env = opts.env or init_env(opts.lax)
+   opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
    local lax = opts.lax
    local filename = opts.filename
    local result = opts.result or {
@@ -5708,7 +5711,7 @@ function tl.process(filename, env, result, preload_modules)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   env = env or init_env(is_lua)
+   env = env or tl.init_env(is_lua)
    result = result or {
       ["syntax_errors"] = {},
       ["type_errors"] = {},
@@ -5748,6 +5751,7 @@ function tl.process(filename, env, result, preload_modules)
       ["filename"] = filename,
       ["env"] = env,
       ["result"] = result,
+      ["skip_compat53"] = env.skip_compat53,
    }
    error, unknown, result.type = tl.type_check(program, opts)
 

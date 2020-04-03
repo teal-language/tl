@@ -72,6 +72,8 @@ local function get_args_parser()
          :argname("<modulename>")
          :count("*")
 
+   parser:flag("--skip-compat53", "Skip compat53 insertions.")
+
    parser:command_target("command")
 
    local check_command = parser:command("check", "Type-check one or more tl script.")
@@ -141,6 +143,27 @@ local env = nil
 
 for i, filename in ipairs(args["script"]) do
    local modules = i == 1 and tlconfig.preload_modules
+
+   if not env then
+      local basename, extension = filename:match("(.*)%.([a-z]+)$")
+      extension = extension and extension:lower()
+
+      local lax_mode
+      if extension == "tl" then
+         lax_mode = false
+      elseif extension == "lua" then
+         lax_mode = true
+      else
+         -- if we can't decide based on the file extension, default to strict
+         -- mode
+         lax_mode = false
+      end
+
+      local skip_compat53 = args["skip_compat53"]
+
+      env = tl.init_env(lax_mode, skip_compat53)
+   end
+
    local result, err = tl.process(filename, env, nil, modules)
    if err then
       die(err)
