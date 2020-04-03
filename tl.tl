@@ -1,6 +1,7 @@
 local Env = record
    globals: {string:Variable}
    modules: {string:Type}
+   skip_compat53: boolean
 end
 
 local TypeCheckOptions = record
@@ -14,6 +15,7 @@ end
 local tl = {
    process: function(string, Env, Result, {string}): (Result, string) = nil,
    type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type) = nil,
+   init_env: function(boolean, boolean): Env = nil,
 }
 
 --------------------------------------------------------------------------------
@@ -3441,16 +3443,17 @@ local function init_globals(lax: boolean): {string:Variable}
    return globals
 end
 
-local function init_env(lax: boolean): Env
+function tl.init_env(lax: boolean, skip_compat53: boolean): Env
    return {
       modules = {},
       globals = init_globals(lax),
+      skip_compat53 = skip_compat53,
    }
 end
 
 function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Type
    opts = opts or {}
-   opts.env = opts.env or init_env(opts.lax)
+   opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
    local lax = opts.lax
    local filename = opts.filename
    local result = opts.result or {
@@ -5708,7 +5711,7 @@ function tl.process(filename: string, env: Env, result: Result, preload_modules:
       is_lua = input:match("^#![^\n]*lua[^\n]*\n") as boolean
    end
 
-   env = env or init_env(is_lua)
+   env = env or tl.init_env(is_lua)
    result = result or {
       syntax_errors = {},
       type_errors = {},
@@ -5748,6 +5751,7 @@ function tl.process(filename: string, env: Env, result: Result, preload_modules:
       filename = filename,
       env = env,
       result = result,
+      skip_compat53 = env.skip_compat53,
    }
    error, unknown, result.type = tl.type_check(program, opts)
 
