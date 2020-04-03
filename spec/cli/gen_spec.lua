@@ -76,4 +76,41 @@ describe("tl gen", function()
          ]], util.read_file(lua_name))
       end)
    end)
+
+   describe("with/without --skip-compat53", function()
+
+      it("does not add compat53 insertions", function()
+         local name = util.write_tmp_file(finally, "test.tl", [[
+            local t = {1, 2, 3, 4}
+            print(table.unpack(t))
+         ]])
+         local pd = io.popen("./tl --skip-compat53 gen " .. name, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = name:gsub("%.tl$", ".lua")
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local t = { [1] = 1, [2] = 2, [3] = 3, [4] = 4, }
+            print(table.unpack(t))
+         ]], util.read_file(lua_name))
+      end)
+
+
+      it("adds compat53 insertions by default", function()
+         local name = util.write_tmp_file(finally, "test.tl", [[
+            local t = {1, 2, 3, 4}
+            print(table.unpack(t))
+         ]])
+         local pd = io.popen("./tl gen " .. name, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = name:gsub("%.tl$", ".lua")
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local t = { [1] = 1, [2] = 2, [3] = 3, [4] = 4, }
+            print(_tl_table_unpack(t))
+         ]], util.read_file(lua_name))
+      end)
+
+   end)
 end)
