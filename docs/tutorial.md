@@ -118,7 +118,7 @@ $ lua
 > print (addsub.add(10, 20))
 ```
 
-When loading and running the tl module from Lua, there is no type checking!
+When loading and running the Teal module from Lua, there is no type checking!
 Type checking will only happen when you run `tl check` or load a program with
 `tl run`.
 
