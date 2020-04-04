@@ -1,9 +1,9 @@
-# Programming With Types in tl
+# Programming With Types in Teal
 
-## Welcome to tl!
+## Welcome to Teal!
 
 In this tutorial, we will go through the basics so you can get up and running
-type checking your Lua code, through the use of tl, a typed dialect of Lua.
+type checking your Lua code, through the use of Teal, a typed dialect of Lua.
 
 ## Why Types
 
@@ -25,9 +25,9 @@ any value in any variable at any time, and if you make a mistake and match
 things incorrectly, the program will crash at runtime, or even worse: it will
 misbehave... silently.
 
-The variables of tl do know about types: each variable has an assigned type
+The variables of Teal do know about types: each variable has an assigned type
 and will hold on to that type forever. This way, there's a whole class of
-mistakes that the tl compiler is able to warn you about before the program
+mistakes that the Teal compiler is able to warn you about before the program
 even runs.
 
 Of course, it cannot catch every possible mistake in a program, but it should
@@ -50,7 +50,7 @@ luarocks install tl
 If your environment is set up correctly, you should have a tl command
 available now!
 
-## Your first tl program
+## Your first Teal program
 
 Let's start with a simple example, which declares a type-safe function. Let's
 call this example add.tl:
@@ -82,7 +82,7 @@ This will produce add.lua. But you can also run it directly with
 tl run add.tl
 ```
 
-We can also write modules in tl which we can load from Lua. Let's create our
+We can also write modules in Teal which we can load from Lua. Let's create our
 first module:
 
 ```
@@ -122,14 +122,14 @@ When loading and running the tl module from Lua, there is no type checking!
 Type checking will only happen when you run `tl check` or load a program with
 `tl run`.
 
-## Types in tl
+## Types in Teal
 
-tl is a dialect of Lua. This tutorial will assume you already know Lua, so
-we'll focus on the things that tl adds to Lua, and those are primarily type
+Teal is a dialect of Lua. This tutorial will assume you already know Lua, so
+we'll focus on the things that Teal adds to Lua, and those are primarily type
 declarations.
 
-Types in tl are more specific than in Lua, because Lua tables are so general.
-These are the types in tl:
+Types in Teal are more specific than in Lua, because Lua tables are so general.
+These are the types in Teal:
 
 * nil
 * boolean
@@ -145,9 +145,9 @@ These are the types in tl:
 
 ## Local variables
 
-Variables in tl have types. So, when you declare a variable with the `local`
+Variables in Teal have types. So, when you declare a variable with the `local`
 keyword, tl needs some way to know what type to assign to that variable. For
-this reason, it is not valid in tl to declare a variable with no type at all
+this reason, it is not valid in Teal to declare a variable with no type at all
 like this:
 
 ```
@@ -187,13 +187,13 @@ local n: number = nil
 ```
 
 This is the same as omitting the ` = nil`, like in plain Lua, but it gives tl
-the information it needs. Every type in tl accepts nil as a valid value, even
+the information it needs. Every type in Teal accepts nil as a valid value, even
 if, like in Lua, attempting to use it with some operations would cause a
 runtime error, so be aware!
 
 ## Arrays
 
-The simplest structured type in tl is the array. An array is a Lua table where
+The simplest structured type in Teal is the array. An array is a Lua table where
 all keys are numbers and all values are of the same type. It is in fact a Lua
 sequence, and as such it has the same semantics as Lua sequences for things
 like the # operator and the use of the `table` standard library.
@@ -292,7 +292,7 @@ a mix of types in their keys or values), you'll have to use casts.
 
 ## Records
 
-Records are the third major type of table supported in tl. They represent
+Records are the third major type of table supported in Teal. They represent
 another super common pattern in Lua code, so much that Lua includes special
 syntax for it (the dot and colon notations for indexing): tables with a set of
 string keys known in advance, each of them corresponding to a possibly
@@ -380,7 +380,7 @@ be organized as a tree using its array part.
 
 ## Generics
 
-tl supports a simple form of generics that is useful enough for dealing
+Teal supports a simple form of generics that is useful enough for dealing
 collections and algorithms that operate over abstract data types.
 
 You can use type variables (annotated with a backtick) wherever a type is
@@ -438,7 +438,7 @@ You can of course promote an arbitrary string to an enum with a cast.
 
 ## Functions
 
-Functions in tl should work like you expect, and we have already showed
+Functions in Teal should work like you expect, and we have already showed
 various examples.
 
 You can declare nominal function types, like we do for records, to avoid
@@ -506,7 +506,7 @@ local x: number = a is number and a + 1 or 0
 ### Current limitations of union types
 
 In the current version, there are two main limitations regarding support
-for union types in tl.
+for union types in Teal.
 
 The first one is that the `is` operator always matches a variable, not arbitrary
 expressions. This limitation is there to avoid aliasing
@@ -547,11 +547,11 @@ this value, there isn't much it can do with it, besides comparing for equality
 and against nil, and casting it into other values using the `as` operator.
 
 Some Lua libraries use complex dynamic types that can't be easily represented
-in tl. In those cases, using any and making explicit casts is our last resort.
+in Teal. In those cases, using any and making explicit casts is our last resort.
 
 ## Const variables
 
-tl supports the `<const>` annotation, like that of Lua 5.4 (it works at compile
+Teal supports the `<const>` annotation, like that of Lua 5.4 (it works at compile
 time, even if you're running a different version of Lua). Do note however that
 this is an annotation for variables, and not values: the contents of a value
 set to a const variable are not constant:
@@ -564,12 +564,12 @@ xs = {} -- Error! can't replace the array in variable xs
 
 ## Global variables
 
-Unlike in Lua, global variables in tl need to be declared, because tl needs to
+Unlike in Lua, global variables in Teal need to be declared, because tl needs to
 know its type. It also allows tl to catch typos in variable names, because an
 invalid name will not be assumed to be some unknown global that happens to be
 nil.
 
-You declare global variables in tl using `global`, like this, doing
+You declare global variables in Teal using `global`, like this, doing
 declaration and/or assignment:
 
 ```
@@ -617,7 +617,7 @@ your own.
 
 ## Using tl with Lua
 
-You can use tl to type-check not only tl programs, but Lua programs too! When
+You can use tl to type-check not only Teal programs, but Lua programs too! When
 type-checking Lua files (with the .lua extension or a Lua #! identifier), the
 type-checker adds support for an extra type:
 
@@ -636,13 +636,13 @@ variables. Anything pertaining unknown variables is, well, unknown. Think of
 mode". However, even a Lua file with no annotations whatsoever will still have
 a bunch of types: every literal value (numbers, strings, arrays, etc.) has a
 type. Variables initialized on declaration are also assumed to keep consistent
-types like in tl. The types of the Lua standard library are also known to tl:
+types like in Teal. The types of the Lua standard library are also known to tl:
 for example, the compiler knows that if you run table.concat on a table, the
 only valid output is a string.
 
 Plus, requiring type-annotated modules from your untyped Lua program will also
 help tl catch errors: tl can check the types of calls from Lua to functions
-declared as tl modules, and will report errors as long as the input arguments
+declared as Teal modules, and will report errors as long as the input arguments
 are not of type unknown.
 
 You can also create declaration files to annotate the types of third-party Lua
