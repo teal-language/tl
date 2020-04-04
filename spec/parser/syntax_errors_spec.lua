@@ -31,5 +31,12 @@ describe("syntax errors", function()
       { y = 5, "expected an expression" },
    }))
 
+   it("in variadic return type", util.check_syntax_error([[
+      local f: function(x: number)...
+   ]], {
+      { y = 1, "unexpected '...'" },
+   }))
+
+
 end)
 

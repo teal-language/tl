@@ -99,7 +99,7 @@ precedence, see below.
 
 *  typelist ::= type {‘,’ type}
 
-*  retlist ::= ‘:’ ‘(’ [typelist] ‘)’ | ‘:’ typelist
+*  retlist ::= ‘:’ ‘(’ [typelist] [‘...’] ‘)’ | ‘:’ typelist [‘...’]
 
 *  typeargs ::= ‘<’ typevar {‘,’ typevar} ‘>’
 

@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("local function", function()
    describe("type", function()
@@ -57,6 +58,17 @@ describe("local function", function()
          local errors = tl.type_check(ast)
          assert.same({}, errors)
       end)
+
+      it("can take typed vararg in return types", util.check [[
+         local f: function(x: number): string...
+
+         f = function(x: number): string...
+            return "hello", "world"
+         end
+
+         local s1, s2 = f(123)
+         local x = s1 .. s2
+      ]])
 
       it("cannot take untyped vararg", function()
          local tokens = tl.lex([[

@@ -1117,6 +1117,22 @@ local function parse_typeval_list(tokens: {Token}, i: number, errs: {ParseError}
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
 end
 
+local function parse_return_types(tokens: {Token}, i: number, errs: {ParseError}): number, Type
+   local rets: Type
+   i, rets = parse_type_list(tokens, i, errs)
+   if tokens[i].tk == "..." then
+      i = i + 1
+      local nrets = #rets
+      if nrets > 0 then
+         rets[nrets].is_va = true
+      else
+         return fail(tokens, i, errs, "unexpected '...'")
+      end
+   end
+
+   return i, rets
+end
+
 local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type
    i = i + 1
    local node: Type = {
@@ -1132,7 +1148,7 @@ local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError
    end
    if tokens[i].tk == "(" then
       i, node.args = parse_argument_type_list(tokens, i, errs)
-      i, node.rets = parse_type_list(tokens, i, errs)
+      i, node.rets = parse_return_types(tokens, i, errs)
    else
       node.args = { { typename = "any", is_va = true } }
       node.rets = { { typename = "any", is_va = true } }
@@ -1254,7 +1270,7 @@ local function parse_function_args_rets_body(tokens: {Token}, i: number, errs: {
       i, node.typeargs = parse_typearg_list(tokens, i, errs)
    end
    i, node.args = parse_argument_list(tokens, i, errs)
-   i, node.rets = parse_type_list(tokens, i, errs)
+   i, node.rets = parse_return_types(tokens, i, errs)
    i, node.body = parse_statements(tokens, i, errs)
    node.yend = tokens[i].y
    i = verify_tk(tokens, i, errs, "end")
@@ -5158,11 +5174,21 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
             local rets = assert(find_var("@return"))
-            if #children[1] > #rets and not lax then
+            local nrets = #rets
+            local vatype: Type
+            if nrets > 0 then
+               vatype = rets[nrets].is_va and rets[nrets]
+            end
+
+            if #children[1] > nrets and (not lax) and not vatype then
                node_error(node, "excess return values, expected " .. #rets .. " got " .. #children[1])
             end
-            for i = 1, math.min(#children[1], #rets) do
-               assert_is_a(node.exps[i], children[1][i], rets[i], "return value")
+
+            for i = 1, #children[1] do
+               local expected = rets[i] or vatype
+               if expected then
+                  assert_is_a(node.exps[i], children[1][i], expected, "return value")
+               end
             end
 
             -- if at the toplevel
