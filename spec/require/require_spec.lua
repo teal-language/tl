@@ -304,7 +304,40 @@ describe("require", function()
       assert.same(0, #result.unknowns)
    end)
 
-   it("cannot extend a record with unknown types outside of scope", function ()
+   it("cannot extend a record object with unknown types outside of scope", function ()
+      util.mock_io(finally, {
+         ["love.d.tl"] = [[
+            global LoveGraphics = record
+               print: function(text: string)
+            end
+
+            global Love = record
+               draw: function()
+               graphics: LoveGraphics
+            end
+
+            global love: Love
+         ]],
+         ["foo.tl"] = [[
+            function love.draw()
+               love.graphics.print("<3")
+            end
+
+            function love.draws()
+               love.graphics.print("</3")
+            end
+         ]],
+      })
+
+      local result, err = tl.process("foo.tl", nil, nil, {"love"})
+
+      assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
+      assert.same({}, result.unknowns)
+   end)
+
+   it("cannot extend a record type with unknown types outside of scope", function ()
       util.mock_io(finally, {
          ["love.d.tl"] = [[
             global love_graphics = record
