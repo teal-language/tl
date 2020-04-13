@@ -1854,6 +1854,7 @@ end
 local function parse_call_or_assignment(tokens, i, errs)
    local asgn = new_node(tokens, i, "assignment")
 
+   local tryi = i
    asgn.vars = new_node(tokens, i, "variables")
    i = parse_trying_list(tokens, i, errs, asgn.vars, parse_expression)
    if #asgn.vars < 1 then
@@ -1871,7 +1872,11 @@ local function parse_call_or_assignment(tokens, i, errs)
       until tokens[i].tk ~= ","
       return i, asgn
    end
-   if lhs.op and lhs.op.op == "@funcall" then
+   if #asgn.vars > 1 then
+      local expi = parse_expression(tokens, tryi, {})
+      return fail(tokens, expi or i, errs)
+   end
+   if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs
    end
    return fail(tokens, i, errs)

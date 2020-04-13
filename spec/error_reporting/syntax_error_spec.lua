@@ -21,6 +21,15 @@ describe("syntax errors", function()
       { y = 4, msg = "syntax error, expected string" },
    }))
 
+   it("unexpected comma", util.check_syntax_error([[
+      print(1),
+      print(2),
+      print(3)
+      print(4)
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[
