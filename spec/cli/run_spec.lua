@@ -56,6 +56,28 @@ describe("tl run", function()
          assert.match("unknown variable: a", output, 1, true)
          assert.match("unknown variable: b", output, 1, true)
       end)
+
+      it("can require other .tl files", function()
+         local add_tl = util.write_tmp_file(finally, "add.tl", [[
+            local function add(a: number, b: number): number
+               return a + b
+            end
+
+            return add
+         ]])
+         print(add_tl)
+         local main_tl = util.write_tmp_file(finally, "main.tl", [[
+            local add = require("add")
+
+            print(add(10, 20))
+         ]])
+         local pd = io.popen("TL_PATH='/tmp/?.tl' ./tl run " .. main_tl, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+            30
+         ]], output)
+      end)
    end)
 
    describe("on .lua files", function()

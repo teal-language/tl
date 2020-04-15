@@ -195,6 +195,9 @@ for i, filename in ipairs(args["script"]) do
       end
       arg[narg] = nil
       arg[narg - 1] = nil
+
+      tl.loader()
+
       return chunk()
 
    elseif cmd == "check" then
