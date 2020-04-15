@@ -2724,6 +2724,8 @@ local ANY = { ["typeid"] = new_typeid(), ["typename"] = "any", }
 local NIL = { ["typeid"] = new_typeid(), ["typename"] = "nil", }
 local NUMBER = { ["typeid"] = new_typeid(), ["typename"] = "number", }
 local STRING = { ["typeid"] = new_typeid(), ["typename"] = "string", }
+local OPT_NUMBER = { ["typeid"] = new_typeid(), ["typename"] = "number", }
+local OPT_STRING = { ["typeid"] = new_typeid(), ["typename"] = "string", }
 local VARARG_ANY = { ["typeid"] = new_typeid(), ["typename"] = "any", ["is_va"] = true, }
 local VARARG_STRING = { ["typeid"] = new_typeid(), ["typename"] = "string", ["is_va"] = true, }
 local VARARG_NUMBER = { ["typeid"] = new_typeid(), ["typename"] = "number", ["is_va"] = true, }
@@ -3265,20 +3267,8 @@ local standard_library = {
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, },
             },
          },
-         ["remove"] = {
-            ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
-               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, }, ["rets"] = { [1] = ALPHA, }, },
-               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
-            },
-         },
-         ["concat"] = {
-            ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
-               [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = STRING, }, ["rets"] = { [1] = STRING, }, },
-               [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, }, ["rets"] = { [1] = STRING, }, },
-            },
-         },
+         ["remove"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = OPT_NUMBER, }, ["rets"] = { [1] = ALPHA, }, },
+         ["concat"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = OPT_STRING, [3] = OPT_NUMBER, [4] = OPT_NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["sort"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
             ["poly"] = {

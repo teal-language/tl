@@ -2724,6 +2724,8 @@ local ANY = { typeid = new_typeid(), typename = "any" }
 local NIL = { typeid = new_typeid(), typename = "nil" }
 local NUMBER = { typeid = new_typeid(), typename = "number" }
 local STRING = { typeid = new_typeid(), typename = "string" }
+local OPT_NUMBER = { typeid = new_typeid(), typename = "number" }
+local OPT_STRING = { typeid = new_typeid(), typename = "string" }
 local VARARG_ANY = { typeid = new_typeid(), typename = "any", is_va = true }
 local VARARG_STRING = { typeid = new_typeid(), typename = "string", is_va = true }
 local VARARG_NUMBER = { typeid = new_typeid(), typename = "number", is_va = true }
@@ -3265,20 +3267,8 @@ local standard_library: {string:Type} = {
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
             }
          },
-         ["remove"] = {
-            typeid = new_typeid(), typename = "poly",
-            poly = {
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER }, rets = { ALPHA } },
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = { ALPHA } },
-            }
-         },
-         ["concat"] = {
-            typeid = new_typeid(), typename = "poly",
-            poly = {
-               { typeid = new_typeid(), typename = "function", args = { ARRAY_OF_STRING, STRING }, rets = { STRING } },
-               { typeid = new_typeid(), typename = "function", args = { ARRAY_OF_STRING }, rets = { STRING } },
-            }
-         },
+         ["remove"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } },
+         ["concat"] = { typeid = new_typeid(), typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } },
          ["sort"] = {
             typeid = new_typeid(), typename = "poly",
             poly = {
