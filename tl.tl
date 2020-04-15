@@ -5457,7 +5457,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                         if node.e1.e1.kind == "variable" then
                            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                         end
-                        node.type = UNKNOWN
+                        node.type = VARARG_UNKNOWN
                      else
                         node.type = INVALID
                      end
