@@ -41,6 +41,12 @@ Once `tl` is in your path, there are a few subcommands:
 
 You can learn more about programming with Teal in the [tutorial](docs/tutorial.md).
 
+## Type definitions
+
+We have a collaborative repository for type definitions of Lua libraries
+at https://github.com/teal-language/teal-types — check it out and make your
+contribution!
+
 ## Credits and license
 
 Teal is a project started by [Hisham Muhammad](https://hisham.hm)
