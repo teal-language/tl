@@ -206,7 +206,7 @@ for i, filename in ipairs(args["script"]) do
          exit = 1
       end
 
-      if #args["script"] == 1 then
+      if exit == 0 and #args["script"] == 1 then
          print("========================================")
          print("Type checked " .. filename)
          print("0 errors detected -- you can use:")
