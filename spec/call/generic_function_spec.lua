@@ -508,5 +508,24 @@ describe("generic function", function()
       { msg = "u" },
       { msg = "v" },
    }))
+
+   pending("check that 'any' matches any type variable", util.check [[
+      local function map<`X, `Y>(xs: {`X}, f: function(`X):`Y): {`Y}
+         local rs = {}
+         for i, v in ipairs(xs) do
+            rs[i] = f(v)
+         end
+         return rs
+      end
+
+      local words = { "10", "20" }
+      -- works if I use tonumber as function(string):number
+      local numbers = map(words, tonumber)
+
+      for _, n in ipairs(numbers) do
+         print(n)
+      end
+   ]])
+
 end)
 
