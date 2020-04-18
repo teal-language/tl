@@ -3040,42 +3040,39 @@ local Result = {}
 
 
 
-function tl.search_module(module_name, search_dtl)
-   local found
-   local fd
-   local tried = {}
-   local path = os.getenv("TL_PATH") or package.path
+local function search_for(module_name, suffix, path, tried)
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
       local filename = entry:gsub("?", slash_name)
-      local tl_filename = filename:gsub("%.lua$", ".tl")
-      if tl_filename ~= filename then
-         fd = io.open(tl_filename, "r")
-         if fd then
-            found = tl_filename
-            break
-         end
-         table.insert(tried, "no file '" .. tl_filename .. "'")
-      end
-      if search_dtl then
-         local dtl_filename = filename:gsub("%.lua$", ".d.tl")
-         if dtl_filename ~= filename then
-            fd = io.open(dtl_filename, "r")
-            if fd then
-               found = dtl_filename
-               break
-            end
-            table.insert(tried, "no file '" .. dtl_filename .. "'")
-         end
-      end
-      fd = io.open(filename, "r")
+      local tl_filename = filename:gsub("%.lua$", suffix)
+      local fd = io.open(tl_filename, "r")
       if fd then
-         found = filename
-         break
+         return tl_filename, fd, tried
       end
-      table.insert(tried, "no file '" .. filename .. "'")
+      table.insert(tried, "no file '" .. tl_filename .. "'")
    end
-   return found, fd, tried
+   return nil, nil, tried
+end
+
+function tl.search_module(module_name, search_dtl)
+   local found
+   local tried = {}
+   local path = os.getenv("TL_PATH") or package.path
+   if search_dtl then
+      local found, fd, tried = search_for(module_name, ".d.tl", path, tried)
+      if found then
+         return found, fd
+      end
+   end
+   local found, fd, tried = search_for(module_name, ".tl", path, tried)
+   if found then
+      return found, fd
+   end
+   local found, fd, tried = search_for(module_name, ".lua", path, tried)
+   if found then
+      return found, fd
+   end
+   return nil, nil, tried
 end
 
 local Variable = {}
