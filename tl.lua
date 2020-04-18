@@ -3212,6 +3212,7 @@ local standard_library = {
          ["execute"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, [3] = NUMBER, }, },
          ["remove"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, },
          ["time"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
+         ["tmpname"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, },
          ["clock"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
          ["exit"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",

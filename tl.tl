@@ -3212,6 +3212,7 @@ local standard_library: {string:Type} = {
          ["execute"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
          ["remove"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
          ["time"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+         ["tmpname"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { STRING } },
          ["clock"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER } },
          ["exit"] = {
             typeid = new_typeid(), typename = "poly",
