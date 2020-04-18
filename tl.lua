@@ -3957,9 +3957,12 @@ function tl.type_check(ast, opts)
          end
          return false, terr(t1, "%s is not a %s", t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
-         local ok = (for_equality) and
-         (t2.tk and t1.enumset[unquote(t2.tk)]) or
-         true
+         local ok
+         if for_equality then
+            ok = t2.tk and t1.enumset[unquote(t2.tk)]
+         else
+            ok = true
+         end
          if ok then
             return true
          else
@@ -3975,7 +3978,7 @@ function tl.type_check(ast, opts)
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1)
          local t2u = resolve_unary(t2)
-         local ok, errs = is_a(t1u, t2u)
+         local ok, errs = is_a(t1u, t2u, for_equality)
          if errs and #errs == 1 then
             if errs[1].msg:match("^got ") then
 

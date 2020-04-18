@@ -23,4 +23,20 @@ describe("==", function()
       local errors = tl.type_check(ast)
       assert.match("not comparable for equality", errors[1].msg)
    end)
+
+   it("fails comparing enum to invalid literal string", function()
+      local tokens = tl.lex([[
+         local MyEnum = enum
+            "foo"
+            "bar"
+         end
+         local data: MyEnum = "foo"
+         if data == "hello" then
+            print("unreachable")
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.match("not comparable for equality", errors[1].msg)
+   end)
 end)
