@@ -2037,7 +2037,7 @@ local function recurse_type<`T>(ast: Type, visit: Visitor<TypeKind, Type, `T>): 
    visit_before(ast, ast.kind, visit)
    local xs: {`T} = {}
    if ast.kind == "type_list"
-   or ast.kind == "typevar_list"
+   or ast.kind == "typeval_list"
    or ast.kind == "typearg_list" then
       for i, child in ipairs(ast) do
          xs[i] = recurse_type(child, visit)
