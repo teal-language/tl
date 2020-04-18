@@ -1,8 +1,8 @@
 # The Grammar of Teal
 
 Here is the complete syntax of Teal in extended BNF, based on the Lua 5.4
-grammar. Lines starting with `+` are modified from the original Lua grammar;
-lines marked with `*` are new additions.
+grammar. Lines starting with `+` are existing lines from the Lua grammar
+with additions; lines marked with `*` are entirely new.
 
 As usual in extended BNF, `{A}` means 0 or more `A`s, and `[A]` means an
 optional `A`. For a description of the terminals Name, Numeral, and
