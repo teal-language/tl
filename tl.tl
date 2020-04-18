@@ -696,7 +696,7 @@ local TypeName = enum
    "table_item"
    "unknown_emptytable_value"
    "tuple"
-   "poly"
+   "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
    "unknown"
    "invalid"
@@ -3916,7 +3916,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                return true
             end
          end
-         return false, terr(t1, "no match with poly") -- don't expect these errors to show, should fix if they do
+         return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
       elseif t1.typename == "union" and t2.typename == "union" then
          if has_all_types_of(t1.types, t2.types) then
             return true
@@ -3935,7 +3935,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                return true
             end
          end
-         return false, terr(t1, "poly has no match") -- don't expect these errors to show, should fix if they do
+         return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
       elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
