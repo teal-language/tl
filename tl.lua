@@ -785,9 +785,6 @@ local Type = {}
 
 
 
-
-
-
 local Operator = {}
 
 
@@ -1814,10 +1811,10 @@ parse_newtype = function(tokens, i, errs)
                      ["y"] = v.y,
                      ["x"] = v.x,
                      ["typename"] = "poly",
-                     ["poly"] = { [1] = prev_t, [2] = t, },
+                     ["types"] = { [1] = prev_t, [2] = t, },
                   }
                elseif t.typename == "function" and prev_t.typename == "poly" then
-                  table.insert(prev_t.poly, t)
+                  table.insert(prev_t.types, t)
                else
                   return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                end
@@ -2941,7 +2938,7 @@ local function show_type_base(t, seen)
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "poly" then
       local out = {}
-      for _, v in ipairs(t.poly) do
+      for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
       return table.concat(out, " or ")
@@ -3130,7 +3127,7 @@ local standard_library = {
    ["rawget"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, }, ["rets"] = { [1] = ANY, }, },
    ["rawset"] = {
       ["typeid"] = new_typeid(), ["typename"] = "poly",
-      ["poly"] = {
+      ["types"] = {
          [1] = { ["typeid"] = new_typeid(), ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, [3] = BETA, }, ["rets"] = {}, },
          [2] = { ["typeid"] = new_typeid(), ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
          [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, [3] = ANY, }, ["rets"] = {}, },
@@ -3138,7 +3135,7 @@ local standard_library = {
    },
    ["next"] = {
       ["typeid"] = new_typeid(), ["typename"] = "poly",
-      ["poly"] = {
+      ["types"] = {
          [1] = { ["typeid"] = new_typeid(), ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
          [2] = { ["typeid"] = new_typeid(), ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, },
          [3] = { ["typeid"] = new_typeid(), ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, },
@@ -3147,7 +3144,7 @@ local standard_library = {
    },
    ["load"] = {
       ["typeid"] = new_typeid(), ["typename"] = "poly",
-      ["poly"] = {
+      ["types"] = {
          [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
          [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = FUNCTION, }, },
       },
@@ -3159,7 +3156,7 @@ local standard_library = {
          ["fields"] = {
             ["read"] = {
                ["typeid"] = new_typeid(), ["typename"] = "poly",
-               ["poly"] = {
+               ["types"] = {
                   [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
                   [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, },
                },
@@ -3213,7 +3210,7 @@ local standard_library = {
          ["clock"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, },
          ["exit"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = BOOLEAN, }, ["rets"] = {}, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = BOOLEAN, [2] = BOOLEAN, }, ["rets"] = {}, },
             },
@@ -3253,14 +3250,14 @@ local standard_library = {
             }, },
          ["move"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, [5] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, },
             },
          },
          ["insert"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, },
             },
@@ -3269,7 +3266,7 @@ local standard_library = {
          ["concat"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = OPT_STRING, [3] = OPT_NUMBER, [4] = OPT_NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["sort"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {}, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = BOOLEAN, }, }, }, ["rets"] = {}, },
             },
@@ -3286,7 +3283,7 @@ local standard_library = {
          ["upper"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, },
          ["gsub"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = STRING, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typeid"] = new_typeid(), ["typename"] = "map", ["keys"] = STRING, ["values"] = STRING, }, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
                [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = STRING, }, }, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, },
@@ -3298,7 +3295,7 @@ local standard_library = {
             }, },
          ["find"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
                [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, [4] = BOOLEAN, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, },
@@ -3308,7 +3305,7 @@ local standard_library = {
          ["char"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_NUMBER, }, ["rets"] = { [1] = STRING, }, },
          ["byte"] = {
             ["typeid"] = new_typeid(), ["typename"] = "poly",
-            ["poly"] = {
+            ["types"] = {
                [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, },
                [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, },
                [3] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_NUMBER, }, },
@@ -3345,14 +3342,14 @@ local standard_library = {
    ["pcall"] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = BOOLEAN, [2] = ANY, }, },
    ["assert"] = {
       ["typeid"] = new_typeid(), ["typename"] = "poly",
-      ["poly"] = {
+      ["types"] = {
          [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
          [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["args"] = { [1] = ALPHA, [2] = BETA, }, ["rets"] = { [1] = ALPHA, }, },
       },
    },
    ["select"] = {
       ["typeid"] = new_typeid(), ["typename"] = "poly",
-      ["poly"] = {
+      ["types"] = {
          [1] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = NUMBER, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, },
          [2] = { ["typeid"] = new_typeid(), ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = NUMBER, }, },
       },
@@ -3911,7 +3908,7 @@ function tl.type_check(ast, opts)
       if t2.typename == "any" then
          return true
       elseif t2.typename == "poly" then
-         for _, t in ipairs(t2.poly) do
+         for _, t in ipairs(t2.types) do
             if is_a(t1, t, for_equality) then
                return true
             end
@@ -3930,7 +3927,7 @@ function tl.type_check(ast, opts)
             end
          end
       elseif t1.typename == "poly" then
-         for _, t in ipairs(t1.poly) do
+         for _, t in ipairs(t1.types) do
             if is_a(t, t2, for_equality) then
                return true
             end
@@ -4206,11 +4203,11 @@ function tl.type_check(ast, opts)
          func = resolve_unary(func)
 
          args = args or {}
-         local poly = func.typename == "poly" and func or { ["poly"] = { [1] = func, }, }
+         local poly = func.typename == "poly" and func or { ["types"] = { [1] = func, }, }
          local first_errs
          local expects = {}
 
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if f.typename ~= "function" then
                if lax and is_unknown(f) then
                   return UNKNOWN
@@ -4230,7 +4227,7 @@ function tl.type_check(ast, opts)
             end
          end
 
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if #args < (#f.args or 0) then
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
@@ -4242,7 +4239,7 @@ function tl.type_check(ast, opts)
             end
          end
 
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if is_vararg(f) and #args > (#f.args or 0) then
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
@@ -4262,8 +4259,8 @@ function tl.type_check(ast, opts)
             end
          end
 
-         poly.poly[1].rets.typename = "tuple"
-         return resolve_typevars(poly.poly[1].rets)
+         poly.types[1].rets.typename = "tuple"
+         return resolve_typevars(poly.types[1].rets)
       end
 
       type_check_function_call = function(node, func, args, is_method, argdelta)
@@ -4649,11 +4646,11 @@ function tl.type_check(ast, opts)
       else
          if not is_a(new, old) then
             if old.typename == "poly" then
-               table.insert(old.poly, new)
+               table.insert(old.types, new)
             else
                return {
                   ["typeid"] = new_typeid(), ["typename"] = "poly",
-                  ["poly"] = {
+                  ["types"] = {
                      [1] = old,
                      [2] = new,
                   },

@@ -728,10 +728,7 @@ local Type = record
    -- vararg
    is_va: boolean
 
-   -- poly
-   poly: {Type}
-
-   -- union
+   -- poly, union
    types: {Type}
 
    -- typetype
@@ -1814,10 +1811,10 @@ parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number
                      y = v.y,
                      x = v.x,
                      typename = "poly",
-                     poly = { prev_t, t }
+                     types = { prev_t, t }
                   }
                elseif t.typename == "function" and prev_t.typename == "poly" then
-                  table.insert(prev_t.poly, t)
+                  table.insert(prev_t.types, t)
                else
                   return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                end
@@ -2941,7 +2938,7 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "poly" then
       local out: {string} = {}
-      for _, v in ipairs(t.poly) do
+      for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
       return table.concat(out, " or ")
@@ -3130,7 +3127,7 @@ local standard_library: {string:Type} = {
    ["rawget"] = { typeid = new_typeid(), typename = "function", args = { TABLE, ANY }, rets = { ANY } },
    ["rawset"] = {
       typeid = new_typeid(), typename = "poly",
-      poly = {
+      types = {
          { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
          { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
          { typeid = new_typeid(), typename = "function", args = { TABLE, ANY, ANY }, rets = {} },
@@ -3138,7 +3135,7 @@ local standard_library: {string:Type} = {
    },
    ["next"] = {
       typeid = new_typeid(), typename = "poly",
-      poly = {
+      types = {
          { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
          { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
          { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
@@ -3147,7 +3144,7 @@ local standard_library: {string:Type} = {
    },
    ["load"] = {
       typeid = new_typeid(), typename = "poly",
-      poly = {
+      types = {
          { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { FUNCTION } },
          { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { FUNCTION } },
       },
@@ -3159,7 +3156,7 @@ local standard_library: {string:Type} = {
          fields = {
             ["read"] = {
                typeid = new_typeid(), typename = "poly",
-               poly = {
+               types = {
                   { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
                   { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
                }
@@ -3213,7 +3210,7 @@ local standard_library: {string:Type} = {
          ["clock"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER } },
          ["exit"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
                { typeid = new_typeid(), typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
             }
@@ -3253,14 +3250,14 @@ local standard_library: {string:Type} = {
          } },
          ["move"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
             }
          },
          ["insert"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
             }
@@ -3269,7 +3266,7 @@ local standard_library: {string:Type} = {
          ["concat"] = { typeid = new_typeid(), typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } },
          ["sort"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
                { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, { typeid = new_typeid(), typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
             }
@@ -3286,7 +3283,7 @@ local standard_library: {string:Type} = {
          ["upper"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { STRING } },
          ["gsub"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING, { typeid = new_typeid(), typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING, { typeid = new_typeid(), typename = "function", args = { VARARG_STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
@@ -3298,7 +3295,7 @@ local standard_library: {string:Type} = {
          } },
          ["find"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
                { typeid = new_typeid(), typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
@@ -3308,7 +3305,7 @@ local standard_library: {string:Type} = {
          ["char"] = { typeid = new_typeid(), typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
          ["byte"] = {
             typeid = new_typeid(), typename = "poly",
-            poly = {
+            types = {
                { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { NUMBER } },
                { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
                { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } },
@@ -3345,14 +3342,14 @@ local standard_library: {string:Type} = {
    ["pcall"] = { typeid = new_typeid(), typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
    ["assert"] = {
       typeid = new_typeid(), typename = "poly",
-      poly = {
+      types = {
          { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
          { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
       }
    },
    ["select"] = {
       typeid = new_typeid(), typename = "poly",
-      poly = {
+      types = {
          { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
          { typeid = new_typeid(), typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
       }
@@ -3911,7 +3908,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       if t2.typename == "any" then
          return true
       elseif t2.typename == "poly" then
-         for _, t in ipairs(t2.poly) do
+         for _, t in ipairs(t2.types) do
             if is_a(t1, t, for_equality) then
                return true
             end
@@ -3930,7 +3927,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end
          end
       elseif t1.typename == "poly" then
-         for _, t in ipairs(t1.poly) do
+         for _, t in ipairs(t1.types) do
             if is_a(t, t2, for_equality) then
                return true
             end
@@ -4206,11 +4203,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          func = resolve_unary(func)
 
          args = args or {}
-         local poly: Type = func.typename == "poly" and func or { poly = { func } }
+         local poly: Type = func.typename == "poly" and func or { types = { func } }
          local first_errs: {Error}
          local expects: {string} = {}
          -- try exact match first
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if f.typename ~= "function" then
                if lax and is_unknown(f) then
                   return UNKNOWN
@@ -4230,7 +4227,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end
          end
          -- now try adjusting with nils to missing arguments or using '...'
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if #args < (#f.args or 0) then
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
@@ -4242,7 +4239,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end
          end
          -- now try vararg functions
-         for _, f in ipairs(poly.poly) do
+         for _, f in ipairs(poly.types) do
             if is_vararg(f) and #args > (#f.args or 0) then
                local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                if matched then
@@ -4262,8 +4259,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end
          end
 
-         poly.poly[1].rets.typename = "tuple"
-         return resolve_typevars(poly.poly[1].rets)
+         poly.types[1].rets.typename = "tuple"
+         return resolve_typevars(poly.types[1].rets)
       end
 
       type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
@@ -4649,11 +4646,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       else
          if not is_a(new, old) then
             if old.typename == "poly" then
-               table.insert(old.poly, new)
+               table.insert(old.types, new)
             else
                return {
                   typeid = new_typeid(), typename = "poly",
-                  poly = {
+                  types = {
                      old,
                      new
                   }
