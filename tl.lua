@@ -937,9 +937,8 @@ local function a_type(t)
    return t
 end
 
-local function new_type(tokens, i)
-   local t = tokens[i]
-   return a_type({ ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, })
+local function new_type(token, typename)
+   return a_type({ ["typename"] = assert(typename), ["y"] = token.y, ["x"] = token.x, ["tk"] = token.tk, })
 end
 
 local function verify_kind(tokens, i, errs, kind, node_kind)
@@ -1098,14 +1097,12 @@ local function parse_typevar_type(tokens, i, errs)
 end
 
 local function parse_typearg_list(tokens, i, errs)
-   local typ = new_type(tokens, i)
-   typ.typename = "tuple"
+   local typ = new_type(tokens[i], "tuple")
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typearg_type)
 end
 
 local function parse_typeval_list(tokens, i, errs)
-   local typ = new_type(tokens, i)
-   typ.typename = "tuple"
+   local typ = new_type(tokens[i], "tuple")
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
 end
 
@@ -1126,14 +1123,10 @@ local function parse_return_types(tokens, i, errs)
 end
 
 local function parse_function_type(tokens, i, errs)
+   local node = new_type(tokens[i], "function")
+   node.args = {}
+   node.rets = {}
    i = i + 1
-   local node = {
-      ["y"] = tokens[i - 1].y,
-      ["x"] = tokens[i - 1].x,
-      ["typename"] = "function",
-      ["args"] = {},
-      ["rets"] = {},
-   }
    if tokens[i].tk == "<" then
       i, node.typeargs = parse_typearg_list(tokens, i, errs)
    end
@@ -1141,8 +1134,8 @@ local function parse_function_type(tokens, i, errs)
       i, node.args = parse_argument_type_list(tokens, i, errs)
       i, node.rets = parse_return_types(tokens, i, errs)
    else
-      node.args = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }
-      node.rets = { [1] = { ["typename"] = "any", ["is_va"] = true, }, }
+      node.args = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }
+      node.rets = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }
    end
    return i, node
 end
@@ -1158,8 +1151,7 @@ local function parse_base_type(tokens, i, errs)
          ["typename"] = tokens[i].tk,
       })
    elseif tokens[i].tk == "table" then
-      local typ = new_type(tokens, i)
-      typ.typename = "map"
+      local typ = new_type(tokens[i], "map")
       typ.keys = a_type({ ["typename"] = "any", })
       typ.values = a_type({ ["typename"] = "any", })
       return i + 1, typ
@@ -1167,11 +1159,10 @@ local function parse_base_type(tokens, i, errs)
       return parse_function_type(tokens, i, errs)
    elseif tokens[i].tk == "{" then
       i = i + 1
-      local decl = new_type(tokens, i)
+      local decl = new_type(tokens[i], "array")
       local t
       i, t = parse_type(tokens, i, errs)
       if tokens[i].tk == "}" then
-         decl.typename = "array"
          decl.elements = t
          decl.yend = tokens[i].y
          i = verify_tk(tokens, i, errs, "}")
@@ -1187,8 +1178,7 @@ local function parse_base_type(tokens, i, errs)
    elseif tokens[i].tk == "`" then
       return parse_typevar_type(tokens, i, errs)
    elseif tokens[i].kind == "identifier" then
-      local typ = new_type(tokens, i)
-      typ.typename = "nominal"
+      local typ = new_type(tokens[i], "nominal")
       typ.names = { [1] = tokens[i].tk, }
       i = i + 1
       while tokens[i].tk == "." do
@@ -1217,8 +1207,7 @@ parse_type = function(tokens, i, errs)
       return i
    end
    if tokens[i].tk == "|" then
-      local u = new_type(tokens, istart)
-      u.typename = "union"
+      local u = new_type(tokens[istart], "union")
       u.types = { [1] = bt, }
       while tokens[i].tk == "|" do
          i = i + 1
@@ -1235,8 +1224,7 @@ parse_type = function(tokens, i, errs)
 end
 
 parse_type_list = function(tokens, i, errs, open)
-   local list = new_type(tokens, i)
-   list.typename = "tuple"
+   local list = new_type(tokens[i], "tuple")
    if tokens[i].tk == (open or ":") then
       i = i + 1
       local optional_paren = false
@@ -1536,8 +1524,7 @@ local function parse_argument_type(tokens, i, errs)
 end
 
 parse_argument_type_list = function(tokens, i, errs)
-   local list = new_type(tokens, i)
-   list.typename = "tuple"
+   local list = new_type(tokens[i], "tuple")
    return parse_bracket_list(tokens, i, errs, list, "(", ")", "sep", parse_argument_type)
 end
 
@@ -1752,14 +1739,12 @@ end
 
 parse_newtype = function(tokens, i, errs)
    local node = new_node(tokens, i, "newtype")
-   node.newtype = new_type(tokens, i)
-   node.newtype.typename = "typetype"
+   node.newtype = new_type(tokens[i], "typetype")
    if tokens[i].tk == "record" then
-      local def = new_type(tokens, i)
-      node.newtype.def = def
-      def.typename = "record"
+      local def = new_type(tokens[i], "record")
       def.fields = {}
       def.field_order = {}
+      node.newtype.def = def
       i = i + 1
       if tokens[i].tk == "<" then
          i, def.typeargs = parse_typearg_list(tokens, i, errs)
@@ -1798,12 +1783,8 @@ parse_newtype = function(tokens, i, errs)
             else
                local prev_t = def.fields[v.tk]
                if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[v.tk] = a_type({
-                     ["y"] = v.y,
-                     ["x"] = v.x,
-                     ["typename"] = "poly",
-                     ["types"] = { [1] = prev_t, [2] = t, },
-                  })
+                  def.fields[v.tk] = new_type({ ["y"] = v.y, ["x"] = v.x, ["tk"] = v.tk, }, "poly")
+                  def.fields[v.tk].types = { [1] = prev_t, [2] = t, }
                elseif t.typename == "function" and prev_t.typename == "poly" then
                   table.insert(prev_t.types, t)
                else
@@ -1816,9 +1797,8 @@ parse_newtype = function(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "end")
       return i, node
    elseif tokens[i].tk == "enum" then
-      local def = new_type(tokens, i)
+      local def = new_type(tokens[i], "enum")
       node.newtype.def = def
-      def.typename = "enum"
       def.enumset = {}
       i = i + 1
       while not ((not tokens[i]) or tokens[i].tk == "end") do
