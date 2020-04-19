@@ -2769,6 +2769,8 @@ end
 
 
 local ANY = a_type({ ["typename"] = "any", })
+local NONE = a_type({ ["typename"] = "none", })
+
 local NIL = a_type({ ["typename"] = "nil", })
 local NUMBER = a_type({ ["typename"] = "number", })
 local STRING = a_type({ ["typename"] = "string", })
@@ -4962,7 +4964,7 @@ function tl.type_check(ast, opts)
 
             end_scope()
 
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["local_declaration"] = {
@@ -4994,7 +4996,7 @@ function tl.type_check(ast, opts)
                assert(var)
                add_var(var, var.tk, t, var.is_const)
             end
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["global_declaration"] = {
@@ -5034,7 +5036,7 @@ function tl.type_check(ast, opts)
                   add_global(var, var.tk, t, var.is_const)
                end
             end
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["assignment"] = {
@@ -5066,12 +5068,12 @@ function tl.type_check(ast, opts)
                   node_error(varnode, "unknown variable")
                end
             end
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["do"] = {
          ["after"] = function(node, children)
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["if"] = {
@@ -5081,7 +5083,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             end_scope()
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["elseif"] = {
@@ -5098,7 +5100,7 @@ function tl.type_check(ast, opts)
             apply_facts(node.exp, f)
          end,
          ["after"] = function(node, children)
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["else"] = {
@@ -5112,7 +5114,7 @@ function tl.type_check(ast, opts)
             apply_facts(node, f)
          end,
          ["after"] = function(node, children)
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["while"] = {
@@ -5126,7 +5128,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             end_scope()
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["label"] = {
@@ -5156,7 +5158,7 @@ function tl.type_check(ast, opts)
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
                table.insert(unresolved.labels[node.label], node)
             end
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["repeat"] = {
@@ -5165,7 +5167,7 @@ function tl.type_check(ast, opts)
             widen_all_unions()
          end,
          ["after"] = function(node, children)
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["forin"] = {
@@ -5203,7 +5205,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             end_scope()
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["fornum"] = {
@@ -5213,7 +5215,7 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             end_scope()
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["return"] = {
@@ -5241,7 +5243,7 @@ function tl.type_check(ast, opts)
                module_type = resolve_unary(children[1])
             end
 
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["variables"] = {
@@ -5343,7 +5345,7 @@ function tl.type_check(ast, opts)
                ["args"] = children[2],
                ["rets"] = get_rets(children[3]),
             }))
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["global_function"] = {
@@ -5357,7 +5359,7 @@ function tl.type_check(ast, opts)
                ["args"] = children[2],
                ["rets"] = get_rets(children[3]),
             }))
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["record_function"] = {
@@ -5410,7 +5412,7 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
             end_function_scope()
 
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["function"] = {
@@ -5631,7 +5633,7 @@ function tl.type_check(ast, opts)
       },
       ["identifier"] = {
          ["after"] = function(node, children)
-            node.type = a_type({ ["typename"] = "none", })
+            node.type = NONE
          end,
       },
       ["newtype"] = {
