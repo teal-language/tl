@@ -3973,7 +3973,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          if ok then
             return true
          else
-            return false, terr(t1, "%s is not a member of %s", t1, t2)
+            if t1.tk then
+               return false, terr(t1, "%s is not a member of %s", t1, t2)
+            else
+               return false, terr(t1, "string is not a %s", t2)
+            end
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
          local t1u = resolve_unary(t1)
@@ -5409,6 +5413,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             local b: Type = children[3]
             local orig_a = a
             local orig_b = b
+            local ua = a and resolve_unary(a)
+            local ub = b and resolve_unary(b)
             if node.op.op == "@funcall" then
                if node.e1.tk == "rawget" then
                   if #b == 2 then
@@ -5478,7 +5484,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                end
                node.type = BOOLEAN
             elseif node.op.op == "." then
-               a = resolve_unary(a)
+               a = ua
                if a.typename == "map" then
                   if is_a(a.keys, STRING) or is_a(a.keys, ANY) then
                      node.type = a.values
@@ -5505,12 +5511,17 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             elseif node.op.op == "or" and b.typename == "emptytable" then
                node.facts = nil
                node.type = resolve_tuple(a)
-            elseif node.op.op == "or" and same_type(resolve_unary(a), resolve_unary(b)) then
+            elseif node.op.op == "or" and same_type(ua, ub) then
                node.facts = facts_or(node.e1.facts, node.e2.facts)
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
                node.facts = nil
                node.type = resolve_tuple(a)
+            elseif node.op.op == "or"
+                   and ((ua.typename == "enum" and ub.typename == "string" and is_a(ub, ua))
+                    or  (ua.typename == "string" and ub.typename == "enum" and is_a(ua, ub))) then
+               node.facts = nil
+               node.type = (ua.typename == "enum" and ua or ub)
             elseif node.op.op == "or"
                    and (a.typename == "nominal" or a.typename == "map")
                    and (b.typename == "record" or b.typename == "arrayrecord")
@@ -5528,7 +5539,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   end
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
-               a = resolve_unary(a)
+               a = ua
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
                if not node.type then
@@ -5543,8 +5554,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   node.facts = facts_or(node.e1.facts, node.e2.facts)
                end
 
-               a = resolve_unary(a)
-               b = resolve_unary(b)
+               a = ua
+               b = ub
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                if not node.type then
