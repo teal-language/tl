@@ -383,12 +383,11 @@ be organized as a tree using its array part.
 Teal supports a simple form of generics that is useful enough for dealing
 collections and algorithms that operate over abstract data types.
 
-You can use type variables (annotated with a backtick) wherever a type is
-used, and you can declare them in both functions and records. Here's an
-example of a generic function:
+You can use type variables wherever a type is used, and you can declare them
+in both functions and records. Here's an example of a generic function:
 
 ```
-local function keys<`K,`V>(xs: {`K:`V}):{`K}
+local function keys<K,V>(xs: {K:V}):{K}
    local ks = {}
    for k, v in pairs(xs) do
       table.insert(ks, k)
@@ -403,9 +402,9 @@ we declare the type variables in angle brackets and use them as types. Generic
 records are declared and used like this:
 
 ```
-local Tree = record<`X>
-   {Tree<`X>}
-   item: `X
+local Tree = record<X>
+   {Tree<X>}
+   item: X
 end
 
 local t: Tree<number> = {
@@ -447,9 +446,9 @@ callbacks. This is done with using `functiontype`, and they can be generic as
 well:
 
 ```
-local Comparator = functiontype<`T>(`T, `T): boolean
+local Comparator = functiontype<T>(T, T): boolean
 
-local function mysort<`A>(arr: {`A}, cmp: Comparator<`A>)
+local function mysort<A>(arr: {A}, cmp: Comparator<A>)
    -- ...
 end
 ```

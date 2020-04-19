@@ -2018,6 +2018,12 @@ local function recurse_type<`T>(ast: Type, visit: Visitor<TypeName, Type, `T>): 
    visit_before(ast, ast.typename, visit)
    local xs: {`T} = {}
 
+   if ast.typeargs then
+      for _, child in ipairs(ast.typeargs) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+
    for i, child in ipairs(ast) do
       xs[i] = recurse_type(child, visit)
    end
@@ -2035,11 +2041,6 @@ local function recurse_type<`T>(ast: Type, visit: Visitor<TypeName, Type, `T>): 
    end
    if ast.values then
       table.insert(xs, recurse_type(ast.values, visit))
-   end
-   if ast.typeargs then
-      for _, child in ipairs(ast.typeargs) do
-         table.insert(xs, recurse_type(child, visit))
-      end
    end
    if ast.elements then
       table.insert(xs, recurse_type(ast.elements, visit))
@@ -3614,7 +3615,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       return copy
    end
 
-   local function find_type(names: {string}): Type
+   local function find_type(names: {string}, accept_typearg: boolean): Type
       local typ = find_var(names[1])
       if not typ then
          return nil
@@ -3629,10 +3630,15 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             break
          end
       end
-      if typ and typ.typename ~= "typetype" then
-         return nil
+      if typ then
+         if accept_typearg and typ.typename == "typearg" then
+            return typ
+         end
+         if typ.typename == "typetype" then
+            return typ
+         end
       end
-      return typ
+      return nil
    end
 
    local function infer_var(emptytable: Type, t: Type, node: Node)
@@ -5697,10 +5703,34 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                return typ,
             end,
          },
+         ["function"] = {
+            before = function(typ: Type, children: {Type})
+               begin_scope()
+            end,
+            after = function(typ: Type, children: {Type}): Type
+               end_scope()
+               return typ
+            end,
+         },
+         ["typearg"] = {
+            after = function(typ: Type, children: {Type}): Type
+               add_var(nil, typ.typearg, a_type {
+                  y = typ.y,
+                  x = typ.x,
+                  typename = "typearg",
+                  typearg = typ.typearg,
+               })
+               return typ
+            end,
+         },
          ["nominal"] = {
             after = function(typ: Type, children: {Type}): Type
-               if not find_type(typ.names) then
-                  --type_error(typ, "unknown type %s", typ)
+               local t = find_type(typ.names, true)
+               if t and t.typename == "typearg" then
+                  -- convert nominal into a typevar
+                  typ.names = nil
+                  typ.typename = "typevar"
+                  typ.typevar = t.typearg
                end
                return typ
             end,
@@ -5739,14 +5769,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
       }
    }
+
+   visit_type.cbs["record"] = visit_type.cbs["function"]
+
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
    visit_type.cbs["typevar"] = visit_type.cbs["string"]
-   visit_type.cbs["typearg"] = visit_type.cbs["string"]
-   visit_type.cbs["function"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
    visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
-   visit_type.cbs["record"] = visit_type.cbs["string"]
    visit_type.cbs["enum"] = visit_type.cbs["string"]
    visit_type.cbs["boolean"] = visit_type.cbs["string"]
    visit_type.cbs["nil"] = visit_type.cbs["string"]

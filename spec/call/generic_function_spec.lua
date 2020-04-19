@@ -5,7 +5,7 @@ describe("generic function", function()
    it("can declare a generic functiontype", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`T>(number): `T
+         local ParseItem = functiontype<T>(number): T
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
@@ -14,9 +14,9 @@ describe("generic function", function()
    it("can declare a function using the functiontype as an argument", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`T>(number): `T
+         local ParseItem = functiontype<T>(number): T
 
-         local function parse_list<`T>(list: {`T}, parse_item: ParseItem): number, `T
+         local function parse_list<T>(list: {T}, parse_item: ParseItem): number, T
             return 0, list[1]
          end
       ]])
@@ -27,10 +27,10 @@ describe("generic function", function()
    it("can use the typevar in the function body", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`T>(number): `T
+         local ParseItem = functiontype<T>(number): T
 
-         local function parse_list<`T>(list: {`T}, parse_item: ParseItem): number, {`T}
-            local ret: {`T} = {}
+         local function parse_list<T>(list: {T}, parse_item: ParseItem): number, {T}
+            local ret: {T} = {}
             local n = 0
             return n, ret
          end
@@ -42,13 +42,13 @@ describe("generic function", function()
    it("can use the function along with a typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<`a>(`a): `a
+         local Id = functiontype<a>(a): a
 
          local function string_id(a: string): string
             return a
          end
 
-         local function use_id<`T>(v: `T, id: Id<`T>): `T
+         local function use_id<T>(v: T, id: Id<T>): T
             return id(v)
          end
 
@@ -61,9 +61,9 @@ describe("generic function", function()
    it("does not mix up typevars with the same name in different scopes", function()
       -- pass
       local tokens = tl.lex([[
-         local Convert = functiontype<`a, `b>(`a): `b
+         local Convert = functiontype<a, b>(a): b
 
-         local function id<`a>(x: `a): `a
+         local function id<a>(x: a): a
             return x
          end
 
@@ -71,7 +71,7 @@ describe("generic function", function()
             return tostring(n)
          end
 
-         local function use_conv<`X, `Y>(x: `X, cvt: Convert<`X, `Y>): `Y
+         local function use_conv<X, Y>(x: X, cvt: Convert<X, Y>): Y
             return id(cvt(x))
          end
 
@@ -86,7 +86,7 @@ describe("generic function", function()
    it("catches incorrect typevars, does not mix up multiple uses", function()
       -- fail
       local tokens = tl.lex([[
-         local Convert = functiontype<`a, `b>(`a): `b
+         local Convert = functiontype<a, b>(a): b
 
          local function convert_num_str(n: number): string
             return tostring(n)
@@ -96,7 +96,7 @@ describe("generic function", function()
             return tonumber(s)
          end
 
-         local function use_conv<`X,`Y>(x: `X, cvt: Convert<`X, `Y>, tvc: Convert<`X, `Y>): `Y -- tvc is not flipped!
+         local function use_conv<X,Y>(x: X, cvt: Convert<X, Y>, tvc: Convert<X, Y>): Y -- tvc is not flipped!
             return cvt(tvc(cvt(x)))
          end
 
@@ -115,13 +115,13 @@ describe("generic function", function()
    it("will catch if resolved typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<`a>(`a): `a
+         local Id = functiontype<a>(a): a
 
          local function string_id(a: string): string
             return a
          end
 
-         local function use_id<`T>(v: `T, id: Id<`T>): `T
+         local function use_id<T>(v: T, id: Id<T>): T
             return id(v)
          end
 
@@ -136,13 +136,13 @@ describe("generic function", function()
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<`a>(`a): `a
+         local Id = functiontype<a>(a): a
 
          local function string_id(a: string): string
             return a
          end
 
-         local function use_id<`T>(v: {`T}, id: Id<`T>): `T
+         local function use_id<T>(v: {T}, id: Id<T>): T
             return id(v[1])
          end
 
@@ -155,13 +155,13 @@ describe("generic function", function()
    it("will catch if resolved indirect typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<`a>(`a): `a
+         local Id = functiontype<a>(a): a
 
          local function string_id(a: string): string
             return a
          end
 
-         local function use_id<`T>(v: {`T}, id: Id<`T>): `T
+         local function use_id<T>(v: {T}, id: Id<T>): T
             return id(v[1])
          end
 
@@ -177,10 +177,10 @@ describe("generic function", function()
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`X>(number): `X
+         local ParseItem = functiontype<X>(number): X
 
-         local function parse_list<`T>(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
-            local ret: {`T} = {}
+         local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
+            local ret: {T} = {}
             local n = 0
             for i, t in ipairs(list) do
                n = i
@@ -208,7 +208,7 @@ describe("generic function", function()
    it("can use a typevar from an argument as the function return type", function()
       -- ok
       local tokens = tl.lex([[
-         local function parse_list<`T>(list: {`T}): `T
+         local function parse_list<T>(list: {T}): T
             return list[1]
          end
       ]])
@@ -219,20 +219,20 @@ describe("generic function", function()
    it("will catch if typevar is unbound", function()
       -- fail
       local tokens = tl.lex([[
-         local function parse_list<`T>(list: {`T}): `T
+         local function parse_list<T>(list: {T}): T
             return true
          end
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got boolean, expected `T", errors[1].msg, 1, true)
+      assert.match("got boolean, expected T", errors[1].msg, 1, true)
    end)
    it("will accept if typevar is bound at a higher level", function()
       -- fail
       local tokens = tl.lex([[
-         local function fun<`T>()
-            local function parse_list<`T>(list: {`T}): `T
+         local function fun<T>()
+            local function parse_list<T>(list: {T}): T
                return list[1]
             end
          end
@@ -244,14 +244,14 @@ describe("generic function", function()
    it("will catch if return value does not match the typevar", function()
       -- fail
       local tokens = tl.lex([[
-         local function parse_list<`T>(list: {`T}): `T
+         local function parse_list<T>(list: {T}): T
             return true
          end
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("got boolean, expected `T", errors[1].msg, 1, true)
+      assert.match("got boolean, expected T", errors[1].msg, 1, true)
    end)
    it("will catch if argument value does not match the typevar", function()
       -- fail
@@ -261,7 +261,7 @@ describe("generic function", function()
             x: number
          end
 
-         local function insert<`a>(list: {`a}, item: `a)
+         local function insert<a>(list: {a}, item: a)
             table.insert(list, item)
          end
 
@@ -277,10 +277,10 @@ describe("generic function", function()
    it("will catch if resolved typevar does not match", function()
       -- fail
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`V>(number): `V
+         local ParseItem = functiontype<V>(number): V
 
-         local function parse_list<`T>(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
-            local ret: {`T} = {}
+         local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
+            local ret: {T} = {}
             local n = 0
             for i, t in ipairs(list) do
                n = i
@@ -313,10 +313,10 @@ describe("generic function", function()
    it("can map one typevar to another", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<`V>(number): `V
+         local ParseItem = functiontype<V>(number): V
 
-         local function parse_list<`T>(list: {`T}, parse_item: ParseItem<`T>): number, {`T}
-            local ret: {`T} = {}
+         local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
+            local ret: {T} = {}
             local n = 0
             for i, t in ipairs(list) do
                n = i
@@ -345,10 +345,10 @@ describe("generic function", function()
       local Node = record
       end
 
-      local VisitorCallbacks = record<`X, `Y>
+      local VisitorCallbacks = record<X, Y>
       end
 
-      local function recurse_node<`T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+      local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
       end
 
       local function pretty_print_ast(ast: Node): string
@@ -357,7 +357,7 @@ describe("generic function", function()
          return recurse_node(ast, visit_node, visit_type)
       end
    ]], {
-      { msg = "unknown type Type", x = 136 },
+      { msg = "unknown type Type", x = 134 },
       { msg = "unknown type Type", x = 53 }
    }))
    it("propagates resolved typevar in return type", function()
@@ -368,10 +368,10 @@ describe("generic function", function()
          local Type = record
          end
 
-         local VisitorCallbacks = record<`N, `X>
+         local VisitorCallbacks = record<N, X>
          end
 
-         local function recurse_node<`T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+         local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
          end
 
          local function pretty_print_ast(ast: Node): string
@@ -393,10 +393,10 @@ describe("generic function", function()
          local Type = record
          end
 
-         local VisitorCallbacks = record<`X, `Y>
+         local VisitorCallbacks = record<X, Y>
          end
 
-         local function recurse_node<`T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>}): `T
+         local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
          end
 
          local function pretty_print_ast(ast: Node): string
@@ -416,10 +416,10 @@ describe("generic function", function()
          local Type = record
          end
 
-         local VisitorCallbacks = record<`X, `Y>
+         local VisitorCallbacks = record<X, Y>
          end
 
-         local function recurse_node<`T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, `T>}, visit_type: {string:VisitorCallbacks<Type, `T>})
+         local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>})
          end
 
          local function pretty_print_ast(ast: Node): string
@@ -431,7 +431,7 @@ describe("generic function", function()
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same(1, #errors)
-      assert.match("argument 3: type parameter <`T>: got number, expected string", errors[1].msg, 1, true)
+      assert.match("argument 3: type parameter <T>: got number, expected string", errors[1].msg, 1, true)
       assert.same(43, errors[1].x)
    end)
    it("inference trickles down to function arguments", function()
@@ -472,7 +472,7 @@ describe("generic function", function()
    end)
    it("does not leak an unresolved generic type", function()
       local tokens = tl.lex([[
-         function mypairs<`a, `b>(map: {`a:`b}): (`a, `b)
+         function mypairs<a, b>(map: {a:b}): (a, b)
          end
 
          local _, resolved   = mypairs({["hello"] = true})
@@ -489,9 +489,9 @@ describe("generic function", function()
       assert.same("unknown", ast[3].exps[1].type[2].typename)
    end)
    it("does not produce a recursive type", util.lax_check([[
-      function mypairs<`a, `b>(map: {`a:`b}): (`a, `b)
+      function mypairs<a, b>(map: {a:b}): (a, b)
       end
-      function myipairs<`a>(array: {`a}): (`a)
+      function myipairs<a>(array: {a}): (a)
       end
 
       local _, xs = mypairs(xss)
@@ -510,7 +510,7 @@ describe("generic function", function()
    }))
 
    pending("check that 'any' matches any type variable", util.check [[
-      local function map<`X, `Y>(xs: {`X}, f: function(`X):`Y): {`Y}
+      local function map<X, Y>(xs: {X}, f: function(X):Y): {Y}
          local rs = {}
          for i, v in ipairs(xs) do
             rs[i] = f(v)
