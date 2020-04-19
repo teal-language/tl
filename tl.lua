@@ -2028,18 +2028,54 @@ local function recurse_type(ast, visit)
       xs[i] = recurse_type(child, visit)
    end
 
-
-
-
-
-
-
-
-
-
-
-
-
+   if ast.types then
+      for i, child in ipairs(ast.types) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.def then
+      table.insert(xs, recurse_type(ast.def, visit))
+   end
+   if ast.keys then
+      table.insert(xs, recurse_type(ast.keys, visit))
+   end
+   if ast.values then
+      table.insert(xs, recurse_type(ast.values, visit))
+   end
+   if ast.typeargs then
+      for _, child in ipairs(ast.typeargs) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.elements then
+      table.insert(xs, recurse_type(ast.elements, visit))
+   end
+   if ast.fields then
+      for _, child in pairs(ast.fields) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.args then
+      for _, child in ipairs(ast.args) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.rets then
+      for _, child in ipairs(ast.rets) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.typevals then
+      for _, child in ipairs(ast.typevals) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.ktype then
+      table.insert(xs, recurse_type(ast.ktype, visit))
+   end
+   if ast.vtype then
+      table.insert(xs, recurse_type(ast.vtype, visit))
+   end
 
    return visit_after(ast, ast.typename, visit, xs)
 end
