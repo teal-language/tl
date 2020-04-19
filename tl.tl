@@ -1077,13 +1077,17 @@ local function parse_trying_list<`T>(tokens: {Token}, i: number, errs: {ParseErr
 end
 
 local function parse_typearg_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
-   i = verify_tk(tokens, i, errs, "`")
+   local backtick = false
+   if tokens[i].tk == "`" then
+      i = verify_tk(tokens, i, errs, "`")
+      backtick = true
+   end
    i = verify_kind(tokens, i, errs, "identifier")
    return i, a_type {
       y = tokens[i - 2].y,
       x = tokens[i - 2].x,
       typename = "typearg",
-      typearg = "`" .. tokens[i-1].tk,
+      typearg = (backtick and "`" or "") .. tokens[i-1].tk,
    }
 end
 
