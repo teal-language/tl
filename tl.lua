@@ -668,13 +668,6 @@ local ParseError = {}
 
 
 
-local TypeKind = {}
-
-
-
-
-
-
 local TypeName = {}
 
 
@@ -713,7 +706,6 @@ local table_types = {
 }
 
 local Type = {}
-
 
 
 
@@ -940,9 +932,9 @@ local function new_node(tokens, i, kind)
    return { ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, ["kind"] = kind or t.kind, }
 end
 
-local function new_type(tokens, i, kind)
+local function new_type(tokens, i)
    local t = tokens[i]
-   return { ["typeid"] = new_typeid(), ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, ["kind"] = kind or t.kind, }
+   return { ["typeid"] = new_typeid(), ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, }
 end
 
 local function verify_kind(tokens, i, errs, kind, node_kind)
@@ -1085,7 +1077,6 @@ local function parse_typearg_type(tokens, i, errs)
       ["typeid"] = new_typeid(),
       ["y"] = tokens[i - 2].y,
       ["x"] = tokens[i - 2].x,
-      ["kind"] = "typedecl",
       ["typename"] = "typearg",
       ["typearg"] = "`" .. tokens[i - 1].tk,
    }
@@ -1098,19 +1089,20 @@ local function parse_typevar_type(tokens, i, errs)
       ["typeid"] = new_typeid(),
       ["y"] = tokens[i - 2].y,
       ["x"] = tokens[i - 2].x,
-      ["kind"] = "typedecl",
       ["typename"] = "typevar",
       ["typevar"] = "`" .. tokens[i - 1].tk,
    }
 end
 
 local function parse_typearg_list(tokens, i, errs)
-   local typ = new_type(tokens, i, "typearg_list")
+   local typ = new_type(tokens, i)
+   typ.typename = "tuple"
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typearg_type)
 end
 
 local function parse_typeval_list(tokens, i, errs)
-   local typ = new_type(tokens, i, "typeval_list")
+   local typ = new_type(tokens, i)
+   typ.typename = "tuple"
    return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
 end
 
@@ -1135,7 +1127,6 @@ local function parse_function_type(tokens, i, errs)
    local node = {
       ["y"] = tokens[i - 1].y,
       ["x"] = tokens[i - 1].x,
-      ["kind"] = "typedecl",
       ["typename"] = "function",
       ["args"] = {},
       ["rets"] = {},
@@ -1162,11 +1153,10 @@ local function parse_base_type(tokens, i, errs)
          ["typeid"] = new_typeid(),
          ["y"] = tokens[i].y,
          ["x"] = tokens[i].x,
-         ["kind"] = "typedecl",
          ["typename"] = tokens[i].tk,
       }
    elseif tokens[i].tk == "table" then
-      local typ = new_type(tokens, i, "typedecl")
+      local typ = new_type(tokens, i)
       typ.typename = "map"
       typ.keys = { ["typeid"] = new_typeid(), ["typename"] = "any", }
       typ.values = { ["typeid"] = new_typeid(), ["typename"] = "any", }
@@ -1175,7 +1165,7 @@ local function parse_base_type(tokens, i, errs)
       return parse_function_type(tokens, i, errs)
    elseif tokens[i].tk == "{" then
       i = i + 1
-      local decl = new_type(tokens, i, "typedecl")
+      local decl = new_type(tokens, i)
       local t
       i, t = parse_type(tokens, i, errs)
       if tokens[i].tk == "}" then
@@ -1195,7 +1185,7 @@ local function parse_base_type(tokens, i, errs)
    elseif tokens[i].tk == "`" then
       return parse_typevar_type(tokens, i, errs)
    elseif tokens[i].kind == "identifier" then
-      local typ = new_type(tokens, i, "typedecl")
+      local typ = new_type(tokens, i)
       typ.typename = "nominal"
       typ.names = { [1] = tokens[i].tk, }
       i = i + 1
@@ -1225,7 +1215,7 @@ parse_type = function(tokens, i, errs)
       return i
    end
    if tokens[i].tk == "|" then
-      local u = new_type(tokens, istart, "typedecl")
+      local u = new_type(tokens, istart)
       u.typename = "union"
       u.types = { [1] = bt, }
       while tokens[i].tk == "|" do
@@ -1243,7 +1233,7 @@ parse_type = function(tokens, i, errs)
 end
 
 parse_type_list = function(tokens, i, errs, open)
-   local list = new_type(tokens, i, "type_list")
+   local list = new_type(tokens, i)
    list.typename = "tuple"
    if tokens[i].tk == (open or ":") then
       i = i + 1
@@ -1544,7 +1534,7 @@ local function parse_argument_type(tokens, i, errs)
 end
 
 parse_argument_type_list = function(tokens, i, errs)
-   local list = new_type(tokens, i, "type_list")
+   local list = new_type(tokens, i)
    list.typename = "tuple"
    return parse_bracket_list(tokens, i, errs, list, "(", ")", "sep", parse_argument_type)
 end
@@ -1760,10 +1750,10 @@ end
 
 parse_newtype = function(tokens, i, errs)
    local node = new_node(tokens, i, "newtype")
-   node.newtype = new_type(tokens, i, "typedecl")
+   node.newtype = new_type(tokens, i)
    node.newtype.typename = "typetype"
    if tokens[i].tk == "record" then
-      local def = new_type(tokens, i, "typedecl")
+      local def = new_type(tokens, i)
       node.newtype.def = def
       def.typename = "record"
       def.fields = {}
@@ -1825,7 +1815,7 @@ parse_newtype = function(tokens, i, errs)
       i = verify_tk(tokens, i, errs, "end")
       return i, node
    elseif tokens[i].tk == "enum" then
-      local def = new_type(tokens, i, "typedecl")
+      local def = new_type(tokens, i)
       node.newtype.def = def
       def.typename = "enum"
       def.enumset = {}
@@ -2031,22 +2021,27 @@ local function visit_after(ast, kind, visit, xs)
 end
 
 local function recurse_type(ast, visit)
-   visit_before(ast, ast.kind, visit)
+   visit_before(ast, ast.typename, visit)
    local xs = {}
-   if ast.kind == "type_list" or
-      ast.kind == "typeval_list" or
-      ast.kind == "typearg_list" then
-      for i, child in ipairs(ast) do
-         xs[i] = recurse_type(child, visit)
-      end
-   elseif ast.kind == "typedecl" then
- else
-      if not ast.kind then
-         error("wat: " .. inspect(ast))
-      end
-      error("unknown node kind " .. ast.kind)
+
+   for i, child in ipairs(ast) do
+      xs[i] = recurse_type(child, visit)
    end
-   return visit_after(ast, ast.kind, visit, xs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   return visit_after(ast, ast.typename, visit, xs)
 end
 
 local function recurse_node(ast,
@@ -2683,13 +2678,7 @@ function tl.pretty_print_ast(ast, fast)
 
    local visit_type = {}
    visit_type.cbs = {
-      ["type_list"] = {
-         ["after"] = function(typ, children)
-            local out = { ["y"] = typ.y, ["h"] = 0, }
-            return out
-         end,
-      },
-      ["typedecl"] = {
+      ["string"] = {
          ["after"] = function(typ, children)
             local out = { ["y"] = typ.y, ["h"] = 0, }
             table.insert(out, primitive[typ.typename] or "table")
@@ -2697,6 +2686,31 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
    }
+   visit_type.cbs["typetype"] = visit_type.cbs["string"]
+   visit_type.cbs["typevar"] = visit_type.cbs["string"]
+   visit_type.cbs["typearg"] = visit_type.cbs["string"]
+   visit_type.cbs["function"] = visit_type.cbs["string"]
+   visit_type.cbs["array"] = visit_type.cbs["string"]
+   visit_type.cbs["map"] = visit_type.cbs["string"]
+   visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
+   visit_type.cbs["record"] = visit_type.cbs["string"]
+   visit_type.cbs["enum"] = visit_type.cbs["string"]
+   visit_type.cbs["boolean"] = visit_type.cbs["string"]
+   visit_type.cbs["nil"] = visit_type.cbs["string"]
+   visit_type.cbs["number"] = visit_type.cbs["string"]
+   visit_type.cbs["union"] = visit_type.cbs["string"]
+   visit_type.cbs["nominal"] = visit_type.cbs["string"]
+   visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
+   visit_type.cbs["emptytable"] = visit_type.cbs["string"]
+   visit_type.cbs["table_item"] = visit_type.cbs["string"]
+   visit_type.cbs["unknown_emptytable_value"] = visit_type.cbs["string"]
+   visit_type.cbs["tuple"] = visit_type.cbs["string"]
+   visit_type.cbs["poly"] = visit_type.cbs["string"]
+   visit_type.cbs["any"] = visit_type.cbs["string"]
+   visit_type.cbs["unknown"] = visit_type.cbs["string"]
+   visit_type.cbs["invalid"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved_labels"] = visit_type.cbs["string"]
+   visit_type.cbs["none"] = visit_type.cbs["string"]
 
    visit_node.cbs["values"] = visit_node.cbs["variables"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
@@ -5625,54 +5639,76 @@ function tl.type_check(ast, opts)
 
    local visit_type = {
       ["cbs"] = {
-         ["typedecl"] = {
+         ["string"] = {
             ["after"] = function(typ, children)
-               if typ.typename == "nominal" then
-                  if not find_type(typ.names) then
-                     type_error(typ, "unknown type %s", typ)
-                  end
-               elseif typ.typename == "union" then
-
-
-                  local n_table_types = 0
-                  local n_string_enum = 0
-                  for _, t in ipairs(typ.types) do
-                     t = resolve_unary(t)
-                     if table_types[t.typename] then
-                        n_table_types = n_table_types + 1
-                        if n_table_types > 1 then
-                           type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
-                           break
-                        end
-                     elseif t.typename == "string" or t.typename == "enum" then
-                        n_string_enum = n_string_enum + 1
-                        if n_string_enum > 1 then
-                           type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
-                           break
-                        end
-                     end
-                  end
-               end
-
                return typ
             end,
          },
-         ["type_list"] = {
+         ["nominal"] = {
             ["after"] = function(typ, children)
-               local ret = children
-               ret.typename = "tuple"
-               return ret
+               if not find_type(typ.names) then
+
+ end
+               return typ
+            end,
+         },
+         ["union"] = {
+            ["after"] = function(typ, children)
+
+
+               local n_table_types = 0
+               local n_string_enum = 0
+               for _, t in ipairs(typ.types) do
+                  t = resolve_unary(t)
+                  if table_types[t.typename] then
+                     n_table_types = n_table_types + 1
+                     if n_table_types > 1 then
+                        type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
+                        break
+                     end
+                  elseif t.typename == "string" or t.typename == "enum" then
+                     n_string_enum = n_string_enum + 1
+                     if n_string_enum > 1 then
+                        type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
+                        break
+                     end
+                  end
+               end
+               return typ
             end,
          },
       },
       ["after"] = {
          ["after"] = function(typ, children, ret)
-            assert(type(ret) == "table", typ.kind .. " did not produce a type")
-            assert(type(ret.typename) == "string", typ.kind .. " type does not have a typename")
+            assert(type(ret) == "table", typ.typename .. " did not produce a type")
+            assert(type(ret.typename) == "string", "type node does not have a typename")
             return ret
          end,
       },
    }
+   visit_type.cbs["typetype"] = visit_type.cbs["string"]
+   visit_type.cbs["typevar"] = visit_type.cbs["string"]
+   visit_type.cbs["typearg"] = visit_type.cbs["string"]
+   visit_type.cbs["function"] = visit_type.cbs["string"]
+   visit_type.cbs["array"] = visit_type.cbs["string"]
+   visit_type.cbs["map"] = visit_type.cbs["string"]
+   visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
+   visit_type.cbs["record"] = visit_type.cbs["string"]
+   visit_type.cbs["enum"] = visit_type.cbs["string"]
+   visit_type.cbs["boolean"] = visit_type.cbs["string"]
+   visit_type.cbs["nil"] = visit_type.cbs["string"]
+   visit_type.cbs["number"] = visit_type.cbs["string"]
+   visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
+   visit_type.cbs["emptytable"] = visit_type.cbs["string"]
+   visit_type.cbs["table_item"] = visit_type.cbs["string"]
+   visit_type.cbs["unknown_emptytable_value"] = visit_type.cbs["string"]
+   visit_type.cbs["tuple"] = visit_type.cbs["string"]
+   visit_type.cbs["poly"] = visit_type.cbs["string"]
+   visit_type.cbs["any"] = visit_type.cbs["string"]
+   visit_type.cbs["unknown"] = visit_type.cbs["string"]
+   visit_type.cbs["invalid"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved_labels"] = visit_type.cbs["string"]
+   visit_type.cbs["none"] = visit_type.cbs["string"]
 
    recurse_node(ast, visit_node, visit_type)
 
