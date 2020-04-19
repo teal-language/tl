@@ -2177,7 +2177,7 @@ visit_type)
          if cbs.before_e2 then
             cbs.before_e2(ast, xs)
          end
-         if ast.op.op == "is" then
+         if ast.op.op == "is" or ast.op.op == "as" then
             xs[3] = recurse_type(ast.e2.casttype, visit_type)
          else
             xs[3] = recurse_node(ast.e2, visit_node, visit_type)
