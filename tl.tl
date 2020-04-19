@@ -1013,21 +1013,21 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
    return i, node, n + 1
 end
 
-local ParseItem = functiontype<`T>({Token}, number, {ParseError}, number): number, `T, number
+local ParseItem = functiontype<T>({Token}, number, {ParseError}, number): number, T, number
 
 local SeparatorMode = enum
    "sep"
    "term"
 end
 
-local function parse_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
+local function parse_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
    local n = 1
    while tokens[i].kind ~= "$EOF$" do
       if close[tokens[i].tk] then
          (list as Node).yend = tokens[i].y
          break
       end
-      local item: `T
+      local item: T
       i, item, n = parse_item(tokens, i, errs, n)
       table.insert(list, item)
       if tokens[i].tk == "," then
@@ -1041,7 +1041,7 @@ local function parse_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, li
    return i, list
 end
 
-local function parse_bracket_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<`T>): number, {`T}
+local function parse_bracket_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
    i = verify_tk(tokens, i, errs, open)
    i = parse_list(tokens, i, errs, list, { [close] = true }, sep, parse_item)
    i = verify_tk(tokens, i, errs, close)
@@ -1053,7 +1053,7 @@ local function parse_table_literal(tokens: {Token}, i: number, errs: {ParseError
    return parse_bracket_list(tokens, i, errs, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list<`T>(tokens: {Token}, i: number, errs: {ParseError}, list: {`T}, parse_item: ParseItem<`T>): number, {`T}
+local function parse_trying_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, parse_item: ParseItem<T>): number, {T}
    local tryerrs: {ParseError} = {}
    local tryi, item = parse_item(tokens, i, tryerrs)
    if not item then
@@ -1972,30 +1972,30 @@ end
 -- AST traversal
 --------------------------------------------------------------------------------
 
-local VisitorCallbacks = record<`N, `T>
-   before: function(`N, {`T})
-   before_statements: function({`N}, {`T})
-   before_e2: function({`N}, {`T})
-   after: function(`N, {`T}, `T): `T
+local VisitorCallbacks = record<N, T>
+   before: function(N, {T})
+   before_statements: function({N}, {T})
+   before_e2: function({N}, {T})
+   after: function(N, {T}, T): T
 end
 
-local Visitor = record<`K, `N, `T>
-   cbs: {`K:VisitorCallbacks<`N, `T>}
-   after: VisitorCallbacks<`N, `T>
+local Visitor = record<K, N, T>
+   cbs: {K:VisitorCallbacks<N, T>}
+   after: VisitorCallbacks<N, T>
 end
 
-local function visit_before<`K,`N,`T>(ast: `N, kind: `K, visit: Visitor<`K,`N,`T>): `T
+local function visit_before<K,N,T>(ast: N, kind: K, visit: Visitor<K,N,T>): T
    assert(visit.cbs[kind], "no visitor for " .. (kind as string))
    if visit.cbs[kind].before then
       visit.cbs[kind].before(ast)
    end
 end
 
-local function visit_after<`K,`N,`T>(ast: `N, kind: `K, visit: Visitor<`K, `N,`T>, xs: {`T}): `T
+local function visit_after<K,N,T>(ast: N, kind: K, visit: Visitor<K, N,T>, xs: {T}): T
    if visit.after and visit.after.before then
       visit.after.before(ast, xs)
    end
-   local ret: `T
+   local ret: T
    if visit.cbs[kind].after then
       ret = visit.cbs[kind].after(ast, xs)
    end
@@ -2005,9 +2005,9 @@ local function visit_after<`K,`N,`T>(ast: `N, kind: `K, visit: Visitor<`K, `N,`T
    return ret
 end
 
-local function recurse_type<`T>(ast: Type, visit: Visitor<TypeName, Type, `T>): `T
+local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    visit_before(ast, ast.typename, visit)
-   local xs: {`T} = {}
+   local xs: {T} = {}
 
    if ast.typeargs then
       for _, child in ipairs(ast.typeargs) do
@@ -2066,15 +2066,15 @@ local function recurse_type<`T>(ast: Type, visit: Visitor<TypeName, Type, `T>): 
    return visit_after(ast, ast.typename, visit, xs)
 end
 
-local function recurse_node<`T>(ast: Node,
-                                visit_node: Visitor<NodeKind, Node, `T>,
-                                visit_type: Visitor<TypeName, Type, `T>): `T
+local function recurse_node<T>(ast: Node,
+                                visit_node: Visitor<NodeKind, Node, T>,
+                                visit_type: Visitor<TypeName, Type, T>): T
    if not ast then
       -- parse error
       return
    end
    visit_before(ast, ast.kind, visit_node)
-   local xs: {`T} = {}
+   local xs: {T} = {}
    local cbs = visit_node.cbs[ast.kind]
    if ast.kind == "statements"
       or ast.kind == "variables"
@@ -2172,7 +2172,7 @@ local function recurse_node<`T>(ast: Node,
       if ast.op.op == ":" and ast.e1.kind == "string" then
          p1 = -999
       end
-      xs[2] = p1 as `T
+      xs[2] = p1 as T
       if ast.op.arity == 2 then
          if cbs.before_e2 then
             cbs.before_e2(ast, xs)
@@ -2182,7 +2182,7 @@ local function recurse_node<`T>(ast: Node,
          else
             xs[3] = recurse_node(ast.e2, visit_node, visit_type)
          end
-         xs[4] = (ast.e2.op and ast.e2.op.prec) as `T
+         xs[4] = (ast.e2.op and ast.e2.op.prec) as T
       end
    elseif ast.kind == "newtype" then
       xs[1] = recurse_type(ast.newtype, visit_type)
@@ -2765,12 +2765,12 @@ local VARARG_ANY = a_type { typename = "any", is_va = true }
 local VARARG_STRING = a_type { typename = "string", is_va = true }
 local VARARG_NUMBER = a_type { typename = "number", is_va = true }
 local VARARG_UNKNOWN = a_type { typename = "unknown", is_va = true }
+local VARARG_ALPHA = a_type { typename = "typevar", typevar = "@a", is_va = true }
 local BOOLEAN = a_type { typename = "boolean" }
-local ARG_ALPHA = a_type { typename = "typearg", typearg = "`a" }
-local ARG_BETA = a_type { typename = "typearg", typearg = "`b" }
-local ALPHA = a_type { typename = "typevar", typevar = "`a" }
-local BETA = a_type { typename = "typevar", typevar = "`b" }
-local ARRAY_OF_ANY = a_type { typename = "array", elements = ANY }
+local ARG_ALPHA = a_type { typename = "typearg", typearg = "@a" }
+local ARG_BETA = a_type { typename = "typearg", typearg = "@b" }
+local ALPHA = a_type { typename = "typevar", typevar = "@a" }
+local BETA = a_type { typename = "typevar", typevar = "@b" }
 local ARRAY_OF_STRING = a_type { typename = "array", elements = STRING }
 local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
@@ -3284,8 +3284,8 @@ local standard_library: {string:Type} = {
             needs_compat53 = true,
             typeargs = { ARG_ALPHA },
             args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
-            rets = { a_type { typename = "typevar", typevar = "`a", is_va = true }
-         } },
+            rets = { VARARG_ALPHA },
+         },
          ["move"] = a_type {
             typename = "poly",
             types = {
@@ -4748,7 +4748,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          return vars
       end
 
-      local function intersect<`T>(xs: {`T}, ys: {`T}, same: function(`T, `T): boolean): {`T}
+      local function intersect<T>(xs: {T}, ys: {T}, same: function(T, T): boolean): {T}
          local rs = {}
          for i = #xs, 1, -1 do
             local x = xs[i]

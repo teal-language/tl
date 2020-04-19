@@ -2765,12 +2765,12 @@ local VARARG_ANY = a_type({ ["typename"] = "any", ["is_va"] = true, })
 local VARARG_STRING = a_type({ ["typename"] = "string", ["is_va"] = true, })
 local VARARG_NUMBER = a_type({ ["typename"] = "number", ["is_va"] = true, })
 local VARARG_UNKNOWN = a_type({ ["typename"] = "unknown", ["is_va"] = true, })
+local VARARG_ALPHA = a_type({ ["typename"] = "typevar", ["typevar"] = "@a", ["is_va"] = true, })
 local BOOLEAN = a_type({ ["typename"] = "boolean", })
-local ARG_ALPHA = a_type({ ["typename"] = "typearg", ["typearg"] = "`a", })
-local ARG_BETA = a_type({ ["typename"] = "typearg", ["typearg"] = "`b", })
-local ALPHA = a_type({ ["typename"] = "typevar", ["typevar"] = "`a", })
-local BETA = a_type({ ["typename"] = "typevar", ["typevar"] = "`b", })
-local ARRAY_OF_ANY = a_type({ ["typename"] = "array", ["elements"] = ANY, })
+local ARG_ALPHA = a_type({ ["typename"] = "typearg", ["typearg"] = "@a", })
+local ARG_BETA = a_type({ ["typename"] = "typearg", ["typearg"] = "@b", })
+local ALPHA = a_type({ ["typename"] = "typevar", ["typevar"] = "@a", })
+local BETA = a_type({ ["typename"] = "typevar", ["typevar"] = "@b", })
 local ARRAY_OF_STRING = a_type({ ["typename"] = "array", ["elements"] = STRING, })
 local ARRAY_OF_ALPHA = a_type({ ["typename"] = "array", ["elements"] = ALPHA, })
 local MAP_OF_ALPHA_TO_BETA = a_type({ ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, })
@@ -3284,8 +3284,8 @@ local standard_library = {
             ["needs_compat53"] = true,
             ["typeargs"] = { [1] = ARG_ALPHA, },
             ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, },
-            ["rets"] = { [1] = a_type({ ["typename"] = "typevar", ["typevar"] = "`a", ["is_va"] = true, }),
-            }, }),
+            ["rets"] = { [1] = VARARG_ALPHA, },
+         }),
          ["move"] = a_type({
             ["typename"] = "poly",
             ["types"] = {
