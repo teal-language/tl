@@ -28,7 +28,7 @@ describe("record method", function()
             x = 2,
             b = true,
          }
-         function r:f<`T>(a: number, b: string, xs: {`T}): boolean, `T
+         function r:f<T>(a: number, b: string, xs: {T}): boolean, T
             if self.b then
                return #b == 3, xs[1]
             else

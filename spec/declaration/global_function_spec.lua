@@ -18,7 +18,7 @@ describe("global function", function()
 
       it("can have type variables", function()
          local tokens = tl.lex([[
-            global f: function<`a, `b, `c>(`a, `b): `c
+            global f: function<a, b, c>(a, b): c
 
             f = function(a: number, b: string): boolean
                return #b == a
@@ -89,7 +89,7 @@ describe("global function", function()
 
          it("declaration with type variables", function()
             local tokens = tl.lex([[
-               ]] .. decl .. [[ f<`a, `b>(a1: `a, a2: `a, b1: `b, b2: `b): `b
+               ]] .. decl .. [[ f<a, b>(a1: a, a2: a, b1: b, b2: b): b
                   if a1 == a2 then
                      return b1
                   else
@@ -155,7 +155,7 @@ describe("global function", function()
          describe("with function arguments", function()
             it("has ambiguity without parentheses in function type return", function()
                local tokens = tl.lex([[
-                  ]] .. decl .. [[ map<`a, `b>(f: function(`a):`b, xs: {`a}): {`b}
+                  ]] .. decl .. [[ map<a, b>(f: function(a):b, xs: {a}): {b}
                      local r = {}
                      for i, x in ipairs(xs) do
                         r[i] = f(x)
@@ -171,12 +171,12 @@ describe("global function", function()
                local syntax_errors = {}
                tl.parse_program(tokens, syntax_errors)
                assert.same(1, syntax_errors[1].y)
-               assert.same(54 + #decl, syntax_errors[1].x)
+               assert.same(50 + #decl, syntax_errors[1].x)
             end)
 
             it("has no ambiguity with parentheses in function type return", function()
                local tokens = tl.lex([[
-                  ]] .. decl .. [[ map<`a,`b>(f: function(`a):(`b), xs: {`a}): {`b}
+                  ]] .. decl .. [[ map<a,b>(f: function(a):(b), xs: {a}): {b}
                      local r = {}
                      for i, x in ipairs(xs) do
                         r[i] = f(x)

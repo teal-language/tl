@@ -93,15 +93,13 @@ precedence, see below.
 
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
 *      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | ‘function’ functiontype
-*      typevar | Name [typeargs]
-
-*  typevar ::= ‘`’ Name
+*      | Name [typeargs]
 
 *  typelist ::= type {‘,’ type}
 
 *  retlist ::= ‘:’ ‘(’ [typelist] [‘...’] ‘)’ | ‘:’ typelist [‘...’]
 
-*  typeargs ::= ‘<’ typevar {‘,’ typevar} ‘>’
+*  typeargs ::= ‘<’ Name {‘,’ Name } ‘>’
 
 *  newtype ::= ‘record’ [typeargs] [‘{’ type ‘}’] {Name ‘:’ type} ‘end’ |
 *      ‘enum’ {LiteralString} ‘end’ |
