@@ -4385,7 +4385,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          description = "type " .. show_type(resolve_tuple(orig_tbl))
       end
 
-      return node_error(node, "invalid key '" .. key.tk .. "' in " .. description)
+      return node_error(key, "invalid key '" .. key.tk .. "' in " .. description)
    end
 
    local function widen_in_scope(scope: {string:Variable}, var: string): boolean
@@ -4666,7 +4666,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             return node_error(idxnode, "wrong index type: %s, expected %s", orig_b, a.keys)
          end
       elseif node.e2.kind == "string" then
-         return match_record_key(node, a, { kind = "string", tk = assert(node.e2.conststr) }, orig_a)
+         return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
       elseif (a.typename == "record" or a.typename == "arrayrecord") and b.typename == "enum" then
          local field_names: {string} = {}
          for k, _ in pairs(b.enumset) do
@@ -5467,10 +5467,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   if #b == 2 then
                      local b1 = resolve_unary(b[1])
                      local b2 = resolve_unary(b[2])
-                     if b1.typename == "record" and node.e2[2].conststr then
-                        node.type = match_record_key(node, b1, { kind = "string", tk = assert(node.e2[2].conststr) }, b1)
+                     local knode = node.e2[2]
+                     if b1.typename == "record" and knode.conststr then
+                        node.type = match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
                      else
-                        node.type = type_check_index(node, node.e2[2], b1, b2)
+                        node.type = type_check_index(node, knode, b1, b2)
                      end
                   else
                      node_error(node, "rawget expects two arguments")
@@ -5539,7 +5540,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)
                   end
                else
-                  node.type = match_record_key(node, a, { kind = "string", tk = node.e2.tk }, orig_a)
+                  node.type = match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = node.e2.tk }, orig_a)
                   if node.type.needs_compat53 and not opts.skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
