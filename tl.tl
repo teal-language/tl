@@ -932,9 +932,14 @@ local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
 
+local function a_type(t: Type): Type
+   t.typeid = new_typeid()
+   return t
+end
+
 local function new_type(tokens: {Token}, i: number): Type
    local t = tokens[i]
-   return { typeid = new_typeid(), y = t.y, x = t.x, tk = t.tk }
+   return a_type { y = t.y, x = t.x, tk = t.tk }
 end
 
 local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind: TokenKind, node_kind: NodeKind): number, Node
@@ -1073,8 +1078,7 @@ end
 local function parse_typearg_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
    i = verify_tk(tokens, i, errs, "`")
    i = verify_kind(tokens, i, errs, "identifier")
-   return i, {
-      typeid = new_typeid(),
+   return i, a_type {
       y = tokens[i - 2].y,
       x = tokens[i - 2].x,
       typename = "typearg",
@@ -1085,8 +1089,7 @@ end
 local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
    i = verify_tk(tokens, i, errs, "`")
    i = verify_kind(tokens, i, errs, "identifier")
-   return i, {
-      typeid = new_typeid(),
+   return i, a_type {
       y = tokens[i - 2].y,
       x = tokens[i - 2].x,
       typename = "typevar",
@@ -1149,8 +1152,7 @@ local function parse_base_type(tokens: {Token}, i: number, errs: {ParseError}): 
       or tokens[i].tk == "boolean"
       or tokens[i].tk == "nil"
       or tokens[i].tk == "number" then
-      return i + 1, {
-         typeid = new_typeid(),
+      return i + 1, a_type {
          y = tokens[i].y,
          x = tokens[i].x,
          typename = tokens[i].tk as TypeName
@@ -1158,8 +1160,8 @@ local function parse_base_type(tokens: {Token}, i: number, errs: {ParseError}): 
    elseif tokens[i].tk == "table" then
       local typ = new_type(tokens, i)
       typ.typename = "map"
-      typ.keys = { typeid = new_typeid(), typename = "any" }
-      typ.values = { typeid = new_typeid(), typename = "any" }
+      typ.keys = a_type { typename = "any" }
+      typ.values = a_type { typename = "any" }
       return i + 1, typ
    elseif tokens[i].tk == "function" then
       return parse_function_type(tokens, i, errs)
@@ -1796,8 +1798,7 @@ parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number
             else
                local prev_t = def.fields[v.tk]
                if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[v.tk] = {
-                     typeid = new_typeid(),
+                  def.fields[v.tk] = a_type {
                      y = v.y,
                      x = v.x,
                      typename = "poly",
@@ -2767,31 +2768,31 @@ end
 -- Type check
 --------------------------------------------------------------------------------
 
-local ANY = { typeid = new_typeid(), typename = "any" }
-local NIL = { typeid = new_typeid(), typename = "nil" }
-local NUMBER = { typeid = new_typeid(), typename = "number" }
-local STRING = { typeid = new_typeid(), typename = "string" }
-local OPT_NUMBER = { typeid = new_typeid(), typename = "number" }
-local OPT_STRING = { typeid = new_typeid(), typename = "string" }
-local VARARG_ANY = { typeid = new_typeid(), typename = "any", is_va = true }
-local VARARG_STRING = { typeid = new_typeid(), typename = "string", is_va = true }
-local VARARG_NUMBER = { typeid = new_typeid(), typename = "number", is_va = true }
-local VARARG_UNKNOWN = { typeid = new_typeid(), typename = "unknown", is_va = true }
-local BOOLEAN = { typeid = new_typeid(), typename = "boolean" }
-local ARG_ALPHA = { typeid = new_typeid(), typename = "typearg", typearg = "`a" }
-local ARG_BETA = { typeid = new_typeid(), typename = "typearg", typearg = "`b" }
-local ALPHA = { typeid = new_typeid(), typename = "typevar", typevar = "`a" }
-local BETA = { typeid = new_typeid(), typename = "typevar", typevar = "`b" }
-local ARRAY_OF_ANY = { typeid = new_typeid(), typename = "array", elements = ANY }
-local ARRAY_OF_STRING = { typeid = new_typeid(), typename = "array", elements = STRING }
-local ARRAY_OF_ALPHA = { typeid = new_typeid(), typename = "array", elements = ALPHA }
-local MAP_OF_ALPHA_TO_BETA = { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA }
-local TABLE = { typeid = new_typeid(), typename = "map", keys = ANY, values = ANY }
-local FUNCTION = { typeid = new_typeid(), typename = "function", args = { { typeid = new_typeid(), typename = "any", is_va = true } }, rets = { { typeid = new_typeid(), typename = "any", is_va = true } } }
-local INVALID = { typeid = new_typeid(), typename = "invalid" }
-local UNKNOWN = { typeid = new_typeid(), typename = "unknown" }
-local NOMINAL_FILE = { typeid = new_typeid(), typename = "nominal", names = {"FILE"} }
-local METATABLE = { typeid = new_typeid(), typename = "nominal", names = {"METATABLE"} }
+local ANY = a_type { typename = "any" }
+local NIL = a_type { typename = "nil" }
+local NUMBER = a_type { typename = "number" }
+local STRING = a_type { typename = "string" }
+local OPT_NUMBER = a_type { typename = "number" }
+local OPT_STRING = a_type { typename = "string" }
+local VARARG_ANY = a_type { typename = "any", is_va = true }
+local VARARG_STRING = a_type { typename = "string", is_va = true }
+local VARARG_NUMBER = a_type { typename = "number", is_va = true }
+local VARARG_UNKNOWN = a_type { typename = "unknown", is_va = true }
+local BOOLEAN = a_type { typename = "boolean" }
+local ARG_ALPHA = a_type { typename = "typearg", typearg = "`a" }
+local ARG_BETA = a_type { typename = "typearg", typearg = "`b" }
+local ALPHA = a_type { typename = "typevar", typevar = "`a" }
+local BETA = a_type { typename = "typevar", typevar = "`b" }
+local ARRAY_OF_ANY = a_type { typename = "array", elements = ANY }
+local ARRAY_OF_STRING = a_type { typename = "array", elements = STRING }
+local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
+local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
+local TABLE = a_type { typename = "map", keys = ANY, values = ANY }
+local FUNCTION = a_type { typename = "function", args = { a_type { typename = "any", is_va = true } }, rets = { a_type { typename = "any", is_va = true } } }
+local INVALID = a_type { typename = "invalid" }
+local UNKNOWN = a_type { typename = "unknown" }
+local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
+local METATABLE = a_type { typename = "nominal", names = {"METATABLE"} }
 
 local numeric_binop = {
    ["number"] = {
@@ -3167,251 +3168,251 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
 end
 
 local standard_library: {string:Type} = {
-   ["..."] = { typeid = new_typeid(), typename = "tuple", STRING, STRING, STRING, STRING, STRING },
-   ["@return"] = { typeid = new_typeid(), typename = "tuple", ANY },
-   ["any"] = { typeid = new_typeid(), typename = "typetype", def = ANY },
+   ["..."] = a_type { typename = "tuple", STRING, STRING, STRING, STRING, STRING },
+   ["@return"] = a_type { typename = "tuple", ANY },
+   ["any"] = a_type { typename = "typetype", def = ANY },
    ["arg"] = ARRAY_OF_STRING,
-   ["require"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = {} },
-   ["setmetatable"] = { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
-   ["getmetatable"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { METATABLE } },
-   ["rawget"] = { typeid = new_typeid(), typename = "function", args = { TABLE, ANY }, rets = { ANY } },
-   ["rawset"] = {
-      typeid = new_typeid(), typename = "poly",
+   ["require"] = a_type { typename = "function", args = { STRING }, rets = {} },
+   ["setmetatable"] = a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } },
+   ["getmetatable"] = a_type { typename = "function", args = { ANY }, rets = { METATABLE } },
+   ["rawget"] = a_type { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
+   ["rawset"] = a_type {
+      typename = "poly",
       types = {
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
-         { typeid = new_typeid(), typename = "function", args = { TABLE, ANY, ANY }, rets = {} },
+         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} },
+         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+         a_type { typename = "function", args = { TABLE, ANY, ANY }, rets = {} },
       }
    },
-   ["next"] = {
-      typeid = new_typeid(), typename = "poly",
+   ["next"] = a_type {
+      typename = "poly",
       types = {
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
-         { typeid = new_typeid(), typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
+         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
+         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
+         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
+         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
       },
    },
-   ["load"] = {
-      typeid = new_typeid(), typename = "poly",
+   ["load"] = a_type {
+      typename = "poly",
       types = {
-         { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { FUNCTION } },
-         { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { FUNCTION } },
+         a_type { typename = "function", args = { STRING }, rets = { FUNCTION } },
+         a_type { typename = "function", args = { STRING, STRING }, rets = { FUNCTION } },
       },
    },
-   ["FILE"] = {
-      typeid = new_typeid(), typename = "typetype",
-      def = {
-         typeid = new_typeid(), typename = "record",
+   ["FILE"] = a_type {
+      typename = "typetype",
+      def = a_type {
+         typename = "record",
          fields = {
-            ["read"] = {
-               typeid = new_typeid(), typename = "poly",
+            ["read"] = a_type {
+               typename = "poly",
                types = {
-                  { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
-                  { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
+                  a_type { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
+                  a_type { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
                }
             },
-            ["write"] = { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
-            ["close"] = { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
-            ["flush"] = { typeid = new_typeid(), typename = "function", args = { NOMINAL_FILE }, rets = {} },
+            ["write"] = a_type { typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+            ["close"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
+            ["flush"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = {} },
             -- TODO complete...
          },
       },
    },
-   ["METATABLE"] = {
-      typeid = new_typeid(), typename = "typetype",
-      def = {
-         typeid = new_typeid(), typename = "record",
+   ["METATABLE"] = a_type {
+      typename = "typetype",
+      def = a_type {
+         typename = "record",
          fields = {
             ["__index"] = ANY, -- FIXME
             ["__newindex"] = ANY, -- FIXME
-            ["__tostring"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { STRING } },
-            ["__mode"] = { typeid = new_typeid(), typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true, } },
+            ["__tostring"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+            ["__mode"] = a_type { typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true, } },
             ["__call"] = FUNCTION,
-            ["__gc"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = {} },
-            ["__len"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { NUMBER } },
-            ["__pairs"] = { typeid = new_typeid(), typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
-                  { typeid = new_typeid(), typename = "function", args = {}, rets = { ALPHA, BETA } },
+            ["__gc"] = a_type { typename = "function", args = { ANY }, rets = {} },
+            ["__len"] = a_type { typename = "function", args = { ANY }, rets = { NUMBER } },
+            ["__pairs"] = a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
+                  a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
             } },
             -- TODO complete...
          },
       },
    },
-   ["io"] = {
-      typeid = new_typeid(), typename = "record",
+   ["io"] = a_type {
+      typename = "record",
       fields = {
          ["stderr"] = NOMINAL_FILE,
          ["stdout"] = NOMINAL_FILE,
-         ["open"] = { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-         ["popen"] = { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-         ["write"] = { typeid = new_typeid(), typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
-         ["flush"] = { typeid = new_typeid(), typename = "function", args = {}, rets = {} },
-         ["type"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { STRING } },
+         ["open"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["popen"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["write"] = a_type { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["flush"] = a_type { typename = "function", args = {}, rets = {} },
+         ["type"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
       },
    },
-   ["os"] = {
-      typeid = new_typeid(), typename = "record",
+   ["os"] = a_type {
+      typename = "record",
       fields = {
-         ["getenv"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { STRING } },
-         ["execute"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
-         ["remove"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
-         ["time"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
-         ["tmpname"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { STRING } },
-         ["clock"] = { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER } },
-         ["exit"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["getenv"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
+         ["execute"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
+         ["remove"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
+         ["time"] = a_type { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+         ["tmpname"] = a_type { typename = "function", args = {}, rets = { STRING } },
+         ["clock"] = a_type { typename = "function", args = {}, rets = { NUMBER } },
+         ["exit"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
-               { typeid = new_typeid(), typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
+               a_type { typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
+               a_type { typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
             }
          },
       },
    },
-   ["package"] = {
-      typeid = new_typeid(), typename = "record",
+   ["package"] = a_type {
+      typename = "record",
       fields = {
          ["path"] = STRING,
          ["config"] = STRING,
-         ["loaded"] = {
-            typeid = new_typeid(), typename = "map",
+         ["loaded"] = a_type {
+            typename = "map",
             keys = STRING,
             values = ANY,
          },
-         ["searchers"] = {
-            typeid = new_typeid(), typename = "array",
-            elements = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { ANY } }
+         ["searchers"] = a_type {
+            typename = "array",
+            elements = a_type { typename = "function", args = { STRING }, rets = { ANY } }
          },
-         ["loaders"] = {
-            typeid = new_typeid(), typename = "array",
-            elements = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { ANY } }
+         ["loaders"] = a_type {
+            typename = "array",
+            elements = a_type { typename = "function", args = { STRING }, rets = { ANY } }
          },
       },
    },
-   ["table"] = {
-      typeid = new_typeid(), typename = "record",
+   ["table"] = a_type {
+      typename = "record",
       fields = {
-         ["pack"] = { typeid = new_typeid(), typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
-         ["unpack"] = {
-            typeid = new_typeid(), typename = "function",
+         ["pack"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
+         ["unpack"] = a_type {
+            typename = "function",
             needs_compat53 = true,
             typeargs = { ARG_ALPHA },
             args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
-            rets = { { typeid = new_typeid(), typename = "typevar", typevar = "`a", is_va = true }
+            rets = { a_type { typename = "typevar", typevar = "`a", is_va = true }
          } },
-         ["move"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["move"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
             }
          },
-         ["insert"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["insert"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} },
             }
          },
-         ["remove"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } },
-         ["concat"] = { typeid = new_typeid(), typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } },
-         ["sort"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["remove"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } },
+         ["concat"] = a_type { typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } },
+         ["sort"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
-               { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, { typeid = new_typeid(), typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
+               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
             }
          }
       },
    },
-   ["string"] = {
-      typeid = new_typeid(), typename = "record",
+   ["string"] = a_type {
+      typename = "record",
       fields = {
-         ["sub"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
-         ["match"] = { typeid = new_typeid(), typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } },
-         ["rep"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
-         ["lower"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { STRING } },
-         ["upper"] = { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { STRING } },
-         ["gsub"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["sub"] = a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
+         ["match"] = a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } },
+         ["rep"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["lower"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
+         ["upper"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
+         ["gsub"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING, { typeid = new_typeid(), typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING, { typeid = new_typeid(), typename = "function", args = { VARARG_STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = { VARARG_STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
                -- FIXME any other modes
             }
          },
-         ["gmatch"] = { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = {
-            { typeid = new_typeid(), typename = "function", args = {}, rets = { STRING } },
+         ["gmatch"] = a_type { typename = "function", args = { STRING, STRING }, rets = {
+            a_type { typename = "function", args = {}, rets = { STRING } },
          } },
-         ["find"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["find"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               a_type { typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               a_type { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
                -- FIXME any other modes
             }
          },
-         ["char"] = { typeid = new_typeid(), typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
-         ["byte"] = {
-            typeid = new_typeid(), typename = "poly",
+         ["char"] = a_type { typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
+         ["byte"] = a_type {
+            typename = "poly",
             types = {
-               { typeid = new_typeid(), typename = "function", args = { STRING }, rets = { NUMBER } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
-               { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } },
+               a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
+               a_type { typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
+               a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } },
             }
          },
-         ["format"] = { typeid = new_typeid(), typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
+         ["format"] = a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
       },
    },
-   ["math"] = {
-      typeid = new_typeid(), typename = "record",
+   ["math"] = a_type {
+      typename = "record",
       fields = {
-         ["max"] = { typeid = new_typeid(), typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-         ["min"] = { typeid = new_typeid(), typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-         ["floor"] = { typeid = new_typeid(), typename = "function", args = { NUMBER }, rets = { NUMBER } },
-         ["randomseed"] = { typeid = new_typeid(), typename = "function", args = { NUMBER }, rets = {} },
-         ["random"] = { typeid = new_typeid(), typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         ["max"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         ["min"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         ["floor"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+         ["randomseed"] = a_type { typename = "function", args = { NUMBER }, rets = {} },
+         ["random"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["huge"] = NUMBER,
       },
    },
-   ["type"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { STRING } },
-   ["utf8"] = {
-      typeid = new_typeid(), typename = "record",
+   ["type"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+   ["utf8"] = a_type {
+      typename = "record",
       fields = {
-         ["len"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
-         ["offset"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
+         ["len"] = a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
+         ["offset"] = a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } },
       },
    },
-   ["ipairs"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
-      { typeid = new_typeid(), typename = "function", args = {}, rets = { NUMBER, ALPHA } },
+   ["ipairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
+      a_type { typename = "function", args = {}, rets = { NUMBER, ALPHA } },
    } },
-   ["pairs"] = { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { { typeid = new_typeid(), typename = "map", keys = ALPHA, values = BETA } }, rets = {
-      { typeid = new_typeid(), typename = "function", args = {}, rets = { ALPHA, BETA } },
+   ["pairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
+      a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
    } },
-   ["pcall"] = { typeid = new_typeid(), typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
-   ["assert"] = {
-      typeid = new_typeid(), typename = "poly",
+   ["pcall"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
+   ["assert"] = a_type {
+      typename = "poly",
       types = {
-         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
-         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
       }
    },
-   ["select"] = {
-      typeid = new_typeid(), typename = "poly",
+   ["select"] = a_type {
+      typename = "poly",
       types = {
-         { typeid = new_typeid(), typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
-         { typeid = new_typeid(), typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
+         a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
       }
    },
-   ["print"] = { typeid = new_typeid(), typename = "function", args = { VARARG_ANY }, rets = {} },
-   ["tostring"] = { typeid = new_typeid(), typename = "function", args = { ANY }, rets = { STRING } },
-   ["tonumber"] = { typeid = new_typeid(), typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } },
-   ["error"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER }, rets = {} },
-   ["debug"] = {
-      typeid = new_typeid(), typename = "record",
+   ["print"] = a_type { typename = "function", args = { VARARG_ANY }, rets = {} },
+   ["tostring"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+   ["tonumber"] = a_type { typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } },
+   ["error"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = {} },
+   ["debug"] = a_type {
+      typename = "record",
       fields = {
-         ["traceback"] = { typeid = new_typeid(), typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["traceback"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
       },
    }
 }
@@ -3539,8 +3540,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          for k, _ in pairs(globals) do
             table.insert(field_order, k)
          end
-         return {
-            typeid = new_typeid(), typename = "record",
+         return a_type {
+            typename = "record",
             field_order = field_order,
             fields = globals,
          }, false
@@ -3945,8 +3946,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          t1 = resolve_tuple(t1)
       end
       if t2.typename == "tuple" and t1.typename ~= "tuple" then
-         t1 = {
-            typeid = new_typeid(), typename = "tuple",
+         t1 = a_type {
+            typename = "tuple",
             [1] = t1,
          }
       end
@@ -4144,9 +4145,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
       if t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
-            infer_var(t2.emptytable_type, { typeid = new_typeid(), typename = "array", elements = t1 }, node)
+            infer_var(t2.emptytable_type, a_type { typename = "array", elements = t1 }, node)
          else
-            infer_var(t2.emptytable_type, { typeid = new_typeid(), typename = "map", keys = t2.emptytable_type.keys, values = t1 }, node)
+            infer_var(t2.emptytable_type, a_type { typename = "map", keys = t2.emptytable_type.keys, values = t1 }, node)
          end
          return
       elseif t2.typename == "emptytable" then
@@ -4247,7 +4248,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          assert(type(args) == "table")
 
          if lax and is_unknown(func) then
-            func = { typeid = new_typeid(), typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } }
+            func = a_type { typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } }
          end
 
          func = resolve_unary(func)
@@ -4470,7 +4471,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
-            t = { typeid = new_typeid(), typename = "unknown" }
+            t = a_type { typename = "unknown" }
          end
          if arg.tk == "..." then
             t.is_va = true
@@ -4483,10 +4484,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          add_var(arg, arg.tk, t)
       end
 
-      add_var(nil, "@return", node.rets or { typeid = new_typeid(), typename = "tuple" })
+      add_var(nil, "@return", node.rets or a_type { typename = "tuple" })
       if recurse then
-         add_var(nil, node.name.tk, {
-            typeid = new_typeid(), typename = "function",
+         add_var(nil, node.name.tk, a_type {
+            typename = "function",
             args = args,
             rets = node.rets,
          })
@@ -4552,7 +4553,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
 
       if not resolved then
-         resolved = { typeid = new_typeid(), typename = "bad_nominal", names = t.names }
+         resolved = a_type { typename = "bad_nominal", names = t.names }
       end
 
       t.resolved = resolved
@@ -4614,7 +4615,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    local function get_rets(rets: {Type}): {Type}
       if lax and (#rets == 0) then
-         return {{ typeid = new_typeid(), typename = "unknown", is_va = true }}
+         return {a_type { typename = "unknown", is_va = true }}
       end
       return rets
    end
@@ -4658,7 +4659,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, b, a.keys)
             end
          end
-         return { y = node.y, x = node.x, typeid = new_typeid(), typename = "unknown_emptytable_value", emptytable_type = a }
+         return a_type { y = node.y, x = node.x, typename = "unknown_emptytable_value", emptytable_type = a }
       elseif a.typename == "map" then
          if is_a(b, a.keys) then
             return a.values
@@ -4698,8 +4699,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             if old.typename == "poly" then
                table.insert(old.types, new)
             else
-               return {
-                  typeid = new_typeid(), typename = "poly",
+               return a_type {
+                  typename = "poly",
                   types = {
                      old,
                      new
@@ -4805,8 +4806,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             if #types == 1 then
                return true, types[1]
             else
-               return true, {
-                  typeid = new_typeid(),
+               return true, a_type {
                   typename = "union",
                   types = types,
                }
@@ -4831,8 +4831,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             if #types == 1 then
                return true, types[1]
             else
-               return true, {
-                  typeid = new_typeid(),
+               return true, a_type {
                   typename = "union",
                   types = types,
                }
@@ -4865,8 +4864,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          if #types == 1 then
             return types[1]
          else
-            return {
-               typeid = new_typeid(),
+            return a_type {
                typename = "union",
                types = types,
             }
@@ -4964,7 +4962,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
             end_scope()
             -- TODO extract node type from `return`
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end
       },
       ["local_declaration"] = {
@@ -4981,7 +4979,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                end
                local t = decltype or infertype
                if t == nil then
-                  t = { typeid = new_typeid(), typename = "unknown" }
+                  t = a_type { typename = "unknown" }
                   if not lax then
                      if node.exps then
                         node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
@@ -4996,7 +4994,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                assert(var)
                add_var(var, var.tk, t, var.is_const)
             end
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["global_declaration"] = {
@@ -5028,7 +5026,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   end
                else
                   if t == nil then
-                     t = { typeid = new_typeid(), typename = "unknown" }
+                     t = a_type { typename = "unknown" }
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
                      t.assigned_to = var.tk
@@ -5036,7 +5034,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   add_global(var, var.tk, t, var.is_const)
                end
             end
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["assignment"] = {
@@ -5068,12 +5066,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   node_error(varnode, "unknown variable")
                end
             end
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["do"] = {
          after = function(node: Node, children: {Type}): Type
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["if"] = {
@@ -5083,7 +5081,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_scope()
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["elseif"] = {
@@ -5100,7 +5098,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             apply_facts(node.exp, f)
          end,
          after = function(node: Node, children: {Type}): Type
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["else"] = {
@@ -5114,7 +5112,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             apply_facts(node, f)
          end,
          after = function(node: Node, children: {Type}): Type
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["while"] = {
@@ -5128,7 +5126,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_scope()
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["label"] = {
@@ -5143,7 +5141,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             if unresolved then
                unresolved.t.labels[node.label] = nil
             end
-            node.type = { y = node.y, x = node.x, typeid = new_typeid(), typename = "none", }
+            node.type = a_type { y = node.y, x = node.x, typename = "none", }
             add_var(node, label_id, node.type)
          end,
       },
@@ -5158,7 +5156,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
                table.insert(unresolved.labels[node.label], node)
             end
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["repeat"] = {
@@ -5167,7 +5165,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             widen_all_unions()
          end,
          after = function(node: Node, children: {Type}): Type
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["forin"] = {
@@ -5205,7 +5203,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_scope()
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["fornum"] = {
@@ -5215,7 +5213,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_scope()
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["return"] = {
@@ -5243,7 +5241,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                module_type = resolve_unary(children[1])
             end
 
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["variables"] = {
@@ -5264,10 +5262,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       },
       ["table_literal"] = {
          after = function(node: Node, children: {Type}): Type
-            node.type = {
+            node.type = a_type {
                y = node.y,
                x = node.x,
-               typeid = new_typeid(), typename = "emptytable",
+               typename = "emptytable",
             }
             local is_record = false
             local is_array = false
@@ -5324,10 +5322,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                vtype = node.decltype
                assert_is_a(node.value, children[2], node.decltype, "table item")
             end
-            node.type = {
+            node.type = a_type {
                y = node.y,
                x = node.x,
-               typeid = new_typeid(), typename = "table_item",
+               typename = "table_item",
                kname = kname,
                ktype = ktype,
                vtype = vtype,
@@ -5340,12 +5338,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
-            add_var(nil, node.name.tk, {
-               typeid = new_typeid(), typename = "function",
+            add_var(nil, node.name.tk, a_type {
+               typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
             })
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["global_function"] = {
@@ -5354,12 +5352,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
-            add_global(nil, node.name.tk, {
-               typeid = new_typeid(), typename = "function",
+            add_global(nil, node.name.tk, a_type {
+               typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
             })
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["record_function"] = {
@@ -5378,10 +5376,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                rtype.typename = "record"
             end
             if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
-               local fn_type = {
+               local fn_type = a_type {
                   y = node.y,
                   x = node.x,
-                  typeid = new_typeid(), typename = "function",
+                  typename = "function",
                   is_method = node.is_method,
                   args = children[3],
                   rets = get_rets(children[4]),
@@ -5412,7 +5410,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          after = function(node: Node, children: {Type}): Type
             end_function_scope()
 
-            node.type = { typeid = new_typeid(), typename = "none" }
+            node.type = a_type { typename = "none" }
          end,
       },
       ["function"] = {
@@ -5423,10 +5421,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end_function_scope()
             -- children[1] args
             -- children[2] body
-            node.type = {
+            node.type = a_type {
                y = node.y,
                x = node.x,
-               typeid = new_typeid(), typename = "function",
+               typename = "function",
                args = children[1],
                rets = children[2],
             }
@@ -5498,7 +5496,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   local ftype = table.remove(b, 1)
                   local rets = type_check_function_call(node, ftype, b, false, 1)
                   if rets.typename ~= "tuple" then
-                     rets = { typeid = new_typeid(), typename = "tuple", rets }
+                     rets = a_type { typename = "tuple", rets }
                   end
                   table.insert(rets, 1, BOOLEAN)
                   node.type = rets
@@ -5622,7 +5620,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          after = function(node: Node, children: {Type}): Type
             node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
-               node.type = { typeid = new_typeid(), typename = "unknown" }
+               node.type = a_type { typename = "unknown" }
                if lax then
                   add_unknown(node, node.tk)
                else
@@ -5633,7 +5631,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       },
       ["identifier"] = {
          after = function(node: Node, children: {Type}): Type
-            node.type = { typeid = new_typeid(), typename = "none" } -- type is resolved elsewhere
+            node.type = a_type { typename = "none" } -- type is resolved elsewhere
          end,
       },
       ["newtype"] = {
@@ -5652,10 +5650,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    visit_node.cbs["string"] = {
       after = function(node: Node, children: {Type}): Type
-         node.type = {
+         node.type = a_type {
             y = node.y,
             x = node.x,
-            typeid = new_typeid(), typename = node.kind as TypeName,
+            typename = node.kind as TypeName,
             tk = node.tk,
          }
          return node.type
@@ -5774,10 +5772,10 @@ end
 
 local function init_modules(): {string:Type}
    local modules: {string:Type} = {
-      tl = {
-         typeid = new_typeid(), typename = "record",
+      tl = a_type {
+         typename = "record",
          fields = {
-            ["loader"] = { typeid = new_typeid(), typename = "function", args = {}, rets = {} },
+            ["loader"] = a_type { typename = "function", args = {}, rets = {} },
          }
       }
    }
