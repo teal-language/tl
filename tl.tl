@@ -1200,15 +1200,16 @@ local function parse_base_type(tokens: {Token}, i: number, errs: {ParseError}): 
 end
 
 parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
-   local istart = i
-   local bt: Type
-
-   local optional_paren = false
    if tokens[i].tk == "(" then
-      optional_paren = true
       i = i + 1
+      local t: Type
+      i, t = parse_type(tokens, i, errs)
+      i = verify_tk(tokens, i, errs, ")")
+      return i, t
    end
 
+   local bt: Type
+   local istart = i
    i, bt = parse_base_type(tokens, i, errs)
    if not bt then
       return i
@@ -1225,10 +1226,6 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
          table.insert(u.types, bt)
       end
       bt = u
-   end
-
-   if optional_paren then
-      i = verify_tk(tokens, i, errs, ")")
    end
    return i, bt
 end

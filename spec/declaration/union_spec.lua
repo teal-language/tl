@@ -17,5 +17,9 @@ describe("union declaration", function()
       -- without parentheses
       local params2: {string: string | {string}}
       params2 = { key1 = 'val2', key2 = {'val2', 'val3'}}
+
+      -- with extra parentheses
+      local params3: {string: ((((string | {string}))))}
+      params3 = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
 end)
