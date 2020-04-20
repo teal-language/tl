@@ -1202,6 +1202,13 @@ end
 parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
    local istart = i
    local bt: Type
+
+   local optional_paren = false
+   if tokens[i].tk == "(" then
+      optional_paren = true
+      i = i + 1
+   end
+
    i, bt = parse_base_type(tokens, i, errs)
    if not bt then
       return i
@@ -1217,10 +1224,13 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
          end
          table.insert(u.types, bt)
       end
-      return i, u
-   else
-      return i, bt
+      bt = u
    end
+
+   if optional_paren then
+      i = verify_tk(tokens, i, errs, ")")
+   end
+   return i, bt
 end
 
 parse_type_list = function(tokens: {Token}, i: number, errs: {ParseError}, open: string): number, Type

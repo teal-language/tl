@@ -89,7 +89,7 @@ precedence, see below.
 
    unop ::= ‘-’ | ‘not’ | ‘#’ | ‘~’
 
-*  type ::= basetype {‘|’ basetype}
+*  type ::= ‘(’ type ‘)’ | basetype {‘|’ basetype}
 
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
 *      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | ‘function’ functiontype
