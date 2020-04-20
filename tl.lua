@@ -2783,6 +2783,21 @@ local UNKNOWN = a_type({ ["typename"] = "unknown", })
 local NOMINAL_FILE = a_type({ ["typename"] = "nominal", ["names"] = { [1] = "FILE", }, })
 local METATABLE = a_type({ ["typename"] = "nominal", ["names"] = { [1] = "METATABLE", }, })
 
+local TIME_TABLE = a_type({
+   ["typename"] = "record",
+   ["fields"] = {
+      ["year"] = NUMBER,
+      ["month"] = NUMBER,
+      ["day"] = NUMBER,
+      ["hour"] = NUMBER,
+      ["min"] = NUMBER,
+      ["sec"] = NUMBER,
+      ["wday"] = NUMBER,
+      ["yday"] = NUMBER,
+      ["isdst"] = BOOLEAN,
+   },
+})
+
 local numeric_binop = {
    ["number"] = {
       ["number"] = NUMBER,
@@ -3246,6 +3261,13 @@ local standard_library = {
          ["execute"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, [3] = NUMBER, }, }),
          ["remove"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, }),
          ["time"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, }),
+         ["date"] = a_type({
+            ["typename"] = "poly",
+            ["types"] = {
+               [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, }),
+               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = OPT_STRING, }, ["rets"] = { [1] = a_type({ ["typename"] = "union", ["types"] = { [1] = STRING, [2] = TIME_TABLE, }, }), }, }),
+            },
+         }),
          ["tmpname"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, }),
          ["clock"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, }),
          ["exit"] = a_type({
@@ -3412,6 +3434,7 @@ for _, t in pairs(standard_library) do
       fill_field_order(t.def)
    end
 end
+fill_field_order(TIME_TABLE)
 
 local compat53_code_cache = {}
 

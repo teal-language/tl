@@ -2783,6 +2783,21 @@ local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
 local METATABLE = a_type { typename = "nominal", names = {"METATABLE"} }
 
+local TIME_TABLE = a_type {
+   typename = "record",
+   fields = {
+      ["year"] = NUMBER,
+      ["month"] = NUMBER,
+      ["day"] = NUMBER,
+      ["hour"] = NUMBER,
+      ["min"] = NUMBER,
+      ["sec"] = NUMBER,
+      ["wday"] = NUMBER,
+      ["yday"] = NUMBER,
+      ["isdst"] = BOOLEAN,
+   }
+}
+
 local numeric_binop = {
    ["number"] = {
       ["number"] = NUMBER,
@@ -3246,6 +3261,13 @@ local standard_library: {string:Type} = {
          ["execute"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
          ["remove"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
          ["time"] = a_type { typename = "function", args = {}, rets = { NUMBER } }, -- TODO table argument
+         ["date"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = {}, rets = { STRING } },
+               a_type { typename = "function", args = { STRING, OPT_STRING }, rets = { a_type { typename = "union", types = { STRING, TIME_TABLE } } } },
+            }
+         },
          ["tmpname"] = a_type { typename = "function", args = {}, rets = { STRING } },
          ["clock"] = a_type { typename = "function", args = {}, rets = { NUMBER } },
          ["exit"] = a_type {
@@ -3412,6 +3434,7 @@ for _, t in pairs(standard_library) do
       fill_field_order(t.def)
    end
 end
+fill_field_order(TIME_TABLE)
 
 local compat53_code_cache: {string:Node} = {}
 
