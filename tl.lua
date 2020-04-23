@@ -408,11 +408,13 @@ function tl.lex(input)
             state = "maybelongstringend"
          end
       elseif state == "maybelongstringend" then
-         if c == "]" and ls_close_lvl == ls_open_lvl then
-            end_token("string")
-            state = "any"
-            ls_open_lvl = 0
-            ls_close_lvl = 0
+         if c == "]" then
+            if ls_close_lvl == ls_open_lvl then
+               end_token("string")
+               state = "any"
+               ls_open_lvl = 0
+               ls_close_lvl = 0
+            end
          elseif c == "=" then
             ls_close_lvl = ls_close_lvl + 1
          else

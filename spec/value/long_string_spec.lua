@@ -31,6 +31,24 @@ describe("long string", function()
       assert.same({}, errors)
    end)
 
+  it("does not get confused by a ] when closing a level 1 long string", function()
+      local tokens = tl.lex([===[
+         local foo = [=[hello]]=]
+      ]===])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
+  it("does not get confused by multiple ] when closing a level 1 long string", function()
+      local tokens = tl.lex([===[
+         local foo = [=[hello]]]]]]=]
+      ]===])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast)
+      assert.same({}, errors)
+   end)
+
    it("typecheck a level 1 long string inside a level 2 long string", function()
       local tokens = tl.lex([[
          local foo = [=[
