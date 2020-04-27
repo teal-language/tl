@@ -18,6 +18,10 @@ local function die(msg)
    os.exit(1)
 end
 
+local function is_null_or_whitespace(str)
+   return str == nil or trim(str) == ""
+end
+
 local function find_in_sequence(seq, value)
    for _, v in ipairs(seq) do
       if trim(v) == trim(value) then
@@ -155,6 +159,10 @@ end
 local env = nil
 
 local function get_shared_library_ext()
+   if is_null_or_whitespace(package.cpath) then
+      return "so" -- FIXME
+   end
+
    return package.cpath:match("%.(%w+)%s*$")
 end
 
