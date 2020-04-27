@@ -18,7 +18,7 @@ local function die(msg)
    os.exit(1)
 end
 
-local function is_null_or_whitespace(str)
+local function is_nil_or_whitespace(str)
    return str == nil or trim(str) == ""
 end
 
@@ -159,7 +159,7 @@ end
 local env = nil
 
 local function get_shared_library_ext()
-   if is_null_or_whitespace(package.cpath) then
+   if is_nil_or_whitespace(package.cpath) then
       return "so" -- FIXME
    end
 
