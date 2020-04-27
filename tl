@@ -19,13 +19,13 @@ local function die(msg)
 end
 
 local function find_in_sequence(seq, value)
-    for _, v in ipairs(seq) do
-        if trim(v) == trim(value) then
-            return true
-        end
-    end
+   for _, v in ipairs(seq) do
+      if trim(v) == trim(value) then
+         return true
+      end
+   end
 
-    return false
+   return false
 end
 
 -- FIXME
@@ -155,21 +155,21 @@ end
 local env = nil
 
 local function prepend_to_path(directory)
-    local path_separator = package.config:sub(1, 1)
+   local path_separator = package.config:sub(1, 1)
 
-    local lua_path_str = directory
+   local lua_path_str = directory
 
-    if string.sub(lua_path_str, -1) == path_separator then
-        lua_path_str = lua_path_str:sub(1, -2)
-    end
+   if string.sub(lua_path_str, -1) == path_separator then
+      lua_path_str = lua_path_str:sub(1, -2)
+   end
 
-    lua_path_str = lua_path_str .. path_separator .. "?.lua;"
+   lua_path_str = lua_path_str .. path_separator .. "?.lua;"
 
-    package.path = lua_path_str .. package.path
+   package.path = lua_path_str .. package.path
 end
 
 for _, include in ipairs(tlconfig["include"]) do
-    prepend_to_path(include)
+   prepend_to_path(include)
 end
 
 for i, filename in ipairs(args["script"]) do
