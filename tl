@@ -155,7 +155,7 @@ end
 local env = nil
 
 local function get_shared_library_ext()
-   return package.cpath:match("%.(%w+);")
+   return package.cpath:match("%.(%w+)$")
 end
 
 local function prepend_to_path(directory)

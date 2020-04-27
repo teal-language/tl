@@ -16,16 +16,13 @@ describe("-I --include argument", function()
    end)
    it("adds a directory to package.cpath", function()
       local name = util.write_tmp_file(finally, "foo.lua", [[
-         local ext = package.cpath:match("%.(%w+);")
-         local cpath_str = string.format("spec/cli/?.%s;", ext)
-
          print(package.cpath)
       ]])
-      local pd = io.popen("LUA_CPATH=\"/usr/lib/lua/?.so;\" ./tl run -I spec/cli/ " .. name, "r")
+      local pd = io.popen("LUA_CPATH=\"/usr/lib/lua/?.so\" ./tl run -I spec/cli/ " .. name, "r")
       local output = pd:read("*a")
       util.assert_popen_close(true, "exit", 0, pd:close())
       util.assert_line_by_line([[
-         spec/cli/?.so;/usr/lib/lua/?.so;
+         spec/cli/?.so;/usr/lib/lua/?.so
       ]], output)
    end)
 end)
