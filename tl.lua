@@ -1,4 +1,4 @@
-local assert = require('compat53.module').assert or assert; local io = require('compat53.module').io or io; local ipairs = require('compat53.module').ipairs or ipairs; local load = require('compat53.module').load or load; local math = require('compat53.module').math or math; local os = require('compat53.module').os or os; local package = require('compat53.module').package or package; local pairs = require('compat53.module').pairs or pairs; local string = require('compat53.module').string or string; local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local Env = {}
+local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local Env = {}
 
 
 
@@ -3456,6 +3456,23 @@ local function add_compat53_entries(program, used_set)
    end
    table.sort(used_list)
 
+   local compat53_loaded = false
+
+   local n = 1
+   local function load_code(name, text)
+      local code = compat53_code_cache[name]
+      if not code then
+         local tokens = tl.lex(text)
+         local _
+         _, code = tl.parse_program(tokens, {}, "@internal")
+         tl.type_check(code, { ["lax"] = false, ["skip_compat53"] = true, })
+         code = code[1]
+         compat53_code_cache[name] = code
+      end
+      table.insert(program, n, code)
+      n = n + 1
+   end
+
    for i, name in ipairs(used_list) do
       local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
@@ -3464,18 +3481,15 @@ local function add_compat53_entries(program, used_set)
       if not code then
 
          if name == "table.unpack" then
-            text = "local _tl_table_unpack = unpack or table.unpack"
+            load_code(name, "local _tl_table_unpack = unpack or table.unpack")
          else
-            text = ("local $NAME = require('compat53.module').$NAME or $NAME"):gsub("$NAME", name)
+            if not compat53_loaded then
+               load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
+               compat53_loaded = true
+            end
+            load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
          end
-         local tokens = tl.lex(text)
-         local _
-         _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, { ["lax"] = false, ["skip_compat53"] = true, })
-         code = code[1]
-         compat53_code_cache[name] = code
       end
-      table.insert(program, i, code)
    end
    program.y = 1
 end

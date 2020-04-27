@@ -3456,6 +3456,23 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
    end
    table.sort(used_list)
 
+   local compat53_loaded = false
+
+   local n = 1
+   local function load_code(name: string, text: string)
+      local code: Node = compat53_code_cache[name]
+      if not code then
+         local tokens = tl.lex(text)
+         local _: number
+         _, code = tl.parse_program(tokens, {}, "@internal")
+         tl.type_check(code, { lax = false, skip_compat53 = true })
+         code = code[1]
+         compat53_code_cache[name] = code
+      end
+      table.insert(program, n, code)
+      n = n + 1
+   end
+
    for i, name in ipairs(used_list) do
       local mod, fn = name:match("([^.]*)%.(.*)")
       local errs = {}
@@ -3464,18 +3481,15 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
       if not code then
          -- TODO generic support for individual functions
          if name == "table.unpack" then
-            text = "local _tl_table_unpack = unpack or table.unpack"
+            load_code(name, "local _tl_table_unpack = unpack or table.unpack")
          else
-            text = ("local $NAME = require('compat53.module').$NAME or $NAME"):gsub("$NAME", name)
+            if not compat53_loaded then
+               load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
+               compat53_loaded = true
+            end
+            load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
          end
-         local tokens = tl.lex(text)
-         local _: number
-         _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, { lax = false, skip_compat53 = true })
-         code = code[1]
-         compat53_code_cache[name] = code
       end
-      table.insert(program, i, code)
    end
    program.y = 1
 end

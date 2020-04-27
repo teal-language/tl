@@ -107,7 +107,7 @@ describe("tl gen", function()
          local lua_name = name:gsub("%.tl$", ".lua")
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
-            local table = require('compat53.module').table or table; local _tl_table_unpack = unpack or table.unpack; local t = { [1] = 1, [2] = 2, [3] = 3, [4] = 4, }
+            local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { [1] = 1, [2] = 2, [3] = 3, [4] = 4, }
             print(_tl_table_unpack(t))
          ]], util.read_file(lua_name))
       end)
