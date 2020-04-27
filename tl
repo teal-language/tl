@@ -84,7 +84,7 @@ local function get_args_parser()
          :argname("<modulename>")
          :count("*")
 
-   parser:option("-I --include", "Prepend this directory to package.path.")
+   parser:option("-I --include", "Prepend this directory to the module search path.")
          :argname("<directory>")
          :count("*")
 
@@ -154,18 +154,28 @@ end
 
 local env = nil
 
+local function get_shared_library_ext()
+   return package.cpath:match("%.(%w+);")
+end
+
 local function prepend_to_path(directory)
    local path_separator = package.config:sub(1, 1)
 
-   local lua_path_str = directory
+   local path_str = directory
 
-   if string.sub(lua_path_str, -1) == path_separator then
-      lua_path_str = lua_path_str:sub(1, -2)
+   if string.sub(path_str, -1) == path_separator then
+      path_str = path_str:sub(1, -2)
    end
 
-   lua_path_str = lua_path_str .. path_separator .. "?.lua;"
+   path_str = path_str .. path_separator
+
+   local lib_path_str = path_str .. "?." .. get_shared_library_ext() .. ";"
+   local lua_path_str = path_str .. "?.lua;"
 
    package.path = lua_path_str .. package.path
+   package.cpath = lib_path_str .. package.cpath
+
+   print(package.cpath)
 end
 
 for _, include in ipairs(tlconfig["include"]) do
