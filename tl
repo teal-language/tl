@@ -174,8 +174,6 @@ local function prepend_to_path(directory)
 
    package.path = lua_path_str .. package.path
    package.cpath = lib_path_str .. package.cpath
-
-   print(package.cpath)
 end
 
 for _, include in ipairs(tlconfig["include"]) do
