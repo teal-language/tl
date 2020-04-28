@@ -2790,7 +2790,7 @@ local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
 local METATABLE = a_type { typename = "nominal", names = {"METATABLE"} }
 
-local TIME_TABLE = a_type {
+local OS_DATE_TABLE = a_type {
    typename = "record",
    fields = {
       ["year"] = NUMBER,
@@ -2802,6 +2802,26 @@ local TIME_TABLE = a_type {
       ["wday"] = NUMBER,
       ["yday"] = NUMBER,
       ["isdst"] = BOOLEAN,
+   }
+}
+
+local DEBUG_GETINFO_TABLE = a_type {
+   typename = "record",
+   fields = {
+      ["name"] = STRING,
+      ["namewhat"] = STRING,
+      ["source"] = STRING,
+      ["short_src"] = STRING,
+      ["linedefined"] = NUMBER,
+      ["lastlinedefined"] = NUMBER,
+      ["what"] = STRING,
+      ["currentline"] = NUMBER,
+      ["istailcall"] = BOOLEAN,
+      ["nups"] = NUMBER,
+      ["nparams"] = NUMBER,
+      ["isvararg"] = BOOLEAN,
+      ["func"] = ANY,
+      ["activelines"] = a_type { typename = "map", keys = NUMBER, values = BOOLEAN },
    }
 }
 
@@ -3272,7 +3292,7 @@ local standard_library: {string:Type} = {
             typename = "poly",
             types = {
                a_type { typename = "function", args = {}, rets = { STRING } },
-               a_type { typename = "function", args = { STRING, OPT_STRING }, rets = { a_type { typename = "union", types = { STRING, TIME_TABLE } } } },
+               a_type { typename = "function", args = { STRING, OPT_STRING }, rets = { a_type { typename = "union", types = { STRING, OS_DATE_TABLE } } } },
             }
          },
          ["tmpname"] = a_type { typename = "function", args = {}, rets = { STRING } },
@@ -3290,6 +3310,7 @@ local standard_library: {string:Type} = {
       typename = "record",
       fields = {
          ["path"] = STRING,
+         ["cpath"] = STRING,
          ["config"] = STRING,
          ["loaded"] = a_type {
             typename = "map",
@@ -3431,6 +3452,14 @@ local standard_library: {string:Type} = {
       typename = "record",
       fields = {
          ["traceback"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["getinfo"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { ANY }, rets = { DEBUG_GETINFO_TABLE } },
+               a_type { typename = "function", args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
+               a_type { typename = "function", args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
+            },
+         }
       },
    }
 }
@@ -3441,7 +3470,8 @@ for _, t in pairs(standard_library) do
       fill_field_order(t.def)
    end
 end
-fill_field_order(TIME_TABLE)
+fill_field_order(OS_DATE_TABLE)
+fill_field_order(DEBUG_GETINFO_TABLE)
 
 local compat53_code_cache: {string:Node} = {}
 
