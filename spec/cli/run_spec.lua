@@ -138,4 +138,143 @@ describe("tl run", function()
          assert.same("", output)
       end)
    end)
+
+   describe("with arguments", function()
+      it("passes arguments as arg", function()
+         local name = util.write_tmp_file(finally, "hello.tl", [[
+            for i = -10, 10 do
+               print(i .. " " .. tostring(arg[i]))
+            end
+         ]])
+         local pd = io.popen("./tl run " .. name .. " hello world", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+            -10 nil
+            -9 nil
+            -8 nil
+            -7 nil
+            -6 nil
+            -5 nil
+            -4 nil
+            -3 lua
+            -2 ./tl
+            -1 run
+            0 ]] .. name .. "\n" .. [[
+            1 hello
+            2 world
+            3 nil
+            4 nil
+            5 nil
+            6 nil
+            7 nil
+            8 nil
+            9 nil
+            10 nil
+         ]], output)
+      end)
+
+      it("allows -- to stop argument parsing after script name", function()
+         local name = util.write_tmp_file(finally, "hello.tl", [[
+            for i = -10, 10 do
+               print(i .. " " .. tostring(arg[i]))
+            end
+         ]])
+         local pd = io.popen("./tl run " .. name .. " -- --skip-compat53 hello world", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+            -10 nil
+            -9 nil
+            -8 nil
+            -7 nil
+            -6 nil
+            -5 nil
+            -4 lua
+            -3 ./tl
+            -2 run
+            -1 --
+            0 ]] .. name .. "\n" .. [[
+            1 --skip-compat53
+            2 hello
+            3 world
+            4 nil
+            5 nil
+            6 nil
+            7 nil
+            8 nil
+            9 nil
+            10 nil
+         ]], output)
+      end)
+
+      it("allows -- to stop argument parsing before script name", function()
+         local name = util.write_tmp_file(finally, "hello.tl", [[
+            for i = -10, 10 do
+               print(i .. " " .. tostring(arg[i]))
+            end
+         ]])
+         local pd = io.popen("./tl run -- " .. name .. " --skip-compat53 hello world", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+            -10 nil
+            -9 nil
+            -8 nil
+            -7 nil
+            -6 nil
+            -5 nil
+            -4 lua
+            -3 ./tl
+            -2 run
+            -1 --
+            0 ]] .. name .. "\n" .. [[
+            1 --skip-compat53
+            2 hello
+            3 world
+            4 nil
+            5 nil
+            6 nil
+            7 nil
+            8 nil
+            9 nil
+            10 nil
+         ]], output)
+      end)
+
+      it("does not get arguments and non-arguments confused when they look the same", function()
+         local name = util.write_tmp_file(finally, "hello.tl", [[
+            for i = -10, 10 do
+               print(i .. " " .. tostring(arg[i]))
+            end
+         ]])
+         local pd = io.popen("./tl run -I . -- " .. name .. " -I . hello world", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+            -10 nil
+            -9 nil
+            -8 nil
+            -7 nil
+            -6 lua
+            -5 ./tl
+            -4 run
+            -3 -I
+            -2 .
+            -1 --
+            0 ]] .. name .. "\n" .. [[
+            1 -I
+            2 .
+            3 hello
+            4 world
+            5 nil
+            6 nil
+            7 nil
+            8 nil
+            9 nil
+            10 nil
+         ]], output)
+      end)
+   end)
+
 end)

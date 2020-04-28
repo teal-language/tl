@@ -103,11 +103,7 @@ local function get_args_parser()
    gen_command:argument("script", "The tl script."):args("+")
 
    local run_command = parser:command("run", "Run a tl script.")
-   run_command:argument("script", "The tl script."):args(1)
-      :convert(function(arg)
-         assert(type(arg) == "string")
-         return { arg }
-   end)
+   run_command:argument("script", "The tl script."):args("+")
 
    return parser
 end
@@ -229,19 +225,42 @@ for i, filename in ipairs(args["script"]) do
       if filename:match("%.tl$") then
          local ok = report_type_errors(result)
          if not ok then
-            exit = 1
-            break
+            os.exit(1)
          end
       end
 
       local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
 
-      local narg = #arg
-      for i = -5, narg do
-         arg[i - 2] = arg[i]
+      -- collect all non-arguments including negative arg values
+      local neg_arg = {}
+      local nargs = #args["script"]
+      local j = #arg
+      local p = nargs
+      local n = 1
+      while arg[j] do
+         if arg[j] == args["script"][p] then
+            p = p - 1
+         else
+            neg_arg[n] = arg[j]
+            n = n + 1
+         end
+         j = j - 1
       end
-      arg[narg] = nil
-      arg[narg - 1] = nil
+
+      -- shift back all non-arguments to negative positions
+      for p, a in ipairs(neg_arg) do
+         arg[-p] = a
+      end
+      -- put script in arg[0] and arguments in positive positions
+      for p, a in ipairs(args["script"]) do
+         arg[p - 1] = a
+      end
+      -- cleanup the rest
+      n = nargs
+      while arg[n] do
+         arg[n] = nil
+         n = n + 1
+      end
 
       tl.loader()
 
