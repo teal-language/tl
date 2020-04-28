@@ -4528,6 +4528,13 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       check_all_typevars(node, t.rets)
    end
 
+   local function get_rets(rets: {Type}): {Type}
+      if lax and (#rets == 0) then
+         return {a_type { typename = "unknown", is_va = true }}
+      end
+      return rets
+   end
+
    local function begin_function_scope(node: Node, recurse: boolean)
       begin_scope()
       local args = {}
@@ -4557,7 +4564,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          add_var(nil, node.name.tk, a_type {
             typename = "function",
             args = args,
-            rets = node.rets,
+            rets = get_rets(node.rets),
          })
       end
    end
@@ -4679,13 +4686,6 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          table.insert(ret, last)
       end
       return ret
-   end
-
-   local function get_rets(rets: {Type}): {Type}
-      if lax and (#rets == 0) then
-         return {a_type { typename = "unknown", is_va = true }}
-      end
-      return rets
    end
 
    local function match_all_record_field_names(node: Node, a: Type, field_names: {string}, errmsg: string): Type
@@ -5472,7 +5472,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
                end
             else
-               node_error(node, "not a module: %s", rtype)
+               if (not lax) or (rtype.typename ~= "unknown") then
+                  node_error(node, "not a module: %s", rtype)
+               end
             end
          end,
          after = function(node: Node, children: {Type}): Type
