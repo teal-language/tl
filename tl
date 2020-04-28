@@ -18,10 +18,25 @@ local function die(msg)
    os.exit(1)
 end
 
+local function is_nil_or_whitespace(str)
+   return str == nil or trim(str) == ""
+end
+
+local function find_in_sequence(seq, value)
+   for _, v in ipairs(seq) do
+      if trim(v) == trim(value) then
+         return true
+      end
+   end
+
+   return false
+end
+
 -- FIXME
 local function validate_config(config)
    local valid_keys = {
-      preload_modules = true
+      preload_modules = true,
+      include = true
    }
 
    for k, _ in pairs(config) do
@@ -37,7 +52,8 @@ end
 
 local function get_config()
    local config = {
-      preload_modules = {}
+      preload_modules = {},
+      include = {}
    }
 
    local status, user_config = pcall(require, "tlconfig")
@@ -72,6 +88,10 @@ local function get_args_parser()
          :argname("<modulename>")
          :count("*")
 
+   parser:option("-I --include", "Prepend this directory to the module search path.")
+         :argname("<directory>")
+         :count("*")
+
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
 
    parser:command_target("command")
@@ -100,17 +120,14 @@ local tlconfig = get_config()
 local cmd = args["command"]
 
 for _, preload_module_cli in ipairs(args["preload"]) do
-   local found_in_config = false
-
-   for _, preload_module_config in ipairs(tlconfig.preload_modules) do
-      if trim(preload_module_cli) == trim(preload_module_config) then
-         found_in_config = true
-         break
-      end
-   end
-
-   if not found_in_config then
+   if not find_in_sequence(tlconfig.preload_modules, preload_module_cli) then
       table.insert(tlconfig.preload_modules, preload_module_cli)
+   end
+end
+
+for _, include_dir_cli in ipairs(args["include"]) do
+   if not find_in_sequence(tlconfig.include, include_dir_cli) then
+      table.insert(tlconfig.include, include_dir_cli)
    end
 end
 
@@ -140,6 +157,36 @@ local function report_type_errors(result)
 end
 
 local env = nil
+
+local function get_shared_library_ext()
+   if is_nil_or_whitespace(package.cpath) then
+      return "so" -- FIXME
+   end
+
+   return package.cpath:match("%.(%w+)%s*$")
+end
+
+local function prepend_to_path(directory)
+   local path_separator = package.config:sub(1, 1)
+
+   local path_str = directory
+
+   if string.sub(path_str, -1) == path_separator then
+      path_str = path_str:sub(1, -2)
+   end
+
+   path_str = path_str .. path_separator
+
+   local lib_path_str = path_str .. "?." .. get_shared_library_ext() .. ";"
+   local lua_path_str = path_str .. "?.lua;"
+
+   package.path = lua_path_str .. package.path
+   package.cpath = lib_path_str .. package.cpath
+end
+
+for _, include in ipairs(tlconfig["include"]) do
+   prepend_to_path(include)
+end
 
 for i, filename in ipairs(args["script"]) do
    local modules = i == 1 and tlconfig.preload_modules
