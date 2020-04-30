@@ -3279,6 +3279,9 @@ local standard_library: {string:Type} = {
          ["write"] = a_type { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
          ["flush"] = a_type { typename = "function", args = {}, rets = {} },
          ["type"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+         ["lines"] = a_type { typename = "function", args = { OPT_STRING, VARARG_STRING }, rets = {
+            a_type { typename = "function", args = {}, rets = { VARARG_STRING } },
+         } },
       },
    },
    ["os"] = a_type {

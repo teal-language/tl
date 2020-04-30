@@ -3279,6 +3279,9 @@ local standard_library = {
          ["write"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
          ["flush"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = {}, }),
          ["type"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),
+         ["lines"] = a_type({ ["typename"] = "function", ["args"] = { [1] = OPT_STRING, [2] = VARARG_STRING, }, ["rets"] = {
+               [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = VARARG_STRING, }, }),
+            }, }),
       },
    }),
    ["os"] = a_type({
