@@ -903,6 +903,14 @@ local Node = {}
 
 
 
+local function is_array_type(t)
+   return t.typename == "array" or t.typename == "arrayrecord"
+end
+
+local function is_record_type(t)
+   return t.typename == "record" or t.typename == "arrayrecord"
+end
+
 local parse_expression
 local parse_statements
 local parse_type_list
@@ -3038,7 +3046,7 @@ local function show_type_base(t, seen)
       return "{" .. show(t.elements) .. "}"
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
-   elseif t.typename == "record" then
+   elseif is_record_type(t) then
       local out = {}
       for _, k in ipairs(t.field_order) do
          local v = t.fields[k]
@@ -4001,6 +4009,10 @@ function tl.type_check(ast, opts)
 
    local resolve_unary = nil
 
+   local function is_known_table_type(t)
+      return (t.typename == "array" or t.typename == "map" or t.typename == "record" or t.typename == "arrayrecord")
+   end
+
    is_a = function(t1, t2, for_equality)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -4110,10 +4122,10 @@ function tl.type_check(ast, opts)
             end
          end
          return ok, errs
-      elseif t1.typename == "emptytable" and (t2.typename == "array" or t2.typename == "map" or t2.typename == "record" or t2.typename == "arrayrecord") then
+      elseif t1.typename == "emptytable" and is_known_table_type(t2) then
          return true
       elseif t2.typename == "array" then
-         if t1.typename == "array" or t1.typename == "arrayrecord" then
+         if is_array_type(t1) then
             return is_a(t1.elements, t2.elements)
          elseif t1.typename == "map" then
             local _, errs_keys = is_a(t1.keys, NUMBER)
@@ -4121,7 +4133,7 @@ function tl.type_check(ast, opts)
             return combine_errs(errs_keys, errs_values)
          end
       elseif t2.typename == "record" then
-         if t1.typename == "record" or t1.typename == "arrayrecord" then
+         if is_record_type(t1) then
             return match_fields_to_record(t1, t2)
          elseif t1.typename == "map" then
             if not is_a(t1.keys, STRING) then
@@ -4158,7 +4170,7 @@ function tl.type_check(ast, opts)
             local _, errs_keys = is_a(NUMBER, t2.keys)
             local _, errs_values = is_a(t1.elements, t2.values)
             return combine_errs(errs_keys, errs_values)
-         elseif t1.typename == "record" or t1.typename == "arrayrecord" then
+         elseif is_record_type(t1) then
             if not is_a(t2.keys, STRING) then
                return false, terr(t1, "can't match a record to a map with non-string keys")
             end
@@ -4222,7 +4234,7 @@ function tl.type_check(ast, opts)
          end
          return
       elseif t2.typename == "emptytable" then
-         if t1.typename == "array" or t1.typename == "map" or t1.typename == "record" or t1.typename == "arrayrecord" then
+         if is_known_table_type(t1) then
             infer_var(t2, t1, node)
          elseif t1.typename ~= "emptytable" then
             node_error(node, "in " .. context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
@@ -4430,7 +4442,7 @@ function tl.type_check(ast, opts)
       tbl = get_self_type(tbl)
 
       if tbl.typename == "emptytable" then
- elseif tbl.typename == "record" or tbl.typename == "arrayrecord" then
+ elseif is_record_type(tbl) then
          assert(tbl.fields, "record has no fields!?")
 
          if key.kind == "string" or key.kind == "identifier" then
@@ -4717,7 +4729,7 @@ function tl.type_check(ast, opts)
       a = resolve_unary(a)
       b = resolve_unary(b)
 
-      if a.typename == "array" or a.typename == "arrayrecord" and is_a(b, NUMBER) then
+      if is_array_type(a) and is_a(b, NUMBER) then
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
@@ -4739,7 +4751,7 @@ function tl.type_check(ast, opts)
          end
       elseif node.e2.kind == "string" then
          return match_record_key(node, a, { ["y"] = node.e2.y, ["x"] = node.e2.x, ["kind"] = "string", ["tk"] = assert(node.e2.conststr), }, orig_a)
-      elseif (a.typename == "record" or a.typename == "arrayrecord") and b.typename == "enum" then
+      elseif is_record_type(a) and b.typename == "enum" then
          local field_names = {}
          for k, _ in pairs(b.enumset) do
             table.insert(field_names, k)
@@ -4752,7 +4764,7 @@ function tl.type_check(ast, opts)
          end
          return match_all_record_field_names(idxnode, a, field_names,
 "cannot index, not all enum values map to record fields of the same type")
-      elseif (a.typename == "record" or a.typename == "arrayrecord") and is_a(b, STRING) then
+      elseif is_record_type(a) and is_a(b, STRING) then
          return match_all_record_field_names(idxnode, a, a.field_order,
 "cannot index, not all fields in record have the same type")
       elseif lax and is_unknown(a) then
@@ -5446,7 +5458,7 @@ function tl.type_check(ast, opts)
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
             end
-            if (rtype.typename == "record" or rtype.typename == "arrayrecord") then
+            if is_record_type(rtype) then
                local fn_type = a_type({
                   ["y"] = node.y,
                   ["x"] = node.x,
@@ -5539,7 +5551,7 @@ function tl.type_check(ast, opts)
                      local b1 = resolve_unary(b[1])
                      local b2 = resolve_unary(b[2])
                      local knode = node.e2[2]
-                     if b1.typename == "record" and knode.conststr then
+                     if is_record_type(b1) and knode.conststr then
                         node.type = match_record_key(node, b1, { ["y"] = knode.y, ["x"] = knode.x, ["kind"] = "string", ["tk"] = assert(knode.conststr), }, b1)
                      else
                         node.type = type_check_index(node, knode, b1, b2)
@@ -5643,7 +5655,7 @@ function tl.type_check(ast, opts)
                node.type = (ua.typename == "enum" and ua or ub)
             elseif node.op.op == "or" and
                (a.typename == "nominal" or a.typename == "map") and
-               (b.typename == "record" or b.typename == "arrayrecord") and
+               is_record_type(b) and
                is_a(b, a) then
                node.facts = nil
                node.type = resolve_tuple(a)
