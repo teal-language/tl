@@ -1011,6 +1011,7 @@ local function parse_table_item(ps, i, n)
    elseif ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
       local orig_i = i
       local try_ps = {
+         ["filename"] = ps.filename,
          ["tokens"] = ps.tokens,
          ["errs"] = {},
       }
@@ -1083,6 +1084,7 @@ end
 
 local function parse_trying_list(ps, i, list, parse_item)
    local try_ps = {
+      ["filename"] = ps.filename,
       ["tokens"] = ps.tokens,
       ["errs"] = {},
    }
@@ -1180,11 +1182,9 @@ local function parse_base_type(ps, i)
       ps.tokens[i].tk == "boolean" or
       ps.tokens[i].tk == "nil" or
       ps.tokens[i].tk == "number" then
-      return i + 1, a_type({
-         ["y"] = ps.tokens[i].y,
-         ["x"] = ps.tokens[i].x,
-         ["typename"] = ps.tokens[i].tk,
-      })
+      local typ = new_type(ps, i, ps.tokens[i].tk)
+      typ.tk = nil
+      return i + 1, typ
    elseif ps.tokens[i].tk == "table" then
       local typ = new_type(ps, i, "map")
       typ.keys = a_type({ ["typename"] = "any", })
@@ -3813,7 +3813,7 @@ function tl.type_check(ast, opts)
          ["y"] = where.y,
          ["x"] = where.x,
          ["msg"] = msg,
-         ["filename"] = filename,
+         ["filename"] = where.filename or filename,
       }
    end
 
@@ -3891,12 +3891,14 @@ function tl.type_check(ast, opts)
          err.msg = prefix .. err.msg
 
 
+         if node and node.y and (
+            (err.filename ~= filename) or
+            (not err.y) or
+            (node.y > err.y or (node.y == err.y and node.x > err.x))) then
 
-
-
-         if node and node.y and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
+            err.filename = filename
          end
 
          table.insert(dst, err)
@@ -5129,8 +5131,6 @@ function tl.type_check(ast, opts)
                   infertype = nil
                end
                if decltype and infertype then
-
-
                   assert_is_a(node.vars[i], infertype, decltype, "local declaration", var.tk)
                end
                local t = decltype or infertype
