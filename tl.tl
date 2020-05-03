@@ -712,6 +712,7 @@ local Type = record
    {Type}
    y: number
    x: number
+   filename: string
    typename: TypeName
    tk: string
 
@@ -912,30 +913,36 @@ local function is_record_type(t:Type): boolean
    return t.typename == "record" or t.typename == "arrayrecord"
 end
 
-local parse_expression: function({Token}, number, {ParseError}): number, Node, number
-local parse_statements: function({Token}, number, {ParseError}, string): number, Node
-local parse_type_list: function({Token}, number, {ParseError}, string): number, Type
-local parse_argument_list: function({Token}, number, {ParseError}): number, Node
-local parse_argument_type_list: function({Token}, number, {ParseError}): number, Type
-local parse_type: function({Token}, number, {ParseError}): number, Type, number
-local parse_newtype: function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-
-
-local function fail(tokens: {Token}, i: number, errs: {ParseError}, msg: string): number
-   if not tokens[i] then
-      local eof = tokens[#tokens]
-      table.insert(errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
-      return #tokens
-   end
-   table.insert(errs, { y = tokens[i].y, x = tokens[i].x, msg = msg or "syntax error" })
-   return math.min(#tokens, i + 1)
+local ParseState = record
+   tokens: {Token}
+   errs: {ParseError}
+   filename: string
 end
 
-local function verify_tk(tokens: {Token}, i: number, errs: {ParseError}, tk: string): number
-   if tokens[i].tk == tk then
+local parse_expression: function(ParseState, number): number, Node, number
+local parse_statements: function(ParseState, number, string): number, Node
+local parse_type_list: function(ParseState, number, string): number, Type
+local parse_argument_list: function(ParseState, number): number, Node
+local parse_argument_type_list: function(ParseState, number): number, Type
+local parse_type: function(ParseState, number): number, Type, number
+local parse_newtype: function(ps: ParseState, i: number): number, Node
+
+
+local function fail(ps: ParseState, i: number, msg: string): number
+   if not ps.tokens[i] then
+      local eof = ps.tokens[#ps.tokens]
+      table.insert(ps.errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
+      return #ps.tokens
+   end
+   table.insert(ps.errs, { y = ps.tokens[i].y, x = ps.tokens[i].x, msg = msg or "syntax error" })
+   return math.min(#ps.tokens, i + 1)
+end
+
+local function verify_tk(ps: ParseState, i: number, tk: string): number
+   if ps.tokens[i].tk == tk then
       return i + 1
    end
-   return fail(tokens, i, errs, "syntax error, expected '" .. tk .. "'")
+   return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
 local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
@@ -948,15 +955,22 @@ local function a_type(t: Type): Type
    return t
 end
 
-local function new_type(token: Token, typename: TypeName): Type
-   return a_type { typename = assert(typename), y = token.y, x = token.x, tk = token.tk }
+local function new_type(ps: ParseState, i: number, typename: TypeName): Type
+   local token = ps.tokens[i]
+   return a_type {
+      typename = assert(typename),
+      filename = ps.filename,
+      y = token.y,
+      x = token.x,
+      tk = token.tk
+   }
 end
 
-local function verify_kind(tokens: {Token}, i: number, errs: {ParseError}, kind: TokenKind, node_kind: NodeKind): number, Node
-   if tokens[i].kind == kind then
-      return i + 1, new_node(tokens, i, node_kind)
+local function verify_kind(ps: ParseState, i: number, kind: TokenKind, node_kind: NodeKind): number, Node
+   if ps.tokens[i].kind == kind then
+      return i + 1, new_node(ps.tokens, i, node_kind)
    end
-   return fail(tokens, i, errs, "syntax error, expected " .. kind)
+   return fail(ps, i, "syntax error, expected " .. kind)
 end
 
 local is_newtype: {string:boolean} = {
@@ -965,49 +979,52 @@ local is_newtype: {string:boolean} = {
    ["functiontype"] = true,
 }
 
-local function parse_table_value(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if is_newtype[tokens[i].tk] then
-      return parse_newtype(tokens, i, errs)
+local function parse_table_value(ps: ParseState, i: number): number, Node
+   if is_newtype[ps.tokens[i].tk] then
+      return parse_newtype(ps, i)
    else
-      local i, node, _ = parse_expression(tokens, i, errs)
+      local i, node, _ = parse_expression(ps, i)
       return i, node
    end
 end
 
-local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, n: number): number, Node, number
-   local node = new_node(tokens, i, "table_item")
-   if tokens[i].kind == "$EOF$" then
-      return fail(tokens, i, errs)
+local function parse_table_item(ps: ParseState, i: number, n: number): number, Node, number
+   local node = new_node(ps.tokens, i, "table_item")
+   if ps.tokens[i].kind == "$EOF$" then
+      return fail(ps, i)
    end
 
-   if tokens[i].tk == "[" then
+   if ps.tokens[i].tk == "[" then
       i = i + 1
-      i, node.key = parse_expression(tokens, i, errs)
-      i = verify_tk(tokens, i, errs, "]")
-      i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_table_value(tokens, i, errs)
+      i, node.key = parse_expression(ps, i)
+      i = verify_tk(ps, i, "]")
+      i = verify_tk(ps, i, "=")
+      i, node.value = parse_table_value(ps, i)
       return i, node, n
-   elseif tokens[i].kind == "identifier" and tokens[i+1].tk == "=" then
-      i, node.key = verify_kind(tokens, i, errs, "identifier", "string")
+   elseif ps.tokens[i].kind == "identifier" and ps.tokens[i+1].tk == "=" then
+      i, node.key = verify_kind(ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
-      i = verify_tk(tokens, i, errs, "=")
-      i, node.value = parse_table_value(tokens, i, errs)
+      i = verify_tk(ps, i, "=")
+      i, node.value = parse_table_value(ps, i)
       return i, node, n
-   elseif tokens[i].kind == "identifier" and tokens[i+1].tk == ":" then
+   elseif ps.tokens[i].kind == "identifier" and ps.tokens[i+1].tk == ":" then
       local orig_i = i
-      local try_errs: {ParseError} = {}
-      i, node.key = verify_kind(tokens, i, try_errs, "identifier", "string")
+      local try_ps: ParseState = {
+         tokens = ps.tokens,
+         errs = {},
+      }
+      i, node.key = verify_kind(try_ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
-      i = verify_tk(tokens, i, try_errs, ":")
-      i, node.decltype = parse_type(tokens, i, try_errs)
-      if node.decltype and tokens[i].tk == "=" then
-         i = verify_tk(tokens, i, try_errs, "=")
-         i, node.value = parse_table_value(tokens, i, try_errs)
+      i = verify_tk(try_ps, i, ":")
+      i, node.decltype = parse_type(try_ps, i)
+      if node.decltype and ps.tokens[i].tk == "=" then
+         i = verify_tk(try_ps, i, "=")
+         i, node.value = parse_table_value(try_ps, i)
          if node.value then
-            for _, e in ipairs(try_errs) do
-               table.insert(errs, e)
+            for _, e in ipairs(try_ps.errs) do
+               table.insert(ps.errs, e)
             end
             return i, node, n
          end
@@ -1017,137 +1034,140 @@ local function parse_table_item(tokens: {Token}, i: number, errs: {ParseError}, 
       i = orig_i
    end
 
-   node.key = new_node(tokens, i, "number")
+   node.key = new_node(ps.tokens, i, "number")
    node.key.constnum = n
    node.key.tk = tostring(n)
-   i, node.value = parse_expression(tokens, i, errs)
+   i, node.value = parse_expression(ps, i)
    return i, node, n + 1
 end
 
-local ParseItem = functiontype<T>({Token}, number, {ParseError}, number): number, T, number
+local ParseItem = functiontype<T>(ParseState, number, number): number, T, number
 
 local SeparatorMode = enum
    "sep"
    "term"
 end
 
-local function parse_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
+local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
    local n = 1
-   while tokens[i].kind ~= "$EOF$" do
-      if close[tokens[i].tk] then
-         (list as Node).yend = tokens[i].y
+   while ps.tokens[i].kind ~= "$EOF$" do
+      if close[ps.tokens[i].tk] then
+         (list as Node).yend = ps.tokens[i].y
          break
       end
       local item: T
-      i, item, n = parse_item(tokens, i, errs, n)
+      i, item, n = parse_item(ps, i, n)
       table.insert(list, item)
-      if tokens[i].tk == "," then
+      if ps.tokens[i].tk == "," then
          i = i + 1
-      elseif sep == "sep" and not close[tokens[i].tk] then
-         return fail(tokens, i, errs)
-      elseif sep == "term" and tokens[i].tk == ";" then
+      elseif sep == "sep" and not close[ps.tokens[i].tk] then
+         return fail(ps, i)
+      elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
       end
    end
    return i, list
 end
 
-local function parse_bracket_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
-   i = verify_tk(tokens, i, errs, open)
-   i = parse_list(tokens, i, errs, list, { [close] = true }, sep, parse_item)
-   i = verify_tk(tokens, i, errs, close)
+local function parse_bracket_list<T>(ps: ParseState, i: number, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
+   i = verify_tk(ps, i, open)
+   i = parse_list(ps, i, list, { [close] = true }, sep, parse_item)
+   i = verify_tk(ps, i, close)
    return i, list
 end
 
-local function parse_table_literal(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "table_literal")
-   return parse_bracket_list(tokens, i, errs, node, "{", "}", "term", parse_table_item)
+local function parse_table_literal(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "table_literal")
+   return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list<T>(tokens: {Token}, i: number, errs: {ParseError}, list: {T}, parse_item: ParseItem<T>): number, {T}
-   local tryerrs: {ParseError} = {}
-   local tryi, item = parse_item(tokens, i, tryerrs)
+local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_item: ParseItem<T>): number, {T}
+   local try_ps: ParseState = {
+      tokens = ps.tokens,
+      errs = {},
+   }
+   local tryi, item = parse_item(try_ps, i)
    if not item then
       return i, list
    end
-   for _, e in ipairs(tryerrs) do
-      table.insert(errs, e)
+   for _, e in ipairs(try_ps.errs) do
+      table.insert(ps.errs, e)
    end
    i = tryi
    table.insert(list, item)
-   if tokens[i].tk == "," then
-      while tokens[i].tk == "," do
+   if ps.tokens[i].tk == "," then
+      while ps.tokens[i].tk == "," do
          i = i + 1
-         i, item = parse_item(tokens, i, errs)
+         i, item = parse_item(ps, i)
          table.insert(list, item)
       end
    end
    return i, list
 end
 
-local function parse_typearg_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
+local function parse_typearg_type(ps: ParseState, i: number): number, Type, number
    local backtick = false
-   if tokens[i].tk == "`" then
-      i = verify_tk(tokens, i, errs, "`")
+   if ps.tokens[i].tk == "`" then
+      i = verify_tk(ps, i, "`")
       backtick = true
    end
-   i = verify_kind(tokens, i, errs, "identifier")
+   i = verify_kind(ps, i, "identifier")
    return i, a_type {
-      y = tokens[i - 2].y,
-      x = tokens[i - 2].x,
+      y = ps.tokens[i - 2].y,
+      x = ps.tokens[i - 2].x,
       typename = "typearg",
-      typearg = (backtick and "`" or "") .. tokens[i-1].tk,
+      typearg = (backtick and "`" or "") .. ps.tokens[i-1].tk,
    }
 end
 
-local function parse_typevar_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
-   i = verify_tk(tokens, i, errs, "`")
-   i = verify_kind(tokens, i, errs, "identifier")
+local function parse_typevar_type(ps: ParseState, i: number): number, Type, number
+   i = verify_tk(ps, i, "`")
+   i = verify_kind(ps, i, "identifier")
    return i, a_type {
-      y = tokens[i - 2].y,
-      x = tokens[i - 2].x,
+      y = ps.tokens[i - 2].y,
+      x = ps.tokens[i - 2].x,
       typename = "typevar",
-      typevar = "`" .. tokens[i-1].tk,
+      typevar = "`" .. ps.tokens[i-1].tk,
    }
 end
 
-local function parse_typearg_list(tokens: {Token}, i: number, errs: {ParseError}): number, Type
-   local typ = new_type(tokens[i], "tuple")
-   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_typearg_type)
+local function parse_typearg_list(ps: ParseState, i: number): number, Type
+   local typ = new_type(ps, i, "tuple")
+   return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
 end
 
-local function parse_typeval_list(tokens: {Token}, i: number, errs: {ParseError}): number, Type
-   local typ = new_type(tokens[i], "tuple")
-   return parse_bracket_list(tokens, i, errs, typ, "<", ">", "sep", parse_type)
+local function parse_typeval_list(ps: ParseState, i: number): number, Type
+   local typ = new_type(ps, i, "tuple")
+   return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_type)
 end
 
-local function parse_return_types(tokens: {Token}, i: number, errs: {ParseError}): number, Type
+local function parse_return_types(ps: ParseState, i: number): number, Type
    local rets: Type
-   i, rets = parse_type_list(tokens, i, errs)
-   if tokens[i].tk == "..." then
+   i, rets = parse_type_list(ps, i)
+   if ps.tokens[i].tk == "..." then
       i = i + 1
       local nrets = #rets
       if nrets > 0 then
          rets[nrets].is_va = true
       else
-         return fail(tokens, i, errs, "unexpected '...'")
+         return fail(ps, i, "unexpected '...'")
       end
    end
 
    return i, rets
 end
 
-local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type
-   local node = new_type(tokens[i], "function")
+local function parse_function_type(ps: ParseState, i: number): number, Type
+   local node = new_type(ps, i, "function")
    node.args = {}
    node.rets = {}
    i = i + 1
-   if tokens[i].tk == "<" then
-      i, node.typeargs = parse_typearg_list(tokens, i, errs)
+   if ps.tokens[i].tk == "<" then
+      i, node.typeargs = parse_typearg_list(ps, i)
    end
-   if tokens[i].tk == "(" then
-      i, node.args = parse_argument_type_list(tokens, i, errs)
-      i, node.rets = parse_return_types(tokens, i, errs)
+   if ps.tokens[i].tk == "(" then
+      i, node.args = parse_argument_type_list(ps, i)
+      i, node.rets = parse_return_types(ps, i)
    else
       node.args = { a_type { typename = "any", is_va = true } }
       node.rets = { a_type { typename = "any", is_va = true } }
@@ -1155,86 +1175,86 @@ local function parse_function_type(tokens: {Token}, i: number, errs: {ParseError
    return i, node
 end
 
-local function parse_base_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
-   if tokens[i].tk == "string"
-      or tokens[i].tk == "boolean"
-      or tokens[i].tk == "nil"
-      or tokens[i].tk == "number" then
+local function parse_base_type(ps: ParseState, i: number): number, Type, number
+   if ps.tokens[i].tk == "string"
+      or ps.tokens[i].tk == "boolean"
+      or ps.tokens[i].tk == "nil"
+      or ps.tokens[i].tk == "number" then
       return i + 1, a_type {
-         y = tokens[i].y,
-         x = tokens[i].x,
-         typename = tokens[i].tk as TypeName,
+         y = ps.tokens[i].y,
+         x = ps.tokens[i].x,
+         typename = ps.tokens[i].tk as TypeName,
       }
-   elseif tokens[i].tk == "table" then
-      local typ = new_type(tokens[i], "map")
+   elseif ps.tokens[i].tk == "table" then
+      local typ = new_type(ps, i, "map")
       typ.keys = a_type { typename = "any" }
       typ.values = a_type { typename = "any" }
       return i + 1, typ
-   elseif tokens[i].tk == "function" then
-      return parse_function_type(tokens, i, errs)
-   elseif tokens[i].tk == "{" then
+   elseif ps.tokens[i].tk == "function" then
+      return parse_function_type(ps, i)
+   elseif ps.tokens[i].tk == "{" then
       i = i + 1
-      local decl = new_type(tokens[i], "array")
+      local decl = new_type(ps, i, "array")
       local t: Type
-      i, t = parse_type(tokens, i, errs)
-      if tokens[i].tk == "}" then
+      i, t = parse_type(ps, i)
+      if ps.tokens[i].tk == "}" then
          decl.elements = t
-         decl.yend = tokens[i].y
-         i = verify_tk(tokens, i, errs, "}")
-      elseif tokens[i].tk == ":" then
+         decl.yend = ps.tokens[i].y
+         i = verify_tk(ps, i, "}")
+      elseif ps.tokens[i].tk == ":" then
          decl.typename = "map"
          i = i + 1
          decl.keys = t
-         i, decl.values = parse_type(tokens, i, errs)
-         decl.yend = tokens[i].y
-         i = verify_tk(tokens, i, errs, "}")
+         i, decl.values = parse_type(ps, i)
+         decl.yend = ps.tokens[i].y
+         i = verify_tk(ps, i, "}")
       end
       return i, decl
-   elseif tokens[i].tk == "`" then
-      return parse_typevar_type(tokens, i, errs)
-   elseif tokens[i].kind == "identifier" then
-      local typ = new_type(tokens[i], "nominal")
-      typ.names = { tokens[i].tk }
+   elseif ps.tokens[i].tk == "`" then
+      return parse_typevar_type(ps, i)
+   elseif ps.tokens[i].kind == "identifier" then
+      local typ = new_type(ps, i, "nominal")
+      typ.names = { ps.tokens[i].tk }
       i = i + 1
-      while tokens[i].tk == "." do
+      while ps.tokens[i].tk == "." do
          i = i + 1
-         if tokens[i].kind == "identifier" then
-            table.insert(typ.names, tokens[i].tk)
+         if ps.tokens[i].kind == "identifier" then
+            table.insert(typ.names, ps.tokens[i].tk)
             i = i + 1
          else
-            return fail(tokens, i, errs, "syntax error, expected identifier")
+            return fail(ps, i, "syntax error, expected identifier")
          end
       end
 
-      if tokens[i].tk == "<" then
-         i, typ.typevals = parse_typeval_list(tokens, i, errs)
+      if ps.tokens[i].tk == "<" then
+         i, typ.typevals = parse_typeval_list(ps, i)
       end
       return i, typ
    end
-   return fail(tokens, i, errs)
+   return fail(ps, i)
 end
 
-parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
-   if tokens[i].tk == "(" then
+parse_type = function(ps: ParseState, i: number): number, Type, number
+   if ps.tokens[i].tk == "(" then
       i = i + 1
       local t: Type
-      i, t = parse_type(tokens, i, errs)
-      i = verify_tk(tokens, i, errs, ")")
+      i, t = parse_type(ps, i)
+      i = verify_tk(ps, i, ")")
       return i, t
    end
 
    local bt: Type
    local istart = i
-   i, bt = parse_base_type(tokens, i, errs)
+   i, bt = parse_base_type(ps, i)
    if not bt then
       return i
    end
-   if tokens[i].tk == "|" then
-      local u = new_type(tokens[istart], "union")
+   if ps.tokens[i].tk == "|" then
+      local u = new_type(ps, istart, "union")
       u.types = { bt }
-      while tokens[i].tk == "|" do
+      while ps.tokens[i].tk == "|" do
          i = i + 1
-         i, bt = parse_base_type(tokens, i, errs)
+         i, bt = parse_base_type(ps, i)
          if not bt then
             return i
          end
@@ -1245,41 +1265,41 @@ parse_type = function(tokens: {Token}, i: number, errs: {ParseError}): number, T
    return i, bt
 end
 
-parse_type_list = function(tokens: {Token}, i: number, errs: {ParseError}, open: string): number, Type
-   local list = new_type(tokens[i], "tuple")
-   if tokens[i].tk == (open or ":") then
+parse_type_list = function(ps: ParseState, i: number, open: string): number, Type
+   local list = new_type(ps, i, "tuple")
+   if ps.tokens[i].tk == (open or ":") then
       i = i + 1
       local optional_paren = false
-      if tokens[i - 1].tk == ":" then
-         if tokens[i].tk == "(" then
+      if ps.tokens[i - 1].tk == ":" then
+         if ps.tokens[i].tk == "(" then
             optional_paren = true
             i = i + 1
          end
       end
-      i = parse_trying_list(tokens, i, errs, list, parse_type)
+      i = parse_trying_list(ps, i, list, parse_type)
       if optional_paren then
-         i = verify_tk(tokens, i, errs, ")")
+         i = verify_tk(ps, i, ")")
       end
    end
    return i, list
 end
 
-local function parse_function_args_rets_body(tokens: {Token}, i: number, errs: {ParseError}, node: Node): number, Node
-   if tokens[i].tk == "<" then
-      i, node.typeargs = parse_typearg_list(tokens, i, errs)
+local function parse_function_args_rets_body(ps: ParseState, i: number, node: Node): number, Node
+   if ps.tokens[i].tk == "<" then
+      i, node.typeargs = parse_typearg_list(ps, i)
    end
-   i, node.args = parse_argument_list(tokens, i, errs)
-   i, node.rets = parse_return_types(tokens, i, errs)
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+   i, node.args = parse_argument_list(ps, i)
+   i, node.rets = parse_return_types(ps, i)
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_function_value(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "function")
-   i = verify_tk(tokens, i, errs, "function")
-   return parse_function_args_rets_body(tokens, i, errs, node)
+local function parse_function_value(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "function")
+   i = verify_tk(ps, i, "function")
+   return parse_function_args_rets_body(ps, i, node)
 end
 
 local function unquote(str: string): string
@@ -1292,35 +1312,35 @@ local function unquote(str: string): string
    return str:sub(l, -l)
 end
 
-local function parse_literal(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if tokens[i].tk == "{" then
-      return parse_table_literal(tokens, i, errs)
-   elseif tokens[i].kind == "..." then
-      return verify_kind(tokens, i, errs, "...")
-   elseif tokens[i].kind == "string" then
-      local tk = unquote(tokens[i].tk)
+local function parse_literal(ps: ParseState, i: number): number, Node
+   if ps.tokens[i].tk == "{" then
+      return parse_table_literal(ps, i)
+   elseif ps.tokens[i].kind == "..." then
+      return verify_kind(ps, i, "...")
+   elseif ps.tokens[i].kind == "string" then
+      local tk = unquote(ps.tokens[i].tk)
       local node: Node
-      i, node = verify_kind(tokens, i, errs, "string")
+      i, node = verify_kind(ps, i, "string")
       node.conststr = tk
       return i, node
-   elseif tokens[i].kind == "identifier" then
-      return verify_kind(tokens, i, errs, "identifier", "variable")
-   elseif tokens[i].kind == "number" then
-      local n = tonumber(tokens[i].tk)
+   elseif ps.tokens[i].kind == "identifier" then
+      return verify_kind(ps, i, "identifier", "variable")
+   elseif ps.tokens[i].kind == "number" then
+      local n = tonumber(ps.tokens[i].tk)
       local node: Node
-      i, node = verify_kind(tokens, i, errs, "number")
+      i, node = verify_kind(ps, i, "number")
       node.constnum = n
       return i, node
-   elseif tokens[i].tk == "true" then
-      return verify_kind(tokens, i, errs, "keyword", "boolean")
-   elseif tokens[i].tk == "false" then
-      return verify_kind(tokens, i, errs, "keyword", "boolean")
-   elseif tokens[i].tk == "nil" then
-      return verify_kind(tokens, i, errs, "keyword", "nil")
-   elseif tokens[i].tk == "function" then
-      return parse_function_value(tokens, i, errs)
+   elseif ps.tokens[i].tk == "true" then
+      return verify_kind(ps, i, "keyword", "boolean")
+   elseif ps.tokens[i].tk == "false" then
+      return verify_kind(ps, i, "keyword", "boolean")
+   elseif ps.tokens[i].tk == "nil" then
+      return verify_kind(ps, i, "keyword", "nil")
+   elseif ps.tokens[i].tk == "function" then
+      return parse_function_value(ps, i)
    end
-   return fail(tokens, i, errs)
+   return fail(ps, i)
 end
 
 do
@@ -1372,72 +1392,72 @@ do
       return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
-   local E: function({Token}, number, {ParseError}): number, Node
+   local E: function(ParseState, number): number, Node
 
-   local function P(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-      if tokens[i].kind == "$EOF$" then
+   local function P(ps: ParseState, i: number): number, Node
+      if ps.tokens[i].kind == "$EOF$" then
          return i
       end
       local e1: Node
-      local t1 = tokens[i]
-      if precedences[1][tokens[i].tk] ~= nil then
-         local op: Operator = new_operator(tokens[i], 1)
+      local t1 = ps.tokens[i]
+      if precedences[1][ps.tokens[i].tk] ~= nil then
+         local op: Operator = new_operator(ps.tokens[i], 1)
          i = i + 1
-         i, e1 = P(tokens, i, errs)
+         i, e1 = P(ps, i)
          e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
-      elseif tokens[i].tk == "(" then
+      elseif ps.tokens[i].tk == "(" then
          i = i + 1
-         i, e1 = parse_expression(tokens, i, errs)
+         i, e1 = parse_expression(ps, i)
          e1 = { y = t1.y, x = t1.x, kind = "paren", e1 = e1 }
-         i = verify_tk(tokens, i, errs, ")")
+         i = verify_tk(ps, i, ")")
       else
-         i, e1 = parse_literal(tokens, i, errs)
+         i, e1 = parse_literal(ps, i)
       end
 
       while true do
-         if tokens[i].kind == "string" or tokens[i].kind == "{" then
-            local op: Operator = new_operator(tokens[i], 2, "@funcall")
-            local args = new_node(tokens, i, "expression_list")
+         if ps.tokens[i].kind == "string" or ps.tokens[i].kind == "{" then
+            local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
+            local args = new_node(ps.tokens, i, "expression_list")
             local arg: Node
-            if tokens[i].kind == "string" then
-               arg = new_node(tokens, i)
-               arg.conststr = unquote(tokens[i].tk)
+            if ps.tokens[i].kind == "string" then
+               arg = new_node(ps.tokens, i)
+               arg.conststr = unquote(ps.tokens[i].tk)
                i = i + 1
             else
-               i, arg = parse_table_literal(tokens, i, errs)
+               i, arg = parse_table_literal(ps, i)
             end
             table.insert(args, arg)
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tokens[i].tk == "(" then
-            local op: Operator = new_operator(tokens[i], 2, "@funcall")
+         elseif ps.tokens[i].tk == "(" then
+            local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
 
-            local args = new_node(tokens, i, "expression_list")
-            i, args = parse_bracket_list(tokens, i, errs, args, "(", ")", "sep", parse_expression)
+            local args = new_node(ps.tokens, i, "expression_list")
+            i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tokens[i].tk == "[" then
-            local op: Operator = new_operator(tokens[i], 2, "@index")
+         elseif ps.tokens[i].tk == "[" then
+            local op: Operator = new_operator(ps.tokens[i], 2, "@index")
 
             local idx: Node
             i = i + 1
-            i, idx = parse_expression(tokens, i, errs)
-            i = verify_tk(tokens, i, errs, "]")
+            i, idx = parse_expression(ps, i)
+            i = verify_tk(ps, i, "]")
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = idx }
-         elseif tokens[i].tk == "." or tokens[i].tk == ":" then
-            local op: Operator = new_operator(tokens[i], 2)
+         elseif ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
+            local op: Operator = new_operator(ps.tokens[i], 2)
 
             local key: Node
             i = i + 1
-            i, key = verify_kind(tokens, i, errs, "identifier")
+            i, key = verify_kind(ps, i, "identifier")
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
-         elseif tokens[i].tk == "as" or tokens[i].tk == "is" then
-            local op: Operator = new_operator(tokens[i], 2, tokens[i].tk)
+         elseif ps.tokens[i].tk == "as" or ps.tokens[i].tk == "is" then
+            local op: Operator = new_operator(ps.tokens[i], 2, ps.tokens[i].tk)
 
             i = i + 1
-            local cast = new_node(tokens, i, "cast")
-            i, cast.casttype = parse_type(tokens, i, errs)
+            local cast = new_node(ps.tokens, i, "cast")
+            i, cast.casttype = parse_type(ps, i)
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
             break
@@ -1447,97 +1467,97 @@ do
       return i, e1
    end
 
-   local function E(tokens: {Token}, i: number, errs: {ParseError}, lhs: Node, min_precedence: number): number, Node
-      local lookahead = tokens[i].tk
+   local function E(ps: ParseState, i: number, lhs: Node, min_precedence: number): number, Node
+      local lookahead = ps.tokens[i].tk
       while precedences[2][lookahead] and precedences[2][lookahead] >= min_precedence do
-         local t1 = tokens[i]
+         local t1 = ps.tokens[i]
          local op: Operator = new_operator(t1, 2)
          i = i + 1
          local rhs: Node
-         i, rhs = P(tokens, i, errs)
-         lookahead = tokens[i].tk
+         i, rhs = P(ps, i)
+         lookahead = ps.tokens[i].tk
          while precedences[2][lookahead] and ((precedences[2][lookahead] > (precedences[2][op.op]))
             or (is_right_assoc[lookahead] and (precedences[2][lookahead] == precedences[2][op.op]))) do
-            i, rhs = E(tokens, i, errs, rhs, precedences[2][lookahead])
-            lookahead = tokens[i].tk
+            i, rhs = E(ps, i, rhs, precedences[2][lookahead])
+            lookahead = ps.tokens[i].tk
          end
          lhs = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = lhs, e2 = rhs, }
       end
       return i, lhs
    end
 
-   parse_expression = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
+   parse_expression = function(ps: ParseState, i: number): number, Node, number
       local lhs: Node
-      i, lhs = P(tokens, i, errs)
-      i, lhs = E(tokens, i, errs, lhs, 0)
+      i, lhs = P(ps, i)
+      i, lhs = E(ps, i, lhs, 0)
       if lhs then
          return i, lhs, 0
       else
-         return fail(tokens, i, errs, "expected an expression")
+         return fail(ps, i, "expected an expression")
       end
    end
 end
 
-local function parse_variable(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
-   if tokens[i].tk == "..." then
-      return verify_kind(tokens, i, errs, "...")
+local function parse_variable(ps: ParseState, i: number): number, Node, number
+   if ps.tokens[i].tk == "..." then
+      return verify_kind(ps, i, "...")
    end
-   return verify_kind(tokens, i, errs, "identifier", "variable")
+   return verify_kind(ps, i, "identifier", "variable")
 end
 
-local function parse_variable_name(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
+local function parse_variable_name(ps: ParseState, i: number): number, Node, number
    local is_const: boolean = false
    local node: Node
-   i, node = verify_kind(tokens, i, errs, "identifier")
+   i, node = verify_kind(ps, i, "identifier")
    if not node then
       return i
    end
-   if tokens[i].tk == "<" then
+   if ps.tokens[i].tk == "<" then
       i = i + 1
       local annotation: Node
-      i, annotation = verify_kind(tokens, i, errs, "identifier")
+      i, annotation = verify_kind(ps, i, "identifier")
       if annotation and annotation.tk == "const" then
          is_const = true
       end
-      i = verify_tk(tokens, i, errs, ">")
+      i = verify_tk(ps, i, ">")
    end
    node.is_const = is_const
    return i, node
 end
 
-local function parse_argument(tokens: {Token}, i: number, errs: {ParseError}): number, Node, number
+local function parse_argument(ps: ParseState, i: number): number, Node, number
    local node: Node
-   if tokens[i].tk == "..." then
-      i, node = verify_kind(tokens, i, errs, "...")
+   if ps.tokens[i].tk == "..." then
+      i, node = verify_kind(ps, i, "...")
    else
-      i, node = verify_kind(tokens, i, errs, "identifier", "argument")
+      i, node = verify_kind(ps, i, "identifier", "argument")
    end
-   if tokens[i].tk == ":" then
+   if ps.tokens[i].tk == ":" then
       i = i + 1
-      i, node.decltype = parse_type(tokens, i, errs)
+      i, node.decltype = parse_type(ps, i)
    end
    return i, node, 0
 end
 
-parse_argument_list = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "argument_list")
-   return parse_bracket_list(tokens, i, errs, node, "(", ")", "sep", parse_argument)
+parse_argument_list = function(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "argument_list")
+   return parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
 end
 
-local function parse_argument_type(tokens: {Token}, i: number, errs: {ParseError}): number, Type, number
+local function parse_argument_type(ps: ParseState, i: number): number, Type, number
    local is_va = false
-   if tokens[i].kind == "identifier" and tokens[i + 1].tk == ":" then
+   if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
       i = i + 2
-   elseif tokens[i].tk == "..." then
-      if tokens[i + 1].tk == ":" then
+   elseif ps.tokens[i].tk == "..." then
+      if ps.tokens[i + 1].tk == ":" then
          i = i + 2
          is_va = true
       else
-         return fail(tokens, i, errs, "cannot have untyped '...' when declaring the type of an argument")
+         return fail(ps, i, "cannot have untyped '...' when declaring the type of an argument")
       end
    end
 
-   local i, typ = parse_type(tokens, i, errs)
+   local i, typ = parse_type(ps, i)
    if typ then
       typ.is_va = is_va
    end
@@ -1545,33 +1565,33 @@ local function parse_argument_type(tokens: {Token}, i: number, errs: {ParseError
    return i, typ, 0
 end
 
-parse_argument_type_list = function(tokens: {Token}, i: number, errs: {ParseError}): number, Type
-   local list = new_type(tokens[i], "tuple")
-   return parse_bracket_list(tokens, i, errs, list, "(", ")", "sep", parse_argument_type)
+parse_argument_type_list = function(ps: ParseState, i: number): number, Type
+   local list = new_type(ps, i, "tuple")
+   return parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
 end
 
-local function parse_local_function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "local_function")
-   i = verify_tk(tokens, i, errs, "local")
-   i = verify_tk(tokens, i, errs, "function")
-   i, node.name = verify_kind(tokens, i, errs, "identifier")
-   return parse_function_args_rets_body(tokens, i, errs, node)
+local function parse_local_function(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "local_function")
+   i = verify_tk(ps, i, "local")
+   i = verify_tk(ps, i, "function")
+   i, node.name = verify_kind(ps, i, "identifier")
+   return parse_function_args_rets_body(ps, i, node)
 end
 
-local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
+local function parse_function(ps: ParseState, i: number): number, Node
    local orig_i = i
-   local fn = new_node(tokens, i, "global_function")
+   local fn = new_node(ps.tokens, i, "global_function")
    local node = fn
-   i = verify_tk(tokens, i, errs, "function")
+   i = verify_tk(ps, i, "function")
    local names: {Node} = {}
-   i, names[1] = verify_kind(tokens, i, errs, "identifier", "variable")
-   while tokens[i].tk == "." do
+   i, names[1] = verify_kind(ps, i, "identifier", "variable")
+   while ps.tokens[i].tk == "." do
       i = i + 1
-      i, names[#names + 1] = verify_kind(tokens, i, errs, "identifier")
+      i, names[#names + 1] = verify_kind(ps, i, "identifier")
    end
-   if tokens[i].tk == ":" then
+   if ps.tokens[i].tk == ":" then
       i = i + 1
-      i, names[#names + 1] = verify_kind(tokens, i, errs, "identifier")
+      i, names[#names + 1] = verify_kind(ps, i, "identifier")
       fn.is_method = true
    end
 
@@ -1588,8 +1608,8 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
    end
    fn.name = names[#names]
 
-   local selfx, selfy = tokens[i].x, tokens[i].y
-   i = parse_function_args_rets_body(tokens, i, errs, fn)
+   local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
+   i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
       table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "variable" })
    end
@@ -1601,134 +1621,134 @@ local function parse_function(tokens: {Token}, i: number, errs: {ParseError}): n
    return i, node
 end
 
-local function parse_if(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "if")
-   i = verify_tk(tokens, i, errs, "if")
-   i, node.exp = parse_expression(tokens, i, errs)
-   i = verify_tk(tokens, i, errs, "then")
-   i, node.thenpart = parse_statements(tokens, i, errs)
+local function parse_if(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "if")
+   i = verify_tk(ps, i, "if")
+   i, node.exp = parse_expression(ps, i)
+   i = verify_tk(ps, i, "then")
+   i, node.thenpart = parse_statements(ps, i)
    node.elseifs = {}
    local n = 0
-   while tokens[i].tk == "elseif" do
+   while ps.tokens[i].tk == "elseif" do
       n = n + 1
-      local subnode = new_node(tokens, i, "elseif")
+      local subnode = new_node(ps.tokens, i, "elseif")
       subnode.parent_if = node
       subnode.elseif_n = n
       i = i + 1
-      i, subnode.exp = parse_expression(tokens, i, errs)
-      i = verify_tk(tokens, i, errs, "then")
-      i, subnode.thenpart = parse_statements(tokens, i, errs)
+      i, subnode.exp = parse_expression(ps, i)
+      i = verify_tk(ps, i, "then")
+      i, subnode.thenpart = parse_statements(ps, i)
       table.insert(node.elseifs, subnode)
    end
-   if tokens[i].tk == "else" then
-      local subnode = new_node(tokens, i, "else")
+   if ps.tokens[i].tk == "else" then
+      local subnode = new_node(ps.tokens, i, "else")
       subnode.parent_if = node
       i = i + 1
-      i, subnode.elsepart = parse_statements(tokens, i, errs)
+      i, subnode.elsepart = parse_statements(ps, i)
       node.elsepart = subnode
    end
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_while(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "while")
-   i = verify_tk(tokens, i, errs, "while")
-   i, node.exp = parse_expression(tokens, i, errs)
-   i = verify_tk(tokens, i, errs, "do")
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+local function parse_while(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "while")
+   i = verify_tk(ps, i, "while")
+   i, node.exp = parse_expression(ps, i)
+   i = verify_tk(ps, i, "do")
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_fornum(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "fornum")
+local function parse_fornum(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "fornum")
    i = i + 1
-   i, node.var = verify_kind(tokens, i, errs, "identifier")
-   i = verify_tk(tokens, i, errs, "=")
-   i, node.from = parse_expression(tokens, i, errs)
-   i = verify_tk(tokens, i, errs, ",")
-   i, node.to = parse_expression(tokens, i, errs)
-   if tokens[i].tk == "," then
+   i, node.var = verify_kind(ps, i, "identifier")
+   i = verify_tk(ps, i, "=")
+   i, node.from = parse_expression(ps, i)
+   i = verify_tk(ps, i, ",")
+   i, node.to = parse_expression(ps, i)
+   if ps.tokens[i].tk == "," then
       i = i + 1
-      i, node.step = parse_expression(tokens, i, errs)
+      i, node.step = parse_expression(ps, i)
    end
-   i = verify_tk(tokens, i, errs, "do")
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+   i = verify_tk(ps, i, "do")
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_forin(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "forin")
+local function parse_forin(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "forin")
    i = i + 1
-   node.vars = new_node(tokens, i, "variables")
-   i, node.vars = parse_list(tokens, i, errs, node.vars, { ["in"] = true }, "sep", parse_variable_name)
-   i = verify_tk(tokens, i, errs, "in")
-   node.exps = new_node(tokens, i, "expression_list")
-   i = parse_list(tokens, i, errs, node.exps, { ["do"] = true }, "sep", parse_expression)
+   node.vars = new_node(ps.tokens, i, "variables")
+   i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true }, "sep", parse_variable_name)
+   i = verify_tk(ps, i, "in")
+   node.exps = new_node(ps.tokens, i, "expression_list")
+   i = parse_list(ps, i, node.exps, { ["do"] = true }, "sep", parse_expression)
    if #node.exps < 1 then
-      return fail(tokens, i, errs, "missing iterator expression in generic for")
+      return fail(ps, i, "missing iterator expression in generic for")
    elseif #node.exps > 3 then
-      return fail(tokens, i, errs, "too many expressions in generic for")
+      return fail(ps, i, "too many expressions in generic for")
    end
-   i = verify_tk(tokens, i, errs, "do")
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+   i = verify_tk(ps, i, "do")
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_for(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if tokens[i+1].kind == "identifier" and tokens[i+2].tk == "=" then
-      return parse_fornum(tokens, i, errs)
+local function parse_for(ps: ParseState, i: number): number, Node
+   if ps.tokens[i+1].kind == "identifier" and ps.tokens[i+2].tk == "=" then
+      return parse_fornum(ps, i)
    else
-      return parse_forin(tokens, i, errs)
+      return parse_forin(ps, i)
    end
 end
 
-local function parse_repeat(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "repeat")
-   i = verify_tk(tokens, i, errs, "repeat")
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "until")
-   i, node.exp = parse_expression(tokens, i, errs)
+local function parse_repeat(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "repeat")
+   i = verify_tk(ps, i, "repeat")
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "until")
+   i, node.exp = parse_expression(ps, i)
    return i, node
 end
 
-local function parse_do(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "do")
-   i = verify_tk(tokens, i, errs, "do")
-   i, node.body = parse_statements(tokens, i, errs)
-   node.yend = tokens[i].y
-   i = verify_tk(tokens, i, errs, "end")
+local function parse_do(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "do")
+   i = verify_tk(ps, i, "do")
+   i, node.body = parse_statements(ps, i)
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
    return i, node
 end
 
-local function parse_break(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "break")
-   i = verify_tk(tokens, i, errs, "break")
+local function parse_break(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "break")
+   i = verify_tk(ps, i, "break")
    return i, node
 end
 
-local function parse_goto(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "goto")
-   i = verify_tk(tokens, i, errs, "goto")
-   node.label = tokens[i].tk
-   i = verify_kind(tokens, i, errs, "identifier")
+local function parse_goto(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "goto")
+   i = verify_tk(ps, i, "goto")
+   node.label = ps.tokens[i].tk
+   i = verify_kind(ps, i, "identifier")
    return i, node
 end
 
-local function parse_label(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "label")
-   i = verify_tk(tokens, i, errs, "::")
-   node.label = tokens[i].tk
-   i = verify_kind(tokens, i, errs, "identifier")
-   i = verify_tk(tokens, i, errs, "::")
+local function parse_label(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "label")
+   i = verify_tk(ps, i, "::")
+   node.label = ps.tokens[i].tk
+   i = verify_kind(ps, i, "identifier")
+   i = verify_tk(ps, i, "::")
    return i, node
 end
 
@@ -1748,57 +1768,58 @@ for k, v in pairs(stop_statement_list) do
    stop_return_list[k] = v
 end
 
-local function parse_return(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node = new_node(tokens, i, "return")
-   i = verify_tk(tokens, i, errs, "return")
-   node.exps = new_node(tokens, i, "expression_list")
-   i = parse_list(tokens, i, errs, node.exps, stop_return_list, "sep", parse_expression)
-   if tokens[i].kind == ";" then
+local function parse_return(ps: ParseState, i: number): number, Node
+   local node = new_node(ps.tokens, i, "return")
+   i = verify_tk(ps, i, "return")
+   node.exps = new_node(ps.tokens, i, "expression_list")
+   i = parse_list(ps, i, node.exps, stop_return_list, "sep", parse_expression)
+   if ps.tokens[i].kind == ";" then
       i = i + 1
    end
    return i, node
 end
 
-parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local node: Node = new_node(tokens, i, "newtype")
-   node.newtype = new_type(tokens[i], "typetype")
-   if tokens[i].tk == "record" then
-      local def = new_type(tokens[i], "record")
+parse_newtype = function(ps: ParseState, i: number): number, Node
+   local node: Node = new_node(ps.tokens, i, "newtype")
+   node.newtype = new_type(ps, i, "typetype")
+   if ps.tokens[i].tk == "record" then
+      local def = new_type(ps, i, "record")
       def.fields = {}
       def.field_order = {}
       node.newtype.def = def
       i = i + 1
-      if tokens[i].tk == "<" then
-         i, def.typeargs = parse_typearg_list(tokens, i, errs)
+      if ps.tokens[i].tk == "<" then
+         i, def.typeargs = parse_typearg_list(ps, i)
       end
-      while not ((not tokens[i]) or tokens[i].tk == "end") do
-         if tokens[i].tk == "{" then
+      while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+         if ps.tokens[i].tk == "{" then
             if def.typename == "arrayrecord" then
-               return fail(tokens, i, errs, "duplicated declaration of array element type in record")
+               return fail(ps, i, "duplicated declaration of array element type in record")
             end
             i = i + 1
             local t: Type
-            i, t = parse_type(tokens, i, errs)
-            if tokens[i].tk == "}" then
-               node.yend = tokens[i].y
-               i = verify_tk(tokens, i, errs, "}")
+            i, t = parse_type(ps, i)
+            if ps.tokens[i].tk == "}" then
+               node.yend = ps.tokens[i].y
+               i = verify_tk(ps, i, "}")
             else
-               return fail(tokens, i, errs, "expected an array declaration")
+               return fail(ps, i, "expected an array declaration")
             end
             def.typename = "arrayrecord"
             def.elements = t
          else
             local v: Node
-            i, v = verify_kind(tokens, i, errs, "identifier", "variable")
+            i, v = verify_kind(ps, i, "identifier", "variable")
+            local iv = i
             if not v then
-               return fail(tokens, i, errs, "expected a variable name")
+               return fail(ps, i, "expected a variable name")
             end
-            if tokens[i].tk == ":" then
-               i = verify_tk(tokens, i, errs, ":")
+            if ps.tokens[i].tk == ":" then
+               i = verify_tk(ps, i, ":")
                local t: Type
-               i, t = parse_type(tokens, i, errs)
+               i, t = parse_type(ps, i)
                if not t then
-                  return fail(tokens, i, errs, "expected a type")
+                  return fail(ps, i, "expected a type")
                end
                if not def.fields[v.tk] then
                   def.fields[v.tk] = t
@@ -1806,184 +1827,188 @@ parse_newtype = function(tokens: {Token}, i: number, errs: {ParseError}): number
                else
                   local prev_t = def.fields[v.tk]
                   if t.typename == "function" and prev_t.typename == "function" then
-                     def.fields[v.tk] = new_type({ y = v.y, x = v.x, tk = v.tk }, "poly")
+                     def.fields[v.tk] = new_type(ps, iv, "poly")
                      def.fields[v.tk].types = { prev_t, t }
                   elseif t.typename == "function" and prev_t.typename == "poly" then
                      table.insert(prev_t.types, t)
                   else
-                     return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                     return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                   end
                end
-            elseif tokens[i].tk == "=" then
-               i = verify_tk(tokens, i, errs, "=")
+            elseif ps.tokens[i].tk == "=" then
+               i = verify_tk(ps, i, "=")
                local nt: Node
-               i, nt = parse_newtype(tokens, i, errs)
+               i, nt = parse_newtype(ps, i)
                if not nt or not nt.newtype then
-                  return fail(tokens, i, errs, "expected a type definition")
+                  return fail(ps, i, "expected a type definition")
                end
 
                if not def.fields[v.tk] then
                   def.fields[v.tk] = nt.newtype
                   table.insert(def.field_order, v.tk)
                else
-                  return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                end
             end
          end
       end
-      node.yend = tokens[i].y
-      i = verify_tk(tokens, i, errs, "end")
+      node.yend = ps.tokens[i].y
+      i = verify_tk(ps, i, "end")
       return i, node
-   elseif tokens[i].tk == "enum" then
-      local def = new_type(tokens[i], "enum")
+   elseif ps.tokens[i].tk == "enum" then
+      local def = new_type(ps, i, "enum")
       node.newtype.def = def
       def.enumset = {}
       i = i + 1
-      while not ((not tokens[i]) or tokens[i].tk == "end") do
+      while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
          local item: Node
-         i, item = verify_kind(tokens, i, errs, "string", "enum_item")
+         i, item = verify_kind(ps, i, "string", "enum_item")
          if item then
             table.insert(node, item)
             def.enumset[unquote(item.tk)] = true
          end
       end
-      node.yend = tokens[i].y
-      i = verify_tk(tokens, i, errs, "end")
+      node.yend = ps.tokens[i].y
+      i = verify_tk(ps, i, "end")
       return i, node
-   elseif tokens[i].tk == "functiontype" then
-      i, node.newtype.def = parse_function_type(tokens, i, errs)
+   elseif ps.tokens[i].tk == "functiontype" then
+      i, node.newtype.def = parse_function_type(ps, i)
       return i, node
    end
-   return fail(tokens, i, errs)
+   return fail(ps, i)
 end
 
-local function parse_call_or_assignment(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   local asgn: Node = new_node(tokens, i, "assignment")
+local function parse_call_or_assignment(ps: ParseState, i: number): number, Node
+   local asgn: Node = new_node(ps.tokens, i, "assignment")
 
    local tryi = i
-   asgn.vars = new_node(tokens, i, "variables")
-   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_expression)
+   asgn.vars = new_node(ps.tokens, i, "variables")
+   i = parse_trying_list(ps, i, asgn.vars, parse_expression)
    if #asgn.vars < 1 then
-      return fail(tokens, i, errs)
+      return fail(ps, i)
    end
    local lhs: Node = asgn.vars[1]
 
-   if tokens[i].tk == "=" then
-      asgn.exps = new_node(tokens, i, "values")
+   if ps.tokens[i].tk == "=" then
+      asgn.exps = new_node(ps.tokens, i, "values")
       repeat
          i = i + 1
          local val: Node
-         i, val = parse_expression(tokens, i, errs)
+         i, val = parse_expression(ps, i)
          table.insert(asgn.exps, val)
-      until tokens[i].tk ~= ","
+      until ps.tokens[i].tk ~= ","
       return i, asgn
    end
    if #asgn.vars > 1 then
-      local expi = parse_expression(tokens, tryi, {})
-      return fail(tokens, expi or i, errs)
+      local err_ps: ParseState = {
+         tokens = ps.tokens,
+         errs = {},
+      }
+      local expi = parse_expression(err_ps, tryi)
+      return fail(ps, expi or i)
    end
    if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs
    end
-   return fail(tokens, i, errs)
+   return fail(ps, i)
 end
 
-local function parse_variable_declarations(tokens: {Token}, i: number, errs: {ParseError}, node_name: NodeKind): number, Node
-   local asgn: Node = new_node(tokens, i, node_name)
+local function parse_variable_declarations(ps: ParseState, i: number, node_name: NodeKind): number, Node
+   local asgn: Node = new_node(ps.tokens, i, node_name)
 
-   asgn.vars = new_node(tokens, i, "variables")
-   i = parse_trying_list(tokens, i, errs, asgn.vars, parse_variable_name)
+   asgn.vars = new_node(ps.tokens, i, "variables")
+   i = parse_trying_list(ps, i, asgn.vars, parse_variable_name)
    if #asgn.vars == 0 then
-      return fail(tokens, i, errs, "expected a local variable definition")
+      return fail(ps, i, "expected a local variable definition")
    end
    local lhs: Node = asgn.vars[1]
 
-   i, asgn.decltype = parse_type_list(tokens, i, errs)
+   i, asgn.decltype = parse_type_list(ps, i)
 
-   if tokens[i].tk == "=" then
-      asgn.exps = new_node(tokens, i, "values")
+   if ps.tokens[i].tk == "=" then
+      asgn.exps = new_node(ps.tokens, i, "values")
       local v = 1
       repeat
          i = i + 1
          local val: Node
-         if is_newtype[tokens[i].tk] then
+         if is_newtype[ps.tokens[i].tk] then
             if #asgn.vars > 1 then
-               return fail(tokens, i, errs, "cannot perform multiple assignment of type definitions")
+               return fail(ps, i, "cannot perform multiple assignment of type definitions")
             end
-            i, val = parse_newtype(tokens, i, errs)
+            i, val = parse_newtype(ps, i)
             if val then
                val.newtype.def.names = { asgn.vars[v].tk }
             else
                return i, val
             end
          else
-            i, val = parse_expression(tokens, i, errs)
+            i, val = parse_expression(ps, i)
          end
          table.insert(asgn.exps, val)
          v = v + 1
-      until tokens[i].tk ~= ","
+      until ps.tokens[i].tk ~= ","
    end
    return i, asgn
 end
 
-local function parse_statement(tokens: {Token}, i: number, errs: {ParseError}): number, Node
-   if tokens[i].tk == "local" then
-      if tokens[i+1].tk == "function" then
-         return parse_local_function(tokens, i, errs)
+local function parse_statement(ps: ParseState, i: number): number, Node
+   if ps.tokens[i].tk == "local" then
+      if ps.tokens[i+1].tk == "function" then
+         return parse_local_function(ps, i)
       else
          i = i + 1
-         return parse_variable_declarations(tokens, i, errs, "local_declaration")
+         return parse_variable_declarations(ps, i, "local_declaration")
       end
-   elseif tokens[i].tk == "global" then
+   elseif ps.tokens[i].tk == "global" then
       i = i + 1
-      if tokens[i].tk == "function" then
-         return parse_function(tokens, i, errs)
+      if ps.tokens[i].tk == "function" then
+         return parse_function(ps, i)
       end
-      return parse_variable_declarations(tokens, i, errs, "global_declaration")
-   elseif tokens[i].tk == "function" then
-      return parse_function(tokens, i, errs)
-   elseif tokens[i].tk == "if" then
-      return parse_if(tokens, i, errs)
-   elseif tokens[i].tk == "while" then
-      return parse_while(tokens, i, errs)
-   elseif tokens[i].tk == "repeat" then
-      return parse_repeat(tokens, i, errs)
-   elseif tokens[i].tk == "for" then
-      return parse_for(tokens, i, errs)
-   elseif tokens[i].tk == "do" then
-      return parse_do(tokens, i, errs)
-   elseif tokens[i].tk == "break" then
-      return parse_break(tokens, i, errs)
-   elseif tokens[i].tk == "return" then
-      return parse_return(tokens, i, errs)
-   elseif tokens[i].tk == "goto" then
-      return parse_goto(tokens, i, errs)
-   elseif tokens[i].tk == "::" then
-      return parse_label(tokens, i, errs)
+      return parse_variable_declarations(ps, i, "global_declaration")
+   elseif ps.tokens[i].tk == "function" then
+      return parse_function(ps, i)
+   elseif ps.tokens[i].tk == "if" then
+      return parse_if(ps, i)
+   elseif ps.tokens[i].tk == "while" then
+      return parse_while(ps, i)
+   elseif ps.tokens[i].tk == "repeat" then
+      return parse_repeat(ps, i)
+   elseif ps.tokens[i].tk == "for" then
+      return parse_for(ps, i)
+   elseif ps.tokens[i].tk == "do" then
+      return parse_do(ps, i)
+   elseif ps.tokens[i].tk == "break" then
+      return parse_break(ps, i)
+   elseif ps.tokens[i].tk == "return" then
+      return parse_return(ps, i)
+   elseif ps.tokens[i].tk == "goto" then
+      return parse_goto(ps, i)
+   elseif ps.tokens[i].tk == "::" then
+      return parse_label(ps, i)
    else
-      return parse_call_or_assignment(tokens, i, errs)
+      return parse_call_or_assignment(ps, i)
    end
-   return fail(tokens, i, errs)
+   return fail(ps, i)
 end
 
-parse_statements = function(tokens: {Token}, i: number, errs: {ParseError}, filename: string): number, Node
-   local node = new_node(tokens, i, "statements")
+parse_statements = function(ps: ParseState, i: number, filename: string): number, Node
+   local node = new_node(ps.tokens, i, "statements")
    while true do
-      while tokens[i].kind == ";" do
+      while ps.tokens[i].kind == ";" do
          i = i + 1
       end
-      if tokens[i].kind == "$EOF$" then
+      if ps.tokens[i].kind == "$EOF$" then
          break
       end
-      if stop_statement_list[tokens[i].tk] then
+      if stop_statement_list[ps.tokens[i].tk] then
          break
       end
       local item: Node
-      i, item = parse_statement(tokens, i, errs)
+      i, item = parse_statement(ps, i)
       if filename then
-         for j = 1, #errs do
-            if not errs[j].filename then
-               errs[j].filename = filename
+         for j = 1, #ps.errs do
+            if not ps.errs[j].filename then
+               ps.errs[j].filename = filename
             end
          end
       end
@@ -1997,9 +2022,14 @@ end
 
 function tl.parse_program(tokens: {Token}, errs: {ParseError}, filename: string): number, Node
    errs = errs or {}
-   local last = tokens[#tokens] or { y = 1, x = 1, tk = "" }
-   table.insert(tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
-   return parse_statements(tokens, 1, errs, filename)
+   local ps: ParseState = {
+      tokens = tokens,
+      errs = errs,
+      filename = filename,
+   }
+   local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
+   table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
+   return parse_statements(ps, 1, filename)
 end
 
 --------------------------------------------------------------------------------
@@ -3859,11 +3889,13 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
       for i, err in ipairs(src) do
          err.msg = prefix .. err.msg
+
          -- node.y may be nil because of `typ as Node` casts and not all types have .y set
          if node and node.y and (not err.y or (node.y > err.y or (node.y == err.y and node.x > err.x))) then
             err.y = node.y
             err.x = node.x
          end
+
          table.insert(dst, err)
       end
    end
