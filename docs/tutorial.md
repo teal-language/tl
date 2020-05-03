@@ -378,6 +378,21 @@ end
 Note the recursive definition in the above example: records of type Node can
 be organized as a tree using its array part.
 
+Finally, records can contain nested record type definitions. This is useful
+when exporting a module as a record, so that the types created in the module
+can be used by the client code which requires the module.
+
+```
+local http = record
+
+   Response = record
+      status_code: number
+   end
+
+   get: function(string): Response
+end
+```
+
 ## Generics
 
 Teal supports a simple form of generics that is useful enough for dealing

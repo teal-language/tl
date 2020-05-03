@@ -101,7 +101,7 @@ precedence, see below.
 
 *  typeargs ::= ‘<’ Name {‘,’ Name } ‘>’
 
-*  newtype ::= ‘record’ [typeargs] [‘{’ type ‘}’] {Name ‘:’ type} ‘end’ |
+*  newtype ::= ‘record’ [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {Name ‘:’ type} ‘end’ |
 *      ‘enum’ {LiteralString} ‘end’ |
 *      ‘functiontype’ functiontype
 

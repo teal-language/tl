@@ -62,6 +62,43 @@ describe("require", function()
       assert.same({}, result.unknowns)
    end)
 
+   it("local types can be exported indirectly, but not their names", function ()
+      util.mock_io(finally, {
+         ["box.tl"] = [[
+            local box = {}
+
+            -- local type
+            local Box = record
+               x: number
+               y: number
+               w: number
+               h: number
+            end
+
+            function box.foo(self: Box): Box
+               return self
+            end
+
+            return box
+         ]],
+         ["foo.tl"] = [[
+            local box = require "box"
+
+            -- passing a table that matches the local type works
+            local b = box.foo({ x = 10, y = 10, w = 123, h = 120 })
+
+            -- you can declare a variable based on another value's type
+            local anotherbox = b
+            anotherbox = { x = 10, y = 10, w = 123, h = 120 }
+         ]],
+      })
+      local result, err = tl.process("foo.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
    it("exported types resolve regardless of module name", function ()
       -- ok
       util.mock_io(finally, {
@@ -207,39 +244,6 @@ describe("require", function()
    end)
 
    it("exports global types", function ()
-      -- fail
-      util.mock_io(finally, {
-         ["box.tl"] = [[
-            local box = {}
-
-            -- local type
-            local Box = record
-               x: number
-               y: number
-               w: number
-               h: number
-            end
-
-            function box.foo(self: Box): Box
-               return self
-            end
-
-            return box
-         ]],
-         ["foo.tl"] = [[
-            local box = require "box"
-
-            local b = box.foo({ x = 10, y = 10, w = 123, h = 120 })
-         ]],
-      })
-      local result, err = tl.process("foo.tl")
-
-      assert.same(0, #result.syntax_errors)
-      assert.same(2, #result.type_errors)
-      assert.match("expected Box", result.type_errors[1].msg)
-      assert.match("unknown type Box", result.type_errors[2].msg)
-      assert.same(0, #result.unknowns)
-
       -- ok
       util.mock_io(finally, {
          ["box.tl"] = [[

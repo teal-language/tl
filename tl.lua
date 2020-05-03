@@ -699,6 +699,7 @@ local TypeName = {}
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1792,22 +1793,38 @@ parse_newtype = function(tokens, i, errs)
             if not v then
                return fail(tokens, i, errs, "expected a variable name")
             end
-            i = verify_tk(tokens, i, errs, ":")
-            local t
-            i, t = parse_type(tokens, i, errs)
-            if not t then
-               return fail(tokens, i, errs, "expected a type")
-            end
-            if not def.fields[v.tk] then
-               def.fields[v.tk] = t
-               table.insert(def.field_order, v.tk)
-            else
-               local prev_t = def.fields[v.tk]
-               if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[v.tk] = new_type({ ["y"] = v.y, ["x"] = v.x, ["tk"] = v.tk, }, "poly")
-                  def.fields[v.tk].types = { [1] = prev_t, [2] = t, }
-               elseif t.typename == "function" and prev_t.typename == "poly" then
-                  table.insert(prev_t.types, t)
+            if tokens[i].tk == ":" then
+               i = verify_tk(tokens, i, errs, ":")
+               local t
+               i, t = parse_type(tokens, i, errs)
+               if not t then
+                  return fail(tokens, i, errs, "expected a type")
+               end
+               if not def.fields[v.tk] then
+                  def.fields[v.tk] = t
+                  table.insert(def.field_order, v.tk)
+               else
+                  local prev_t = def.fields[v.tk]
+                  if t.typename == "function" and prev_t.typename == "function" then
+                     def.fields[v.tk] = new_type({ ["y"] = v.y, ["x"] = v.x, ["tk"] = v.tk, }, "poly")
+                     def.fields[v.tk].types = { [1] = prev_t, [2] = t, }
+                  elseif t.typename == "function" and prev_t.typename == "poly" then
+                     table.insert(prev_t.types, t)
+                  else
+                     return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                  end
+               end
+            elseif tokens[i].tk == "=" then
+               i = verify_tk(tokens, i, errs, "=")
+               local nt
+               i, nt = parse_newtype(tokens, i, errs)
+               if not nt or not nt.newtype then
+                  return fail(tokens, i, errs, "expected a type definition")
+               end
+
+               if not def.fields[v.tk] then
+                  def.fields[v.tk] = nt.newtype
+                  table.insert(def.field_order, v.tk)
                else
                   return fail(tokens, i, errs, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                end
@@ -2332,6 +2349,20 @@ function tl.pretty_print_ast(ast, fast)
       return table.concat(out)
    end
 
+   local function print_record_def(typ)
+      local out = { [1] = "{", }
+      for name, field in pairs(typ.fields) do
+         if field.typename == "typetype" and is_record_type(field.def) then
+            table.insert(out, name)
+            table.insert(out, " = ")
+            table.insert(out, print_record_def(field.def))
+            table.insert(out, ", ")
+         end
+      end
+      table.insert(out, "}")
+      return table.concat(out)
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -2683,7 +2714,11 @@ function tl.pretty_print_ast(ast, fast)
       ["newtype"] = {
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
-            table.insert(out, "{}")
+            if is_record_type(node.newtype.def) then
+               table.insert(out, print_record_def(node.newtype.def))
+            else
+               table.insert(out, "{}")
+            end
             return out
          end,
       },
@@ -3676,8 +3711,9 @@ function tl.type_check(ast, opts)
          return nil
       end
       for i = 2, #names do
-         if typ.fields then
-            typ = typ.fields[names[i]]
+         local nested = typ.fields or (typ.def and typ.def.fields)
+         if nested then
+            typ = nested[names[i]]
             if typ == nil then
                return nil
             end
@@ -3689,7 +3725,7 @@ function tl.type_check(ast, opts)
          if accept_typearg and typ.typename == "typearg" then
             return typ
          end
-         if typ.typename == "typetype" then
+         if typ.typename == "typetype" or typ.typename == "nestedtype" then
             return typ
          end
       end
@@ -5136,7 +5172,9 @@ function tl.type_check(ast, opts)
                end
                if vartype then
                   local val = exps[i]
-                  if val then
+                  if resolve_unary(vartype).typename == "typetype" then
+                     node_error(varnode, "cannot reassign a type")
+                  elseif val then
                      assert_is_a(varnode, val, vartype, "assignment")
                      if varnode.kind == "variable" and vartype.typename == "union" then
 
@@ -5268,7 +5306,7 @@ function tl.type_check(ast, opts)
                      if not (lax and is_unknown(t)) then
                         node_error(exp1, "attempting pairs loop on something that's not a map or record: %s", exp1.e2.type)
                      end
-                  elseif exp1.e1.tk == "ipairs" and not (t.typename == "array" or t.typename == "arrayrecord") then
+                  elseif exp1.e1.tk == "ipairs" and not is_array_type(t) then
                      if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
                         node_error(exp1, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
                      end
@@ -5315,6 +5353,9 @@ function tl.type_check(ast, opts)
             for i = 1, #children[1] do
                local expected = rets[i] or vatype
                if expected then
+                  children[1][i].y = nil
+                  children[1][i].x = nil
+                  expected = resolve_unary(expected)
                   assert_is_a(node.exps[i], children[1][i], expected, "return value")
                end
             end
@@ -5421,10 +5462,12 @@ function tl.type_check(ast, opts)
          end,
          ["after"] = function(node, children)
             end_function_scope()
+            local rets = get_rets(children[3])
+
             add_var(nil, node.name.tk, a_type({
                ["typename"] = "function",
                ["args"] = children[2],
-               ["rets"] = get_rets(children[3]),
+               ["rets"] = rets,
             }))
             node.type = NONE
          end,
@@ -5773,6 +5816,26 @@ function tl.type_check(ast, opts)
                return typ
             end,
          },
+         ["record"] = {
+            ["before"] = function(typ, children)
+               begin_scope()
+               for name, typ in pairs(typ.fields) do
+                  if typ.typename == "typetype" then
+                     typ.typename = "nestedtype"
+                     add_var(nil, name, typ)
+                  end
+               end
+            end,
+            ["after"] = function(typ, children)
+               end_scope()
+               for name, typ in pairs(typ.fields) do
+                  if typ.typename == "nestedtype" then
+                     typ.typename = "typetype"
+                  end
+               end
+               return typ
+            end,
+         },
          ["typearg"] = {
             ["after"] = function(typ, children)
                add_var(nil, typ.typearg, a_type({
@@ -5787,11 +5850,15 @@ function tl.type_check(ast, opts)
          ["nominal"] = {
             ["after"] = function(typ, children)
                local t = find_type(typ.names, true)
-               if t and t.typename == "typearg" then
+               if t then
+                  if t.typename == "typearg" then
 
-                  typ.names = nil
-                  typ.typename = "typevar"
-                  typ.typevar = t.typearg
+                     typ.names = nil
+                     typ.typename = "typevar"
+                     typ.typevar = t.typearg
+                  elseif t.typename == "nestedtype" then
+                     typ.resolved = t.def
+                  end
                end
                return typ
             end,
@@ -5831,9 +5898,8 @@ function tl.type_check(ast, opts)
       },
    }
 
-   visit_type.cbs["record"] = visit_type.cbs["function"]
-
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
+   visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
    visit_type.cbs["typevar"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
