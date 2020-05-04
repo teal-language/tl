@@ -1,3 +1,18 @@
+# 0.4.0
+
+2020-05-03
+
+## What's new
+
+### Language changes
+
+* Record definitions can be nested: this should make
+  declarations of types in modules more natural
+
+## Tooling
+
+* Improvement in the position of error messages
+
 # 0.3.0
 
 2020-04-27
