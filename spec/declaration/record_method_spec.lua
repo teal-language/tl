@@ -196,6 +196,68 @@ describe("record method", function()
       assert.same({}, errors)
    end)
 
+
+   it("allows colon notation in methods", function()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local Point = record
+               x: number
+               y: number
+               __index: Point
+            end
+
+            Point.__index = Point as Point
+
+            function Point.new(x: number, y: number): Point
+               local self: Point = setmetatable({}, Point as METATABLE)
+
+               self.x = x or 0
+               self.y = y or 0
+
+               return self
+            end
+
+            function Point:print()
+               print("x: " .. self.x .. "; y: " .. self.y)
+            end
+
+            local a = Point.new(1, 1)
+
+            a:print()
+         ]]
+      })
+      local result, err = tl.process("foo.tl")
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      local output = tl.pretty_print_ast(result.ast)
+      util.assert_line_by_line([[
+         local Point = {}
+
+
+
+
+
+         Point.__index = Point
+
+         function Point.new(x, y)
+            local self = setmetatable({}, Point)
+
+            self.x = x or 0
+            self.y = y or 0
+
+            return self
+         end
+
+         function Point:print()
+            print("x: " .. self.x .. "; y: " .. self.y)
+         end
+
+         local a = Point.new(1, 1)
+
+         a:print()
+      ]], output)
+   end)
+
    it("allows functions declared on method tables (#27)", function()
       util.mock_io(finally, {
          ["foo.tl"] = [[
@@ -258,4 +320,5 @@ describe("record method", function()
          pt:move(3, 4)
       ]], output)
    end)
+
 end)

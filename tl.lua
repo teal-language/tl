@@ -2106,8 +2106,10 @@ local function recurse_type(ast, visit)
       end
    end
    if ast.args then
-      for _, child in ipairs(ast.args) do
-         table.insert(xs, recurse_type(child, visit))
+      for i, child in ipairs(ast.args) do
+         if i > 1 or not ast.is_method then
+            table.insert(xs, recurse_type(child, visit))
+         end
       end
    end
    if ast.rets then
