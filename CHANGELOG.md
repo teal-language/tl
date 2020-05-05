@@ -1,3 +1,9 @@
+# 0.4.1
+
+2020-05-05
+
+Fixes a regression in record functions.
+
 # 0.4.0
 
 2020-05-03
