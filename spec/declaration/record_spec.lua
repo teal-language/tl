@@ -34,6 +34,50 @@ describe("records", function()
       assert.same("attempt to redeclare field 'print' (only functions can be overloaded)", syntax_errors[1].msg)
    end)
 
+   it("can produce an intersection type for polymorphic functions", util.check [[
+      local requests = record
+
+         RequestOpts = record
+            {string}
+            url: string
+         end
+
+         Response = record
+            status_code: number
+         end
+
+         get: function(string): Response
+         get: function(string, RequestOpts): Response
+         get: function(RequestOpts): Response
+      end
+
+      local r: requests = {}
+      local resp = r.get("hello")
+   ]])
+
+   it("can check the arity of polymorphic functions", util.check_type_error([[
+      local requests = record
+
+         RequestOpts = record
+            {string}
+            url: string
+         end
+
+         Response = record
+            status_code: number
+         end
+
+         get: function(string): Response
+         get: function(string, RequestOpts): Response
+         get: function(RequestOpts): Response
+      end
+
+      local r: requests = {}
+      local resp = r.get("hello", 123, 123)
+   ]], {
+     { y = 18, msg = "wrong number of arguments (given 3, expects 1 or 2)" }
+   }))
+
    it("can be nested", function()
       util.mock_io(finally, {
          ["req.d.tl"] = [[

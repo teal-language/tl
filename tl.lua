@@ -4401,6 +4401,17 @@ function tl.type_check(ast, opts)
          end
       end
 
+      local function remove_sorted_duplicates(t)
+         local prev = nil
+         for i = #t, 1, -1 do
+            if t[i] == prev then
+               table.remove(t, i)
+            else
+               prev = t[i]
+            end
+         end
+      end
+
       local function check_call(node, func, args, is_method, argdelta)
          assert(type(func) == "table")
          assert(type(args) == "table")
@@ -4461,6 +4472,8 @@ function tl.type_check(ast, opts)
          end
 
          if not first_errs then
+            table.sort(expects)
+            remove_sorted_duplicates(expects)
             node_error(node, "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")")
          else
             for _, err in ipairs(first_errs) do
