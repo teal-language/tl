@@ -4201,7 +4201,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          return true
       elseif t2.typename == "array" then
          if is_array_type(t1) then
-            return is_a(t1.elements, t2.elements)
+            if is_a(t1.elements, t2.elements) then
+               return true
+            end
          elseif t1.typename == "map" then
             local _, errs_keys = is_a(t1.keys, NUMBER)
             local _, errs_values = is_a(t1.values, t2.elements)
@@ -4862,16 +4864,46 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   local function expand_type(old: Type, new: Type): Type
+   local function expand_type(where: Node, old: Type, new: Type): Type
       if not old then
          return new
       else
          if not is_a(new, old) then
-            if old.typename == "poly" then
+            if old.typename == "map" and is_record_type(new) then
+               if old.ktype.typename == "string" then
+                  for _, ftype in pairs(new.fields) do
+                     old.values = expand_type(where, old.values, ftype)
+                  end
+               else
+                  node_error(where, "cannot determine table literal type")
+               end
+            elseif is_record_type(old) and is_record_type(new) then
+               old.typename = "map"
+               old.keys = STRING
+               for _, ftype in pairs(old.fields) do
+                  if not old.values then
+                     old.values = ftype
+                  else
+                     old.values = expand_type(where, old.values, ftype)
+                  end
+               end
+               for _, ftype in pairs(new.fields) do
+                  if not old.values then
+                     new.values = ftype
+                  else
+                     new.values = expand_type(where, old.values, ftype)
+                  end
+               end
+               old.fields = nil
+               old.field_order = nil
+            elseif old.typename == "union" then
+               new.tk = nil
                table.insert(old.types, new)
             else
+               old.tk = nil
+               new.tk = nil
                return a_type {
-                  typename = "poly",
+                  typename = "union",
                   types = {
                      old,
                      new
@@ -5458,11 +5490,11 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
-                  node.type.elements = expand_type(node.type.elements, child.vtype)
+                  node.type.elements = expand_type(node, node.type.elements, child.vtype)
                else
                   is_map = true
-                  node.type.keys = expand_type(node.type.keys, child.ktype)
-                  node.type.values = expand_type(node.type.values, child.vtype)
+                  node.type.keys = expand_type(node, node.type.keys, child.ktype)
+                  node.type.values = expand_type(node, node.type.values, child.vtype)
                end
             end
             if is_array and is_map then
@@ -5473,7 +5505,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                if node.type.keys.typename == "string" then
                   node.type.typename = "map"
                   for _, ftype in pairs(node.type.fields) do
-                     node.type.values = expand_type(node.type.values, ftype)
+                     node.type.values = expand_type(node, node.type.values, ftype)
                   end
                   node.type.fields = nil
                   node.type.field_order = nil

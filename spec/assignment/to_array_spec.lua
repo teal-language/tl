@@ -1,6 +1,16 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("assignment to array", function()
+   it("check array type", util.check_type_error([[
+      local a: {string}
+      a = 100
+      a = {"a", 100}
+   ]], {
+      { y = 2, msg = "got number, expected {string}" },
+      { y = 3, msg = "got {string | number}, expected {string}" },
+   }))
+
    it("accept expression", function()
       local tokens = tl.lex([[
          local self = {
