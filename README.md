@@ -3,6 +3,7 @@ Teal
 ====
 
 [![Build Status](https://travis-ci.org/hishamhm/tl.svg?branch=master)](https://travis-ci.org/hishamhm/tl)
+[![Join the chat at https://gitter.im/dotnet/coreclr](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/teal-language/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 This is the repository of **tl**, the compiler for Teal, a typed dialect of Lua.
 
@@ -47,9 +48,14 @@ We have a collaborative repository for type definitions of Lua libraries
 at https://github.com/teal-language/teal-types — check it out and make your
 contribution!
 
-## Credits and license
+## Community
 
-Teal is a project started by [Hisham Muhammad](https://hisham.hm)
+Join the chat on [Gitter](https://gitter.im/teal-language/community)!
+
+Teal is a project started by [Hisham Muhammad](https://hisham.hm),
+developed by a [growing number of contributors](https://github.com/teal-language/tl/graphs/contributors)
 and is written using Teal itself!
+
+## License
 
 License is MIT, the same as Lua.
