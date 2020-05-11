@@ -3351,6 +3351,13 @@ local standard_library = {
          ["stdout"] = NOMINAL_FILE,
          ["open"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
          ["popen"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
+         ["read"] = a_type({
+            ["typename"] = "poly",
+            ["types"] = {
+               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
+               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
+            },
+         }),
          ["write"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
          ["flush"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = {}, }),
          ["type"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),

@@ -3351,6 +3351,13 @@ local standard_library: {string:Type} = {
          ["stdout"] = NOMINAL_FILE,
          ["open"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
          ["popen"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["read"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
+               a_type { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
+            }
+         },
          ["write"] = a_type { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
          ["flush"] = a_type { typename = "function", args = {}, rets = {} },
          ["type"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
