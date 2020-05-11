@@ -234,7 +234,8 @@ Note also that we didn't need to declare the types of i and n in the above
 example: the for statement can infer those from the return type of the
 iterator function produced by the ipairs call. Feeding ipairs with a {string}
 means that the iteration variables of the ipairs loop will be number and
-string.
+string. For an example of a custom user-written iterator, see the [Functions](#functions)
+section below.
 
 Note that all items of the array are expected to be of the same type. If you
 need to deal with heterogeneous arrays, you will have to use the cast operator
@@ -475,6 +476,37 @@ declarations and multiple returns:
 ```
 f: function(function():(number, number), number)
 ```
+
+You can declare functions that generate iterators which can be used in
+`for` statements: the function needs to produce another function that iterates.
+This is an example [taken the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
+
+```
+function allwords(): (function(): string)
+   local line = io.read()
+   local pos = 1
+   return function(): string
+      while line do
+         local s, e = line:find("%w+", pos)
+         if s then
+            pos = e + 1
+            return line:sub(s, e)
+         else
+            line = io.read()
+            pos = 1
+         end
+      end
+      return nil
+   end
+end
+
+for word in allwords() do
+   print(word)
+end
+```
+
+The only changes made to the code above were the addition of type signatures
+in both function declarations.
 
 ## Union types
 
