@@ -25,3 +25,4 @@ return {
 | --- | --- | --- | --- |
 | `-l --preload` | `preload_modules` | `{string}` | Execute the equivalent of `require('modulename')` before executing the tl script(s). |
 | `-I --include` | `include` | `{string}` | Prepend this directory to the module search path.
+| `--skip-compat53` | | | Skip compat53 insertions.
