@@ -5701,7 +5701,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
                         node.type = require_module(module_name, lax, opts.env, result)
-                        if not node.type then
+                        if node.type == UNKNOWN then
+                           node_error(node, "module not found: '" .. module_name .. "'")
+                        elseif not node.type then
                            node.type = BOOLEAN
                         end
                         opts.env.modules[module_name] = node.type

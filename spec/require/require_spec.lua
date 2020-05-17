@@ -2,6 +2,12 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("require", function()
+   it("reports module not found", util.check_type_error([[
+      local notfound = require "modulenotfound"
+   ]], {
+      { y = 1, msg = "module not found: 'modulenotfound'" }
+   }))
+
    it("exports functions", function ()
       -- ok
       util.mock_io(finally, {
