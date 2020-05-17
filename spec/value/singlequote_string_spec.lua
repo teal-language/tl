@@ -7,7 +7,7 @@ end
 
 
 describe("singlequote string", function()
-   it("typecheck", function()
+   it("accepts", function()
       local tokens = tl.lex([[local foo = 'bar']])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)

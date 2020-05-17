@@ -7,7 +7,7 @@ end
 
 
 describe("long string", function()
-   it("typecheck a level 0 long string", function()
+   it("accepts a level 0 long string", function()
       local tokens = tl.lex([=[
          local foo = [[
                long string line 1
@@ -19,7 +19,7 @@ describe("long string", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 1 long string", function()
+   it("accepts a level 1 long string", function()
       local tokens = tl.lex([[
          local foo = [=[
                long string line 1
@@ -49,7 +49,7 @@ describe("long string", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 1 long string inside a level 2 long string", function()
+   it("accepts a level 1 long string inside a level 2 long string", function()
       local tokens = tl.lex([[
          local foo = [=[
                long string line 1
@@ -64,7 +64,7 @@ describe("long string", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 2 long string inside a level 1 long string", function()
+   it("accepts a level 2 long string inside a level 1 long string", function()
       local tokens = tl.lex([[
          local foo = [==[
                long string line 1

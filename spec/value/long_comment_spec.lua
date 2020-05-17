@@ -7,7 +7,7 @@ end
 
 
 describe("long comment", function()
-   it("typecheck a level 0 long comment", function()
+   it("accepts a level 0 long comment", function()
       local tokens = tl.lex([=[
          --[[
             long comment line 1
@@ -20,7 +20,7 @@ describe("long comment", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 1 long comment", function()
+   it("accepts a level 1 long comment", function()
       local tokens = tl.lex([[
          --[=[
             long comment line 1
@@ -33,7 +33,7 @@ describe("long comment", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 1 long comment inside a level 2 long comment", function()
+   it("accepts a level 1 long comment inside a level 2 long comment", function()
       local tokens = tl.lex([[
          --[=[
             long comment line 1
@@ -49,7 +49,7 @@ describe("long comment", function()
       assert.same({}, errors)
    end)
 
-   it("typecheck a level 2 long comment inside a level 1 long comment", function()
+   it("accepts a level 2 long comment inside a level 1 long comment", function()
       local tokens = tl.lex([[
          --[==[
             long comment line 1
