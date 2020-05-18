@@ -781,6 +781,7 @@ local Type = {}
 
 
 
+
 local Operator = {}
 
 
@@ -2815,7 +2816,7 @@ function tl.pretty_print_ast(ast, fast)
    visit_type.cbs["any"] = visit_type.cbs["string"]
    visit_type.cbs["unknown"] = visit_type.cbs["string"]
    visit_type.cbs["invalid"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved_labels"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved"] = visit_type.cbs["string"]
    visit_type.cbs["none"] = visit_type.cbs["string"]
 
    visit_node.cbs["values"] = visit_node.cbs["variables"]
@@ -4345,6 +4346,12 @@ function tl.type_check(ast, opts)
                   table.insert(upper.t.labels[name], node)
                end
             end
+            for name, types in pairs(unresolved.t.nominals) do
+               for _, typ in ipairs(types) do
+                  upper.t.nominals[name] = upper.t.nominals[name] or {}
+                  table.insert(upper.t.nominals[name], typ)
+               end
+            end
          else
             st[#st - 1]["@unresolved"] = unresolved
          end
@@ -4681,7 +4688,7 @@ function tl.type_check(ast, opts)
       end
    end
 
-   local function fail_unresolved_labels()
+   local function fail_unresolved()
       local unresolved = st[#st]["@unresolved"]
       if unresolved then
          st[#st]["@unresolved"] = nil
@@ -4690,11 +4697,18 @@ function tl.type_check(ast, opts)
                node_error(node, "no visible label '" .. name .. "' for goto")
             end
          end
+         for name, types in pairs(unresolved.t.nominals) do
+            for _, typ in ipairs(types) do
+               assert(typ.x)
+               assert(typ.y)
+               type_error(typ, "unknown type %s", typ)
+            end
+         end
       end
    end
 
    local function end_function_scope()
-      fail_unresolved_labels()
+      fail_unresolved()
       end_scope()
    end
 
@@ -5167,7 +5181,7 @@ function tl.type_check(ast, opts)
          ["after"] = function(node, children)
 
             if #st == 2 then
-               fail_unresolved_labels()
+               fail_unresolved()
             end
 
             end_scope()
@@ -5203,6 +5217,11 @@ function tl.type_check(ast, opts)
                end
                assert(var)
                add_var(var, var.tk, t, var.is_const)
+
+               local unresolved = st[#st]["@unresolved"]
+               if unresolved then
+                  unresolved.t.nominals[var.tk] = nil
+               end
             end
             node.type = NONE
          end,
@@ -5242,6 +5261,11 @@ function tl.type_check(ast, opts)
                      t.assigned_to = var.tk
                   end
                   add_global(var, var.tk, t, var.is_const)
+
+                  local unresolved = st[#st]["@unresolved"]
+                  if unresolved then
+                     unresolved.t.nominals[var.tk] = nil
+                  end
                end
             end
             node.type = NONE
@@ -5362,7 +5386,7 @@ function tl.type_check(ast, opts)
             if not find_var("::" .. node.label .. "::") then
                local unresolved = find_var("@unresolved")
                if not unresolved then
-                  unresolved = { ["typename"] = "unresolved_labels", ["labels"] = {}, }
+                  unresolved = { ["typename"] = "unresolved", ["labels"] = {}, ["nominals"] = {}, }
                   add_var(node, "@unresolved", unresolved)
                end
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
@@ -5444,10 +5468,15 @@ function tl.type_check(ast, opts)
             for i = 1, #children[1] do
                local expected = rets[i] or vatype
                if expected then
+
+                  local savex = children[1][i].x
+                  local savey = children[1][i].y
                   children[1][i].y = nil
                   children[1][i].x = nil
                   expected = resolve_unary(expected)
                   assert_is_a(node.exps[i], children[1][i], expected, "return value")
+                  children[1][i].x = savex
+                  children[1][i].y = savey
                end
             end
 
@@ -5952,6 +5981,23 @@ function tl.type_check(ast, opts)
                   elseif t.typename == "nestedtype" then
                      typ.resolved = t.def
                   end
+               else
+                  if #typ.names == 1 then
+                     local name = typ.names[1]
+                     local unresolved = find_var("@unresolved")
+                     if not unresolved then
+                        unresolved = { ["typename"] = "unresolved", ["labels"] = {}, ["nominals"] = {}, }
+                        add_var(nil, "@unresolved", unresolved)
+                     end
+                     unresolved.nominals[name] = unresolved.nominals[name] or {}
+                     table.insert(unresolved.nominals[name], typ)
+                  else
+
+
+
+
+
+ end
                end
                return typ
             end,
@@ -6010,7 +6056,7 @@ function tl.type_check(ast, opts)
    visit_type.cbs["any"] = visit_type.cbs["string"]
    visit_type.cbs["unknown"] = visit_type.cbs["string"]
    visit_type.cbs["invalid"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved_labels"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved"] = visit_type.cbs["string"]
    visit_type.cbs["none"] = visit_type.cbs["string"]
 
    recurse_node(ast, visit_node, visit_type)
@@ -6036,24 +6082,6 @@ function tl.type_check(ast, opts)
    end
 
    return errors, unknowns, module_type
-end
-
-local function init_modules()
-   local modules = {
-      ["tl"] = a_type({
-         ["typename"] = "record",
-         ["fields"] = {
-            ["loader"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = {}, }),
-         },
-      }),
-   }
-   fill_field_order(modules["tl"])
-   for k, m in pairs(standard_library) do
-      if m.typename == "record" then
-         modules[k] = m
-      end
-   end
-   return modules
 end
 
 function tl.process(filename, env, result, preload_modules)

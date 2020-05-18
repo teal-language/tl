@@ -19,7 +19,7 @@ describe("assignment to nominal record", function()
             foo: string
          end
          local AR = record
-            {node}
+            {Node}
             bar: string
          end
          local Node = record

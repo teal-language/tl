@@ -2,6 +2,66 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("records", function()
+   it("can have circular type dependencies", util.check [[
+      local R = record
+         foo: S
+      end
+
+      local S = record
+         foo: R
+      end
+
+      function id(r: R): R
+         return r
+      end
+   ]])
+
+   it("can have circular type dependencies on nested types", util.check [[
+      local R = record
+         R2 = record
+            foo: S.S2
+         end
+
+         foo: S
+      end
+
+      local S = record
+         S2 = record
+            foo: R.R2
+         end
+
+         foo: R
+      end
+
+      function id(r: R): R
+         return r
+      end
+   ]])
+
+   pending("can detect errors in type dependencies on nested types", util.check_type_error([[
+      local R = record
+         R2 = record
+            foo: S.S3
+         end
+
+         foo: S
+      end
+
+      local S = record
+         S2 = record
+            foo: R.R2
+         end
+
+         foo: R
+      end
+
+      function id(r: R): R
+         return r
+      end
+   ]], {
+      { y = 3, msg = "unknown type S.S3" }
+   }))
+
    it("can overload functions", function()
       local tokens = tl.lex([[
          global love_graphics = record
@@ -33,6 +93,34 @@ describe("records", function()
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same("attempt to redeclare field 'print' (only functions can be overloaded)", syntax_errors[1].msg)
    end)
+
+   it("can report an error on unknown types in polymorphic definitions", util.check_type_error([[
+      -- this reports an error
+      local R = record
+         u: function(): UnknownType
+         u: function(): string
+      end
+
+      function f(r: R): R
+         return r
+      end
+   ]], {
+      { y = 3, msg = "unknown type UnknownType"},
+   }))
+
+   it("can report an error on unknown types in polymorphic definitions in any order", util.check_type_error([[
+      -- this reports an error
+      local R = record
+         u: function(): string
+         u: function(): UnknownType
+      end
+
+      function f(r: R): R
+         return r
+      end
+   ]], {
+      { y = 4, msg = "unknown type UnknownType"},
+   }))
 
    it("can produce an intersection type for polymorphic functions", util.check [[
       local requests = record
