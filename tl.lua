@@ -4220,6 +4220,8 @@ function tl.type_check(ast, opts)
       elseif t2.typename == "record" then
          if is_record_type(t1) then
             return match_fields_to_record(t1, t2)
+         elseif t1.typename == "typetype" and t1.def.typename == "record" then
+            return is_a(t1.def, t2, for_equality)
          elseif t1.typename == "map" then
             if not is_a(t1.keys, STRING) then
                return false, terr(t1, "map has non-string keys")

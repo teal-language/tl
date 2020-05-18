@@ -2,6 +2,15 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("records", function()
+   it("can have self-references", util.check [[
+      local SLAXML = record
+          parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
+       end
+
+      local myxml = io.open('my.xml'):read('*all')
+      SLAXML:parse(myxml, SLAXML)
+   ]])
+
    it("can have circular type dependencies", util.check [[
       local R = record
          foo: S
