@@ -4893,7 +4893,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       else
          if not is_a(new, old) then
             if old.typename == "map" and is_record_type(new) then
-               if old.ktype.typename == "string" then
+               if old.keys.typename == "string" then
                   for _, ftype in pairs(new.fields) do
                      old.values = expand_type(where, old.values, ftype)
                   end
