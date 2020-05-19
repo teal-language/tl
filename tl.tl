@@ -2352,6 +2352,10 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    end
 
    local function add_child(out: Output, child: Output, space: string, indent: number): number
+      if #child == 0 then
+         return
+      end
+
       if child.y < out.y then
          out.y = child.y
       end
@@ -2426,7 +2430,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if children[2] then
-               add_child(out, children[1], " ")
+               add_child(out, children[1])
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end

@@ -290,7 +290,7 @@ function tl.lex(input)
             end_token("op")
          elseif lex_space[c] then
 
- else
+         else
             begin_token()
             end_token("$invalid$")
             table.insert(errs, tokens[#tokens])
@@ -2216,7 +2216,7 @@ visit_type)
    elseif ast.kind == "do" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "cast" then
- elseif ast.kind == "local_function" or
+   elseif ast.kind == "local_function" or
       ast.kind == "global_function" then
       xs[1] = recurse_node(ast.name, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
@@ -2352,6 +2352,10 @@ function tl.pretty_print_ast(ast, fast)
    end
 
    local function add_child(out, child, space, indent)
+      if #child == 0 then
+         return
+      end
+
       if child.y < out.y then
          out.y = child.y
       end
@@ -2426,7 +2430,7 @@ function tl.pretty_print_ast(ast, fast)
          ["after"] = function(node, children)
             local out = { ["y"] = node.y, ["h"] = 0, }
             if children[2] then
-               add_child(out, children[1], " ")
+               add_child(out, children[1])
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
@@ -4548,7 +4552,7 @@ function tl.type_check(ast, opts)
       tbl = get_self_type(tbl)
 
       if tbl.typename == "emptytable" then
- elseif is_record_type(tbl) then
+      elseif is_record_type(tbl) then
          assert(tbl.fields, "record has no fields!?")
 
          if key.kind == "string" or key.kind == "identifier" then
@@ -5999,7 +6003,7 @@ function tl.type_check(ast, opts)
 
 
 
- end
+                  end
                end
                return typ
             end,
