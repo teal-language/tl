@@ -1,3 +1,19 @@
+# 0.4.2
+
+2020-05-18
+
+Another collection of bugfixes!
+
+### Fixes
+
+* Report error when a required module is not found
+* Detects unresolved nominal types
+* Fixes when using record type object as a record instance itself
+* Fixes in the expansion of the type of a table literal
+* Fixes the indentation in generated code
+* More standard library additions
+* Improved/fixed error messages
+
 # 0.4.1
 
 2020-05-05
@@ -15,7 +31,7 @@ Fixes a regression in record functions.
 * Record definitions can be nested: this should make
   declarations of types in modules more natural
 
-## Tooling
+### Tooling
 
 * Improvement in the position of error messages
 
@@ -40,7 +56,7 @@ details), here are the main changes:
   clarity, e.g. `{string: (string|number)}`
 * More standard library typing improvements
 
-## Tooling
+### Tooling
 
 * `--include`/`-I` flag for including directories
   to the module search path
