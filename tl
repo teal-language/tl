@@ -292,7 +292,7 @@ for i, filename in ipairs(args["script"]) do
          die("cannot write " .. lua_name .. ": " .. err)
       end
 
-      local ok, err = ofd:write(tl.pretty_print_ast(result.ast))
+      local ok, err = ofd:write(tl.pretty_print_ast(result.ast) .. "\n")
       if err then
          die("error writing " .. lua_name .. ": " .. err)
       end

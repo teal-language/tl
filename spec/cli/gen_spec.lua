@@ -1,5 +1,71 @@
 local util = require("spec.util")
 
+local input_file = [[
+global type1 = 2
+
+local type_2 = record
+end
+
+local function bla()
+end
+
+local function ovo()
+   if type1 == 2 then
+      print("hello")
+   else
+   end
+end
+
+local func1 = function()
+end
+
+local func2 = function()
+    local a = 100
+    local b = a
+end
+
+-- multi
+-- multi
+-- multi
+-- multi
+-- line
+-- comment
+local c = 100
+]]
+
+local output_file = [[
+type1 = 2
+
+local type_2 = {}
+
+
+local function bla()
+end
+
+local function ovo()
+   if type1 == 2 then
+      print("hello")
+   else
+   end
+end
+
+local func1 = function()
+end
+
+local func2 = function()
+   local a = 100
+   local b = a
+end
+
+
+
+
+
+
+
+local c = 100
+]]
+
 describe("tl gen", function()
    describe("on .tl files", function()
       it("reports 0 errors and code 0 on success", function()
@@ -74,6 +140,16 @@ describe("tl gen", function()
                return a + b
             end
          ]], util.read_file(lua_name))
+      end)
+
+      it("does not mess up the indentation (#109)", function()
+         local name = util.write_tmp_file(finally, "add.tl", input_file)
+         local pd = io.popen("./tl gen " .. name, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = name:gsub("%.tl$", ".lua")
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         assert.equal(output_file, util.read_file(lua_name))
       end)
    end)
 
