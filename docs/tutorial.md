@@ -336,7 +336,7 @@ You can always force a type, though, using the `as` operator:
 local p2 = p1 as Point -- Ok, I'll trust you...
 ```
 
-Note we didn't even have to declare the type of p2. The as expression resolves
+Note we didn't even have to declare the type of p2. The `as` expression resolves
 as a Point, so p2 picks up that type.
 
 You can also declare record functions after the record definition using the
@@ -344,6 +344,13 @@ regular Lua colon or dot syntax, as long as you do it in the same scope block
 where the record type is defined:
 
 ```
+function Point.new(x: number, y: number): Point
+   local self: Point = setmetatable({}, { __index = Point })
+   self.x = x or 0
+   self.y = y or 0
+   return self
+end
+
 function Point:move(dx: number, dy: number)
    self.x = self.x + dx
    self.y = self.y + dy
