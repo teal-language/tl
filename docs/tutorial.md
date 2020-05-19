@@ -40,8 +40,8 @@ programming with the machine.
 
 ## Installing tl
 
-To run tl, you need a Lua environment. Install Lua and LuaRocks (methods vary
-according to your operating system), and then run
+To run tl, the Teal compiler, you need a Lua environment. Install Lua and
+LuaRocks (methods vary according to your operating system), and then run
 
 ```
 luarocks install tl
@@ -53,7 +53,7 @@ available now!
 ## Your first Teal program
 
 Let's start with a simple example, which declares a type-safe function. Let's
-call this example add.tl:
+call this example `add.tl`:
 
 ```
 local function add(a: number, b: number): number
@@ -105,7 +105,7 @@ We can generate addsub.lua with
 tl gen addsub.tl
 ```
 
-and then require the addsub module from Lua normally. Or we can load the tl
+and then require the addsub module from Lua normally. Or we can load the Teal
 package loader, which will allow require to load .tl files directly, without
 having to run `tl gen` first:
 
@@ -146,7 +146,7 @@ These are the types in Teal:
 ## Local variables
 
 Variables in Teal have types. So, when you declare a variable with the `local`
-keyword, tl needs some way to know what type to assign to that variable. For
+keyword, Teal needs some way to know what type to assign to that variable. For
 this reason, it is not valid in Teal to declare a variable with no type at all
 like this:
 
@@ -154,7 +154,7 @@ like this:
 local x -- Error! What is this?
 ```
 
-tl doesn't know anything about the variable, so it can't do anything useful
+Teal doesn't know anything about the variable, so it can't do anything useful
 with this. There are two ways, however, to give a variable a type:
 
 * through declaration
@@ -178,7 +178,7 @@ local ok = true
 ```
 
 If you initialize a variable with nil and don't give it any type, this doesn't
-give tl any useful information to work with (you don't want your variable to
+give Teal any useful information to work with (you don't want your variable to
 be always nil throughout the lifetime of your program, right?) so you will
 have to declare the type explicitly:
 
@@ -186,7 +186,7 @@ have to declare the type explicitly:
 local n: number = nil
 ```
 
-This is the same as omitting the ` = nil`, like in plain Lua, but it gives tl
+This is the same as omitting the ` = nil`, like in plain Lua, but it gives Teal
 the information it needs. Every type in Teal accepts nil as a valid value, even
 if, like in Lua, attempting to use it with some operations would cause a
 runtime error, so be aware!
@@ -213,8 +213,8 @@ you have to do so explicitly:
 local prices: {number} = {}
 ```
 
-Creating empty tables to fill an array is so common that tl has a naive
-inference feature to support determining the type of empty tables with no
+Creating empty tables to fill an array is so common that Teal includes a naive
+inference logic to support determining the type of empty tables with no
 declaration. The first array assignment to an empty table, reading the code
 top-to-bottom, determines its type. So this works:
 
@@ -226,9 +226,9 @@ end
 ```
 
 Note that this works even with library calls. If you make assignments of
-conflicting types, tl will tell you in its error message from which point in
-the program it originally got the idea that the empty table was an array of
-that incompatible type.
+conflicting types, the tl compiler will tell you in its error message from
+which point in the program it originally got the idea that the empty table was
+an array of that incompatible type.
 
 Note also that we didn't need to declare the types of i and n in the above
 example: the for statement can infer those from the return type of the
@@ -240,7 +240,7 @@ section below.
 Note that all items of the array are expected to be of the same type. If you
 need to deal with heterogeneous arrays, you will have to use the cast operator
 `as` to force the elements to their desired types. Keep in mind that when you
-use `as`, tl will accept whatever type you use, meaning that it can also hide
+use `as`, Teal will accept whatever type you use, meaning that it can also hide
 incorrect usage of data:
 
 ```
@@ -595,7 +595,7 @@ of record constructors with metatables).
 ## The type `any`
 
 The type `any`, as it name implies, accepts any value, like a
-dynamically-typed Lua variable. However, since tl doesn't know anything about
+dynamically-typed Lua variable. However, since Teal doesn't know anything about
 this value, there isn't much it can do with it, besides comparing for equality
 and against nil, and casting it into other values using the `as` operator.
 
@@ -617,7 +617,7 @@ xs = {} -- Error! can't replace the array in variable xs
 
 ## Global variables
 
-Unlike in Lua, global variables in Teal need to be declared, because tl needs to
+Unlike in Lua, global variables in Teal need to be declared, because Teal needs to
 know its type. It also allows tl to catch typos in variable names, because an
 invalid name will not be assumed to be some unknown global that happens to be
 nil.
@@ -711,6 +711,6 @@ program tl is helpless about and help you incrementally add type annotations
 to your code.
 
 Note that even though adding type annotations to .lua files makes it invalid
-Lua, you can still do so and load them from the Lua VM once the tl package
+Lua, you can still do so and load them from the Lua VM once the Teal package
 loader is installed by calling tl.loader().
 
