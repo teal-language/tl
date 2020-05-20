@@ -146,16 +146,15 @@ These are the types in Teal:
 ## Local variables
 
 Variables in Teal have types. So, when you declare a variable with the `local`
-keyword, Teal needs some way to know what type to assign to that variable. For
-this reason, it is not valid in Teal to declare a variable with no type at all
+keyword, you need to provide enough information so that the type can be determined.
+For this reason, it is not valid in Teal to declare a variable with no type at all
 like this:
 
 ```
 local x -- Error! What is this?
 ```
 
-Teal doesn't know anything about the variable, so it can't do anything useful
-with this. There are two ways, however, to give a variable a type:
+There are two ways, however, to give a variable a type:
 
 * through declaration
 * through initialization
@@ -178,7 +177,7 @@ local ok = true
 ```
 
 If you initialize a variable with nil and don't give it any type, this doesn't
-give Teal any useful information to work with (you don't want your variable to
+give any useful information to work with (you don't want your variable to
 be always nil throughout the lifetime of your program, right?) so you will
 have to declare the type explicitly:
 
@@ -186,10 +185,10 @@ have to declare the type explicitly:
 local n: number = nil
 ```
 
-This is the same as omitting the ` = nil`, like in plain Lua, but it gives Teal
-the information it needs. Every type in Teal accepts nil as a valid value, even
-if, like in Lua, attempting to use it with some operations would cause a
-runtime error, so be aware!
+This is the same as omitting the ` = nil`, like in plain Lua, but it gives the
+information the Teal program needs. Every type in Teal accepts nil as a valid
+value, even if, like in Lua, attempting to use it with some operations would
+cause a runtime error, so be aware!
 
 ## Arrays
 
@@ -595,12 +594,14 @@ of record constructors with metatables).
 ## The type `any`
 
 The type `any`, as it name implies, accepts any value, like a
-dynamically-typed Lua variable. However, since Teal doesn't know anything about
-this value, there isn't much it can do with it, besides comparing for equality
-and against nil, and casting it into other values using the `as` operator.
+dynamically-typed Lua variable. However, since Teal doesn't know anything
+about this value, there isn't much you can do with it, besides comparing for
+equality and against nil, and casting it into other values using the `as`
+operator.
 
 Some Lua libraries use complex dynamic types that can't be easily represented
-in Teal. In those cases, using any and making explicit casts is our last resort.
+in Teal. In those cases, using `any` and making explicit casts is our last
+resort.
 
 ## Const variables
 
@@ -617,10 +618,10 @@ xs = {} -- Error! can't replace the array in variable xs
 
 ## Global variables
 
-Unlike in Lua, global variables in Teal need to be declared, because Teal needs to
-know its type. It also allows tl to catch typos in variable names, because an
-invalid name will not be assumed to be some unknown global that happens to be
-nil.
+Unlike in Lua, global variables in Teal need to be declared, because the
+compiler needs to know its type. It also allows the compiler to catch typos in
+variable names, because an invalid name will not be assumed to be some unknown
+global that happens to be nil.
 
 You declare global variables in Teal using `global`, like this, doing
 declaration and/or assignment:
