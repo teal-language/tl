@@ -1277,7 +1277,11 @@ parse_type_list = function(ps, i, open)
             i = i + 1
          end
       end
+      local prev_i = i
       i = parse_trying_list(ps, i, list, parse_type)
+      if i == prev_i then
+         fail(ps, i - 1, "expected a type list")
+      end
       if optional_paren then
          i = verify_tk(ps, i, ")")
       end

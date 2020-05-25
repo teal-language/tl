@@ -37,6 +37,19 @@ describe("syntax errors", function()
       { y = 1, "unexpected '...'" },
    }))
 
+   it("missing return type", util.check_syntax_error([[
+      function error(err: string):
+         -- msg is a typo
+         if msg is string then
+            return
+         else
+            return
+         end
+      end
+   ]], {
+      { y = 1, "expected a type list" },
+   }))
+
 
 end)
 
