@@ -4342,6 +4342,14 @@ function tl.type_check(ast, opts)
       add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and (name .. ": ") or ""), node)
    end
 
+   local function close_types(vars)
+      for name, var in pairs(vars) do
+         if var.t.typename == "typetype" then
+            var.t.closed = true
+         end
+      end
+   end
+
    local function begin_scope()
       table.insert(st, {})
    end
@@ -4367,6 +4375,7 @@ function tl.type_check(ast, opts)
             st[#st - 1]["@unresolved"] = unresolved
          end
       end
+      close_types(st[#st])
       table.remove(st)
    end
 
@@ -4949,13 +4958,15 @@ function tl.type_check(ast, opts)
 
    local function find_in_scope(exp)
       if exp.kind == "variable" then
-         local name = exp.tk
-         local parent_scope = st[#st - 1]
-         local type_in_scope = parent_scope[name] and parent_scope[name].t
-         if type_in_scope and type_in_scope.typename == "typetype" then
-            type_in_scope = type_in_scope.def
+         local t = find_var(exp.tk)
+         if t.def then
+            if not t.def.closed and not t.closed then
+               return t.def
+            end
          end
-         return type_in_scope
+         if not t.closed then
+            return t
+         end
       elseif exp.kind == "op" and exp.op.op == "." then
          local t = find_in_scope(exp.e1)
          if not t then
@@ -6071,6 +6082,8 @@ function tl.type_check(ast, opts)
    visit_type.cbs["none"] = visit_type.cbs["string"]
 
    recurse_node(ast, visit_node, visit_type)
+
+   close_types(st[1])
 
    local redundant = {}
    local lastx, lasty = 0, 0

@@ -478,7 +478,54 @@ describe("require", function()
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
+      assert.same(1, #result.type_errors)
       assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
+      assert.same({}, result.unknowns)
+   end)
+
+   it("can extend a global defined in scope", function ()
+      util.mock_io(finally, {
+         ["luaunit.d.tl"] = [[
+            global luaunit_runner_t = record
+               setOutputType: function(luaunit_runner_t, string)
+               runSuite: function(luaunit_runner_t, any): number
+            end
+
+            global luaunit_t = record
+               new: function(): luaunit_runner_t
+            end
+
+            local luaunit = record
+               LuaUnit: luaunit_t
+               assertIsTrue: function(any)
+            end
+
+            return luaunit
+         ]],
+         ["tests.tl"] = [[
+            local lu = require("luaunit")
+
+            -- it must be global to use luaunit
+            global TestSuite = {}
+
+            function TestSuite:test_count()
+                lu.assertIsTrue(100 == 200)
+            end
+
+            function main(args: any)
+                local runner = lu.LuaUnit.new()
+                runner:setOutputType("tap")
+                local code = runner:runSuite(args)
+                os.exit(code)
+            end
+         ]],
+      })
+
+      local result, err = tl.process("tests.tl")
+
+      assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
       assert.same({}, result.unknowns)
    end)
 end)
