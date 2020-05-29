@@ -483,6 +483,59 @@ describe("require", function()
       assert.same({}, result.unknowns)
    end)
 
+   it("cannot extend a record type outside of scope", function ()
+      util.mock_io(finally, {
+         ["widget.tl"] = [[
+            local Widget = record
+                draw: function(self: Widget)
+            end
+
+            return Widget
+         ]],
+         ["foo.tl"] = [[
+            local Widget = require("widget")
+
+            function Widget:totally_unrelated_function()
+                print("heyo")
+            end
+         ]],
+      })
+
+      local result, err = tl.process("foo.tl")
+
+      assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.same(1, #result.type_errors)
+      assert.match("cannot add undeclared function 'totally_unrelated_function' outside of the scope where 'Widget' was originally declared", result.type_errors[1].msg)
+      assert.same({}, result.unknowns)
+   end)
+
+   it("can redeclare a function that was previously declared outside of scope", function ()
+      util.mock_io(finally, {
+         ["widget.tl"] = [[
+            local Widget = record
+                draw: function(self: Widget)
+            end
+
+            return Widget
+         ]],
+         ["foo.tl"] = [[
+            local Widget = require("widget")
+
+            function Widget:draw()
+                print("heyo")
+            end
+         ]],
+      })
+
+      local result, err = tl.process("foo.tl")
+
+      assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.same(0, #result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
    it("can extend a global defined in scope", function ()
       util.mock_io(finally, {
          ["luaunit.d.tl"] = [[
