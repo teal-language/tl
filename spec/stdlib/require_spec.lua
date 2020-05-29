@@ -504,6 +504,7 @@ describe("require", function()
          ]],
          ["tests.tl"] = [[
             local lu = require("luaunit")
+            local os = require("os")
 
             -- it must be global to use luaunit
             global TestSuite = {}

@@ -782,6 +782,8 @@ local Type = {}
 
 
 
+
+
 local Operator = {}
 
 
@@ -3659,11 +3661,20 @@ local function init_globals(lax)
 end
 
 function tl.init_env(lax, skip_compat53)
-   return {
+   local env = {
       ["modules"] = {},
       ["globals"] = init_globals(lax),
       ["skip_compat53"] = skip_compat53,
    }
+
+
+   for name, var in pairs(standard_library) do
+      if var.typename == "record" then
+         env.modules[name] = var
+      end
+   end
+
+   return env
 end
 
 function tl.type_check(ast, opts)

@@ -3661,11 +3661,20 @@ local function init_globals(lax: boolean): {string:Variable}
 end
 
 function tl.init_env(lax: boolean, skip_compat53: boolean): Env
-   return {
+   local env = {
       modules = {},
       globals = init_globals(lax),
       skip_compat53 = skip_compat53,
    }
+
+   -- make standard library tables available as modules for require()
+   for name, var in pairs(standard_library) do
+      if var.typename == "record" then
+         env.modules[name] = var
+      end
+   end
+
+   return env
 end
 
 function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Type
