@@ -71,11 +71,17 @@ describe("generic function", function()
             return tostring(n)
          end
 
+         local function convert_str_num(s: string): number
+            return tonumber(s)
+         end
+
          local function use_conv<X, Y>(x: X, cvt: Convert<X, Y>): Y
             return id(cvt(x))
          end
 
          print(use_conv(122, convert_num_str) .. "!")
+
+         print(use_conv("123", convert_str_num) + 123)
       ]])
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
@@ -112,6 +118,7 @@ describe("generic function", function()
       assert.same(15, errors[1].y)
       assert.same(47, errors[1].x)
    end)
+
    it("will catch if resolved typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
@@ -132,7 +139,6 @@ describe("generic function", function()
       assert.same(1, #errors)
       assert.match("got string, expected number", errors[1].msg, 1, true)
    end)
-
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[
@@ -172,8 +178,6 @@ describe("generic function", function()
       assert.same(1, #errors)
       assert.match("got string, expected number", errors[1].msg, 1, true)
    end)
-
-
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[

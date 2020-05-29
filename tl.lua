@@ -2144,6 +2144,7 @@ visit_type)
 
       return
    end
+
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
    local cbs = visit_node.cbs[ast.kind]
@@ -5988,8 +5989,10 @@ function tl.type_check(ast, opts)
                      typ.names = nil
                      typ.typename = "typevar"
                      typ.typevar = t.typearg
-                  elseif t.typename == "nestedtype" then
-                     typ.resolved = t.def
+                  else
+                     if not t.def.typeargs then
+                        typ.resolved = t.def
+                     end
                   end
                else
                   if #typ.names == 1 then

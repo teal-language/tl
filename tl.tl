@@ -2138,12 +2138,13 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
 end
 
 local function recurse_node<T>(ast: Node,
-                                visit_node: Visitor<NodeKind, Node, T>,
-                                visit_type: Visitor<TypeName, Type, T>): T
+                               visit_node: Visitor<NodeKind, Node, T>,
+                               visit_type: Visitor<TypeName, Type, T>): T
    if not ast then
       -- parse error
       return
    end
+
    visit_before(ast, ast.kind, visit_node)
    local xs: {T} = {}
    local cbs = visit_node.cbs[ast.kind]
@@ -5988,8 +5989,10 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      typ.names = nil
                      typ.typename = "typevar"
                      typ.typevar = t.typearg
-                  elseif t.typename == "nestedtype" then
-                     typ.resolved = t.def
+                  else
+                     if not t.def.typeargs then
+                        typ.resolved = t.def
+                     end
                   end
                else
                   if #typ.names == 1 then

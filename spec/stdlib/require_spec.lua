@@ -136,15 +136,89 @@ describe("require", function()
 
             return bar
          ]],
+         ["bla.tl"] = [[
+            local bla = {
+               subtype = record
+                  xx: number
+               end
+            }
+
+            function bla.func(): bla.subtype
+               return { xx = 2 }
+            end
+
+            return bla
+         ]],
          ["foo.tl"] = [[
-            local point = require "point"
+            local pnt = require "point"
+            local bar = require "bar"
+            local bla1 = require "bla"
+
+            function use_point(p: pnt.Point)
+               print(p.x, p.y)
+               print(bla1.func().xx)
+            end
+
+            use_point(bar.get_point():move(5, 5))
+         ]],
+      })
+      local result, err = tl.process("foo.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
+   it("local types can get exported", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["point.tl"] = [[
+            local Point = record
+               x: number
+               y: number
+            end
+
+            local point = {
+               Point = Point,
+            }
+
+            function Point:move(x: number, y: number)
+               self.x = self.x + x
+               self.y = self.y + y
+            end
+
+            return point
+         ]],
+         ["bar.tl"] = [[
+            local mypoint = require "point"
+
+            local rec = record
+               xx: number
+               yy: number
+            end
+
+            local function get_point(): mypoint.Point
+               return { x = 100, y = 100 }
+            end
+
+            return {
+               get_point = get_point,
+               rec = rec,
+            }
+         ]],
+         ["foo.tl"] = [[
+            local pnt = require "point"
             local bar = require "bar"
 
-            function use_point(p: point.Point)
+            function use_point(p: pnt.Point)
                print(p.x, p.y)
             end
 
             use_point(bar.get_point():move(5, 5))
+            local r: bar.rec = {
+               xx = 10,
+               yy = 20,
+            }
          ]],
       })
       local result, err = tl.process("foo.tl")
