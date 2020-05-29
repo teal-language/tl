@@ -5182,6 +5182,18 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
+   local function dismiss_unresolved(name: string)
+      local unresolved = st[#st]["@unresolved"]
+      if unresolved then
+         if unresolved.t.nominals[name] then
+            for _, t in ipairs(unresolved.t.nominals[name]) do
+               resolve_nominal(t)
+            end
+         end
+         unresolved.t.nominals[name] = nil
+      end
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -5229,10 +5241,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                assert(var)
                add_var(var, var.tk, t, var.is_const)
 
-               local unresolved = st[#st]["@unresolved"]
-               if unresolved then
-                  unresolved.t.nominals[var.tk] = nil
-               end
+               dismiss_unresolved(var.tk)
             end
             node.type = NONE
          end,
@@ -5273,10 +5282,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   end
                   add_global(var, var.tk, t, var.is_const)
 
-                  local unresolved = st[#st]["@unresolved"]
-                  if unresolved then
-                     unresolved.t.nominals[var.tk] = nil
-                  end
+                  dismiss_unresolved(var.tk)
                end
             end
             node.type = NONE
@@ -5995,22 +6001,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      end
                   end
                else
-                  if #typ.names == 1 then
-                     local name = typ.names[1]
-                     local unresolved = find_var("@unresolved")
-                     if not unresolved then
-                        unresolved = { typename = "unresolved", labels = {}, nominals = {} }
-                        add_var(nil, "@unresolved", unresolved)
-                     end
-                     unresolved.nominals[name] = unresolved.nominals[name] or {}
-                     table.insert(unresolved.nominals[name], typ)
-                  else
-                     -- FIXME for now, in case of nominal types with dots (foo.bar),
-                     -- we fail to resolve. This needs to be fixed eventually.
-                     -- The line below would make it fail right away, but would also make
-                     -- circular dependencies on nested records impossible:
-                     -- type_error(typ, "unknown type %s", typ)
+                  local name = typ.names[1]
+                  local unresolved = find_var("@unresolved")
+                  if not unresolved then
+                     unresolved = { typename = "unresolved", labels = {}, nominals = {} }
+                     add_var(nil, "@unresolved", unresolved)
                   end
+                  unresolved.nominals[name] = unresolved.nominals[name] or {}
+                  table.insert(unresolved.nominals[name], typ)
                end
                return typ
             end,

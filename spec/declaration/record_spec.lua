@@ -47,7 +47,7 @@ describe("records", function()
       end
    ]])
 
-   pending("can detect errors in type dependencies on nested types", util.check_type_error([[
+   it("can detect errors in type dependencies on nested types", util.check_type_error([[
       local R = record
          R2 = record
             foo: S.S3
