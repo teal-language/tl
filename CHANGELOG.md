@@ -1,3 +1,15 @@
+# 0.5.1
+
+2020-05-29
+
+Since I was on a roll doing bugfixes, here's a quick version bump!
+
+### Fixes
+
+* Detect and report unresolved nested nominal types
+* Fix scope restriction for record functions
+* Standard library tables can now be required with `require()`
+
 # 0.5.0
 
 2020-05-29
