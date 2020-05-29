@@ -1,3 +1,30 @@
+# 0.5.0
+
+2020-05-29
+
+This release does not include a lot of changes, but it does change
+the rules for exporting types across modules, so it is worth the
+middle-number bump.
+
+## What's new
+
+### Language changes
+
+* Types declared as `local` can be exported in modules
+* Types that are `local` to a module and which are used in
+  function signatures (e.g. as return types) can be destructured
+  from requiring modules. This already partially worked before,
+  but it required the variable to be used in the original
+  module to force a type resolution.
+  * Generics still require more work, but non-generic types
+    should be propagating as described above. Generic types
+    export correctly if made part of the module record definition.
+
+### Fixes
+
+* Fixed a parsing error when a colon in a variable declaration
+  was not followed by a type list
+
 # 0.4.2
 
 2020-05-18
