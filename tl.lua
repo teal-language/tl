@@ -5244,6 +5244,82 @@ function tl.type_check(ast, opts)
       end
    end
 
+   local function type_check_funcall(node, a, b, argdelta)
+      argdelta = argdelta or 0
+      if node.e1.tk == "rawget" then
+         if #b == 2 then
+            local b1 = resolve_unary(b[1])
+            local b2 = resolve_unary(b[2])
+            local knode = node.e2[2]
+            if is_record_type(b1) and knode.conststr then
+               return match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
+            else
+               return type_check_index(node, knode, b1, b2)
+            end
+         else
+            node_error(node, "rawget expects two arguments")
+         end
+      elseif node.e1.tk == "print_type" then
+         print(show_type(b))
+         return BOOLEAN
+      elseif node.e1.tk == "require" then
+         if #b == 1 then
+            if node.e2[1].kind == "string" then
+               local module_name = assert(node.e2[1].conststr)
+               local t, found = require_module(module_name, lax, opts.env, result)
+               if not found then
+                  node_error(node, "module not found: '" .. module_name .. "'")
+               elseif not lax and is_unknown(t) then
+                  node_error(node, "no type information for required module: '" .. module_name .. "'")
+               end
+               return t
+            else
+               node_error(node, "don't know how to resolve a dynamic require")
+            end
+         else
+            node_error(node, "require expects one literal argument")
+         end
+      elseif node.e1.tk == "pcall" then
+         local ftype = table.remove(b, 1)
+         local fe2 = {}
+         for i = 2, #node.e2 do
+            table.insert(fe2, node.e2[i])
+         end
+         local fnode = {
+            y = node.y,
+            x = node.x,
+            typename = "op",
+            op = { op = "@funcall" },
+            e1 = node.e2[1],
+            e2 = fe2,
+         }
+         local rets = type_check_funcall(fnode, ftype, b, argdelta + 1)
+         if rets.typename ~= "tuple" then
+            rets = a_type({ typename = "tuple", rets })
+         end
+         table.insert(rets, 1, BOOLEAN)
+         return rets
+      elseif node.e1.op and node.e1.op.op == ":" then
+         local func = node.e1.type
+         if func.typename == "function" or func.typename == "poly" then
+            table.insert(b, 1, node.e1.e1.type)
+            return type_check_function_call(node, func, b, true)
+         else
+            if lax and (is_unknown(func)) then
+               if node.e1.e1.kind == "variable" then
+                  add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
+               end
+               return VARARG_UNKNOWN
+            else
+               return INVALID
+            end
+         end
+      else
+         return type_check_function_call(node, a, b, false, argdelta)
+      end
+      return UNKNOWN
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -5783,65 +5859,7 @@ function tl.type_check(ast, opts)
             local ua = a and resolve_unary(a)
             local ub = b and resolve_unary(b)
             if node.op.op == "@funcall" then
-               if node.e1.tk == "rawget" then
-                  if #b == 2 then
-                     local b1 = resolve_unary(b[1])
-                     local b2 = resolve_unary(b[2])
-                     local knode = node.e2[2]
-                     if is_record_type(b1) and knode.conststr then
-                        node.type = match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
-                     else
-                        node.type = type_check_index(node, knode, b1, b2)
-                     end
-                  else
-                     node_error(node, "rawget expects two arguments")
-                  end
-               elseif node.e1.tk == "print_type" then
-                  print(show_type(b))
-                  node.type = BOOLEAN
-               elseif node.e1.tk == "require" then
-                  if #b == 1 then
-                     if node.e2[1].kind == "string" then
-                        local module_name = assert(node.e2[1].conststr)
-                        local t, found = require_module(module_name, lax, opts.env, result)
-                        if not found then
-                           node_error(node, "module not found: '" .. module_name .. "'")
-                        elseif not lax and is_unknown(t) then
-                           node_error(node, "no type information for required module: '" .. module_name .. "'")
-                        end
-                        node.type = t
-                     else
-                        node_error(node, "don't know how to resolve a dynamic require")
-                     end
-                  else
-                     node_error(node, "require expects one literal argument")
-                  end
-               elseif node.e1.tk == "pcall" then
-                  local ftype = table.remove(b, 1)
-                  local rets = type_check_function_call(node, ftype, b, false, 1)
-                  if rets.typename ~= "tuple" then
-                     rets = a_type({ typename = "tuple", rets })
-                  end
-                  table.insert(rets, 1, BOOLEAN)
-                  node.type = rets
-               elseif node.e1.op and node.e1.op.op == ":" then
-                  local func = node.e1.type
-                  if func.typename == "function" or func.typename == "poly" then
-                     table.insert(b, 1, node.e1.e1.type)
-                     node.type = type_check_function_call(node, func, b, true)
-                  else
-                     if lax and (is_unknown(func)) then
-                        if node.e1.e1.kind == "variable" then
-                           add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-                        end
-                        node.type = VARARG_UNKNOWN
-                     else
-                        node.type = INVALID
-                     end
-                  end
-               else
-                  node.type = type_check_function_call(node, a, b, false)
-               end
+               node.type = type_check_funcall(node, a, b)
             elseif node.op.op == "@index" then
                node.type = type_check_index(node, node.e2, a, b)
             elseif node.op.op == "as" then
