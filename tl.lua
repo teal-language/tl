@@ -784,6 +784,8 @@ local Type = {}
 
 
 
+
+
 local Operator = {}
 
 
@@ -1826,6 +1828,14 @@ parse_newtype = function(ps, i)
             def.typename = "arrayrecord"
             def.elements = t
          else
+            local is_tag = false
+            if ps.tokens[i].tk == "tag" and ps.tokens[i].kind == "identifier" then
+               if def.tag_field then
+                  return fail(ps, i, "cannot declare record tag multiple times")
+               end
+               i = i + 1
+               is_tag = true
+            end
             local v
             i, v = verify_kind(ps, i, "identifier", "variable")
             local iv = i
@@ -1842,6 +1852,9 @@ parse_newtype = function(ps, i)
                if not def.fields[v.tk] then
                   def.fields[v.tk] = t
                   table.insert(def.field_order, v.tk)
+                  if is_tag then
+                     def.tag_field = v.tk
+                  end
                else
                   local prev_t = def.fields[v.tk]
                   if t.typename == "function" and prev_t.typename == "function" then
@@ -1854,6 +1867,9 @@ parse_newtype = function(ps, i)
                   end
                end
             elseif ps.tokens[i].tk == "=" then
+               if is_tag then
+                  return fail(ps, i, "cannot declare record tag on a nested type")
+               end
                i = verify_tk(ps, i, "=")
                local nt
                i, nt = parse_newtype(ps, i)
