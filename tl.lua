@@ -13,9 +13,9 @@ local TypeCheckOptions = {}
 
 
 local tl = {
-   ["process"] = nil,
-   ["type_check"] = nil,
-   ["init_env"] = nil,
+   process = nil,
+   type_check = nil,
+   init_env = nil,
 }
 
 
@@ -119,17 +119,17 @@ for c = string.byte("A"), string.byte("F") do
 end
 
 local lex_char_symbols = {}
-for _, c in ipairs({ [1] = "[", [2] = "]", [3] = "(", [4] = ")", [5] = "{", [6] = "}", [7] = ",", [8] = "#", [9] = "`", [10] = ";", }) do
+for _, c in ipairs({ "[", "]", "(", ")", "{", "}", ",", "#", "`", ";" }) do
    lex_char_symbols[c] = true
 end
 
 local lex_op_start = {}
-for _, c in ipairs({ [1] = "+", [2] = "*", [3] = "/", [4] = "|", [5] = "&", [6] = "%", [7] = "^", }) do
+for _, c in ipairs({ "+", "*", "/", "|", "&", "%", "^" }) do
    lex_op_start[c] = true
 end
 
 local lex_space = {}
-for _, c in ipairs({ [1] = " ", [2] = "\t", [3] = "\v", [4] = "\n", [5] = "\r", }) do
+for _, c in ipairs({ " ", "\t", "\v", "\n", "\r" }) do
    lex_space[c] = true
 end
 
@@ -198,11 +198,11 @@ function tl.lex(input)
          kind = "keyword"
       end
       table.insert(tokens, {
-         ["x"] = tx,
-         ["y"] = ty,
-         ["i"] = ti,
-         ["tk"] = tk,
-         ["kind"] = kind,
+         x = tx,
+         y = ty,
+         i = ti,
+         tk = tk,
+         kind = kind,
       })
       in_token = false
    end
@@ -844,7 +844,14 @@ local Fact = {}
 
 
 
+local KeyParsed = {}
+
+
+
+
+
 local Node = {}
+
 
 
 
@@ -934,10 +941,10 @@ local parse_newtype
 local function fail(ps, i, msg)
    if not ps.tokens[i] then
       local eof = ps.tokens[#ps.tokens]
-      table.insert(ps.errs, { ["y"] = eof.y, ["x"] = eof.x, ["msg"] = msg or "unexpected end of file", })
+      table.insert(ps.errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
       return #ps.tokens
    end
-   table.insert(ps.errs, { ["y"] = ps.tokens[i].y, ["x"] = ps.tokens[i].x, ["msg"] = msg or "syntax error", })
+   table.insert(ps.errs, { y = ps.tokens[i].y, x = ps.tokens[i].x, msg = msg or "syntax error" })
    return math.min(#ps.tokens, i + 1)
 end
 
@@ -950,7 +957,7 @@ end
 
 local function new_node(tokens, i, kind)
    local t = tokens[i]
-   return { ["y"] = t.y, ["x"] = t.x, ["tk"] = t.tk, ["kind"] = kind or t.kind, }
+   return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
 
 local function a_type(t)
@@ -961,11 +968,11 @@ end
 local function new_type(ps, i, typename)
    local token = ps.tokens[i]
    return a_type({
-      ["typename"] = assert(typename),
-      ["filename"] = ps.filename,
-      ["y"] = token.y,
-      ["x"] = token.x,
-      ["tk"] = token.tk,
+      typename = assert(typename),
+      filename = ps.filename,
+      y = token.y,
+      x = token.x,
+      tk = token.tk,
    })
 end
 
@@ -998,6 +1005,7 @@ local function parse_table_item(ps, i, n)
    end
 
    if ps.tokens[i].tk == "[" then
+      node.key_parsed = "long"
       i = i + 1
       i, node.key = parse_expression(ps, i)
       i = verify_tk(ps, i, "]")
@@ -1005,6 +1013,7 @@ local function parse_table_item(ps, i, n)
       i, node.value = parse_table_value(ps, i)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == "=" then
+      node.key_parsed = "short"
       i, node.key = verify_kind(ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
@@ -1012,11 +1021,12 @@ local function parse_table_item(ps, i, n)
       i, node.value = parse_table_value(ps, i)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+      node.key_parsed = "short"
       local orig_i = i
       local try_ps = {
-         ["filename"] = ps.filename,
-         ["tokens"] = ps.tokens,
-         ["errs"] = {},
+         filename = ps.filename,
+         tokens = ps.tokens,
+         errs = {},
       }
       i, node.key = verify_kind(try_ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
@@ -1039,6 +1049,7 @@ local function parse_table_item(ps, i, n)
    end
 
    node.key = new_node(ps.tokens, i, "number")
+   node.key_parsed = "implicit"
    node.key.constnum = n
    node.key.tk = tostring(n)
    i, node.value = parse_expression(ps, i)
@@ -1075,7 +1086,7 @@ end
 
 local function parse_bracket_list(ps, i, list, open, close, sep, parse_item)
    i = verify_tk(ps, i, open)
-   i = parse_list(ps, i, list, { [close] = true, }, sep, parse_item)
+   i = parse_list(ps, i, list, { [close] = true }, sep, parse_item)
    i = verify_tk(ps, i, close)
    return i, list
 end
@@ -1087,9 +1098,9 @@ end
 
 local function parse_trying_list(ps, i, list, parse_item)
    local try_ps = {
-      ["filename"] = ps.filename,
-      ["tokens"] = ps.tokens,
-      ["errs"] = {},
+      filename = ps.filename,
+      tokens = ps.tokens,
+      errs = {},
    }
    local tryi, item = parse_item(try_ps, i)
    if not item then
@@ -1118,10 +1129,10 @@ local function parse_typearg_type(ps, i)
    end
    i = verify_kind(ps, i, "identifier")
    return i, a_type({
-      ["y"] = ps.tokens[i - 2].y,
-      ["x"] = ps.tokens[i - 2].x,
-      ["typename"] = "typearg",
-      ["typearg"] = (backtick and "`" or "") .. ps.tokens[i - 1].tk,
+      y = ps.tokens[i - 2].y,
+      x = ps.tokens[i - 2].x,
+      typename = "typearg",
+      typearg = (backtick and "`" or "") .. ps.tokens[i - 1].tk,
    })
 end
 
@@ -1129,10 +1140,10 @@ local function parse_typevar_type(ps, i)
    i = verify_tk(ps, i, "`")
    i = verify_kind(ps, i, "identifier")
    return i, a_type({
-      ["y"] = ps.tokens[i - 2].y,
-      ["x"] = ps.tokens[i - 2].x,
-      ["typename"] = "typevar",
-      ["typevar"] = "`" .. ps.tokens[i - 1].tk,
+      y = ps.tokens[i - 2].y,
+      x = ps.tokens[i - 2].x,
+      typename = "typevar",
+      typevar = "`" .. ps.tokens[i - 1].tk,
    })
 end
 
@@ -1174,8 +1185,8 @@ local function parse_function_type(ps, i)
       i, node.args = parse_argument_type_list(ps, i)
       i, node.rets = parse_return_types(ps, i)
    else
-      node.args = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }
-      node.rets = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }
+      node.args = { a_type({ typename = "any", is_va = true }) }
+      node.rets = { a_type({ typename = "any", is_va = true }) }
    end
    return i, node
 end
@@ -1190,8 +1201,8 @@ local function parse_base_type(ps, i)
       return i + 1, typ
    elseif ps.tokens[i].tk == "table" then
       local typ = new_type(ps, i, "map")
-      typ.keys = a_type({ ["typename"] = "any", })
-      typ.values = a_type({ ["typename"] = "any", })
+      typ.keys = a_type({ typename = "any" })
+      typ.values = a_type({ typename = "any" })
       return i + 1, typ
    elseif ps.tokens[i].tk == "function" then
       return parse_function_type(ps, i)
@@ -1217,7 +1228,7 @@ local function parse_base_type(ps, i)
       return parse_typevar_type(ps, i)
    elseif ps.tokens[i].kind == "identifier" then
       local typ = new_type(ps, i, "nominal")
-      typ.names = { [1] = ps.tokens[i].tk, }
+      typ.names = { ps.tokens[i].tk }
       i = i + 1
       while ps.tokens[i].tk == "." do
          i = i + 1
@@ -1254,7 +1265,7 @@ parse_type = function(ps, i)
    end
    if ps.tokens[i].tk == "|" then
       local u = new_type(ps, istart, "union")
-      u.types = { [1] = bt, }
+      u.types = { bt }
       while ps.tokens[i].tk == "|" do
          i = i + 1
          i, bt = parse_base_type(ps, i)
@@ -1396,7 +1407,7 @@ do
 
    local function new_operator(tk, arity, op)
       op = op or tk.tk
-      return { ["y"] = tk.y, ["x"] = tk.x, ["arity"] = arity, ["op"] = op, ["prec"] = precedences[arity][op], }
+      return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
    local E
@@ -1411,11 +1422,11 @@ do
          local op = new_operator(ps.tokens[i], 1)
          i = i + 1
          i, e1 = P(ps, i)
-         e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, }
+         e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
          i, e1 = parse_expression(ps, i)
-         e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "paren", ["e1"] = e1, }
+         e1 = { y = t1.y, x = t1.x, kind = "paren", e1 = e1 }
          i = verify_tk(ps, i, ")")
       else
          i, e1 = parse_literal(ps, i)
@@ -1434,14 +1445,14 @@ do
                i, arg = parse_table_literal(ps, i)
             end
             table.insert(args, arg)
-            e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = args, }
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif ps.tokens[i].tk == "(" then
             local op = new_operator(ps.tokens[i], 2, "@funcall")
 
             local args = new_node(ps.tokens, i, "expression_list")
             i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
 
-            e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = args, }
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif ps.tokens[i].tk == "[" then
             local op = new_operator(ps.tokens[i], 2, "@index")
 
@@ -1450,7 +1461,7 @@ do
             i, idx = parse_expression(ps, i)
             i = verify_tk(ps, i, "]")
 
-            e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = idx, }
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = idx }
          elseif ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
             local op = new_operator(ps.tokens[i], 2)
 
@@ -1458,14 +1469,14 @@ do
             i = i + 1
             i, key = verify_kind(ps, i, "identifier")
 
-            e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = key, }
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif ps.tokens[i].tk == "as" or ps.tokens[i].tk == "is" then
             local op = new_operator(ps.tokens[i], 2, ps.tokens[i].tk)
 
             i = i + 1
             local cast = new_node(ps.tokens, i, "cast")
             i, cast.casttype = parse_type(ps, i)
-            e1 = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = e1, ["e2"] = cast, ["conststr"] = e1.conststr, }
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
             break
          end
@@ -1488,7 +1499,7 @@ do
             i, rhs = E(ps, i, rhs, precedences[2][lookahead])
             lookahead = ps.tokens[i].tk
          end
-         lhs = { ["y"] = t1.y, ["x"] = t1.x, ["kind"] = "op", ["op"] = op, ["e1"] = lhs, ["e2"] = rhs, }
+         lhs = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = lhs, e2 = rhs }
       end
       return i, lhs
    end
@@ -1606,9 +1617,9 @@ local function parse_function(ps, i)
       fn.kind = "record_function"
       local owner = names[1]
       for i = 2, #names - 1 do
-         local dot = { ["y"] = names[i].y, ["x"] = names[i].x - 1, ["arity"] = 2, ["op"] = ".", }
+         local dot = { y = names[i].y, x = names[i].x - 1, arity = 2, op = "." }
          names[i].kind = "identifier"
-         local op = { ["y"] = names[i].y, ["x"] = names[i].x, ["kind"] = "op", ["op"] = dot, ["e1"] = owner, ["e2"] = names[i], }
+         local op = { y = names[i].y, x = names[i].x, kind = "op", op = dot, e1 = owner, e2 = names[i] }
          owner = op
       end
       fn.fn_owner = owner
@@ -1618,7 +1629,7 @@ local function parse_function(ps, i)
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
-      table.insert(fn.args, 1, { ["x"] = selfx, ["y"] = selfy, ["tk"] = "self", ["kind"] = "variable", })
+      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "variable" })
    end
 
    if not fn.name then
@@ -1693,10 +1704,10 @@ local function parse_forin(ps, i)
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
    node.vars = new_node(ps.tokens, i, "variables")
-   i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true, }, "sep", parse_variable_name)
+   i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true }, "sep", parse_variable_name)
    i = verify_tk(ps, i, "in")
    node.exps = new_node(ps.tokens, i, "expression_list")
-   i = parse_list(ps, i, node.exps, { ["do"] = true, }, "sep", parse_expression)
+   i = parse_list(ps, i, node.exps, { ["do"] = true }, "sep", parse_expression)
    if #node.exps < 1 then
       return fail(ps, i, "missing iterator expression in generic for")
    elseif #node.exps > 3 then
@@ -1835,7 +1846,7 @@ parse_newtype = function(ps, i)
                   local prev_t = def.fields[v.tk]
                   if t.typename == "function" and prev_t.typename == "function" then
                      def.fields[v.tk] = new_type(ps, iv, "poly")
-                     def.fields[v.tk].types = { [1] = prev_t, [2] = t, }
+                     def.fields[v.tk].types = { prev_t, t }
                   elseif t.typename == "function" and prev_t.typename == "poly" then
                      table.insert(prev_t.types, t)
                   else
@@ -1908,8 +1919,8 @@ local function parse_call_or_assignment(ps, i)
    end
    if #asgn.vars > 1 then
       local err_ps = {
-         ["tokens"] = ps.tokens,
-         ["errs"] = {},
+         tokens = ps.tokens,
+         errs = {},
       }
       local expi = parse_expression(err_ps, tryi)
       return fail(ps, expi or i)
@@ -1944,7 +1955,7 @@ local function parse_variable_declarations(ps, i, node_name)
             end
             i, val = parse_newtype(ps, i)
             if val then
-               val.newtype.def.names = { [1] = asgn.vars[v].tk, }
+               val.newtype.def.names = { asgn.vars[v].tk }
             else
                return i, val
             end
@@ -2030,12 +2041,12 @@ end
 function tl.parse_program(tokens, errs, filename)
    errs = errs or {}
    local ps = {
-      ["tokens"] = tokens,
-      ["errs"] = errs,
-      ["filename"] = filename,
+      tokens = tokens,
+      errs = errs,
+      filename = filename,
    }
-   local last = ps.tokens[#ps.tokens] or { ["y"] = 1, ["x"] = 1, ["tk"] = "", }
-   table.insert(ps.tokens, { ["y"] = last.y, ["x"] = last.x + #last.tk, ["tk"] = "$EOF$", ["kind"] = "$EOF$", })
+   local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
+   table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    return parse_statements(ps, 1, filename)
 end
 
@@ -2394,7 +2405,7 @@ function tl.pretty_print_ast(ast, fast)
    end
 
    local function print_record_def(typ)
-      local out = { [1] = "{", }
+      local out = { "{" }
       for name, field in pairs(typ.fields) do
          if field.typename == "typetype" and is_record_type(field.def) then
             table.insert(out, name)
@@ -2411,8 +2422,8 @@ function tl.pretty_print_ast(ast, fast)
 
    visit_node.cbs = {
       ["statements"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             local space
             for i, child in ipairs(children) do
                add_child(out, children[i], space, indent)
@@ -2422,8 +2433,8 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["local_declaration"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "local")
             add_child(out, children[1], " ")
             if children[2] then
@@ -2434,8 +2445,8 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["global_declaration"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             if children[2] then
                add_child(out, children[1])
                table.insert(out, " =")
@@ -2445,8 +2456,8 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["assignment"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             add_child(out, children[1])
             table.insert(out, " =")
             add_child(out, children[2], " ")
@@ -2454,9 +2465,9 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["if"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "if")
             add_child(out, children[1], " ")
             table.insert(out, " then")
@@ -2465,52 +2476,52 @@ function tl.pretty_print_ast(ast, fast)
             for i = 3, #children do
                add_child(out, children[i], " ", indent)
             end
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["while"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "while")
             add_child(out, children[1], " ")
             table.insert(out, " do")
             add_child(out, children[2], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["repeat"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "repeat")
             add_child(out, children[1], " ")
             if not fast then
                indent = indent - 1
             end
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "until ", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
             return out
          end,
       },
       ["do"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "do")
             add_child(out, children[1], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["forin"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "for")
             add_child(out, children[1], " ")
             table.insert(out, " in")
@@ -2518,14 +2529,14 @@ function tl.pretty_print_ast(ast, fast)
             table.insert(out, " do")
             add_child(out, children[3], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["fornum"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "for")
             add_child(out, children[1], " ")
             table.insert(out, " =")
@@ -2539,13 +2550,13 @@ function tl.pretty_print_ast(ast, fast)
             table.insert(out, " do")
             add_child(out, children[5], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["return"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "return")
             if #children[1] > 0 then
                add_child(out, children[1], " ")
@@ -2554,15 +2565,15 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["break"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "break")
             return out
          end,
       },
       ["elseif"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "elseif")
             add_child(out, children[1], " ")
             table.insert(out, " then")
@@ -2571,16 +2582,16 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["else"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "else")
             add_child(out, children[1], " ")
             return out
          end,
       },
       ["variables"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             local space
             for i, child in ipairs(children) do
                if i > 1 then
@@ -2593,38 +2604,49 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["table_literal"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             if #children == 0 then
                indent = indent - 1
                table.insert(out, "{}")
                return out
             end
             table.insert(out, "{")
+            local n = #children
             for i, child in ipairs(children) do
                add_child(out, child, " ", child.y ~= node.y and indent)
-               table.insert(out, ",")
+               if i < n or node.yend ~= node.y then
+                  table.insert(out, ",")
+               end
             end
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "}", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
             return out
          end,
       },
       ["table_item"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
-            table.insert(out, "[")
-            add_child(out, children[1])
-            table.insert(out, "] = ")
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
+            if node.key_parsed ~= "implicit" then
+               if node.key_parsed == "short" then
+                  children[1][1] = children[1][1]:sub(2, -2)
+                  add_child(out, children[1])
+                  table.insert(out, " = ")
+               else
+                  table.insert(out, "[")
+                  add_child(out, children[1])
+                  table.insert(out, "] = ")
+               end
+            end
             add_child(out, children[2])
             return out
          end,
       },
       ["local_function"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "local function")
             add_child(out, children[1], " ")
             table.insert(out, "(")
@@ -2632,14 +2654,14 @@ function tl.pretty_print_ast(ast, fast)
             table.insert(out, ")")
             add_child(out, children[4], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["global_function"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "function")
             add_child(out, children[1], " ")
             table.insert(out, "(")
@@ -2647,14 +2669,14 @@ function tl.pretty_print_ast(ast, fast)
             table.insert(out, ")")
             add_child(out, children[4], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["record_function"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "function")
             add_child(out, children[1], " ")
             table.insert(out, node.is_method and ":" or ".")
@@ -2672,28 +2694,28 @@ function tl.pretty_print_ast(ast, fast)
             table.insert(out, ")")
             add_child(out, children[5], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["function"] = {
-         ["before"] = increment_indent,
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         before = increment_indent,
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "function(")
             add_child(out, children[1])
             table.insert(out, ")")
             add_child(out, children[3], " ")
             indent = indent - 1
-            add_child(out, { ["y"] = node.yend, ["h"] = 0, [1] = "end", }, " ", indent)
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
       },
       ["cast"] = {},
 
       ["paren"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "(")
             add_child(out, children[1], "", indent)
             table.insert(out, ")")
@@ -2701,8 +2723,8 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["op"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
                add_child(out, children[1], "", indent)
                table.insert(out, "(")
@@ -2749,15 +2771,15 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["variable"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             add_string(out, node.tk)
             return out
          end,
       },
       ["newtype"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             if is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
             else
@@ -2767,16 +2789,16 @@ function tl.pretty_print_ast(ast, fast)
          end,
       },
       ["goto"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "goto ")
             table.insert(out, node.label)
             return out
          end,
       },
       ["label"] = {
-         ["after"] = function(node, children)
-            local out = { ["y"] = node.y, ["h"] = 0, }
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
             table.insert(out, "::")
             table.insert(out, node.label)
             table.insert(out, "::")
@@ -2797,8 +2819,8 @@ function tl.pretty_print_ast(ast, fast)
    local visit_type = {}
    visit_type.cbs = {
       ["string"] = {
-         ["after"] = function(typ, children)
-            local out = { ["y"] = typ.y, ["h"] = 0, }
+         after = function(typ, children)
+            local out = { y = typ.y, h = 0 }
             table.insert(out, primitive[typ.typename] or "table")
             return out
          end,
@@ -2849,37 +2871,37 @@ end
 
 
 
-local ANY = a_type({ ["typename"] = "any", })
-local NONE = a_type({ ["typename"] = "none", })
+local ANY = a_type({ typename = "any" })
+local NONE = a_type({ typename = "none" })
 
-local NIL = a_type({ ["typename"] = "nil", })
-local NUMBER = a_type({ ["typename"] = "number", })
-local STRING = a_type({ ["typename"] = "string", })
-local OPT_NUMBER = a_type({ ["typename"] = "number", })
-local OPT_STRING = a_type({ ["typename"] = "string", })
-local VARARG_ANY = a_type({ ["typename"] = "any", ["is_va"] = true, })
-local VARARG_STRING = a_type({ ["typename"] = "string", ["is_va"] = true, })
-local VARARG_NUMBER = a_type({ ["typename"] = "number", ["is_va"] = true, })
-local VARARG_UNKNOWN = a_type({ ["typename"] = "unknown", ["is_va"] = true, })
-local VARARG_ALPHA = a_type({ ["typename"] = "typevar", ["typevar"] = "@a", ["is_va"] = true, })
-local BOOLEAN = a_type({ ["typename"] = "boolean", })
-local ARG_ALPHA = a_type({ ["typename"] = "typearg", ["typearg"] = "@a", })
-local ARG_BETA = a_type({ ["typename"] = "typearg", ["typearg"] = "@b", })
-local ALPHA = a_type({ ["typename"] = "typevar", ["typevar"] = "@a", })
-local BETA = a_type({ ["typename"] = "typevar", ["typevar"] = "@b", })
-local ARRAY_OF_STRING = a_type({ ["typename"] = "array", ["elements"] = STRING, })
-local ARRAY_OF_ALPHA = a_type({ ["typename"] = "array", ["elements"] = ALPHA, })
-local MAP_OF_ALPHA_TO_BETA = a_type({ ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, })
-local TABLE = a_type({ ["typename"] = "map", ["keys"] = ANY, ["values"] = ANY, })
-local FUNCTION = a_type({ ["typename"] = "function", ["args"] = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }, ["rets"] = { [1] = a_type({ ["typename"] = "any", ["is_va"] = true, }), }, })
-local INVALID = a_type({ ["typename"] = "invalid", })
-local UNKNOWN = a_type({ ["typename"] = "unknown", })
-local NOMINAL_FILE = a_type({ ["typename"] = "nominal", ["names"] = { [1] = "FILE", }, })
-local METATABLE = a_type({ ["typename"] = "nominal", ["names"] = { [1] = "METATABLE", }, })
+local NIL = a_type({ typename = "nil" })
+local NUMBER = a_type({ typename = "number" })
+local STRING = a_type({ typename = "string" })
+local OPT_NUMBER = a_type({ typename = "number" })
+local OPT_STRING = a_type({ typename = "string" })
+local VARARG_ANY = a_type({ typename = "any", is_va = true })
+local VARARG_STRING = a_type({ typename = "string", is_va = true })
+local VARARG_NUMBER = a_type({ typename = "number", is_va = true })
+local VARARG_UNKNOWN = a_type({ typename = "unknown", is_va = true })
+local VARARG_ALPHA = a_type({ typename = "typevar", typevar = "@a", is_va = true })
+local BOOLEAN = a_type({ typename = "boolean" })
+local ARG_ALPHA = a_type({ typename = "typearg", typearg = "@a" })
+local ARG_BETA = a_type({ typename = "typearg", typearg = "@b" })
+local ALPHA = a_type({ typename = "typevar", typevar = "@a" })
+local BETA = a_type({ typename = "typevar", typevar = "@b" })
+local ARRAY_OF_STRING = a_type({ typename = "array", elements = STRING })
+local ARRAY_OF_ALPHA = a_type({ typename = "array", elements = ALPHA })
+local MAP_OF_ALPHA_TO_BETA = a_type({ typename = "map", keys = ALPHA, values = BETA })
+local TABLE = a_type({ typename = "map", keys = ANY, values = ANY })
+local FUNCTION = a_type({ typename = "function", args = { a_type({ typename = "any", is_va = true }) }, rets = { a_type({ typename = "any", is_va = true }) } })
+local INVALID = a_type({ typename = "invalid" })
+local UNKNOWN = a_type({ typename = "unknown" })
+local NOMINAL_FILE = a_type({ typename = "nominal", names = { "FILE" } })
+local METATABLE = a_type({ typename = "nominal", names = { "METATABLE" } })
 
 local OS_DATE_TABLE = a_type({
-   ["typename"] = "record",
-   ["fields"] = {
+   typename = "record",
+   fields = {
       ["year"] = NUMBER,
       ["month"] = NUMBER,
       ["day"] = NUMBER,
@@ -2893,8 +2915,8 @@ local OS_DATE_TABLE = a_type({
 })
 
 local DEBUG_GETINFO_TABLE = a_type({
-   ["typename"] = "record",
-   ["fields"] = {
+   typename = "record",
+   fields = {
       ["name"] = STRING,
       ["namewhat"] = STRING,
       ["source"] = STRING,
@@ -2908,7 +2930,7 @@ local DEBUG_GETINFO_TABLE = a_type({
       ["nparams"] = NUMBER,
       ["isvararg"] = BOOLEAN,
       ["func"] = ANY,
-      ["activelines"] = a_type({ ["typename"] = "map", ["keys"] = NUMBER, ["values"] = BOOLEAN, }),
+      ["activelines"] = a_type({ typename = "map", keys = NUMBER, values = BOOLEAN }),
    },
 })
 
@@ -3088,7 +3110,7 @@ local function show_type_base(t, seen)
 
    if t.typename == "nominal" then
       if t.typevals then
-         local out = { [1] = table.concat(t.names, "."), [2] = "<", }
+         local out = { table.concat(t.names, "."), "<" }
          local vals = {}
          for _, v in ipairs(t.typevals) do
             table.insert(vals, show(v))
@@ -3286,275 +3308,275 @@ local function require_module(module_name, lax, env, result)
 end
 
 local standard_library = {
-   ["..."] = a_type({ ["typename"] = "tuple", [1] = STRING, [2] = STRING, [3] = STRING, [4] = STRING, [5] = STRING, }),
-   ["@return"] = a_type({ ["typename"] = "tuple", [1] = ANY, }),
-   ["any"] = a_type({ ["typename"] = "typetype", ["def"] = ANY, }),
+   ["..."] = a_type({ typename = "tuple", STRING, STRING, STRING, STRING, STRING }),
+   ["@return"] = a_type({ typename = "tuple", ANY }),
+   ["any"] = a_type({ typename = "typetype", def = ANY }),
    ["arg"] = ARRAY_OF_STRING,
-   ["require"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = {}, }),
-   ["setmetatable"] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = METATABLE, }, ["rets"] = { [1] = ALPHA, }, }),
-   ["getmetatable"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = METATABLE, }, }),
-   ["rawget"] = a_type({ ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, }, ["rets"] = { [1] = ANY, }, }),
+   ["require"] = a_type({ typename = "function", args = { STRING }, rets = {} }),
+   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } }),
+   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { METATABLE } }),
+   ["rawget"] = a_type({ typename = "function", args = { TABLE, ANY }, rets = { ANY } }),
    ["rawset"] = a_type({
-      ["typename"] = "poly",
-      ["types"] = {
-         [1] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, [3] = BETA, }, ["rets"] = {}, }),
-         [2] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, }),
-         [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = TABLE, [2] = ANY, [3] = ANY, }, ["rets"] = {}, }),
+      typename = "poly",
+      types = {
+         a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} }),
+         a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
+         a_type({ typename = "function", args = { TABLE, ANY, ANY }, rets = {} }),
       },
    }),
    ["next"] = a_type({
-      ["typename"] = "poly",
-      ["types"] = {
-         [1] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, }),
-         [2] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = MAP_OF_ALPHA_TO_BETA, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, [2] = BETA, }, }),
-         [3] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, }),
-         [4] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, }, ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, }),
+      typename = "poly",
+      types = {
+         a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } }),
+         a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } }),
+         a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } }),
+         a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } }),
       },
    }),
    ["load"] = a_type({
-      ["typename"] = "poly",
-      ["types"] = {
-         [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = FUNCTION, }, }),
-         [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = FUNCTION, }, }),
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", args = { STRING }, rets = { FUNCTION } }),
+         a_type({ typename = "function", args = { STRING, STRING }, rets = { FUNCTION } }),
       },
    }),
    ["FILE"] = a_type({
-      ["typename"] = "typetype",
-      ["def"] = a_type({
-         ["typename"] = "record",
-         ["fields"] = {
+      typename = "typetype",
+      def = a_type({
+         typename = "record",
+         fields = {
             ["read"] = a_type({
-               ["typename"] = "poly",
-               ["types"] = {
-                  [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
-                  [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
+               typename = "poly",
+               types = {
+                  a_type({ typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } }),
+                  a_type({ typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } }),
                },
             }),
-            ["write"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
-            ["close"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, }),
-            ["flush"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, }, ["rets"] = {}, }),
+            ["write"] = a_type({ typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } }),
+            ["close"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
+            ["flush"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = {} }),
 
          },
       }),
    }),
    ["METATABLE"] = a_type({
-      ["typename"] = "typetype",
-      ["def"] = a_type({
-         ["typename"] = "record",
-         ["fields"] = {
+      typename = "typetype",
+      def = a_type({
+         typename = "record",
+         fields = {
             ["__index"] = ANY,
             ["__newindex"] = ANY,
-            ["__tostring"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),
-            ["__mode"] = a_type({ ["typename"] = "enum", ["enumset"] = { ["k"] = true, ["v"] = true, ["kv"] = true, }, }),
+            ["__tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+            ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
             ["__call"] = FUNCTION,
-            ["__gc"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = {}, }),
-            ["__len"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = NUMBER, }, }),
-            ["__pairs"] = a_type({ ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["typename"] = "function", ["args"] = { [1] = a_type({ ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }), }, ["rets"] = {
-                  [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, }),
+            ["__gc"] = a_type({ typename = "function", args = { ANY }, rets = {} }),
+            ["__len"] = a_type({ typename = "function", args = { ANY }, rets = { NUMBER } }),
+            ["__pairs"] = a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
+                  a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
                }, }),
 
          },
       }),
    }),
    ["io"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
+      typename = "record",
+      fields = {
          ["stderr"] = NOMINAL_FILE,
          ["stdout"] = NOMINAL_FILE,
-         ["open"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
-         ["popen"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
+         ["open"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
+         ["popen"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
          ["read"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = STRING, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = NOMINAL_FILE, [2] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = STRING, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } }),
+               a_type({ typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } }),
             },
          }),
-         ["write"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = NOMINAL_FILE, [2] = STRING, }, }),
-         ["flush"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = {}, }),
-         ["type"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),
-         ["lines"] = a_type({ ["typename"] = "function", ["args"] = { [1] = OPT_STRING, [2] = VARARG_STRING, }, ["rets"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = VARARG_STRING, }, }),
+         ["write"] = a_type({ typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } }),
+         ["flush"] = a_type({ typename = "function", args = {}, rets = {} }),
+         ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+         ["lines"] = a_type({ typename = "function", args = { OPT_STRING, VARARG_STRING }, rets = {
+               a_type({ typename = "function", args = {}, rets = { VARARG_STRING } }),
             }, }),
       },
    }),
    ["os"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["getenv"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, }),
-         ["execute"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, [3] = NUMBER, }, }),
-         ["remove"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = BOOLEAN, [2] = STRING, }, }),
-         ["time"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, }),
+      typename = "record",
+      fields = {
+         ["getenv"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
+         ["execute"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } }),
+         ["remove"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } }),
+         ["time"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
          ["date"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = OPT_STRING, }, ["rets"] = { [1] = a_type({ ["typename"] = "union", ["types"] = { [1] = STRING, [2] = OS_DATE_TABLE, }, }), }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = {}, rets = { STRING } }),
+               a_type({ typename = "function", args = { STRING, OPT_STRING }, rets = { a_type({ typename = "union", types = { STRING, OS_DATE_TABLE } }) } }),
             },
          }),
-         ["tmpname"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, }),
-         ["clock"] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, }, }),
+         ["tmpname"] = a_type({ typename = "function", args = {}, rets = { STRING } }),
+         ["clock"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
          ["exit"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = BOOLEAN, }, ["rets"] = {}, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = BOOLEAN, [2] = BOOLEAN, }, ["rets"] = {}, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { NUMBER, BOOLEAN }, rets = {} }),
+               a_type({ typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} }),
             },
          }),
       },
    }),
    ["package"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
+      typename = "record",
+      fields = {
          ["path"] = STRING,
          ["cpath"] = STRING,
          ["config"] = STRING,
          ["loaded"] = a_type({
-            ["typename"] = "map",
-            ["keys"] = STRING,
-            ["values"] = ANY,
+            typename = "map",
+            keys = STRING,
+            values = ANY,
          }),
          ["searchers"] = a_type({
-            ["typename"] = "array",
-            ["elements"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, }),
+            typename = "array",
+            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
          }),
          ["loaders"] = a_type({
-            ["typename"] = "array",
-            ["elements"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = ANY, }, }),
+            typename = "array",
+            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
          }),
       },
    }),
    ["table"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["pack"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = TABLE, }, }),
+      typename = "record",
+      fields = {
+         ["pack"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { TABLE } }),
          ["unpack"] = a_type({
-            ["typename"] = "function",
-            ["needs_compat53"] = true,
-            ["typeargs"] = { [1] = ARG_ALPHA, },
-            ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, },
-            ["rets"] = { [1] = VARARG_ALPHA, },
+            typename = "function",
+            needs_compat53 = true,
+            typeargs = { ARG_ALPHA },
+            args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
+            rets = { VARARG_ALPHA },
          }),
          ["move"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, }),
-               [2] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = NUMBER, [4] = NUMBER, [5] = ARRAY_OF_ALPHA, }, ["rets"] = { [1] = ARRAY_OF_ALPHA, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } }),
             },
          }),
          ["insert"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = NUMBER, [3] = ALPHA, }, ["rets"] = {}, }),
-               [2] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = ALPHA, }, ["rets"] = {}, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} }),
             },
          }),
-         ["remove"] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = OPT_NUMBER, }, ["rets"] = { [1] = ALPHA, }, }),
-         ["concat"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ARRAY_OF_STRING, [2] = OPT_STRING, [3] = OPT_NUMBER, [4] = OPT_NUMBER, }, ["rets"] = { [1] = STRING, }, }),
+         ["remove"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } }),
+         ["concat"] = a_type({ typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } }),
          ["sort"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {}, }),
-               [2] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = ALPHA, [2] = ALPHA, }, ["rets"] = { [1] = BOOLEAN, }, }), }, ["rets"] = {}, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type({ typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } }) }, rets = {} }),
             },
          }),
       },
    }),
    ["string"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["sub"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = STRING, }, }),
-         ["match"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_STRING, }, }),
-         ["rep"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, }),
-         ["lower"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, }),
-         ["upper"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = STRING, }, }),
+      typename = "record",
+      fields = {
+         ["sub"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } }),
+         ["match"] = a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } }),
+         ["rep"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
+         ["lower"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
+         ["upper"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
          ["gsub"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = STRING, [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = a_type({ ["typename"] = "map", ["keys"] = STRING, ["values"] = STRING, }), [4] = NUMBER, }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, }),
-               [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_STRING, }, ["rets"] = { [1] = STRING, }, }), }, ["rets"] = { [1] = STRING, [2] = NUMBER, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } }),
+               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "map", keys = STRING, values = STRING }), NUMBER }, rets = { STRING, NUMBER } }),
+               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "function", args = { VARARG_STRING }, rets = { STRING } }) }, rets = { STRING, NUMBER } }),
 
             },
          }),
-         ["gmatch"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = STRING, }, }),
+         ["gmatch"] = a_type({ typename = "function", args = { STRING, STRING }, rets = {
+               a_type({ typename = "function", args = {}, rets = { STRING } }),
             }, }),
          ["find"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, }),
-               [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = STRING, [3] = NUMBER, [4] = BOOLEAN, }, ["rets"] = { [1] = NUMBER, [2] = NUMBER, [3] = VARARG_STRING, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
+               a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
+               a_type({ typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
 
             },
          }),
-         ["char"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_NUMBER, }, ["rets"] = { [1] = STRING, }, }),
+         ["char"] = a_type({ typename = "function", args = { VARARG_NUMBER }, rets = { STRING } }),
          ["byte"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, }, ["rets"] = { [1] = NUMBER, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-               [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = VARARG_NUMBER, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING }, rets = { NUMBER } }),
+               a_type({ typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } }),
+               a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } }),
             },
          }),
-         ["format"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = STRING, }, }),
+         ["format"] = a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } }),
       },
    }),
    ["math"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["max"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-         ["min"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-         ["floor"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-         ["randomseed"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, }, ["rets"] = {}, }),
-         ["random"] = a_type({ ["typename"] = "function", ["args"] = { [1] = NUMBER, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
+      typename = "record",
+      fields = {
+         ["max"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+         ["min"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+         ["floor"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
+         ["randomseed"] = a_type({ typename = "function", args = { NUMBER }, rets = {} }),
+         ["random"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
          ["huge"] = NUMBER,
       },
    }),
-   ["type"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),
+   ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
    ["utf8"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["len"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-         ["offset"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, [3] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
+      typename = "record",
+      fields = {
+         ["len"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
+         ["offset"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
       },
    }),
-   ["ipairs"] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ARRAY_OF_ALPHA, }, ["rets"] = {
-         [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = NUMBER, [2] = ALPHA, }, }),
+   ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
+         a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
       }, }),
-   ["pairs"] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["args"] = { [1] = a_type({ ["typename"] = "map", ["keys"] = ALPHA, ["values"] = BETA, }), }, ["rets"] = {
-         [1] = a_type({ ["typename"] = "function", ["args"] = {}, ["rets"] = { [1] = ALPHA, [2] = BETA, }, }),
+   ["pairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
+         a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
       }, }),
-   ["pcall"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = { [1] = BOOLEAN, [2] = ANY, }, }),
+   ["pcall"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } }),
    ["assert"] = a_type({
-      ["typename"] = "poly",
-      ["types"] = {
-         [1] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, }),
-         [2] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, [2] = ARG_BETA, }, ["args"] = { [1] = ALPHA, [2] = BETA, }, ["rets"] = { [1] = ALPHA, }, }),
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } }),
+         a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } }),
       },
    }),
    ["select"] = a_type({
-      ["typename"] = "poly",
-      ["types"] = {
-         [1] = a_type({ ["typename"] = "function", ["typeargs"] = { [1] = ARG_ALPHA, }, ["args"] = { [1] = NUMBER, [2] = ALPHA, }, ["rets"] = { [1] = ALPHA, }, }),
-         [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = VARARG_ANY, }, ["rets"] = { [1] = NUMBER, }, }),
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } }),
+         a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } }),
       },
    }),
-   ["print"] = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_ANY, }, ["rets"] = {}, }),
-   ["tostring"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = STRING, }, }),
-   ["tonumber"] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, [2] = NUMBER, }, ["rets"] = { [1] = NUMBER, }, }),
-   ["error"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = {}, }),
+   ["print"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = {} }),
+   ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+   ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
+   ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
    ["debug"] = a_type({
-      ["typename"] = "record",
-      ["fields"] = {
-         ["traceback"] = a_type({ ["typename"] = "function", ["args"] = { [1] = STRING, [2] = NUMBER, }, ["rets"] = { [1] = STRING, }, }),
+      typename = "record",
+      fields = {
+         ["traceback"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
          ["getinfo"] = a_type({
-            ["typename"] = "poly",
-            ["types"] = {
-               [1] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, }, ["rets"] = { [1] = DEBUG_GETINFO_TABLE, }, }),
-               [2] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, [2] = STRING, }, ["rets"] = { [1] = DEBUG_GETINFO_TABLE, }, }),
-               [3] = a_type({ ["typename"] = "function", ["args"] = { [1] = ANY, [2] = ANY, [3] = STRING, }, ["rets"] = { [1] = DEBUG_GETINFO_TABLE, }, }),
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { ANY }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_type({ typename = "function", args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_type({ typename = "function", args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
             },
          }),
       },
@@ -3592,7 +3614,7 @@ local function add_compat53_entries(program, used_set)
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, { ["lax"] = false, ["skip_compat53"] = true, })
+         tl.type_check(code, { lax = false, skip_compat53 = true })
          code = code[1]
          compat53_code_cache[name] = code
       end
@@ -3654,7 +3676,7 @@ local function init_globals(lax)
    local stdlib_compat53 = get_stdlib_compat53(lax)
 
    for name, typ in pairs(standard_library) do
-      globals[name] = { ["t"] = typ, ["needs_compat53"] = stdlib_compat53[name], ["is_const"] = true, }
+      globals[name] = { t = typ, needs_compat53 = stdlib_compat53[name], is_const = true }
    end
 
    return globals
@@ -3662,9 +3684,9 @@ end
 
 function tl.init_env(lax, skip_compat53)
    local env = {
-      ["modules"] = {},
-      ["globals"] = init_globals(lax),
-      ["skip_compat53"] = skip_compat53,
+      modules = {},
+      globals = init_globals(lax),
+      skip_compat53 = skip_compat53,
    }
 
 
@@ -3683,14 +3705,14 @@ function tl.type_check(ast, opts)
    local lax = opts.lax
    local filename = opts.filename
    local result = opts.result or {
-      ["syntax_errors"] = {},
-      ["type_errors"] = {},
-      ["unknowns"] = {},
+      syntax_errors = {},
+      type_errors = {},
+      unknowns = {},
    }
 
    local stdlib_compat53 = get_stdlib_compat53(lax)
 
-   local st = { [1] = opts.env.globals, }
+   local st = { opts.env.globals }
 
    local all_needs_compat53 = {}
 
@@ -3710,9 +3732,9 @@ function tl.type_check(ast, opts)
             table.insert(field_order, k)
          end
          return a_type({
-            ["typename"] = "record",
-            ["field_order"] = field_order,
-            ["fields"] = globals,
+            typename = "record",
+            field_order = field_order,
+            fields = globals,
          }), false
       end
       for i = #st, 1, -1 do
@@ -3799,8 +3821,8 @@ function tl.type_check(ast, opts)
          local scope = st[i]
          if scope[emptytable.assigned_to] then
             scope[emptytable.assigned_to] = {
-               ["t"] = t,
-               ["is_const"] = false,
+               t = t,
+               is_const = false,
             }
             t.inferred_at = node
             t.inferred_at_file = filename
@@ -3840,10 +3862,10 @@ function tl.type_check(ast, opts)
       end
 
       return {
-         ["y"] = where.y,
-         ["x"] = where.x,
-         ["msg"] = msg,
-         ["filename"] = where.filename or filename,
+         y = where.y,
+         x = where.x,
+         msg = msg,
+         filename = where.filename or filename,
       }
    end
 
@@ -3864,11 +3886,11 @@ function tl.type_check(ast, opts)
    end
 
    local function terr(t, s, ...)
-      return { [1] = error_in_type(t, s, ...), }
+      return { error_in_type(t, s, ...) }
    end
 
    local function add_unknown(node, name)
-      table.insert(unknowns, { ["y"] = node.y, ["x"] = node.x, ["msg"] = name, ["filename"] = filename, })
+      table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
    end
 
    local function add_var(node, var, valtype, is_const, is_narrowing)
@@ -3882,7 +3904,7 @@ function tl.type_check(ast, opts)
          st[#st][var].is_narrowed = true
          st[#st][var].t = valtype
       else
-         st[#st][var] = { ["t"] = valtype, ["is_const"] = is_const, ["is_narrowed"] = is_narrowing, }
+         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing }
       end
    end
 
@@ -3966,7 +3988,7 @@ function tl.type_check(ast, opts)
 
    local function match_fields_to_map(t1, t2)
       if not match_record_fields(t1, function(_)             return t2.values end) then
-         return false, { [1] = error_in_type(t1, "not all fields have type %s", t2.values), }
+         return false, { error_in_type(t1, "not all fields have type %s", t2.values) }
       end
       return true
    end
@@ -4133,7 +4155,7 @@ function tl.type_check(ast, opts)
       end
       if t2.typename == "tuple" and t1.typename ~= "tuple" then
          t1 = a_type({
-            ["typename"] = "tuple",
+            typename = "tuple",
             [1] = t1,
          })
       end
@@ -4335,9 +4357,9 @@ function tl.type_check(ast, opts)
 
       if t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
-            infer_var(t2.emptytable_type, a_type({ ["typename"] = "array", ["elements"] = t1, }), node)
+            infer_var(t2.emptytable_type, a_type({ typename = "array", elements = t1 }), node)
          else
-            infer_var(t2.emptytable_type, a_type({ ["typename"] = "map", ["keys"] = t2.emptytable_type.keys, ["values"] = t1, }), node)
+            infer_var(t2.emptytable_type, a_type({ typename = "map", keys = t2.emptytable_type.keys, values = t1 }), node)
          end
          return
       elseif t2.typename == "emptytable" then
@@ -4403,7 +4425,7 @@ function tl.type_check(ast, opts)
          end
 
          if f.is_method and not is_method and not is_a(args[1], f.args[1]) then
-            table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "invoked method as a regular function: use ':' instead of '.'", ["filename"] = filename, })
+            table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
             return nil, errs
          end
 
@@ -4421,7 +4443,7 @@ function tl.type_check(ast, opts)
                end
                if not lax then
                   ok = false
-                  table.insert(errs, { ["y"] = node.y, ["x"] = node.x, ["msg"] = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg), ["filename"] = filename, })
+                  table.insert(errs, { y = node.y, x = node.x, msg = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg), filename = filename })
                end
             else
                local at = node.e2 and node.e2[a] or node
@@ -4464,13 +4486,13 @@ function tl.type_check(ast, opts)
          assert(type(args) == "table")
 
          if lax and is_unknown(func) then
-            func = a_type({ ["typename"] = "function", ["args"] = { [1] = VARARG_UNKNOWN, }, ["rets"] = { [1] = VARARG_UNKNOWN, }, })
+            func = a_type({ typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } })
          end
 
          func = resolve_unary(func)
 
          args = args or {}
-         local poly = func.typename == "poly" and func or { ["types"] = { [1] = func, }, }
+         local poly = func.typename == "poly" and func or { types = { func } }
          local first_errs
          local expects = {}
 
@@ -4599,7 +4621,7 @@ function tl.type_check(ast, opts)
 
       local description
       if node.e1.kind == "variable" then
-         description = type_description .. " '" .. node.e1.tk .. "'"
+         description = type_description .. " '" .. node.e1.tk .. "' of type " .. show_type(resolve_tuple(orig_tbl))
       else
          description = "type " .. show_type(resolve_tuple(orig_tbl))
       end
@@ -4647,7 +4669,7 @@ function tl.type_check(ast, opts)
       if lax and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
       end
-      st[1][var] = { ["t"] = valtype, ["is_const"] = is_const, }
+      st[1][var] = { t = valtype, is_const = is_const }
    end
 
    local check_typevars
@@ -4680,7 +4702,7 @@ function tl.type_check(ast, opts)
 
    local function get_rets(rets)
       if lax and (#rets == 0) then
-         return { [1] = a_type({ ["typename"] = "unknown", ["is_va"] = true, }), }
+         return { a_type({ typename = "unknown", is_va = true }) }
       end
       return rets
    end
@@ -4696,7 +4718,7 @@ function tl.type_check(ast, opts)
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
-            t = a_type({ ["typename"] = "unknown", })
+            t = a_type({ typename = "unknown" })
          end
          if arg.tk == "..." then
             t.is_va = true
@@ -4709,12 +4731,12 @@ function tl.type_check(ast, opts)
          add_var(arg, arg.tk, t)
       end
 
-      add_var(nil, "@return", node.rets or a_type({ ["typename"] = "tuple", }))
+      add_var(nil, "@return", node.rets or a_type({ typename = "tuple" }))
       if recurse then
          add_var(nil, node.name.tk, a_type({
-            ["typename"] = "function",
-            ["args"] = args,
-            ["rets"] = get_rets(node.rets),
+            typename = "function",
+            args = args,
+            rets = get_rets(node.rets),
          }))
       end
    end
@@ -4785,7 +4807,7 @@ function tl.type_check(ast, opts)
       end
 
       if not resolved then
-         resolved = a_type({ ["typename"] = "bad_nominal", ["names"] = t.names, })
+         resolved = a_type({ typename = "bad_nominal", names = t.names })
       end
 
       t.resolved = resolved
@@ -4884,7 +4906,7 @@ function tl.type_check(ast, opts)
                return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, b, a.keys)
             end
          end
-         return a_type({ ["y"] = node.y, ["x"] = node.x, ["typename"] = "unknown_emptytable_value", ["emptytable_type"] = a, })
+         return a_type({ y = node.y, x = node.x, typename = "unknown_emptytable_value", emptytable_type = a })
       elseif a.typename == "map" then
          if is_a(b, a.keys) then
             return a.values
@@ -4892,7 +4914,7 @@ function tl.type_check(ast, opts)
             return node_error(idxnode, "wrong index type: %s, expected %s", orig_b, a.keys)
          end
       elseif node.e2.kind == "string" then
-         return match_record_key(node, a, { ["y"] = node.e2.y, ["x"] = node.e2.x, ["kind"] = "string", ["tk"] = assert(node.e2.conststr), }, orig_a)
+         return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
       elseif is_record_type(a) and b.typename == "enum" then
          local field_names = {}
          for k, _ in pairs(b.enumset) do
@@ -4955,10 +4977,10 @@ function tl.type_check(ast, opts)
                old.tk = nil
                new.tk = nil
                return a_type({
-                  ["typename"] = "union",
-                  ["types"] = {
-                     [1] = old,
-                     [2] = new,
+                  typename = "union",
+                  types = {
+                     old,
+                     new,
                   },
                })
             end
@@ -5047,9 +5069,9 @@ function tl.type_check(ast, opts)
                end
             else
                if i == 1 then
-                  types = { [1] = f.typ, }
+                  types = { f.typ }
                else
-                  types = intersect(types, { [1] = f.typ, }, same_type_for_intersect)
+                  types = intersect(types, { f.typ }, same_type_for_intersect)
                end
             end
          end
@@ -5064,8 +5086,8 @@ function tl.type_check(ast, opts)
                return true, types[1]
             else
                return true, a_type({
-                  ["typename"] = "union",
-                  ["types"] = types,
+                  typename = "union",
+                  types = types,
                })
             end
          else
@@ -5089,8 +5111,8 @@ function tl.type_check(ast, opts)
                return true, types[1]
             else
                return true, a_type({
-                  ["typename"] = "union",
-                  ["types"] = types,
+                  typename = "union",
+                  types = types,
                })
             end
          else
@@ -5100,9 +5122,9 @@ function tl.type_check(ast, opts)
 
       local function subtract_types(u1, u2, errt)
          local types = {}
-         for _, rt in ipairs(u1.types or { [1] = u1, }) do
+         for _, rt in ipairs(u1.types or { u1 }) do
             local not_present = true
-            for _, ft in ipairs(u2.types or { [1] = u2, }) do
+            for _, ft in ipairs(u2.types or { u2 }) do
                if same_type(rt, ft) then
                   not_present = false
                   break
@@ -5122,8 +5144,8 @@ function tl.type_check(ast, opts)
             return types[1]
          else
             return a_type({
-               ["typename"] = "union",
-               ["types"] = types,
+               typename = "union",
+               types = types,
             })
          end
       end
@@ -5137,11 +5159,11 @@ function tl.type_check(ast, opts)
          end
 
          local out = {}
-         for v, fs in pairs(join_facts({ [1] = f1, [2] = f2, })) do
+         for v, fs in pairs(join_facts({ f1, f2 })) do
             local ok, u = intersect_facts(fs, errnode)
 
             if ok then
-               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = u, })
+               table.insert(out, { fact = "is", var = v, typ = u })
             else
 
                for _, f in ipairs(fs) do
@@ -5158,10 +5180,10 @@ function tl.type_check(ast, opts)
          end
 
          local out = {}
-         for v, fs in pairs(join_facts({ [1] = f1, [2] = f2, })) do
+         for v, fs in pairs(join_facts({ f1, f2 })) do
             local ok, u = sum_facts(fs)
             if ok then
-               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = u, })
+               table.insert(out, { fact = "is", var = v, typ = u })
             else
 
                for _, f in ipairs(fs) do
@@ -5178,12 +5200,12 @@ function tl.type_check(ast, opts)
          end
 
          local out = {}
-         for v, fs in pairs(join_facts({ [1] = f1, })) do
+         for v, fs in pairs(join_facts({ f1 })) do
             local realtype = find_var(v)
             local ok, u = sum_facts(fs)
             if ok then
                local not_typ = subtract_types(realtype, u, fs[1].typ)
-               table.insert(out, { ["fact"] = "is", ["var"] = v, ["typ"] = not_typ, })
+               table.insert(out, { fact = "is", var = v, typ = not_typ })
             end
          end
          return out
@@ -5220,10 +5242,10 @@ function tl.type_check(ast, opts)
 
    visit_node.cbs = {
       ["statements"] = {
-         ["before"] = function()
+         before = function()
             begin_scope()
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
 
             if #st == 2 then
                fail_unresolved()
@@ -5235,7 +5257,7 @@ function tl.type_check(ast, opts)
          end,
       },
       ["local_declaration"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             local vals = get_assignment_values(children[2], #node.vars)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
@@ -5248,7 +5270,7 @@ function tl.type_check(ast, opts)
                end
                local t = decltype or infertype
                if t == nil then
-                  t = a_type({ ["typename"] = "unknown", })
+                  t = a_type({ typename = "unknown" })
                   if not lax then
                      if node.exps then
                         node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
@@ -5269,7 +5291,7 @@ function tl.type_check(ast, opts)
          end,
       },
       ["global_declaration"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             local vals = get_assignment_values(children[2], #node.vars)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
@@ -5297,7 +5319,7 @@ function tl.type_check(ast, opts)
                   end
                else
                   if t == nil then
-                     t = a_type({ ["typename"] = "unknown", })
+                     t = a_type({ typename = "unknown" })
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
                      t.assigned_to = var.tk
@@ -5311,7 +5333,7 @@ function tl.type_check(ast, opts)
          end,
       },
       ["assignment"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             local vals = get_assignment_values(children[2], #children[1])
             local exps = flatten_list(vals)
             for i, vartype in ipairs(children[1]) do
@@ -5345,26 +5367,26 @@ function tl.type_check(ast, opts)
          end,
       },
       ["do"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = NONE
          end,
       },
       ["if"] = {
-         ["before_statements"] = function(node)
+         before_statements = function(node)
             begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_scope()
             node.type = NONE
          end,
       },
       ["elseif"] = {
-         ["before"] = function(node)
+         before = function(node)
             end_scope()
             begin_scope()
          end,
-         ["before_statements"] = function(node)
+         before_statements = function(node)
             local f = facts_not(node.parent_if.exp.facts)
             for e = 1, node.elseif_n - 1 do
                f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.facts), node)
@@ -5372,12 +5394,12 @@ function tl.type_check(ast, opts)
             f = facts_and(f, node.exp.facts, node)
             apply_facts(node.exp, f)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = NONE
          end,
       },
       ["else"] = {
-         ["before"] = function(node)
+         before = function(node)
             end_scope()
             begin_scope()
             local f = facts_not(node.parent_if.exp.facts)
@@ -5386,26 +5408,26 @@ function tl.type_check(ast, opts)
             end
             apply_facts(node, f)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = NONE
          end,
       },
       ["while"] = {
-         ["before"] = function()
+         before = function()
 
             widen_all_unions()
          end,
-         ["before_statements"] = function(node)
+         before_statements = function(node)
             begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_scope()
             node.type = NONE
          end,
       },
       ["label"] = {
-         ["before"] = function(node)
+         before = function(node)
 
             widen_all_unions()
             local label_id = "::" .. node.label .. "::"
@@ -5416,16 +5438,16 @@ function tl.type_check(ast, opts)
             if unresolved then
                unresolved.t.labels[node.label] = nil
             end
-            node.type = a_type({ ["y"] = node.y, ["x"] = node.x, ["typename"] = "none", })
+            node.type = a_type({ y = node.y, x = node.x, typename = "none" })
             add_var(node, label_id, node.type)
          end,
       },
       ["goto"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             if not find_var("::" .. node.label .. "::") then
                local unresolved = find_var("@unresolved")
                if not unresolved then
-                  unresolved = { ["typename"] = "unresolved", ["labels"] = {}, ["nominals"] = {}, }
+                  unresolved = { typename = "unresolved", labels = {}, nominals = {} }
                   add_var(node, "@unresolved", unresolved)
                end
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
@@ -5435,19 +5457,19 @@ function tl.type_check(ast, opts)
          end,
       },
       ["repeat"] = {
-         ["before"] = function()
+         before = function()
 
             widen_all_unions()
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = NONE
          end,
       },
       ["forin"] = {
-         ["before"] = function()
+         before = function()
             begin_scope()
          end,
-         ["before_statements"] = function(node)
+         before_statements = function(node)
             local exp1 = node.exps[1]
             local exp1type = resolve_tuple(exp1.type)
             if exp1type.typename == "function" then
@@ -5476,23 +5498,23 @@ function tl.type_check(ast, opts)
                end
             end
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_scope()
             node.type = NONE
          end,
       },
       ["fornum"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_scope()
             add_var(nil, node.var.tk, NUMBER)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_scope()
             node.type = NONE
          end,
       },
       ["return"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             local rets = assert(find_var("@return"))
             local nrets = #rets
             local vatype
@@ -5528,7 +5550,7 @@ function tl.type_check(ast, opts)
          end,
       },
       ["variables"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = children
 
 
@@ -5544,16 +5566,16 @@ function tl.type_check(ast, opts)
          end,
       },
       ["table_literal"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = a_type({
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["typename"] = "emptytable",
+               y = node.y,
+               x = node.x,
+               typename = "emptytable",
             })
             local is_record = false
             local is_array = false
             local is_map = false
-            for _, child in ipairs(children) do
+            for i, child in ipairs(children) do
                assert(child.typename == "table_item")
                if child.kname then
                   is_record = true
@@ -5565,7 +5587,14 @@ function tl.type_check(ast, opts)
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
-                  node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                  if i == #children and node[i].key_parsed == "implicit" and child.vtype.typename == "tuple" then
+
+                     for _, c in ipairs(child.vtype) do
+                        node.type.elements = expand_type(node, node.type.elements, c)
+                     end
+                  else
+                     node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                  end
                else
                   is_map = true
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)
@@ -5597,7 +5626,7 @@ function tl.type_check(ast, opts)
          end,
       },
       ["table_item"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             local kname = node.key.conststr
             local ktype = children[1]
             local vtype = children[2]
@@ -5606,50 +5635,50 @@ function tl.type_check(ast, opts)
                assert_is_a(node.value, children[2], node.decltype, "table item")
             end
             node.type = a_type({
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["typename"] = "table_item",
-               ["kname"] = kname,
-               ["ktype"] = ktype,
-               ["vtype"] = vtype,
+               y = node.y,
+               x = node.x,
+               typename = "table_item",
+               kname = kname,
+               ktype = ktype,
+               vtype = vtype,
             })
          end,
       },
       ["local_function"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_function_scope(node, true)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_function_scope()
             local rets = get_rets(children[3])
 
             add_var(nil, node.name.tk, a_type({
-               ["typename"] = "function",
-               ["args"] = children[2],
-               ["rets"] = rets,
+               typename = "function",
+               args = children[2],
+               rets = rets,
             }))
             node.type = NONE
          end,
       },
       ["global_function"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_function_scope(node, true)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_function_scope()
             add_global(nil, node.name.tk, a_type({
-               ["typename"] = "function",
-               ["args"] = children[2],
-               ["rets"] = get_rets(children[3]),
+               typename = "function",
+               args = children[2],
+               rets = get_rets(children[3]),
             }))
             node.type = NONE
          end,
       },
       ["record_function"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_function_scope(node)
          end,
-         ["before_statements"] = function(node, children)
+         before_statements = function(node, children)
             if node.is_method then
                local rtype = get_self_type(children[1])
                children[3][1] = rtype
@@ -5662,12 +5691,12 @@ function tl.type_check(ast, opts)
             end
             if is_record_type(rtype) then
                local fn_type = a_type({
-                  ["y"] = node.y,
-                  ["x"] = node.x,
-                  ["typename"] = "function",
-                  ["is_method"] = node.is_method,
-                  ["args"] = children[3],
-                  ["rets"] = get_rets(children[4]),
+                  y = node.y,
+                  x = node.x,
+                  typename = "function",
+                  is_method = node.is_method,
+                  args = children[3],
+                  rets = get_rets(children[4]),
                })
 
                local ok = false
@@ -5694,51 +5723,51 @@ function tl.type_check(ast, opts)
                end
             end
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_function_scope()
 
             node.type = NONE
          end,
       },
       ["function"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_function_scope(node)
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_function_scope()
 
 
             node.type = a_type({
-               ["y"] = node.y,
-               ["x"] = node.x,
-               ["typename"] = "function",
-               ["args"] = children[1],
-               ["rets"] = children[2],
+               y = node.y,
+               x = node.x,
+               typename = "function",
+               args = children[1],
+               rets = children[2],
             })
          end,
       },
       ["cast"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = node.casttype
          end,
       },
       ["paren"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = resolve_unary(children[1])
          end,
       },
       ["op"] = {
-         ["before"] = function(node)
+         before = function(node)
             begin_scope()
          end,
-         ["before_e2"] = function(node)
+         before_e2 = function(node)
             if node.op.op == "and" then
                apply_facts(node, node.e1.facts)
             elseif node.op.op == "or" then
                apply_facts(node, facts_not(node.e1.facts))
             end
          end,
-         ["after"] = function(node, children)
+         after = function(node, children)
             end_scope()
 
             local a = children[1]
@@ -5754,7 +5783,7 @@ function tl.type_check(ast, opts)
                      local b2 = resolve_unary(b[2])
                      local knode = node.e2[2]
                      if is_record_type(b1) and knode.conststr then
-                        node.type = match_record_key(node, b1, { ["y"] = knode.y, ["x"] = knode.x, ["kind"] = "string", ["tk"] = assert(knode.conststr), }, b1)
+                        node.type = match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
                      else
                         node.type = type_check_index(node, knode, b1, b2)
                      end
@@ -5785,7 +5814,7 @@ function tl.type_check(ast, opts)
                   local ftype = table.remove(b, 1)
                   local rets = type_check_function_call(node, ftype, b, false, 1)
                   if rets.typename ~= "tuple" then
-                     rets = a_type({ ["typename"] = "tuple", [1] = rets, })
+                     rets = a_type({ typename = "tuple", rets })
                   end
                   table.insert(rets, 1, BOOLEAN)
                   node.type = rets
@@ -5813,7 +5842,7 @@ function tl.type_check(ast, opts)
                node.type = b
             elseif node.op.op == "is" then
                if node.e1.kind == "variable" then
-                  node.facts = { [1] = { ["fact"] = "is", ["var"] = node.e1.tk, ["typ"] = b, }, }
+                  node.facts = { { fact = "is", var = node.e1.tk, typ = b } }
                else
                   node_error(node, "can only use 'is' on variables")
                end
@@ -5827,7 +5856,7 @@ function tl.type_check(ast, opts)
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)
                   end
                else
-                  node.type = match_record_key(node, a, { ["y"] = node.e2.y, ["x"] = node.e2.x, ["kind"] = "string", ["tk"] = node.e2.tk, }, orig_a)
+                  node.type = match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = node.e2.tk }, orig_a)
                   if node.type.needs_compat53 and not opts.skip_compat53 then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
@@ -5906,10 +5935,10 @@ function tl.type_check(ast, opts)
          end,
       },
       ["variable"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
-               node.type = a_type({ ["typename"] = "unknown", })
+               node.type = a_type({ typename = "unknown" })
                if lax then
                   add_unknown(node, node.tk)
                else
@@ -5919,12 +5948,12 @@ function tl.type_check(ast, opts)
          end,
       },
       ["identifier"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = NONE
          end,
       },
       ["newtype"] = {
-         ["after"] = function(node, children)
+         after = function(node, children)
             node.type = node.newtype
          end,
       },
@@ -5938,12 +5967,12 @@ function tl.type_check(ast, opts)
    visit_node.cbs["argument"] = visit_node.cbs["variable"]
 
    visit_node.cbs["string"] = {
-      ["after"] = function(node, children)
+      after = function(node, children)
          node.type = a_type({
-            ["y"] = node.y,
-            ["x"] = node.x,
-            ["typename"] = node.kind,
-            ["tk"] = node.tk,
+            y = node.y,
+            x = node.x,
+            typename = node.kind,
+            tk = node.tk,
          })
          return node.type
       end,
@@ -5954,7 +5983,7 @@ function tl.type_check(ast, opts)
    visit_node.cbs["..."] = visit_node.cbs["variable"]
 
    visit_node.after = {
-      ["after"] = function(node, children)
+      after = function(node, children)
          assert(type(node.type) == "table", node.kind .. " did not produce a type")
          assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
          return node.type
@@ -5962,23 +5991,23 @@ function tl.type_check(ast, opts)
    }
 
    local visit_type = {
-      ["cbs"] = {
+      cbs = {
          ["string"] = {
-            ["after"] = function(typ, children)
+            after = function(typ, children)
                return typ
             end,
          },
          ["function"] = {
-            ["before"] = function(typ, children)
+            before = function(typ, children)
                begin_scope()
             end,
-            ["after"] = function(typ, children)
+            after = function(typ, children)
                end_scope()
                return typ
             end,
          },
          ["record"] = {
-            ["before"] = function(typ, children)
+            before = function(typ, children)
                begin_scope()
                for name, typ in pairs(typ.fields) do
                   if typ.typename == "typetype" then
@@ -5987,7 +6016,7 @@ function tl.type_check(ast, opts)
                   end
                end
             end,
-            ["after"] = function(typ, children)
+            after = function(typ, children)
                end_scope()
                for name, typ in pairs(typ.fields) do
                   if typ.typename == "nestedtype" then
@@ -5998,18 +6027,18 @@ function tl.type_check(ast, opts)
             end,
          },
          ["typearg"] = {
-            ["after"] = function(typ, children)
+            after = function(typ, children)
                add_var(nil, typ.typearg, a_type({
-                  ["y"] = typ.y,
-                  ["x"] = typ.x,
-                  ["typename"] = "typearg",
-                  ["typearg"] = typ.typearg,
+                  y = typ.y,
+                  x = typ.x,
+                  typename = "typearg",
+                  typearg = typ.typearg,
                }))
                return typ
             end,
          },
          ["nominal"] = {
-            ["after"] = function(typ, children)
+            after = function(typ, children)
                local t = find_type(typ.names, true)
                if t then
                   if t.typename == "typearg" then
@@ -6026,7 +6055,7 @@ function tl.type_check(ast, opts)
                   local name = typ.names[1]
                   local unresolved = find_var("@unresolved")
                   if not unresolved then
-                     unresolved = { ["typename"] = "unresolved", ["labels"] = {}, ["nominals"] = {}, }
+                     unresolved = { typename = "unresolved", labels = {}, nominals = {} }
                      add_var(nil, "@unresolved", unresolved)
                   end
                   unresolved.nominals[name] = unresolved.nominals[name] or {}
@@ -6036,7 +6065,7 @@ function tl.type_check(ast, opts)
             end,
          },
          ["union"] = {
-            ["after"] = function(typ, children)
+            after = function(typ, children)
 
 
                local n_table_types = 0
@@ -6061,8 +6090,8 @@ function tl.type_check(ast, opts)
             end,
          },
       },
-      ["after"] = {
-         ["after"] = function(typ, children, ret)
+      after = {
+         after = function(typ, children, ret)
             assert(type(ret) == "table", typ.typename .. " did not produce a type")
             assert(type(ret.typename) == "string", "type node does not have a typename")
             return ret
@@ -6145,9 +6174,9 @@ function tl.process(filename, env, result, preload_modules)
 
    env = env or tl.init_env(is_lua)
    result = result or {
-      ["syntax_errors"] = {},
-      ["type_errors"] = {},
-      ["unknowns"] = {},
+      syntax_errors = {},
+      type_errors = {},
+      unknowns = {},
    }
    preload_modules = preload_modules or {}
 
@@ -6155,10 +6184,10 @@ function tl.process(filename, env, result, preload_modules)
    if errs then
       for i, err in ipairs(errs) do
          table.insert(result.syntax_errors, {
-            ["y"] = err.y,
-            ["x"] = err.x,
-            ["msg"] = "invalid token '" .. err.tk .. "'",
-            ["filename"] = filename,
+            y = err.y,
+            x = err.x,
+            msg = "invalid token '" .. err.tk .. "'",
+            filename = filename,
          })
       end
    end
@@ -6179,11 +6208,11 @@ function tl.process(filename, env, result, preload_modules)
 
    local error, unknown
    local opts = {
-      ["lax"] = is_lua,
-      ["filename"] = filename,
-      ["env"] = env,
-      ["result"] = result,
-      ["skip_compat53"] = env.skip_compat53,
+      lax = is_lua,
+      filename = filename,
+      env = env,
+      result = result,
+      skip_compat53 = env.skip_compat53,
    }
    error, unknown, result.type = tl.type_check(program, opts)
 

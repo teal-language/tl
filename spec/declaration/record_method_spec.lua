@@ -135,8 +135,8 @@ describe("record method", function()
       local output = tl.pretty_print_ast(result.ast)
       util.assert_line_by_line([[
          local r = {
-            ["x"] = 2,
-            ["b"] = true,
+            x = 2,
+            b = true,
          }
          function r:f(a, b)
             return self.invalid
@@ -299,7 +299,7 @@ describe("record method", function()
 
 
          local PointMetatable = {
-            ["__index"] = Point,
+            __index = Point,
          }
 
          function Point.new(x, y)

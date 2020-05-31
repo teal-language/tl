@@ -205,7 +205,7 @@ describe("records", function()
          ]],
       })
       local result, err = tl.process("use.tl")
-      assert.same("invalid key 'status_coda' in record 'r'", result.type_errors[1].msg)
+      assert.same("invalid key 'status_coda' in record 'r' of type Response", result.type_errors[1].msg)
    end)
 
    it("can export types as nested records", function()

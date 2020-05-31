@@ -11,6 +11,16 @@ describe("assignment to array", function()
       { y = 3, msg = "got {string | number}, expected {string}" },
    }))
 
+   it("check expansion of expression inside array", util.check_type_error([[
+      local function f(): string, number
+         return "hello", 123
+      end
+      local a: {string}
+      a = { f() }
+   ]], {
+      { y = 5, msg = "got {string | number}, expected {string}" },
+   }))
+
    it("accept expression", function()
       local tokens = tl.lex([[
          local self = {

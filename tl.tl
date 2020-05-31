@@ -844,6 +844,12 @@ local Fact = record
    typ: Type
 end
 
+local KeyParsed = enum
+   "short"
+   "long"
+   "implicit"
+end
+
 local Node = record
    {Node}
    y: number
@@ -857,6 +863,7 @@ local Node = record
 
    key: Node
    value: Node
+   key_parsed: KeyParsed
 
    typeargs: Type
    args: Node
@@ -998,6 +1005,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    end
 
    if ps.tokens[i].tk == "[" then
+      node.key_parsed = "long"
       i = i + 1
       i, node.key = parse_expression(ps, i)
       i = verify_tk(ps, i, "]")
@@ -1005,6 +1013,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
       i, node.value = parse_table_value(ps, i)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" and ps.tokens[i+1].tk == "=" then
+      node.key_parsed = "short"
       i, node.key = verify_kind(ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
       node.key.tk = '"' .. node.key.tk .. '"'
@@ -1012,6 +1021,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
       i, node.value = parse_table_value(ps, i)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" and ps.tokens[i+1].tk == ":" then
+      node.key_parsed = "short"
       local orig_i = i
       local try_ps: ParseState = {
          filename = ps.filename,
@@ -1039,6 +1049,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    end
 
    node.key = new_node(ps.tokens, i, "number")
+   node.key_parsed = "implicit"
    node.key.constnum = n
    node.key.tk = tostring(n)
    i, node.value = parse_expression(ps, i)
@@ -2602,9 +2613,12 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
                return out
             end
             table.insert(out, "{")
+            local n = #children
             for i, child in ipairs(children) do
                add_child(out, child, " ", child.y ~= node.y and indent)
-               table.insert(out, ",")
+               if i < n or node.yend ~= node.y then
+                  table.insert(out, ",")
+               end
             end
             indent = indent - 1
             add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
@@ -2614,9 +2628,17 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       ["table_item"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "[")
-            add_child(out, children[1])
-            table.insert(out, "] = ")
+            if node.key_parsed ~= "implicit" then
+               if node.key_parsed == "short" then
+                  children[1][1] = children[1][1]:sub(2, -2)
+                  add_child(out, children[1])
+                  table.insert(out, " = ")
+               else
+                  table.insert(out, "[")
+                  add_child(out, children[1])
+                  table.insert(out, "] = ")
+               end
+            end
             add_child(out, children[2])
             return out
          end,
@@ -4599,7 +4621,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
       local description: string
       if node.e1.kind == "variable" then
-         description = type_description .. " '" .. node.e1.tk .. "'"
+         description = type_description .. " '" .. node.e1.tk .. "' of type " .. show_type(resolve_tuple(orig_tbl))
       else
          description = "type " .. show_type(resolve_tuple(orig_tbl))
       end
@@ -5553,7 +5575,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             local is_record = false
             local is_array = false
             local is_map = false
-            for _, child in ipairs(children) do
+            for i, child in ipairs(children) do
                assert(child.typename == "table_item")
                if child.kname then
                   is_record = true
@@ -5565,7 +5587,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
-                  node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                  if i == #children and node[i].key_parsed == "implicit" and child.vtype.typename == "tuple" then
+                     -- need to expand last item in an array (e.g { 1, 2, 3, f() })
+                     for _, c in ipairs(child.vtype) do
+                        node.type.elements = expand_type(node, node.type.elements, c)
+                     end
+                  else
+                     node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                  end
                else
                   is_map = true
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)
