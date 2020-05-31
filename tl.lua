@@ -3285,7 +3285,7 @@ local function require_module(module_name, lax, env, result)
    local modules = env.modules
 
    if modules[module_name] then
-      return modules[module_name]
+      return modules[module_name], true
    end
    modules[module_name] = UNKNOWN
 
@@ -3301,10 +3301,10 @@ local function require_module(module_name, lax, env, result)
 
       modules[module_name] = _result.type
 
-      return _result.type
+      return _result.type, true
    end
 
-   return UNKNOWN
+   return UNKNOWN, found ~= nil
 end
 
 local standard_library = {
@@ -4608,7 +4608,13 @@ function tl.type_check(ast, opts)
             end
          end
       else
-         node_error(node, "cannot index something that is not a record: %s", tbl)
+         if is_unknown(tbl) then
+            if not lax then
+               node_error(node, "cannot index a value of unknown type")
+            end
+         else
+            node_error(node, "cannot index something that is not a record: %s", tbl)
+         end
          return INVALID
       end
 
@@ -5797,15 +5803,15 @@ function tl.type_check(ast, opts)
                   if #b == 1 then
                      if node.e2[1].kind == "string" then
                         local module_name = assert(node.e2[1].conststr)
-                        node.type = require_module(module_name, lax, opts.env, result)
-                        if node.type == UNKNOWN then
+                        local t, found = require_module(module_name, lax, opts.env, result)
+                        if not found then
                            node_error(node, "module not found: '" .. module_name .. "'")
-                        elseif not node.type then
-                           node.type = BOOLEAN
+                        elseif not lax and is_unknown(t) then
+                           node_error(node, "no type information for required module: '" .. module_name .. "'")
                         end
-                        opts.env.modules[module_name] = node.type
+                        node.type = t
                      else
-                        node.type = UNKNOWN
+                        node_error(node, "don't know how to resolve a dynamic require")
                      end
                   else
                      node_error(node, "require expects one literal argument")

@@ -8,6 +8,34 @@ describe("require", function()
       { y = 1, msg = "module not found: 'modulenotfound'" }
    }))
 
+   it("for .tl files, complain if required module has no type information", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["box.lua"] = [[
+            local box = {}
+
+            function box.foo(n)
+               return "hello number " .. tostring(n)
+            end
+
+            return box
+         ]],
+         ["foo.tl"] = [[
+            local Box = require "box"
+
+            Box.foo(123)
+         ]],
+      })
+      local result, err = tl.process("foo.tl")
+
+      assert.same(0, #result.syntax_errors)
+      assert.same({
+         { filename = "foo.tl", y = 1, x = 25, msg = "no type information for required module: 'box'" },
+         { filename = "foo.tl", y = 3, x = 13, msg = "cannot index a value of unknown type" },
+      }, result.type_errors)
+      assert.same(0, #result.unknowns)
+   end)
+
    it("exports functions", function ()
       -- ok
       util.mock_io(finally, {
