@@ -1,3 +1,20 @@
+# 0.5.2
+
+2020-05-31
+
+More bugfixes!
+
+### Fixes
+
+* An important fix for the code generation of table literals:
+  it was causing incorrect Lua output for arrays with expanded
+  contents, such as `{...}`
+* Resolution of pcall now recurses: the compiler can now handle a
+  pcalled `require` correctly
+* Better error messages for errors using `require`: do not
+  report "module not found" when a module _was found_ but does
+  not report type information.
+
 # 0.5.1
 
 2020-05-29
