@@ -4250,6 +4250,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
+         local t1u = resolve_unary(t1)
+         local t2u = resolve_unary(t2)
+         if is_record_type(t1u) and is_record_type(t2u) and t1u.parent_record and resolve_unary(t1u.parent_record) == t2u then
+            return true
+         end
+
          if same_names(t1, t2) then
             if t1.typevals == nil and t2.typevals == nil then
                return true
