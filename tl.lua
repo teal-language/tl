@@ -786,6 +786,8 @@ local Type = {}
 
 
 
+
+
 local Operator = {}
 
 
@@ -952,7 +954,7 @@ end
 
 local function verify_tk(ps, i, tk)
    if ps.tokens[i].tk == tk then
-      return i + 1
+      return i + 1, true
    end
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
@@ -1799,6 +1801,36 @@ local function parse_return(ps, i)
    return i, node
 end
 
+local function parse_record_tag_declaration(ps, i, def)
+   local v
+   i, v = verify_kind(ps, i, "identifier", "variable")
+   if not v then
+      return fail(ps, i, "expected a record type name")
+   end
+   def.parent_record = new_type(ps, i, "nominal")
+   def.parent_record.names = { v.tk }
+
+   local ok
+   i, ok = verify_tk(ps, i, "with")
+   if not ok then
+      return i - 1
+   end
+   i, v = verify_kind(ps, i, "identifier", "variable")
+   if not v then
+      return fail(ps, i, "expected a tag field name")
+   end
+   def.tag_field = v.tk
+   i = verify_tk(ps, i, "=")
+   local lit_i = i
+   i, v = parse_literal(ps, i)
+   if v.kind ~= "string" and v.kind ~= "number" and v.kind ~= "boolean" then
+      fail(ps, lit_i, "invalid literal for tag value")
+      return i
+   end
+   def.tag_value = v
+   return i
+end
+
 parse_newtype = function(ps, i)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
@@ -1810,6 +1842,10 @@ parse_newtype = function(ps, i)
       i = i + 1
       if ps.tokens[i].tk == "<" then
          i, def.typeargs = parse_typearg_list(ps, i)
+      end
+      if ps.tokens[i].tk == "is" then
+         i = i + 1
+         i = parse_record_tag_declaration(ps, i, def)
       end
       while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
          if ps.tokens[i].tk == "{" then
@@ -2124,6 +2160,9 @@ local function recurse_type(ast, visit)
    end
    if ast.def then
       table.insert(xs, recurse_type(ast.def, visit))
+   end
+   if ast.parent_record then
+      table.insert(xs, recurse_type(ast.parent_record, visit))
    end
    if ast.keys then
       table.insert(xs, recurse_type(ast.keys, visit))
@@ -4368,7 +4407,7 @@ function tl.type_check(ast, opts)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
       if lax and (is_unknown(t1) or is_unknown(t2)) then
-         return
+         return true
       end
 
       if t2.typename == "unknown_emptytable_value" then
@@ -4389,6 +4428,8 @@ function tl.type_check(ast, opts)
 
       local match, match_errs = is_a(t1, t2)
       add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and (name .. ": ") or ""), node)
+
+      return match
    end
 
    local function close_types(vars)
@@ -6030,6 +6071,39 @@ function tl.type_check(ast, opts)
       end,
    }
 
+   local function check_parent_record(typ)
+      if not typ.parent_record then
+         return
+      end
+      local pr = resolve_unary(typ.parent_record)
+      if not is_record_type(pr) then
+         type_error(typ.parent_record, "unknown type %s", typ.parent_record)
+      elseif not pr.tag_field then
+         type_error(typ, "parent record %s does not have a tag field", typ.parent_record)
+      elseif pr.tag_field ~= typ.tag_field then
+         type_error(typ, "invalid tag '" .. typ.tag_field .. "', expected '" .. pr.tag_field .. "'")
+      else
+         if not typ.tag_value.type then
+            if typ.tag_value.kind == "string" then
+               typ.tag_value.type = STRING
+            elseif typ.tag_value.kind == "number" then
+               typ.tag_value.type = NUMBER
+            elseif typ.tag_value.kind == "boolean" then
+               typ.tag_value.type = BOOLEAN
+            end
+         end
+         assert_is_a(typ, typ.tag_value.type, pr.fields[typ.tag_field], "tag value")
+         for _, f in ipairs(pr.field_order) do
+            if typ.fields[f] then
+               type_error(typ, "redefining existing field '" .. f .. "' from parent record")
+            else
+               typ.fields[f] = pr.fields[f]
+               table.insert(typ.field_order, f)
+            end
+         end
+      end
+   end
+
    local visit_type = {
       cbs = {
          ["string"] = {
@@ -6057,6 +6131,7 @@ function tl.type_check(ast, opts)
                end
             end,
             after = function(typ, children)
+               check_parent_record(typ)
                end_scope()
                for name, typ in pairs(typ.fields) do
                   if typ.typename == "nestedtype" then
