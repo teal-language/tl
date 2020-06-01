@@ -908,6 +908,7 @@ local Node = record
    e2: Node
    constnum: number
    conststr: string
+   constbool: boolean
 
    -- goto
    label: string
@@ -1354,9 +1355,15 @@ local function parse_literal(ps: ParseState, i: number): number, Node
       node.constnum = n
       return i, node
    elseif ps.tokens[i].tk == "true" then
-      return verify_kind(ps, i, "keyword", "boolean")
+      local node: Node
+      i, node = verify_kind(ps, i, "keyword", "boolean")
+      node.constbool = true
+      return i, node
    elseif ps.tokens[i].tk == "false" then
-      return verify_kind(ps, i, "keyword", "boolean")
+      local node: Node
+      i, node = verify_kind(ps, i, "keyword", "boolean")
+      node.constbool = false
+      return i, node
    elseif ps.tokens[i].tk == "nil" then
       return verify_kind(ps, i, "keyword", "nil")
    elseif ps.tokens[i].tk == "function" then
@@ -2793,11 +2800,23 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             elseif node.op.op == "as" then
                add_child(out, children[1], "", indent)
             elseif node.op.op == "is" then
-               table.insert(out, "type(")
-               add_child(out, children[1], "", indent)
-               table.insert(out, ") == \"")
-               add_child(out, children[3], "", indent)
-               table.insert(out, "\"")
+               if node.e1.type.tag_field then
+                  add_child(out, children[1], "", indent)
+                  table.insert(out, ".")
+                  table.insert(out, node.e1.type.tag_field)
+                  table.insert(out, " == ")
+                  local e2: Node = node.e2.casttype.resolved.tag_value
+                  local v: string = (e2.kind == "string" and string.format("%q", e2.conststr))
+                                    or (e2.kind == "number" and tostring(e2.constnum))
+                                    or (e2.kind == "boolean" and tostring(e2.constbool))
+                  table.insert(out, v)
+               else
+                  table.insert(out, "type(")
+                  add_child(out, children[1], "", indent)
+                  table.insert(out, ") == \"")
+                  add_child(out, children[3], "", indent)
+                  table.insert(out, "\"")
+               end
             elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
                local space = spaced_op[node.op.arity][node.op.op] and " " or ""
                if children[2] and node.op.prec > tonumber(children[2]) then
@@ -6191,12 +6210,25 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                -- due to codegen limitations (we only check with type() so far)
                local n_table_types = 0
                local n_string_enum = 0
+               local all_tagged = true
+               local parent: Type
                for _, t in ipairs(typ.types) do
                   t = resolve_unary(t)
+                  if t.tag_value then
+                     local pr = resolve_unary(t.parent_record)
+                     if parent and not same_type(pr, parent) then
+                        type_error(typ, "cannot discriminate a union between records with different parents")
+                        break
+                     end
+                     parent = pr
+                     typ.tag_field = parent.tag_field
+                  else
+                     all_tagged = false
+                  end
                   if table_types[t.typename] then
                      n_table_types = n_table_types + 1
-                     if n_table_types > 1 then
-                        type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
+                     if n_table_types > 1 and not all_tagged then
+                        type_error(typ, "cannot discriminate a union between untagged table types: %s", typ)
                         break
                      end
                   elseif t.typename == "string" or t.typename == "enum" then
