@@ -263,6 +263,46 @@ describe("tagged records", function()
       end
    ]])
 
+   it("can have enums as tags", util.check [[
+      local NodeKind = enum
+         "t1"
+         "t2"
+      end
+
+      local Node = record
+         tag kind: NodeKind
+      end
+
+      local T1Node = record is Node with kind = "t1"
+         t1data: {string}
+      end
+
+      local T2Node = record is Node with kind = "t2"
+         t2data: {string}
+      end
+   ]])
+
+   it("enums as tags must be valid", util.check_type_error([[
+      local NodeKind = enum
+         "t1"
+         "t2"
+      end
+
+      local Node = record
+         tag kind: NodeKind
+      end
+
+      local T1Node = record is Node with kind = "t1"
+         t1data: {string}
+      end
+
+      local T2Node = record is Node with kind = "t3" -- invalid!
+         t2data: {string}
+      end
+   ]], {
+      { msg = "string \"t3\" is not a member of NodeKind" }
+   }))
+
    it("subtypes must have tag declarations", util.check_syntax_error([[
       local Node = record
          tag kind: string

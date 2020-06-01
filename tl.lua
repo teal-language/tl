@@ -6091,7 +6091,7 @@ function tl.type_check(ast, opts)
       else
          if not typ.tag_value.type then
             if typ.tag_value.kind == "string" then
-               typ.tag_value.type = STRING
+               typ.tag_value.type = a_type({ typename = "string", tk = typ.tag_value.tk })
             elseif typ.tag_value.kind == "number" then
                typ.tag_value.type = NUMBER
             elseif typ.tag_value.kind == "boolean" then
