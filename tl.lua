@@ -3312,16 +3312,23 @@ local standard_library = {
    ["@return"] = a_type({ typename = "tuple", ANY }),
    ["any"] = a_type({ typename = "typetype", def = ANY }),
    ["arg"] = ARRAY_OF_STRING,
-   ["require"] = a_type({ typename = "function", args = { STRING }, rets = {} }),
-   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } }),
-   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { METATABLE } }),
-   ["rawget"] = a_type({ typename = "function", args = { TABLE, ANY }, rets = { ANY } }),
-   ["rawset"] = a_type({
+   ["assert"] = a_type({
       typename = "poly",
       types = {
-         a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} }),
-         a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
-         a_type({ typename = "function", args = { TABLE, ANY, ANY }, rets = {} }),
+         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } }),
+         a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } }),
+      },
+   }),
+   ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
+   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { METATABLE } }),
+   ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
+         a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
+      }, }),
+   ["load"] = a_type({
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", args = { STRING }, rets = { FUNCTION } }),
+         a_type({ typename = "function", args = { STRING, STRING }, rets = { FUNCTION } }),
       },
    }),
    ["next"] = a_type({
@@ -3333,18 +3340,40 @@ local standard_library = {
          a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } }),
       },
    }),
-   ["load"] = a_type({
+   ["pairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
+         a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
+      }, }),
+   ["pcall"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } }),
+   ["print"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = {} }),
+   ["rawget"] = a_type({ typename = "function", args = { TABLE, ANY }, rets = { ANY } }),
+   ["rawset"] = a_type({
       typename = "poly",
       types = {
-         a_type({ typename = "function", args = { STRING }, rets = { FUNCTION } }),
-         a_type({ typename = "function", args = { STRING, STRING }, rets = { FUNCTION } }),
+         a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = {} }),
+         a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
+         a_type({ typename = "function", args = { TABLE, ANY, ANY }, rets = {} }),
       },
    }),
+   ["require"] = a_type({ typename = "function", args = { STRING }, rets = {} }),
+   ["select"] = a_type({
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } }),
+         a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } }),
+      },
+   }),
+   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } }),
+   ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
+   ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+   ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+
    ["FILE"] = a_type({
       typename = "typetype",
       def = a_type({
          typename = "record",
          fields = {
+            ["close"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
+            ["flush"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = {} }),
             ["read"] = a_type({
                typename = "poly",
                types = {
@@ -3353,8 +3382,6 @@ local standard_library = {
                },
             }),
             ["write"] = a_type({ typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } }),
-            ["close"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
-            ["flush"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = {} }),
 
          },
       }),
@@ -3364,25 +3391,41 @@ local standard_library = {
       def = a_type({
          typename = "record",
          fields = {
-            ["__index"] = ANY,
-            ["__newindex"] = ANY,
-            ["__tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
-            ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
             ["__call"] = FUNCTION,
             ["__gc"] = a_type({ typename = "function", args = { ANY }, rets = {} }),
+            ["__index"] = ANY,
             ["__len"] = a_type({ typename = "function", args = { ANY }, rets = { NUMBER } }),
+            ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
+            ["__newindex"] = ANY,
             ["__pairs"] = a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
                   a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
                }, }),
+            ["__tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
 
          },
       }),
    }),
+   ["debug"] = a_type({
+      typename = "record",
+      fields = {
+         ["traceback"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
+         ["getinfo"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { ANY }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_type({ typename = "function", args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_type({ typename = "function", args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
+            },
+         }),
+      },
+   }),
    ["io"] = a_type({
       typename = "record",
       fields = {
-         ["stderr"] = NOMINAL_FILE,
-         ["stdout"] = NOMINAL_FILE,
+         ["flush"] = a_type({ typename = "function", args = {}, rets = {} }),
+         ["lines"] = a_type({ typename = "function", args = { OPT_STRING, VARARG_STRING }, rets = {
+               a_type({ typename = "function", args = {}, rets = { VARARG_STRING } }),
+            }, }),
          ["open"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
          ["popen"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
          ["read"] = a_type({
@@ -3392,135 +3435,10 @@ local standard_library = {
                a_type({ typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } }),
             },
          }),
-         ["write"] = a_type({ typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } }),
-         ["flush"] = a_type({ typename = "function", args = {}, rets = {} }),
+         ["stderr"] = NOMINAL_FILE,
+         ["stdout"] = NOMINAL_FILE,
          ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
-         ["lines"] = a_type({ typename = "function", args = { OPT_STRING, VARARG_STRING }, rets = {
-               a_type({ typename = "function", args = {}, rets = { VARARG_STRING } }),
-            }, }),
-      },
-   }),
-   ["os"] = a_type({
-      typename = "record",
-      fields = {
-         ["getenv"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
-         ["execute"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } }),
-         ["remove"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } }),
-         ["time"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
-         ["date"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = {}, rets = { STRING } }),
-               a_type({ typename = "function", args = { STRING, OPT_STRING }, rets = { a_type({ typename = "union", types = { STRING, OS_DATE_TABLE } }) } }),
-            },
-         }),
-         ["tmpname"] = a_type({ typename = "function", args = {}, rets = { STRING } }),
-         ["clock"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
-         ["exit"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = { NUMBER, BOOLEAN }, rets = {} }),
-               a_type({ typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} }),
-            },
-         }),
-      },
-   }),
-   ["package"] = a_type({
-      typename = "record",
-      fields = {
-         ["path"] = STRING,
-         ["cpath"] = STRING,
-         ["config"] = STRING,
-         ["loaded"] = a_type({
-            typename = "map",
-            keys = STRING,
-            values = ANY,
-         }),
-         ["searchers"] = a_type({
-            typename = "array",
-            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
-         }),
-         ["loaders"] = a_type({
-            typename = "array",
-            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
-         }),
-      },
-   }),
-   ["table"] = a_type({
-      typename = "record",
-      fields = {
-         ["pack"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { TABLE } }),
-         ["unpack"] = a_type({
-            typename = "function",
-            needs_compat53 = true,
-            typeargs = { ARG_ALPHA },
-            args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
-            rets = { VARARG_ALPHA },
-         }),
-         ["move"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } }),
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } }),
-            },
-         }),
-         ["insert"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} }),
-            },
-         }),
-         ["remove"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } }),
-         ["concat"] = a_type({ typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } }),
-         ["sort"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} }),
-               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type({ typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } }) }, rets = {} }),
-            },
-         }),
-      },
-   }),
-   ["string"] = a_type({
-      typename = "record",
-      fields = {
-         ["sub"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } }),
-         ["match"] = a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } }),
-         ["rep"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
-         ["lower"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
-         ["upper"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
-         ["gsub"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } }),
-               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "map", keys = STRING, values = STRING }), NUMBER }, rets = { STRING, NUMBER } }),
-               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "function", args = { VARARG_STRING }, rets = { STRING } }) }, rets = { STRING, NUMBER } }),
-
-            },
-         }),
-         ["gmatch"] = a_type({ typename = "function", args = { STRING, STRING }, rets = {
-               a_type({ typename = "function", args = {}, rets = { STRING } }),
-            }, }),
-         ["find"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
-               a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
-               a_type({ typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
-
-            },
-         }),
-         ["char"] = a_type({ typename = "function", args = { VARARG_NUMBER }, rets = { STRING } }),
-         ["byte"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = { STRING }, rets = { NUMBER } }),
-               a_type({ typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } }),
-               a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } }),
-            },
-         }),
-         ["format"] = a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } }),
+         ["write"] = a_type({ typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } }),
       },
    }),
    ["math"] = a_type({
@@ -3539,70 +3457,153 @@ local standard_library = {
          ["floor"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["fmod"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
          ["frexp"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER, NUMBER } }),
+         ["huge"] = NUMBER,
          ["ldexp"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
          ["log"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["log10"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["max"] = a_type({ typename = "function", args = { VARARG_NUMBER }, rets = { NUMBER } }),
          ["min"] = a_type({ typename = "function", args = { VARARG_NUMBER }, rets = { NUMBER } }),
          ["modf"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER, NUMBER } }),
+         ["pi"] = NUMBER,
          ["pow"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
          ["rad"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
-         ["randomseed"] = a_type({ typename = "function", args = { NUMBER }, rets = {} }),
          ["random"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+         ["randomseed"] = a_type({ typename = "function", args = { NUMBER }, rets = {} }),
          ["sin"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["sinh"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["sqrt"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["tan"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
          ["tanh"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
-         ["huge"] = NUMBER,
-         ["pi"] = NUMBER,
       },
    }),
-   ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+   ["os"] = a_type({
+      typename = "record",
+      fields = {
+         ["clock"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
+         ["date"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = {}, rets = { STRING } }),
+               a_type({ typename = "function", args = { STRING, OPT_STRING }, rets = { a_type({ typename = "union", types = { STRING, OS_DATE_TABLE } }) } }),
+            },
+         }),
+         ["execute"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } }),
+         ["exit"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { NUMBER, BOOLEAN }, rets = {} }),
+               a_type({ typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} }),
+            },
+         }),
+         ["getenv"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
+         ["remove"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } }),
+         ["time"] = a_type({ typename = "function", args = {}, rets = { NUMBER } }),
+         ["tmpname"] = a_type({ typename = "function", args = {}, rets = { STRING } }),
+      },
+   }),
+   ["package"] = a_type({
+      typename = "record",
+      fields = {
+         ["config"] = STRING,
+         ["cpath"] = STRING,
+         ["loaded"] = a_type({
+            typename = "map",
+            keys = STRING,
+            values = ANY,
+         }),
+         ["loaders"] = a_type({
+            typename = "array",
+            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
+         }),
+         ["path"] = STRING,
+         ["searchers"] = a_type({
+            typename = "array",
+            elements = a_type({ typename = "function", args = { STRING }, rets = { ANY } }),
+         }),
+      },
+   }),
+   ["string"] = a_type({
+      typename = "record",
+      fields = {
+         ["byte"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING }, rets = { NUMBER } }),
+               a_type({ typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } }),
+               a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } }),
+            },
+         }),
+         ["char"] = a_type({ typename = "function", args = { VARARG_NUMBER }, rets = { STRING } }),
+         ["find"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
+               a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
+               a_type({ typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } }),
+
+            },
+         }),
+         ["format"] = a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } }),
+         ["gmatch"] = a_type({ typename = "function", args = { STRING, STRING }, rets = {
+               a_type({ typename = "function", args = {}, rets = { STRING } }),
+            }, }),
+         ["gsub"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } }),
+               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "map", keys = STRING, values = STRING }), NUMBER }, rets = { STRING, NUMBER } }),
+               a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "function", args = { VARARG_STRING }, rets = { STRING } }) }, rets = { STRING, NUMBER } }),
+
+            },
+         }),
+         ["lower"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
+         ["match"] = a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } }),
+         ["rep"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
+         ["sub"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } }),
+         ["upper"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
+      },
+   }),
+   ["table"] = a_type({
+      typename = "record",
+      fields = {
+         ["concat"] = a_type({ typename = "function", args = { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = { STRING } }),
+         ["insert"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = {} }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, ALPHA }, rets = {} }),
+            },
+         }),
+         ["move"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = { ARRAY_OF_ALPHA } }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } }),
+            },
+         }),
+         ["pack"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { TABLE } }),
+         ["remove"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } }),
+         ["sort"] = a_type({
+            typename = "poly",
+            types = {
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} }),
+               a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type({ typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } }) }, rets = {} }),
+            },
+         }),
+         ["unpack"] = a_type({
+            typename = "function",
+            needs_compat53 = true,
+            typeargs = { ARG_ALPHA },
+            args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
+            rets = { VARARG_ALPHA },
+         }),
+      },
+   }),
    ["utf8"] = a_type({
       typename = "record",
       fields = {
          ["len"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
          ["offset"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
-      },
-   }),
-   ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
-         a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
-      }, }),
-   ["pairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
-         a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
-      }, }),
-   ["pcall"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } }),
-   ["assert"] = a_type({
-      typename = "poly",
-      types = {
-         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } }),
-         a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } }),
-      },
-   }),
-   ["select"] = a_type({
-      typename = "poly",
-      types = {
-         a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } }),
-         a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } }),
-      },
-   }),
-   ["print"] = a_type({ typename = "function", args = { VARARG_ANY }, rets = {} }),
-   ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
-   ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
-   ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
-   ["debug"] = a_type({
-      typename = "record",
-      fields = {
-         ["traceback"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
-         ["getinfo"] = a_type({
-            typename = "poly",
-            types = {
-               a_type({ typename = "function", args = { ANY }, rets = { DEBUG_GETINFO_TABLE } }),
-               a_type({ typename = "function", args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
-               a_type({ typename = "function", args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
-            },
-         }),
       },
    }),
 }

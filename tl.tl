@@ -3589,7 +3589,7 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
                a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
             }
-         }
+         },
          ["unpack"] = a_type {
             typename = "function",
             needs_compat53 = true,
