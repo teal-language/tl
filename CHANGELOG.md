@@ -1,3 +1,18 @@
+# 0.6.0
+
+2020-06-03
+
+## What's New
+
+### Language changes
+
+* Completed definitions of the `math` table to the standard
+  library
+
+### Fixes
+
+* Resolve arrays of unions, and flatten unions of unions
+
 # 0.5.2
 
 2020-05-31
