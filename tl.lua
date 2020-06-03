@@ -4029,7 +4029,7 @@ function tl.type_check(ast, opts)
       for _, t1 in ipairs(t1s) do
          local found = false
          for _, t2 in ipairs(t2s) do
-            if same_type(t1, t2) then
+            if is_a(t2, t1) then
                found = true
                break
             end
@@ -4108,6 +4108,32 @@ function tl.type_check(ast, opts)
          return match_fields_to_record(t1, t2, same_type)
       end
       return true
+   end
+
+   local function a_union(types)
+      local ts = {}
+      local stack = {}
+      local i = 1
+      while types[i] or stack[1] do
+         local t
+         if stack[1] then
+            t = table.remove(stack)
+         else
+            t = types[i]
+            i = i + 1
+         end
+         if t.typename == "union" then
+            for _, s in ipairs(t.types) do
+               table.insert(stack, s)
+            end
+         else
+            table.insert(ts, t)
+         end
+      end
+      return a_type({
+         typename = "union",
+         types = ts,
+      })
    end
 
    local function is_vararg(t)
@@ -4982,13 +5008,7 @@ function tl.type_check(ast, opts)
             else
                old.tk = nil
                new.tk = nil
-               return a_type({
-                  typename = "union",
-                  types = {
-                     old,
-                     new,
-                  },
-               })
+               return a_union({ old, new })
             end
          end
       end
@@ -5091,10 +5111,7 @@ function tl.type_check(ast, opts)
             if #types == 1 then
                return true, types[1]
             else
-               return true, a_type({
-                  typename = "union",
-                  types = types,
-               })
+               return true, a_union(types)
             end
          else
             return false
@@ -5116,10 +5133,7 @@ function tl.type_check(ast, opts)
             if #types == 1 then
                return true, types[1]
             else
-               return true, a_type({
-                  typename = "union",
-                  types = types,
-               })
+               return true, a_union(types)
             end
          else
             return false
@@ -5149,10 +5163,7 @@ function tl.type_check(ast, opts)
          if #types == 1 then
             return types[1]
          else
-            return a_type({
-               typename = "union",
-               types = types,
-            })
+            return a_union(types)
          end
       end
 

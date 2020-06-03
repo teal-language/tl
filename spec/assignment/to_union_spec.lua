@@ -47,7 +47,7 @@ describe("assignment to union", function()
    }))
 
    pending("resolves union types in map keys", util.check [[
-      function foo(n: number | string, a: {string | boolean}):{number | string:string | boolean}
+      function foo(n: number | string, a: {string | boolean}):{(number | string):(string | boolean)}
          n = 12
          n = "hello"
          a[1] = "hello"
@@ -59,6 +59,20 @@ describe("assignment to union", function()
             ["world"] = true,
          }
       end
+   ]])
+
+   it("resolves arrays of unions", util.check [[
+      local Item = record
+         name: string
+      end
+
+      local e: string | Item = {name="myname"}
+
+      local e1: {string | number} = {12, "name1"}
+
+      local x: {string | Item} = {"name1", e}
+
+      local x: {string | Item} = {"name1", {name="myname"}}
    ]])
 
 end)
