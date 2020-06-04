@@ -684,6 +684,7 @@ local TypeName = enum
    "boolean"
    "string"
    "nil"
+   "thread"
    "number"
    "union"
    "nominal"
@@ -1195,7 +1196,8 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
    if ps.tokens[i].tk == "string"
       or ps.tokens[i].tk == "boolean"
       or ps.tokens[i].tk == "nil"
-      or ps.tokens[i].tk == "number" then
+      or ps.tokens[i].tk == "number"
+      or ps.tokens[i].tk == "thread" then
       local typ = new_type(ps, i, ps.tokens[i].tk as TypeName)
       typ.tk = nil
       return i + 1, typ
@@ -2830,6 +2832,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    visit_type.cbs["typevar"] = visit_type.cbs["string"]
    visit_type.cbs["typearg"] = visit_type.cbs["string"]
    visit_type.cbs["function"] = visit_type.cbs["string"]
+   visit_type.cbs["thread"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
    visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
@@ -2894,6 +2897,7 @@ local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
 local TABLE = a_type { typename = "map", keys = ANY, values = ANY }
 local FUNCTION = a_type { typename = "function", args = { a_type { typename = "any", is_va = true } }, rets = { a_type { typename = "any", is_va = true } } }
+local THREAD = a_type { typename = "thread" }
 local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
@@ -2989,6 +2993,10 @@ local equality_binop = {
       ["map"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
+   ["thread"] = {
+      ["thread"] = BOOLEAN,
+      ["nil"] = BOOLEAN,
+   }
 }
 
 local unop_types: {string:{string:Type}} = {
@@ -3011,6 +3019,7 @@ local unop_types: {string:{string:Type}} = {
       ["array"] = BOOLEAN,
       ["map"] = BOOLEAN,
       ["emptytable"] = BOOLEAN,
+      ["thread"] = BOOLEAN,
    },
 }
 
@@ -3068,6 +3077,9 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
       ["enum"] = {
          ["string"] = STRING,
       },
+      ["thread"] = {
+         ["boolean"] = BOOLEAN,
+      }
    },
    [".."] = {
       ["string"] = {
@@ -3178,7 +3190,8 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       end
       return table.concat(out)
    elseif t.typename == "number"
-       or t.typename == "boolean" then
+       or t.typename == "boolean"
+       or t.typename == "thread" then
       return t.typename
    elseif t.typename == "string" then
       return t.typename ..
@@ -3481,6 +3494,18 @@ local standard_library: {string:Type} = {
             }
          }
       },
+   },
+   ["coroutine"] = a_type {
+      typename = "record",
+      fields = {
+         ["create"] = a_type { typename = "function", args = { FUNCTION }, rets = { THREAD } },
+         ["isyieldable"] = a_type { typename = "function", args = {}, rets = { BOOLEAN } },
+         ["resume"] = a_type { typename = "function", args = { THREAD, VARARG_ANY }, rets = { BOOLEAN, VARARG_ANY } },
+         ["running"] = a_type { typename = "function", args = {}, rets = { THREAD, BOOLEAN } },
+         ["status"] = a_type { typename = "function", args = { THREAD }, rets = { STRING } },
+         ["wrap"] = a_type { typename = "function", args = { FUNCTION }, rets = { THREAD } },
+         ["yield"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { VARARG_ANY } },
+      }
    },
    ["string"] = a_type {
       typename = "record",
@@ -6168,6 +6193,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
    visit_type.cbs["boolean"] = visit_type.cbs["string"]
    visit_type.cbs["nil"] = visit_type.cbs["string"]
    visit_type.cbs["number"] = visit_type.cbs["string"]
+   visit_type.cbs["thread"] = visit_type.cbs["string"]
    visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
    visit_type.cbs["emptytable"] = visit_type.cbs["string"]
    visit_type.cbs["table_item"] = visit_type.cbs["string"]
