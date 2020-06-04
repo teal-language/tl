@@ -3504,7 +3504,7 @@ local standard_library: {string:Type} = {
          ["resume"] = a_type { typename = "function", args = { THREAD, VARARG_ANY }, rets = { BOOLEAN, VARARG_ANY } },
          ["running"] = a_type { typename = "function", args = {}, rets = { THREAD, BOOLEAN } },
          ["status"] = a_type { typename = "function", args = { THREAD }, rets = { STRING } },
-         ["wrap"] = a_type { typename = "function", args = { FUNCTION }, rets = { THREAD } },
+         ["wrap"] = a_type { typename = "function", args = { FUNCTION }, rets = { FUNCTION } },
          ["yield"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { VARARG_ANY } },
       }
    },
