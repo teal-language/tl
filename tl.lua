@@ -3357,6 +3357,7 @@ local standard_library = {
          a_type({ typename = "function", args = { STRING, STRING, TABLE }, rets = { FUNCTION, ANY } }),
       },
    }),
+   ["dofile"] = a_type({ typename = "function", args = { OPT_STRING }, rets = { VARARG_ANY } }),
    ["next"] = a_type({
       typename = "poly",
       types = {
