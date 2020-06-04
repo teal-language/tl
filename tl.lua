@@ -2816,6 +2816,7 @@ function tl.pretty_print_ast(ast, fast)
       ["string"] = "string",
       ["nil"] = "nil",
       ["number"] = "number",
+      ["thread"] = "thread",
    }
 
    local visit_type = {}
