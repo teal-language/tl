@@ -526,7 +526,7 @@ end
 test(1, 2, 3)
 ```
 
-In case your function returns a variable amount of values, you may also declare variadic return types using the following syntax:
+In case your function returns a variable amount of values, you may also declare variadic return types by using the following syntax:
 
 ```lua
 function test(...: number): number...
