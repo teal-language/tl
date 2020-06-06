@@ -519,7 +519,7 @@ in both function declarations.
 Just like in Lua, some functions in Teal may receive a variable amount of arguments. Variadic functions can be declared by specifying `...` as the last argument of the function:
 
 ```lua
-function test(...: any)
+function test(...: number)
 	print(...)
 end
 
@@ -529,7 +529,7 @@ test(1, 2, 3)
 In case your function returns a variable amount of values, you may also declare variadic return types using the following syntax:
 
 ```lua
-function test(...: any): any...
+function test(...: number): number...
 	return ...
 end
 
