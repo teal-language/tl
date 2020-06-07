@@ -34,7 +34,7 @@ Once `tl` is in your path, there are a few subcommands:
 * `tl run script.tl` will run a Teal script.
 * `tl check module.tl` will type check a Teal module, report any errors and
   quit.
-* `tl gen module.tl` will type check a Teal module, and if there's no errors,
+* `tl gen module.tl` will type check a Teal module, and if there's no syntax errors,
   generate a `module.lua` file in plain Lua with all type annotations
   stripped.
 
