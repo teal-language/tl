@@ -59,7 +59,11 @@ local function get_config()
    local status, user_config = pcall(require, "tlconfig")
 
    if not status then
-      return config
+      if user_config:match("^module 'tlconfig' not found:") then
+         return config
+      else
+         die("Error while loading config:\n" .. user_config)
+      end
    end
 
    -- Merge tlconfig with the default config
