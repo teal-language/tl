@@ -3369,7 +3369,8 @@ local standard_library: {string:Type} = {
    ["pairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
       a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
    } },
-   ["pcall"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { BOOLEAN, ANY } },
+   ["pcall"] = a_type { typename = "function", args = { FUNCTION, VARARG_ANY }, rets = { BOOLEAN, ANY } },
+   ["xpcall"] = a_type { typename = "function", args = { FUNCTION, FUNCTION, VARARG_ANY }, rets = { BOOLEAN, ANY } },
    ["print"] = a_type { typename = "function", args = { VARARG_ANY }, rets = {} },
    ["rawequal"] = a_type { typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } },
    ["rawget"] = a_type { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
