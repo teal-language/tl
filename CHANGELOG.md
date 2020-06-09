@@ -1,3 +1,33 @@
+# 0.7.0
+
+2020-06-03
+
+This release had a bunch of community contributions!
+
+## What's New
+
+### Language changes
+
+* Disallow unions of multiple function types, applying a similar
+  restriction that was already in place for table types.
+  These can't be efficiently destructured at runtime with `is`.
+* Lots of additions to the standard library:
+  * more overloads for the `load` function
+  * `loadfile` and `dofile` functions
+  * More math functions: `tointeger`, `type` and `ult`
+  * math variables: `maxinteger` and `mininteger`
+  * improvement the type definition of `pcall`
+  * `xpcall`
+
+### Tooling
+
+* `tl` now reports when there is a syntax error loading `tlconfig.lua`
+
+### Fixes
+
+* A functiontype declaration can now refer to itself.
+* Nominals declared in nested types now resolve correctly.
+
 # 0.6.0
 
 2020-06-03
