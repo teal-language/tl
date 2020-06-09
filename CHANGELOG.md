@@ -8,12 +8,14 @@ This release had a bunch of community contributions!
 
 ### Language changes
 
+* `thread` is a new primitive type for representing coroutines
 * Disallow unions of multiple function types, applying a similar
   restriction that was already in place for table types.
   These can't be efficiently destructured at runtime with `is`.
 * Lots of additions to the standard library:
   * more overloads for the `load` function
   * `loadfile` and `dofile` functions
+  * `coroutine` library
   * More math functions: `tointeger`, `type` and `ult`
   * math variables: `maxinteger` and `mininteger`
   * improvement the type definition of `pcall`
