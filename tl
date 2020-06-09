@@ -1,5 +1,7 @@
 #!/usr/bin/env lua
 
+local version_string = '0.7.0'
+
 local function script_path()
    local str = debug.getinfo(2, "S").source:sub(2)
    return str:match("(.*[/\\])") or "."
@@ -98,6 +100,9 @@ local function get_args_parser()
 
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
 
+   parser:flag("--version", "Print version and exit")
+
+   parser:require_command(false)
    parser:command_target("command")
 
    local check_command = parser:command("check", "Type-check one or more tl script.")
@@ -117,7 +122,19 @@ local args = parser:parse()
 
 local tlconfig = get_config()
 
+
+if args["version"] then
+   print(version_string)
+   os.exit(0)
+end
+
 local cmd = args["command"]
+if not cmd then
+   print(parser:get_usage())
+   print()
+   print("Error: a command is required")
+   os.exit(1)
+end
 
 for _, preload_module_cli in ipairs(args["preload"]) do
    if not find_in_sequence(tlconfig.preload_modules, preload_module_cli) then
