@@ -61,7 +61,7 @@ describe("if", function()
       local x = 12
       if x == 123 then
          print(x)
-      if not x == 123 then
+      elseif not x == 123 then
          print("not " .. x)
       end
    ]], {

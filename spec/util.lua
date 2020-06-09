@@ -118,7 +118,9 @@ end
 local function check_type_error(lax, code, type_errors)
    return function()
       local tokens = tl.lex(code)
-      local _, ast = tl.parse_program(tokens)
+      local syntax_errors = {}
+      local _, ast = tl.parse_program(tokens, syntax_errors)
+      assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
       assert.same(#type_errors, #errors, "Expected same number of errors:")
       for i, err in ipairs(type_errors) do
