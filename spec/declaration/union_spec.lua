@@ -22,4 +22,37 @@ describe("union declaration", function()
       local params3: {string: ((((string | {string}))))}
       params3 = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
+
+   it("cannot declare a union between multiple table types", util.check_type_error([[
+      local t: number | {number} | {string:boolean}
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
+   it("cannot declare a union between multiple records", util.check_type_error([[
+      local R1 = record
+         f: string
+      end
+      local R2 = record
+         g: string
+      end
+      local t: R1 | R2
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
+   it("cannot declare a union between multiple function types", util.check_type_error([[
+      local t: function():(number) | function():(string)
+   ]], {
+      { msg = "cannot discriminate a union between multiple function types" },
+   }))
+
+   it("cannot declare a union between multiple function types", util.check_type_error([[
+      local F1 = functiontype(): number
+      local F2 = functiontype(): string
+      local t: F1|F2
+   ]], {
+      { msg = "cannot discriminate a union between multiple function types" },
+   }))
+
 end)

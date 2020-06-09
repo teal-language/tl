@@ -6245,6 +6245,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                -- check for limitations in our union support
                -- due to codegen limitations (we only check with type() so far)
                local n_table_types = 0
+               local n_function_types = 0
                local n_string_enum = 0
                for _, t in ipairs(typ.types) do
                   t = resolve_unary(t)
@@ -6252,6 +6253,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      n_table_types = n_table_types + 1
                      if n_table_types > 1 then
                         type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
+                        break
+                     end
+                  elseif t.typename == "function" then
+                     n_function_types = n_function_types + 1
+                     if n_function_types > 1 then
+                        type_error(typ, "cannot discriminate a union between multiple function types: %s", typ)
                         break
                      end
                   elseif t.typename == "string" or t.typename == "enum" then
