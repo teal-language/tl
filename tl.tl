@@ -924,6 +924,10 @@ local function is_record_type(t:Type): boolean
    return t.typename == "record" or t.typename == "arrayrecord"
 end
 
+local function is_type(t:Type): boolean
+   return t.typename == "typetype" or t.typename == "nestedtype"
+end
+
 local ParseState = record
    tokens: {Token}
    errs: {ParseError}
@@ -3944,7 +3948,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          if accept_typearg and typ.typename == "typearg" then
             return typ
          end
-         if typ.typename == "typetype" or typ.typename == "nestedtype" then
+         if is_type(typ) then
             return typ
          end
       end
@@ -4969,7 +4973,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       local typetype = find_type(t.names)
       if not typetype then
          type_error(t, "unknown type %s", t)
-      elseif typetype.typename == "typetype" then
+      elseif is_type(typetype) then
          resolved = match_typevals(t, typetype.def)
       else
          type_error(t, table.concat(t.names, ".") .. " is not a type")
