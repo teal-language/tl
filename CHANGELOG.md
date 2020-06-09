@@ -1,6 +1,6 @@
 # 0.7.0
 
-2020-06-03
+2020-06-08
 
 This release had a bunch of community contributions!
 
