@@ -36,9 +36,9 @@ precedence, see below.
 *      ‘global’ attnamelist [‘:’ typelist] ‘=’ explist
 *      ‘global’ name ‘=’ newtype
 
-   attnamelist ::=  Name attrib {‘,’ Name attrib}
+   attnamelist ::=  Name [attrib] {‘,’ Name [attrib]}
 
-   attrib ::= [‘<’ Name ‘>’]
+   attrib ::= ‘<’ Name ‘>’
 
    retstat ::= ‘return’ [explist] [‘;’]
 
@@ -58,7 +58,6 @@ precedence, see below.
        prefixexp | tableconstructor | exp binop exp | unop exp |
 *      exp ‘as’ type | Name ‘is’ type
 
-
    prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 
    functioncall ::=  prefixexp args | prefixexp ‘:’ Name args
@@ -67,7 +66,7 @@ precedence, see below.
 
    functiondef ::= ‘function’ funcbody
 
-+  funcbody ::= [typeargs] ‘(’ [parlist] ‘)’ [retlist] block end
++  funcbody ::= [typeargs] ‘(’ [parlist] ‘)’ [‘:’ retlist] block end
 
 +  parlist ::= parnamelist [‘,’ ‘...’ [‘:’ type]] | ‘...’ [‘:’ type]
 
@@ -97,7 +96,7 @@ precedence, see below.
 
 *  typelist ::= type {‘,’ type}
 
-*  retlist ::= ‘:’ ‘(’ [typelist] [‘...’] ‘)’ | ‘:’ typelist [‘...’]
+*  retlist ::= ‘(’ [typelist] [‘...’] ‘)’ | typelist [‘...’]
 
 *  typeargs ::= ‘<’ Name {‘,’ Name } ‘>’
 
@@ -105,7 +104,7 @@ precedence, see below.
 *      ‘enum’ {LiteralString} ‘end’ |
 *      ‘functiontype’ functiontype
 
-*  functiontype ::= [typeargs] ‘(’ partypelist ‘)’ [retlist]
+*  functiontype ::= [typeargs] ‘(’ partypelist ‘)’ [‘:’ retlist]
 
 *  partypelist ::= partype {‘,’ partype}
 
