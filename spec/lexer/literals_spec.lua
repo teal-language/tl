@@ -69,6 +69,22 @@ describe("lexer", function()
       local syntax_errors = {}
       local tokens = tl.lex("0b1001001")
       assert.same(1, #tokens)
-      assert.same("number", tokens[2].kind)
+      assert.same("number", tokens[1].kind)
+   end)
+
+   it("lexes luajit integer number suffixes", function()
+      local syntax_errors = {}
+      local tokens = tl.lex("100ll 100lL 100UlL 100ull")
+      assert.same(4, #tokens)
+      for i = 1, 4 do
+         assert.same("number", tokens[i].kind)
+      end
+   end)
+
+   it("lexes luajit complex number suffix", function()
+      local syntax_errors = {}
+      local tokens = tl.lex("100i")
+      assert.same(1, #tokens)
+      assert.same("number", tokens[1].kind)
    end)
 end)

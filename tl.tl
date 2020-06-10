@@ -118,6 +118,15 @@ for c = string.byte("A"), string.byte("F") do
    lex_hexadecimals[string.char(c)] = true
 end
 
+local lex_number_suffixes: {string:boolean} = {}
+for _, c in ipairs({
+   "u", "U",
+   "l", "L",
+   "i", "I"
+}) do
+   lex_number_suffixes[c] = true
+end
+
 local lex_char_symbols: {string:boolean} = {}
 for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", "#", "`", ";"}) do
    lex_char_symbols[c] = true
@@ -149,6 +158,7 @@ local LexState = enum
    "hex_number"
    "hex_float"
    "binary_number"
+   "number_suffix"
    "lt"
    "gt"
    "colon"
@@ -463,9 +473,8 @@ function tl.lex(input: string): {Token}, {Token}
          elseif c == "." then
             state = "decimal_float"
          else
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "hex_number" then
          if c == "." then
@@ -473,23 +482,20 @@ function tl.lex(input: string): {Token}, {Token}
          elseif c == "p" or c == "P" then
             state = "power_sign"
          elseif not lex_hexadecimals[c] then
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "binary_number" then
          if c ~= "1" and c ~= "0" then
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "hex_float" then
          if c == "p" or c == "P" then
             state = "power_sign"
          elseif not lex_hexadecimals[c] then
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "decimal_number" then
          if c == "." then
@@ -497,17 +503,15 @@ function tl.lex(input: string): {Token}, {Token}
          elseif c == "e" or c == "E" then
             state = "power_sign"
          elseif not lex_decimals[c] then
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "decimal_float" then
          if c == "e" or c == "E" then
             state = "power_sign"
          elseif not lex_decimals[c] then
-            end_token("number", i - 1)
+            state = "number_suffix"
             fwd = false
-            state = "any"
          end
       elseif state == "power_sign" then
          if c == "-" or c == "+" then
@@ -521,6 +525,11 @@ function tl.lex(input: string): {Token}, {Token}
          end
       elseif state == "power" then
          if not lex_decimals[c] then
+            state = "number_suffix"
+            fwd = false
+         end
+      elseif state == "number_suffix" then
+         if not lex_number_suffixes[c] then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -535,6 +544,7 @@ function tl.lex(input: string): {Token}, {Token}
       ["decimal_float"] = "number",
       ["hex_number"] = "number",
       ["binary_number"] = "number",
+      ["number_suffix"] = "number",
       ["hex_float"] = "number",
       ["power"] = "number",
    }
