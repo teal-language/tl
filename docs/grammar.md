@@ -76,7 +76,7 @@ precedence, see below.
 
    field ::= ‘[’ exp ‘]’ ‘=’ exp |
 +     Name [‘:’ type] ‘=’ exp |
-+     Name ‘=’ newtype |
+*     Name ‘=’ newtype |
       exp
 
    fieldsep ::= ‘,’ | ‘;’
