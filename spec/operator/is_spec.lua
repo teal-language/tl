@@ -177,6 +177,17 @@ describe("flow analysis with is", function()
             end
          end
       ]])
+
+      it("does not crash on invalid variables", util.check_type_error([[
+         local t: number | string
+         if x is number then
+            print("foo")
+         else
+            print("hello")
+         end
+      ]], {
+         { msg = "unknown variable: x" },
+      }))
    end)
 
    describe("code gen", function()

@@ -5360,10 +5360,12 @@ function tl.type_check(ast, opts)
          local out = {}
          for v, fs in pairs(join_facts({ f1 })) do
             local realtype = find_var(v)
-            local ok, u = sum_facts(fs)
-            if ok then
-               local not_typ = subtract_types(realtype, u, fs[1].typ)
-               table.insert(out, { fact = "is", var = v, typ = not_typ })
+            if realtype then
+               local ok, u = sum_facts(fs)
+               if ok then
+                  local not_typ = subtract_types(realtype, u, fs[1].typ)
+                  table.insert(out, { fact = "is", var = v, typ = not_typ })
+               end
             end
          end
          return out
