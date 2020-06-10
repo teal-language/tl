@@ -50,5 +50,10 @@ describe("syntax errors", function()
       { y = 1, "expected a type list" },
    }))
 
+   it("cannot use keyword as an identifier in an argument list", util.check_syntax_error([[
+      local function foo(do: number | string) end
+   ]], {
+      { y = 1, "syntax error, expected identifier" },
+   }))
 end)
 
