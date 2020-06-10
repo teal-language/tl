@@ -30,11 +30,11 @@ precedence, see below.
        ‘function’ funcname funcbody |
        ‘local’ ‘function’ Name funcbody |
 +      ‘local’ attnamelist [‘:’ typelist] [‘=’ explist] |
-+      ‘local’ name ‘=’ newtype |
++      ‘local’ Name ‘=’ newtype |
 *      ‘global’ ‘function’ Name funcbody |
 *      ‘global’ attnamelist ‘:’ typelist |
 *      ‘global’ attnamelist [‘:’ typelist] ‘=’ explist
-*      ‘global’ name ‘=’ newtype
+*      ‘global’ Name ‘=’ newtype
 
    attnamelist ::=  Name [attrib] {‘,’ Name [attrib]}
 
