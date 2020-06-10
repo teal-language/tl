@@ -1558,7 +1558,13 @@ local function parse_argument(ps, i)
    end
    if ps.tokens[i].tk == ":" then
       i = i + 1
-      i, node.decltype = parse_type(ps, i)
+      local decltype
+
+      i, decltype = parse_type(ps, i)
+
+      if node then
+         i, node.decltype = i, decltype
+      end
    end
    return i, node, 0
 end
