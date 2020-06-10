@@ -66,7 +66,7 @@ precedence, see below.
 
    functiondef ::= ‘function’ funcbody
 
-+  funcbody ::= [typeargs] ‘(’ [parlist] ‘)’ [‘:’ retlist] block end
++  funcbody ::= [typeargs] ‘(’ [parlist] ‘)’ [‘:’ retlist] block ‘end’
 
 +  parlist ::= parnamelist [‘,’ ‘...’ [‘:’ type]] | ‘...’ [‘:’ type]
 
