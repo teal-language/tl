@@ -148,6 +148,7 @@ local LexState = enum
    "power_sign"
    "hex_number"
    "hex_float"
+   "binary_number"
    "lt"
    "gt"
    "colon"
@@ -455,6 +456,8 @@ function tl.lex(input: string): {Token}, {Token}
             state = "hex_number"
          elseif c == "e" or c == "E" then
             state = "power_sign"
+         elseif c == "b" or c == "B" then
+            state = "binary_number"
          elseif lex_decimals[c] then
             state = "decimal_number"
          elseif c == "." then
@@ -470,6 +473,12 @@ function tl.lex(input: string): {Token}, {Token}
          elseif c == "p" or c == "P" then
             state = "power_sign"
          elseif not lex_hexadecimals[c] then
+            end_token("number", i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "binary_number" then
+         if c ~= "1" and c ~= "0" then
             end_token("number", i - 1)
             fwd = false
             state = "any"
@@ -525,6 +534,7 @@ function tl.lex(input: string): {Token}, {Token}
       ["decimal_number"] = "number",
       ["decimal_float"] = "number",
       ["hex_number"] = "number",
+      ["binary_number"] = "number",
       ["hex_float"] = "number",
       ["power"] = "number",
    }

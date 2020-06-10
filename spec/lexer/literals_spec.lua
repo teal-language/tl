@@ -64,4 +64,11 @@ describe("lexer", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+
+   it("lexes luajit binary literals", function()
+      local syntax_errors = {}
+      local tokens = tl.lex("0b1001001")
+      assert.same(1, #tokens)
+      assert.same("number", tokens[2].kind)
+   end)
 end)
