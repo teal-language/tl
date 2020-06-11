@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("assignment to nominal record", function()
    it("accepts empty table", function()
@@ -87,4 +88,20 @@ describe("assignment to nominal record", function()
       local errors = tl.type_check(ast)
       assert.match("in local declaration: x: got number, expected Node", errors[1].msg, 1, true)
    end)
+
+   it("type system is nominal: fails if different records with compatible structure", util.check_type_error([[
+      local Node1 = record
+         b: boolean
+      end
+
+      local Node2 = record
+         b: boolean
+      end
+
+      local n1: Node1 = { b = true }
+      local n2: Node2 = { b = true }
+      n1 = n2
+   ]], {
+      { msg = "in assignment: Node2 is not a Node1" },
+   }))
 end)
