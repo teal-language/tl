@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("return", function()
    describe("arity", function()
@@ -99,4 +100,14 @@ describe("return", function()
       end)
 
    end)
+
+   describe("type checking", function()
+      it("checks all returns of a call with proper locations", util.check_type_error([[
+         local function foo1(): (boolean, any) return coroutine.resume(nil) end
+         local function foo2(): (boolean, string) return coroutine.resume(nil) end
+      ]], {
+         { y = 2, x = 58, msg = "in return value: got <any type>, expected string" }
+      }))
+   end)
+
 end)

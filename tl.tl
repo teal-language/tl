@@ -1561,7 +1561,7 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
       local decltype: Type
 
       i, decltype = parse_type(ps, i)
-      
+
       if node then
          i, node.decltype = i, decltype
       end
@@ -5785,15 +5785,12 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             for i = 1, #children[1] do
                local expected = rets[i] or vatype
                if expected then
-                  -- this is a hack to make the error message point at the correct location
-                  local savex = children[1][i].x
-                  local savey = children[1][i].y
-                  children[1][i].y = nil
-                  children[1][i].x = nil
                   expected = resolve_unary(expected)
-                  assert_is_a(node.exps[i], children[1][i], expected, "return value")
-                  children[1][i].x = savex
-                  children[1][i].y = savey
+                  local where = (node.exps[i] and node.exps[i].x)
+                                and node.exps[i]
+                                or  node.exps
+                  assert(where and where.x)
+                  assert_is_a(where, children[1][i], expected, "return value")
                end
             end
 
