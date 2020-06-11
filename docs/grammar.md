@@ -91,7 +91,8 @@ precedence, see below.
 *  type ::= ‘(’ type ‘)’ | basetype {‘|’ basetype}
 
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
-*      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | ‘function’ functiontype
+*      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’
+*      | ‘function’ [typeargs] ‘(’ partypelist ‘)’ [‘:’ retlist]
 *      | Name [typeargs]
 
 *  typelist ::= type {‘,’ type}
@@ -102,9 +103,7 @@ precedence, see below.
 
 *  newtype ::= ‘record’ [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {Name ‘:’ type} ‘end’ |
 *      ‘enum’ {LiteralString} ‘end’ |
-*      ‘functiontype’ functiontype
-
-*  functiontype ::= [typeargs] ‘(’ partypelist ‘)’ [‘:’ retlist]
+*      ‘typealias’ type
 
 *  partypelist ::= partype {‘,’ partype}
 

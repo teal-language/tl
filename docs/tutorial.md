@@ -464,11 +464,11 @@ various examples.
 
 You can declare nominal function types, like we do for records, to avoid
 longwinded type declarations, especially when declaring functions that take
-callbacks. This is done with using `functiontype`, and they can be generic as
-well:
+callbacks. This is done with using a `typealias` declaration, and those
+can be generic as well:
 
 ```
-local Comparator = functiontype<T>(T, T): boolean
+local Comparator = typealias function<T>(T, T): boolean
 
 local function mysort<A>(arr: {A}, cmp: Comparator<A>)
    -- ...
@@ -575,6 +575,17 @@ The flow analysis of `is` also takes effect within expressions:
 local a: string | number
 
 local x: number = a is number and a + 1 or 0
+```
+
+To avoid typing long union declarations, you can also use `typealias` declarations
+to give union types a name:
+
+```
+local NameOrCallback = typealias (string | function(string):string)
+
+local function f(arg: NameOrCallback): boolean, string
+   -- ...
+end
 ```
 
 ### Current limitations of union types
