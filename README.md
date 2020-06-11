@@ -48,6 +48,10 @@ We have a collaborative repository for type definitions of Lua libraries
 at https://github.com/teal-language/teal-types — check it out and make your
 contribution!
 
+## Text editor support
+
+Teal language support is currently available for [Vim](https://github.com/teal-language/vim-teal) and [Visual Studio Code](https://github.com/teal-language/vscode-teal).
+
 ## Community
 
 Join the chat on [Gitter](https://gitter.im/teal-language/community)!
