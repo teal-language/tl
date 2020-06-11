@@ -992,7 +992,6 @@ local is_newtype = {
    ["enum"] = true,
    ["record"] = true,
    ["typealias"] = true,
-   ["functiontype"] = true,
 }
 
 local function parse_table_value(ps, i)
@@ -1899,9 +1898,6 @@ parse_newtype = function(ps, i)
    elseif ps.tokens[i].tk == "typealias" then
       i = i + 1
       i, node.newtype.def = parse_type(ps, i)
-      return i, node
-   elseif ps.tokens[i].tk == "functiontype" then
-      i, node.newtype.def = parse_function_type(ps, i)
       return i, node
    end
    return fail(ps, i)
