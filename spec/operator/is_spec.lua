@@ -14,6 +14,13 @@ describe("flow analysis with is", function()
          local s = x is number and tostring(x + 1) or x:lower()
       ]])
 
+      it("narrows type on expressions with or using a type alias", util.check [[
+         local T = typealias (number | string)
+         local x: T
+
+         local s = x is number and tostring(x + 1) or x:lower()
+      ]])
+
       it("narrows type on expressions with not", util.check [[
          local x: number | string
 

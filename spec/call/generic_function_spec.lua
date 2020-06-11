@@ -2,19 +2,19 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("generic function", function()
-   it("can declare a generic functiontype", function()
+   it("can declare a generic function typealias", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<T>(number): T
+         local ParseItem = typealias function<T>(number): T
       ]])
       local _, ast = tl.parse_program(tokens)
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
-   it("can declare a function using the functiontype as an argument", function()
+   it("can declare a function using the function typealias as an argument", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<T>(number): T
+         local ParseItem = typealias function<T>(number): T
 
          local function parse_list<T>(list: {T}, parse_item: ParseItem): number, T
             return 0, list[1]
@@ -27,7 +27,7 @@ describe("generic function", function()
    it("can use the typevar in the function body", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<T>(number): T
+         local ParseItem = typealias function<T>(number): T
 
          local function parse_list<T>(list: {T}, parse_item: ParseItem): number, {T}
             local ret: {T} = {}
@@ -42,7 +42,7 @@ describe("generic function", function()
    it("can use the function along with a typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<a>(a): a
+         local Id = typealias function<a>(a): a
 
          local function string_id(a: string): string
             return a
@@ -61,7 +61,7 @@ describe("generic function", function()
    it("does not mix up typevars with the same name in different scopes", function()
       -- pass
       local tokens = tl.lex([[
-         local Convert = functiontype<a, b>(a): b
+         local Convert = typealias function<a, b>(a): b
 
          local function id<a>(x: a): a
             return x
@@ -92,7 +92,7 @@ describe("generic function", function()
    it("catches incorrect typevars, does not mix up multiple uses", function()
       -- fail
       local tokens = tl.lex([[
-         local Convert = functiontype<a, b>(a): b
+         local Convert = typealias function<a, b>(a): b
 
          local function convert_num_str(n: number): string
             return tostring(n)
@@ -122,7 +122,7 @@ describe("generic function", function()
    it("will catch if resolved typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<a>(a): a
+         local Id = typealias function<a>(a): a
 
          local function string_id(a: string): string
             return a
@@ -142,7 +142,7 @@ describe("generic function", function()
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<a>(a): a
+         local Id = typealias function<a>(a): a
 
          local function string_id(a: string): string
             return a
@@ -161,7 +161,7 @@ describe("generic function", function()
    it("will catch if resolved indirect typevar does not match", function()
       -- pass
       local tokens = tl.lex([[
-         local Id = functiontype<a>(a): a
+         local Id = typealias function<a>(a): a
 
          local function string_id(a: string): string
             return a
@@ -181,7 +181,7 @@ describe("generic function", function()
    it("can use the function along with an indirect typevar", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<X>(number): X
+         local ParseItem = typealias function<X>(number): X
 
          local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
             local ret: {T} = {}
@@ -281,7 +281,7 @@ describe("generic function", function()
    it("will catch if resolved typevar does not match", function()
       -- fail
       local tokens = tl.lex([[
-         local ParseItem = functiontype<V>(number): V
+         local ParseItem = typealias function<V>(number): V
 
          local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
             local ret: {T} = {}
@@ -317,7 +317,7 @@ describe("generic function", function()
    it("can map one typevar to another", function()
       -- pass
       local tokens = tl.lex([[
-         local ParseItem = functiontype<V>(number): V
+         local ParseItem = typealias function<V>(number): V
 
          local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
             local ret: {T} = {}

@@ -423,7 +423,7 @@ describe("require", function()
             local someds = record
                Event = record
                end
-               Callback = functiontype(Event)
+               Callback = typealias function(Event)
                subscribe: function(callback: Callback)
             end
 
