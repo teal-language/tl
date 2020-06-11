@@ -1062,7 +1062,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    return i, node, n + 1
 end
 
-local ParseItem = functiontype<T>(ParseState, number, number): number, T, number
+local ParseItem = typealias function<T>(ParseState, number, number): number, T, number
 
 local SeparatorMode = enum
    "sep"
@@ -4054,7 +4054,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   local CompareTypes = functiontype(Type, Type, boolean): boolean, {Error}
+   local CompareTypes = typealias function(Type, Type, boolean): boolean, {Error}
 
    local function compare_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
       local tv1 = find_var(t1.typevar)
@@ -4105,7 +4105,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    local is_a: function(Type, Type, boolean): boolean, {Error}
 
-   local TypeGetter = functiontype(string): Type
+   local TypeGetter = typealias function(string): Type
 
    local function match_record_fields(t1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
       cmp = cmp or is_a
