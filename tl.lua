@@ -991,6 +991,7 @@ end
 local is_newtype = {
    ["enum"] = true,
    ["record"] = true,
+   ["typealias"] = true,
    ["functiontype"] = true,
 }
 
@@ -1894,6 +1895,10 @@ parse_newtype = function(ps, i)
       end
       node.yend = ps.tokens[i].y
       i = verify_tk(ps, i, "end")
+      return i, node
+   elseif ps.tokens[i].tk == "typealias" then
+      i = i + 1
+      i, node.newtype.def = parse_type(ps, i)
       return i, node
    elseif ps.tokens[i].tk == "functiontype" then
       i, node.newtype.def = parse_function_type(ps, i)
@@ -5361,6 +5366,7 @@ function tl.type_check(ast, opts)
          for v, fs in pairs(join_facts({ f1 })) do
             local realtype = find_var(v)
             if realtype then
+               realtype = resolve_unary(realtype)
                local ok, u = sum_facts(fs)
                if ok then
                   local not_typ = subtract_types(realtype, u, fs[1].typ)
@@ -5598,10 +5604,12 @@ function tl.type_check(ast, opts)
                end
                if vartype then
                   local val = exps[i]
-                  if resolve_unary(vartype).typename == "typetype" then
+                  local orig_vartype = vartype
+                  vartype = resolve_unary(vartype)
+                  if vartype.typename == "typetype" then
                      node_error(varnode, "cannot reassign a type")
                   elseif val then
-                     assert_is_a(varnode, val, vartype, "assignment")
+                     assert_is_a(varnode, val, orig_vartype, "assignment")
                      if varnode.kind == "variable" and vartype.typename == "union" then
 
                         add_var(varnode, varnode.tk, val, false, true)
