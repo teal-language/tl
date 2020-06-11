@@ -2,7 +2,7 @@
 Teal
 ====
 
-[![Build Status](https://travis-ci.org/hishamhm/tl.svg?branch=master)](https://travis-ci.org/hishamhm/tl)
+[![Build Status](https://travis-ci.org/teal-language/tl.svg?branch=master)](https://travis-ci.org/teal-language/tl)
 [![Join the chat at https://gitter.im/dotnet/coreclr](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/teal-language/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 This is the repository of **tl**, the compiler for Teal, a typed dialect of Lua.
