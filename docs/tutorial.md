@@ -520,17 +520,17 @@ Just like in Lua, some functions in Teal may receive a variable amount of argume
 
 ```
 function test(...: number)
-	print(...)
+   print(...)
 end
 
 test(1, 2, 3)
 ```
 
-In case your function returns a variable amount of values, you may also declare variadic return types by using the following syntax:
+In case your function returns a variable amount of values, you may also declare variadic return types by using the `type...` syntax:
 
 ```
 function test(...: number): number...
-	return ...
+   return ...
 end
 
 local a, b, c = test(1, 2, 3)
