@@ -38,7 +38,8 @@ end
 local function validate_config(config)
    local valid_keys = {
       preload_modules = true,
-      include = true
+      include = true,
+      quiet = true
    }
 
    for k, _ in pairs(config) do
@@ -55,7 +56,8 @@ end
 local function get_config()
    local config = {
       preload_modules = {},
-      include = {}
+      include = {},
+      quiet = false
    }
 
    local status, user_config = pcall(require, "tlconfig")
@@ -102,6 +104,8 @@ local function get_args_parser()
 
    parser:flag("--version", "Print version and exit")
 
+   parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
+
    parser:require_command(false)
    parser:command_target("command")
 
@@ -146,6 +150,10 @@ for _, include_dir_cli in ipairs(args["include"]) do
    if not find_in_sequence(tlconfig.include, include_dir_cli) then
       table.insert(tlconfig.include, include_dir_cli)
    end
+end
+
+if args["quiet"] then
+   tlconfig["quiet"] = true
 end
 
 local function report_errors(category, errors)
@@ -293,7 +301,7 @@ for i, filename in ipairs(args["script"]) do
          exit = 1
       end
 
-      if exit == 0 and #args["script"] == 1 then
+      if exit == 0 and #args["script"] == 1 and tlconfig["quiet"] == false then
          print("========================================")
          print("Type checked " .. filename)
          print("0 errors detected -- you can use:")
@@ -319,8 +327,10 @@ for i, filename in ipairs(args["script"]) do
       end
 
       ofd:close()
-      print("Wrote: " .. lua_name)
 
+      if tlconfig["quiet"] == false then
+         print("Wrote: " .. lua_name)
+      end
    end
 end
 
