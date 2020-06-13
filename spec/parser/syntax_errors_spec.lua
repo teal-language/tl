@@ -1,6 +1,16 @@
 local util = require("spec.util")
 
 describe("syntax errors", function()
+   it("unpaired 'end'(#166)", util.check_syntax_error([[
+      print("A")
+
+      end
+
+      print("what")
+   ]], {
+      { y = 3, "syntax error" },
+   }))
+
    it("in table declaration", util.check_syntax_error([[
       local x = {
          [123] = true,

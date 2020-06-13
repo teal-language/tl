@@ -160,7 +160,6 @@ describe("flow analysis with is", function()
                end
             end
          end
-         end
       ]], {
          { y = 4, msg = [[cannot use operator '<' for types number | string and number]] },
       }))

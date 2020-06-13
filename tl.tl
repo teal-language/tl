@@ -935,7 +935,7 @@ local ParseState = record
 end
 
 local parse_expression: function(ParseState, number): number, Node, number
-local parse_statements: function(ParseState, number, string): number, Node
+local parse_statements: function(ParseState, number, string, boolean): number, Node
 local parse_type_list: function(ParseState, number, string): number, Type
 local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
@@ -2021,7 +2021,7 @@ local function parse_statement(ps: ParseState, i: number): number, Node
    return fail(ps, i)
 end
 
-parse_statements = function(ps: ParseState, i: number, filename: string): number, Node
+parse_statements = function(ps: ParseState, i: number, filename: string, toplevel: boolean): number, Node
    local node = new_node(ps.tokens, i, "statements")
    while true do
       while ps.tokens[i].kind == ";" do
@@ -2030,7 +2030,7 @@ parse_statements = function(ps: ParseState, i: number, filename: string): number
       if ps.tokens[i].kind == "$EOF$" then
          break
       end
-      if stop_statement_list[ps.tokens[i].tk] then
+      if (not toplevel) and stop_statement_list[ps.tokens[i].tk] then
          break
       end
       local item: Node
@@ -2059,7 +2059,7 @@ function tl.parse_program(tokens: {Token}, errs: {ParseError}, filename: string)
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
-   return parse_statements(ps, 1, filename)
+   return parse_statements(ps, 1, filename, true)
 end
 
 --------------------------------------------------------------------------------
