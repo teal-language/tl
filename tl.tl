@@ -3341,10 +3341,10 @@ local standard_library: {string:Type} = {
    ["load"] = a_type {
       typename = "poly",
       types = {
-         a_type { typename = "function", args = { STRING }, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING, STRING }, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING, STRING, STRING }, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING, STRING, STRING, TABLE }, rets = { FUNCTION, ANY } },
+         a_type { typename = "function", args = { STRING }, rets = { FUNCTION, STRING } },
+         a_type { typename = "function", args = { STRING, STRING }, rets = { FUNCTION, STRING } },
+         a_type { typename = "function", args = { STRING, STRING, STRING }, rets = { FUNCTION, STRING } },
+         a_type { typename = "function", args = { STRING, STRING, STRING, TABLE }, rets = { FUNCTION, STRING } },
       },
    },
    ["loadfile"] = a_type {
