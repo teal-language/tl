@@ -536,6 +536,21 @@ end
 local a, b, c = test(1, 2, 3)
 ```
 
+If your function is very dynamic by nature (for example, you are typing a
+Lua function that can return anything), a typical return type will be `any...`.
+When using these functions, often one knows at the call site what are the
+types of the expected returns, given the arguments that were passed. To set
+the types of these dynamic returns, you can use the `as` operator over
+multiple values, using a parenthesized list of types:
+
+```
+local s = { 1234, "ola" }
+local a, b = table.unpack(s) as (number, string)
+
+print(a + 1)      -- `a` has type number
+print(b:upper())  -- `b` has type string
+```
+
 ## Union types
 
 The language supports a basic form of union types. You can register a type

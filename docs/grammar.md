@@ -56,7 +56,7 @@ precedence, see below.
 
    exp ::=  ‘nil’ | ‘false’ | ‘true’ | Numeral | LiteralString | ‘...’ | functiondef |
        prefixexp | tableconstructor | exp binop exp | unop exp |
-*      exp ‘as’ type | Name ‘is’ type
+*      exp ‘as’ type | exp ‘as’ ‘(’ typelist ‘)’ | Name ‘is’ type
 
    prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 
