@@ -1,6 +1,6 @@
 #!/usr/bin/env lua
 
-local version_string = "0.7.0+dev"
+local version_string = "0.7.1"
 
 local function script_path()
    local str = debug.getinfo(2, "S").source:sub(2)
