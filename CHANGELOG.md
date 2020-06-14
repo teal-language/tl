@@ -1,3 +1,53 @@
+# 0.7.1
+
+2020-06-14
+
+A lot of important bugfixes driven by community reports!
+
+Starting with this release, version numbers in the 0.x series
+will indicate the presence of breaking changes when bumping
+the second number (0.x.0), and both bugfixes and compatible
+additions when bumping the third number (0.x.y). This should
+make it easier to see when a release breaks something.
+
+This release adds new features but introduces no breaking
+changes, so we're calling it 0.7.1.
+
+## What's New
+
+### Language changes
+
+* support tuples in `as` operator for casting vararg returns:
+  you can now cast the return of variadic functions with
+  a parenthesized list of types
+* semantics of scope of `until` now matches that of Lua
+* Standard library:
+  * Fixed return type of `load`
+
+### Tooling
+
+* `tl` CLI:
+  * New flag `--version`
+  * New flag `-q`, `--quiet`
+* `tl` module:
+  * New function `tl.load` which is like Lua's `load()`
+    but enables loading Teal code
+
+### Documentation
+
+* Various fixes in the grammar definition
+
+### Fixes
+
+* Fixes the resolution of generic types by delaying the resolution
+  of type arguments
+* Fixes parsing of paranthesized function return with varargs
+* Does not stop parsing the input toplevel when a stray `end` is found
+* Avoids a compiler crash when type checking call returns in
+  a `return` statement
+* Fixes an error when parsing invalid function arguments
+* Fixes a crash in flow analysis when a variable does not exist
+
 # 0.7.0
 
 2020-06-08
