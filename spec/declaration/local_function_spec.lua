@@ -70,6 +70,17 @@ describe("local function", function()
          local x = s1 .. s2
       ]])
 
+      it("can take parenthesized typed vararg in return types", util.check [[
+         local f: function(x: number): (number, string...)
+
+         f = function(x: number): (number, string...)
+            return 9, "hello", "world"
+         end
+
+         local n, s1, s2 = f(123)
+         local x = s1 .. s2 .. tostring(math.floor(n))
+      ]])
+
       it("cannot take untyped vararg", function()
          local tokens = tl.lex([[
             local f: function(number, ...): boolean

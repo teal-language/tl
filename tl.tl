@@ -936,7 +936,7 @@ end
 
 local parse_expression: function(ParseState, number): number, Node, number
 local parse_statements: function(ParseState, number, string, boolean): number, Node
-local parse_type_list: function(ParseState, number, string): number, Type
+local parse_type_list: function(ParseState, number, boolean): number, Type
 local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
 local parse_type: function(ParseState, number): number, Type, number
@@ -1163,19 +1163,7 @@ local function parse_typeval_list(ps: ParseState, i: number): number, Type
 end
 
 local function parse_return_types(ps: ParseState, i: number): number, Type
-   local rets: Type
-   i, rets = parse_type_list(ps, i)
-   if ps.tokens[i].tk == "..." then
-      i = i + 1
-      local nrets = #rets
-      if nrets > 0 then
-         rets[nrets].is_va = true
-      else
-         return fail(ps, i, "unexpected '...'")
-      end
-   end
-
-   return i, rets
+   return parse_type_list(ps, i, true)
 end
 
 local function parse_function_type(ps: ParseState, i: number): number, Type
@@ -1285,9 +1273,9 @@ parse_type = function(ps: ParseState, i: number): number, Type, number
    return i, bt
 end
 
-parse_type_list = function(ps: ParseState, i: number, open: string): number, Type
+parse_type_list = function(ps: ParseState, i: number, accept_vararg: boolean): number, Type
    local list = new_type(ps, i, "tuple")
-   if ps.tokens[i].tk == (open or ":") then
+   if ps.tokens[i].tk == ":" then
       i = i + 1
       local optional_paren = false
       if ps.tokens[i - 1].tk == ":" then
@@ -1300,6 +1288,15 @@ parse_type_list = function(ps: ParseState, i: number, open: string): number, Typ
       i = parse_trying_list(ps, i, list, parse_type)
       if i == prev_i then
          fail(ps, i - 1, "expected a type list")
+      end
+      if accept_vararg and ps.tokens[i].tk == "..." then
+         i = i + 1
+         local nrets = #list
+         if nrets > 0 then
+            list[nrets].is_va = true
+         else
+            return fail(ps, i, "unexpected '...'")
+         end
       end
       if optional_paren then
          i = verify_tk(ps, i, ")")
@@ -1520,13 +1517,6 @@ do
          return fail(ps, i, "expected an expression")
       end
    end
-end
-
-local function parse_variable(ps: ParseState, i: number): number, Node, number
-   if ps.tokens[i].tk == "..." then
-      return verify_kind(ps, i, "...")
-   end
-   return verify_kind(ps, i, "identifier", "variable")
 end
 
 local function parse_variable_name(ps: ParseState, i: number): number, Node, number
@@ -1953,7 +1943,7 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
    end
    local lhs: Node = asgn.vars[1]
 
-   i, asgn.decltype = parse_type_list(ps, i)
+   i, asgn.decltype = parse_type_list(ps, i, false)
 
    if ps.tokens[i].tk == "=" then
       asgn.exps = new_node(ps.tokens, i, "values")
@@ -2018,7 +2008,6 @@ local function parse_statement(ps: ParseState, i: number): number, Node
    else
       return parse_call_or_assignment(ps, i)
    end
-   return fail(ps, i)
 end
 
 parse_statements = function(ps: ParseState, i: number, filename: string, toplevel: boolean): number, Node
