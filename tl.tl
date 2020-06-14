@@ -6443,5 +6443,24 @@ function tl.loader()
    end
 end
 
+local LoadMode = enum
+   "b"
+   "t"
+   "bt"
+end
+
+local LoadFunction = functiontype(...:any): any...
+
+function tl.load(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
+   local tokens = tl.lex(input)
+   local errs: {ParseError} = {}
+   local i, program = tl.parse_program(tokens, errs, chunkname)
+   if #errs > 0 then
+      return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
+   end
+   local code = tl.pretty_print_ast(program, true)
+   return load(code, chunkname, mode, env)
+end
+
 return tl
 

@@ -6443,4 +6443,23 @@ function tl.loader()
    end
 end
 
+local LoadMode = {}
+
+
+
+
+
+local LoadFunction = {}
+
+function tl.load(input, chunkname, mode, env)
+   local tokens = tl.lex(input)
+   local errs = {}
+   local i, program = tl.parse_program(tokens, errs, chunkname)
+   if #errs > 0 then
+      return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
+   end
+   local code = tl.pretty_print_ast(program, true)
+   return load(code, chunkname, mode, env)
+end
+
 return tl
