@@ -873,6 +873,9 @@ local Node = record
 
    name: Node
 
+   -- statements list in a `repeat`, delay closing scope
+   is_repeat: boolean
+
    -- local
    is_const: boolean
 
@@ -1753,6 +1756,7 @@ local function parse_repeat(ps: ParseState, i: number): number, Node
    local node = new_node(ps.tokens, i, "repeat")
    i = verify_tk(ps, i, "repeat")
    i, node.body = parse_statements(ps, i)
+   node.body.is_repeat = true
    node.yend = ps.tokens[i].y
    i = verify_tk(ps, i, "until")
    i, node.exp = parse_expression(ps, i)
@@ -5509,7 +5513,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                fail_unresolved()
             end
 
-            end_scope()
+            if not node.is_repeat then
+               end_scope()
+            end
             -- TODO extract node type from `return`
             node.type = NONE
          end
@@ -5726,6 +5732,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             widen_all_unions()
          end,
          after = function(node: Node, children: {Type}): Type
+            -- only end scope after checking `until`, `statements` in repeat body has is_return == true
+            end_scope()
             node.type = NONE
          end,
       },

@@ -916,6 +916,9 @@ local Node = {}
 
 
 
+
+
+
 local function is_array_type(t)
    return t.typename == "array" or t.typename == "arrayrecord"
 end
@@ -1753,6 +1756,7 @@ local function parse_repeat(ps, i)
    local node = new_node(ps.tokens, i, "repeat")
    i = verify_tk(ps, i, "repeat")
    i, node.body = parse_statements(ps, i)
+   node.body.is_repeat = true
    node.yend = ps.tokens[i].y
    i = verify_tk(ps, i, "until")
    i, node.exp = parse_expression(ps, i)
@@ -5509,7 +5513,9 @@ function tl.type_check(ast, opts)
                fail_unresolved()
             end
 
-            end_scope()
+            if not node.is_repeat then
+               end_scope()
+            end
 
             node.type = NONE
          end,
@@ -5726,6 +5732,8 @@ function tl.type_check(ast, opts)
             widen_all_unions()
          end,
          after = function(node, children)
+
+            end_scope()
             node.type = NONE
          end,
       },
