@@ -785,6 +785,7 @@ local Type = {}
 
 
 
+
 local Operator = {}
 
 
@@ -2924,7 +2925,7 @@ local THREAD = a_type({ typename = "thread" })
 local INVALID = a_type({ typename = "invalid" })
 local UNKNOWN = a_type({ typename = "unknown" })
 local NOMINAL_FILE = a_type({ typename = "nominal", names = { "FILE" } })
-local METATABLE = a_type({ typename = "nominal", names = { "METATABLE" } })
+local NOMINAL_METATABLE = a_type({ typename = "nominal", names = { "METATABLE" } })
 
 local OS_DATE_TABLE = a_type({
    typename = "record",
@@ -3357,7 +3358,7 @@ local standard_library = {
    }),
    ["dofile"] = a_type({ typename = "function", args = { OPT_STRING }, rets = { VARARG_ANY } }),
    ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
-   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { METATABLE } }),
+   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { NOMINAL_METATABLE } }),
    ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
          a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
       }, }),
@@ -3419,7 +3420,7 @@ local standard_library = {
          a_type({ typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } }),
       },
    }),
-   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, METATABLE }, rets = { ALPHA } }),
+   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE }, rets = { ALPHA } }),
    ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
    ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
    ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
@@ -3750,6 +3751,9 @@ for _, t in pairs(standard_library) do
 end
 fill_field_order(OS_DATE_TABLE)
 fill_field_order(DEBUG_GETINFO_TABLE)
+
+NOMINAL_FILE.found = standard_library["FILE"]
+NOMINAL_METATABLE.found = standard_library["METATABLE"]
 
 local compat53_code_cache = {}
 
@@ -4161,27 +4165,6 @@ function tl.type_check(ast, opts)
       return true
    end
 
-
-   local function same_names(t1, t2)
-      if t1.resolved and t2.resolved then
-         return t1.resolved.typeid == t2.resolved.typeid
-      end
-
-      local ft1 = find_type(t1.names)
-      local ft2 = find_type(t2.names)
-      if ft1 and ft2 then
-         return ft1 == ft2
-      else
-         if not ft1 then
-            type_error(t1, "unknown type %s", t1)
-         end
-         if not ft2 then
-            type_error(t2, "unknown type %s", t2)
-         end
-         return table.concat(t1.names, ".") == table.concat(t2.names, ".")
-      end
-   end
-
    local same_type
 
    local function has_all_types_of(t1s, t2s)
@@ -4205,6 +4188,46 @@ function tl.type_check(ast, opts)
          return true
       else
          return false, all_errs
+      end
+   end
+
+   local function are_same_nominals(t1, t2)
+      local same_names
+      if t1.found and t2.found then
+         same_names = t1.found.typeid == t2.found.typeid
+      else
+         local ft1 = t1.found or find_type(t1.names)
+         local ft2 = t2.found or find_type(t2.names)
+         if ft1 and ft2 then
+            same_names = ft1.typeid == ft2.typeid
+         else
+            if not ft1 then
+               type_error(t1, "unknown type %s", t1)
+            end
+            if not ft2 then
+               type_error(t2, "unknown type %s", t2)
+            end
+            return false, {}
+         end
+      end
+
+      if same_names then
+         if t1.typevals == nil and t2.typevals == nil then
+            return true
+         elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
+            local all_errs = {}
+            for i = 1, #t1.typevals do
+               local ok, errs = same_type(t2.typevals[i], t1.typevals[i])
+               add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t1.typevals[i]) .. ">: ", t1)
+            end
+            if #all_errs == 0 then
+               return true
+            else
+               return false, all_errs
+            end
+         end
+      else
+         return false, terr(t1, "%s is not a %s", t1, t2)
       end
    end
 
@@ -4240,7 +4263,7 @@ function tl.type_check(ast, opts)
             return false, terr(t1, "got %s, expected %s", t1, t2)
          end
       elseif t1.typename == "nominal" then
-         return same_names(t1, t2)
+         return are_same_nominals(t1, t2)
       elseif t1.typename == "record" then
          return match_fields_to_record(t1, t2, same_type)
       elseif t1.typename == "function" then
@@ -4380,23 +4403,7 @@ function tl.type_check(ast, opts)
       elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         if same_names(t1, t2) then
-            if t1.typevals == nil and t2.typevals == nil then
-               return true
-            elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
-               local all_errs = {}
-               for i = 1, #t1.typevals do
-                  local ok, errs = same_type(t2.typevals[i], t1.typevals[i])
-                  add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t1.typevals[i]) .. ">: ", t1)
-               end
-               if #all_errs == 0 then
-                  return true
-               else
-                  return false, all_errs
-               end
-            end
-         end
-         return false, terr(t1, "%s is not a %s", t1, t2)
+         return are_same_nominals(t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok
          if for_equality then
@@ -4988,7 +4995,7 @@ function tl.type_check(ast, opts)
 
       local resolved
 
-      local typetype = find_type(t.names)
+      local typetype = t.found or find_type(t.names)
       if not typetype then
          type_error(t, "unknown type %s", t)
       elseif is_type(typetype) then
@@ -5001,6 +5008,7 @@ function tl.type_check(ast, opts)
          resolved = a_type({ typename = "bad_nominal", names = t.names })
       end
 
+      t.found = typetype
       t.resolved = resolved
       return resolved
    end
@@ -6258,9 +6266,7 @@ function tl.type_check(ast, opts)
                      typ.typename = "typevar"
                      typ.typevar = t.typearg
                   else
-                     if not t.def.typeargs then
-                        typ.resolved = t.def
-                     end
+                     typ.found = t
                   end
                else
                   local name = typ.names[1]

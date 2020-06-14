@@ -208,6 +208,55 @@ describe("records", function()
       assert.same("invalid key 'status_coda' in record 'r' of type Response", result.type_errors[1].msg)
    end)
 
+   it("can have nested generic records", util.check [[
+      local foo = record
+         bar = record<T>
+            x: T
+         end
+         example: bar<string>
+      end
+
+      local f: foo = {}
+
+      foo.example = { x = "hello" }
+   ]])
+
+   it("can extend generic functions", util.check [[
+      local foo = record
+         bar = functiontype<T>(T)
+         example: bar<string>
+      end
+
+      function foo.example(data: string)
+         print(data)
+      end
+   ]])
+
+   it("does not produce an esoteric type error (#167)", util.check_type_error([[
+      local foo = record
+         bar = functiontype<T>(T)
+         example: bar<string>
+      end
+
+      foo.example = function(data: string)
+         print(data)
+      end as bar<string>
+   ]], {
+      -- this is expected, because bar is local to foo
+      { y = 8, x = 14, msg = "unknown type bar<string>" },
+   }))
+
+   it("can cast generic member using full path of type name", util.check [[
+      local foo = record
+         bar = functiontype<T>(T)
+         example: bar<string>
+      end
+
+      foo.example = function(data: string)
+         print(data)
+      end as foo.bar<string>
+   ]])
+
    it("can export types as nested records", function()
       util.mock_io(finally, {
          ["req.d.tl"] = [[

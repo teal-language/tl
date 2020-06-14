@@ -446,6 +446,37 @@ describe("require", function()
       assert.same(0, #result.unknowns)
    end)
 
+   it("generic nested types resolve in definition files", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["someds.d.tl"] = [[
+            local someds = record
+               Event = record<T>
+                  x: T
+               end
+               Callback = functiontype(Event<string>)
+               subscribe: function(callback: Callback)
+            end
+
+            return someds
+         ]],
+         ["main.tl"] = [[
+            local someds = require("someds")
+
+            function main()
+               local b:someds.Callback = function(event: someds.Event<string>)
+               end
+               someds.subscribe(b)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
    it("cannot extend a record object with unknown types outside of scope", function ()
       util.mock_io(finally, {
          ["love.d.tl"] = [[

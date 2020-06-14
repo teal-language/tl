@@ -345,6 +345,7 @@ describe("generic function", function()
       local errors = tl.type_check(ast)
       assert.same({}, errors)
    end)
+
    it("checks that missing typevars are caught", util.check_type_error([[
       local Node = record
       end
@@ -361,9 +362,10 @@ describe("generic function", function()
          return recurse_node(ast, visit_node, visit_type)
       end
    ]], {
-      { msg = "unknown type Type", x = 134 },
-      { msg = "unknown type Type", x = 53 }
+      { msg = "unknown type Type", y = 7, x = 134 },
+      { msg = "unknown type Type", y = 12, x = 53 },
    }))
+
    it("propagates resolved typevar in return type", function()
       local tokens = tl.lex([[
          local Node = record

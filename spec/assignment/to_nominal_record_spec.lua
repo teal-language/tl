@@ -104,4 +104,21 @@ describe("assignment to nominal record", function()
    ]], {
       { msg = "in assignment: Node2 is not a Node1" },
    }))
+
+   it("identical generic instances resolve to the same type", util.check [[
+      local R = record<T>
+         x: T
+      end
+
+      local function foo(): R<string>
+         return { x = "hello" }
+      end
+
+      local function bar(): R<string>
+         return { x = "world" }
+      end
+
+      local v = foo()
+      v = bar()
+   ]])
 end)
