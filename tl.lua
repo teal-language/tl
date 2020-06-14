@@ -934,9 +934,15 @@ local ParseState = {}
 
 
 
+local ParseTypeListMode = {}
+
+
+
+
+
+local parse_type_list
 local parse_expression
 local parse_statements
-local parse_type_list
 local parse_argument_list
 local parse_argument_type_list
 local parse_type
@@ -1163,7 +1169,7 @@ local function parse_typeval_list(ps, i)
 end
 
 local function parse_return_types(ps, i)
-   return parse_type_list(ps, i, true)
+   return parse_type_list(ps, i, "rets")
 end
 
 local function parse_function_type(ps, i)
@@ -1273,35 +1279,44 @@ parse_type = function(ps, i)
    return i, bt
 end
 
-parse_type_list = function(ps, i, accept_vararg)
+parse_type_list = function(ps, i, mode)
    local list = new_type(ps, i, "tuple")
-   if ps.tokens[i].tk == ":" then
-      i = i + 1
-      local optional_paren = false
-      if ps.tokens[i - 1].tk == ":" then
-         if ps.tokens[i].tk == "(" then
-            optional_paren = true
-            i = i + 1
-         end
-      end
-      local prev_i = i
-      i = parse_trying_list(ps, i, list, parse_type)
-      if i == prev_i then
-         fail(ps, i - 1, "expected a type list")
-      end
-      if accept_vararg and ps.tokens[i].tk == "..." then
+
+   local first_token = ps.tokens[i].tk
+   if mode == "rets" or mode == "decltype" then
+      if first_token == ":" then
          i = i + 1
-         local nrets = #list
-         if nrets > 0 then
-            list[nrets].is_va = true
-         else
-            return fail(ps, i, "unexpected '...'")
-         end
-      end
-      if optional_paren then
-         i = verify_tk(ps, i, ")")
+      else
+         return i, list
       end
    end
+
+   local optional_paren = false
+   if ps.tokens[i].tk == "(" then
+      optional_paren = true
+      i = i + 1
+   end
+
+   local prev_i = i
+   i = parse_trying_list(ps, i, list, parse_type)
+   if i == prev_i then
+      fail(ps, i - 1, "expected a type list")
+   end
+
+   if mode == "rets" and ps.tokens[i].tk == "..." then
+      i = i + 1
+      local nrets = #list
+      if nrets > 0 then
+         list[nrets].is_va = true
+      else
+         return fail(ps, i, "unexpected '...'")
+      end
+   end
+
+   if optional_paren then
+      i = verify_tk(ps, i, ")")
+   end
+
    return i, list
 end
 
@@ -1478,7 +1493,11 @@ do
 
             i = i + 1
             local cast = new_node(ps.tokens, i, "cast")
-            i, cast.casttype = parse_type(ps, i)
+            if ps.tokens[i].tk == "(" then
+               i, cast.casttype = parse_type_list(ps, i, "casttype")
+            else
+               i, cast.casttype = parse_type(ps, i)
+            end
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
             break
@@ -1943,7 +1962,7 @@ local function parse_variable_declarations(ps, i, node_name)
    end
    local lhs = asgn.vars[1]
 
-   i, asgn.decltype = parse_type_list(ps, i, false)
+   i, asgn.decltype = parse_type_list(ps, i, "decltype")
 
    if ps.tokens[i].tk == "=" then
       asgn.exps = new_node(ps.tokens, i, "values")

@@ -12,6 +12,15 @@ describe("cast", function()
       }
    ]])
 
+   it("can cast vararg returns as tuples", util.check [[
+      local s = { 1234, "ola", 4566 }
+      local a, b, c = table.unpack(s) as (number, string, number)
+
+      print(a + 1)
+      print(b:upper())
+      print(c + 1)
+   ]])
+
    it("can cast to function", util.check [[
       local x = nil as function()
    ]])
