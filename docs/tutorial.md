@@ -400,6 +400,16 @@ local http = record
 end
 ```
 
+You can then refer to nested types with the normal dot notation, and use
+it across required modules as well:
+
+```
+local http = require("http")
+
+local x: http.Response = http.get("http://example.com")
+print(x.status_code)
+```
+
 ## Generics
 
 Teal supports a simple form of generics that is useful enough for dealing
