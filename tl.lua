@@ -14,6 +14,8 @@ local TypeCheckOptions = {}
 
 local tl = {
    process = nil,
+   process_string = nil,
+   gen = nil,
    type_check = nil,
    init_env = nil,
 }
@@ -6391,6 +6393,18 @@ function tl.process(filename, env, result, preload_modules)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
+   result, err = tl.process_string(input, is_lua, env, result, preload_modules, filename)
+
+   if err then
+      return nil, err
+   end
+
+   return result
+end
+
+function tl.process_string(input, is_lua, env, result, preload_modules,
+filename)
+
    env = env or tl.init_env(is_lua)
    result = result or {
       syntax_errors = {},
@@ -6439,6 +6453,20 @@ function tl.process(filename, env, result, preload_modules)
    result.env = env
 
    return result
+end
+
+function tl.gen(input)
+   local result, err = tl.process_string(input, false)
+
+   if err then
+      return nil, nil
+   end
+
+   if not result.ast then
+      return nil, result
+   end
+
+   return tl.pretty_print_ast(result.ast), result
 end
 
 local function tl_package_loader(module_name)
