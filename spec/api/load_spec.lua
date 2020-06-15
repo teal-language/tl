@@ -1,3 +1,5 @@
+require("compat53")
+
 describe("tl.load", function()
 
    it("can load Teal code from Lua", function()
