@@ -6418,6 +6418,7 @@ filename)
       unknowns = {},
    }
    preload_modules = preload_modules or {}
+   filename = filename or ""
 
    local tokens, errs = tl.lex(input)
    if errs then

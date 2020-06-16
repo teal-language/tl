@@ -29,6 +29,28 @@ describe("tl.gen", function()
       assert.is_nil(err)
    end)
 
+   it("does not crash on inference errors due to a lack of a filename", function()
+      local input = [[
+          local Point = record
+             x: number
+             y: number
+          end
+
+          function Point.new(p: string|Point)
+             print("hello")
+             if p is Point then
+                print("hello")
+             else
+                print(p.x)
+             end
+          end
+      ]]
+
+      local output, result = tl.gen(input)
+
+      assert.match("inferred at :", result.type_errors[1].msg, 1, true)
+   end)
+
    it("returns error on syntax errors", function()
       local input = [[
          local movie:string =

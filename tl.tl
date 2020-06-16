@@ -6418,6 +6418,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
       unknowns = {},
    }
    preload_modules = preload_modules or {}
+   filename = filename or ""
 
    local tokens, errs = tl.lex(input)
    if errs then
