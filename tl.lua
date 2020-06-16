@@ -6462,8 +6462,9 @@ filename)
    return result
 end
 
-function tl.gen(input)
-   local result, err = tl.process_string(input, false)
+function tl.gen(input, env)
+   env = env or tl.init_env()
+   local result, err = tl.process_string(input, false, env)
 
    if err then
       return nil, nil

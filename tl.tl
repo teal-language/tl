@@ -6462,8 +6462,9 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
    return result
 end
 
-function tl.gen(input: string): string, Result
-   local result, err = tl.process_string(input, false)
+function tl.gen(input: string, env: Env): string, Result
+   env = env or tl.init_env()
+   local result, err = tl.process_string(input, false, env)
 
    if err then
       return nil, nil

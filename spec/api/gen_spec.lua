@@ -26,7 +26,17 @@ describe("tl.gen", function()
 
       assert.equal('local movie = 1', output)
       assert.match("expected string", result.type_errors[1].msg, 1, true)
-      assert.is_nil(err)
+   end)
+
+   it("can skip compat53 output given an env", function()
+      local input = [[
+         print(math.floor(2))
+      ]]
+
+      local env = tl.init_env(true, true)
+      local output, result = tl.gen(input, env)
+
+      assert.equal('print(math.floor(2))', output)
    end)
 
    it("does not crash on inference errors due to a lack of a filename", function()
