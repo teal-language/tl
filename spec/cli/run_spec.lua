@@ -65,7 +65,6 @@ describe("tl run", function()
 
             return add
          ]])
-         print(add_tl)
          local main_tl = util.write_tmp_file(finally, "main.tl", [[
             local add = require("add")
 
