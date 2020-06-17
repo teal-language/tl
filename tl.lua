@@ -5725,7 +5725,7 @@ function tl.type_check(ast, opts)
       ["goto"] = {
          after = function(node, children)
             if not find_var("::" .. node.label .. "::") then
-               local unresolved = find_var("@unresolved")
+               local unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
                if not unresolved then
                   unresolved = { typename = "unresolved", labels = {}, nominals = {} }
                   add_var(node, "@unresolved", unresolved)

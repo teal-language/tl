@@ -88,4 +88,23 @@ describe("goto", function()
    ]], {
       { y = 1, msg = "no visible label 'my_label'" }
    }))
+
+   it("accepts multiple labels", util.check [[
+      for i=1, 3 do
+         if i <= 2 then
+            goto continue
+         end
+         print(i)
+         ::continue::
+      end
+
+      for i=1, 3 do
+         if i <= 2 then
+            goto continue1
+         end
+         print(i)
+         ::continue1::
+      end
+   ]])
+
 end)
