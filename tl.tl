@@ -3433,7 +3433,7 @@ local standard_library: {string:Type} = {
          fields = {
             ["close"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
             ["flush"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = {} },
-            ["lines"] = a_type { typename = "function", args = { NOMINAL_FILE, OPT_STRING, VARARG_STRING }, rets = {
+            ["lines"] = a_type { typename = "function", args = { NOMINAL_FILE, a_type { typename = "union", types = { STRING, NUMBER }, is_va = true } }, rets = {
                a_type { typename = "function", args = {}, rets = { VARARG_STRING } },
             } },
             ["read"] = a_type {
@@ -3521,7 +3521,7 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", args = { NOMINAL_FILE }, rets = { NOMINAL_FILE } },
             },
          },
-         ["lines"] = a_type { typename = "function", args = { OPT_STRING, VARARG_STRING }, rets = {
+         ["lines"] = a_type { typename = "function", args = { OPT_STRING, a_type { typename = "union", types = { STRING, NUMBER }, is_va = true } }, rets = {
             a_type { typename = "function", args = {}, rets = { VARARG_STRING } },
          } },
          ["open"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
@@ -4635,10 +4635,6 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                if farg.is_va then
                   break
                end
-               if not lax then
-                  ok = false
-                  table.insert(errs, { y = node.y, x = node.x, msg = "error in argument " .. (a + argdelta) .. ": missing argument of type " .. show_type(farg), filename = filename })
-               end
             else
                local at = node.e2 and node.e2[a] or node
                if not arg_check(is_a, arg, farg, at, (a + argdelta), errs) then
@@ -4690,47 +4686,58 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          local first_errs: {Error}
          local expects: {string} = {}
          -- try exact match first
-         for _, f in ipairs(poly.types) do
-            if f.typename ~= "function" then
-               if lax and is_unknown(f) then
-                  return UNKNOWN
+         local tried: {number:boolean} = {}
+         for i, f in ipairs(poly.types) do
+            if not tried[i] then
+               if f.typename ~= "function" then
+                  if lax and is_unknown(f) then
+                     return UNKNOWN
+                  end
+                  return node_error(node, "not a function: %s", f)
                end
-               return node_error(node, "not a function: %s", f)
-            end
-            table.insert(expects, tostring(#f.args or 0))
-            local va = is_vararg(f)
-            if #args == (#f.args or 0) or (va and #args > #f.args) then
-               local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-               if matched then
-                  return matched
-               else
-                  revert_typeargs(f)
+               table.insert(expects, tostring(#f.args or 0))
+               local va = is_vararg(f)
+               if #args == (#f.args or 0) or (va and #args > #f.args) then
+                  tried[i] = true
+                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
+                  if matched then
+                     return matched
+                  else
+                     revert_typeargs(f)
+                  end
+                  first_errs = first_errs or errs
                end
-               first_errs = first_errs or errs
             end
          end
          -- now try adjusting with nils to missing arguments or using '...'
-         for _, f in ipairs(poly.types) do
-            if #args < (#f.args or 0) then
-               local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-               if matched then
-                  return matched
-               else
-                  revert_typeargs(f)
+         for i, f in ipairs(poly.types) do
+            if not tried[i] then
+               tried[i] = true
+               if #args < (#f.args or 0) then
+                  tried[i] = true
+                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
+                  if matched then
+                     return matched
+                  else
+                     revert_typeargs(f)
+                  end
+                  first_errs = first_errs or errs
                end
-               first_errs = first_errs or errs
             end
          end
          -- now try vararg functions
-         for _, f in ipairs(poly.types) do
-            if is_vararg(f) and #args > (#f.args or 0) then
-               local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-               if matched then
-                  return matched
-               else
-                  revert_typeargs(f)
+         for i, f in ipairs(poly.types) do
+            if not tried[i] then
+               if is_vararg(f) and #args > (#f.args or 0) then
+                  tried[i] = true
+                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
+                  if matched then
+                     return matched
+                  else
+                     revert_typeargs(f)
+                  end
+                  first_errs = first_errs or errs
                end
-               first_errs = first_errs or errs
             end
          end
 
@@ -5755,8 +5762,6 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             local exp1 = node.exps[1]
             local exp1type = resolve_tuple(exp1.type)
             if exp1type.typename == "function" then
-               local r1 = exp1type.rets[1] or UNKNOWN
-               local r2 = exp1type.rets[2] or UNKNOWN
                -- check common errors:
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_unary(exp1.e2.type)
@@ -5770,9 +5775,18 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                      end
                   end
                end
-               add_var(node.vars[1], node.vars[1].tk, r1)
-               if node.vars[2] then
-                  add_var(node.vars[2], node.vars[2].tk, r2)
+               local last: Type
+               for i, v in ipairs(node.vars) do
+                  local r = exp1type.rets[i]
+                  if not r then
+                     if last and last.is_va then
+                        r = last
+                     else
+                        r = UNKNOWN
+                     end
+                  end
+                  add_var(v, v.tk, r)
+                  last = r
                end
             else
                if not (lax and is_unknown(exp1type)) then
