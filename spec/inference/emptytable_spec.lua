@@ -15,6 +15,26 @@ describe("empty table without type annotation", function()
       assert.match("cannot index something that is not a record: {number}", errors[1].msg, 1, true)
    end)
 
+   it("first use can be a function call", function()
+      local tokens = tl.lex([[
+         local files = {}
+         local pd = io.popen("git diff-tree -r HEAD", "r")
+         for line in pd:lines() do
+            local mode, file = line:match("^[^%s]+ [^%s]+ [^%s]+ [^%s]+ (.)\t(.-)$")
+            if mode and file then
+               table.insert(files, { mode = mode, file = file })
+            end
+         end
+
+         for i, f in ipairs(files) do
+            print(f.mode, f.file)
+         end
+      ]])
+      local _, ast = tl.parse_program(tokens)
+      local errors = tl.type_check(ast, { filename = "test.lua" })
+      assert.same({}, errors)
+   end)
+
    it("has its type determined by its first reassignment", function()
       local tokens = tl.lex([[
          local function return_arr(): {number}

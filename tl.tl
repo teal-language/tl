@@ -4645,6 +4645,16 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
          if ok == true then
             f.rets.typename = "tuple"
+
+            -- resolve inference of emptytables used as arguments
+            for a = 1, #args do
+               local arg = args[a]
+               local farg = f.args[a] or (va and f.args[#f.args])
+               if arg.typename == "emptytable" then
+                  infer_var(arg, resolve_typevars(farg), node.e2[a])
+               end
+            end
+
             return resolve_typevars(f.rets)
          end
          return nil, errs
