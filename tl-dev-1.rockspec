@@ -17,6 +17,9 @@ dependencies = {
 
    -- needed for the cli tool
    "argparse"
+
+   -- needed for --source-dir
+   "lfs"
 }
 build = {
    modules = {
