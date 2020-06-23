@@ -17,6 +17,7 @@ install:
   - luarocks install busted
   - luarocks install compat53
   - luarocks install argparse
+  - luarocks install luafilesystem
 
 script:
   - luarocks lint tl-dev*rockspec

@@ -16,7 +16,11 @@ dependencies = {
    "compat53",
 
    -- needed for the cli tool
-   "argparse"
+   "argparse",
+
+   -- needed for build options
+   -- --build-dir, --source-dir, etc.
+   "luafilesystem",
 }
 build = {
    modules = {

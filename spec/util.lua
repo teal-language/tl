@@ -2,6 +2,7 @@ local util = {}
 
 local tl = require("tl")
 local assert = require("luassert")
+local lfs = require("lfs")
 
 function util.mock_io(finally, files)
    assert(type(finally) == "function")
@@ -69,10 +70,123 @@ function util.write_tmp_file(finally, name, content)
    return full_name
 end
 
+function util.write_tmp_dir(finally, dir_name, dir_structure)
+   assert(type(finally) == "function")
+   assert(type(dir_name) == "string")
+   assert(type(dir_structure) == "table")
+
+   local full_name = "/tmp/" .. dir_name .. "/"
+   assert(lfs.mkdir(full_name))
+   local function traverse_dir(dir_structure, prefix)
+      prefix = prefix or full_name
+      for name, content in pairs(dir_structure) do
+         if type(content) == "table" then
+            assert(lfs.mkdir(prefix .. name))
+            traverse_dir(content, prefix .. name .. "/")
+         else
+            local fd = io.open(prefix .. name, "w")
+            fd:write(content)
+            fd:close()
+         end
+      end
+   end
+   traverse_dir(dir_structure)
+   finally(function()
+      os.execute("rm -r " .. full_name)
+      -- local function rm_dir(dir_structure, prefix)
+      --    prefix = prefix or full_name
+      --    for name, content in pairs(dir_structure) do
+      --       if type(content) == "table" then
+      --          rm_dir(prefix .. name .. "/")
+      --       end
+      --       os.remove(prefix .. name)
+      --    end
+      -- end
+      -- rm_dir(dir_structure)
+   end)
+   return full_name
+end
+
+function util.get_dir_structure(dir_name)
+   -- basically run `tree` and put it into a table
+   local dir_structure = {}
+   for fname in lfs.dir(dir_name) do
+      if fname ~= ".." and fname ~= "." then
+         if lfs.attributes(dir_name .. "/" .. fname, "mode") == "directory" then
+            dir_structure[fname] = util.get_dir_structure(dir_name .. "/" .. fname)
+         else
+            dir_structure[fname] = true
+         end
+      end
+   end
+   return dir_structure
+end
+
+local function insert_into(tab, files)
+   for k, v in pairs(files) do
+      if type(k) == "number" then
+         tab[v] = true
+      elseif type(v) == "string" then
+         tab[k] = true
+      elseif type(v) == "table" then
+         if not tab[k] then
+            tab[k] = {}
+         end
+         insert_into(tab[k], v)
+      end
+   end
+end
+local tl_path = lfs.currentdir()
+local tl_executable = tl_path .. "/tl"
+local tl_lib = tl_path .. "/tl.lua"
+function util.run_mock_project(finally, t)
+   assert(type(finally) == "function")
+   assert(type(t) == "table")
+   assert(type(t.cmd) == "string", "tl <cmd> not given")
+   assert(type(t.dir_name) == "string", "dir_name not provided")
+   assert(({
+      gen = true,
+      check = true,
+      run = true,
+      build = true,
+   })[t.cmd], "Invalid tl <cmd>")
+   local actual_dir_name = util.write_tmp_dir(finally, t.dir_name, t.dir_structure)
+   lfs.link(tl_executable, actual_dir_name .. "/tl")
+   lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
+   local expected_dir_structure = {
+      ["tl"] = true,
+      ["tl.lua"] = true,
+   }
+   insert_into(expected_dir_structure, t.dir_structure)
+   insert_into(expected_dir_structure, t.generated_files)
+   lfs.chdir(actual_dir_name)
+   local pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or ""))
+   local output = pd:read("*a")
+   local actual_dir_structure = util.get_dir_structure(".")
+   lfs.chdir(tl_path)
+   t.popen = t.popen or {
+      status = true,
+      exit = "exit",
+      code = 0,
+   }
+   -- util.assert_popen_close(
+   --    t.popen.status,
+   --    t.popen.exit,
+   --    t.popen.code,
+   --    pd:close()
+   -- )
+   if t.cmd_output then
+      -- FIXME: when generating multiple files their order isnt guaranteed
+      -- so either account for this here or make the order deterministic in tl
+      assert.are.equal(output, t.cmd_output)
+   end
+   assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
+end
+
 function util.read_file(name)
    assert(type(name) == "string")
 
-   local fd = io.open(name, "r")
+   local fd = assert(io.open(name, "r"))
    local output = fd:read("*a")
    fd:close()
    return output
