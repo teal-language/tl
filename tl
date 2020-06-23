@@ -331,11 +331,10 @@ local function traverse(dirname)
                files[input] = output
             end
          else
-            local output = file
             if file:match(".tl$") and not file:match(".d.tl$") then
-               output = file:gsub(".tl$", ".lua")
+               local output = file:gsub(".tl$", ".lua")
+               files[path_concat(dirname, file)] = path_concat(dirname, output)
             end
-            files[path_concat(dirname, file)] = path_concat(dirname, output)
          end
       end
    end
