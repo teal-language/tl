@@ -19,7 +19,7 @@ dependencies = {
    "argparse"
 
    -- needed for --source-dir
-   "lfs"
+   "luafilesystem"
 }
 build = {
    modules = {

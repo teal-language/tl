@@ -34,7 +34,7 @@ return {
 
 ### Include/Exclude patterns
 
-Similar to tsconfig.json, the `include` and `exclude` fields can have glob-like patterns in them.
+The `include` and `exclude` fields can have glob-like patterns in them:
 - `*`: Matches any number of characters (excluding directory separators)
 - `**/`: Matches any number subdirectories
 
