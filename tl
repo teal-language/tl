@@ -257,8 +257,7 @@ local function type_check_and_load(filename, modules)
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
-      exit = 1
-      return
+      os.exit(1)
    end
    if filename:match("%.tl$") then
       local ok = report_type_errors(result)
@@ -267,7 +266,10 @@ local function type_check_and_load(filename, modules)
       end
    end
 
-   local chunk = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
+   local chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
+   if err then
+      die(err)
+   end
    return chunk
 end
 
