@@ -345,9 +345,10 @@ end
 
 -- include/exclude pattern matching
 local function str_split(str, delimiter)
-   local idx = 1
+   local idx = 0
    return function()
       if not idx then return end
+      idx = idx + 1
       local prev_idx = idx
       local s_idx
       s_idx, idx = str:find(delimiter, idx, true)
@@ -449,17 +450,19 @@ end
 if #args["script"] == 0 then
    for input_file, output_file in pairs(src_map) do
       rel_input_file = to_relative(input_file)
-      local include = true
+      local include = false
       for _, patt in ipairs(inc_patterns) do
-         if not patt(rel_input_file) then
-            include = false
+         if patt(rel_input_file) then
+            include = true
             break
          end
       end
-      for _, patt in ipairs(exc_patterns) do
-         if patt(rel_input_file) then
-            include = false
-            break
+      if include then
+         for _, patt in ipairs(exc_patterns) do
+            if patt(rel_input_file) then
+               include = false
+               break
+            end
          end
       end
       if not include then
