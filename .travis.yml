@@ -19,6 +19,7 @@ install:
   - luarocks install argparse
 
 script:
+  - luarocks lint tl-dev*rockspec
   - make
 
 branches:
