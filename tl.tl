@@ -1092,10 +1092,10 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
       table.insert(list, item)
       if ps.tokens[i].tk == "," then
          i = i + 1
-      elseif sep == "sep" and not close[ps.tokens[i].tk] then
-         return fail(ps, i)
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
+      elseif not close[ps.tokens[i].tk] then
+         return fail(ps, i)
       end
    end
    return i, list
@@ -5550,7 +5550,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       ["local_declaration"] = {
          before = function(node: Node)
             put_newtype_name_in_scope(node)
-         end
+         end,
          after = function(node: Node, children: {Type}): Type
             local vals: {Type} = get_assignment_values(children[2], #node.vars)
             for i, var in ipairs(node.vars) do
@@ -5587,7 +5587,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       ["global_declaration"] = {
          before = function(node: Node)
             put_newtype_name_in_scope(node)
-         end
+         end,
          after = function(node: Node, children: {Type}): Type
             local vals: {Type} = get_assignment_values(children[2], #node.vars)
             for i, var in ipairs(node.vars) do

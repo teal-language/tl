@@ -19,7 +19,20 @@ describe("syntax errors", function()
       }
    ]], {
       { y = 3, "syntax error" },
-      { y = 3, "expected an expression" },
+      { y = 3, "syntax error" },
+      { y = 4, "expected an expression" },
+   }))
+
+   it("missing separators in table", util.check_syntax_error([[
+      local x = {
+         cat = true
+         pizza = true
+         brain = true
+      }
+   ]], {
+      { y = 3, "syntax error" },
+      { y = 3, "syntax error" },
+      { y = 4, "syntax error" },
    }))
 
    it("missing separators", util.check_syntax_error([[
