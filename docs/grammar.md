@@ -92,7 +92,7 @@ precedence, see below.
 
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
 *      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | ‘function’ functiontype
-*      | Name [typeargs]
+*      | Name {{‘.’ Name }} [typeargs]
 
 *  typelist ::= type {‘,’ type}
 
