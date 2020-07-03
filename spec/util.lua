@@ -2,6 +2,7 @@ local util = {}
 
 local tl = require("tl")
 local assert = require("luassert")
+local lfs = require("lfs")
 
 function util.mock_io(finally, files)
    assert(type(finally) == "function")
@@ -67,6 +68,58 @@ function util.write_tmp_file(finally, name, content)
       os.remove(full_name)
    end)
    return full_name
+end
+
+function util.write_tmp_dir(finally, dir_name, dir_structure)
+   assert(type(finally) == "function")
+   assert(type(dir_name) == "string")
+   assert(type(dir_structure) == "table")
+
+   local full_name = "/tmp/" .. dir_name .. "/"
+   assert(lfs.mkdir(full_name))
+   local function traverse_dir(dir_structure, prefix)
+      prefix = prefix or full_name
+      for name, content in pairs(dir_structure) do
+         if type(content) == "table" then
+            assert(lfs.mkdir(prefix .. name))
+            traverse_dir(content, prefix .. name .. "/")
+         else
+            local fd = io.open(prefix .. name, "w")
+            fd:write(content)
+            fd:close()
+         end
+      end
+   end
+   traverse_dir(dir_structure)
+   finally(function()
+      os.execute("rm -r " .. full_name)
+      -- local function rm_dir(dir_structure, prefix)
+      --    prefix = prefix or full_name
+      --    for name, content in pairs(dir_structure) do
+      --       if type(content) == "table" then
+      --          rm_dir(prefix .. name .. "/")
+      --       end
+      --       os.remove(prefix .. name)
+      --    end
+      -- end
+      -- rm_dir(dir_structure)
+   end)
+   return full_name
+end
+
+function util.get_dir_structure(dir_name)
+   -- basically run `tree` and put it into a table
+   local dir_structure = {}
+   for fname in lfs.dir(dir_name) do
+      if fname ~= ".." and fname ~= "." then
+         if lfs.attributes(dir_name .. "/" .. fname, "mode") == "directory" then
+            dir_structure[fname] = util.get_dir_structure(dir_name .. "/" .. fname)
+         else
+            dir_structure[fname] = true
+         end
+      end
+   end
+   return dir_structure
 end
 
 function util.read_file(name)
