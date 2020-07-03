@@ -1,6 +1,6 @@
 local util = require("spec.util")
 
-describe("-I --include argument", function()
+describe("-I --include-dir argument", function()
    it("adds a directory to package.path", function()
       local name = util.write_tmp_file(finally, "foo.tl", [[
          require("add")

@@ -29,7 +29,7 @@ return {
 || `include` | `{string}` | The set of files to compile/check. See below for details on patterns.
 || `exclude` | `{string}` | The set of files to exclude. See below for details on patterns.
 | `-s --source-dir` | `source_dir` | `string` | Set the directory to be searched for files. `gen` will compile every .tl file in every subdirectory by default.
-| `-b --build-dir` | `build_dir` | `string` | Set the directory for generated files, mimicing the file structure of the source files.
+| `-b --build-dir` | `build_dir` | `string` | Set the directory for generated files, mimicking the file structure of the source files.
 || `files` | `{string}` | The names of files to be compiled. Does not accept patterns like `include`.
 
 ### Include/Exclude patterns
@@ -38,7 +38,7 @@ The `include` and `exclude` fields can have glob-like patterns in them:
 - `*`: Matches any number of characters (excluding directory separators)
 - `**/`: Matches any number subdirectories
 
-In addition, setting the `source_dir` has the effect of prepending `source_dir` to all patterns
+In addition, setting the `source_dir` has the effect of prepending `source_dir` to all patterns.
 
 For example:
 If our project was laid out as such:
