@@ -333,8 +333,8 @@ local function traverse(dirname)
                files[input] = output
             end
          else
-            if file:match(".tl$") and not file:match(".d.tl$") then
-               local output = file:gsub(".tl$", ".lua")
+            if file:match("%.tl$") and not file:match("%.d%.tl$") then
+               local output = file:gsub("%.tl$", ".lua")
                files[path_concat(dirname, file)] = path_concat(dirname, output)
             end
          end
@@ -371,7 +371,7 @@ end
 local function matcher(str)
    local chunks = {}
    for piece in str_split(str, "**/") do
-      table.insert(chunks, (piece:gsub("%*", "[^" .. path_separator .. "]*")))
+      table.insert(chunks, (piece:gsub("%*", "[^" .. path_separator .. "]-")))
    end
    chunks[1] = "^" .. chunks[1]
    chunks[#chunks] = chunks[#chunks] .. "$"
