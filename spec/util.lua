@@ -122,6 +122,61 @@ function util.get_dir_structure(dir_name)
    return dir_structure
 end
 
+local function insert_into(tab, files)
+   for k, v in pairs(files) do
+      if type(k) == "number" then
+         tab[v] = true
+      elseif type(v) == "string" then
+         tab[k] = true
+      elseif type(v) == "table" then
+         if not tab[k] then
+            tab[k] = {}
+         end
+         insert_into(tab[k], v)
+      end
+   end
+end
+local tl_path = lfs.currentdir()
+local tl_executable = tl_path .. "/tl"
+local tl_lib = tl_path .. "/tl.lua"
+function util.run_mock_project(finally, t)
+   assert(type(finally) == "function")
+   assert(type(t) == "table")
+   assert(type(t.cmd) == "string")
+   assert(({
+      gen = true,
+      check = true,
+      run = true,
+   })[t.cmd])
+   local actual_dir_name = util.write_tmp_dir(finally, t.dir_name, t.dir_structure)
+   lfs.link(tl_executable, actual_dir_name .. "/tl")
+   lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
+   local expected_dir_structure = {
+      ["tl"] = true,
+      ["tl.lua"] = true,
+   }
+   insert_into(expected_dir_structure, t.dir_structure)
+   insert_into(expected_dir_structure, t.generated_files)
+   lfs.chdir(actual_dir_name)
+   local pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or ""))
+   local output = pd:read("*a")
+   local actual_dir_structure = util.get_dir_structure(".")
+   lfs.chdir(tl_path)
+   t.popen_close = t.popen_close or {}
+   util.assert_popen_close(
+      t.popen_close[1] or true, --FIXME: nil is an acceptable value here
+      t.popen_close[2] or "exit",
+      t.popen_close[3] or 0,
+      pd:close()
+   )
+   if t.cmd_output then
+      -- FIXME: when generating multiple files their order isnt guaranteed
+      -- so either account for this here or make the order deterministic in tl
+      assert.are.equal(output, t.cmd_output)
+   end
+   assert.are.same(expected_dir_structure, actual_dir_structure)
+end
+
 function util.read_file(name)
    assert(type(name) == "string")
 
