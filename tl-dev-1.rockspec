@@ -25,6 +25,9 @@ build = {
    install = {
       bin = {
          "tl"
+      },
+      lua = {
+         "tl.tl"
       }
    },
 }
