@@ -122,7 +122,9 @@ describe("global function", function()
                end
                f(3, "abc")
             ]])
-            local _, ast = tl.parse_program(tokens)
+            local syntax_errors = {}
+            local _, ast = tl.parse_program(tokens, syntax_errors)
+            assert.same({}, syntax_errors)
             local errors = tl.type_check(ast)
             assert.same({}, errors)
          end)
@@ -147,9 +149,11 @@ describe("global function", function()
                end
                local x = f(3, "abc")
             ]])
-            local _, ast = tl.parse_program(tokens)
+            local syntax_errors = {}
+            local _, ast = tl.parse_program(tokens, syntax_errors)
+            assert.same({}, syntax_errors)
             local errors = tl.type_check(ast)
-            assert.same(0, #errors)
+            assert.same({}, errors)
          end)
 
          describe("with function arguments", function()
@@ -189,7 +193,9 @@ describe("global function", function()
 
                   print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
                ]])
-               local _, ast = tl.parse_program(tokens)
+               local syntax_errors = {}
+               local _, ast = tl.parse_program(tokens, syntax_errors)
+               assert.same({}, syntax_errors)
                local errors = tl.type_check(ast)
                assert.same({}, errors)
             end)

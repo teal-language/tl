@@ -1305,7 +1305,7 @@ parse_type_list = function(ps, i, mode)
 
    local prev_i = i
    i = parse_trying_list(ps, i, list, parse_type)
-   if i == prev_i then
+   if i == prev_i and ps.tokens[i].tk ~= ")" then
       fail(ps, i - 1, "expected a type list")
    end
 
