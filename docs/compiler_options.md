@@ -38,7 +38,9 @@ The `include` and `exclude` fields can have glob-like patterns in them:
 - `*`: Matches any number of characters (excluding directory separators)
 - `**/`: Matches any number subdirectories
 
-In addition, setting the `source_dir` has the effect of prepending `source_dir` to all patterns.
+In addition
+- setting the `source_dir` has the effect of prepending `source_dir` to all patterns.
+- setting the `build_dir` has the additional effect of adding `<build_dir>/**/` to `exclude`
 
 For example:
 If our project was laid out as such:

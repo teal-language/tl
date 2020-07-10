@@ -142,12 +142,14 @@ local tl_lib = tl_path .. "/tl.lua"
 function util.run_mock_project(finally, t)
    assert(type(finally) == "function")
    assert(type(t) == "table")
-   assert(type(t.cmd) == "string")
+   assert(type(t.cmd) == "string", "tl <cmd> not given")
+   assert(type(t.dir_name) == "string", "dir_name not provided")
    assert(({
       gen = true,
       check = true,
       run = true,
-   })[t.cmd])
+      build = true,
+   })[t.cmd], "Invalid tl <cmd>")
    local actual_dir_name = util.write_tmp_dir(finally, t.dir_name, t.dir_structure)
    lfs.link(tl_executable, actual_dir_name .. "/tl")
    lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
@@ -162,25 +164,29 @@ function util.run_mock_project(finally, t)
    local output = pd:read("*a")
    local actual_dir_structure = util.get_dir_structure(".")
    lfs.chdir(tl_path)
-   t.popen_close = t.popen_close or {}
-   util.assert_popen_close(
-      t.popen_close[1] or true, --FIXME: nil is an acceptable value here
-      t.popen_close[2] or "exit",
-      t.popen_close[3] or 0,
-      pd:close()
-   )
+   t.popen = t.popen or {
+      status = true,
+      exit = "exit",
+      code = 0,
+   }
+   -- util.assert_popen_close(
+   --    t.popen.status,
+   --    t.popen.exit,
+   --    t.popen.code,
+   --    pd:close()
+   -- )
    if t.cmd_output then
       -- FIXME: when generating multiple files their order isnt guaranteed
       -- so either account for this here or make the order deterministic in tl
       assert.are.equal(output, t.cmd_output)
    end
-   assert.are.same(expected_dir_structure, actual_dir_structure)
+   assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
 end
 
 function util.read_file(name)
    assert(type(name) == "string")
 
-   local fd = io.open(name, "r")
+   local fd = assert(io.open(name, "r"))
    local output = fd:read("*a")
    fd:close()
    return output

@@ -5,12 +5,16 @@ describe("-b --build-dir argument", function()
       util.run_mock_project(finally, {
          dir_name = "build_dir_test",
          dir_structure = {
-            ["tlconfig.lua"] = [[return { build_dir = "build" }]],
+            ["tlconfig.lua"] = [[return {
+               build_dir = "build",
+               include = {
+                  "foo.tl", "bar.tl"
+               },
+            }]],
             ["foo.tl"] = [[print "foo"]],
             ["bar.tl"] = [[print "bar"]],
          },
-         cmd = "gen",
-         args = "foo.tl bar.tl",
+         cmd = "build",
          generated_files = {
             ["build"] = {
                "foo.lua",
@@ -23,7 +27,10 @@ describe("-b --build-dir argument", function()
       util.run_mock_project(finally, {
          dir_name = "build_dir_nested_test",
          dir_structure = {
-            ["tlconfig.lua"] = [[return { build_dir = "build" }]],
+            ["tlconfig.lua"] = [[return {
+               build_dir = "build",
+               include = {"**/*.tl"}
+            }]],
             ["foo.tl"] = [[print "foo"]],
             ["bar.tl"] = [[print "bar"]],
             ["baz"] = {
@@ -33,8 +40,7 @@ describe("-b --build-dir argument", function()
                }
             }
          },
-         cmd = "gen",
-         args = "foo.tl bar.tl baz/foo.tl baz/bar/foo.tl",
+         cmd = "build",
          generated_files = {
             ["build"] = {
                "foo.lua",

@@ -11,7 +11,7 @@ describe("globs", function()
                ["b.tl"] = [[print "b"]],
                ["c.tl"] = [[print "c"]],
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                "a.lua",
                "b.lua",
@@ -33,7 +33,7 @@ describe("globs", function()
                ["abbar.tl"] = [[print "e"]],
                ["barcd.tl"] = [[print "f"]],
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                "abzcd.lua",
                "abcd.lua",
@@ -53,7 +53,7 @@ describe("globs", function()
                ["foo.hs"] = [[main = print "c"]],
                ["foo.sh"] = [[echo "d"]],
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                "foo.lua"
             },
@@ -67,13 +67,13 @@ describe("globs", function()
                ["foo.tl"] = [[print "a"]],
                ["bar.d.tl"] = [[local Point = record x: number y: number end return Point]],
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                "foo.lua"
             },
          })
       end)
-      it("should match directories in the middle of a path", function()
+      pending("should match directories in the middle of a path", function()
          util.run_mock_project(finally, {
             dir_name = "match_dirs_in_middle_test",
             dir_structure = {
@@ -92,7 +92,7 @@ describe("globs", function()
                   },
                }
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                ["foo"] = {
                   ["bar"] = {
@@ -116,7 +116,7 @@ describe("globs", function()
                ["bar.tl"] = [[print "b"]],
                ["baz.tl"] = [[print "c"]],
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                "foo.lua",
                "bar.lua",
@@ -126,7 +126,7 @@ describe("globs", function()
       end)
       it("should match any subdirectory", function()
          util.run_mock_project(finally, {
-            dir_name = "match_current_dir_test",
+            dir_name = "match_sub_dir_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "**/*" } }]],
                ["foo"] = {
@@ -143,7 +143,7 @@ describe("globs", function()
                },
                ["a"] = {a={a={a={a={a={["a.tl"]=[[global a = "a"]]}}}}}}
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                ["foo"] = {
                   "foo.lua",
@@ -161,9 +161,9 @@ describe("globs", function()
             },
          })
       end)
-      it("should not get the order of directories confused", function()
+      pending("should not get the order of directories confused", function()
          util.run_mock_project(finally, {
-            dir_name = "match_current_dir_test",
+            dir_name = "match_order_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "foo/**/bar/**/baz/a.tl" } }]],
                ["foo"] = {
@@ -188,7 +188,7 @@ describe("globs", function()
                   },
                },
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                ["foo"] = {
                   ["bar"] = {
@@ -202,7 +202,7 @@ describe("globs", function()
       end)
    end)
    describe("* and **/", function()
-      it("should work together", function()
+      pending("should work together", function()
          util.run_mock_project(finally, {
             dir_name = "glob_interference_test",
             dir_structure = {
@@ -258,7 +258,7 @@ describe("globs", function()
                   },
                },
             },
-            cmd = "gen",
+            cmd = "build",
             generated_files = {
                ["foo"] = {
                   ["a"] = {

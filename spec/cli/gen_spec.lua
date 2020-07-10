@@ -79,7 +79,7 @@ describe("tl gen", function()
          local pd = io.popen("./tl gen " .. name, "r")
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "add.lua"
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
             local function add(a, b)
@@ -103,7 +103,7 @@ describe("tl gen", function()
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
          assert.same("", output)
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "add.lua"
          util.assert_line_by_line([[
             local function add(a, b)
                return a + b
@@ -134,7 +134,7 @@ describe("tl gen", function()
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
          assert.same("", output)
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "add.lua"
          util.assert_line_by_line([[
             local function unk(x, y)
                return a + b
@@ -147,7 +147,7 @@ describe("tl gen", function()
          local pd = io.popen("./tl gen " .. name, "r")
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "add.lua"
          assert.match("Wrote: " .. lua_name, output, 1, true)
          assert.equal(output_file, util.read_file(lua_name))
       end)
@@ -162,7 +162,7 @@ describe("tl gen", function()
          local pd = io.popen("./tl --skip-compat53 gen " .. name, "r")
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "test.lua"
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
             local t = { 1, 2, 3, 4 }
@@ -180,7 +180,7 @@ describe("tl gen", function()
          local pd = io.popen("./tl gen " .. name, "r")
          local output = pd:read("*a")
          util.assert_popen_close(true, "exit", 0, pd:close())
-         local lua_name = name:gsub("%.tl$", ".lua")
+         local lua_name = "test.lua"
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
             local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { 1, 2, 3, 4 }

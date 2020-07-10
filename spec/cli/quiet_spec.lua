@@ -36,7 +36,7 @@ describe("-q --quiet flag", function()
       local pd = io.popen("./tl --quiet gen " .. name, "r")
       local output = pd:read("*a")
       util.assert_popen_close(true, "exit", 0, pd:close())
-      local lua_name = name:gsub("%.tl$", ".lua")
+      local lua_name = "add.lua"
       assert.match("", output, 1, true)
       util.assert_line_by_line([[
          local function add(a, b)

@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("files config option", function()
-   it("should compile the given list of files", function()
+   pending("should compile the given list of files", function()
       util.run_mock_project(finally, {
          dir_name = "files_test",
          dir_structure = {
@@ -10,7 +10,7 @@ describe("files config option", function()
             ["bar.tl"] = [[print "b"]],
             ["baz.tl"] = [[print "c"]],
          },
-         cmd = "gen",
+         cmd = "build",
          generated_files = {
             "foo.lua",
             "bar.lua",
