@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("config option interactions", function()
    describe("include+exclude", function()
-      pending("exclude should have precedence over include", function()
+      it("exclude should have precedence over include", function()
          util.run_mock_project(finally, {
             dir_name = "interaction_inc_exc_test",
             dir_structure = {
@@ -37,7 +37,7 @@ describe("config option interactions", function()
       end)
    end)
    describe("source_dir+build_dir", function()
-      pending("Having source_dir inside of build_dir works", function()
+      it("Having source_dir inside of build_dir works", function()
          util.run_mock_project(finally, {
             dir_name = "source_dir_in_build_dir_test",
             dir_structure = {
@@ -61,7 +61,7 @@ describe("config option interactions", function()
             },
          })
       end)
-      pending("Having build_dir inside of source_dir works if no inputs from ", function()
+      it("Having build_dir inside of source_dir works", function()
          util.run_mock_project(finally, {
             dir_name = "build_dir_in_source_dir_test",
             dir_structure = {
@@ -85,60 +85,82 @@ describe("config option interactions", function()
             },
          })
       end)
-      it("fails when a file would be generated inside of source_dir while there is a build_dir", function()
+   end)
+   describe("source_dir+include+exclude", function()
+      it("nothing outside of source_dir is included", function()
          util.run_mock_project(finally, {
-            dir_name = "gen_in_source_dir_test",
+            dir_name = "source_dir_inc_exc_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   source_dir = "src",
-                  build_dir = ".",
+                  include = {
+                     "**/*"
+                  },
                }]],
-               src = {
-                  ["foo.tl"] = [[print "hi"]],
-                  src = {
-                     ["foo.tl"] = [[print "hi"]],
+               ["src"] = {
+                  ["foo"] = {
+                     ["bar"] = {
+                        ["a.tl"] = [[print "a"]],
+                        ["b.tl"] = [[print "b"]],
+                     },
+                     ["a.tl"] = [[print "a"]],
+                     ["b.tl"] = [[print "b"]],
+                  },
+               },
+               ["a.tl"] = [[print "a"]],
+               ["b.tl"] = [[print "b"]],
+            },
+            cmd = "build",
+            generated_files = {
+               ["src"] = {
+                  ["foo"] = {
+                     ["bar"] = {
+                        "a.lua",
+                        "b.lua",
+                     },
+                     "a.lua",
+                     "b.lua",
                   },
                },
             },
-            generated_files = {}, -- Build errors should not generate anything
-            cmd = "build",
-            popen = {
-               status = false,
-               exit = "exit",
-               code = 1,
-            },
          })
       end)
-      pending("should not include any files in build_dir", function()
+      it("include and exclude work as expected", function()
          util.run_mock_project(finally, {
-            dir_name = "source_file_in_build_dir_test",
+            dir_name = "source_dir_inc_exc_2",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
-                  source_dir = ".",
-                  build_dir = "build",
+                  source_dir = "",
+                  include = {
+                     "foo/*.tl",
+                  },
+                  exclude = {
+                     "foo/a*.tl",
+                  },
                }]],
-               ["foo.tl"] = [[print "hi"]],
-               bar = {
-                  ["baz.tl"] = [[print "hi"]],
+               foo = {
+                  ["a.tl"] = [[print 'a']],
+                  ["ab.tl"] = [[print 'a']],
+                  ["ac.tl"] = [[print 'a']],
+                  ["b.tl"] = [[print 'b']],
+                  ["bc.tl"] = [[print 'b']],
+                  ["bd.tl"] = [[print 'b']],
                },
-               build = {
-                  ["dont_include_this.tl"] = [[print "dont"]],
+               bar = {
+                  ["c.tl"] = [[print 'c']],
+                  ["cd.tl"] = [[print 'c']],
+                  ["ce.tl"] = [[print 'c']],
                },
             },
             cmd = "build",
             generated_files = {
-               build = {
-                  "foo.lua",
-                  bar = {
-                     "baz.lua",
-                  },
+               foo = {
+                  "b.lua",
+                  "bc.lua",
+                  "bd.lua",
                },
             },
          })
-      end)
-   end)
-   describe("source_dir+include+exclude", function()
-      pending("nothing outside of source_dir is included", function()
       end)
    end)
 end)
