@@ -121,7 +121,6 @@ local function get_args_parser()
 
    parser:option("-o --output", "Write to <filename> instead.")
          :argname("<filename>")
-         :count("*")
 
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
 
@@ -451,10 +450,19 @@ if cmd == "gen" then
          end
       end
    else
-      -- TODO: args["output"]
       for i, res in ipairs(results) do
-         write_out(res.tl_result, res.output_file)
-         print("Wrote: " .. res.output_file)
+         local append = args["output"] and i > 1
+         write_out(
+            res.tl_result,
+            args["output"] or res.output_file,
+            append
+         )
+         if not args["output"] then
+            print("Wrote: " .. res.output_file)
+         end
+      end
+      if args["output"] then
+         print("Wrote: " .. args["output"])
       end
    end
    os.exit(exit)
@@ -697,7 +705,6 @@ if cmd == "build" then
    end
    for path in project:files(inc_patterns, exc_patterns) do
       if path:match("%.tl$") and not path:match("%.d%.tl$") then
-         local include = true
          project.source_file_map[path] = path:gsub("%.tl$", ".lua")
          if tlconfig["build_dir"] then
             if tlconfig["source_dir"] then
@@ -706,20 +713,7 @@ if cmd == "build" then
             project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
          end
 
-         if (
-            tlconfig["source_dir"] and
-            tlconfig["build_dir"] and
-            is_in(path, tlconfig["build_dir"]) and
-            not is_in(path, tlconfig["source_dir"])
-         ) then -- handle when source_dir is in build_dir
-            include = false
-            -- die("Build error: file \"" .. path .. "\" is included even though it is in build_dir")
-         end
-         if include then
-            check_parent_dirs(project.source_file_map[path])
-         else
-            project.source_file_map[path] = nil
-         end
+         check_parent_dirs(project.source_file_map[path])
       end
    end
    for i, v in ipairs(dirs_to_be_mked) do
