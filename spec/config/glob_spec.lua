@@ -17,8 +17,7 @@ describe("globs", function()
                "b.lua",
                "c.lua",
             },
-            --FIXME: order is not guaranteed, fix either in here or in tl itself
-            --cmd_output = "Wrote: a.lua\nWrote: b.lua\nWrote: c.lua\n"
+            cmd_output = "Wrote: a.lua\nWrote: b.lua\nWrote: c.lua\n"
          })
       end)
       it("should match when other characters are present in the pattern", function()
@@ -73,7 +72,7 @@ describe("globs", function()
             },
          })
       end)
-      pending("should match directories in the middle of a path", function()
+      it("should match directories in the middle of a path", function()
          util.run_mock_project(finally, {
             dir_name = "match_dirs_in_middle_test",
             dir_structure = {
@@ -161,7 +160,7 @@ describe("globs", function()
             },
          })
       end)
-      pending("should not get the order of directories confused", function()
+      it("should not get the order of directories confused", function()
          util.run_mock_project(finally, {
             dir_name = "match_order_test",
             dir_structure = {
@@ -202,7 +201,7 @@ describe("globs", function()
       end)
    end)
    describe("* and **/", function()
-      pending("should work together", function()
+      it("should work together", function()
          util.run_mock_project(finally, {
             dir_name = "glob_interference_test",
             dir_structure = {

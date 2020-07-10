@@ -587,14 +587,15 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
    local function iter(dirs, prefix)
       prefix = prefix or ""
       for fname, file in pairs(dirs) do
+         local path = self.paths[file]
          if getmetatable(file) == self.emptyref then
             local include = true
 
-            local idx = inc_patt_arr:match(fname)
+            local idx = inc_patt_arr:match(path)
             if not idx then
                include = false
             end
-            idx = exc_patt_arr:match(fname)
+            idx = exc_patt_arr:match(path)
             if include and idx then
                include = false
             end
