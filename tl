@@ -591,13 +591,17 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
          if getmetatable(file) == self.emptyref then
             local include = true
 
-            local idx = inc_patt_arr:match(path)
-            if not idx then
-               include = false
+            if #inc_patt_arr > 0 then
+               local idx = inc_patt_arr:match(path)
+               if not idx then
+                  include = false
+               end
             end
-            idx = exc_patt_arr:match(path)
-            if include and idx then
-               include = false
+            if #exc_patt_arr > 0 then
+               idx = exc_patt_arr:match(path)
+               if include and idx then
+                  include = false
+               end
             end
             if include then
                coroutine.yield(self.paths[file])
@@ -682,6 +686,7 @@ end
 --------------------------------------------------------------------
 --                            BUILD                               --
 --------------------------------------------------------------------
+--print(require"inspect"(project))
 
 -- sort source map so that order is deterministic (helps for testing output)
 local sorted_source_file_arr = {}

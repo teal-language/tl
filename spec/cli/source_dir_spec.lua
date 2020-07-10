@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("-s --source-dir argument", function()
-   pending("recursively traverses the directory by default", function()
+   it("recursively traverses the directory by default", function()
       util.run_mock_project(finally, {
          dir_name = "source_dir_traversal_test",
          dir_structure = {
