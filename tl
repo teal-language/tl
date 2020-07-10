@@ -51,6 +51,7 @@ local function validate_config(config)
       preload_modules = true,
       quiet = true,
       source_dir = true,
+      skip_compat53 = true,
    }
 
    for k, _ in pairs(config) do
@@ -189,6 +190,7 @@ if cmd == "build" then
    tlconfig["source_dir"] = args["source_dir"] or tlconfig["source_dir"]
    tlconfig["build_dir"] = args["build_dir"] or tlconfig["build_dir"]
 end
+tlconfig["skip_compat53"] = args["skip_compat53"] or tlconfig["skip_compat53"]
 
 local function report_errors(category, errors)
    if not errors then
@@ -266,7 +268,7 @@ local function setup_env(filename)
          lax_mode = false
       end
 
-      local skip_compat53 = args["skip_compat53"]
+      local skip_compat53 = tlconfig["skip_compat53"]
 
       env = tl.init_env(lax_mode, skip_compat53)
    end
