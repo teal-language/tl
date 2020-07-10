@@ -128,7 +128,6 @@ local function get_args_parser()
 
    parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
-
    parser:flag("-p --pretend", "Do not write to any files, just output what files would be generated.")
 
    parser:require_command(false)
@@ -591,6 +590,9 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
          if getmetatable(file) == self.emptyref then
             local include = true
 
+            if tlconfig["files"] then
+               include = false
+            end
             if #inc_patt_arr > 0 then
                local idx = inc_patt_arr:match(path)
                if not idx then
@@ -612,6 +614,16 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
       end
    end
    return coroutine.wrap(iter), self.dir
+end
+function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
+   local current_dir = self.dir
+   for dirname in str_split(path, path_separator) do
+      current_dir = current_dir[dirname]
+      if not current_dir then
+         return nil
+      end
+   end
+   return current_dir
 end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
@@ -664,6 +676,16 @@ if cmd == "build" then
       end
    end
 
+   if tlconfig["files"] then
+      -- TODO: check if files are not relative
+      for i, fname in ipairs(tlconfig["files"]) do
+         if not project:find(fname) then
+            die("Build error: file \"" .. fname .. "\" not found")
+         end
+         project.source_file_map[fname] = fname:gsub("%.tl$", ".lua")
+         check_parent_dirs(project.source_file_map[fname])
+      end
+   end
    for path in project:files(inc_patterns, exc_patterns) do
       if path:match("%.tl$") and not path:match("%.d%.tl$") then
          project.source_file_map[path] = path:gsub("%.tl$", ".lua")
@@ -686,7 +708,7 @@ end
 --------------------------------------------------------------------
 --                            BUILD                               --
 --------------------------------------------------------------------
---print(require"inspect"(project))
+-- print(require"inspect"(project))
 
 -- sort source map so that order is deterministic (helps for testing output)
 local sorted_source_file_arr = {}

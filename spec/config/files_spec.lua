@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("files config option", function()
-   pending("should compile the given list of files", function()
+   it("should compile the given list of files", function()
       util.run_mock_project(finally, {
          dir_name = "files_test",
          dir_structure = {
