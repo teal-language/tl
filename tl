@@ -524,9 +524,9 @@ local function cleanup_file_name(name) --remove trailing and extra path separato
          if b == "." then
             die("Config error: ../ not allowed, please use direct paths")
          elseif b == path_separator then
-            return curr_dir .. path_separator
+            return ""
          else
-            return curr_dir
+            return b
          end
       end)
       :gsub(path_separator .. "+", path_separator))
@@ -547,6 +547,7 @@ local function remove_leading_path(leading_part, path)
    if s then
       return path:sub(e+1, -1)
    end
+   return path
 end
 
 local function traverse(dirname, emptyref)
@@ -625,6 +626,9 @@ function project:find(path) -- allow for indexing with paths project:find("foo/b
    end
    return current_dir
 end
+local function is_in(a, b) -- a is in b
+   return a:find("^" .. b) and true
+end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 project.source_file_map = {}
@@ -683,11 +687,15 @@ if cmd == "build" then
             die("Build error: file \"" .. fname .. "\" not found")
          end
          project.source_file_map[fname] = fname:gsub("%.tl$", ".lua")
+         if tlconfig["build_dir"] then
+            project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
+         end
          check_parent_dirs(project.source_file_map[fname])
       end
    end
    for path in project:files(inc_patterns, exc_patterns) do
       if path:match("%.tl$") and not path:match("%.d%.tl$") then
+         local include = true
          project.source_file_map[path] = path:gsub("%.tl$", ".lua")
          if tlconfig["build_dir"] then
             if tlconfig["source_dir"] then
@@ -695,12 +703,26 @@ if cmd == "build" then
             end
             project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
          end
-         check_parent_dirs(project.source_file_map[path])
+
+         if (
+            tlconfig["source_dir"] and
+            tlconfig["build_dir"] and
+            is_in(path, tlconfig["build_dir"]) and
+            not is_in(path, tlconfig["source_dir"])
+         ) then -- handle when source_dir is in build_dir
+            include = false
+            -- die("Build error: file \"" .. path .. "\" is included even though it is in build_dir")
+         end
+         if include then
+            check_parent_dirs(project.source_file_map[path])
+         else
+            project.source_file_map[path] = nil
+         end
       end
    end
    for i, v in ipairs(dirs_to_be_mked) do
       if not lfs.mkdir(v) then
-         die("Build error: unable to mkdir " .. v)
+         die("Build error: unable to mkdir \"" .. v .. "\"")
       end
    end
 end
