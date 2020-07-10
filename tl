@@ -407,7 +407,8 @@ end
 --                            GEN                                 --
 --------------------------------------------------------------------
 
-local function write_out(result, output_file, append)
+local function write_out(result, output_file, append, should_print)
+   if not args["pretend"] then
       local ofd, err = io.open(output_file, append and "a" or "w")
 
       if not ofd then
@@ -420,6 +421,14 @@ local function write_out(result, output_file, append)
       end
 
       ofd:close()
+   end
+   if should_print then
+      if args["pretend"] then
+         print("Would Write: " .. output_file)
+      else
+         print("Wrote: " .. output_file)
+      end
+   end
 end
 
 if cmd == "gen" then
@@ -452,17 +461,16 @@ if cmd == "gen" then
    else
       for i, res in ipairs(results) do
          local append = args["output"] and i > 1
+         local should_print = true
+         if args["output"] then
+            should_print = i == #results
+         end
          write_out(
             res.tl_result,
             args["output"] or res.output_file,
-            append
+            append,
+            should_print
          )
-         if not args["output"] then
-            print("Wrote: " .. res.output_file)
-         end
-      end
-      if args["output"] then
-         print("Wrote: " .. args["output"])
       end
    end
    os.exit(exit)
