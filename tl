@@ -119,7 +119,7 @@ local function get_args_parser()
 
    parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
-   parser:flag("-p --pretend", "Do not write to any files, just output what files would be generated.")
+   parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
 
    parser:require_command(false)
    parser:command_target("command")
@@ -747,8 +747,10 @@ for i, files in ipairs(sorted_source_file_arr) do
       exit = 1
       break
    end
-
-   write_out(result, output_file)
+   local ok = report_type_errors(result)
+   if ok then
+      write_out(result, output_file)
+   end
 end
 
 os.exit(exit)
