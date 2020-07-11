@@ -112,6 +112,7 @@ local function check(lax, code, unknowns)
             end
          end
       end
+      return true, ast
    end
 end
 
@@ -133,6 +134,9 @@ local function check_type_error(lax, code, type_errors)
          if err.msg then
             assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
+         if err.filename then
+            assert.match(err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+         end
       end
    end
 end
@@ -150,11 +154,33 @@ function util.lax_check(code, unknowns)
    return check(true, code, unknowns)
 end
 
+function util.strict_and_lax_check(code, unknowns)
+   assert(type(code) == "string")
+   assert(type(unknowns) == "table")
+
+   return check(true, code)
+      and check(false, code, unknowns)
+end
+
 function util.check_type_error(code, type_errors)
    assert(type(code) == "string")
    assert(type(type_errors) == "table")
 
    return check_type_error(false, code, type_errors)
+end
+
+function util.strict_check_type_error(code, type_errors, unknowns)
+   assert(type(code) == "string")
+   assert(type(type_errors) == "table")
+   assert(type(unknowns) == "table")
+
+   -- fails in strict
+   local ok = check_type_error(false, code, type_errors)
+   if not ok then
+      return
+   end
+   -- passes in lax
+   return check(true, code, unknowns)
 end
 
 function util.lax_check_type_error(code, type_errors)
@@ -182,6 +208,9 @@ function util.check_syntax_error(code, syntax_errors)
          end
          if err.msg then
             assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+         end
+         if err.filename then
+            assert.match(err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
    end

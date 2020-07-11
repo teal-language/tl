@@ -1,80 +1,60 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("local", function()
    describe("declaration", function()
-      it("basic inference sets types", function()
-         -- fail
-         local tokens = tl.lex([[
-            local x = 1
-            local y = 2
-            local z: table
-            z = x + y
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.match("in assignment: got number", errors[1].msg, 1, true)
-         -- pass
-         local tokens = tl.lex([[
-            local x = 1
-            local y = 2
-            local z: number
-            z = x + y
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
+      it("basic inference sets types, fail", util.check_type_error([[
+         local x = 1
+         local y = 2
+         local z: table
+         z = x + y
+      ]], {
+         { msg = "in assignment: got number" },
+      }))
+
+      it("basic inference sets types, pass", util.check [[
+         local x = 1
+         local y = 2
+         local z: number
+         z = x + y
+      ]])
    end)
 
    describe("multiple declaration", function()
-      it("basic inference catches errors", function()
-         local tokens = tl.lex([[
-            local x, y = 1, 2
-            local z: table
-            z = x + y
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.match("in assignment: got number", errors[1].msg, 1, true)
-      end)
+      it("basic inference catches errors", util.check_type_error([[
+         local x, y = 1, 2
+         local z: table
+         z = x + y
+      ]], {
+         { msg = "in assignment: got number" },
+      }))
 
-      it("basic inference sets types", function()
-         -- pass
-         local tokens = tl.lex([[
-            local x, y = 1, 2
-            local z: number
-            z = x + y
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
+      it("basic inference sets types", util.check [[
+         local x, y = 1, 2
+         local z: number
+         z = x + y
+      ]])
 
       describe("with types", function()
-         it("checks values", function()
-            -- fail
-            local tokens = tl.lex([[
-               local x, y: string, number = 1, "a"
-               local z
-               z = x + string.byte(y)
-            ]])
-            local _, ast = tl.parse_program(tokens)
-            local errors = tl.type_check(ast, nil, "bla.tl")
-            assert.match("x: got number, expected string", errors[1].msg, 1, true)
-            assert.match("y: got string \"a\", expected number", errors[2].msg, 1, true)
-         end)
+         it("checks values", util.check_type_error([[
+            local x, y: string, number = 1, "a"
+            local z
+            z = x + string.byte(y)
+         ]], {
+            { msg = "x: got number, expected string" },
+            { msg = "y: got string \"a\", expected number" },
+            { msg = "variable 'z' has no type" },
+            { msg = "cannot use operator '+'" },
+            { msg = "argument 1: got number, expected string" },
+         }))
 
-         it("propagates correct type", function()
-            -- fail
-            local tokens = tl.lex([[
-               local x, y: number, string = 1, "a"
-               local z: table
-               z = x + string.byte(y)
-            ]])
-            local _, ast = tl.parse_program(tokens)
-            local errors = tl.type_check(ast)
-            assert.match("in assignment: got number", errors[1].msg, 1, true)
-         end)
+         it("propagates correct type", util.check_type_error([[
+            local x, y: number, string = 1, "a"
+            local z: table
+            z = x + string.byte(y)
+         ]], {
+            { msg = "in assignment: got number" },
+         }))
 
          it("uses correct type", function()
             -- pass

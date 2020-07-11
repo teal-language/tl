@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 
 local function string_trim(s)
@@ -7,17 +8,11 @@ end
 
 
 describe("singlequote string", function()
-   it("accepts", function()
-      local tokens = tl.lex([[local foo = 'bar']])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("accepts", util.check [[local foo = 'bar']])
 
    it("export Lua", function()
-      local tokens = tl.lex([[local foo = 'bar']])
-      local _, ast = tl.parse_program(tokens)
-      local lua = tl.pretty_print_ast(ast)
+      local result = tl.process_string([[local foo = 'bar']])
+      local lua = tl.pretty_print_ast(result.ast)
       assert.equal([[local foo = 'bar']], string_trim(lua))
    end)
 end)

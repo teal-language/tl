@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 
 local function string_trim(s)
@@ -7,102 +8,73 @@ end
 
 
 describe("long comment", function()
-   it("accepts a level 0 long comment", function()
-      local tokens = tl.lex([=[
-         --[[
-            long comment line 1
-            long comment line 2
-         ]]
-         local foo = 1
-      ]=])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("accepts a level 0 long comment", util.check [=[
+      --[[
+         long comment line 1
+         long comment line 2
+      ]]
+      local foo = 1
+   ]=])
 
-   it("accepts a level 1 long comment", function()
-      local tokens = tl.lex([[
-         --[=[
-            long comment line 1
-            long comment line 2
-         ]=]
-         local foo = 1
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("accepts a level 1 long comment", util.check [[
+      --[=[
+         long comment line 1
+         long comment line 2
+      ]=]
+      local foo = 1
+   ]])
 
-   it("accepts a level 1 long comment inside a level 2 long comment", function()
-      local tokens = tl.lex([[
-         --[=[
-            long comment line 1
-            --[==[
-              long comment within long comment
-            ]==]
-            long comment line 2
-         ]=]
-         local foo = 1
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("accepts a level 2 long comment inside a level 1 long comment", function()
-      local tokens = tl.lex([[
+   it("accepts a level 1 long comment inside a level 2 long comment", util.check [[
+      --[=[
+         long comment line 1
          --[==[
-            long comment line 1
-            --[=[
-              long comment within long comment
-            ]=]
-            long comment line 2
+           long comment within long comment
          ]==]
-         local foo = 1
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+         long comment line 2
+      ]=]
+      local foo = 1
+   ]])
 
-   it("long comments can contain quotes and double quotes", function()
-      local tokens = tl.lex([=[
-         --[[
-            ' "
-         ]]
-         local foo = 1
-      ]=])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("wrongly nested long comments result in a parse error", function()
-      local tokens = tl.lex([[
-         --[==[
-            long comment line 1
-            --[=[
-              long comment within long comment
-            ]==]
-            long comment line 2
+   it("accepts a level 2 long comment inside a level 1 long comment", util.check [[
+      --[==[
+         long comment line 1
+         --[=[
+           long comment within long comment
          ]=]
-         local foo = 1
-      ]])
-      local errs = {}
-      tl.parse_program(tokens, errs)
-      assert.is_true(#errs > 0)
-   end)
+         long comment line 2
+      ]==]
+      local foo = 1
+   ]])
+
+   it("long comments can contain quotes and double quotes", util.check [=[
+      --[[
+         ' "
+      ]]
+      local foo = 1
+   ]=])
+
+   it("wrongly nested long comments result in a parse error", util.check_syntax_error([[
+      --[==[
+         long comment line 1
+         --[=[
+           long comment within long comment
+         ]==]
+         long comment line 2
+      ]=]
+      local foo = 1
+   ]], {
+      { msg = "syntax error" }
+   }))
 
    pending("export Lua", function()
-      local tokens = tl.lex([=[
+      local result = tl.process_string([=[
          --[[
             long comment line 1
             long comment line 2
          ]]
          local foo = 1
       ]=])
-      local _, ast = tl.parse_program(tokens)
-      local lua = tl.pretty_print_ast(ast)
+      local lua = tl.pretty_print_ast(result.ast)
       assert.equal([=[--[[
             long comment line 1
             long comment line 2

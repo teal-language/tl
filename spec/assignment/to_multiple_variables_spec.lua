@@ -1,47 +1,36 @@
-local tl = require("tl")
+local util = require("spec.util")
 
 describe("assignment to multiple variables", function()
-   it("from a function call", function()
-      local tokens = tl.lex([[
-         local function foo(): boolean, string
-            return true, "yeah!"
-         end
-         local a, b = foo()
-         print(b .. " right!")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("from a function call", util.check [[
+      local function foo(): boolean, string
+         return true, "yeah!"
+      end
+      local a, b = foo()
+      print(b .. " right!")
+   ]])
 
-   it("reports unsufficient rvalues as an error, simple", function()
-      local tokens = tl.lex([[
-         local a, b = 1, 2
-         a, b = 3
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors, unknowns = tl.type_check(ast)
-      assert.same("variable is not being assigned a value", errors[1].msg)
-   end)
+   it("reports unsufficient rvalues as an error, simple", util.check_type_error([[
+      local a, b = 1, 2
+      a, b = 3
+   ]], {
+      { msg = "variable is not being assigned a value" }
+   }))
 
-   it("reports unsufficient rvalues as an error, tricky", function()
-      local tokens = tl.lex([[
-         local T = record
-            x: number
-            y: number
-         end
+   it("reports unsufficient rvalues as an error, tricky", util.check_type_error([[
+      local T = record
+         x: number
+         y: number
+      end
 
-         function T:returnsTwo(): number, number
-            return self.x, self.y
-         end
+      function T:returnsTwo(): number, number
+         return self.x, self.y
+      end
 
-         function T:method()
-            local a, b: number, number
-            a, b = self.returnsTwo and self:returnsTwo()
-         end
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors, unknowns = tl.type_check(ast)
-      assert.same("variable is not being assigned a value", errors[1].msg)
-   end)
+      function T:method()
+         local a, b: number, number
+         a, b = self.returnsTwo and self:returnsTwo()
+      end
+   ]], {
+      { msg = "variable is not being assigned a value" }
+   }))
 end)

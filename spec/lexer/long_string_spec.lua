@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 
 local function string_trim(s)
@@ -7,113 +8,74 @@ end
 
 
 describe("long string", function()
-   it("accepts a level 0 long string", function()
-      local tokens = tl.lex([=[
-         local foo = [[
-               long string line 1
-               long string line 2
-            ]]
-      ]=])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("accepts a level 0 long string", util.check [=[
+      local foo = [[
+            long string line 1
+            long string line 2
+         ]]
+   ]=])
 
-   it("accepts a level 1 long string", function()
-      local tokens = tl.lex([[
-         local foo = [=[
-               long string line 1
-               long string line 2
-            ]=]
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("accepts a level 1 long string", util.check [[
+      local foo = [=[
+            long string line 1
+            long string line 2
+         ]=]
+   ]])
 
-  it("does not get confused by a ] when closing a level 1 long string", function()
-      local tokens = tl.lex([===[
-         local foo = [=[hello]]=]
-      ]===])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("does not get confused by a ] when closing a level 1 long string", util.check [===[
+      local foo = [=[hello]]=]
+   ]===])
 
-  it("does not get confused by multiple ] when closing a level 1 long string", function()
-      local tokens = tl.lex([===[
-         local foo = [=[hello]]]]]]=]
-      ]===])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("does not get confused by multiple ] when closing a level 1 long string", util.check [===[
+      local foo = [=[hello]]]]]]=]
+   ]===])
 
-   it("accepts a level 1 long string inside a level 2 long string", function()
-      local tokens = tl.lex([[
-         local foo = [=[
-               long string line 1
-               [==[
-                 long string within long string
-               ]==]
-               long string line 2
-            ]=]
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("accepts a level 2 long string inside a level 1 long string", function()
-      local tokens = tl.lex([[
-         local foo = [==[
-               long string line 1
-               [=[
-                 long string within long string
-               ]=]
-               long string line 2
+   it("accepts a level 1 long string inside a level 2 long string", util.check [[
+      local foo = [=[
+            long string line 1
+            [==[
+              long string within long string
             ]==]
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+            long string line 2
+         ]=]
+   ]])
 
-   it("long strings can contain quotes and double quotes", function()
-      local tokens = tl.lex([=[
-         local foo = [[
-               ' "
-            ]]
-      ]=])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("wrongly nested long strings result in a parse error", function()
-      local tokens = tl.lex([[
-         local foo = [==[
-               long string line 1
-               [=[
-                 long string within long string
-               ]==]
-               long string line 2
+   it("accepts a level 2 long string inside a level 1 long string", util.check [[
+      local foo = [==[
+            long string line 1
+            [=[
+              long string within long string
             ]=]
-      ]])
-      local errs = {}
-      tl.parse_program(tokens, errs)
-      assert.is_true(#errs > 0)
-   end)
+            long string line 2
+         ]==]
+   ]])
+
+   it("long strings can contain quotes and double quotes", util.check [=[
+      local foo = [[
+            ' "
+         ]]
+   ]=])
+
+   it("wrongly nested long strings result in a parse error", util.check_syntax_error([[
+      local foo = [==[
+            long string line 1
+            [=[
+              long string within long string
+            ]==]
+            long string line 2
+         ]=]
+   ]], {
+      { y = 6, x = 18, msg = "syntax error" },
+   }))
 
    it("export Lua", function()
-      local tokens = tl.lex([==[
+      local result = tl.process_string([==[
          local foo = [=[
                long string line 1
                long string line 2
             ]=]
       ]==])
-      local _, ast = tl.parse_program(tokens)
-      local lua = tl.pretty_print_ast(ast)
+      local lua = tl.pretty_print_ast(result.ast)
       assert.equal([==[local foo = [=[
                long string line 1
                long string line 2

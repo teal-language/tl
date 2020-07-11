@@ -2,10 +2,8 @@ local tl = require("tl")
 
 describe("parser errors", function()
    it("parse errors include filename", function ()
-      local tokens = tl.lex("local x 1")
-      local syntax_errors = {}
-      local _, ast = tl.parse_program(tokens, syntax_errors, "foo.tl")
-      assert.same("foo.tl", syntax_errors[1].filename, "parse errors should contain .filename property")
+      local result = tl.process_string("local x 1", false, nil, nil, nil, "foo.tl")
+      assert.same("foo.tl", result.syntax_errors[1].filename, "parse errors should contain .filename property")
    end)
 
    it("parse errors in a required package include filename of required file", function ()
@@ -29,16 +27,10 @@ describe("parser errors", function()
          end
       end
 
-      local tokens = tl.lex([[
+      local code = [[
          local bar = require "bar"
-      ]])
-      local _, ast = tl.parse_program(tokens, {}, "foo.tl")
-      local result = {
-         syntax_errors = {},
-         type_errors = {},
-         unknowns = {},
-      }
-      tl.type_check(ast, { lax = true, filename = "foo.tl" , result = result })
-      assert.is_not_nil(string.match(result.syntax_errors[1].filename, "bar.tl$"), "type errors should contain .filename property")
+      ]]
+      local result = tl.process_string(code, true, nil, nil, nil, "foo.tl")
+      assert.is_not_nil(string.match(result.syntax_errors[1].filename, "bar.tl$"), "errors should contain .filename property")
    end)
 end)

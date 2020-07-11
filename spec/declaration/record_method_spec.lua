@@ -2,118 +2,90 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("record method", function()
-   it("valid declaration", function()
-      local tokens = tl.lex([[
-         local r = {
+   it("valid declaration", util.check [[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f(a: number, b: string): boolean
+         if self.b then
+            return #b == 3
+         else
+            return a > self.x
+         end
+      end
+      local ok = r:f(3, "abc")
+   ]])
+
+   it("valid declaration with type variables", util.check [[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f<T>(a: number, b: string, xs: {T}): boolean, T
+         if self.b then
+            return #b == 3, xs[1]
+         else
+            return a > self.x, xs[2]
+         end
+      end
+      local ok, s = r:f(3, "abc", {"what"})
+      print(s .. "!")
+   ]])
+
+   it("nested declaration", util.check [[
+      local r = {
+         z = {
             x = 2,
             b = true,
-         }
-         function r:f(a: number, b: string): boolean
-            if self.b then
-               return #b == 3
-            else
-               return a > self.x
-            end
+         },
+      }
+      function r.z:f(a: number, b: string): boolean
+         if self.b then
+            return #b == 3
+         else
+            return a > self.x
          end
-         local ok = r:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+      end
+      local ok = r.z:f(3, "abc")
+   ]])
 
-   it("valid declaration with type variables", function()
-      local tokens = tl.lex([[
-         local r = {
-            x = 2,
-            b = true,
-         }
-         function r:f<T>(a: number, b: string, xs: {T}): boolean, T
-            if self.b then
-               return #b == 3, xs[1]
-            else
-               return a > self.x, xs[2]
-            end
-         end
-         local ok, s = r:f(3, "abc", {"what"})
-         print(s .. "!")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("nested declaration in {}", util.check [[
+      local r = {
+         z = {},
+      }
+      function r.z:f(a: number, b: string): boolean
+         return true
+      end
+      local ok = r.z:f(3, "abc")
+   ]])
 
-   it("nested declaration", function()
-      local tokens = tl.lex([[
-         local r = {
-            z = {
-               x = 2,
-               b = true,
-            },
-         }
-         function r.z:f(a: number, b: string): boolean
-            if self.b then
-               return #b == 3
-            else
-               return a > self.x
-            end
-         end
-         local ok = r.z:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("deep nested declaration", util.check [[
+      local r = {
+         a = {
+            b = {
+               x = true
+            }
+         },
+      }
+      function r.a.b:f(a: number, b: string): boolean
+         return self.x
+      end
+      local ok = r.a.b:f(3, "abc")
+   ]])
 
-   it("nested declaration in {}", function()
-      local tokens = tl.lex([[
-         local r = {
-            z = {},
-         }
-         function r.z:f(a: number, b: string): boolean
-            return true
-         end
-         local ok = r.z:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("deep nested declaration", function()
-      local tokens = tl.lex([[
-         local r = {
-            a = {
-               b = {
-                  x = true
-               }
-            },
-         }
-         function r.a.b:f(a: number, b: string): boolean
-            return self.x
-         end
-         local ok = r.a.b:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
-   it("resolves self", function()
-      local tokens = tl.lex([[
-         local r = {
-            x = 2,
-            b = true,
-         }
-         function r:f(a: number, b: string): boolean
-            return self.invalid
-         end
-         local ok = r:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.match("invalid key 'invalid' in record 'self'", errors[1].msg, 1, true)
-   end)
+   it("resolves self", util.check_type_error([[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f(a: number, b: string): boolean
+         return self.invalid
+      end
+      local ok = r:f(3, "abc")
+   ]], {
+      { msg = "invalid key 'invalid' in record 'self'" }
+   }))
 
    it("resolves self but does not output it as an argument (#27)", function()
       util.mock_io(finally, {
@@ -148,54 +120,40 @@ describe("record method", function()
       ]], output)
    end)
 
-   it("catches invocation style", function()
-      local tokens = tl.lex([[
-         local r = {
-            x = 2,
-            b = true,
-         }
-         function r:f(a: number, b: string): boolean
-            return self.b
-         end
-         local ok = r.f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.match("invoked method as a regular function", errors[1].msg, 1, true)
-   end)
+   it("catches invocation style", util.check_type_error([[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f(a: number, b: string): boolean
+         return self.b
+      end
+      local ok = r.f(3, "abc")
+   ]], {
+      { msg = "invoked method as a regular function" }
+   }))
 
-   it("allows invocation when properly used with '.'", function()
-      local tokens = tl.lex([[
-         local r = {
-            x = 2,
-            b = true,
-         }
-         function r:f(a: number, b: string): boolean
-            return self.b
-         end
-         local ok = r.f(r, 3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("allows invocation when properly used with '.'", util.check [[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f(a: number, b: string): boolean
+         return self.b
+      end
+      local ok = r.f(r, 3, "abc")
+   ]])
 
-   it("allows invocation when properly used with ':'", function()
-      local tokens = tl.lex([[
-         local r = {
-            x = 2,
-            b = true,
-         }
-         function r:f(a: number, b: string): boolean
-            return self.b
-         end
-         local ok = r:f(3, "abc")
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-
+   it("allows invocation when properly used with ':'", util.check [[
+      local r = {
+         x = 2,
+         b = true,
+      }
+      function r:f(a: number, b: string): boolean
+         return self.b
+      end
+      local ok = r:f(3, "abc")
+   ]])
 
    it("allows colon notation in methods", function()
       util.mock_io(finally, {

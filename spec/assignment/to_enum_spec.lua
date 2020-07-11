@@ -1,39 +1,31 @@
-local tl = require("tl")
+local util = require("spec.util")
 
 describe("assignment to enum", function()
-   it("accepts a valid string", function()
-      local tokens = tl.lex([[
-         local Direction = enum
-            "north"
-            "south"
-            "east"
-            "west"
-         end
+   it("accepts a valid string", util.check [[
+      local Direction = enum
+         "north"
+         "south"
+         "east"
+         "west"
+      end
 
-         local d: Direction
+      local d: Direction
 
-         d = "west"
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+      d = "west"
+   ]])
 
-   it("rejects an invalid string", function()
-      local tokens = tl.lex([[
-         local Direction = enum
-            "north"
-            "south"
-            "east"
-            "west"
-         end
+   it("rejects an invalid string", util.check_type_error([[
+      local Direction = enum
+         "north"
+         "south"
+         "east"
+         "west"
+      end
 
-         local d: Direction
+      local d: Direction
 
-         d = "up"
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.match("string \"up\" is not a member of Direction", errors[1].msg)
-   end)
+      d = "up"
+   ]], {
+      { msg = "string \"up\" is not a member of Direction" }
+   }))
 end)

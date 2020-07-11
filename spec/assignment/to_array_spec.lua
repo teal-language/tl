@@ -21,33 +21,28 @@ describe("assignment to array", function()
       { y = 5, msg = "got {string | number}, expected {string}" },
    }))
 
-   it("accept expression", function()
-      local tokens = tl.lex([[
-         local self = {
-            fmt = "hello"
+   it("accept expression", util.check [[
+      local self = {
+         fmt = "hello"
+      }
+      local str = "hello"
+      local a = {str:sub(2, 10)}
+   ]])
+
+   it("catches a syntax error", util.check_syntax_error([[
+      local self = {
+         ["fmt"] = {
+            x = 123,
+            y = 234,
          }
-         local str = "hello"
-         local a = {str:sub(2, 10)}
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
-   it("catches a syntax error", function()
-      local tokens = tl.lex([[
-         local self = {
-            ["fmt"] = {
-               x = 123,
-               y = 234,
-            }
-            ["bla"] = {
-               z = 345,
-               w = 456,
-            }
+         ["bla"] = {
+            z = 345,
+            w = 456,
          }
-      ]])
-      local errors = {}
-      tl.parse_program(tokens, errors)
-      assert.same("syntax error", errors[1].msg)
-   end)
+      }
+   ]], {
+      { y = 6, msg = "syntax error" },
+      { y = 6, msg = "syntax error" },
+      { y = 8, msg = "syntax error" },
+   }))
 end)

@@ -1,65 +1,39 @@
-local tl = require("tl")
+local util = require("spec.util")
 
 describe("string method call", function()
    describe("simple", function()
-      it("pass", function()
-         -- pass
-         local tokens = tl.lex([[
-            print(("  "):rep(12))
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
-      it("fail", function()
-         local tokens = tl.lex([[
-            print(("  "):rep("foo"))
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.match("argument 1: got string", errors[1].msg, 1, true)
-      end)
+      it("pass", util.check [[
+         print(("  "):rep(12))
+      ]])
+
+      it("fail", util.check_type_error([[
+         print(("  "):rep("foo"))
+      ]], {
+         { msg = "argument 1: got string" },
+      }))
    end)
    describe("with variable", function()
-      it("pass", function()
-         -- pass
-         local tokens = tl.lex([[
-            local s = "a"
-            s = s:gsub("a", "b") .. "!"
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
-      it("fail", function()
-         local tokens = tl.lex([[
-            local s = "a"
-            s = s:gsub(function() end) .. "!"
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.match("argument 1: got function", errors[1].msg, 1, true)
-      end)
+      it("pass", util.check [[
+         local s = "a"
+         s = s:gsub("a", "b") .. "!"
+      ]])
+
+      it("fail", util.check_type_error([[
+         local s = "a"
+         s = s:gsub(function() end) .. "!"
+      ]], {
+         { msg = "argument 1: got function" },
+      }))
    end)
    describe("chained", function()
-      it("pass", function()
-         -- pass
-         local tokens = tl.lex([[
-            print(("xy"):rep(12):sub(1,3))
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same({}, errors)
-      end)
-      it("fail", function()
-         -- pass
-         local tokens = tl.lex([[
-            print(("xy"):rep(12):subo(1,3))
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors = tl.type_check(ast)
-         assert.same(1, #errors)
-         assert.match("invalid key 'subo' in type string", errors[1].msg, 1, true)
-      end)
+      it("pass", util.check [[
+         print(("xy"):rep(12):sub(1,3))
+      ]])
+
+      it("fail", util.check_type_error([[
+         print(("xy"):rep(12):subo(1,3))
+      ]], {
+         { msg = "invalid key 'subo' in type string" },
+      }))
    end)
 end)
