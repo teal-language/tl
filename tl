@@ -113,15 +113,6 @@ local function get_args_parser()
          :argname("<directory>")
          :count("*")
 
-   parser:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
-         :argname("<directory>")
-
-   parser:option("-b --build-dir", "Put all generated files in <directory>.")
-         :argname("<directory>")
-
-   parser:option("-o --output", "Write to <filename> instead.")
-         :argname("<filename>")
-
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
 
    parser:flag("--version", "Print version and exit")
@@ -138,11 +129,17 @@ local function get_args_parser()
 
    local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
    gen_command:argument("script", "The tl script."):args("+")
+   gen_command:option("-o --output", "Write to <filename> instead.")
+              :argname("<filename>")
 
    local run_command = parser:command("run", "Run a tl script.")
    run_command:argument("script", "The tl script."):args("+")
 
    local build_command = parser:command("build", "Build your project according to tlconfig.lua by type checking and compiling each specified file.")
+   build_command:option("-b --build-dir", "Put all generated files in <directory>.")
+                :argname("<directory>")
+   build_command:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
+                :argname("<directory>")
 
    return parser
 end
@@ -190,6 +187,10 @@ if cmd == "build" then
    tlconfig["build_dir"] = args["build_dir"] or tlconfig["build_dir"]
 end
 tlconfig["skip_compat53"] = args["skip_compat53"] or tlconfig["skip_compat53"]
+if cmd == "gen" and args["output"] and #args["script"] ~= 1 then
+   print("Error: --output can only be used to map one input to one output")
+   os.exit(1)
+end
 
 local function report_errors(category, errors)
    if not errors then
@@ -407,9 +408,9 @@ end
 --                            GEN                                 --
 --------------------------------------------------------------------
 
-local function write_out(result, output_file, append, should_print)
+local function write_out(result, output_file)
    if not args["pretend"] then
-      local ofd, err = io.open(output_file, append and "a" or "w")
+      local ofd, err = io.open(output_file, "w")
 
       if not ofd then
          die("cannot write " .. output_file .. ": " .. err)
@@ -422,12 +423,10 @@ local function write_out(result, output_file, append, should_print)
 
       ofd:close()
    end
-   if should_print then
-      if args["pretend"] then
-         print("Would Write: " .. output_file)
-      else
-         print("Wrote: " .. output_file)
-      end
+   if args["pretend"] then
+      print("Would Write: " .. output_file)
+   else
+      print("Wrote: " .. output_file)
    end
 end
 
@@ -460,17 +459,7 @@ if cmd == "gen" then
       end
    else
       for i, res in ipairs(results) do
-         local append = args["output"] and i > 1
-         local should_print = true
-         if args["output"] then
-            should_print = i == #results
-         end
-         write_out(
-            res.tl_result,
-            args["output"] or res.output_file,
-            append,
-            should_print
-         )
+         write_out(res.tl_result, args["output"] or res.output_file)
       end
    end
    os.exit(exit)
@@ -760,9 +749,6 @@ for i, files in ipairs(sorted_source_file_arr) do
    end
 
    write_out(result, output_file)
-   if tlconfig["quiet"] == false then
-      print("Wrote: " .. output_file)
-   end
 end
 
 os.exit(exit)
