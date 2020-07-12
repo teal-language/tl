@@ -34,12 +34,12 @@ describe("globs", function()
             },
             cmd = "build",
             generated_files = {
-               "abzcd.lua",
+               "abbarcd.lua",
                "abcd.lua",
                "abfoocd.lua",
-               "abbarcd.lua",
+               "abzcd.lua",
             },
-            --FIXME cmd_output = "Wrote: abzcd.lua\n",
+            cmd_output = "Wrote: abbarcd.lua\nWrote: abcd.lua\nWrote: abfoocd.lua\nWrote: abzcd.lua\n"
          })
       end)
       it("should only match .tl by default", function()

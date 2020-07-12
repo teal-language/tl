@@ -130,7 +130,7 @@ describe("config option interactions", function()
             dir_name = "source_dir_inc_exc_2",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
-                  source_dir = "",
+                  source_dir = ".",
                   include = {
                      "foo/*.tl",
                   },
