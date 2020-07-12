@@ -508,7 +508,7 @@ local function patt_match(patt, str)
 end
 local function matcher(str)
    local chunks = {}
-   for piece in str_split(str, "**/") do
+   for piece in str_split(str, "**" .. path_separator) do
       table.insert(chunks, (piece:gsub("%*", "[^" .. path_separator .. "]-")))
    end
    chunks[1] = "^" .. chunks[1]
@@ -529,7 +529,7 @@ local function cleanup_file_name(name) --remove trailing and extra path separato
       :gsub("^(%.)(.?)", function(a, b)
          assert(a == ".")
          if b == "." then
-            die("Config error: ../ not allowed, please use direct paths")
+            die("Config error: .." .. path_separator .. " not allowed, please use direct paths")
          elseif b == path_separator then
             return ""
          else
@@ -633,9 +633,9 @@ function project:find(path) -- allow for indexing with paths project:find("foo/b
    end
    return current_dir
 end
-local function is_in(a, b) -- a is in b
-   return a:find("^" .. b) and true
-end
+-- local function is_in(a, b) -- a is in b
+--    return a:find("^" .. b) and true
+-- end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 project.source_file_map = {}
