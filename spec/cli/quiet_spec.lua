@@ -1,6 +1,8 @@
 local util = require("spec.util")
 
 describe("-q --quiet flag", function()
+   setup(util.chdir_setup)
+   teardown(util.chdir_teardown)
    it("silences stdout when running tl check", function()
       local name = util.write_tmp_file(finally, "foo.tl", [[
          local x: number = 123
