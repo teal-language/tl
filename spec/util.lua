@@ -96,10 +96,10 @@ local function check(lax, code, unknowns)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local errors, unks = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      local errors, unks = tl.type_check(ast, { filename = "foo.lua", lax = lax })
       assert.same({}, errors)
       if unknowns then
-         assert.same(#unknowns, #unks)
+         assert.same(#unknowns, #unks, "Expected same number of unknowns:")
          for i, u in ipairs(unknowns) do
             if u.y then
                assert.same(u.y, unks[i].y)
@@ -109,6 +109,9 @@ local function check(lax, code, unknowns)
             end
             if u.msg then
                assert.same(u.msg, unks[i].msg)
+            end
+            if u.filename then
+               assert.same(u.filename, unks[i].filename)
             end
          end
       end

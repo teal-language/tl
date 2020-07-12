@@ -1,12 +1,10 @@
-local tl = require("tl")
+local util = require("spec.util")
 
 describe("call", function()
-   it("catches a syntax error", function()
-      local tokens = tl.lex([[
-         print("hello", "world",)
-      ]])
-      local _, ast = tl.parse_program(tokens)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
-   end)
+   it("catches a syntax error", util.check_syntax_error([[
+      print("hello", "world",)
+   ]], {
+      { msg = "syntax error" },
+      { msg = "syntax error" },
+   }))
 end)

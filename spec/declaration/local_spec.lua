@@ -1,4 +1,3 @@
-local tl = require("tl")
 local util = require("spec.util")
 
 describe("local", function()
@@ -56,59 +55,45 @@ describe("local", function()
             { msg = "in assignment: got number" },
          }))
 
-         it("uses correct type", function()
-            -- pass
-            local tokens = tl.lex([[
-               local x, y: number, string = 1, "a"
-               local z: number
-               z = x + string.byte(y)
-            ]])
-            local _, ast = tl.parse_program(tokens)
-            local errors = tl.type_check(ast)
-            assert.same({}, errors)
-         end)
-      end)
-
-      it("reports unset and untyped values as errors in tl mode", function()
-         local tokens = tl.lex([[
-            local T = record
-               x: number
-               y: number
-            end
-
-            function T:returnsTwo(): number, number
-               return self.x, self.y
-            end
-
-            function T:method()
-               local a, b = self.returnsTwo and self:returnsTwo()
-            end
+         it("uses correct type", util.check [[
+            local x, y: number, string = 1, "a"
+            local z: number
+            z = x + string.byte(y)
          ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors, unknowns = tl.type_check(ast)
-         assert.same(1, #errors)
       end)
 
-      it("reports unset values as unknown in Lua mode", function()
-         local tokens = tl.lex([[
-            local T = record
-               x: number
-               y: number
-            end
+      it("reports unset and untyped values as errors in tl mode", util.check_type_error([[
+         local T = record
+            x: number
+            y: number
+         end
 
-            function T:returnsTwo(): number, number
-               return self.x, self.y
-            end
+         function T:returnsTwo(): number, number
+            return self.x, self.y
+         end
 
-            function T:method()
-               local a, b = self.returnsTwo and self:returnsTwo()
-            end
-         ]])
-         local _, ast = tl.parse_program(tokens)
-         local errors, unknowns = tl.type_check(ast, { lax = true })
-         assert.same({}, errors)
-         assert.same(1, #unknowns)
-         assert.same("b", unknowns[1].msg)
-      end)
+         function T:method()
+            local a, b = self.returnsTwo and self:returnsTwo()
+         end
+      ]], {
+         { msg = "assignment in declaration did not produce an initial value for variable 'b'" },
+      }))
+
+      it("reports unset values as unknown in Lua mode", util.lax_check([[
+         local T = record
+            x: number
+            y: number
+         end
+
+         function T:returnsTwo(): number, number
+            return self.x, self.y
+         end
+
+         function T:method()
+            local a, b = self.returnsTwo and self:returnsTwo()
+         end
+      ]], {
+         { msg = "b" },
+      }))
    end)
 end)

@@ -1,4 +1,4 @@
-local tl = require("tl")
+local util = require("spec.util")
 
 math.randomseed(os.time())
 
@@ -51,17 +51,12 @@ describe("lexer", function()
    gen_all_passes(passes, "0X", hexs, "P", decs)
 
    it("accepts valid literals", function()
-      local syntax_errors = {}
       local code = {}
       for i, p in ipairs(passes) do
          table.insert(code, "local x" .. i .. " = " .. p)
       end
       local input = table.concat(code, "\n")
 
-      local tokens = tl.lex(input)
-      local _, ast = tl.parse_program(tokens, syntax_errors)
-      assert.same({}, syntax_errors)
-      local errors = tl.type_check(ast)
-      assert.same({}, errors)
+      util.check(input)
    end)
 end)

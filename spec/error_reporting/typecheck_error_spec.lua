@@ -1,4 +1,3 @@
-local tl = require("tl")
 local util = require("spec.util")
 
 describe("typecheck errors", function()
@@ -19,22 +18,20 @@ describe("typecheck errors", function()
       })
    end)
 
-   it("unknowns include filename", function ()
-      local tokens = tl.lex("local x: string = b")
-      local _, ast = tl.parse_program(tokens, {})
-      local errors, unknowns = tl.type_check(ast, { lax = true, filename = "foo.lua" })
-      assert.same("foo.lua", unknowns[1].filename, "unknowns should contain .filename property")
-   end)
+   it("unknowns include filename", util.lax_check([[
+      local x: string = b
+   ]], {
+      { msg = "b", filename = "foo.lua" }
+   }))
 
    it("unknowns in a required package include filename of required file", function ()
-      local tokens = tl.lex([[
-         local bar = require "bar"
-      ]])
       util.mock_io(finally, {
-         ["bar.tl"] = "local x: string = b"
+         ["bar.lua"] = "local x: string = b"
       })
-      local _, ast = tl.parse_program(tokens, {}, "foo.tl")
-      local errors, unknowns = tl.type_check(ast, { filename = "foo.tl" })
-      assert.is_not_nil(string.match(errors[1].filename, "bar.tl$"), "unknowns should contain .filename property")
+      util.lax_check([[
+         local bar = require "bar"
+      ]], {
+         { msg = "b", filename = "bar.lua" }
+      })
    end)
 end)
