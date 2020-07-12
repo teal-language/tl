@@ -65,8 +65,10 @@ function util.chdir_setup()
 end
 
 function util.chdir_teardown()
-   os.remove("tl.lua")
-   os.remove("tl")
+   -- explicitly use /tmp here
+   -- just in case it may remove the actual tl file
+   os.remove("/tmp/tl.lua")
+   os.remove("/tmp/tl")
    assert(lfs.chdir(current_dir))
 end
 
