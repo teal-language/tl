@@ -1092,6 +1092,9 @@ local function parse_list(ps, i, list, close, sep, parse_item)
       table.insert(list, item)
       if ps.tokens[i].tk == "," then
          i = i + 1
+         if sep == "sep" and close[ps.tokens[i].tk] then
+            return fail(ps, i)
+         end
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
       elseif not close[ps.tokens[i].tk] then

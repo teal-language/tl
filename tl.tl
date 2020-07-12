@@ -1092,6 +1092,9 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
       table.insert(list, item)
       if ps.tokens[i].tk == "," then
          i = i + 1
+         if sep == "sep" and close[ps.tokens[i].tk] then
+            return fail(ps, i)
+         end
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
       elseif not close[ps.tokens[i].tk] then
@@ -6239,7 +6242,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       cbs = {
          ["string"] = {
             after = function(typ: Type, children: {Type}): Type
-               return typ,
+               return typ
             end,
          },
          ["function"] = {
