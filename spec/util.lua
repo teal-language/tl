@@ -3,6 +3,9 @@ local util = {}
 local tl = require("tl")
 local assert = require("luassert")
 local lfs = require("lfs")
+local current_dir = lfs.currentdir()
+local tl_executable = current_dir .. "/tl"
+local tl_lib = current_dir .. "/tl.lua"
 
 function util.mock_io(finally, files)
    assert(type(finally) == "function")
@@ -53,6 +56,18 @@ function util.assert_line_by_line(s1, s2)
    for i in ipairs(l1) do
       assert.same(l1[i], l2[i], "mismatch at line " .. i .. ":")
    end
+end
+
+function util.chdir_setup()
+   assert(lfs.link("tl", "/tmp/tl"))
+   assert(lfs.link("tl.lua", "/tmp/tl.lua"))
+   assert(lfs.chdir("/tmp"))
+end
+
+function util.chdir_teardown()
+   os.remove("tl.lua")
+   os.remove("tl")
+   assert(lfs.chdir(current_dir))
 end
 
 function util.write_tmp_file(finally, name, content)
@@ -136,9 +151,6 @@ local function insert_into(tab, files)
       end
    end
 end
-local tl_path = lfs.currentdir()
-local tl_executable = tl_path .. "/tl"
-local tl_lib = tl_path .. "/tl.lua"
 function util.run_mock_project(finally, t)
    assert(type(finally) == "function")
    assert(type(t) == "table")
@@ -149,7 +161,7 @@ function util.run_mock_project(finally, t)
       check = true,
       run = true,
       build = true,
-   })[t.cmd], "Invalid tl <cmd>")
+   })[t.cmd], "Invalid command tl " .. t.cmd)
    local actual_dir_name = util.write_tmp_dir(finally, t.dir_name, t.dir_structure)
    lfs.link(tl_executable, actual_dir_name .. "/tl")
    lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
@@ -163,21 +175,21 @@ function util.run_mock_project(finally, t)
    local pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or ""))
    local output = pd:read("*a")
    local actual_dir_structure = util.get_dir_structure(".")
-   lfs.chdir(tl_path)
-   t.popen = t.popen or {
-      status = true,
-      exit = "exit",
-      code = 0,
-   }
-   -- util.assert_popen_close(
-   --    t.popen.status,
-   --    t.popen.exit,
-   --    t.popen.code,
-   --    pd:close()
-   -- )
+   lfs.chdir(current_dir)
+   if t.popen then
+      -- t.popen = t.popen or {
+      --    status = true,
+      --    exit = "exit",
+      --    code = 0,
+      -- }
+      util.assert_popen_close(
+         t.popen.status,
+         t.popen.exit,
+         t.popen.code,
+         pd:close()
+      )
+   end
    if t.cmd_output then
-      -- FIXME: when generating multiple files their order isnt guaranteed
-      -- so either account for this here or make the order deterministic in tl
       assert.are.equal(output, t.cmd_output)
    end
    assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
