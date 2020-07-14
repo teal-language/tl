@@ -45,7 +45,6 @@ local function validate_config(config)
       build_dir = true,
       exclude = true,
       files = true,
-      ignore = true,
       include = true,
       include_dir = true,
       preload_modules = true,
@@ -65,6 +64,7 @@ local function validate_config(config)
    return nil
 end
 
+local config_from_file = false
 local function get_config()
    local config = {
       preload_modules = {},
@@ -81,6 +81,7 @@ local function get_config()
          die("Error while loading config:\n" .. user_config)
       end
    end
+   config_from_file = true
 
    -- Merge tlconfig with the default config
    for k, v in pairs(user_config) do
@@ -463,6 +464,10 @@ if cmd == "gen" then
       end
    end
    os.exit(exit)
+end
+
+if cmd == "build" and not config_from_file then
+   die("Build error: no config file")
 end
 
 
