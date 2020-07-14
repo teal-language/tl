@@ -483,9 +483,8 @@ local function match(patt_arr, str)
    end
    return nil
 end
-local patt_mt = {__index = {match = match}}
-local inc_patterns = setmetatable({}, patt_mt)
-local exc_patterns = setmetatable({}, patt_mt)
+local inc_patterns = {}
+local exc_patterns = {}
 
 local function str_split(str, delimiter)
    local idx = 0
@@ -606,14 +605,16 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
             if tlconfig["files"] then
                include = false
             end
+            -- TODO: print out patterns that include/exclude paths to help
+            -- users debug tlconfig.lua (this is why match returns the array index)
             if #inc_patt_arr > 0 then
-               local idx = inc_patt_arr:match(path)
+               local idx = match(inc_patt_arr, path)
                if not idx then
                   include = false
                end
             end
             if #exc_patt_arr > 0 then
-               idx = exc_patt_arr:match(path)
+               local idx = match(exc_patt_arr, path)
                if include and idx then
                   include = false
                end
