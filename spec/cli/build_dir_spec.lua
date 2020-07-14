@@ -55,4 +55,19 @@ describe("-b --build-dir argument", function()
          },
       })
    end)
+   it("dies when no config is found", function()
+      util.run_mock_project(finally, {
+         dir_name = "build_dir_die_test",
+         dir_structure = {},
+         cmd = "build",
+         generated_files = {},
+         popen = {
+            status = nil,
+            exit = "exit",
+            code = 1,
+         },
+         cmd_output = "Build error: tlconfig.lua not found\n"
+      })
+   end)
+
 end)

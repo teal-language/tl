@@ -467,7 +467,7 @@ if cmd == "gen" then
 end
 
 if cmd == "build" and not config_from_file then
-   die("Build error: no config file")
+   die("Build error: tlconfig.lua not found")
 end
 
 
@@ -648,6 +648,12 @@ project.source_file_map = {}
 if cmd == "build" then
    if tlconfig["source_dir"] then
       tlconfig["source_dir"] = cleanup_file_name(tlconfig["source_dir"])
+      local project_source = project:find(tlconfig["source_dir"])
+      if not project_source then
+         die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' doesn't exist")
+      elseif getmetatable(project_source) == project.emptyref then
+         die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' is not a directory")
+      end
    end
    if tlconfig["build_dir"] then
       tlconfig["build_dir"] = cleanup_file_name(tlconfig["build_dir"])

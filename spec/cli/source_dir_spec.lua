@@ -32,4 +32,16 @@ describe("-s --source-dir argument", function()
          },
       })
    end)
+   it("should die when the given directory doesn't exist", function()
+      util.run_mock_project(function() end, {
+         dir_name = "no_source_dir_test",
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {source_dir="src"}]],
+            ["foo.tl"] = [[print 'hi']],
+         },
+         cmd = "build",
+         generated_files = {},
+         cmd_output = "Build error: source_dir 'src' doesn't exist\n",
+      })
+   end)
 end)
