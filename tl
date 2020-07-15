@@ -630,6 +630,7 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
    return coroutine.wrap(iter), self.dir
 end
 function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
+   if path == "" then return self.dir end -- empty string is the current dir
    local current_dir = self.dir
    for dirname in str_split(path, path_separator) do
       current_dir = current_dir[dirname]

@@ -33,7 +33,7 @@ describe("-s --source-dir argument", function()
       })
    end)
    it("should die when the given directory doesn't exist", function()
-      util.run_mock_project(function() end, {
+      util.run_mock_project(finally, {
          dir_name = "no_source_dir_test",
          dir_structure = {
             ["tlconfig.lua"] = [[return {source_dir="src"}]],
