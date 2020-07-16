@@ -716,7 +716,7 @@ local table_types = {
    ["emptytable"] = true,
 }
 
-local HasType = {}
+local OpType = {}
 
 
 
@@ -1841,6 +1841,31 @@ local function parse_return(ps, i)
    return i, node
 end
 
+local unary_op = {
+   ["-"] = true,
+   ["#"] = true,
+   ["~"] = true,
+}
+local bin_op = {
+   ["+"] = true,
+   ["-"] = true,
+   ["*"] = true,
+   ["%"] = true,
+   ["/"] = true,
+   ["//"] = true,
+   ["^"] = true,
+   ["&"] = true,
+   ["|"] = true,
+   ["<<"] = true,
+   [">>"] = true,
+   ["=="] = true,
+   ["~="] = true,
+   ["<="] = true,
+   [">="] = true,
+   ["<"] = true,
+   [">"] = true,
+   [".."] = true,
+}
 parse_newtype = function(ps, i)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
@@ -1878,26 +1903,40 @@ parse_newtype = function(ps, i)
                return fail(ps, i, "expected a variable name")
             end
             local has = false
-            if v.tk == "has" and ps.tokens[i].kind == "op" then
+
+            if v.tk == "has" and (unary_op[ps.tokens[i].tk] or bin_op[ps.tokens[i].tk]) then
                local op = ps.tokens[i].tk
+               local op_idx = i
+               local arity
+               if unary_op[op] and bin_op[op] then
+                  arity = 0
+               elseif unary_op[op] then
+                  arity = 1
+               else
+                  arity = 2
+               end
                i = verify_tk(ps, i + 1, "(")
                local ltype, rtype, rettype
                i, ltype = parse_type(ps, i)
-
-               i = verify_tk(ps, i, ",")
-               i, rtype = parse_type(ps, i)
+               if ps.tokens[i].tk == "," and arity == 0 then
+                  arity = 2
+               else
+                  arity = 1
+               end
+               if def.has[op] and def.has[op][arity] then
+                  return fail(ps, op_idx, "attempt to redeclare overloaded " .. (unary_op[op] and bin_op[op] and (arity == 1 and "unary " or "binary ") or "") .. op)
+               end
+               if arity == 2 then
+                  i = verify_tk(ps, i, ",")
+                  i, rtype = parse_type(ps, i)
+               end
                i = verify_tk(ps, i, ")")
                i = verify_tk(ps, i, ":")
                i, rettype = parse_type(ps, i)
-               local arity = 2
                if not def.has[op] then
                   def.has[op] = {}
                end
 
-
-               if def.has[op] and def.has[op][arity] then
-                  return fail(ps, i, "record already has " .. op .. " of arity " .. arity)
-               end
                def.has[op][arity] = {
                   ltype = ltype,
                   rtype = rtype,
@@ -6195,9 +6234,15 @@ function tl.type_check(ast, opts)
                   end
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
+               local op = node.op.op
                a = ua
-               local types_op = unop_types[node.op.op]
-               node.type = types_op[a.typename]
+               if a.has and a.has[op] and a.has[op][1] then
+                  node.type = a.has[op][1].rettype
+               end
+               if not node.type then
+                  local types_op = unop_types[op]
+                  node.type = types_op[a.typename]
+               end
                if not node.type then
                   if lax and is_unknown(a) then
                      node.type = UNKNOWN
