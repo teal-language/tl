@@ -130,6 +130,11 @@ for _, c in ipairs({"+", "*", "/", "|", "&", "%", "^"}) do
    lex_op_start[c] = true
 end
 
+local lex_has_op: {string:boolean} = {}
+for _, c in ipairs({"+", "*", "/", "|", "&", "%", "^"}) do
+   lex_op_start[c] = true
+end
+
 local lex_space: {string:boolean} = {}
 for _, c in ipairs({" ", "\t", "\v", "\n", "\r"}) do
    lex_space[c] = true
@@ -711,6 +716,11 @@ local table_types: {TypeName:boolean} = {
    ["emptytable"] = true,
 }
 
+local HasType = record
+   ltype: Type
+   rtype: Type
+   rettype: Type
+end
 local Type = record
    {Type}
    y: number
@@ -743,6 +753,7 @@ local Type = record
    typeargs: {Type}
    fields: {string: Type}
    field_order: {string}
+   has: {string:{number:HasType}}
 
    -- array
    elements: Type
@@ -840,12 +851,14 @@ end
 
 local FactType = enum
    "is"
+   "has"
 end
 
 local Fact = record
    fact: FactType
    var: string
    typ: Type
+   op: Type
 end
 
 local KeyParsed = enum
@@ -1835,6 +1848,7 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
       local def = new_type(ps, i, "record")
       def.fields = {}
       def.field_order = {}
+      def.has = {}
       node.newtype.def = def
       i = i + 1
       if ps.tokens[i].tk == "<" then
@@ -1863,40 +1877,70 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
             if not v then
                return fail(ps, i, "expected a variable name")
             end
-            if ps.tokens[i].tk == ":" then
+            local has = false
+            if v.tk == "has" and ps.tokens[i].kind == "op" then
+               local op = ps.tokens[i].tk
+               i = verify_tk(ps, i+1, "(")
+               local ltype, rtype, rettype: Type, Type, Type
+               i, ltype = parse_type(ps, i)
+
+               i = verify_tk(ps, i, ",")
+               i, rtype = parse_type(ps, i)
+               i = verify_tk(ps, i, ")")
                i = verify_tk(ps, i, ":")
-               local t: Type
-               i, t = parse_type(ps, i)
-               if not t then
-                  return fail(ps, i, "expected a type")
+               i, rettype = parse_type(ps, i)
+               local arity = 2
+               if not def.has[op] then
+                  def.has[op] = {}
                end
-               if not def.fields[v.tk] then
-                  def.fields[v.tk] = t
-                  table.insert(def.field_order, v.tk)
-               else
-                  local prev_t = def.fields[v.tk]
-                  if t.typename == "function" and prev_t.typename == "function" then
-                     def.fields[v.tk] = new_type(ps, iv, "poly")
-                     def.fields[v.tk].types = { prev_t, t }
-                  elseif t.typename == "function" and prev_t.typename == "poly" then
-                     table.insert(prev_t.types, t)
+
+               -- print("Adding " .. op .. " to record ")
+               if def.has[op] and def.has[op][arity] then
+                  return fail(ps, i, "record already has " .. op .. " of arity " .. arity)
+               end
+               def.has[op][arity] = {
+                  ltype = ltype,
+                  rtype = rtype,
+                  rettype = rettype,
+               }
+               has = true
+            end
+            if not has then
+               if ps.tokens[i].tk == ":" then
+                  i = verify_tk(ps, i, ":")
+                  local t: Type
+                  i, t = parse_type(ps, i)
+                  if not t then
+                     return fail(ps, i, "expected a type")
+                  end
+                  if not def.fields[v.tk] then
+                     def.fields[v.tk] = t
+                     table.insert(def.field_order, v.tk)
+                  else
+                     local prev_t = def.fields[v.tk]
+                     if t.typename == "function" and prev_t.typename == "function" then
+                        def.fields[v.tk] = new_type(ps, iv, "poly")
+                        def.fields[v.tk].types = { prev_t, t }
+                     elseif t.typename == "function" and prev_t.typename == "poly" then
+                        table.insert(prev_t.types, t)
+                     else
+                        return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                     end
+                  end
+               elseif ps.tokens[i].tk == "=" then
+                  i = verify_tk(ps, i, "=")
+                  local nt: Node
+                  i, nt = parse_newtype(ps, i)
+                  if not nt or not nt.newtype then
+                     return fail(ps, i, "expected a type definition")
+                  end
+
+                  if not def.fields[v.tk] then
+                     def.fields[v.tk] = nt.newtype
+                     table.insert(def.field_order, v.tk)
                   else
                      return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                   end
-               end
-            elseif ps.tokens[i].tk == "=" then
-               i = verify_tk(ps, i, "=")
-               local nt: Node
-               i, nt = parse_newtype(ps, i)
-               if not nt or not nt.newtype then
-                  return fail(ps, i, "expected a type definition")
-               end
-
-               if not def.fields[v.tk] then
-                  def.fields[v.tk] = nt.newtype
-                  table.insert(def.field_order, v.tk)
-               else
-                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
                end
             end
          end
@@ -6168,8 +6212,32 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
                a = ua
                b = ub
-               local types_op = binop_types[node.op.op]
-               node.type = types_op[a.typename] and types_op[a.typename][b.typename]
+
+               local op = node.op.op
+               if a.has and a.has[op] and a.has[op][2] then
+                  local ltype = a.has[op][2].ltype
+                  local rtype = a.has[op][2].rtype
+                  if not is_a(a, ltype) then
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
+                  elseif not is_a(b, rtype) then
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
+                  end
+                  node.type = a.has[op][2].rettype
+               elseif b.has and b.has[op] and b.has[op][2] then
+                  local ltype = b.has[op][2].ltype
+                  local rtype = b.has[op][2].rtype
+                  if not is_a(a, ltype) then
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
+                  elseif not is_a(b, rtype) then
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
+                  end
+                  node.type = b.has[op][2].rettype
+               end
+
+               if not node.type then
+                  local types_op = binop_types[node.op.op]
+                  node.type = types_op[a.typename] and types_op[a.typename][b.typename]
+               end
                if not node.type then
                   if lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
