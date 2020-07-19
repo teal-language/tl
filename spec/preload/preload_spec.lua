@@ -6,11 +6,11 @@ describe("preload", function()
       -- ok
       util.mock_io(finally, {
          ["love.d.tl"] = [[
-            global love_graphics = record
+            global type love_graphics = record
                print: function(text: string)
             end
 
-            global love = record
+            global type love = record
                draw: function()
                graphics: love_graphics
             end
@@ -33,21 +33,21 @@ describe("preload", function()
       -- ok
       util.mock_io(finally, {
          ["love.d.tl"] = [[
-            global love_graphics = record
+            global type love_graphics = record
                print: function(text: string)
             end
 
-            global love = record
+            global type love = record
                draw: function()
                graphics: love_graphics
             end
          ]],
          ["hate.d.tl"] = [[
-            global hate_graphics = record
+            global type hate_graphics = record
                print: function(text: string)
             end
 
-            global hate = record
+            global type hate = record
                draw: function()
                graphics: hate_graphics
             end

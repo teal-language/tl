@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("assignment to self record field", function()
    it("passes", util.check [[
-      local Node = record
+      local type Node = record
          foo: boolean
       end
       function Node:method()
@@ -11,7 +11,7 @@ describe("assignment to self record field", function()
    ]])
 
    it("fails if mismatch", util.check_type_error([[
-      local Node = record
+      local type Node = record
          foo: string
       end
       function Node:method()

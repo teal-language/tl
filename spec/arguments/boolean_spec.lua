@@ -29,7 +29,7 @@ describe("boolean argument", function()
          end
       end
 
-      local R = record
+      local type R = record
          b: boolean
       end
       local r: R = {}

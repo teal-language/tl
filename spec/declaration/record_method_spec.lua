@@ -158,7 +158,7 @@ describe("record method", function()
    it("allows colon notation in methods", function()
       util.mock_io(finally, {
          ["foo.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
                __index: Point
@@ -229,7 +229,7 @@ describe("record method", function()
    it("allows functions declared on method tables (#27)", function()
       util.mock_io(finally, {
          ["foo.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end

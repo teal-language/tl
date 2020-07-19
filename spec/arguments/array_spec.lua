@@ -16,7 +16,7 @@ describe("array argument", function()
    }))
 
    it("constructs type of complex array correctly (#111)", util.check_type_error([[
-      local MyRecord = record
+      local type MyRecord = record
          func: function<K, V>(t: {{K:V}}): {V}
       end
 

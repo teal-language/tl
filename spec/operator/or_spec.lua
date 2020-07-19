@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("or", function()
    it("map or record matching map", util.check [[
-      local Ty = record
+      local type Ty = record
          name: string
          foo: number
       end
@@ -12,7 +12,7 @@ describe("or", function()
    ]])
 
    it("string or enum matches enum", util.check [[
-      local Dir = enum
+      local type Dir = enum
          "left"
          "right"
       end
@@ -23,7 +23,7 @@ describe("or", function()
    ]])
 
    it("invalid string or enum matches string", util.check_type_error([[
-      local Dir = enum
+      local type Dir = enum
          "left"
          "right"
       end

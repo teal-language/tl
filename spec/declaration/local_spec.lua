@@ -63,7 +63,7 @@ describe("local", function()
       end)
 
       it("reports unset and untyped values as errors in tl mode", util.check_type_error([[
-         local T = record
+         local type T = record
             x: number
             y: number
          end
@@ -80,7 +80,7 @@ describe("local", function()
       }))
 
       it("reports unset values as unknown in Lua mode", util.lax_check([[
-         local T = record
+         local type T = record
             x: number
             y: number
          end

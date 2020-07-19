@@ -9,7 +9,7 @@ describe("assignment to maps", function()
    ]])
 
    it("resolves strings to enum", util.check [[
-      local Direction = enum
+      local type Direction = enum
          "north"
          "south"
          "east"

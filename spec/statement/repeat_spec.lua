@@ -3,7 +3,7 @@ local util = require("spec.util")
 describe("repeat", function()
    it("only closes scope after until", util.check [[
       repeat
-         local R = record
+         local type R = record
             a: string
          end
          local r = { a = "hello" }
@@ -11,7 +11,7 @@ describe("repeat", function()
    ]])
    it("closes scope on exit", util.check_type_error([[
       repeat
-         local R = record
+         local type R = record
             a: string
          end
          local r = { a = "hello" }

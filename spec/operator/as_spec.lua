@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("cast", function()
    it("can be used inside table literals", util.check [[
-      local Foo = record
+      local type Foo = record
          x: string
       end
 
@@ -25,7 +25,7 @@ describe("cast", function()
    ]])
 
    it("can cast to enum", util.check [[
-      local Direction = enum
+      local type Direction = enum
          "north"
          "south"
          "east"

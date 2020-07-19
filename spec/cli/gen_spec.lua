@@ -4,7 +4,7 @@ local util = require("spec.util")
 local input_file = [[
 global type1 = 2
 
-local type_2 = record
+local type type_2 = record
 end
 
 local function bla()

@@ -17,7 +17,7 @@ describe("assignment to multiple variables", function()
    }))
 
    it("reports unsufficient rvalues as an error, tricky", util.check_type_error([[
-      local T = record
+      local type T = record
          x: number
          y: number
       end

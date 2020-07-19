@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("assignment to nominal arrayrecord", function()
    it("accepts empty table", util.check [[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
       end
@@ -10,7 +10,7 @@ describe("assignment to nominal arrayrecord", function()
    ]])
 
    it("accepts complete fields without array entries", util.check [[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
       end
@@ -20,7 +20,7 @@ describe("assignment to nominal arrayrecord", function()
    ]])
 
    it("accepts complete fields with array entries", util.check [[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
       end
@@ -34,7 +34,7 @@ describe("assignment to nominal arrayrecord", function()
    ]])
 
    it("accepts incomplete fields without array entries", util.check [[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
          bar: number
@@ -45,7 +45,7 @@ describe("assignment to nominal arrayrecord", function()
    ]])
 
    it("accepts complete fields with array entries", util.check [[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
          bar: number
@@ -60,7 +60,7 @@ describe("assignment to nominal arrayrecord", function()
    ]])
 
    it("fails if table has extra fields", util.check_type_error([[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
          bar: number
@@ -74,7 +74,7 @@ describe("assignment to nominal arrayrecord", function()
    }))
 
    it("fails if mismatch", util.check_type_error([[
-      local Node = record
+      local type Node = record
          {Node}
          foo: boolean
       end

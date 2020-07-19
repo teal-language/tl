@@ -9,7 +9,7 @@ describe("syntax errors", function()
    }))
 
    it("in enum", util.check_syntax_error([[
-      local Direction = enum
+      local type Direction = enum
          "north",
          "south",
          "east",

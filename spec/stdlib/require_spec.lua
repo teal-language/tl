@@ -65,7 +65,7 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["point.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end
@@ -101,8 +101,7 @@ describe("require", function()
          ["box.tl"] = [[
             local box = {}
 
-            -- local type
-            local Box = record
+            local type Box = record
                x: number
                y: number
                w: number
@@ -137,7 +136,7 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["point.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end
@@ -201,7 +200,7 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["point.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end
@@ -220,7 +219,7 @@ describe("require", function()
          ["bar.tl"] = [[
             local mypoint = require "point"
 
-            local rec = record
+            local type rec = record
                xx: number
                yy: number
             end
@@ -260,7 +259,7 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["point.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end
@@ -290,7 +289,7 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["point.tl"] = [[
-            local Point = record
+            local type Point = record
                x: number
                y: number
             end
@@ -308,7 +307,7 @@ describe("require", function()
          ["foo.tl"] = [[
             local point1 = require "point"
 
-            local Point = record
+            local type Point = record
                foo: string
             end
 
@@ -358,7 +357,7 @@ describe("require", function()
             local box = {}
 
             -- global type
-            global Box = record
+            global type Box = record
                x: number
                y: number
                w: number
@@ -420,10 +419,10 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["someds.d.tl"] = [[
-            local someds = record
-               Event = record
+            local type someds = record
+               type Event = record
                end
-               Callback = function(Event)
+               type Callback = function(Event)
                subscribe: function(callback: Callback)
             end
 
@@ -450,11 +449,11 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["someds.d.tl"] = [[
-            local someds = record
-               Event = record<T>
+            local type someds = record
+               type Event = record<T>
                   x: T
                end
-               Callback = function(Event<string>)
+               type Callback = function(Event<string>)
                subscribe: function(callback: Callback)
             end
 
@@ -480,11 +479,11 @@ describe("require", function()
    it("cannot extend a record object with unknown types outside of scope", function ()
       util.mock_io(finally, {
          ["love.d.tl"] = [[
-            global LoveGraphics = record
+            global type LoveGraphics = record
                print: function(text: string)
             end
 
-            global Love = record
+            global type Love = record
                draw: function()
                graphics: LoveGraphics
             end
@@ -513,11 +512,11 @@ describe("require", function()
    it("cannot extend a record type with unknown types outside of scope", function ()
       util.mock_io(finally, {
          ["love.d.tl"] = [[
-            global love_graphics = record
+            global type love_graphics = record
                print: function(text: string)
             end
 
-            global love = record
+            global type love = record
                draw: function()
                graphics: love_graphics
             end
@@ -545,7 +544,7 @@ describe("require", function()
    it("cannot extend a record type outside of scope", function ()
       util.mock_io(finally, {
          ["widget.tl"] = [[
-            local Widget = record
+            local type Widget = record
                 draw: function(self: Widget)
             end
 
@@ -572,7 +571,7 @@ describe("require", function()
    it("can redeclare a function that was previously declared outside of scope", function ()
       util.mock_io(finally, {
          ["widget.tl"] = [[
-            local Widget = record
+            local type Widget = record
                 draw: function(self: Widget)
             end
 
@@ -598,16 +597,16 @@ describe("require", function()
    it("can extend a global defined in scope", function ()
       util.mock_io(finally, {
          ["luaunit.d.tl"] = [[
-            global luaunit_runner_t = record
+            global type luaunit_runner_t = record
                setOutputType: function(luaunit_runner_t, string)
                runSuite: function(luaunit_runner_t, any): number
             end
 
-            global luaunit_t = record
+            global type luaunit_t = record
                new: function(): luaunit_runner_t
             end
 
-            local luaunit = record
+            local type luaunit = record
                LuaUnit: luaunit_t
                assertIsTrue: function(any)
             end
