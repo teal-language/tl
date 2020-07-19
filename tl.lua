@@ -1873,6 +1873,21 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
    return i
 end
 
+local function parse_enum_body(ps, i, def, node)
+   def.enumset = {}
+   while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+      local item
+      i, item = verify_kind(ps, i, "string", "enum_item")
+      if item then
+         table.insert(node, item)
+         def.enumset[unquote(item.tk)] = true
+      end
+   end
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
+   return i, node
+end
+
 local function parse_record_body(ps, i, def, node)
    def.fields = {}
    def.field_order = {}
@@ -1915,6 +1930,8 @@ local function parse_record_body(ps, i, def, node)
          end
       elseif ps.tokens[i].tk == "record" and ps.tokens[i + 1].tk ~= ":" then
          i = parse_nested_type(ps, i, def, "record", parse_record_body)
+      elseif ps.tokens[i].tk == "enum" and ps.tokens[i + 1].tk ~= ":" then
+         i = parse_nested_type(ps, i, def, "enum", parse_enum_body)
       else
          local v
          i, v = verify_kind(ps, i, "identifier", "variable")
@@ -1945,7 +1962,7 @@ local function parse_record_body(ps, i, def, node)
             end
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
-            if next_word == "record" then
+            if next_word == "record" or next_word == "enum" then
                return fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. next_word .. " " .. v.tk .. "'")
             elseif next_word == "functiontype" then
                return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
@@ -1971,19 +1988,9 @@ parse_newtype = function(ps, i)
       return i, node
    elseif ps.tokens[i].tk == "enum" then
       local def = new_type(ps, i, "enum")
-      node.newtype.def = def
-      def.enumset = {}
       i = i + 1
-      while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
-         local item
-         i, item = verify_kind(ps, i, "string", "enum_item")
-         if item then
-            table.insert(node, item)
-            def.enumset[unquote(item.tk)] = true
-         end
-      end
-      node.yend = ps.tokens[i].y
-      i = verify_tk(ps, i, "end")
+      i = parse_enum_body(ps, i, def, node)
+      node.newtype.def = def
       return i, node
    else
       i, node.newtype.def = parse_type(ps, i)
@@ -2072,12 +2079,14 @@ local function parse_type_declaration(ps, i, node_name)
    return i, asgn
 end
 
-local function parse_record(ps, i, node_name)
+local ParseBody = {}
+
+local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    local asgn = new_node(ps.tokens, i, node_name)
    local nt = new_node(ps.tokens, i, "newtype")
    asgn.value = nt
    nt.newtype = new_type(ps, i, "typetype")
-   local def = new_type(ps, i, "record")
+   local def = new_type(ps, i, type_name)
    nt.newtype.def = def
 
    i = i + 2
@@ -2088,7 +2097,7 @@ local function parse_record(ps, i, node_name)
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_record_body(ps, i, def, nt)
+   i = parse_body(ps, i, def, nt)
    return i, asgn
 end
 
@@ -2099,7 +2108,9 @@ local function parse_statement(ps, i)
       elseif ps.tokens[i + 1].tk == "function" then
          return parse_local_function(ps, i)
       elseif ps.tokens[i + 1].tk == "record" and ps.tokens[i + 2].kind == "identifier" then
-         return parse_record(ps, i, "local_type")
+         return parse_type_constructor(ps, i, "local_type", "record", parse_record_body)
+      elseif ps.tokens[i + 1].tk == "enum" and ps.tokens[i + 2].kind == "identifier" then
+         return parse_type_constructor(ps, i, "local_type", "enum", parse_enum_body)
       else
          i = i + 1
          return parse_variable_declarations(ps, i, "local_declaration")
@@ -2108,7 +2119,9 @@ local function parse_statement(ps, i)
       if ps.tokens[i + 1].tk == "type" and ps.tokens[i + 2].kind == "identifier" then
          return parse_type_declaration(ps, i, "global_type")
       elseif ps.tokens[i + 1].tk == "record" and ps.tokens[i + 2].kind == "identifier" then
-         return parse_record(ps, i, "global_type")
+         return parse_type_constructor(ps, i, "global_type", "record", parse_record_body)
+      elseif ps.tokens[i + 1].tk == "enum" and ps.tokens[i + 2].kind == "identifier" then
+         return parse_type_constructor(ps, i, "global_type", "enum", parse_enum_body)
       elseif ps.tokens[i + 1].tk == "function" then
          i = i + 1
          return parse_function(ps, i)

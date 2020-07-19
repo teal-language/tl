@@ -230,6 +230,18 @@ describe("records", function()
       })
    end)
 
+   it("record and enum and not reserved words", util.check [[
+      local type foo = record
+         record: string
+         enum: number
+      end
+
+      local f: foo = {}
+
+      foo.record = "hello"
+      foo.enum = 123
+   ]])
+
    it("can have nested generic records", util.check [[
       local type foo = record
          type bar = record<T>
@@ -241,6 +253,24 @@ describe("records", function()
       local f: foo = {}
 
       foo.example = { x = "hello" }
+   ]])
+
+   it("can have nested enums", util.check [[
+      local type foo = record
+         enum Direction
+            "north"
+            "south"
+            "east"
+            "west"
+         end
+
+         d: Direction
+      end
+
+      local f: foo = {}
+
+      local dir: foo.Direction = "north"
+      foo.d = dir
    ]])
 
    it("can have nested generic records with shorthand syntax", util.check [[

@@ -95,5 +95,13 @@ describe("local", function()
       ]], {
          { msg = "b" },
       }))
+
+      it("'type', 'record' and 'enum' are not reserved keywords", util.check [[
+         local type = type
+         local record: string = "hello"
+         local enum: number = 123
+         print(record)
+         print(enum + 123)
+      ]])
    end)
 end)
