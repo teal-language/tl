@@ -837,6 +837,8 @@ local NodeKind = enum
    "argument_list"
    "local_function"
    "global_function"
+   "local_type"
+   "global_type"
    "record_function"
    "local_declaration"
    "global_declaration"
@@ -2008,20 +2010,45 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
    return i, asgn
 end
 
+local function parse_type_declaration(ps: ParseState, i: number, node_name: NodeKind): number, Node
+   i = i + 2 -- skip `local` or `global`, and `type`
+
+   local asgn: Node = new_node(ps.tokens, i, node_name)
+   i, asgn.var = parse_variable_name(ps, i)
+   if not asgn.var then
+      return fail(ps, i, "expected a type name")
+   end
+   i = verify_tk(ps, i, "=")
+   i, asgn.value = parse_newtype(ps, i)
+   if asgn.value then
+      asgn.value.newtype.def.names = { asgn.var.tk }
+   else
+      return i
+   end
+
+   return i, asgn
+end
+
 local function parse_statement(ps: ParseState, i: number): number, Node
    if ps.tokens[i].tk == "local" then
-      if ps.tokens[i+1].tk == "function" then
+      if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
+         return parse_type_declaration(ps, i, "local_type")
+      elseif ps.tokens[i+1].tk == "function" then
          return parse_local_function(ps, i)
       else
          i = i + 1
          return parse_variable_declarations(ps, i, "local_declaration")
       end
    elseif ps.tokens[i].tk == "global" then
-      i = i + 1
-      if ps.tokens[i].tk == "function" then
+      if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
+         return parse_type_declaration(ps, i, "global_type")
+      elseif ps.tokens[i+1].tk == "function" then
+         i = i + 1
          return parse_function(ps, i)
+      else
+         i = i + 1
+         return parse_variable_declarations(ps, i, "global_declaration")
       end
-      return parse_variable_declarations(ps, i, "global_declaration")
    elseif ps.tokens[i].tk == "function" then
       return parse_function(ps, i)
    elseif ps.tokens[i].tk == "if" then
@@ -2218,6 +2245,10 @@ local function recurse_node<T>(ast: Node,
       if ast.decltype then
          xs[3] = recurse_type(ast.decltype, visit_type)
       end
+   elseif ast.kind == "local_type"
+          or ast.kind == "global_type" then
+      xs[1] = recurse_node(ast.var, visit_node, visit_type)
+      xs[2] = recurse_node(ast.value, visit_node, visit_type)
    elseif ast.kind == "table_item" then
       xs[1] = recurse_node(ast.key, visit_node, visit_type)
       xs[2] = recurse_node(ast.value, visit_node, visit_type)
@@ -2479,6 +2510,25 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+            return out
+         end,
+      },
+      ["local_type"] = {
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            table.insert(out, "local")
+            add_child(out, children[1], " ")
+            table.insert(out, " =")
+            add_child(out, children[2], " ")
+            return out
+         end,
+      },
+      ["global_type"] = {
+         after = function(node: Node, children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            add_child(out, children[1], " ")
+            table.insert(out, " =")
+            add_child(out, children[2], " ")
             return out
          end,
       },
@@ -5588,6 +5638,37 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             -- TODO extract node type from `return`
             node.type = NONE
          end
+      },
+      ["local_type"] = {
+         before = function(node: Node)
+            add_var(node.var, node.var.tk, node.value.newtype, node.var.is_const)
+         end,
+         after = function(node: Node, children: {Type}): Type
+            dismiss_unresolved(node.var.tk)
+            node.type = NONE
+         end,
+      },
+      ["global_type"] = {
+         before = function(node: Node)
+            add_global(node.var, node.var.tk, node.value.newtype, node.var.is_const)
+         end,
+         after = function(node: Node, children: {Type}): Type
+            local existing, existing_is_const = find_global(node.var.tk)
+            local var = node.var
+            if existing then
+               if existing_is_const == true and not var.is_const then
+                  node_error(var, "global was previously declared as <const>: " .. var.tk)
+               end
+               if existing_is_const == false and var.is_const then
+                  node_error(var, "global was previously declared as not <const>: " .. var.tk)
+               end
+               if not same_type(existing, node.value.newtype) then
+                  node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
+               end
+            end
+            dismiss_unresolved(var.tk)
+            node.type = NONE
+         end,
       },
       ["local_declaration"] = {
          before = function(node: Node)
