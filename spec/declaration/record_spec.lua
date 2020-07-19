@@ -214,7 +214,7 @@ describe("records", function()
 
    it("can extend generic functions", util.check [[
       local foo = record
-         bar = functiontype<T>(T)
+         bar = function<T>(T)
          example: bar<string>
       end
 
@@ -225,7 +225,7 @@ describe("records", function()
 
    it("does not produce an esoteric type error (#167)", util.check_type_error([[
       local foo = record
-         bar = functiontype<T>(T)
+         bar = function<T>(T)
          example: bar<string>
       end
 
@@ -239,7 +239,7 @@ describe("records", function()
 
    it("can cast generic member using full path of type name", util.check [[
       local foo = record
-         bar = functiontype<T>(T)
+         bar = function<T>(T)
          example: bar<string>
       end
 

@@ -48,8 +48,8 @@ describe("union declaration", function()
    }))
 
    it("cannot declare a union between multiple function types", util.check_type_error([[
-      local F1 = functiontype(): number
-      local F2 = functiontype(): string
+      local type F1 = function(): number
+      local type F2 = function(): string
       local t: F1|F2
    ]], {
       { msg = "cannot discriminate a union between multiple function types" },

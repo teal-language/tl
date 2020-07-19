@@ -423,7 +423,7 @@ describe("require", function()
             local someds = record
                Event = record
                end
-               Callback = functiontype(Event)
+               Callback = function(Event)
                subscribe: function(callback: Callback)
             end
 
@@ -454,7 +454,7 @@ describe("require", function()
                Event = record<T>
                   x: T
                end
-               Callback = functiontype(Event<string>)
+               Callback = function(Event<string>)
                subscribe: function(callback: Callback)
             end
 

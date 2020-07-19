@@ -2,12 +2,12 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("generic function", function()
-   it("can declare a generic functiontype", util.check [[
-      local ParseItem = functiontype<T>(number): T
+   it("can declare a generic function type", util.check [[
+      local type ParseItem = function<T>(number): T
    ]])
 
-   it("can declare a function using the functiontype as an argument", util.check [[
-      local ParseItem = functiontype<T>(number): T
+   it("can declare a function using the function type as an argument", util.check [[
+      local type ParseItem = function<T>(number): T
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem): number, T
          return 0, list[1]
@@ -15,7 +15,7 @@ describe("generic function", function()
    ]])
 
    it("can use the typevar in the function body", util.check [[
-      local ParseItem = functiontype<T>(number): T
+      local type ParseItem = function<T>(number): T
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem): number, {T}
          local ret: {T} = {}
@@ -25,7 +25,7 @@ describe("generic function", function()
    ]])
 
    it("can use the function along with a typevar", util.check [[
-      local Id = functiontype<a>(a): a
+      local type Id = function<a>(a): a
 
       local function string_id(a: string): string
          return a
@@ -39,7 +39,7 @@ describe("generic function", function()
    ]])
 
    it("does not mix up typevars with the same name in different scopes", util.check [[
-      local Convert = functiontype<a, b>(a): b
+      local type Convert = function<a, b>(a): b
 
       local function id<a>(x: a): a
          return x
@@ -63,7 +63,7 @@ describe("generic function", function()
    ]])
 
    it("catches incorrect typevars, does not mix up multiple uses", util.check_type_error([[
-      local Convert = functiontype<a, b>(a): b
+      local type Convert = function<a, b>(a): b
 
       local function convert_num_str(n: number): string
          return tostring(n)
@@ -83,7 +83,7 @@ describe("generic function", function()
    }))
 
    it("will catch if resolved typevar does not match", util.check_type_error([[
-      local Id = functiontype<a>(a): a
+      local type Id = function<a>(a): a
 
       local function string_id(a: string): string
          return a
@@ -99,7 +99,7 @@ describe("generic function", function()
    }))
 
    it("can use the function along with an indirect typevar", util.check [[
-      local Id = functiontype<a>(a): a
+      local type Id = function<a>(a): a
 
       local function string_id(a: string): string
          return a
@@ -113,7 +113,7 @@ describe("generic function", function()
    ]])
 
    it("will catch if resolved indirect typevar does not match", util.check_type_error([[
-      local Id = functiontype<a>(a): a
+      local type Id = function<a>(a): a
 
       local function string_id(a: string): string
          return a
@@ -129,7 +129,7 @@ describe("generic function", function()
    }))
 
    it("can use the function along with an indirect typevar", util.check [[
-      local ParseItem = functiontype<X>(number): X
+      local type ParseItem = function<X>(number): X
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
          local ret: {T} = {}
@@ -202,7 +202,7 @@ describe("generic function", function()
    }))
 
    it("will catch if resolved typevar does not match", util.check_type_error([[
-      local ParseItem = functiontype<V>(number): V
+      local type ParseItem = function<V>(number): V
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
          local ret: {T} = {}
@@ -234,7 +234,7 @@ describe("generic function", function()
    }))
 
    it("can map one typevar to another", util.check [[
-      local ParseItem = functiontype<V>(number): V
+      local type ParseItem = function<V>(number): V
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
          local ret: {T} = {}
