@@ -12,7 +12,7 @@ local record TypeCheckOptions
    result: Result
 end
 
-local type LoadMode = enum
+local enum LoadMode
    "b"
    "t"
    "bt"
@@ -65,7 +65,7 @@ local keywords: {string:boolean} = {
 --   ["global"] = true,
 }
 
-local type TokenKind = enum
+local enum TokenKind
    "keyword"
    "op"
    "string"
@@ -143,7 +143,7 @@ for _, c in ipairs({" ", "\t", "\v", "\n", "\r"}) do
    lex_space[c] = true
 end
 
-local type LexState = enum
+local enum LexState
    "start"
    "any"
    "identifier"
@@ -680,7 +680,7 @@ local record ParseError
    filename: string
 end
 
-local type TypeName = enum
+local enum TypeName
    "typetype"
    "nestedtype"
    "typevar"
@@ -804,7 +804,7 @@ local record Operator
    prec: number
 end
 
-local type NodeKind = enum
+local enum NodeKind
    "op"
    "nil"
    "string"
@@ -848,7 +848,7 @@ local type NodeKind = enum
    "paren"
 end
 
-local type FactType = enum
+local enum FactType
    "is"
 end
 
@@ -858,7 +858,7 @@ local record Fact
    typ: Type
 end
 
-local type KeyParsed = enum
+local enum KeyParsed
    "short"
    "long"
    "implicit"
@@ -950,7 +950,7 @@ local record ParseState
    filename: string
 end
 
-local type ParseTypeListMode = enum
+local enum ParseTypeListMode
    "rets"
    "decltype"
    "casttype"
@@ -1084,7 +1084,7 @@ end
 
 local type ParseItem = function<T>(ParseState, number, number): number, T, number
 
-local type SeparatorMode = enum
+local enum SeparatorMode
    "sep"
    "term"
 end
