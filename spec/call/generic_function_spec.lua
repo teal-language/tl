@@ -141,7 +141,7 @@ describe("generic function", function()
          return n, ret
       end
 
-      local Node = record
+      local type Node = record
          foo: number
       end
 
@@ -185,7 +185,7 @@ describe("generic function", function()
    }))
 
    it("will catch if argument value does not match the typevar", util.check_type_error([[
-      local Output = record
+      local type Output = record
          {string}
          x: number
       end
@@ -214,11 +214,11 @@ describe("generic function", function()
          return n, ret
       end
 
-      local Node = record
+      local type Node = record
          foo: number
       end
 
-      local Other = record
+      local type Other = record
          bar: string
       end
 
@@ -246,7 +246,7 @@ describe("generic function", function()
          return n, ret
       end
 
-      local Node = record
+      local type Node = record
          foo: number
       end
 
@@ -260,10 +260,10 @@ describe("generic function", function()
    ]])
 
    it("checks that missing typevars are caught", util.check_type_error([[
-      local Node = record
+      local type Node = record
       end
 
-      local VisitorCallbacks = record<X, Y>
+      local type VisitorCallbacks = record<X, Y>
       end
 
       local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
@@ -280,13 +280,13 @@ describe("generic function", function()
    }))
 
    it("propagates resolved typevar in return type", util.check [[
-      local Node = record
+      local type Node = record
       end
 
-      local Type = record
+      local type Type = record
       end
 
-      local VisitorCallbacks = record<N, X>
+      local type VisitorCallbacks = record<N, X>
       end
 
       local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
@@ -300,13 +300,13 @@ describe("generic function", function()
    ]])
 
    it("checks that typevars that appear in multiple arguments must match, pass", util.check [[
-      local Node = record
+      local type Node = record
       end
 
-      local Type = record
+      local type Type = record
       end
 
-      local VisitorCallbacks = record<X, Y>
+      local type VisitorCallbacks = record<X, Y>
       end
 
       local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>}): T
@@ -320,13 +320,13 @@ describe("generic function", function()
    ]])
 
    it("checks that typevars that appear in multiple arguments must match, fail", util.check_type_error([[
-      local Node = record
+      local type Node = record
       end
 
-      local Type = record
+      local type Type = record
       end
 
-      local VisitorCallbacks = record<X, Y>
+      local type VisitorCallbacks = record<X, Y>
       end
 
       local function recurse_node<T>(ast: Node, visit_node: {string:VisitorCallbacks<Node, T>}, visit_type: {string:VisitorCallbacks<Type, T>})
@@ -342,7 +342,7 @@ describe("generic function", function()
    }))
 
    it("inference trickles down to function arguments, pass", util.check [[
-      local R = record
+      local type R = record
          arch: string
       end
       local data: {R} = {
@@ -353,10 +353,10 @@ describe("generic function", function()
    ]])
 
    it("inference trickles down to function arguments, pass", util.check_type_error([[
-      local R = record
+      local type R = record
          arch: string
       end
-      local S = record
+      local type S = record
          different: string
       end
       local data: {R} = {

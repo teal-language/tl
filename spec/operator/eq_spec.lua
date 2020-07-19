@@ -18,7 +18,7 @@ describe("==", function()
    }))
 
    it("fails comparing enum to invalid literal string", util.check_type_error([[
-      local MyEnum = enum
+      local type MyEnum = enum
          "foo"
          "bar"
       end

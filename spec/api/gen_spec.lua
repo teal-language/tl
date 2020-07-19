@@ -41,7 +41,7 @@ describe("tl.gen", function()
 
    it("does not crash on inference errors due to a lack of a filename", function()
       local input = [[
-          local Point = record
+          local type Point = record
              x: number
              y: number
           end

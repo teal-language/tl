@@ -201,10 +201,10 @@ describe("flow analysis with is", function()
          }))
 
          it("cannot discriminate a union between records", util.check_type_error([[
-            local R1 = record
+            local type R1 = record
                foo: string
             end
-            local R2 = record
+            local type R2 = record
                foo: string
             end
             local t: R1 | R2
@@ -213,7 +213,7 @@ describe("flow analysis with is", function()
          }))
 
          it("cannot discriminate a union between multiple string/enum types", util.check_type_error([[
-            local Enum = enum
+            local type Enum = enum
                "hello"
                "world"
             end

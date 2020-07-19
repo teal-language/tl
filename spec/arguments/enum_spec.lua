@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("enum argument", function()
    it("accepts a valid string", util.check [[
-      local Direction = enum
+      local type Direction = enum
          "north"
          "south"
          "east"
@@ -17,7 +17,7 @@ describe("enum argument", function()
    ]])
 
    it("rejects an invalid string", util.check_type_error([[
-      local Direction = enum
+      local type Direction = enum
          "north"
          "south"
          "east"

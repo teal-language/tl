@@ -23,6 +23,20 @@ describe("union declaration", function()
       params3 = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
 
+   it("unions can be declared nominally", util.check [[
+      -- with parentheses
+      local type P1 = (string | {string})
+      local params1: {string:P1} = { key1 = 'val2', key2 = {'val2', 'val3'}}
+
+      -- without parentheses
+      local type P2 = string | {string}
+      local params2: {string:P2} = { key1 = 'val2', key2 = {'val2', 'val3'}}
+
+      -- with extra parentheses
+      local type P3 = ((((string | {string}))))
+      local params3: {string:P3} = { key1 = 'val2', key2 = {'val2', 'val3'}}
+   ]])
+
    it("cannot declare a union between multiple table types", util.check_type_error([[
       local t: number | {number} | {string:boolean}
    ]], {
@@ -30,10 +44,10 @@ describe("union declaration", function()
    }))
 
    it("cannot declare a union between multiple records", util.check_type_error([[
-      local R1 = record
+      local type R1 = record
          f: string
       end
-      local R2 = record
+      local type R2 = record
          g: string
       end
       local t: R1 | R2

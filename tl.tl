@@ -1837,6 +1837,15 @@ local function parse_return(ps: ParseState, i: number): number, Node
    return i, node
 end
 
+local function store_field_in_record(name: string, def: Type, nt: Node): boolean
+   if def.fields[name] then
+      return false
+   end
+   def.fields[name] = nt.newtype
+   table.insert(def.field_order, name)
+   return true
+end
+
 parse_newtype = function(ps: ParseState, i: number): number, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
@@ -1865,6 +1874,24 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
             end
             def.typename = "arrayrecord"
             def.elements = t
+         elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
+            i = i + 1
+            local v: Node
+            i, v = verify_kind(ps, i, "identifier", "variable")
+            if not v then
+               return fail(ps, i, "expected a variable name")
+            end
+            i = verify_tk(ps, i, "=")
+            local nt: Node
+            i, nt = parse_newtype(ps, i)
+            if not nt or not nt.newtype then
+               return fail(ps, i, "expected a type definition")
+            end
+
+            local ok = store_field_in_record(v.tk, def, nt)
+            if not ok then
+               return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+            end
          else
             local v: Node
             i, v = verify_kind(ps, i, "identifier", "variable")
@@ -1894,18 +1921,11 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
                   end
                end
             elseif ps.tokens[i].tk == "=" then
-               i = verify_tk(ps, i, "=")
-               local nt: Node
-               i, nt = parse_newtype(ps, i)
-               if not nt or not nt.newtype then
-                  return fail(ps, i, "expected a type definition")
-               end
-
-               if not def.fields[v.tk] then
-                  def.fields[v.tk] = nt.newtype
-                  table.insert(def.field_order, v.tk)
+               local next_word = ps.tokens[i + 1].tk
+               if next_word == "functiontype" then
+                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
                else
-                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
                end
             end
          end
@@ -1929,8 +1949,8 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
       node.yend = ps.tokens[i].y
       i = verify_tk(ps, i, "end")
       return i, node
-   elseif ps.tokens[i].tk == "function" then
-      i, node.newtype.def = parse_function_type(ps, i)
+   else
+      i, node.newtype.def = parse_type(ps, i)
       return i, node
    end
    return fail(ps, i)
@@ -1989,19 +2009,7 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
       repeat
          i = i + 1
          local val: Node
-         if is_newtype[ps.tokens[i].tk] then
-            if #asgn.vars > 1 then
-               return fail(ps, i, "cannot perform multiple assignment of type definitions")
-            end
-            i, val = parse_newtype(ps, i)
-            if val then
-               val.newtype.def.names = { asgn.vars[v].tk }
-            else
-               return i, val
-            end
-         else
-            i, val = parse_expression(ps, i)
-         end
+         i, val = parse_expression(ps, i)
          table.insert(asgn.exps, val)
          v = v + 1
       until ps.tokens[i].tk ~= ","

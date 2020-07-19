@@ -25,7 +25,7 @@ describe("[]", function()
       }))
 
       it("ok without declaration if key is enum and all keys map to the same type", util.check [[
-         local Keys = enum
+         local type Keys = enum
             "foo"
             "bar"
          end
@@ -35,7 +35,7 @@ describe("[]", function()
       ]])
 
       it("fail if key is enum and not all keys map to the same type", util.check_type_error([[
-         local Keys = enum
+         local type Keys = enum
             "foo"
             "bar"
          end
@@ -47,7 +47,7 @@ describe("[]", function()
       }))
 
       it("fail if key is enum and not all keys are covered", util.check_type_error([[
-         local Keys = enum
+         local type Keys = enum
             "foo"
             "bar"
             "oops"

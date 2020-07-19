@@ -2,21 +2,21 @@ local util = require("spec.util")
 
 describe("assignment to nominal record", function()
    it("accepts empty table", util.check [[
-      local Node = record
+      local type Node = record
          b: boolean
       end
       local x: Node = {}
    ]])
 
    it("accepts complete table", util.check [[
-      local R = record
+      local type R = record
          foo: string
       end
-      local AR = record
+      local type AR = record
          {Node}
          bar: string
       end
-      local Node = record
+      local type Node = record
          b: boolean
          n: number
          m: {number: string}
@@ -35,7 +35,7 @@ describe("assignment to nominal record", function()
    ]])
 
    it("accepts incomplete table", util.check [[
-      local Node = record
+      local type Node = record
          b: boolean
          n: number
       end
@@ -45,7 +45,7 @@ describe("assignment to nominal record", function()
    ]])
 
    it("fails if table has extra fields", util.check_type_error([[
-      local Node = record
+      local type Node = record
          b: boolean
          n: number
       end
@@ -58,7 +58,7 @@ describe("assignment to nominal record", function()
    }))
 
    it("fails if mismatch", util.check_type_error([[
-      local Node = record
+      local type Node = record
          b: boolean
       end
       local x: Node = 123
@@ -67,11 +67,11 @@ describe("assignment to nominal record", function()
    }))
 
    it("type system is nominal: fails if different records with compatible structure", util.check_type_error([[
-      local Node1 = record
+      local type Node1 = record
          b: boolean
       end
 
-      local Node2 = record
+      local type Node2 = record
          b: boolean
       end
 
@@ -83,7 +83,7 @@ describe("assignment to nominal record", function()
    }))
 
    it("identical generic instances resolve to the same type", util.check [[
-      local R = record<T>
+      local type R = record<T>
          x: T
       end
 

@@ -62,7 +62,7 @@ describe("assignment to union", function()
    ]])
 
    it("resolves arrays of unions", util.check [[
-      local Item = record
+      local type Item = record
          name: string
       end
 

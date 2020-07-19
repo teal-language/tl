@@ -2,10 +2,10 @@ local util = require("spec.util")
 
 describe("assignment to nominal record field", function()
    it("passes", util.check [[
-      local Node = record
+      local type Node = record
          foo: boolean
       end
-      local Type = record
+      local type Type = record
          node: Node
       end
       local t: Type = {}
@@ -13,10 +13,10 @@ describe("assignment to nominal record field", function()
    ]])
 
    it("fails if mismatch", util.check_type_error([[
-      local Node = record
+      local type Node = record
          foo: boolean
       end
-      local Type = record
+      local type Type = record
          node: Node
       end
       local t: Type = {}

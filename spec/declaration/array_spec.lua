@@ -14,6 +14,13 @@ describe("array declarations", function()
       print(x[10])
    ]])
 
+   it("can be declared as a nominal type", util.check [[
+      local type Booleans = {boolean}
+      local bs: Booleans = {
+         true, false, [12] = true,
+      }
+   ]])
+
    it("can be indirect", util.check [[
       local RED = 1
       local BLUE = 2

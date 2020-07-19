@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("records", function()
    it("can have self-references", util.check [[
-      local SLAXML = record
+      local type SLAXML = record
           parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
        end
 
@@ -11,11 +11,11 @@ describe("records", function()
    ]])
 
    it("can have circular type dependencies", util.check [[
-      local R = record
+      local type R = record
          foo: S
       end
 
-      local S = record
+      local type S = record
          foo: R
       end
 
@@ -25,16 +25,16 @@ describe("records", function()
    ]])
 
    it("can have circular type dependencies on nested types", util.check [[
-      local R = record
-         R2 = record
+      local type R = record
+         type R2 = record
             foo: S.S2
          end
 
          foo: S
       end
 
-      local S = record
-         S2 = record
+      local type S = record
+         type S2 = record
             foo: R.R2
          end
 
@@ -47,16 +47,16 @@ describe("records", function()
    ]])
 
    it("can detect errors in type dependencies on nested types", util.check_type_error([[
-      local R = record
-         R2 = record
+      local type R = record
+         type R2 = record
             foo: S.S3
          end
 
          foo: S
       end
 
-      local S = record
-         S2 = record
+      local type S = record
+         type S2 = record
             foo: R.R2
          end
 
@@ -71,12 +71,12 @@ describe("records", function()
    }))
 
    it("can overload functions", util.check [[
-      global love_graphics = record
+      global type love_graphics = record
          print: function(text: string, x: number, y: number, r: number, sx: number, sy: number, ox: number, oy: number, kx: number, ky:number)
          print: function(coloredtext: {any}, x: number, y: number, r: number, sx: number, sy: number, ox: number, oy: number, kx: number, ky:number)
       end
 
-      global love = record
+      global type love = record
          graphics: love_graphics
       end
 
@@ -86,7 +86,7 @@ describe("records", function()
    ]])
 
    it("cannot overload other things", util.check_syntax_error([[
-      global love_graphics = record
+      global type love_graphics = record
          print: number
          print: string
       end
@@ -96,7 +96,7 @@ describe("records", function()
 
    it("can report an error on unknown types in polymorphic definitions", util.check_type_error([[
       -- this reports an error
-      local R = record
+      local type R = record
          u: function(): UnknownType
          u: function(): string
       end
@@ -110,7 +110,7 @@ describe("records", function()
 
    it("can report an error on unknown types in polymorphic definitions in any order", util.check_type_error([[
       -- this reports an error
-      local R = record
+      local type R = record
          u: function(): string
          u: function(): UnknownType
       end
@@ -123,14 +123,14 @@ describe("records", function()
    }))
 
    it("can produce an intersection type for polymorphic functions", util.check [[
-      local requests = record
+      local type requests = record
 
-         RequestOpts = record
+         type RequestOpts = record
             {string}
             url: string
          end
 
-         Response = record
+         type Response = record
             status_code: number
          end
 
@@ -144,14 +144,14 @@ describe("records", function()
    ]])
 
    it("can check the arity of polymorphic functions", util.check_type_error([[
-      local requests = record
+      local type requests = record
 
-         RequestOpts = record
+         type RequestOpts = record
             {string}
             url: string
          end
 
-         Response = record
+         type Response = record
             status_code: number
          end
 
@@ -169,14 +169,14 @@ describe("records", function()
    it("can be nested", function()
       util.mock_io(finally, {
          ["req.d.tl"] = [[
-            local requests = record
+            local type requests = record
 
-               RequestOpts = record
+               type RequestOpts = record
                   {string}
                   url: string
                end
 
-               Response = record
+               type Response = record
                   status_code: number
                end
 
@@ -200,8 +200,8 @@ describe("records", function()
    end)
 
    it("can have nested generic records", util.check [[
-      local foo = record
-         bar = record<T>
+      local type foo = record
+         type bar = record<T>
             x: T
          end
          example: bar<string>
@@ -213,8 +213,8 @@ describe("records", function()
    ]])
 
    it("can extend generic functions", util.check [[
-      local foo = record
-         bar = function<T>(T)
+      local type foo = record
+         type bar = function<T>(T)
          example: bar<string>
       end
 
@@ -224,8 +224,8 @@ describe("records", function()
    ]])
 
    it("does not produce an esoteric type error (#167)", util.check_type_error([[
-      local foo = record
-         bar = function<T>(T)
+      local type foo = record
+         type bar = function<T>(T)
          example: bar<string>
       end
 
@@ -238,8 +238,8 @@ describe("records", function()
    }))
 
    it("can cast generic member using full path of type name", util.check [[
-      local foo = record
-         bar = function<T>(T)
+      local type foo = record
+         type bar = function<T>(T)
          example: bar<string>
       end
 
@@ -253,12 +253,12 @@ describe("records", function()
          ["req.d.tl"] = [[
             local requests = record
 
-               RequestOpts = record
+               type RequestOpts = record
                   {string}
                   url: string
                end
 
-               Response = record
+               type Response = record
                   status_code: number
                end
 
