@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("record argument", function()
    it("catches error passing map when record is expected", util.check_type_error([[
-      local node_t = record
+      local type node_t = record
          node: {string: node_t}
       end
 

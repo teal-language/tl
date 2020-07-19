@@ -26,7 +26,7 @@ describe("assignment to nominal record field", function()
    }))
 
    it("fails with incorrect literal index", util.check_type_error([[
-      local Node = record
+      local type Node = record
           f: string
       end
 
@@ -37,7 +37,7 @@ describe("assignment to nominal record field", function()
    }))
 
    it("fails with variable index with arbitrary string", util.check_type_error([[
-      local Node = record
+      local type Node = record
           f: string
       end
 
@@ -49,12 +49,12 @@ describe("assignment to nominal record field", function()
    }))
 
    it("succeeds with variable index with enum", util.check [[
-      local Node = record
+      local type Node = record
           f: string
           g: string
       end
 
-      local Keys = enum
+      local type Keys = enum
          "f"
          "g"
       end

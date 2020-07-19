@@ -88,7 +88,7 @@ describe("[]", function()
    end)
    describe("on enums", function()
       it("works with relevant stdlib string functions", util.check [[
-         local foo = enum
+         local type foo = enum
             "bar"
          end
          local s: foo
