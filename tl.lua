@@ -1930,7 +1930,7 @@ parse_newtype = function(ps, i)
       node.yend = ps.tokens[i].y
       i = verify_tk(ps, i, "end")
       return i, node
-   elseif ps.tokens[i].tk == "functiontype" then
+   elseif ps.tokens[i].tk == "functiontype" or ps.tokens[i].tk == "function" then
       i, node.newtype.def = parse_function_type(ps, i)
       return i, node
    end
