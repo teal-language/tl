@@ -1,10 +1,10 @@
-local Env = record
+local type Env = record
    globals: {string:Variable}
    modules: {string:Type}
    skip_compat53: boolean
 end
 
-local TypeCheckOptions = record
+local type TypeCheckOptions = record
    lax: boolean
    filename: string
    skip_compat53: boolean
@@ -17,7 +17,7 @@ local LoadMode = enum
    "t"
    "bt"
 end
-local LoadFunction = functiontype(...:any): any...
+local type LoadFunction = functiontype(...:any): any...
 
 local tl = {
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string = nil,
@@ -65,7 +65,7 @@ local keywords: {string:boolean} = {
 --   ["global"] = true,
 }
 
-local TokenKind = enum
+local type TokenKind = enum
    "keyword"
    "op"
    "string"
@@ -78,7 +78,7 @@ local TokenKind = enum
    "$EOF$"
 end
 
-local Token = record
+local type Token = record
    x: number
    y: number
    i: number
@@ -673,7 +673,7 @@ local function new_typeid(): number
    return last_typeid
 end
 
-local ParseError = record
+local type ParseError = record
    y: number
    x: number
    msg: string
@@ -719,7 +719,7 @@ local table_types: {TypeName:boolean} = {
    ["emptytable"] = true,
 }
 
-local Type = record
+local type Type = record
    {Type}
    y: number
    x: number
@@ -796,7 +796,7 @@ local Type = record
    nominals: {string:{Type}}
 end
 
-local Operator = record
+local type Operator = record
    y: number
    x: number
    arity: number
@@ -804,7 +804,7 @@ local Operator = record
    prec: number
 end
 
-local NodeKind = enum
+local type NodeKind = enum
    "op"
    "nil"
    "string"
@@ -848,23 +848,23 @@ local NodeKind = enum
    "paren"
 end
 
-local FactType = enum
+local type FactType = enum
    "is"
 end
 
-local Fact = record
+local type Fact = record
    fact: FactType
    var: string
    typ: Type
 end
 
-local KeyParsed = enum
+local type KeyParsed = enum
    "short"
    "long"
    "implicit"
 end
 
-local Node = record
+local type Node = record
    {Node}
    y: number
    x: number
@@ -944,13 +944,13 @@ local function is_type(t:Type): boolean
    return t.typename == "typetype" or t.typename == "nestedtype"
 end
 
-local ParseState = record
+local type ParseState = record
    tokens: {Token}
    errs: {ParseError}
    filename: string
 end
 
-local ParseTypeListMode = enum
+local type ParseTypeListMode = enum
    "rets"
    "decltype"
    "casttype"
@@ -1083,9 +1083,9 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    return i, node, n + 1
 end
 
-local ParseItem = functiontype<T>(ParseState, number, number): number, T, number
+local type ParseItem = functiontype<T>(ParseState, number, number): number, T, number
 
-local SeparatorMode = enum
+local type SeparatorMode = enum
    "sep"
    "term"
 end
@@ -2119,14 +2119,14 @@ end
 -- AST traversal
 --------------------------------------------------------------------------------
 
-local VisitorCallbacks = record<N, T>
+local type VisitorCallbacks = record<N, T>
    before: function(N, {T})
    before_statements: function({N}, {T})
    before_e2: function({N}, {T})
    after: function(N, {T}, T): T
 end
 
-local Visitor = record<K, N, T>
+local type Visitor = record<K, N, T>
    cbs: {K:VisitorCallbacks<N, T>}
    after: VisitorCallbacks<N, T>
 end
@@ -2411,7 +2411,7 @@ local spaced_op: {number:{string:boolean}} = {
 function tl.pretty_print_ast(ast: Node, fast: boolean): string
    local indent = 0
 
-   local Output = record
+   local type Output = record
       {string}
       y: number
       h: number
@@ -3312,14 +3312,14 @@ show_type = function(t: Type, seen: {Type:boolean}): string
    return ret
 end
 
-local Error = record
+local type Error = record
    y: number
    x: number
    msg: string
    filename: string
 end
 
-local Result = record
+local type Result = record
    ast: Node
    type: Type
    syntax_errors: {ParseError}
@@ -3363,7 +3363,7 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
-local Variable = record
+local type Variable = record
    t: Type
    is_const: boolean
    needs_compat53: boolean
@@ -4167,7 +4167,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       end
    end
 
-   local CompareTypes = functiontype(Type, Type, boolean): boolean, {Error}
+   local type CompareTypes = functiontype(Type, Type, boolean): boolean, {Error}
 
    local function compare_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
       local tv1 = find_var(t1.typevar)
@@ -4218,7 +4218,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 
    local is_a: function(Type, Type, boolean): boolean, {Error}
 
-   local TypeGetter = functiontype(string): Type
+   local type TypeGetter = functiontype(string): Type
 
    local function match_record_fields(t1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
       cmp = cmp or is_a
