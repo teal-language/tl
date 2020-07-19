@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("functiontype declaration", function()
    it("declares a functiontype", util.check [[
-      local t = functiontype(number, number): string
+      local type t = function(number, number): string
 
       local func = function(a: number, b: number): string
          return tostring(a + b)
@@ -10,7 +10,7 @@ describe("functiontype declaration", function()
    ]])
 
    it("functiontype can return a union including itself (#135)", util.check [[
-      local F = functiontype(): F | number
+      local type F = function(): F | number
 
       local i = 5
       local func: F
