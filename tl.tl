@@ -2893,17 +2893,10 @@ function tl.pretty_print_ast(ast: Node, fast: boolean, is_tl: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
-               local is_table_call = #node.e2 == 1 and node.e2[1].kind == "table_literal"
                add_child(out, children[1], "", indent)
-               if is_table_call then
-                  table.insert(out, " ")
-               else
-                  table.insert(out, "(")
-               end
+               table.insert(out, "(")
                add_child(out, children[3], "", indent)
-               if not is_table_call then
-                  table.insert(out, ")")
-               end
+               table.insert(out, ")")
             elseif node.op.op == "@index" then
                add_child(out, children[1], "", indent)
                table.insert(out, "[")
