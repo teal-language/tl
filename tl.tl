@@ -24,11 +24,11 @@ local tl = {
 -- Lexer
 --------------------------------------------------------------------------------
 
--- local inspect: function(value: any, options: InspectOptions): string = require "inspect"
-
 local inspect = function(x: any):string
    return tostring(x)
 end
+
+-- local inspect: function(value: any, options: InspectOptions): string = require "inspect"
 
 local keywords: {string:boolean} = {
    ["and"] = true,
@@ -919,6 +919,8 @@ local Node = record
    -- goto
    label: string
 
+   is_argument: boolean
+
    casttype: Type
 
    typename: string
@@ -1581,6 +1583,7 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
+   node.is_argument = true
    if ps.tokens[i].tk == ":" then
       i = i + 1
       local decltype: Type
@@ -2890,15 +2893,15 @@ function tl.pretty_print_ast(ast: Node, fast: boolean, is_tl: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
-               local is_table_literal = #node.e2 == 1 and node.e2[1].kind == "table_literal"
+               local is_table_call = #node.e2 == 1 and node.e2[1].kind == "table_literal"
                add_child(out, children[1], "", indent)
-               if is_table_literal then
+               if is_table_call then
                   table.insert(out, " ")
                else
                   table.insert(out, "(")
                end
                add_child(out, children[3], "", indent)
-               if not is_table_literal then
+               if not is_table_call then
                   table.insert(out, ")")
                end
             elseif node.op.op == "@index" then
@@ -2917,7 +2920,6 @@ function tl.pretty_print_ast(ast: Node, fast: boolean, is_tl: boolean): string
                end
             elseif node.op.op == "is" then
                if is_tl then
-                  error(inspect(node.e2))
                   local shown_type = show_type_2(node.e2.casttype)
                   if shown_type then
                      table.insert(out, " is ")
@@ -2961,7 +2963,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean, is_tl: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             add_string(out, node.tk)
-            if is_tl and node.kind == "argument" or node.kind == "..." then
+            if is_tl and node.is_argument then
                local shown_type = show_type_2(node.type)
                if shown_type then
                   table.insert(out, ": ")
@@ -3383,10 +3385,18 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
    elseif t.typename == "function" then
       local out: {string} = {}
       if t.tk == "functiontype" then
-         table.insert(out, "functiontype(")
+         table.insert(out, "functiontype")
       else
-         table.insert(out, "function(")
+         table.insert(out, "function")
       end
+      if t.typeargs then
+        local typeargs: {string} = {}
+        for i, t in ipairs(t.typeargs) do
+            table.insert(typeargs, show(t))
+        end
+        table.insert(out, "<" .. table.concat(typeargs, ", ") .. ">")
+      end
+      table.insert(out, "(")
       local args = {}
       if t.is_method then
          table.insert(args, "self")
