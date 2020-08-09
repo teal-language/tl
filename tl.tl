@@ -1583,7 +1583,9 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
-   node.is_argument = true
+   if node then
+      node.is_argument = true
+   end
    if ps.tokens[i].tk == ":" then
       i = i + 1
       local decltype: Type
