@@ -24,7 +24,7 @@ local tl = {
 -- Lexer
 --------------------------------------------------------------------------------
 
---local inspect: function(any):string = require "inspect"
+-- local inspect: function(value: any, options: InspectOptions): string = require "inspect"
 
 local inspect = function(x: any):string
    return tostring(x)
@@ -718,6 +718,7 @@ local Type = record
    filename: string
    typename: TypeName
    tk: string
+   ident: string
 
    closed: boolean
 
@@ -770,6 +771,9 @@ local Type = record
    kname: string
    ktype: Type
    vtype: Type
+
+   -- tuple
+   had_optional_paren: boolean
 
    -- emptytable
    declared_at: Node
@@ -1326,6 +1330,8 @@ parse_type_list = function(ps: ParseState, i: number, mode: ParseTypeListMode): 
       i = verify_tk(ps, i, ")")
    end
 
+   list.had_optional_paren = optional_paren
+
    return i, list
 end
 
@@ -1569,7 +1575,8 @@ end
 
 local function parse_argument(ps: ParseState, i: number): number, Node, number
    local node: Node
-   if ps.tokens[i].tk == "..." then
+   local ident = ps.tokens[i].tk
+   if ident == "..." then
       i, node = verify_kind(ps, i, "...")
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
@@ -1579,6 +1586,7 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
       local decltype: Type
 
       i, decltype = parse_type(ps, i)
+      decltype.ident = ident
 
       if node then
          i, node.decltype = i, decltype
@@ -1594,10 +1602,13 @@ end
 
 local function parse_argument_type(ps: ParseState, i: number): number, Type, number
    local is_va = false
+   local ident: string = nil
    if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+      ident = ps.tokens[i].tk
       i = i + 2
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == ":" then
+         ident = ps.tokens[i].tk
          i = i + 2
          is_va = true
       else
@@ -1608,6 +1619,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
    local i, typ = parse_type(ps, i)
    if typ then
       typ.is_va = is_va
+      typ.ident = ident
    end
 
    return i, typ, 0
@@ -1908,13 +1920,16 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
       local def = new_type(ps, i, "enum")
       node.newtype.def = def
       def.enumset = {}
+      def.field_order = {}
       i = i + 1
       while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
          local item: Node
          i, item = verify_kind(ps, i, "string", "enum_item")
          if item then
             table.insert(node, item)
-            def.enumset[unquote(item.tk)] = true
+            local name = unquote(item.tk)
+            table.insert(def.field_order, name)
+            def.enumset[name] = true
          end
       end
       node.yend = ps.tokens[i].y
@@ -2369,7 +2384,9 @@ local spaced_op: {number:{string:boolean}} = {
    },
 }
 
-function tl.pretty_print_ast(ast: Node, fast: boolean): string
+local show_type: function(Type, {Type:boolean}): string
+
+function tl.pretty_print_ast(ast: Node, fast: boolean, is_tl: boolean): string
    local indent = 0
 
    local Output = record
@@ -2434,18 +2451,100 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       return table.concat(out)
    end
 
-   local function print_record_def(typ: Type): string
-      local out: {string} = { "{" }
-      for name, field in pairs(typ.fields) do
-         if field.typename == "typetype" and is_record_type(field.def) then
-            table.insert(out, name)
-            table.insert(out, " = ")
-            table.insert(out, print_record_def(field.def))
-            table.insert(out, ", ")
+   local function show_type_2(t: Type): string
+      if t.typename == "tuple" and #t == 0 then
+         return nil
+      end
+      return show_type(t)
+   end
+
+   local function print_typeargs(typeargs: {Type}): string
+      local out: {string} = {}
+      for i, t in ipairs(typeargs) do
+         local shown_type = show_type_2(t)
+         if shown_type then
+            table.insert(out, shown_type)
          end
       end
-      table.insert(out, "}")
-      return table.concat(out)
+      return "<" .. table.concat(out, ", ") .. ">"
+   end
+
+   local function print_record_def(typ: Type, seen: {Type:boolean}): string, number
+      seen = seen or {}
+      if seen[typ] then
+         return typ.tk, 0
+      end
+      seen[typ] = true
+
+      local out: {string} = {}
+      local delta_h = 0
+      if is_tl then
+         table.insert(out, "record")
+         if typ.typeargs then
+            table.insert(out, print_typeargs(typ.typeargs))
+         end
+         table.insert(out, "\n")
+         delta_h = delta_h - 1
+         indent = indent + 1
+         if typ.elements then
+            table.insert(out, ("   "):rep(indent))
+            table.insert(out, "{")
+            table.insert(out, show_type(typ.elements, seen))
+            table.insert(out, "}")
+            table.insert(out, "\n")
+            delta_h = delta_h - 1
+         end
+         for _, name in ipairs(typ.field_order) do
+            local field = typ.fields[name]
+            if field.typename == "typetype" and is_record_type(field.def) then
+               table.insert(out, ("   "):rep(indent))
+               table.insert(out, name)
+               table.insert(out, " = ")
+               local str, dh = print_record_def(field.def)
+               table.insert(out, str)
+               table.insert(out, "\n")
+               delta_h = delta_h + dh - 1
+            else
+               table.insert(out, ("   "):rep(indent))
+               table.insert(out, name)
+               table.insert(out, ": ")
+               table.insert(out, show_type(field))
+               table.insert(out, "\n")
+               delta_h = delta_h - 1
+            end
+         end
+         indent = indent - 1
+         table.insert(out, ("   "):rep(indent))
+         table.insert(out, "end")
+      else
+         table.insert(out, "{")
+         for name, field in pairs(typ.fields) do
+            if field.typename == "typetype" and is_record_type(field.def) then
+               table.insert(out, name)
+               table.insert(out, " = ")
+               local str = print_record_def(field.def)
+               table.insert(out, str)
+               table.insert(out, ", ")
+            end
+         end
+         table.insert(out, "}")
+      end
+      return table.concat(out), delta_h
+   end
+
+   local function print_func_rets(t: Type): string
+      if #t == 0 then
+         return ""
+      end
+      local out: {string} = {}
+      for _, v in ipairs(t) do
+         table.insert(out, show_type(v))
+      end
+      if t.had_optional_paren then
+         return ": (" .. table.concat(out, ", ") .. ")"
+      else
+         return ": " .. table.concat(out, ", ")
+      end
    end
 
    local visit_node: Visitor<NodeKind, Node, Output> = {}
@@ -2467,6 +2566,13 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "local")
             add_child(out, children[1], " ")
+            if is_tl then
+               local shown_type = show_type_2(node.decltype)
+               if shown_type then
+                  table.insert(out, ": ")
+                  table.insert(out, shown_type)
+               end
+            end
             if children[2] then
                table.insert(out, " =")
                add_child(out, children[2], " ")
@@ -2662,6 +2768,13 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
                if node.key_parsed == "short" then
                   children[1][1] = children[1][1]:sub(2, -2)
                   add_child(out, children[1])
+                  if is_tl and node.decltype then
+                     local shown_type = show_type_2(node.decltype)
+                     if shown_type then
+                        table.insert(out, ": ")
+                        table.insert(out, shown_type)
+                     end
+                  end
                   table.insert(out, " = ")
                else
                   table.insert(out, "[")
@@ -2679,9 +2792,15 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "local function")
             add_child(out, children[1], " ")
+            if is_tl and node.typeargs then
+               table.insert(out, print_typeargs(node.typeargs))
+            end
             table.insert(out, "(")
             add_child(out, children[2])
             table.insert(out, ")")
+            if is_tl then
+               table.insert(out, print_func_rets(node.rets))
+            end
             add_child(out, children[4], " ")
             indent = indent - 1
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
@@ -2694,9 +2813,15 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "function")
             add_child(out, children[1], " ")
+            if is_tl and node.typeargs then
+               table.insert(out, print_typeargs(node.typeargs))
+            end
             table.insert(out, "(")
             add_child(out, children[2])
             table.insert(out, ")")
+            if is_tl then
+               table.insert(out, print_func_rets(node.rets))
+            end
             add_child(out, children[4], " ")
             indent = indent - 1
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
@@ -2711,6 +2836,9 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             add_child(out, children[1], " ")
             table.insert(out, node.is_method and ":" or ".")
             add_child(out, children[2])
+            if is_tl and node.typeargs then
+               table.insert(out, print_typeargs(node.typeargs))
+            end
             table.insert(out, "(")
             if node.is_method then
                -- remove self
@@ -2722,6 +2850,9 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             end
             add_child(out, children[3])
             table.insert(out, ")")
+            if is_tl then
+               table.insert(out, print_func_rets(node.rets))
+            end
             add_child(out, children[5], " ")
             indent = indent - 1
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
@@ -2735,6 +2866,9 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             table.insert(out, "function(")
             add_child(out, children[1])
             table.insert(out, ")")
+            if is_tl then
+               table.insert(out, print_func_rets(node.rets))
+            end
             add_child(out, children[3], " ")
             indent = indent - 1
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
@@ -2756,10 +2890,17 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if node.op.op == "@funcall" then
+               local is_table_literal = #node.e2 == 1 and node.e2[1].kind == "table_literal"
                add_child(out, children[1], "", indent)
-               table.insert(out, "(")
+               if is_table_literal then
+                  table.insert(out, " ")
+               else
+                  table.insert(out, "(")
+               end
                add_child(out, children[3], "", indent)
-               table.insert(out, ")")
+               if not is_table_literal then
+                  table.insert(out, ")")
+               end
             elseif node.op.op == "@index" then
                add_child(out, children[1], "", indent)
                table.insert(out, "[")
@@ -2767,12 +2908,28 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
                table.insert(out, "]")
             elseif node.op.op == "as" then
                add_child(out, children[1], "", indent)
+               if is_tl then
+                  local shown_type = show_type_2(node.e2.casttype)
+                  if shown_type then
+                     table.insert(out, " as ")
+                     table.insert(out, shown_type)
+                  end
+               end
             elseif node.op.op == "is" then
-               table.insert(out, "type(")
-               add_child(out, children[1], "", indent)
-               table.insert(out, ") == \"")
-               add_child(out, children[3], "", indent)
-               table.insert(out, "\"")
+               if is_tl then
+                  error(inspect(node.e2))
+                  local shown_type = show_type_2(node.e2.casttype)
+                  if shown_type then
+                     table.insert(out, " is ")
+                     table.insert(out, shown_type)
+                  end
+               else
+                  table.insert(out, "type(")
+                  add_child(out, children[1], "", indent)
+                  table.insert(out, ") == \"")
+                  add_child(out, children[3], "", indent)
+                  table.insert(out, "\"")
+               end
             elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
                local space = spaced_op[node.op.arity][node.op.op] and " " or ""
                if children[2] and node.op.prec > tonumber(children[2]) then
@@ -2804,6 +2961,13 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             add_string(out, node.tk)
+            if is_tl and node.kind == "argument" or node.kind == "..." then
+               local shown_type = show_type_2(node.type)
+               if shown_type then
+                  table.insert(out, ": ")
+                  table.insert(out, shown_type)
+               end
+            end
             return out
          end,
       },
@@ -2811,7 +2975,25 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if is_record_type(node.newtype.def) then
-               table.insert(out, print_record_def(node.newtype.def))
+               local str, delta_h = print_record_def(node.newtype.def)
+               table.insert(out, str)
+               out.h = out.h - delta_h
+            elseif is_tl then
+               if node.newtype.def.typename == "enum" then
+                  table.insert(out, "enum\n")
+                  out.h = out.h + 1
+                  indent = indent + 1
+                  for _, val in ipairs(node.newtype.def.field_order) do
+                     table.insert(out, ("   "):rep(indent))
+                     table.insert(out, ("\"%s\"\n"):format(val))
+                     out.h = out.h + 1
+                  end
+                  indent = indent - 1
+                  table.insert(out, ("   "):rep(indent))
+                  table.insert(out, "end")
+               elseif node.newtype.def.tk == "functiontype" then
+                  table.insert(out, show_type_2(node.newtype.def))
+               end
             else
                table.insert(out, "{}")
             end
@@ -3129,14 +3311,10 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    },
 }
 
-local show_type: function(Type): string
-
 local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
        or t.typename == "unknown_emptytable_value"
 end
-
-local show_type: function(Type, {Type:boolean}): string
 
 local function show_type_base(t: Type, seen: {Type:boolean}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist
@@ -3167,7 +3345,11 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       for _, v in ipairs(t) do
          table.insert(out, show(v))
       end
-      return "(" .. table.concat(out, ", ") .. ")"
+      if t.had_optional_paren then
+         return "(" .. table.concat(out, ", ") .. ")"
+      else
+         return table.concat(out, ", ")
+      end
    elseif t.typename == "poly" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
@@ -3183,7 +3365,10 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
    elseif t.typename == "emptytable" then
       return "{}"
    elseif t.typename == "map" then
-      return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
+      if t.keys.typename == "any" and t.values.typename == "any" then
+         return "table"
+      end
+      return "{" .. show(t.keys) .. ":" .. show(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show(t.elements) .. "}"
    elseif t.typename == "enum" then
@@ -3197,25 +3382,44 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "function" then
       local out: {string} = {}
-      table.insert(out, "function(")
+      if t.tk == "functiontype" then
+         table.insert(out, "functiontype(")
+      else
+         table.insert(out, "function(")
+      end
       local args = {}
       if t.is_method then
          table.insert(args, "self")
       end
       for i, v in ipairs(t.args) do
+         local s = ""
          if not t.is_method or i > 1 then
-            table.insert(args, show(v))
+            if v.ident then
+               s = v.ident .. ": "
+            end
+            s = s .. show(v)
+            table.insert(args, s)
          end
       end
-      table.insert(out, table.concat(args, ","))
+      table.insert(out, table.concat(args, ", "))
       table.insert(out, ")")
       if #t.rets > 0 then
-         table.insert(out, ":")
+         table.insert(out, ": ")
+         if t.rets.had_optional_paren then
+            table.insert(out, "(")
+         end
          local rets = {}
          for _, v in ipairs(t.rets) do
-            table.insert(rets, show(v))
+            local s = show(v)
+            if v.is_va then
+               s = s .. "..."
+            end
+            table.insert(rets, s)
          end
-         table.insert(out, table.concat(rets, ","))
+         table.insert(out, table.concat(rets, ", "))
+         if t.rets.had_optional_paren then
+            table.insert(out, ")")
+         end
       end
       return table.concat(out)
    elseif t.typename == "number"
