@@ -640,9 +640,9 @@ function project:find(path) -- allow for indexing with paths project:find("foo/b
    end
    return current_dir
 end
--- local function is_in(a, b) -- a is in b
---    return a:find("^" .. b) and true
--- end
+local function is_in(a, b) -- a is in b
+   return a:find("^" .. b) and true
+end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 project.source_file_map = {}
@@ -714,7 +714,15 @@ if cmd == "build" then
       end
    end
    for path in project:files(inc_patterns, exc_patterns) do
-      if path:match("%.tl$") and not path:match("%.d%.tl$") then
+      --TODO: make this better
+      local valid = true
+      if not (path:match("%.tl$") and not path:match("%.d%.tl$")) then
+         valid = false
+      end
+      if not (tlconfig["source_dir"] and is_in(path, tlconfig["source_dir"]) or not tlconfig["source_dir"]) then
+         valid = false
+      end
+      if valid then
          project.source_file_map[path] = path:gsub("%.tl$", ".lua")
          if tlconfig["build_dir"] then
             if tlconfig["source_dir"] then
