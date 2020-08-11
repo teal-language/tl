@@ -592,13 +592,24 @@ local function traverse(dirname, emptyref)
 end
 
 local project = {} -- This will probably get exposed in the api if that happens
-function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in the project adhering to the provided patterns
+function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the files in the project adhering to the provided patterns
+   local iter_dir
+   if dirname then
+      iter_dir = project:find(dirname)
+   else
+      iter_dir = self.dir
+   end
+   if not iter_dir then
+      return function() end
+   end
    inc_patt_arr = inc_patt_arr or {}
    exc_patt_arr = exc_patt_arr or {}
-   local function iter(dirs, prefix)
-      prefix = prefix or ""
+   local function iter(dirs)
       for fname, file in pairs(dirs) do
          local path = self.paths[file]
+         if dirname then
+            path = remove_leading_path(dirname, path)
+         end
          if getmetatable(file) == self.emptyref then
             local include = true
 
@@ -627,9 +638,10 @@ function project:files(inc_patt_arr, exc_patt_arr) -- iterate over the files in 
          end
       end
    end
-   return coroutine.wrap(iter), self.dir
+   return coroutine.wrap(iter), iter_dir
 end
 function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
+   if not path then return nil end
    if path == "" then return self.dir end -- empty string is the current dir
    local current_dir = self.dir
    for dirname in str_split(path, path_separator) do
@@ -639,9 +651,6 @@ function project:find(path) -- allow for indexing with paths project:find("foo/b
       end
    end
    return current_dir
-end
-local function is_in(a, b) -- a is in b
-   return a:find("^" .. b) and true
 end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
@@ -665,18 +674,12 @@ if cmd == "build" then
    if tlconfig["include"] then
       for i, patt in ipairs(tlconfig["include"]) do
          patt = cleanup_file_name(patt)
-         if tlconfig["source_dir"] then
-            patt = path_concat(tlconfig["source_dir"], patt)
-         end
          table.insert(inc_patterns, matcher(patt))
       end
    end
    if tlconfig["exclude"] then
       for i, patt in ipairs(tlconfig["exclude"]) do
          patt = cleanup_file_name(patt)
-         if tlconfig["source_dir"] then
-            patt = path_concat(tlconfig["source_dir"], patt)
-         end
          table.insert(exc_patterns, matcher(patt))
       end
    end
@@ -713,13 +716,10 @@ if cmd == "build" then
          check_parent_dirs(project.source_file_map[fname])
       end
    end
-   for path in project:files(inc_patterns, exc_patterns) do
+   for path in project:files(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
       --TODO: make this better
       local valid = true
       if not (path:match("%.tl$") and not path:match("%.d%.tl$")) then
-         valid = false
-      end
-      if not (tlconfig["source_dir"] and is_in(path, tlconfig["source_dir"]) or not tlconfig["source_dir"]) then
          valid = false
       end
       if valid then

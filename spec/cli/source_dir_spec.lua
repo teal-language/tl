@@ -66,4 +66,26 @@ describe("-s --source-dir argument", function()
          },
       })
    end)
+   it("should correctly match directory names", function()
+      util.run_mock_project(finally, {
+         dir_name = "source_dir_exc",
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {
+               source_dir = "foo",
+            }]],
+            ["foo"] = {
+               ["a.tl"] = [[return "hey"]],
+            },
+            ["foobar"] = {
+               ["b.tl"] = [[return "hi"]],
+            },
+         },
+         cmd = "build",
+         generated_files = {
+            ["foo"] = {
+               "a.lua"
+            },
+         },
+      })
+   end)
 end)
