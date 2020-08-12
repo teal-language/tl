@@ -44,4 +44,48 @@ describe("-s --source-dir argument", function()
          cmd_output = "Build error: source_dir 'src' doesn't exist\n",
       })
    end)
+   it("should not include files from other directories", function()
+      util.run_mock_project(finally, {
+         dir_name = "source_dir_exc",
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {
+               source_dir = "foo",
+            }]],
+            ["foo"] = {
+               ["a.tl"] = [[return "hey"]],
+            },
+            ["bar"] = {
+               ["b.tl"] = [[return "hi"]],
+            },
+         },
+         cmd = "build",
+         generated_files = {
+            ["foo"] = {
+               "a.lua"
+            },
+         },
+      })
+   end)
+   it("should correctly match directory names", function()
+      util.run_mock_project(finally, {
+         dir_name = "source_dir_exc",
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {
+               source_dir = "foo",
+            }]],
+            ["foo"] = {
+               ["a.tl"] = [[return "hey"]],
+            },
+            ["foobar"] = {
+               ["b.tl"] = [[return "hi"]],
+            },
+         },
+         cmd = "build",
+         generated_files = {
+            ["foo"] = {
+               "a.lua"
+            },
+         },
+      })
+   end)
 end)
