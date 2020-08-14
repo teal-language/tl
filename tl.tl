@@ -3361,6 +3361,7 @@ local standard_library: {string:Type} = {
          a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
       }
    },
+   ["collectgarbage"] = a_type { typename = "function", args = { STRING }, rets = { a_type { typename = "union", types = { BOOLEAN, NUMBER } }, NUMBER, NUMBER } },
    ["dofile"] = a_type { typename = "function", args = { OPT_STRING }, rets = { VARARG_ANY } },
    ["error"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = {} },
    ["getmetatable"] = a_type { typename = "function", args = { ANY }, rets = { NOMINAL_METATABLE } },
@@ -3385,6 +3386,13 @@ local standard_library: {string:Type} = {
          a_type { typename = "function", args = { STRING, STRING, TABLE }, rets = { FUNCTION, ANY } },
       },
    },
+   ["loadstring"] = a_type({
+      typename = "poly",
+      types = {
+         a_type({ typename = "function", args = { STRING }, rets = { FUNCTION, STRING } }),
+         a_type({ typename = "function", args = { STRING, STRING }, rets = { FUNCTION, STRING } }),
+      },
+   }),
    ["next"] = a_type {
       typename = "poly",
       types = {
@@ -3467,15 +3475,34 @@ local standard_library: {string:Type} = {
          fields = {
             ["__call"] = FUNCTION,
             ["__gc"] = a_type { typename = "function", args = { ANY }, rets = {} },
-            ["__index"] = ANY, -- FIXME
+            ["__index"] = ANY, -- FIXME: function | table | anything with an __index metamethod
             ["__len"] = a_type { typename = "function", args = { ANY }, rets = { NUMBER } },
             ["__mode"] = a_type { typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true, } },
-            ["__newindex"] = ANY, -- FIXME
+            ["__newindex"] = ANY, -- FIXME: function | table | anything with a __newindex metamethod
             ["__pairs"] = a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
                   a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
             } },
             ["__tostring"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+
             -- TODO complete...
+            ["__add"] = FUNCTION,
+            ["__sub"] = FUNCTION,
+            ["__mul"] = FUNCTION,
+            ["__div"] = FUNCTION,
+            ["__idiv"] = FUNCTION,
+            ["__mod"] = FUNCTION,
+            ["__pow"] = FUNCTION,
+            ["__unm"] = FUNCTION,
+            ["__band"] = FUNCTION,
+            ["__bor"] = FUNCTION,
+            ["__bxor"] = FUNCTION,
+            ["__bnot"] = FUNCTION,
+            ["__shl"] = FUNCTION,
+            ["__shr"] = FUNCTION,
+            ["__concat"] = FUNCTION,
+            ["__eq"] = FUNCTION,
+            ["__lt"] = FUNCTION,
+            ["__le"] = FUNCTION,
          },
       },
    },
@@ -3483,6 +3510,7 @@ local standard_library: {string:Type} = {
       typename = "record",
       fields = {
          ["create"] = a_type { typename = "function", args = { FUNCTION }, rets = { THREAD } },
+         ["close"] = a_type { typename = "function", args = { THREAD }, rets = { BOOLEAN, STRING } },
          ["isyieldable"] = a_type { typename = "function", args = {}, rets = { BOOLEAN } },
          ["resume"] = a_type { typename = "function", args = { THREAD, VARARG_ANY }, rets = { BOOLEAN, VARARG_ANY } },
          ["running"] = a_type { typename = "function", args = {}, rets = { THREAD, BOOLEAN } },
@@ -3558,7 +3586,11 @@ local standard_library: {string:Type} = {
          ["abs"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["acos"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["asin"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-         ["atan"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+         ["atan"] = a_type {
+            typename = "poly",
+            a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+            a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+         },
          ["atan2"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["ceil"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["cos"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
