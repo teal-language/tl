@@ -391,7 +391,7 @@ if cmd == "run" then
    end
 
    tl.loader()
-   return chunk()
+   return chunk((unpack or table.unpack)(arg))
 end
 
 --------------------------------------------------------------------
