@@ -276,6 +276,32 @@ describe("tl run", function()
             10 nil
          ]], output)
       end)
+
+      it("passes args through as ... to the target script", function()
+         local name = util.write_tmp_file(finally, "hello.tl", [[
+            local args = {...}
+            for i = -5, 5 do
+               print(i .. " " .. tostring(args[i]))
+            end
+         ]])
+         local pd = io.popen("./tl run -I . -- " .. name ..
+                                 " -I . hello world", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_line_by_line([[
+         -5 nil
+         -4 nil
+         -3 nil
+         -2 nil
+         -1 nil
+         0 nil
+         1 -I
+         2 .
+         3 hello
+         4 world
+         5 nil
+      ]], output)
+     end)
    end)
 
 end)
