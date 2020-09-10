@@ -3848,6 +3848,11 @@ local function init_globals(lax: boolean): {string:Variable}
       globals[name] = { t = typ, needs_compat53 = stdlib_compat53[name], is_const = true }
    end
 
+   -- only global scope and vararg functions accept `...`:
+   -- `@is_va` is an internal sentinel value which is
+   -- `any` if `...` is accepted in this scope or `nil` if it isn't.
+   globals["@is_va"] = { t = VARARG_ANY }
+
    return globals
 end
 
@@ -3894,7 +3899,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          -- this is a static approximation of _G
          local globals: {string:Type} = {}
          for k, v in pairs(st[1]) do
-            globals[k] = v.t
+            if k:sub(1,1) ~= "@" then
+               globals[k] = v.t
+            end
          end
          local field_order: {string} = {}
          for k, _ in pairs(globals) do
@@ -4936,12 +4943,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             add_var(nil, arg.typearg, arg)
          end
       end
+      local is_va = false
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
             t = a_type { typename = "unknown" }
          end
          if arg.tk == "..." then
+            is_va = true
             t.is_va = true
             if i ~= #node.args then
                node_error(node, "'...' can only be last argument")
@@ -4951,6 +4960,8 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          table.insert(args, t)
          add_var(arg, arg.tk, t)
       end
+
+      add_var(nil, "@is_va", is_va and VARARG_ANY or NIL)
 
       add_var(nil, "@return", node.rets or a_type { typename = "tuple" })
       if recurse then
@@ -6185,6 +6196,14 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       },
       ["variable"] = {
          after = function(node: Node, children: {Type}): Type
+            if node.tk == "..." then
+               local va_sentinel = find_var("@is_va")
+               if not va_sentinel or va_sentinel.typename == "nil" then
+                  node.type = UNKNOWN
+                  node_error(node, "cannot use '...' outside a vararg function")
+               end
+            end
+
             node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
                node.type = a_type { typename = "unknown" }

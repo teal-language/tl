@@ -3848,6 +3848,11 @@ local function init_globals(lax)
       globals[name] = { t = typ, needs_compat53 = stdlib_compat53[name], is_const = true }
    end
 
+
+
+
+   globals["@is_va"] = { t = VARARG_ANY }
+
    return globals
 end
 
@@ -3894,7 +3899,9 @@ function tl.type_check(ast, opts)
 
          local globals = {}
          for k, v in pairs(st[1]) do
-            globals[k] = v.t
+            if k:sub(1, 1) ~= "@" then
+               globals[k] = v.t
+            end
          end
          local field_order = {}
          for k, _ in pairs(globals) do
@@ -4936,12 +4943,14 @@ function tl.type_check(ast, opts)
             add_var(nil, arg.typearg, arg)
          end
       end
+      local is_va = false
       for i, arg in ipairs(node.args) do
          local t = arg.decltype
          if not t then
             t = a_type({ typename = "unknown" })
          end
          if arg.tk == "..." then
+            is_va = true
             t.is_va = true
             if i ~= #node.args then
                node_error(node, "'...' can only be last argument")
@@ -4951,6 +4960,8 @@ function tl.type_check(ast, opts)
          table.insert(args, t)
          add_var(arg, arg.tk, t)
       end
+
+      add_var(nil, "@is_va", is_va and VARARG_ANY or NIL)
 
       add_var(nil, "@return", node.rets or a_type({ typename = "tuple" }))
       if recurse then
@@ -6185,6 +6196,14 @@ function tl.type_check(ast, opts)
       },
       ["variable"] = {
          after = function(node, children)
+            if node.tk == "..." then
+               local va_sentinel = find_var("@is_va")
+               if not va_sentinel or va_sentinel.typename == "nil" then
+                  node.type = UNKNOWN
+                  node_error(node, "cannot use '...' outside a vararg function")
+               end
+            end
+
             node.type, node.is_const = find_var(node.tk)
             if node.type == nil then
                node.type = a_type({ typename = "unknown" })
