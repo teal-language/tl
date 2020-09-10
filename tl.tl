@@ -3386,13 +3386,6 @@ local standard_library: {string:Type} = {
          a_type { typename = "function", args = { STRING, STRING, TABLE }, rets = { FUNCTION, ANY } },
       },
    },
-   ["loadstring"] = a_type({
-      typename = "poly",
-      types = {
-         a_type({ typename = "function", args = { STRING }, rets = { FUNCTION, STRING } }),
-         a_type({ typename = "function", args = { STRING, STRING }, rets = { FUNCTION, STRING } }),
-      },
-   }),
    ["next"] = a_type {
       typename = "poly",
       types = {
