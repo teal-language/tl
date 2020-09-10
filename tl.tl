@@ -3421,7 +3421,8 @@ local standard_library: {string:Type} = {
    ["select"] = a_type {
       typename = "poly",
       types = {
-         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, ALPHA }, rets = { ALPHA } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, VARARG_ALPHA }, rets = { ALPHA } },
+         a_type { typename = "function", args = { NUMBER, VARARG_ANY }, rets = { ANY } },
          a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
       }
    },
