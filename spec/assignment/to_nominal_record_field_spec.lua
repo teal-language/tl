@@ -24,4 +24,43 @@ describe("assignment to nominal record field", function()
    ]], {
       { msg = "in assignment: got number, expected Node" }
    }))
+
+   it("fails with incorrect literal index", util.check_type_error([[
+      local Node = record
+          f: string
+      end
+
+      local root: Node = {}
+      root["a"] = ""
+   ]], {
+      { msg = "invalid key 'a' in record 'root' of type Node" }
+   }))
+
+   it("fails with variable index with arbitrary string", util.check_type_error([[
+      local Node = record
+          f: string
+      end
+
+      local root: Node = {}
+      local a = "f"
+      root[a] = "x"
+   ]], {
+      { msg = "cannot index object of type Node with a string, consider using an enum" }
+   }))
+
+   it("succeeds with variable index with enum", util.check [[
+      local Node = record
+          f: string
+          g: string
+      end
+
+      local Keys = enum
+         "f"
+         "g"
+      end
+
+      local root: Node = {}
+      local a: Keys = "f"
+      root[a] = "x"
+   ]])
 end)
