@@ -4575,6 +4575,7 @@ function tl.type_check(ast, opts)
       elseif t1.typename == t2.typename then
          return true
       end
+
       return false, terr(t1, "got %s, expected %s", t1, t2)
    end
 
@@ -5186,12 +5187,12 @@ function tl.type_check(ast, opts)
          end
          return match_all_record_field_names(idxnode, a, field_names,
 "cannot index, not all enum values map to record fields of the same type")
-      elseif is_record_type(a) and is_a(b, STRING) then
-         return match_all_record_field_names(idxnode, a, a.field_order,
-"cannot index, not all fields in record have the same type")
       elseif lax and is_unknown(a) then
          return UNKNOWN
       else
+         if is_a(b, STRING) then
+            return node_error(idxnode, "cannot index object of type %s with a string, consider using an enum", orig_a)
+         end
          return node_error(idxnode, "cannot index object of type %s with %s", orig_a, orig_b)
       end
    end
@@ -6115,6 +6116,7 @@ function tl.type_check(ast, opts)
 
             local a = children[1]
             local b = children[3]
+
             local orig_a = a
             local orig_b = b
             local ua = a and resolve_unary(a)

@@ -7,18 +7,21 @@ describe("[]", function()
          print(x["foo"])
       ]])
 
-      it("ok without declaration if record is homogenous", util.check [[
+      it("fails even if record is homogenous", util.check_type_error([[
          local x = { foo = 12, bar = 24 }
          local y = "baz"
          local n: number = x[y]
-      ]])
+      ]], {
+         { msg = "cannot index object of type {foo: number, bar: number} with a string, consider using an enum" },
+      }))
 
       it("fail without declaration if record is not homogenous", util.check_type_error([[
-         local x = { foo = 12, bar = 24 }
+         local s = string.upper("hello")
+         local x = { foo = 12, bar = s }
          local y = "baz"
          local n: string = x[y]
       ]], {
-         { msg = "got number, expected string" },
+         { msg = "cannot index object of type {foo: number, bar: string} with a string, consider using an enum" },
       }))
 
       it("ok without declaration if key is enum and all keys map to the same type", util.check [[
