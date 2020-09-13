@@ -216,6 +216,16 @@ describe("record method", function()
       ]], output)
    end)
 
+   it("record method assignment must match record type", util.check_type_error([[
+      local foo_mt: METATABLE = {}
+      foo_mt.__tostring = function()
+         return "hello"
+      end
+   ]], {
+      { msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
+      { msg = "excess return values, expected 0 (), got 1 (string \"hello\")" },
+   }))
+
    it("allows functions declared on method tables (#27)", function()
       util.mock_io(finally, {
          ["foo.tl"] = [[

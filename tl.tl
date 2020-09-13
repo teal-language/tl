@@ -4545,7 +4545,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
          if (not is_vararg(t2)) and #t1.args > #t2.args then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments"))
+            t1.args.typename = "tuple"
+            t2.args.typename = "tuple"
+            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
          else
             for i = (t1.is_method and 2 or 1), #t1.args do
                arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
@@ -4553,7 +4555,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets[#t2.rets].is_va
          if #t1.rets < #t2.rets and not diff_by_va then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of returns"))
+            t1.rets.typename = "tuple"
+            t2.rets.typename = "tuple"
+            table.insert(all_errs, error_in_type(t1, "incompatible number of returns: got " .. #t1.rets .. " %s, expected " .. #t2.rets .. " %s", t1.rets, t2.rets))
          else
             local nrets = #t2.rets
             if diff_by_va then
@@ -5870,7 +5874,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             end
 
             if #children[1] > nrets and (not lax) and not vatype then
-               node_error(node, "excess return values, expected " .. #rets .. " got " .. #children[1])
+               rets.typename = "tuple"
+               children[1].typename = "tuple"
+               node_error(node, "excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
             end
 
             for i = 1, #children[1] do
