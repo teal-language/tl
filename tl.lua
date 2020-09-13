@@ -4833,7 +4833,7 @@ function tl.type_check(ast, opts)
 
       tbl = resolve_unary(tbl)
       local type_description = tbl.typename
-      if tbl.typename == "string" then
+      if tbl.typename == "string" or tbl.typename == "enum" then
          tbl = find_var("string")
       end
 
@@ -5172,7 +5172,7 @@ function tl.type_check(ast, opts)
          else
             return node_error(idxnode, "wrong index type: %s, expected %s", orig_b, a.keys)
          end
-      elseif node.e2.kind == "string" then
+      elseif node.e2.kind == "string" or node.e2.kind == "enum_item" then
          return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
       elseif is_record_type(a) and b.typename == "enum" then
          local field_names = {}
