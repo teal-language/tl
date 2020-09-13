@@ -279,4 +279,21 @@ describe("record method", function()
       ]], output)
    end)
 
+   it("__tostring works with explicit return type", util.check [[
+         local foo_mt = record
+         end
+
+         function foo_mt:__tostring() : string
+            return ""
+         end
+      ]])
+
+   it("__tostring works without explicit return type", util.check [[
+         local foo_mt = record
+         end
+
+         function foo_mt:__tostring()
+            return ""
+         end
+      ]])
 end)
