@@ -4494,17 +4494,6 @@ function tl.type_check(ast, opts)
             return match_fields_to_record(t1, t2)
          elseif t1.typename == "typetype" and t1.def.typename == "record" then
             return is_a(t1.def, t2, for_equality)
-         elseif t1.typename == "map" then
-            if not is_a(t1.keys, STRING) then
-               return false, terr(t1, "map has non-string keys")
-            end
-            for _, fname in ipairs(t2.field_order) do
-               local ftype = t2.fields[fname]
-               if not is_a(t1.values, ftype) then
-                  return false, terr(t1, "field " .. fname .. " is of type %s", ftype)
-               end
-            end
-            return true
          end
       elseif t2.typename == "arrayrecord" then
          if t1.typename == "array" then
