@@ -301,7 +301,7 @@ local function type_check_file(file_name)
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
       exit = 1
-      return 
+      return
    end
 
    local ok = report_type_errors(result)
@@ -346,7 +346,7 @@ local function type_check_and_load(filename, modules)
 
    local chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
    if err then
-      die("!!Error uncaught by tl!!: " .. err)
+      die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
    end
    return chunk
 end
