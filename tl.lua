@@ -6617,8 +6617,8 @@ function tl.process(filename, env, result, preload_modules)
    end
 
    local input, err = fd:read("*a")
+   fd:close()
    if not input then
-      fd:close()
       return nil, "could not read " .. filename .. ": " .. err
    end
 
