@@ -2047,6 +2047,17 @@ local function parse_variable_declarations(ps, i, node_name)
    i, asgn.decltype = parse_type_list(ps, i, "decltype")
 
    if ps.tokens[i].tk == "=" then
+
+      if ps.tokens[i + 1].tk == "record" or
+         ps.tokens[i + 1].tk == "enum" then
+
+         local scope = node_name == "local_declaration" and "local" or "global"
+         fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. ps.tokens[i + 1].tk .. " " .. asgn.vars[1].tk .. "'")
+      elseif ps.tokens[i + 1].tk == "functiontype" then
+         local scope = node_name == "local_declaration" and "local" or "global"
+         fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...")
+      end
+
       asgn.exps = new_node(ps.tokens, i, "values")
       local v = 1
       repeat
