@@ -23,6 +23,20 @@ describe("records", function()
       p.y = 12
    ]])
 
+   it("produces a nice error when declared with bare 'local'", util.check_syntax_error([[
+      local Point = record
+         x: number
+         y: number
+      end
+
+      local p: Point = {}
+      p.x = 12
+      p.y = 12
+   ]], {
+      { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local record Point'" },
+      { msg = "syntax error" },
+   }))
+
    it("can be declared with 'global type'", util.check [[
       global type Point = record
          x: number
