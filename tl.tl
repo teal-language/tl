@@ -12,7 +12,15 @@ local TypeCheckOptions = record
    result: Result
 end
 
+local LoadMode = enum
+   "b"
+   "t"
+   "bt"
+end
+local LoadFunction = functiontype(...:any): any...
+
 local tl = {
+   load: function(string, string, LoadMode, {any:any}): LoadFunction, string = nil,
    process: function(string, Env, Result, {string}): (Result, string) = nil,
    process_string: function(string, boolean, Env, Result, {string}, string): (Result, string) = nil,
    gen: function(string): string = nil,
@@ -6551,17 +6559,21 @@ local function tl_package_loader(module_name: string): any
    if found_filename then
       local input = fd:read("*a")
       fd:close()
-      local tokens = tl.lex(input)
-      local errs = {}
-      local i, program = tl.parse_program(tokens, errs, found_filename)
+      local errs: {ParseError} = {}
+      local _, program = tl.parse_program(tl.lex(input), errs, module_name)
+      if #errs > 0 then
+         error(module_name .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
+      end
       local code = tl.pretty_print_ast(program, true)
-      local chunk = load(code, found_filename)
+      local chunk, err = load(code, module_name, "t")
       if chunk then
          return function(): any
             local ret = chunk()
             package.loaded[module_name] = ret
             return ret
          end
+      else
+         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
       end
    end
    return table.concat(tried, "\n\t")
@@ -6574,14 +6586,6 @@ function tl.loader()
       table.insert(package.loaders, 2, tl_package_loader)
    end
 end
-
-local LoadMode = enum
-   "b"
-   "t"
-   "bt"
-end
-
-local LoadFunction = functiontype(...:any): any...
 
 function tl.load(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
    local tokens = tl.lex(input)

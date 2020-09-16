@@ -12,7 +12,15 @@ local TypeCheckOptions = {}
 
 
 
+local LoadMode = {}
+
+
+
+
+local LoadFunction = {}
+
 local tl = {
+   load = nil,
    process = nil,
    process_string = nil,
    gen = nil,
@@ -6551,17 +6559,21 @@ local function tl_package_loader(module_name)
    if found_filename then
       local input = fd:read("*a")
       fd:close()
-      local tokens = tl.lex(input)
       local errs = {}
-      local i, program = tl.parse_program(tokens, errs, found_filename)
+      local _, program = tl.parse_program(tl.lex(input), errs, module_name)
+      if #errs > 0 then
+         error(module_name .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
+      end
       local code = tl.pretty_print_ast(program, true)
-      local chunk = load(code, found_filename)
+      local chunk, err = load(code, module_name, "t")
       if chunk then
          return function()
             local ret = chunk()
             package.loaded[module_name] = ret
             return ret
          end
+      else
+         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
       end
    end
    return table.concat(tried, "\n\t")
@@ -6574,14 +6586,6 @@ function tl.loader()
       table.insert(package.loaders, 2, tl_package_loader)
    end
 end
-
-local LoadMode = {}
-
-
-
-
-
-local LoadFunction = {}
 
 function tl.load(input, chunkname, mode, env)
    local tokens = tl.lex(input)

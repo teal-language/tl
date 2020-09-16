@@ -179,11 +179,6 @@ function util.run_mock_project(finally, t)
    local actual_dir_structure = util.get_dir_structure(".")
    lfs.chdir(current_dir)
    if t.popen then
-      -- t.popen = t.popen or {
-      --    status = true,
-      --    exit = "exit",
-      --    code = 0,
-      -- }
       util.assert_popen_close(
          t.popen.status,
          t.popen.exit,
