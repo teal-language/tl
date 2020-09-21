@@ -28,13 +28,17 @@ precedence, see below.
        ‘for’ Name ‘=’ exp ‘,’ exp [‘,’ exp] ‘do’ block ‘end’ |
        ‘for’ namelist ‘in’ explist ‘do’ block ‘end’ |
        ‘function’ funcname funcbody |
-       ‘local’ ‘function’ Name funcbody |
 +      ‘local’ attnamelist [‘:’ typelist] [‘=’ explist] |
-+      ‘local’ Name ‘=’ newtype |
+       ‘local’ ‘function’ Name funcbody |
+*      ‘local’ ‘record’ Name recordbody |
+*      ‘local’ ‘enum’ Name enumbody |
+*      ‘local’ ‘type’ Name ‘=’ newtype |
+*      ‘global’ attnamelist ‘:’ typelist [‘=’ explist] |
+*      ‘global’ attnamelist ‘=’ explist |
 *      ‘global’ ‘function’ Name funcbody |
-*      ‘global’ attnamelist ‘:’ typelist |
-*      ‘global’ attnamelist [‘:’ typelist] ‘=’ explist
-*      ‘global’ Name ‘=’ newtype
+*      ‘global’ ‘record’ Name recordbody |
+*      ‘global’ ‘enum’ Name enumbody |
+*      ‘global’ ‘type’ Name ‘=’ newtype
 
    attnamelist ::=  Name [attrib] {‘,’ Name [attrib]}
 
@@ -76,7 +80,9 @@ precedence, see below.
 
    field ::= ‘[’ exp ‘]’ ‘=’ exp |
 +     Name [‘:’ type] ‘=’ exp |
-*     Name ‘=’ newtype |
+*     ‘record’ Name recordbody |
+*     ‘enum’ Name enumbody |
+*     ‘type’ Name ‘=’ newtype |
       exp
 
    fieldsep ::= ‘,’ | ‘;’
@@ -91,7 +97,7 @@ precedence, see below.
 *  type ::= ‘(’ type ‘)’ | basetype {‘|’ basetype}
 
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
-*      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | ‘function’ functiontype
+*      ‘{’ type ‘}’ | ‘{’ type ‘:’ type ‘}’ | functiontype
 *      | Name {{‘.’ Name }} [typeargs]
 
 *  typelist ::= type {‘,’ type}
@@ -100,11 +106,13 @@ precedence, see below.
 
 *  typeargs ::= ‘<’ Name {‘,’ Name } ‘>’
 
-*  newtype ::= ‘record’ [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {Name ‘:’ type} ‘end’ |
-*      ‘enum’ {LiteralString} ‘end’ |
-*      ‘functiontype’ functiontype
+*  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  functiontype ::= [typeargs] ‘(’ partypelist ‘)’ [‘:’ retlist]
+*  recordbody ::= [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {Name ‘:’ type} ‘end’
+
+*  enumbody ::= {LiteralString} ‘end’
+
+*  functiontype ::= ‘function’ [typeargs] ‘(’ partypelist ‘)’ [‘:’ retlist]
 
 *  partypelist ::= partype {‘,’ partype}
 

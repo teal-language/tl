@@ -300,12 +300,27 @@ different value type. Records (named as such in honor of the Algol/Pascal
 tradition from which Lua gets much of the feel of its syntax) can be used
 to represent objects, "structs", etc.
 
-To declare a record variable you need to refer by name to a record type, which
-describes the set of valid fields (keys of type string and their values of
-specific types) this record can take.
+To declare a record variable, you need to create a record type first.
+The type describes the set of valid fields (keys of type string and their values of
+specific types) this record can take. You can declare types using `local type`
+and global types using `global type`.
 
 ```
-local Point = record
+local type Point = record
+   x: number
+   y: number
+end
+```
+
+Types are constant: you cannot reassign them, and they must be initialized
+with a type on declaration.
+
+Just like with functions in Lua, which can be declared either with `local f =
+function()` or with `local function f()`, there is also a shorthand syntax
+available for the declaration of record types:
+
+```
+local record Point
    x: number
    y: number
 end
@@ -364,7 +379,7 @@ callback to be defined by users of a module you are creating), you can declare
 the type of the function field in the record and fill it later from anywhere:
 
 ```
-local Obj = record
+local record Obj
    location: Point
    draw: function(Obj)
 end
@@ -375,7 +390,7 @@ following is an arrayrecord. You can use it both as a record, accessing its
 fields by name, and as an array, accessing its entries by number.
 
 ```
-local Node = record
+local record Node
    {Node}
    weight: number
    name: string
@@ -390,9 +405,9 @@ when exporting a module as a record, so that the types created in the module
 can be used by the client code which requires the module.
 
 ```
-local http = record
+local record http
 
-   Response = record
+   record Response
       status_code: number
    end
 
@@ -434,7 +449,7 @@ we declare the type variables in angle brackets and use them as types. Generic
 records are declared and used like this:
 
 ```
-local Tree = record<X>
+local type Tree = record<X>
    {Tree<X>}
    item: X
 end
@@ -455,7 +470,18 @@ enumeration of possible values.
 You describe an enum like this:
 
 ```
-local Direction = enum
+local type Direction = enum
+   "north"
+   "south"
+   "east"
+   "west"
+end
+```
+
+or like this:
+
+```
+local enum Direction
    "north"
    "south"
    "east"
@@ -474,11 +500,11 @@ various examples.
 
 You can declare nominal function types, like we do for records, to avoid
 longwinded type declarations, especially when declaring functions that take
-callbacks. This is done with using `functiontype`, and they can be generic as
+callbacks. This is done with using `function` types, and they can be generic as
 well:
 
 ```
-local Comparator = functiontype<T>(T, T): boolean
+local type Comparator = function<T>(T, T): boolean
 
 local function mysort<A>(arr: {A}, cmp: Comparator<A>)
    -- ...
@@ -688,7 +714,7 @@ as their definition has been previously required:
 -- mymod.tl
 local mymod = {}
 
-global MyPoint = record
+global type MyPoint = record
    x: number
    y: number
 end
