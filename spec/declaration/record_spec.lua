@@ -1,8 +1,52 @@
 local util = require("spec.util")
 
 describe("records", function()
+   it("can be declared with 'local type'", util.check [[
+      local type Point = record
+         x: number
+         y: number
+      end
+
+      local p: Point = {}
+      p.x = 12
+      p.y = 12
+   ]])
+
+   it("can be declared with 'local record'", util.check [[
+      local record Point
+         x: number
+         y: number
+      end
+
+      local p: Point = {}
+      p.x = 12
+      p.y = 12
+   ]])
+
+   it("can be declared with 'global type'", util.check [[
+      global type Point = record
+         x: number
+         y: number
+      end
+
+      local p: Point = {}
+      p.x = 12
+      p.y = 12
+   ]])
+
+   it("can be declared with 'global record'", util.check [[
+      global record Point
+         x: number
+         y: number
+      end
+
+      local p: Point = {}
+      p.x = 12
+      p.y = 12
+   ]])
+
    it("can have self-references", util.check [[
-      local type SLAXML = record
+      local record SLAXML
           parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
        end
 
@@ -23,52 +67,6 @@ describe("records", function()
          return r
       end
    ]])
-
-   it("can have circular type dependencies on nested types", util.check [[
-      local type R = record
-         type R2 = record
-            foo: S.S2
-         end
-
-         foo: S
-      end
-
-      local type S = record
-         type S2 = record
-            foo: R.R2
-         end
-
-         foo: R
-      end
-
-      function id(r: R): R
-         return r
-      end
-   ]])
-
-   it("can detect errors in type dependencies on nested types", util.check_type_error([[
-      local type R = record
-         type R2 = record
-            foo: S.S3
-         end
-
-         foo: S
-      end
-
-      local type S = record
-         type S2 = record
-            foo: R.R2
-         end
-
-         foo: R
-      end
-
-      function id(r: R): R
-         return r
-      end
-   ]], {
-      { y = 3, msg = "unknown type S.S3" }
-   }))
 
    it("can overload functions", util.check [[
       global type love_graphics = record
@@ -199,6 +197,39 @@ describe("records", function()
       })
    end)
 
+   it("can be nested with shorthand syntax", function()
+      util.mock_io(finally, {
+         ["req.d.tl"] = [[
+            local type requests = record
+
+               record RequestOpts
+                  {string}
+                  url: string
+               end
+
+               record Response
+                  status_code: number
+               end
+
+               get: function(string): Response
+               get: function(string, RequestOpts): Response
+               get: function(RequestOpts): Response
+            end
+
+            return requests
+         ]],
+      })
+      util.check_type_error([[
+         local req = require("req")
+
+         local r = req.get("http://example.com")
+         print(r.status_code)
+         print(r.status_coda)
+      ]], {
+         { msg = "invalid key 'status_coda' in record 'r' of type Response" }
+      })
+   end)
+
    it("can have nested generic records", util.check [[
       local type foo = record
          type bar = record<T>
@@ -210,6 +241,35 @@ describe("records", function()
       local f: foo = {}
 
       foo.example = { x = "hello" }
+   ]])
+
+   it("can have nested generic records with shorthand syntax", util.check [[
+      local type foo = record
+         record bar<T>
+            x: T
+         end
+         example: bar<string>
+      end
+
+      local f: foo = {}
+
+      foo.example = { x = "hello" }
+   ]])
+
+   it("can mix nested record syntax", util.check [[
+      local type foo = record
+         record mid<T>
+            type bar = record
+               x: T
+            end
+            z: bar
+         end
+         example: mid<string>
+      end
+
+      local f: foo = {}
+
+      foo.example = { z = { x = "hello" } }
    ]])
 
    it("can extend generic functions", util.check [[
@@ -251,7 +311,7 @@ describe("records", function()
    it("can export types as nested records", function()
       util.mock_io(finally, {
          ["req.d.tl"] = [[
-            local requests = record
+            local type requests = record
 
                type RequestOpts = record
                   {string}
@@ -280,5 +340,51 @@ describe("records", function()
          print(f().status_code)
       ]])
    end)
+
+   it("can have circular type dependencies on nested types", util.check [[
+      local type R = record
+         type R2 = record
+            foo: S.S2
+         end
+
+         foo: S
+      end
+
+      local type S = record
+         type S2 = record
+            foo: R.R2
+         end
+
+         foo: R
+      end
+
+      function id(r: R): R
+         return r
+      end
+   ]])
+
+   it("can detect errors in type dependencies on nested types", util.check_type_error([[
+      local record R
+         record R2
+            foo: S.S3
+         end
+
+         foo: S
+      end
+
+      local record S
+         record S2
+            foo: R.R2
+         end
+
+         foo: R
+      end
+
+      function id(r: R): R
+         return r
+      end
+   ]], {
+      { y = 3, msg = "unknown type S.S3" }
+   }))
 
 end)
