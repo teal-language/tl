@@ -1,10 +1,10 @@
-local type Env = record
+local record Env
    globals: {string:Variable}
    modules: {string:Type}
    skip_compat53: boolean
 end
 
-local type TypeCheckOptions = record
+local record TypeCheckOptions
    lax: boolean
    filename: string
    skip_compat53: boolean
@@ -78,7 +78,7 @@ local type TokenKind = enum
    "$EOF$"
 end
 
-local type Token = record
+local record Token
    x: number
    y: number
    i: number
@@ -673,7 +673,7 @@ local function new_typeid(): number
    return last_typeid
 end
 
-local type ParseError = record
+local record ParseError
    y: number
    x: number
    msg: string
@@ -719,7 +719,7 @@ local table_types: {TypeName:boolean} = {
    ["emptytable"] = true,
 }
 
-local type Type = record
+local record Type
    {Type}
    y: number
    x: number
@@ -796,7 +796,7 @@ local type Type = record
    nominals: {string:{Type}}
 end
 
-local type Operator = record
+local record Operator
    y: number
    x: number
    arity: number
@@ -852,7 +852,7 @@ local type FactType = enum
    "is"
 end
 
-local type Fact = record
+local record Fact
    fact: FactType
    var: string
    typ: Type
@@ -864,7 +864,7 @@ local type KeyParsed = enum
    "implicit"
 end
 
-local type Node = record
+local record Node
    {Node}
    y: number
    x: number
@@ -944,7 +944,7 @@ local function is_type(t:Type): boolean
    return t.typename == "typetype" or t.typename == "nestedtype"
 end
 
-local type ParseState = record
+local record ParseState
    tokens: {Token}
    errs: {ParseError}
    filename: string
@@ -1846,92 +1846,128 @@ local function store_field_in_record(name: string, def: Type, nt: Node): boolean
    return true
 end
 
+local type ParseBody = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+
+local function parse_nested_type(ps: ParseState, i: number, def: Type, typename: TypeName, parse_body: ParseBody): number, boolean
+   i = i + 1 -- skip 'record' or 'enum'
+
+   local v: Node
+   i, v = verify_kind(ps, i, "identifier", "variable")
+   if not v then
+      return fail(ps, i, "expected a variable name")
+   end
+
+   local nt: Node = new_node(ps.tokens, i, "newtype")
+   nt.newtype = new_type(ps, i, "typetype")
+   local rdef = new_type(ps, i, typename)
+   local iok = parse_body(ps, i, rdef, nt)
+   if iok then
+      i = iok
+      nt.newtype.def = rdef
+   end
+
+   local ok = store_field_in_record(v.tk, def, nt)
+   if not ok then
+      fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+   end
+   return i
+end
+
+local function parse_record_body(ps: ParseState, i: number, def: Type, node: Node): number, Node
+   def.fields = {}
+   def.field_order = {}
+   if ps.tokens[i].tk == "<" then
+      i, def.typeargs = parse_typearg_list(ps, i)
+   end
+   while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+      if ps.tokens[i].tk == "{" then
+         if def.typename == "arrayrecord" then
+            return fail(ps, i, "duplicated declaration of array element type in record")
+         end
+         i = i + 1
+         local t: Type
+         i, t = parse_type(ps, i)
+         if ps.tokens[i].tk == "}" then
+            node.yend = ps.tokens[i].y
+            i = verify_tk(ps, i, "}")
+         else
+            return fail(ps, i, "expected an array declaration")
+         end
+         def.typename = "arrayrecord"
+         def.elements = t
+      elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
+         i = i + 1
+         local v: Node
+         i, v = verify_kind(ps, i, "identifier", "variable")
+         if not v then
+            return fail(ps, i, "expected a variable name")
+         end
+         i = verify_tk(ps, i, "=")
+         local nt: Node
+         i, nt = parse_newtype(ps, i)
+         if not nt or not nt.newtype then
+            return fail(ps, i, "expected a type definition")
+         end
+
+         local ok = store_field_in_record(v.tk, def, nt)
+         if not ok then
+            return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+         end
+      elseif ps.tokens[i].tk == "record" and ps.tokens[i+1].tk ~= ":" then
+         i = parse_nested_type(ps, i, def, "record", parse_record_body)
+      else
+         local v: Node
+         i, v = verify_kind(ps, i, "identifier", "variable")
+         local iv = i
+         if not v then
+            return fail(ps, i, "expected a variable name")
+         end
+         if ps.tokens[i].tk == ":" then
+            i = verify_tk(ps, i, ":")
+            local t: Type
+            i, t = parse_type(ps, i)
+            if not t then
+               return fail(ps, i, "expected a type")
+            end
+            if not def.fields[v.tk] then
+               def.fields[v.tk] = t
+               table.insert(def.field_order, v.tk)
+            else
+               local prev_t = def.fields[v.tk]
+               if t.typename == "function" and prev_t.typename == "function" then
+                  def.fields[v.tk] = new_type(ps, iv, "poly")
+                  def.fields[v.tk].types = { prev_t, t }
+               elseif t.typename == "function" and prev_t.typename == "poly" then
+                  table.insert(prev_t.types, t)
+               else
+                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+               end
+            end
+         elseif ps.tokens[i].tk == "=" then
+            local next_word = ps.tokens[i + 1].tk
+            if next_word == "record" then
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. next_word .. " " .. v.tk .. "'")
+            elseif next_word == "functiontype" then
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
+            else
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
+            end
+         end
+      end
+   end
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
+   return i, node
+end
+
 parse_newtype = function(ps: ParseState, i: number): number, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
       local def = new_type(ps, i, "record")
-      def.fields = {}
-      def.field_order = {}
-      node.newtype.def = def
       i = i + 1
-      if ps.tokens[i].tk == "<" then
-         i, def.typeargs = parse_typearg_list(ps, i)
-      end
-      while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
-         if ps.tokens[i].tk == "{" then
-            if def.typename == "arrayrecord" then
-               return fail(ps, i, "duplicated declaration of array element type in record")
-            end
-            i = i + 1
-            local t: Type
-            i, t = parse_type(ps, i)
-            if ps.tokens[i].tk == "}" then
-               node.yend = ps.tokens[i].y
-               i = verify_tk(ps, i, "}")
-            else
-               return fail(ps, i, "expected an array declaration")
-            end
-            def.typename = "arrayrecord"
-            def.elements = t
-         elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
-            i = i + 1
-            local v: Node
-            i, v = verify_kind(ps, i, "identifier", "variable")
-            if not v then
-               return fail(ps, i, "expected a variable name")
-            end
-            i = verify_tk(ps, i, "=")
-            local nt: Node
-            i, nt = parse_newtype(ps, i)
-            if not nt or not nt.newtype then
-               return fail(ps, i, "expected a type definition")
-            end
-
-            local ok = store_field_in_record(v.tk, def, nt)
-            if not ok then
-               return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-            end
-         else
-            local v: Node
-            i, v = verify_kind(ps, i, "identifier", "variable")
-            local iv = i
-            if not v then
-               return fail(ps, i, "expected a variable name")
-            end
-            if ps.tokens[i].tk == ":" then
-               i = verify_tk(ps, i, ":")
-               local t: Type
-               i, t = parse_type(ps, i)
-               if not t then
-                  return fail(ps, i, "expected a type")
-               end
-               if not def.fields[v.tk] then
-                  def.fields[v.tk] = t
-                  table.insert(def.field_order, v.tk)
-               else
-                  local prev_t = def.fields[v.tk]
-                  if t.typename == "function" and prev_t.typename == "function" then
-                     def.fields[v.tk] = new_type(ps, iv, "poly")
-                     def.fields[v.tk].types = { prev_t, t }
-                  elseif t.typename == "function" and prev_t.typename == "poly" then
-                     table.insert(prev_t.types, t)
-                  else
-                     return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-                  end
-               end
-            elseif ps.tokens[i].tk == "=" then
-               local next_word = ps.tokens[i + 1].tk
-               if next_word == "functiontype" then
-                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
-               else
-                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
-               end
-            end
-         end
-      end
-      node.yend = ps.tokens[i].y
-      i = verify_tk(ps, i, "end")
+      i = parse_record_body(ps, i, def, node)
+      node.newtype.def = def
       return i, node
    elseif ps.tokens[i].tk == "enum" then
       local def = new_type(ps, i, "enum")
@@ -2036,12 +2072,34 @@ local function parse_type_declaration(ps: ParseState, i: number, node_name: Node
    return i, asgn
 end
 
+local function parse_record(ps: ParseState, i: number, node_name: NodeKind): number, Node
+   local asgn: Node = new_node(ps.tokens, i, node_name)
+   local nt: Node = new_node(ps.tokens, i, "newtype")
+   asgn.value = nt
+   nt.newtype = new_type(ps, i, "typetype")
+   local def = new_type(ps, i, "record")
+   nt.newtype.def = def
+
+   i = i + 2 -- skip `local` or `global`, and `record`
+
+   i, asgn.var = verify_kind(ps, i, "identifier")
+   if not asgn.var then
+      return fail(ps, i, "expected a type name")
+   end
+   nt.newtype.def.names = { asgn.var.tk }
+
+   i = parse_record_body(ps, i, def, nt)
+   return i, asgn
+end
+
 local function parse_statement(ps: ParseState, i: number): number, Node
    if ps.tokens[i].tk == "local" then
       if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
          return parse_type_declaration(ps, i, "local_type")
       elseif ps.tokens[i+1].tk == "function" then
          return parse_local_function(ps, i)
+      elseif ps.tokens[i+1].tk == "record" and ps.tokens[i+2].kind == "identifier"  then
+         return parse_record(ps, i, "local_type")
       else
          i = i + 1
          return parse_variable_declarations(ps, i, "local_declaration")
@@ -2049,6 +2107,8 @@ local function parse_statement(ps: ParseState, i: number): number, Node
    elseif ps.tokens[i].tk == "global" then
       if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
          return parse_type_declaration(ps, i, "global_type")
+      elseif ps.tokens[i+1].tk == "record" and ps.tokens[i+2].kind == "identifier" then
+         return parse_record(ps, i, "global_type")
       elseif ps.tokens[i+1].tk == "function" then
          i = i + 1
          return parse_function(ps, i)
@@ -2126,14 +2186,14 @@ end
 -- AST traversal
 --------------------------------------------------------------------------------
 
-local type VisitorCallbacks = record<N, T>
+local record VisitorCallbacks<N, T>
    before: function(N, {T})
    before_statements: function({N}, {T})
    before_e2: function({N}, {T})
    after: function(N, {T}, T): T
 end
 
-local type Visitor = record<K, N, T>
+local record Visitor<K, N, T>
    cbs: {K:VisitorCallbacks<N, T>}
    after: VisitorCallbacks<N, T>
 end
@@ -2418,7 +2478,7 @@ local spaced_op: {number:{string:boolean}} = {
 function tl.pretty_print_ast(ast: Node, fast: boolean): string
    local indent = 0
 
-   local type Output = record
+   local record Output
       {string}
       y: number
       h: number
@@ -3319,14 +3379,14 @@ show_type = function(t: Type, seen: {Type:boolean}): string
    return ret
 end
 
-local type Error = record
+local record Error
    y: number
    x: number
    msg: string
    filename: string
 end
 
-local type Result = record
+local record Result
    ast: Node
    type: Type
    syntax_errors: {ParseError}
@@ -3370,7 +3430,7 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
-local type Variable = record
+local record Variable
    t: Type
    is_const: boolean
    needs_compat53: boolean

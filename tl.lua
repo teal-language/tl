@@ -1846,92 +1846,128 @@ local function store_field_in_record(name, def, nt)
    return true
 end
 
+local ParseBody = {}
+
+local function parse_nested_type(ps, i, def, typename, parse_body)
+   i = i + 1
+
+   local v
+   i, v = verify_kind(ps, i, "identifier", "variable")
+   if not v then
+      return fail(ps, i, "expected a variable name")
+   end
+
+   local nt = new_node(ps.tokens, i, "newtype")
+   nt.newtype = new_type(ps, i, "typetype")
+   local rdef = new_type(ps, i, typename)
+   local iok = parse_body(ps, i, rdef, nt)
+   if iok then
+      i = iok
+      nt.newtype.def = rdef
+   end
+
+   local ok = store_field_in_record(v.tk, def, nt)
+   if not ok then
+      fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+   end
+   return i
+end
+
+local function parse_record_body(ps, i, def, node)
+   def.fields = {}
+   def.field_order = {}
+   if ps.tokens[i].tk == "<" then
+      i, def.typeargs = parse_typearg_list(ps, i)
+   end
+   while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+      if ps.tokens[i].tk == "{" then
+         if def.typename == "arrayrecord" then
+            return fail(ps, i, "duplicated declaration of array element type in record")
+         end
+         i = i + 1
+         local t
+         i, t = parse_type(ps, i)
+         if ps.tokens[i].tk == "}" then
+            node.yend = ps.tokens[i].y
+            i = verify_tk(ps, i, "}")
+         else
+            return fail(ps, i, "expected an array declaration")
+         end
+         def.typename = "arrayrecord"
+         def.elements = t
+      elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
+         i = i + 1
+         local v
+         i, v = verify_kind(ps, i, "identifier", "variable")
+         if not v then
+            return fail(ps, i, "expected a variable name")
+         end
+         i = verify_tk(ps, i, "=")
+         local nt
+         i, nt = parse_newtype(ps, i)
+         if not nt or not nt.newtype then
+            return fail(ps, i, "expected a type definition")
+         end
+
+         local ok = store_field_in_record(v.tk, def, nt)
+         if not ok then
+            return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+         end
+      elseif ps.tokens[i].tk == "record" and ps.tokens[i + 1].tk ~= ":" then
+         i = parse_nested_type(ps, i, def, "record", parse_record_body)
+      else
+         local v
+         i, v = verify_kind(ps, i, "identifier", "variable")
+         local iv = i
+         if not v then
+            return fail(ps, i, "expected a variable name")
+         end
+         if ps.tokens[i].tk == ":" then
+            i = verify_tk(ps, i, ":")
+            local t
+            i, t = parse_type(ps, i)
+            if not t then
+               return fail(ps, i, "expected a type")
+            end
+            if not def.fields[v.tk] then
+               def.fields[v.tk] = t
+               table.insert(def.field_order, v.tk)
+            else
+               local prev_t = def.fields[v.tk]
+               if t.typename == "function" and prev_t.typename == "function" then
+                  def.fields[v.tk] = new_type(ps, iv, "poly")
+                  def.fields[v.tk].types = { prev_t, t }
+               elseif t.typename == "function" and prev_t.typename == "poly" then
+                  table.insert(prev_t.types, t)
+               else
+                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+               end
+            end
+         elseif ps.tokens[i].tk == "=" then
+            local next_word = ps.tokens[i + 1].tk
+            if next_word == "record" then
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. next_word .. " " .. v.tk .. "'")
+            elseif next_word == "functiontype" then
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
+            else
+               return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
+            end
+         end
+      end
+   end
+   node.yend = ps.tokens[i].y
+   i = verify_tk(ps, i, "end")
+   return i, node
+end
+
 parse_newtype = function(ps, i)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
       local def = new_type(ps, i, "record")
-      def.fields = {}
-      def.field_order = {}
-      node.newtype.def = def
       i = i + 1
-      if ps.tokens[i].tk == "<" then
-         i, def.typeargs = parse_typearg_list(ps, i)
-      end
-      while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
-         if ps.tokens[i].tk == "{" then
-            if def.typename == "arrayrecord" then
-               return fail(ps, i, "duplicated declaration of array element type in record")
-            end
-            i = i + 1
-            local t
-            i, t = parse_type(ps, i)
-            if ps.tokens[i].tk == "}" then
-               node.yend = ps.tokens[i].y
-               i = verify_tk(ps, i, "}")
-            else
-               return fail(ps, i, "expected an array declaration")
-            end
-            def.typename = "arrayrecord"
-            def.elements = t
-         elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
-            i = i + 1
-            local v
-            i, v = verify_kind(ps, i, "identifier", "variable")
-            if not v then
-               return fail(ps, i, "expected a variable name")
-            end
-            i = verify_tk(ps, i, "=")
-            local nt
-            i, nt = parse_newtype(ps, i)
-            if not nt or not nt.newtype then
-               return fail(ps, i, "expected a type definition")
-            end
-
-            local ok = store_field_in_record(v.tk, def, nt)
-            if not ok then
-               return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-            end
-         else
-            local v
-            i, v = verify_kind(ps, i, "identifier", "variable")
-            local iv = i
-            if not v then
-               return fail(ps, i, "expected a variable name")
-            end
-            if ps.tokens[i].tk == ":" then
-               i = verify_tk(ps, i, ":")
-               local t
-               i, t = parse_type(ps, i)
-               if not t then
-                  return fail(ps, i, "expected a type")
-               end
-               if not def.fields[v.tk] then
-                  def.fields[v.tk] = t
-                  table.insert(def.field_order, v.tk)
-               else
-                  local prev_t = def.fields[v.tk]
-                  if t.typename == "function" and prev_t.typename == "function" then
-                     def.fields[v.tk] = new_type(ps, iv, "poly")
-                     def.fields[v.tk].types = { prev_t, t }
-                  elseif t.typename == "function" and prev_t.typename == "poly" then
-                     table.insert(prev_t.types, t)
-                  else
-                     return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-                  end
-               end
-            elseif ps.tokens[i].tk == "=" then
-               local next_word = ps.tokens[i + 1].tk
-               if next_word == "functiontype" then
-                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
-               else
-                  return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
-               end
-            end
-         end
-      end
-      node.yend = ps.tokens[i].y
-      i = verify_tk(ps, i, "end")
+      i = parse_record_body(ps, i, def, node)
+      node.newtype.def = def
       return i, node
    elseif ps.tokens[i].tk == "enum" then
       local def = new_type(ps, i, "enum")
@@ -2036,12 +2072,34 @@ local function parse_type_declaration(ps, i, node_name)
    return i, asgn
 end
 
+local function parse_record(ps, i, node_name)
+   local asgn = new_node(ps.tokens, i, node_name)
+   local nt = new_node(ps.tokens, i, "newtype")
+   asgn.value = nt
+   nt.newtype = new_type(ps, i, "typetype")
+   local def = new_type(ps, i, "record")
+   nt.newtype.def = def
+
+   i = i + 2
+
+   i, asgn.var = verify_kind(ps, i, "identifier")
+   if not asgn.var then
+      return fail(ps, i, "expected a type name")
+   end
+   nt.newtype.def.names = { asgn.var.tk }
+
+   i = parse_record_body(ps, i, def, nt)
+   return i, asgn
+end
+
 local function parse_statement(ps, i)
    if ps.tokens[i].tk == "local" then
       if ps.tokens[i + 1].tk == "type" and ps.tokens[i + 2].kind == "identifier" then
          return parse_type_declaration(ps, i, "local_type")
       elseif ps.tokens[i + 1].tk == "function" then
          return parse_local_function(ps, i)
+      elseif ps.tokens[i + 1].tk == "record" and ps.tokens[i + 2].kind == "identifier" then
+         return parse_record(ps, i, "local_type")
       else
          i = i + 1
          return parse_variable_declarations(ps, i, "local_declaration")
@@ -2049,6 +2107,8 @@ local function parse_statement(ps, i)
    elseif ps.tokens[i].tk == "global" then
       if ps.tokens[i + 1].tk == "type" and ps.tokens[i + 2].kind == "identifier" then
          return parse_type_declaration(ps, i, "global_type")
+      elseif ps.tokens[i + 1].tk == "record" and ps.tokens[i + 2].kind == "identifier" then
+         return parse_record(ps, i, "global_type")
       elseif ps.tokens[i + 1].tk == "function" then
          i = i + 1
          return parse_function(ps, i)
