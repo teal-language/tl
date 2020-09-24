@@ -2499,8 +2499,32 @@ local spaced_op: {number:{string:boolean}} = {
    },
 }
 
-function tl.pretty_print_ast(ast: Node, fast: boolean): string
+local record PrettyPrintOpts
+   preserve_indent: boolean
+   preserve_newlines: boolean
+end
+
+local default_pretty_print_ast_opts: PrettyPrintOpts = {
+   preserve_indent = true,
+   preserve_newlines = true,
+}
+
+local fast_pretty_print_ast_opts: PrettyPrintOpts = {
+   preserve_indent = false,
+   preserve_newlines = true,
+}
+
+function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    local indent = 0
+
+   local opts: PrettyPrintOpts
+   if mode is PrettyPrintOpts then
+      opts = mode
+   elseif mode == true then
+      opts = fast_pretty_print_ast_opts
+   else
+      opts = default_pretty_print_ast_opts
+   end
 
    local record Output
       {string}
@@ -2512,7 +2536,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
       indent = indent + 1
    end
 
-   if fast then
+   if not opts.preserve_indent then
       increment_indent = nil
    end
 
@@ -2538,7 +2562,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
          out.y = child.y
       end
 
-      if child.y > out.y + out.h then
+      if child.y > out.y + out.h and opts.preserve_newlines then
          local delta = child.y - (out.y + out.h)
          out.h = out.h + delta
          table.insert(out, ("\n"):rep(delta))
@@ -2548,7 +2572,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             indent = nil
          end
       end
-      if indent and (not fast) then
+      if indent and opts.preserve_indent then
          table.insert(out, ("   "):rep(indent))
       end
       table.insert(out, child as string)
@@ -2678,7 +2702,7 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "repeat")
             add_child(out, children[1], " ")
-            if not fast then
+            if opts.preserve_indent then
                indent = indent - 1
             end
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
@@ -3045,7 +3069,14 @@ function tl.pretty_print_ast(ast: Node, fast: boolean): string
    visit_node.cbs["argument"] = visit_node.cbs["variable"]
 
    local out = recurse_node(ast, visit_node, visit_type)
-   return concat_output(out)
+   local code: Output
+   if opts.preserve_newlines then
+      code = { y = 1, h = 0 }
+      add_child(code, out)
+   else
+      code = out
+   end
+   return concat_output(code)
 end
 
 --------------------------------------------------------------------------------
@@ -6219,7 +6250,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
                else
-                  local name = tl.pretty_print_ast(node.fn_owner)
+                  local name = tl.pretty_print_ast(node.fn_owner, { preserve_indent = true, preserve_newlines = false })
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
                end
             else

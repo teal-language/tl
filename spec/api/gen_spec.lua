@@ -39,6 +39,20 @@ describe("tl.gen", function()
       assert.equal('print(math.floor(2))', output)
    end)
 
+   it("preserves initial newlines #226", function()
+      local input = [[
+
+
+
+
+print(math.floor(2))]]
+
+      local env = tl.init_env(true, true)
+      local output, result = tl.gen(input, env)
+
+      assert.equal(input, output)
+   end)
+
    it("does not crash on inference errors due to a lack of a filename", function()
       local input = [[
           local type Point = record
