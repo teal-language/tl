@@ -1,3 +1,83 @@
+# 0.8.0
+
+2020-09-18
+
+Some big language changes in this release! Type declarations were made more
+consistent, with the introduction of `local type T = D` for declaring a type
+`T` given a definition `D` (likewise for `global type`), instead of pretending
+that type declarations were assignments. This allowed us to remove the kludgy
+`functiontype` word (the definition for function types is the same as used for
+function arguments: `local type F = function()···`
+
+This release also includes major tooling improvements! The `tl` CLI received
+major attention, with a new command `tl build` and many new options in
+`tlconfig.lua`, making `tl` more comfortable to use for building projects. The
+`tl` module also received some API improvements for programmatic use of the
+compiler.
+
+This release features commits by Darren Jennings, Patrick Desaulniers,
+Corey Williamson, Chris West and Hisham Muhammad.
+
+## What's New
+
+### Language changes
+
+* `local type` and `global type` syntax for type declarations
+* Dropped support for `functiontype`: use `function` instead
+* Shorthand syntax forms for declarations, similar to `local function` in Lua:
+  * `local record R` as a synonym for `local type R = record` (same for `global`)
+  * `local enum E` as a synonym for `local type E = enum` (same for `global`)
+  * Shorthand forms are also accepted nested inside records
+* Extended flow-based inference for empty tables: now when declaring a
+  variable with an empty table (`local V = {}`), if its first use (lexically)
+  is as an argument to a function, the compiler will infer the argument type to
+  the variable
+* Enums can be indexed with string methods
+* Lots of additions and tweaks to the standard library definitions:
+  * `collectgarbage`
+  * `coroutine.close`
+  * `math.atan` overload
+  * the many metamethods in metatable definitions
+  * Fixed declaration of `select()`
+
+### Tooling
+
+* New command `tl build`, which is able to compile multiple files at once,
+  following configuration in `tlconfig.lua`
+* `tl run` passes arguments to script, populating `...`
+* `tl gen`: new flag `-o, --output`
+* Many newly supported options in `tlconfig.lua`:
+  * `build_dir`
+  * `source_dir`
+  * `files`
+  * `include`
+  * `exclude`
+  * `include_dir` (new name of the previous `include`)
+  * `skip_compat53`
+* New functions in the `tl` module API:
+  * `tl.gen`, a high-level function for generating Lua code from Teal code,
+    akin to `tl gen` on the CLI
+  * `tl.process_string`, a lower-level driver function which produces the
+    result data structure including the AST for later processing
+
+### Fixes
+
+* Fixed a file handle leak in `tl.process`
+* Initial newlines from input file are preserved in the generated output file,
+  so that line numbers match in stack traces produced at runtime
+* It now reports error when `...` is used in non-vararg
+  functions
+* Stricter type checks:
+  * no longer accepts indexing a record with an arbitrary string
+  * no longer accepts matching a map as a record
+* Fixed resolution of multiple labels
+* Better handling of varargs for `for in` iterators
+* Parser fixes:
+  * Accept `()` as a return type in a function declaration
+  * Require separators in key/value table constructors
+  * Fix acceptance of a stray separator in table constructors
+    (accepted) and function calls (not accepted)
+
 # 0.7.1
 
 2020-06-14
