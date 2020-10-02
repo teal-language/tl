@@ -4828,7 +4828,7 @@ function tl.type_check(ast, opts)
             argdelta = 0
          end
 
-         if f.is_method and not is_method and not is_a(args[1], f.args[1]) then
+         if f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
             table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
             return nil, errs
          end

@@ -50,4 +50,20 @@ describe("record method call", function()
       }))
    end)
 
+   it("catches wrong use of self. in call", util.check_type_error([[
+      local record Foo
+      end
+      function Foo:method_a()
+      end
+      function Foo:method_c(arg: string)
+      end
+      function Foo:method_b()
+         self.method_a()
+         self.method_c("hello")
+      end
+   ]], {
+      { y = 8, msg = "invoked method as a regular function: use ':' instead of '.'" },
+      { y = 9, msg = "invoked method as a regular function: use ':' instead of '.'" },
+   }))
+
 end)
