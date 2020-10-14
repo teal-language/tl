@@ -6131,6 +6131,10 @@ function tl.type_check(ast, opts)
                   else
                      node.type.elements = expand_type(node, node.type.elements, child.vtype)
                   end
+                  if not node.type.elements then
+                     node_error(node, "cannot determine type of array elements")
+                     is_array = false
+                  end
                else
                   is_map = true
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)

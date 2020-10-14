@@ -1,6 +1,16 @@
 local util = require("spec.util")
 
 describe("empty table without type annotation", function()
+   it("an empty return produces no type information (regression test for #234)", util.check_type_error([[
+      local function heyyyy()
+      end
+
+      local ret_value = {heyyyy()}
+      table.unpack(ret_value)
+   ]], {
+      { msg = "cannot determine type of array elements" },
+   }))
+
    it("has its type determined by its first use", util.check_type_error([[
       local t = {}
       for i = 1, 10 do
