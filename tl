@@ -42,24 +42,39 @@ end
 -- FIXME
 local function validate_config(config)
    local valid_keys = {
-      build_dir = true,
-      exclude = true,
-      files = true,
-      include = true,
-      include_dir = true,
-      preload_modules = true,
-      quiet = true,
-      source_dir = true,
-      skip_compat53 = true,
+      build_dir = "string",
+      exclude = "{string}",
+      files = "{string}",
+      include = "{string}",
+      include_dir = "{string}",
+      preload_modules = "{string}",
+      quiet = "boolean",
+      source_dir = "string",
+      skip_compat53 = "boolean",
    }
 
-   for k, _ in pairs(config) do
+   for k, v in pairs(config) do
       if not valid_keys[k] then
          print(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
+      else
+         -- TODO: could we type-check the config file using tl?
+         local arr_type = valid_keys[k]:match("{(.*)}")
+         if arr_type then
+            if type(v) ~= "table" then
+               return "Expected " .. k .. " to be a " .. valid_keys[k]
+            end
+            for i, val in ipairs(v) do
+               if type(val) ~= arr_type then
+                  return "Expected " .. k .. "[" .. i .. "] to be a " .. valid_keys[k]
+               end
+            end
+         else
+            if type(v) ~= valid_keys[k] then
+               return "Expected " .. k .. " to be a " .. valid_keys[k]
+            end
+         end
       end
    end
-
-   -- TODO: could we type-check the config file using tl?
 
    return nil
 end
