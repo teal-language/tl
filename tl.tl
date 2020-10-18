@@ -3657,6 +3657,7 @@ local standard_library: {string:Type} = {
                   a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
             } },
             ["__tostring"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
+            ["__name"] = STRING,
 
             -- TODO complete...
             ["__add"] = FUNCTION,
@@ -3696,7 +3697,13 @@ local standard_library: {string:Type} = {
    ["debug"] = a_type {
       typename = "record",
       fields = {
-         ["traceback"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+         ["traceback"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { THREAD, STRING, NUMBER }, rets = { STRING } },
+               a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+            },
+         },
          ["getinfo"] = a_type {
             typename = "poly",
             types = {
