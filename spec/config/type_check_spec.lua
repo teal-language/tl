@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("config type checking", function()
-   it("should error out when a config entry isn't the correct type", function()
+   it("should error out when config.include is not a {string}", function()
       util.run_mock_project(finally, {
          dir_name = "config_type_check",
          dir_structure = {
@@ -17,6 +17,8 @@ describe("config type checking", function()
          },
          cmd_output = "Error while loading config: Expected include to be a {string}\n",
       })
+   end)
+   it("should error out when config.source_dir is not a string", function()
       util.run_mock_project(finally, {
          dir_name = "config_type_check2",
          dir_structure = {
