@@ -1,4 +1,4 @@
-language: python
+language: generic
 sudo: false
 
 env:
@@ -10,7 +10,6 @@ env:
 
 jobs:
   - os: osx
-    language: generic
   - os: linux
 
 before_install:
