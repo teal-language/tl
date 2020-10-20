@@ -8,6 +8,11 @@ env:
   - LUA="luajit=2.0"
   - LUA="luajit=2.1"
 
+jobs:
+  - os: osx
+    language: generic
+  - os: linux
+
 before_install:
   - pip install hererocks
   - hererocks lua_install -r^ --$LUA
