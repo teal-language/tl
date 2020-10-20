@@ -51,6 +51,8 @@ local function validate_config(config)
       quiet = "boolean",
       source_dir = "string",
       skip_compat53 = "boolean",
+      build_file = "string",
+      build_file_output_dir = "string"
    }
 
    for k, v in pairs(config) do
@@ -84,11 +86,18 @@ local function get_config()
    local config = {
       preload_modules = {},
       include_dir = {},
-      quiet = false
+      quiet = false,
    }
 
    local status, user_config = pcall(require, "tlconfig")
-
+   local build_file_path = "./build.tl"
+   if lfs.attributes("./build.tl","mode") == "file" then
+      --TODO
+      --I'm kind of abusing the configfile with this. Probably shouldn't do that?
+      --on the other hand, it allows you to set your own build.tl file
+      --though it should probably preserve it if it also found a build.tl file....
+      config.build_file = build_file_path
+   end
    if not status then
       if user_config:match("^module 'tlconfig' not found:") then
          return config
@@ -207,6 +216,10 @@ if cmd == "gen" and args["output"] and #args["script"] ~= 1 then
    print("Error: --output can only be used to map one input to one output")
    os.exit(1)
 end
+if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
+   print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
+   tlconfig["build_file_output_dir"] = "generated_code"
+end
 
 local function report_errors(category, errors)
    if not errors then
@@ -265,6 +278,14 @@ end
 
 for _, include in ipairs(tlconfig["include_dir"]) do
    prepend_to_path(include)
+end
+--it should be able to be moved down, shouldn't it?
+--so it fits nicely with the rest of the build script code
+local build_path = ""
+if tlconfig["build_file"] then
+   build_path = "/tmp/tl_temp_out_"..os.time(os.date("!*t"))
+   lfs.mkdir(build_path)
+   prepend_to_path(build_path)
 end
 
 local modules = tlconfig.preload_modules
@@ -364,6 +385,23 @@ local function type_check_and_load(filename, modules)
       die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
    end
    return chunk
+end
+
+
+--------------------------------------------------------------------
+--                        RUN BUILD SCRIPT                        --
+--------------------------------------------------------------------
+
+local script = {}
+if tlconfig.build_file then
+   script = type_check_and_load(tlconfig.build_file, modules)()
+end
+
+if script["gen_code"] then
+   local full_path = build_path  .. "/" .. tlconfig["build_file_output_dir"]
+   lfs.rmdir(full_path)
+   lfs.mkdir(full_path)
+   script["gen_code"](full_path)
 end
 
 --------------------------------------------------------------------
@@ -683,7 +721,13 @@ if cmd == "build" then
    if tlconfig["build_dir"] then
       tlconfig["build_dir"] = cleanup_file_name(tlconfig["build_dir"])
    end
-
+   --TODO:
+   --I was hoping that this would cause tl to put the compiled version of the generated files "somewhere"
+   --but if it does, I have no idea where it puts them :(
+   if build_path then
+      table.insert(inc_patterns, matcher(build_path .. "/**/*.tl"))
+      table.insert(inc_patterns, matcher(build_path .. "/**/*.lua"))
+   end
    -- include/exclude pattern matching
    -- create matchers for each pattern
    if tlconfig["include"] then
