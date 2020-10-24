@@ -46,6 +46,23 @@ describe("return", function()
       ]], {
          { y = 2, x = 58, msg = "in return value: got <any type>, expected string" }
       }))
+
+      it("expands tuples but not nominals (regression test for #249)", util.check [[
+         local type A = number
+         local type B = record
+           h: unionAorB
+           t: unionAorB
+         end
+         local type unionAorB = A | B
+
+         function head(n: unionAorB): unionAorB
+           if n is B then
+             return n.h  --  10
+           else
+             assert(false, 'head of A; ' .. n as A)
+           end
+         end
+      ]])
    end)
 
 end)

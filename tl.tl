@@ -6076,7 +6076,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
             for i = 1, #children[1] do
                local expected = rets[i] or vatype
                if expected then
-                  expected = resolve_unary(expected)
+                  expected = resolve_tuple(expected)
                   local where = (node.exps[i] and node.exps[i].x)
                                 and node.exps[i]
                                 or  node.exps
