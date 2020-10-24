@@ -2081,10 +2081,11 @@ local function parse_type_declaration(ps: ParseState, i: number, node_name: Node
    end
    i = verify_tk(ps, i, "=")
    i, asgn.value = parse_newtype(ps, i)
-   if asgn.value then
-      asgn.value.newtype.def.names = { asgn.var.tk }
-   else
+   if not asgn.value then
       return i
+   end
+   if not asgn.value.newtype.def.names then
+      asgn.value.newtype.def.names = { asgn.var.tk }
    end
 
    return i, asgn

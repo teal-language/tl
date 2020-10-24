@@ -1,4 +1,5 @@
 local util = require("spec.util")
+local tl = require("tl")
 
 describe("local", function()
    describe("declaration", function()
@@ -95,6 +96,32 @@ describe("local", function()
       ]], {
          { msg = "b" },
       }))
+
+      it("local type can declare a nominal type alias (regression test for #238)", function ()
+         util.mock_io(finally, {
+            ["module.tl"] = [[
+               local record module
+                 record Type
+                   data: number
+                 end
+               end
+               return module
+            ]],
+            ["main.tl"] = [[
+               local module = require "module"
+               local type Boo = module.Type
+               local var: Boo = { dato = 0 }
+               print(var.dato)
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 3, x = 42, filename = "main.tl", msg = "in local declaration: var: unknown field dato" },
+            { y = 4, x = 26, filename = "main.tl", msg = "invalid key 'dato' in record 'var' of type Boo" },
+         }, result.type_errors)
+      end)
 
       it("'type', 'record' and 'enum' are not reserved keywords", util.check [[
          local type = type
