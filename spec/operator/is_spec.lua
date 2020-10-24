@@ -49,6 +49,23 @@ describe("flow analysis with is", function()
          end
       ]])
 
+      it("resolves with else and a type definition (regression test for #250)", util.check [[
+         local type A = number
+         local type B = record
+           h: UnionAorB
+           t: UnionAorB
+         end
+         local type UnionAorB = A | B
+
+         function head(n: UnionAorB): UnionAorB
+           if n is B then
+             return n.h
+           else
+             return n + 1
+           end
+         end
+      ]])
+
       it("resolves incrementally with elseif", util.check [[
          local v: number | string | {boolean}
          if v is number then
