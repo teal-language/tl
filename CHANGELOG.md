@@ -1,3 +1,34 @@
+# 0.8.1
+
+2020-10-24
+
+This is a small bugfix release, to get some of the recent fixes out in the
+default package.
+
+This release features commits by Hisham Muhammad, Corey Williamson and Casper.
+
+## What's New
+
+### Language
+
+* Standard library definition improvements: `debug.traceback` 3-argument
+  form and `__name` metatable field
+
+### Tooling
+
+* Added a simple type checking for config entries in `tlconfig.lua`
+
+### Fixes
+
+* Fixed a crash when detecting wrong use of `self` on a method with no
+  arguments. (#228)
+* Fixed the declaration of type aliases for nominals, which was causing
+  a stack overflow. (#238)
+* Only infer an array if we can infer its elements: When resolving the
+  type of a table literal, a function with no returns produces an empty
+  tuple, and that does not give us enough data to resolve a type. (#234)
+* Improved cleanup for the test suite.
+
 # 0.8.0
 
 2020-09-18
