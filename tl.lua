@@ -626,6 +626,7 @@ local should_indent = {
    ["elseif"] = true,
    ["else"] = true,
    ["function"] = true,
+   ["record"] = true,
 }
 
 function tl.pretty_print_tokens(tokens)
