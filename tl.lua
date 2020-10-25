@@ -582,6 +582,8 @@ local add_space = {
    ["op:{"] = true,
    ["op:#"] = true,
 
+   ["::identifier"] = true,
+
    [",:identifier"] = true,
    [",:keyword"] = true,
    [",:string"] = true,
