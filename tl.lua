@@ -555,13 +555,14 @@ end
 
 
 local add_space = {
-   ["word:keyword"] = true,
-   ["word:word"] = true,
-   ["word:string"] = true,
-   ["word:="] = true,
-   ["word:op"] = true,
+   ["identifier:identifier"] = true,
+   ["identifier:keyword"] = true,
+   ["identifier:word"] = true,
+   ["identifier:string"] = true,
+   ["identifier:="] = true,
+   ["identifier:op"] = true,
 
-   ["keyword:word"] = true,
+   ["keyword:identifier"] = true,
    ["keyword:keyword"] = true,
    ["keyword:string"] = true,
    ["keyword:number"] = true,
@@ -571,7 +572,7 @@ local add_space = {
    ["keyword:("] = true,
    ["keyword:#"] = true,
 
-   ["=:word"] = true,
+   ["=:identifier"] = true,
    ["=:keyword"] = true,
    ["=:string"] = true,
    ["=:number"] = true,
@@ -581,30 +582,32 @@ local add_space = {
    ["op:{"] = true,
    ["op:#"] = true,
 
-   [",:word"] = true,
+   ["::identifier"] = true,
+
+   [",:identifier"] = true,
    [",:keyword"] = true,
    [",:string"] = true,
    [",:{"] = true,
 
    ["):op"] = true,
-   ["):word"] = true,
+   ["):identifier"] = true,
    ["):keyword"] = true,
 
    ["op:string"] = true,
    ["op:number"] = true,
-   ["op:word"] = true,
+   ["op:identifier"] = true,
    ["op:keyword"] = true,
 
-   ["]:word"] = true,
+   ["]:identifier"] = true,
    ["]:keyword"] = true,
    ["]:="] = true,
    ["]:op"] = true,
 
    ["string:op"] = true,
-   ["string:word"] = true,
+   ["string:identifier"] = true,
    ["string:keyword"] = true,
 
-   ["number:word"] = true,
+   ["number:identifier"] = true,
    ["number:keyword"] = true,
 }
 
@@ -623,6 +626,7 @@ local should_indent = {
    ["elseif"] = true,
    ["else"] = true,
    ["function"] = true,
+   ["record"] = true,
 }
 
 function tl.pretty_print_tokens(tokens)
