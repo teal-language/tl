@@ -55,6 +55,24 @@ describe("forin", function()
          print(i + 1)
       end
    ]])
+   it("with an iterator declared as a nominal (regression test for #183)", util.check [[
+      local type Iterator = function(): string
+
+      local function it(): Iterator
+          return nil
+      end
+
+      for _, v in it() do
+      end
+   ]])
+   it("with an iterator declared as a function type", util.check [[
+      local function it(): function(): string
+         return nil
+      end
+
+      for _, v in it() do
+      end
+   ]])
    describe("regressions", function()
       it("accepts nested unresolved values", util.lax_check([[
          function fun(xss)

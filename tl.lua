@@ -6010,7 +6010,7 @@ function tl.type_check(ast, opts)
          end,
          before_statements = function(node)
             local exp1 = node.exps[1]
-            local exp1type = resolve_tuple(exp1.type)
+            local exp1type = resolve_unary(exp1.type)
             if exp1type.typename == "function" then
 
                if exp1.op and exp1.op.op == "@funcall" then
