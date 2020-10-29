@@ -159,4 +159,50 @@ describe("local function", function()
          print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
       ]])
    end)
+
+   describe("shadowing", function()
+      it("arguments shadow variables", util.check [[
+         local record Name
+            normal: string
+            folded: string
+         end
+
+         local normal: number
+
+         function new(normal: string): Name
+            return {
+               normal = normal:upper()
+            }
+         end
+      ]])
+
+      it("arguments shadow variables but not argument types", util.check [[
+         local record CaseMapping
+            upper: string
+            lower: string
+         end
+
+         local casemap = {
+            CaseMapping = CaseMapping
+         }
+
+         local record Name
+            normal: string
+            folded: string
+         end
+
+         local normal: number
+
+         -- argument casemap does not shadow casemap in type casemap.CaseMapping
+         function Name.new(normal: string, casemap: casemap.CaseMapping): Name
+            return {
+               normal = normal:upper()
+            }
+         end
+
+         return {
+            Name = Name;
+         }
+      ]])
+   end)
 end)
