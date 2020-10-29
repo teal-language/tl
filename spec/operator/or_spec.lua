@@ -11,6 +11,21 @@ describe("or", function()
       local m2: {string:Ty} = m1 or { foo = t }
    ]])
 
+   it("record or record: need to be same type", util.check_type_error([[
+      local record R1
+         x: string
+         y: string
+      end
+      local record R2
+         x: string
+      end
+      local r1: R1
+      local r2: R2
+      local r3 = r2 or r1
+   ]], {
+      { msg = "cannot use operator 'or' for types R2 and R1" }
+   }))
+
    it("string or enum matches enum", util.check [[
       local type Dir = enum
          "left"

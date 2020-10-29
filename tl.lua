@@ -4495,7 +4495,8 @@ function tl.type_check(ast, opts)
       elseif t1.typename == "nominal" then
          return are_same_nominals(t1, t2)
       elseif t1.typename == "record" then
-         return match_fields_to_record(t1, t2, same_type)
+         return match_fields_to_record(t1, t2, same_type) and
+         match_fields_to_record(t2, t1, same_type)
       elseif t1.typename == "function" then
          if #t1.args ~= #t2.args then
             return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
@@ -4517,7 +4518,8 @@ function tl.type_check(ast, opts)
          if not ok then
             return ok, errs
          end
-         return match_fields_to_record(t1, t2, same_type)
+         return match_fields_to_record(t1, t2, same_type) and
+         match_fields_to_record(t2, t1, same_type)
       end
       return true
    end
