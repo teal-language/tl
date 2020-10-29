@@ -1583,7 +1583,7 @@ end
 local function parse_argument(ps, i)
    local node
    if ps.tokens[i].tk == "..." then
-      i, node = verify_kind(ps, i, "...")
+      i, node = verify_kind(ps, i, "...", "argument")
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -1602,7 +1602,13 @@ end
 
 parse_argument_list = function(ps, i)
    local node = new_node(ps.tokens, i, "argument_list")
-   return parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   local i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   for a, arg in ipairs(node) do
+      if arg.tk == "..." and a ~= #node then
+         return fail(ps, i, "'...' can only be last argument")
+      end
+   end
+   return i, node
 end
 
 local function parse_argument_type(ps, i)
@@ -1645,7 +1651,7 @@ local function parse_function(ps, i)
    local node = fn
    i = verify_tk(ps, i, "function")
    local names = {}
-   i, names[1] = verify_kind(ps, i, "identifier", "variable")
+   i, names[1] = verify_kind(ps, i, "identifier")
    while ps.tokens[i].tk == "." do
       i = i + 1
       i, names[#names + 1] = verify_kind(ps, i, "identifier")
@@ -1659,6 +1665,7 @@ local function parse_function(ps, i)
    if #names > 1 then
       fn.kind = "record_function"
       local owner = names[1]
+      owner.kind = "variable"
       for i = 2, #names - 1 do
          local dot = { y = names[i].y, x = names[i].x - 1, arity = 2, op = "." }
          names[i].kind = "identifier"
@@ -1672,7 +1679,7 @@ local function parse_function(ps, i)
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
-      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "variable" })
+      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier" })
    end
 
    if not fn.name then
@@ -2311,6 +2318,14 @@ local function recurse_type(ast, visit)
    return visit_after(ast, ast.typename, visit, xs)
 end
 
+local function recurse_typeargs(ast, visit_type)
+   if ast.typeargs then
+      for _, typearg in ipairs(ast.typeargs) do
+         recurse_type(typearg, visit_type)
+      end
+   end
+end
+
 local function recurse_node(ast,
 visit_node,
 visit_type)
@@ -2370,8 +2385,12 @@ visit_type)
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
       xs[2] = recurse_node(ast.exp, visit_node, visit_type)
    elseif ast.kind == "function" then
+      recurse_typeargs(ast, visit_type)
       xs[1] = recurse_node(ast.args, visit_node, visit_type)
       xs[2] = recurse_type(ast.rets, visit_type)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
+      end
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "forin" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
@@ -2401,11 +2420,16 @@ visit_type)
    elseif ast.kind == "cast" then
    elseif ast.kind == "local_function" or
       ast.kind == "global_function" then
+      recurse_typeargs(ast, visit_type)
       xs[1] = recurse_node(ast.name, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
       xs[3] = recurse_type(ast.rets, visit_type)
+      if cbs.before_statements then
+         cbs.before_statements(ast, xs)
+      end
       xs[4] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "record_function" then
+      recurse_typeargs(ast, visit_type)
       xs[1] = recurse_node(ast.fn_owner, visit_node, visit_type)
       xs[2] = recurse_node(ast.name, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
@@ -5148,42 +5172,24 @@ function tl.type_check(ast, opts)
       return rets
    end
 
-   local function begin_function_scope(node, recurse)
-      begin_scope()
-      local args = {}
-      if node.typeargs then
-         for i, arg in ipairs(node.typeargs) do
-            add_var(nil, arg.typearg, arg)
-         end
-      end
-      local is_va = false
-      for i, arg in ipairs(node.args) do
-         local t = arg.decltype
-         if not t then
-            t = a_type({ typename = "unknown" })
-         end
-         if arg.tk == "..." then
-            is_va = true
-            t.is_va = true
-            if i ~= #node.args then
-               node_error(node, "'...' can only be last argument")
-            end
-         end
-         check_typevars(arg, t)
-         table.insert(args, t)
-         add_var(arg, arg.tk, t)
-      end
-
+   local function add_internal_function_variables(node)
+      local is_va = #node.args > 0 and node.args[#node.args].type.is_va
       add_var(nil, "@is_va", is_va and VARARG_ANY or NIL)
 
       add_var(nil, "@return", node.rets or a_type({ typename = "tuple" }))
-      if recurse then
-         add_var(nil, node.name.tk, a_type({
-            typename = "function",
-            args = args,
-            rets = get_rets(node.rets),
-         }))
+   end
+
+   local function add_function_definition_for_recursion(node)
+      local args = {}
+      for i, arg in ipairs(node.args) do
+         table.insert(args, arg.type)
       end
+
+      add_var(nil, node.name.tk, a_type({
+         typename = "function",
+         args = args,
+         rets = get_rets(node.rets),
+      }))
    end
 
    local function fail_unresolved()
@@ -6201,7 +6207,11 @@ function tl.type_check(ast, opts)
       },
       ["local_function"] = {
          before = function(node)
-            begin_function_scope(node, true)
+            begin_scope()
+         end,
+         before_statements = function(node)
+            add_internal_function_variables(node)
+            add_function_definition_for_recursion(node)
          end,
          after = function(node, children)
             end_function_scope()
@@ -6217,7 +6227,11 @@ function tl.type_check(ast, opts)
       },
       ["global_function"] = {
          before = function(node)
-            begin_function_scope(node, true)
+            begin_scope()
+         end,
+         before_statements = function(node)
+            add_internal_function_variables(node)
+            add_function_definition_for_recursion(node)
          end,
          after = function(node, children)
             end_function_scope()
@@ -6231,9 +6245,10 @@ function tl.type_check(ast, opts)
       },
       ["record_function"] = {
          before = function(node)
-            begin_function_scope(node)
+            begin_scope()
          end,
          before_statements = function(node, children)
+            add_internal_function_variables(node)
             if node.is_method then
                local rtype = get_self_type(children[1])
                children[3][1] = rtype
@@ -6286,7 +6301,10 @@ function tl.type_check(ast, opts)
       },
       ["function"] = {
          before = function(node)
-            begin_function_scope(node)
+            begin_scope()
+         end,
+         before_statements = function(node)
+            add_internal_function_variables(node)
          end,
          after = function(node, children)
             end_function_scope()
@@ -6453,6 +6471,20 @@ function tl.type_check(ast, opts)
             end
          end,
       },
+      ["argument"] = {
+         after = function(node, children)
+            local t = node.decltype
+            if not t then
+               t = a_type({ typename = "unknown" })
+            end
+            if node.tk == "..." then
+               t.is_va = true
+            end
+            check_typevars(node, t)
+            node.type = t
+            add_var(node, node.tk, t)
+         end,
+      },
       ["identifier"] = {
          after = function(node, children)
             node.type = NONE
@@ -6470,7 +6502,6 @@ function tl.type_check(ast, opts)
    visit_node.cbs["values"] = visit_node.cbs["variables"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
-   visit_node.cbs["argument"] = visit_node.cbs["variable"]
 
    visit_node.cbs["string"] = {
       after = function(node, children)
