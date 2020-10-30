@@ -87,16 +87,20 @@ local function get_config()
       quiet = false
    }
 
-   local status, user_config = pcall(require, "tlconfig")
-
-   if not status then
-      if user_config:match("^module 'tlconfig' not found:") then
+   local conf, err = loadfile("tlconfig.lua")
+   if not conf then
+      if err:match("No such file or directory$") then
          return config
       else
-         die("Error while loading config:\n" .. user_config)
+         die("Error loading config:\n" .. err)
       end
    end
    config_from_file = true
+
+   local ok, user_config = pcall(conf)
+   if not ok then
+      die("Error loading config:\n" .. err)
+   end
 
    -- Merge tlconfig with the default config
    for k, v in pairs(user_config) do
