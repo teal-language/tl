@@ -4,7 +4,6 @@ describe("globs", function()
    describe("*", function()
       it("should match non directory separators", function()
          util.run_mock_project(finally, {
-            dir_name = "non_dir_sep_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = {"*"} }]],
                ["a.tl"] = [[print "a"]],
@@ -22,7 +21,6 @@ describe("globs", function()
       end)
       it("should match when other characters are present in the pattern", function()
          util.run_mock_project(finally, {
-            dir_name = "other_chars_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "ab*cd.tl" } }]],
                ["abzcd.tl"] = [[print "a"]],
@@ -44,7 +42,6 @@ describe("globs", function()
       end)
       it("should only match .tl by default", function()
          util.run_mock_project(finally, {
-            dir_name = "match_only_teal_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "*" } }]],
                ["foo.tl"] = [[print "a"]],
@@ -60,7 +57,6 @@ describe("globs", function()
       end)
       it("should not match .d.tl files", function()
          util.run_mock_project(finally, {
-            dir_name = "dont_match_d_tl",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "*" } }]],
                ["foo.tl"] = [[print "a"]],
@@ -74,7 +70,6 @@ describe("globs", function()
       end)
       it("should match directories in the middle of a path", function()
          util.run_mock_project(finally, {
-            dir_name = "match_dirs_in_middle_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "foo/*/baz.tl" } }]],
                ["foo"] = {
@@ -108,7 +103,6 @@ describe("globs", function()
    describe("**/", function()
       it("should match the current directory", function()
          util.run_mock_project(finally, {
-            dir_name = "match_current_dir_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "**/*" } }]],
                ["foo.tl"] = [[print "a"]],
@@ -125,7 +119,6 @@ describe("globs", function()
       end)
       it("should match any subdirectory", function()
          util.run_mock_project(finally, {
-            dir_name = "match_sub_dir_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "**/*" } }]],
                ["foo"] = {
@@ -162,7 +155,6 @@ describe("globs", function()
       end)
       it("should not get the order of directories confused", function()
          util.run_mock_project(finally, {
-            dir_name = "match_order_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "foo/**/bar/**/baz/a.tl" } }]],
                ["foo"] = {
@@ -203,7 +195,6 @@ describe("globs", function()
    describe("* and **/", function()
       it("should work together", function()
          util.run_mock_project(finally, {
-            dir_name = "glob_interference_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return { include = { "**/foo/*/bar/**/*" } }]],
                ["foo"] = {

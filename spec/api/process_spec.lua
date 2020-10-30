@@ -24,7 +24,7 @@ describe("tl.process", function()
       it("should cache modules by filename to prevent code being loaded more than once (#245)", function()
 
          local current_dir = lfs.currentdir()
-         local dir_name = util.write_tmp_dir(finally, "module_cache", {
+         local dir_name = util.write_tmp_dir(finally, {
             ["foo.tl"] = [[ require("bar") ]],
             ["bar.tl"] = [[ global x = 10 ]],
          })

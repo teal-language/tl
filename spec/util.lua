@@ -87,12 +87,14 @@ function util.write_tmp_file(finally, name, content)
    return full_name
 end
 
-function util.write_tmp_dir(finally, dir_name, dir_structure)
+local tmp_files = 1
+
+function util.write_tmp_dir(finally, dir_structure)
    assert(type(finally) == "function")
-   assert(type(dir_name) == "string")
    assert(type(dir_structure) == "table")
 
-   local full_name = "/tmp/" .. dir_name .. "/"
+   local full_name = "/tmp/teal_spec" .. tostring(tmp_files) .. "/"
+   tmp_files = tmp_files + 1
    assert(lfs.mkdir(full_name))
    local function traverse_dir(dir_structure, prefix)
       prefix = prefix or full_name
@@ -157,14 +159,13 @@ function util.run_mock_project(finally, t)
    assert(type(finally) == "function")
    assert(type(t) == "table")
    assert(type(t.cmd) == "string", "tl <cmd> not given")
-   assert(type(t.dir_name) == "string", "dir_name not provided")
    assert(({
       gen = true,
       check = true,
       run = true,
       build = true,
    })[t.cmd], "Invalid command tl " .. t.cmd)
-   local actual_dir_name = util.write_tmp_dir(finally, t.dir_name, t.dir_structure)
+   local actual_dir_name = util.write_tmp_dir(finally, t.dir_structure)
    lfs.link(tl_executable, actual_dir_name .. "/tl")
    lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
    local expected_dir_structure = {
@@ -173,11 +174,11 @@ function util.run_mock_project(finally, t)
    }
    insert_into(expected_dir_structure, t.dir_structure)
    insert_into(expected_dir_structure, t.generated_files)
-   lfs.chdir(actual_dir_name)
+   assert(lfs.chdir(actual_dir_name))
    local pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or "") .. " 2>&1")
    local output = pd:read("*a")
    local actual_dir_structure = util.get_dir_structure(".")
-   lfs.chdir(current_dir)
+   assert(lfs.chdir(current_dir))
    if t.popen then
       util.assert_popen_close(
          t.popen.status,
