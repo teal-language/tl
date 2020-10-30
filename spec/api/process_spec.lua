@@ -20,4 +20,21 @@ describe("tl.process", function()
          util.assert_line_by_line(expected_lua_code, pretty_result_string)
       end)
    end)
+   describe("process", function()
+      it("should cache modules by filename to prevent code being loaded more than once (#245)", function()
+
+         local current_dir = lfs.currentdir()
+         local dir_name = util.write_tmp_dir(finally, "module_cache", {
+            ["foo.tl"] = [[ require("bar") ]],
+            ["bar.tl"] = [[ global x = 10 ]],
+         })
+
+         assert(lfs.chdir(dir_name))
+         local foo_result, foo_err = tl.process("foo.tl")
+         local bar_result, bar_err = tl.process("bar.tl", foo_result.env)
+         assert(lfs.chdir(current_dir))
+         assert(foo_result, foo_err)
+         assert(bar_result, bar_err)
+      end)
+   end)
 end)
