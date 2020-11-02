@@ -4779,6 +4779,7 @@ tl.type_check = function(ast, opts)
          return true
       end
 
+
       if t1.typename == "nil" then
          return true
       end
@@ -5025,7 +5026,10 @@ tl.type_check = function(ast, opts)
          return
       end
 
-      if t2.typename == "unknown_emptytable_value" then
+
+      if t1.typename == "nil" then
+         return
+      elseif t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
             infer_var(t2.emptytable_type, a_type({ typename = "array", elements = t1 }), node)
          else

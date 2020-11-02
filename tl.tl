@@ -4779,6 +4779,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return true
       end
 
+      -- ∀ t, nil <: t
       if t1.typename == "nil" then -- TODO nilable
          return true
       end
@@ -5025,7 +5026,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return
       end
 
-      if t2.typename == "unknown_emptytable_value" then
+      -- some flow-based inference
+      if t1.typename == "nil" then
+         return
+      elseif t2.typename == "unknown_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
             infer_var(t2.emptytable_type, a_type { typename = "array", elements = t1 }, node)
          else
