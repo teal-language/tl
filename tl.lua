@@ -1250,6 +1250,7 @@ local function parse_base_type(ps, i)
       ps.tokens[i].tk == "boolean" or
       ps.tokens[i].tk == "nil" or
       ps.tokens[i].tk == "number" or
+      ps.tokens[i].tk == "any" or
       ps.tokens[i].tk == "thread" then
       local typ = new_type(ps, i, ps.tokens[i].tk)
       typ.tk = nil
@@ -4785,6 +4786,7 @@ tl.type_check = function(ast, opts)
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
+
       if t2.typename == "tuple" and t1.typename ~= "tuple" then
          t1 = a_type({
             typename = "tuple",
@@ -4795,6 +4797,7 @@ tl.type_check = function(ast, opts)
       if t1.typename == "typevar" or t2.typename == "typevar" then
          return compare_typevars(t1, t2, is_a)
       end
+
 
       if t2.typename == "any" then
          return true
@@ -4824,8 +4827,6 @@ tl.type_check = function(ast, opts)
             end
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
-      elseif t1.typename == "nominal" and t2.typename == "nominal" and #t2.names == 1 and t2.names[1] == "any" then
-         return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
          return are_same_nominals(t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
