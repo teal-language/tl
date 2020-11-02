@@ -3440,7 +3440,7 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
-      return table.concat(out, " or ")
+      return table.concat(out, " and ")
    elseif t.typename == "union" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
@@ -4802,25 +4802,42 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       -- ∀ t, t <: any
       if t2.typename == "any" then
          return true
-      elseif t2.typename == "poly" then
-         for _, t in ipairs(t2.types) do
-            if is_a(t1, t, for_equality) then
-               return true
+
+      -- ∀ t in t1, t <: t2
+      -- ──────────────────   -- a union type t1 is a t2
+      --   t1 union <: t2     -- if all of t1's types satisfy t2
+      elseif t1.typename == "union" then
+         for _, t in ipairs(t1.types) do
+            if not is_a(t, t2, for_equality) then
+               return false, terr(t1, "got %s, expected %s", t1, t2)
             end
          end
-         return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
-      elseif t1.typename == "union" and t2.typename == "union" then
-         if has_all_types_of(t1.types, t2.types, is_a) then
-            return true
-         else
-            return false, terr(t1, "got %s, expected %s", t1, t2)
-         end
+         return true
+
+      -- ∃ t in t2, t1 <: t
+      -- ──────────────────   -- a value of type t1 is a member of union type t2
+      --   t1 <: t2 union     -- if it is a member of some of t2's types
       elseif t2.typename == "union" then
          for _, t in ipairs(t2.types) do
             if is_a(t1, t, for_equality) then
                return true
             end
          end
+
+      -- ∀ t in t2, t1 <: t
+      -- ──────────────────   -- a type t1 is a poly type t2
+      --   t1 <: t2 poly      -- if all of t2's poly types are satisfied by t1
+      elseif t2.typename == "poly" then
+         for _, t in ipairs(t2.types) do
+            if not is_a(t1, t, for_equality) then
+               return false, terr(t1, "cannot match against all alternatives of the polymorphic type")
+            end
+         end
+         return true
+
+      -- ∃ t in t1, t <: t2
+      -- ──────────────────   -- a poly type t1 is a t2 if
+      --   t1 poly <: t2      -- t2 is some of of the poly's types
       elseif t1.typename == "poly" then
          for _, t in ipairs(t1.types) do
             if is_a(t, t2, for_equality) then

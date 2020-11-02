@@ -3440,7 +3440,7 @@ local function show_type_base(t, seen)
       for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
-      return table.concat(out, " or ")
+      return table.concat(out, " and ")
    elseif t.typename == "union" then
       local out = {}
       for _, v in ipairs(t.types) do
@@ -4802,25 +4802,42 @@ tl.type_check = function(ast, opts)
 
       if t2.typename == "any" then
          return true
-      elseif t2.typename == "poly" then
-         for _, t in ipairs(t2.types) do
-            if is_a(t1, t, for_equality) then
-               return true
+
+
+
+
+      elseif t1.typename == "union" then
+         for _, t in ipairs(t1.types) do
+            if not is_a(t, t2, for_equality) then
+               return false, terr(t1, "got %s, expected %s", t1, t2)
             end
          end
-         return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
-      elseif t1.typename == "union" and t2.typename == "union" then
-         if has_all_types_of(t1.types, t2.types, is_a) then
-            return true
-         else
-            return false, terr(t1, "got %s, expected %s", t1, t2)
-         end
+         return true
+
+
+
+
       elseif t2.typename == "union" then
          for _, t in ipairs(t2.types) do
             if is_a(t1, t, for_equality) then
                return true
             end
          end
+
+
+
+
+      elseif t2.typename == "poly" then
+         for _, t in ipairs(t2.types) do
+            if not is_a(t1, t, for_equality) then
+               return false, terr(t1, "cannot match against all alternatives of the polymorphic type")
+            end
+         end
+         return true
+
+
+
+
       elseif t1.typename == "poly" then
          for _, t in ipairs(t1.types) do
             if is_a(t, t2, for_equality) then
