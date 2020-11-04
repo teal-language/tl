@@ -3566,8 +3566,8 @@ local standard_library: {string:Type} = {
    ["assert"] = a_type {
       typename = "poly",
       types = {
-         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
-         a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { a_type { typename = "union", types = { ALPHA, NIL  } } }, rets = { ALPHA } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type { typename = "union", types = { ALPHA, NIL  } }, BETA }, rets = { ALPHA } },
       }
    },
    ["collectgarbage"] = a_type { typename = "function", args = { STRING }, rets = { a_type { typename = "union", types = { BOOLEAN, NUMBER } }, NUMBER, NUMBER } },
