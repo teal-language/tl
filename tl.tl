@@ -3798,8 +3798,10 @@ local standard_library: {string:Type} = {
          ["asin"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["atan"] = a_type {
             typename = "poly",
-            a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-            a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+            types = {
+               a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+               a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
+            },
          },
          ["atan2"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["ceil"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
