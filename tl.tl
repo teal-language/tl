@@ -1,6 +1,7 @@
 local record Env
    globals: {string:Variable}
    modules: {string:Type}
+   loaded: {string:Result}
    skip_compat53: boolean
 end
 
@@ -3534,6 +3535,7 @@ end
 
 local function require_module(module_name: string, lax: boolean, env: Env, result: Result): Type, boolean
    local modules = env.modules
+   local loaded = env.loaded
 
    if modules[module_name] then
       return modules[module_name], true
@@ -3550,6 +3552,7 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
          _result.type = BOOLEAN
       end
 
+      loaded[found] = _result
       modules[module_name] = _result.type
 
       return _result.type, true
@@ -4102,6 +4105,7 @@ end
 function tl.init_env(lax: boolean, skip_compat53: boolean): Env
    local env = {
       modules = {},
+      loaded = {},
       globals = init_globals(lax),
       skip_compat53 = skip_compat53,
    }
@@ -6694,6 +6698,9 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
 end
 
 function tl.process(filename: string, env: Env, result: Result, preload_modules: {string}): Result, string
+   if env and env.loaded and env.loaded[filename] then
+      return env.loaded[filename]
+   end
    local fd, err = io.open(filename, "r")
    if not fd then
       return nil, "could not open " .. filename .. ": " .. err
@@ -6730,6 +6737,9 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
                            filename: string): Result, string
 
    env = env or tl.init_env(is_lua)
+   if env.loaded and env.loaded[filename] then
+      return env.loaded[filename]
+   end
    result = result or {
       syntax_errors = {},
       type_errors = {},
@@ -6777,6 +6787,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
    result.ast = program
    result.env = env
 
+   env.loaded[filename] = result
    return result
 end
 
