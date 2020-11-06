@@ -1,3 +1,27 @@
+# 0.8.2
+
+2020-11-06
+
+This is another bugfix release.
+
+This release features commits by Hisham Muhammad, Corey Williamson and fang.
+
+## What's New
+
+### Fixes
+
+* `tl` now caches required modules to not load code more than once (#245)
+* fixed a compiler crash using `math.atan`
+* `tl` now uses `loadstring` instead of `require` to load config,
+  to avoid issues with LUA_PATH
+* do not shadow argument types with function arguments
+* expand tuples but not nominals in return types (#249)
+* fix `is` inference on `else` block when using nominal types (#250)
+* `for` accepts a function call that returns a nominal
+  which resolves to an iterator. (#183)
+* fix invariant type checking of records
+* various fixes for the lexer pretty-printer
+
 # 0.8.1
 
 2020-10-24
