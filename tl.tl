@@ -1,10 +1,3 @@
-local record Env
-   globals: {string:Variable}
-   modules: {string:Type}
-   loaded: {string:Result}
-   skip_compat53: boolean
-end
-
 local record TypeCheckOptions
    lax: boolean
    filename: string
@@ -20,14 +13,41 @@ local enum LoadMode
 end
 local type LoadFunction = function(...:any): any...
 
-local tl = {
-   load: function(string, string, LoadMode, {any:any}): LoadFunction, string = nil,
-   process: function(string, Env, Result, {string}): (Result, string) = nil,
-   process_string: function(string, boolean, Env, Result, {string}, string): (Result, string) = nil,
-   gen: function(string, Env): string = nil,
-   type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type) = nil,
-   init_env: function(boolean, boolean): Env = nil,
-}
+local record tl
+   load: function(string, string, LoadMode, {any:any}): LoadFunction, string
+   process: function(string, Env, Result, {string}): (Result, string)
+   process_string: function(string, boolean, Env, Result, {string}, string): (Result, string)
+   gen: function(string): string
+   type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type)
+   init_env: function(boolean, boolean): Env
+
+   record Env
+      globals: {string:Variable}
+      modules: {string:Type}
+      loaded: {string:Result}
+      skip_compat53: boolean
+   end
+
+   record Result
+      ast: Node
+      type: Type
+      syntax_errors: {ParseError}
+      type_errors: {Error}
+      unknowns: {Error}
+      env: Env
+   end
+
+   record Error
+      y: number
+      x: number
+      msg: string
+      filename: string
+   end
+end
+
+local Result = tl.Result
+local Env = tl.Env
+local Error = tl.Error
 
 --------------------------------------------------------------------------------
 -- Lexer
@@ -2620,11 +2640,11 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
 
    local function print_record_def(typ: Type): string
       local out: {string} = { "{" }
-      for name, field in pairs(typ.fields) do
-         if field.typename == "typetype" and is_record_type(field.def) then
+      for _, name in ipairs(typ.field_order) do
+         if typ.fields[name].typename == "typetype" and is_record_type(typ.fields[name].def) then
             table.insert(out, name)
             table.insert(out, " = ")
-            table.insert(out, print_record_def(field.def))
+            table.insert(out, print_record_def(typ.fields[name].def))
             table.insert(out, ", ")
          end
       end
@@ -3462,22 +3482,6 @@ show_type = function(t: Type, seen: {Type:boolean}): string
       ret = ret .. " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..": )"
    end
    return ret
-end
-
-local record Error
-   y: number
-   x: number
-   msg: string
-   filename: string
-end
-
-local record Result
-   ast: Node
-   type: Type
-   syntax_errors: {ParseError}
-   type_errors: {Error}
-   unknowns: {Error}
-   env: Env
 end
 
 local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
@@ -6852,4 +6856,3 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, env: {any:a
 end
 
 return tl
-
