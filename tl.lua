@@ -1,11 +1,4 @@
-local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local Env = {}
-
-
-
-
-
-
-local TypeCheckOptions = {}
+local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local TypeCheckOptions = {}
 
 
 
@@ -20,14 +13,41 @@ local LoadMode = {}
 
 local LoadFunction = {}
 
-local tl = {
-   load = nil,
-   process = nil,
-   process_string = nil,
-   gen = nil,
-   type_check = nil,
-   init_env = nil,
-}
+local tl = {Env = {}, Result = {}, Error = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local Result = tl.Result
+local Env = tl.Env
+local Error = tl.Error
 
 
 
@@ -2628,11 +2648,11 @@ function tl.pretty_print_ast(ast, mode)
 
    local function print_record_def(typ)
       local out = { "{" }
-      for name, field in pairs(typ.fields) do
-         if field.typename == "typetype" and is_record_type(field.def) then
+      for _, name in ipairs(typ.field_order) do
+         if typ.fields[name].typename == "typetype" and is_record_type(typ.fields[name].def) then
             table.insert(out, name)
             table.insert(out, " = ")
-            table.insert(out, print_record_def(field.def))
+            table.insert(out, print_record_def(typ.fields[name].def))
             table.insert(out, ", ")
          end
       end
@@ -3471,22 +3491,6 @@ show_type = function(t, seen)
    end
    return ret
 end
-
-local Error = {}
-
-
-
-
-
-
-local Result = {}
-
-
-
-
-
-
-
 
 local function search_for(module_name, suffix, path, tried)
    for entry in path:gmatch("[^;]+") do
