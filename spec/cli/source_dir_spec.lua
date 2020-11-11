@@ -3,7 +3,6 @@ local util = require("spec.util")
 describe("-s --source-dir argument", function()
    it("recursively traverses the directory by default", function()
       util.run_mock_project(finally, {
-         dir_name = "source_dir_traversal_test",
          dir_structure = {
             ["tlconfig.lua"] = [[return { source_dir = "src" }]],
             ["src"] = {
@@ -34,7 +33,6 @@ describe("-s --source-dir argument", function()
    end)
    it("should die when the given directory doesn't exist", function()
       util.run_mock_project(finally, {
-         dir_name = "no_source_dir_test",
          dir_structure = {
             ["tlconfig.lua"] = [[return {source_dir="src"}]],
             ["foo.tl"] = [[print 'hi']],
@@ -46,7 +44,6 @@ describe("-s --source-dir argument", function()
    end)
    it("should not include files from other directories", function()
       util.run_mock_project(finally, {
-         dir_name = "source_dir_exc",
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                source_dir = "foo",
@@ -68,7 +65,6 @@ describe("-s --source-dir argument", function()
    end)
    it("should correctly match directory names", function()
       util.run_mock_project(finally, {
-         dir_name = "source_dir_exc",
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                source_dir = "foo",

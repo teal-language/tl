@@ -14,7 +14,6 @@ describe("Uncaught compiler errors", function()
    end)
    it("should be reported when loading modules", function()
       util.run_mock_project(finally, {
-         dir_name = "uncaught_compiler_error_test",
          dir_structure = {
             ["my_module.tl"] = [[todo, write module :)]],
             ["my_script.tl"] = [[local mod = require("my_module"); mod.do_things()]],

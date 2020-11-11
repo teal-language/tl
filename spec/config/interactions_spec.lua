@@ -4,7 +4,6 @@ describe("config option interactions", function()
    describe("include+exclude", function()
       it("exclude should have precedence over include", function()
          util.run_mock_project(finally, {
-            dir_name = "interaction_inc_exc_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   include = {
@@ -39,7 +38,6 @@ describe("config option interactions", function()
    describe("source_dir+build_dir", function()
       it("Having source_dir inside of build_dir works", function()
          util.run_mock_project(finally, {
-            dir_name = "source_dir_in_build_dir_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   source_dir = "foo/bar",
@@ -63,7 +61,6 @@ describe("config option interactions", function()
       end)
       it("Having build_dir inside of source_dir works", function()
          util.run_mock_project(finally, {
-            dir_name = "build_dir_in_source_dir_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   source_dir = "foo",
@@ -89,7 +86,6 @@ describe("config option interactions", function()
    describe("source_dir+include+exclude", function()
       it("nothing outside of source_dir is included", function()
          util.run_mock_project(finally, {
-            dir_name = "source_dir_inc_exc_test",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   source_dir = "src",
@@ -127,7 +123,6 @@ describe("config option interactions", function()
       end)
       it("include and exclude work as expected", function()
          util.run_mock_project(finally, {
-            dir_name = "source_dir_inc_exc_2",
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   source_dir = ".",

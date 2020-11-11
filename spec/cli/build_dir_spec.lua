@@ -3,7 +3,6 @@ local util = require("spec.util")
 describe("-b --build-dir argument", function()
    it("generates files in the given directory", function()
       util.run_mock_project(finally, {
-         dir_name = "build_dir_test",
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
@@ -25,7 +24,6 @@ describe("-b --build-dir argument", function()
    end)
    it("replicates the directory structure of the source", function()
       util.run_mock_project(finally, {
-         dir_name = "build_dir_nested_test",
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
@@ -57,7 +55,6 @@ describe("-b --build-dir argument", function()
    end)
    it("dies when no config is found", function()
       util.run_mock_project(finally, {
-         dir_name = "build_dir_die_test",
          dir_structure = {},
          cmd = "build",
          generated_files = {},
