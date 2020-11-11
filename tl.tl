@@ -1024,8 +1024,8 @@ local function parse_table_value(ps: ParseState, i: number): number, Node
    if is_newtype[ps.tokens[i].tk] then
       return parse_newtype(ps, i)
    else
-      local i, node, _ = parse_expression(ps, i)
-      return i, node
+      local i2, node, _ = parse_expression(ps, i)
+      return i2, node
    end
 end
 
@@ -1451,7 +1451,7 @@ do
       return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
-   local E: function(ParseState, number): number, Node
+   local E: function(ParseState, number, Node, number): number, Node
 
    local function P(ps: ParseState, i: number): number, Node
       if ps.tokens[i].kind == "$EOF$" then
@@ -1530,7 +1530,7 @@ do
       return i, e1
    end
 
-   local function E(ps: ParseState, i: number, lhs: Node, min_precedence: number): number, Node
+   E = function(ps: ParseState, i: number, lhs: Node, min_precedence: number): number, Node
       local lookahead = ps.tokens[i].tk
       while precedences[2][lookahead] and precedences[2][lookahead] >= min_precedence do
          local t1 = ps.tokens[i]
@@ -1603,7 +1603,7 @@ end
 
 parse_argument_list = function(ps: ParseState, i: number): number, Node
    local node = new_node(ps.tokens, i, "argument_list")
-   local i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
    for a, arg in ipairs(node) do
       if arg.tk == "..." and a ~= #node then
          return fail(ps, i, "'...' can only be last argument")
@@ -1625,7 +1625,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
       end
    end
 
-   local i, typ = parse_type(ps, i)
+   local typ: Type; i, typ = parse_type(ps, i)
    if typ then
       typ.is_va = is_va
    end
@@ -1667,10 +1667,10 @@ local function parse_function(ps: ParseState, i: number): number, Node
       fn.kind = "record_function"
       local owner = names[1]
       owner.kind = "variable"
-      for i = 2, #names - 1 do
-         local dot = { y = names[i].y, x = names[i].x - 1, arity = 2, op = "." }
-         names[i].kind = "identifier"
-         local op = { y = names[i].y, x = names[i].x, kind = "op", op = dot, e1 = owner, e2 = names[i] }
+      for i2 = 2, #names - 1 do
+         local dot = { y = names[i2].y, x = names[i2].x - 1, arity = 2, op = "." }
+         names[i2].kind = "identifier"
+         local op = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
          owner = op
       end
       fn.fn_owner = owner
@@ -2103,7 +2103,7 @@ local function parse_type_declaration(ps: ParseState, i: number, node_name: Node
    return i, asgn
 end
 
-local type ParseBody = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+--local type ParseBody = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
 
 local function parse_type_constructor(ps: ParseState, i: number, node_name: NodeKind, type_name: TypeName, parse_body: ParseBody): number, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)
@@ -3339,7 +3339,7 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    },
 }
 
-local show_type: function(Type): string
+--local show_type: function(Type): string
 
 local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
@@ -3496,19 +3496,20 @@ end
 
 function tl.search_module(module_name: string, search_dtl: boolean): string, FILE, {string}
    local found: string
+   local fd: FILE
    local tried: {string} = {}
    local path = os.getenv("TL_PATH") or package.path
    if search_dtl then
-      local found, fd, tried = search_for(module_name, ".d.tl", path, tried)
+      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
       end
    end
-   local found, fd, tried = search_for(module_name, ".tl", path, tried)
+   found, fd, tried = search_for(module_name, ".tl", path, tried)
    if found then
       return found, fd
    end
-   local found, fd, tried = search_for(module_name, ".lua", path, tried)
+   found, fd, tried = search_for(module_name, ".lua", path, tried)
    if found then
       return found, fd
    end
@@ -6552,18 +6553,18 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
          ["record"] = {
             before = function(typ: Type, children: {Type})
                begin_scope()
-               for name, typ in pairs(typ.fields) do
-                  if typ.typename == "typetype" then
-                     typ.typename = "nestedtype"
-                     add_var(nil, name, typ)
+               for name, typ2 in pairs(typ.fields) do
+                  if typ2.typename == "typetype" then
+                     typ2.typename = "nestedtype"
+                     add_var(nil, name, typ2)
                   end
                end
             end,
             after = function(typ: Type, children: {Type}): Type
                end_scope()
-               for name, typ in pairs(typ.fields) do
-                  if typ.typename == "nestedtype" then
-                     typ.typename = "typetype"
+               for name, typ2 in pairs(typ.fields) do
+                  if typ2.typename == "nestedtype" then
+                     typ2.typename = "typetype"
                   end
                end
                return typ
@@ -6706,7 +6707,7 @@ function tl.process(filename: string, env: Env, result: Result, preload_modules:
       return nil, "could not open " .. filename .. ": " .. err
    end
 
-   local input, err = fd:read("*a")
+   local input: string; input, err = fd:read("*a")
    fd:close()
    if not input then
       return nil, "could not read " .. filename .. ": " .. err
