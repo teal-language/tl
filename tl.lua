@@ -4103,7 +4103,7 @@ local function init_globals(lax)
    return globals
 end
 
-function tl.init_env(lax, skip_compat53)
+tl.init_env = function(lax, skip_compat53)
    local env = {
       modules = {},
       loaded = {},
@@ -4121,7 +4121,7 @@ function tl.init_env(lax, skip_compat53)
    return env
 end
 
-function tl.type_check(ast, opts)
+tl.type_check = function(ast, opts)
    opts = opts or {}
    opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
    local lax = opts.lax
@@ -6698,7 +6698,7 @@ function tl.type_check(ast, opts)
    return errors, unknowns, module_type
 end
 
-function tl.process(filename, env, result, preload_modules)
+tl.process = function(filename, env, result, preload_modules)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -6792,7 +6792,7 @@ filename)
    return result
 end
 
-function tl.gen(input, env)
+tl.gen = function(input, env)
    env = env or tl.init_env()
    local result, err = tl.process_string(input, false, env)
 
@@ -6840,7 +6840,7 @@ function tl.loader()
    end
 end
 
-function tl.load(input, chunkname, mode, env)
+tl.load = function(input, chunkname, mode, env)
    local tokens = tl.lex(input)
    local errs = {}
    local i, program = tl.parse_program(tokens, errs, chunkname)
