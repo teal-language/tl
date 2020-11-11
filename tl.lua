@@ -1024,8 +1024,8 @@ local function parse_table_value(ps, i)
    if is_newtype[ps.tokens[i].tk] then
       return parse_newtype(ps, i)
    else
-      local i, node, _ = parse_expression(ps, i)
-      return i, node
+      local i2, node, _ = parse_expression(ps, i)
+      return i2, node
    end
 end
 
@@ -1530,7 +1530,7 @@ do
       return i, e1
    end
 
-   local function E(ps, i, lhs, min_precedence)
+   E = function(ps, i, lhs, min_precedence)
       local lookahead = ps.tokens[i].tk
       while precedences[2][lookahead] and precedences[2][lookahead] >= min_precedence do
          local t1 = ps.tokens[i]
@@ -1603,7 +1603,7 @@ end
 
 parse_argument_list = function(ps, i)
    local node = new_node(ps.tokens, i, "argument_list")
-   local i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
    for a, arg in ipairs(node) do
       if arg.tk == "..." and a ~= #node then
          return fail(ps, i, "'...' can only be last argument")
@@ -1625,7 +1625,7 @@ local function parse_argument_type(ps, i)
       end
    end
 
-   local i, typ = parse_type(ps, i)
+   local typ; i, typ = parse_type(ps, i)
    if typ then
       typ.is_va = is_va
    end
@@ -1667,10 +1667,10 @@ local function parse_function(ps, i)
       fn.kind = "record_function"
       local owner = names[1]
       owner.kind = "variable"
-      for i = 2, #names - 1 do
-         local dot = { y = names[i].y, x = names[i].x - 1, arity = 2, op = "." }
-         names[i].kind = "identifier"
-         local op = { y = names[i].y, x = names[i].x, kind = "op", op = dot, e1 = owner, e2 = names[i] }
+      for i2 = 2, #names - 1 do
+         local dot = { y = names[i2].y, x = names[i2].x - 1, arity = 2, op = "." }
+         names[i2].kind = "identifier"
+         local op = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
          owner = op
       end
       fn.fn_owner = owner
@@ -2103,7 +2103,7 @@ local function parse_type_declaration(ps, i, node_name)
    return i, asgn
 end
 
-local ParseBody = {}
+
 
 local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    local asgn = new_node(ps.tokens, i, node_name)
@@ -3339,7 +3339,7 @@ local binop_types = {
    },
 }
 
-local show_type
+
 
 local function is_unknown(t)
    return t.typename == "unknown" or
@@ -3496,19 +3496,20 @@ end
 
 function tl.search_module(module_name, search_dtl)
    local found
+   local fd
    local tried = {}
    local path = os.getenv("TL_PATH") or package.path
    if search_dtl then
-      local found, fd, tried = search_for(module_name, ".d.tl", path, tried)
+      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
       end
    end
-   local found, fd, tried = search_for(module_name, ".tl", path, tried)
+   found, fd, tried = search_for(module_name, ".tl", path, tried)
    if found then
       return found, fd
    end
-   local found, fd, tried = search_for(module_name, ".lua", path, tried)
+   found, fd, tried = search_for(module_name, ".lua", path, tried)
    if found then
       return found, fd
    end
@@ -4102,7 +4103,7 @@ local function init_globals(lax)
    return globals
 end
 
-function tl.init_env(lax, skip_compat53)
+tl.init_env = function(lax, skip_compat53)
    local env = {
       modules = {},
       loaded = {},
@@ -4120,7 +4121,7 @@ function tl.init_env(lax, skip_compat53)
    return env
 end
 
-function tl.type_check(ast, opts)
+tl.type_check = function(ast, opts)
    opts = opts or {}
    opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
    local lax = opts.lax
@@ -6552,18 +6553,18 @@ function tl.type_check(ast, opts)
          ["record"] = {
             before = function(typ, children)
                begin_scope()
-               for name, typ in pairs(typ.fields) do
-                  if typ.typename == "typetype" then
-                     typ.typename = "nestedtype"
-                     add_var(nil, name, typ)
+               for name, typ2 in pairs(typ.fields) do
+                  if typ2.typename == "typetype" then
+                     typ2.typename = "nestedtype"
+                     add_var(nil, name, typ2)
                   end
                end
             end,
             after = function(typ, children)
                end_scope()
-               for name, typ in pairs(typ.fields) do
-                  if typ.typename == "nestedtype" then
-                     typ.typename = "typetype"
+               for name, typ2 in pairs(typ.fields) do
+                  if typ2.typename == "nestedtype" then
+                     typ2.typename = "typetype"
                   end
                end
                return typ
@@ -6697,7 +6698,7 @@ function tl.type_check(ast, opts)
    return errors, unknowns, module_type
 end
 
-function tl.process(filename, env, result, preload_modules)
+tl.process = function(filename, env, result, preload_modules)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -6706,7 +6707,7 @@ function tl.process(filename, env, result, preload_modules)
       return nil, "could not open " .. filename .. ": " .. err
    end
 
-   local input, err = fd:read("*a")
+   local input; input, err = fd:read("*a")
    fd:close()
    if not input then
       return nil, "could not read " .. filename .. ": " .. err
@@ -6791,7 +6792,7 @@ filename)
    return result
 end
 
-function tl.gen(input, env)
+tl.gen = function(input, env)
    env = env or tl.init_env()
    local result, err = tl.process_string(input, false, env)
 
@@ -6839,7 +6840,7 @@ function tl.loader()
    end
 end
 
-function tl.load(input, chunkname, mode, env)
+tl.load = function(input, chunkname, mode, env)
    local tokens = tl.lex(input)
    local errs = {}
    local i, program = tl.parse_program(tokens, errs, chunkname)

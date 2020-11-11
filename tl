@@ -107,7 +107,7 @@ local function get_config()
       config[k] = v
    end
 
-   local err = validate_config(config)
+   err = validate_config(config)
 
    if err then
       die("Error while loading config: " .. err)
@@ -363,7 +363,7 @@ local function type_check_and_load(filename, modules)
       end
    end
 
-   local chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
+   local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
    if err then
       die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
    end
@@ -395,12 +395,12 @@ if cmd == "run" then
    end
 
    -- shift back all non-arguments to negative positions
-   for p, a in ipairs(neg_arg) do
-      arg[-p] = a
+   for p2, a in ipairs(neg_arg) do
+      arg[-p2] = a
    end
    -- put script in arg[0] and arguments in positive positions
-   for p, a in ipairs(args["script"]) do
-      arg[p - 1] = a
+   for p2, a in ipairs(args["script"]) do
+      arg[p2 - 1] = a
    end
    -- cleanup the rest
    n = nargs
@@ -436,7 +436,7 @@ local function write_out(result, output_file)
          die("cannot write " .. output_file .. ": " .. err)
       end
 
-      local ok, err = ofd:write(tl.pretty_print_ast(result.ast) .. "\n")
+      local ok; ok, err = ofd:write(tl.pretty_print_ast(result.ast) .. "\n")
       if err then
          die("error writing " .. output_file .. ": " .. err)
       end
@@ -585,7 +585,7 @@ local function traverse(dirname, emptyref)
    local paths = {} --lookup table for string paths to help
    -- with pattern matching while iterating over a project
    -- paths[files.foo.bar] -> "foo/bar"
-   local emptyref = emptyref or {}
+   emptyref = emptyref or {}
    for file in lfs.dir(dirname) do
       if file ~= "." and file ~= ".." then
          if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
