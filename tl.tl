@@ -24,7 +24,7 @@ local tl = {
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string = nil,
    process: function(string, Env, Result, {string}): (Result, string) = nil,
    process_string: function(string, boolean, Env, Result, {string}, string): (Result, string) = nil,
-   gen: function(string): string = nil,
+   gen: function(string, Env): string = nil,
    type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type) = nil,
    init_env: function(boolean, boolean): Env = nil,
 }
@@ -4103,7 +4103,7 @@ local function init_globals(lax: boolean): {string:Variable}
    return globals
 end
 
-function tl.init_env(lax: boolean, skip_compat53: boolean): Env
+tl.init_env = function(lax: boolean, skip_compat53: boolean): Env
    local env = {
       modules = {},
       loaded = {},
@@ -4121,7 +4121,7 @@ function tl.init_env(lax: boolean, skip_compat53: boolean): Env
    return env
 end
 
-function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Type
+tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Type
    opts = opts or {}
    opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
    local lax = opts.lax
@@ -6698,7 +6698,7 @@ function tl.type_check(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, Typ
    return errors, unknowns, module_type
 end
 
-function tl.process(filename: string, env: Env, result: Result, preload_modules: {string}): Result, string
+tl.process = function(filename: string, env: Env, result: Result, preload_modules: {string}): Result, string
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -6792,7 +6792,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
    return result
 end
 
-function tl.gen(input: string, env: Env): string, Result
+tl.gen = function(input: string, env: Env): string, Result
    env = env or tl.init_env()
    local result, err = tl.process_string(input, false, env)
 
@@ -6840,7 +6840,7 @@ function tl.loader()
    end
 end
 
-function tl.load(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
+tl.load = function(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
    local tokens = tl.lex(input)
    local errs: {ParseError} = {}
    local i, program = tl.parse_program(tokens, errs, chunkname)
