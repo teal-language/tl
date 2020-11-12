@@ -1946,7 +1946,15 @@ local function parse_record_body(ps: ParseState, i: number, def: Type, node: Nod
          i = parse_nested_type(ps, i, def, "enum", parse_enum_body)
       else
          local v: Node
-         i, v = verify_kind(ps, i, "identifier", "variable")
+         if ps.tokens[i].tk == "[" then
+            i, v = parse_literal(ps, i+1)
+            if not v.conststr then
+               return fail(ps, i, "expected a string literal")
+            end
+            i = verify_tk(ps, i, "]")
+         else
+            i, v = verify_kind(ps, i, "identifier", "variable")
+         end
          local iv = i
          if not v then
             return fail(ps, i, "expected a variable name")
@@ -1958,18 +1966,20 @@ local function parse_record_body(ps: ParseState, i: number, def: Type, node: Nod
             if not t then
                return fail(ps, i, "expected a type")
             end
-            if not def.fields[v.tk] then
-               def.fields[v.tk] = t
-               table.insert(def.field_order, v.tk)
+
+            local field_name = v.conststr or v.tk
+            if not def.fields[field_name] then
+               def.fields[field_name] = t
+               table.insert(def.field_order, field_name)
             else
-               local prev_t = def.fields[v.tk]
+               local prev_t = def.fields[field_name]
                if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[v.tk] = new_type(ps, iv, "poly")
-                  def.fields[v.tk].types = { prev_t, t }
+                  def.fields[field_name] = new_type(ps, iv, "poly")
+                  def.fields[field_name].types = { prev_t, t }
                elseif t.typename == "function" and prev_t.typename == "poly" then
                   table.insert(prev_t.types, t)
                else
-                  return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
+                  return fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
                end
             end
          elseif ps.tokens[i].tk == "=" then
@@ -2102,8 +2112,6 @@ local function parse_type_declaration(ps: ParseState, i: number, node_name: Node
 
    return i, asgn
 end
-
---local type ParseBody = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
 
 local function parse_type_constructor(ps: ParseState, i: number, node_name: NodeKind, type_name: TypeName, parse_body: ParseBody): number, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)

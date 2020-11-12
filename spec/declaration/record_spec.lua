@@ -431,4 +431,13 @@ describe("records", function()
       { y = 3, msg = "unknown type S.S3" }
    }))
 
+   it("can contain reserved words/arbitrary strings with ['table key syntax']", util.check [=[
+      local record A
+         start: number
+         ["end"]: number
+         [" "]: string
+         ['123']: table
+         [ [[  "hi"  ]] ]: table
+      end
+   ]=])
 end)
