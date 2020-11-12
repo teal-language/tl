@@ -698,13 +698,6 @@ local function new_typeid()
    return last_typeid
 end
 
-local ParseError = {}
-
-
-
-
-
-
 local TypeName = {}
 
 

@@ -31,7 +31,7 @@ local record tl
    record Result
       ast: Node
       type: Type
-      syntax_errors: {ParseError}
+      syntax_errors: {Error}
       type_errors: {Error}
       unknowns: {Error}
       env: Env
@@ -698,13 +698,6 @@ local function new_typeid(): number
    return last_typeid
 end
 
-local record ParseError
-   y: number
-   x: number
-   msg: string
-   filename: string
-end
-
 local enum TypeName
    "typetype"
    "nestedtype"
@@ -971,7 +964,7 @@ end
 
 local record ParseState
    tokens: {Token}
-   errs: {ParseError}
+   errs: {Error}
    filename: string
 end
 
@@ -2227,7 +2220,7 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
    return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {ParseError}, filename: string): number, Node
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): number, Node
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens,
@@ -6816,7 +6809,7 @@ local function tl_package_loader(module_name: string): any
    if found_filename then
       local input = fd:read("*a")
       fd:close()
-      local errs: {ParseError} = {}
+      local errs: {Error} = {}
       local _, program = tl.parse_program(tl.lex(input), errs, module_name)
       if #errs > 0 then
          error(module_name .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
@@ -6846,7 +6839,7 @@ end
 
 tl.load = function(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
    local tokens = tl.lex(input)
-   local errs: {ParseError} = {}
+   local errs: {Error} = {}
    local i, program = tl.parse_program(tokens, errs, chunkname)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
