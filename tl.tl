@@ -17,7 +17,7 @@ local record tl
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env, Result, {string}): (Result, string)
    process_string: function(string, boolean, Env, Result, {string}, string): (Result, string)
-   gen: function(string): string
+   gen: function(string, Env): string
    type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type)
    init_env: function(boolean, boolean): Env
 
