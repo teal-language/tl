@@ -4487,7 +4487,19 @@ function tl.type_check(ast, opts)
             end
          end
       else
-         return false, terr(t1, "%s is not a %s", t1, t2)
+         local t1name = show_type(t1)
+         local t2name = show_type(t2)
+         if t1name == t2name then
+            local t1r = t1.resolved or t1
+            if t1r.filename then
+               t1name = t1name .. " (defined in " .. t1r.filename .. ":" .. t1r.y .. ")"
+            end
+            local t2r = t2.resolved or t2
+            if t2r.filename then
+               t2name = t2name .. " (defined in " .. t2r.filename .. ":" .. t2r.y .. ")"
+            end
+         end
+         return false, terr(t1, t1name .. " is not a " .. t2name)
       end
    end
 
@@ -5267,6 +5279,13 @@ function tl.type_check(ast, opts)
          resolved = a_type({ typename = "bad_nominal", names = t.names })
       end
 
+      if not t.filename then
+         t.filename = resolved.filename
+         if t.x == nil and t.y == nil then
+            t.x = resolved.x
+            t.y = resolved.x
+         end
+      end
       t.found = typetype
       t.resolved = resolved
       return resolved
@@ -6131,6 +6150,7 @@ function tl.type_check(ast, opts)
       ["table_literal"] = {
          after = function(node, children)
             node.type = a_type({
+               filename = filename,
                y = node.y,
                x = node.x,
                typename = "emptytable",

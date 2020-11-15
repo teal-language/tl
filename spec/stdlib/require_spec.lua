@@ -321,8 +321,7 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.type_errors)
-      -- not ideal message, but technically correct...
-      assert.match("Point is not a Point", result.type_errors[1].msg, 1, true)
+      assert.match("Point (defined in foo.tl:3) is not a Point (defined in ./point.tl:1)", result.type_errors[1].msg, 1, true)
    end)
 
    it("catches errors in exported functions", function ()
