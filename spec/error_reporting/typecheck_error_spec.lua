@@ -15,7 +15,7 @@ describe("typecheck errors", function()
          local bar = require "bar"
       ]], {
          { filename = "bar.tl" }
-      })
+      })()
    end)
 
    it("unknowns include filename", util.lax_check([[
@@ -31,7 +31,126 @@ describe("typecheck errors", function()
       util.lax_check([[
          local bar = require "bar"
       ]], {
-         { msg = "b", filename = "bar.lua" }
-      })
+         { msg = "b", filename = "./bar.lua" }
+      })()
    end)
+
+   it("type mismatches across modules report their module names", function ()
+      util.mock_io(finally, {
+         ["aaa.tl"] = [[
+            local record aaa
+               record Thing
+                  x: number
+               end
+            end
+            return aaa
+         ]],
+         ["bbb.tl"] = [[
+            local record bbb
+               record Thing
+                  x: string
+               end
+            end
+            return bbb
+         ]]
+      })
+      util.check_type_error([[
+         local aaa = require("aaa")
+         local bbb = require("bbb")
+
+         local b: bbb.Thing = {}
+
+         local function myfunc(a: aaa.Thing)
+            print(a.x + 1)
+         end
+
+         myfunc(b)
+      ]], {
+         { msg = "bbb.Thing is not a aaa.Thing" }
+      })()
+   end)
+
+   it("localized type mismatches across module report their filenames", function ()
+      util.mock_io(finally, {
+         ["aaa.tl"] = [[
+            local record Thing
+               x: number
+            end
+
+            local record aaa
+            end
+
+            function aaa.myfunc(a: Thing)
+               print(a.x + 1)
+            end
+
+            return aaa
+         ]],
+         ["bbb.tl"] = [[
+            local record bbb
+
+               record Thing
+                  x: string
+               end
+            end
+            return bbb
+         ]]
+      })
+      util.check_type_error([[
+         local aaa = require("aaa")
+         local bbb = require("bbb")
+
+         local Thing = bbb.Thing
+
+         local b: Thing = {}
+
+         aaa.myfunc(b)
+      ]], {
+         { msg = "argument 1: Thing (defined in ./bbb.tl:4) is not a Thing (defined in ./aaa.tl:1)" }
+      })()
+   end)
+
+   it("type mismatches across local type names report their provenance", function ()
+      util.mock_io(finally, {
+         ["aaa.tl"] = [[
+            local record Thing
+               x: number
+            end
+
+            local record aaa
+            end
+
+            function aaa.myfunc(a: Thing)
+               print(a.x + 1)
+            end
+
+            return aaa
+         ]],
+         ["bbb.tl"] = [[
+            local record Thing
+               x: string
+            end
+
+            local record bbb
+            end
+
+            function bbb.get_thing(): Thing
+               return {}
+            end
+
+            return bbb
+         ]]
+      })
+      util.check_type_error([[
+         local aaa = require("aaa")
+         local bbb = require("bbb")
+
+         local b = bbb.get_thing()
+
+         aaa.myfunc(b)
+      ]], {
+         { msg = "argument 1: Thing (defined in ./bbb.tl:1) is not a Thing (defined in ./aaa.tl:1)" }
+      })()
+   end)
+
 end)
