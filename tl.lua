@@ -6766,10 +6766,10 @@ filename)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   result = result or {
-      syntax_errors = {},
-      type_errors = {},
-      unknowns = {},
+   result = {
+      syntax_errors = result and result.syntax_errors or {},
+      type_errors = result and result.type_errors or {},
+      unknowns = result and result.unknowns or {},
    }
    preload_modules = preload_modules or {}
    filename = filename or ""
