@@ -6,12 +6,12 @@ describe("array argument", function()
          print(arg)
       end
 
-      function main()
+      local function main()
          a({"a", 100})
          a(100)
       end
    ]], {
-      { y = 6, msg = 'argument 1: got {string | number}, expected {string}' },
+      { y = 6, msg = 'argument 1: got [1: string, 2: number], expected {string}' },
       { y = 7, msg = 'argument 1: got number, expected {string}' },
    }))
 

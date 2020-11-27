@@ -1,3 +1,4 @@
+
 local record TypeCheckOptions
    lax: boolean
    filename: string
@@ -719,6 +720,7 @@ local enum TypeName
    "function"
    "array"
    "map"
+   "tupletable"
    "arrayrecord"
    "record"
    "enum"
@@ -785,6 +787,8 @@ local record Type
 
    -- array
    elements: Type
+   -- tuples/array
+   inferred_len: number
 
    -- function
    is_method: boolean
@@ -953,6 +957,9 @@ local record Node
    constnum: number
    conststr: string
 
+   -- table literal
+   array_len: number
+
    -- goto
    label: string
 
@@ -994,7 +1001,6 @@ local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
 local parse_type: function(ParseState, number): number, Type, number
 local parse_newtype: function(ps: ParseState, i: number): number, Node
-
 
 local function fail(ps: ParseState, i: number, msg: string): number
    if not ps.tokens[i] then
@@ -1255,6 +1261,8 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
       return i + 1, typ
    elseif ps.tokens[i].tk == "function" then
       return parse_function_type(ps, i)
+   -- elseif ps.tokens[i].tk == "[" then
+      -- return parse_tupletable_type(ps, i)
    elseif ps.tokens[i].tk == "{" then
       i = i + 1
       local decl = new_type(ps, i, "array")
@@ -1263,6 +1271,20 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
       if ps.tokens[i].tk == "}" then
          decl.elements = t
          decl.yend = ps.tokens[i].y
+         i = verify_tk(ps, i, "}")
+      elseif ps.tokens[i].tk == "," then
+         decl.typename = "tupletable"
+         decl[1] = t
+         local n = 2
+         repeat
+            i = i + 1
+            local it: Type
+            i, decl[n] = parse_type(ps, i)
+            if not decl[n] then
+               break
+            end
+            n = n + 1
+         until ps.tokens[i].tk ~= ","
          i = verify_tk(ps, i, "}")
       elseif ps.tokens[i].tk == ":" then
          decl.typename = "map"
@@ -3101,6 +3123,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    visit_type.cbs["thread"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
+   visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
    visit_type.cbs["record"] = visit_type.cbs["string"]
    visit_type.cbs["enum"] = visit_type.cbs["string"]
@@ -3149,7 +3172,6 @@ end
 
 local ANY = a_type { typename = "any" }
 local NONE = a_type { typename = "none" }
-
 local NIL = a_type { typename = "nil" }
 local NUMBER = a_type { typename = "number" }
 local STRING = a_type { typename = "string" }
@@ -3298,11 +3320,7 @@ local unop_types: {string:{string:Type}} = {
 
 local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    ["+"] = numeric_binop,
-   ["-"] = {
-      ["number"] = {
-         ["number"] = NUMBER,
-      }
-   },
+   ["-"] = numeric_binop,
    ["*"] = numeric_binop,
    ["%"] = numeric_binop,
    ["/"] = numeric_binop,
@@ -3413,6 +3431,12 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
          table.insert(out, show(v))
       end
       return "(" .. table.concat(out, ", ") .. ")"
+   elseif t.typename == "tupletable" then
+      local out: {string} = {}
+      for i, v in ipairs(t) do
+         table.insert(out, tostring(i) .. ": " .. show(v))
+      end
+      return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "poly" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
@@ -4639,8 +4663,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local resolve_unary: function(t: Type): Type = nil
 
+   local table_types: {TypeName:boolean} = {
+      array = true,
+      map = true,
+      record = true,
+      arrayrecord = true,
+      tupletable = true,
+   }
    local function is_known_table_type(t: Type): boolean
-      return (t.typename == "array" or t.typename == "map" or t.typename == "record" or t.typename == "arrayrecord")
+      return table_types[t.typename]
    end
 
    is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
@@ -4743,6 +4774,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if is_a(t1.elements, t2.elements) then
                return true
             end
+         elseif t1.typename == "tupletable" then
+            local arr_len = math.huge
+            if t2.inferred_len then
+               if t2.inferred_len > #t1 then
+                  return false, terr(t2, "array is too long to fit into %s", t1)
+               end
+               arr_len = t2.inferred_len
+            end
+            for i = 1, math.min(#t1, arr_len) do
+               if not is_a(t1[i], t2.elements) then
+                  return false, terr(t2, "got %s, expected %s", t1, t2)
+               end
+            end
+            return true
          elseif t1.typename == "map" then
             local _, errs_keys = is_a(t1.keys, NUMBER)
             local _, errs_values = is_a(t1.values, t2.elements)
@@ -4789,6 +4834,31 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
             end
             return match_fields_to_map(t1, t2)
+         end
+      elseif t2.typename == "tupletable" then
+         if t1.typename == "tupletable" then
+            for i = 1, math.min(#t1, #t2) do
+               if not is_a(t1[i], t2[i], for_equality) then
+                  return false, terr(t1, "in tuple entry " .. i .. ": got %s, expected %s", t1[i], t2[i])
+               end
+            end
+            if for_equality and #t1 ~= #t2 then
+               return false, terr(t1, "tuples are not the same size")
+            end
+            if #t1 > #t2 then
+               return false, terr(t1, "tuple %s is too big for tuple %s", t1, t2)
+            end
+            return true
+         elseif is_array_type(t1) then
+            if t1.inferred_len and t1.inferred_len > #t2 then
+               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t2) .. ", got " .. tostring(t1.inferred_len))
+            end
+            for i = 1, math.min(#t2, t1.inferred_len or math.huge) do
+               if not is_a(t2[i], t1.elements, for_equality) then
+                  return false, terr(t1, "tuple entry " .. tostring(i) .. " %s does not match array of %s", t2[i], t1.elements)
+               end
+            end
+            return true
          end
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
@@ -5387,13 +5457,59 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local function is_valid_union(typ: Type): Type
+      -- check for limitations in our union support
+      -- due to codegen limitations (we only check with type() so far)
+      local n_table_types = 0
+      local n_function_types = 0
+      local n_string_enum = 0
+      for _, t in ipairs(typ.types) do
+         t = resolve_unary(t)
+         if table_types[t.typename] then
+            n_table_types = n_table_types + 1
+            if n_table_types > 1 then
+               type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
+               break
+            end
+         elseif t.typename == "function" then
+            n_function_types = n_function_types + 1
+            if n_function_types > 1 then
+               type_error(typ, "cannot discriminate a union between multiple function types: %s", typ)
+               break
+            end
+         elseif t.typename == "string" or t.typename == "enum" then
+            n_string_enum = n_string_enum + 1
+            if n_string_enum > 1 then
+               type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
+               break
+            end
+         end
+      end
+      return typ
+   end
+
    local function type_check_index(node: Node, idxnode: Node, a: Type, b: Type): Type
       local orig_a = a
       local orig_b = b
       a = resolve_unary(a)
       b = resolve_unary(b)
 
-      if is_array_type(a) and is_a(b, NUMBER) then
+      if a.typename == "tupletable" and is_a(b, NUMBER) then
+         if idxnode.constnum then
+            if idxnode.constnum > #a
+               or idxnode.constnum < 1
+               or idxnode.constnum ~= math.floor(idxnode.constnum)
+            then
+               return node_error(idxnode, "index " .. tostring(idxnode.constnum) .. " out of range for tuple %s", a)
+            end
+            return a[idxnode.constnum]
+         else
+            local u = a_union(a)
+            u.x = idxnode.x
+            u.y = idxnode.y
+            return is_valid_union(u)
+         end
+      elseif is_array_type(a) and is_a(b, NUMBER) then
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
@@ -5879,6 +5995,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   t.declared_at = node
                   t.assigned_to = var.tk
                end
+               t.inferred_len = nil
                assert(var)
                add_var(var, var.tk, t, var.is_const)
 
@@ -5921,6 +6038,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      t.declared_at = node
                      t.assigned_to = var.tk
                   end
+                  t.inferred_len = nil
                   add_global(var, var.tk, t, var.is_const)
 
                   dismiss_unresolved(var.tk)
@@ -6181,6 +6299,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local is_record = false
             local is_array = false
             local is_map = false
+            local is_tuple = false
+            local array_len = 0
+            local pure_array = true
             for i, child in ipairs(children) do
                assert(child.typename == "table_item")
                if child.kname then
@@ -6193,16 +6314,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
+                  is_tuple = true
                   if i == #children and node[i].key_parsed == "implicit" and child.vtype.typename == "tuple" then
                      -- need to expand last item in an array (e.g { 1, 2, 3, f() })
-                     for _, c in ipairs(child.vtype) do
+                     for j, c in ipairs(child.vtype) do
+                        array_len = array_len + 1
                         node.type.elements = expand_type(node, node.type.elements, c)
+                        node.type[j] = c
                      end
                   else
+                     array_len = array_len + 1
+                     node.type[i] = child.vtype
                      node.type.elements = expand_type(node, node.type.elements, child.vtype)
                   end
                   if not node.type.elements then
-                     node_error(node, "cannot determine type of array elements")
                      is_array = false
                   end
                else
@@ -6211,6 +6336,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node.type.values = expand_type(node, node.type.values, child.vtype)
                end
             end
+            node.type.inferred_len = array_len
             if is_array and is_map then
                node_error(node, "cannot determine type of table literal")
             elseif is_record and is_array then
@@ -6227,11 +6353,26 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node_error(node, "cannot determine type of table literal")
                end
             elseif is_array then
-               node.type.typename = "array"
+               for i = 2, #node.type do
+                  if not is_a(node.type[i], node.type[i-1]) then
+                     pure_array = false
+                     break
+                  end
+               end
+               if not pure_array then
+                  node.type.typename = "tupletable"
+               else
+                  node.type.typename = "array"
+               end
             elseif is_record then
                node.type.typename = "record"
             elseif is_map then
                node.type.typename = "map"
+            elseif is_tuple then
+               node.type.typename = "tupletable"
+               if #node.type == 0 then
+                  node_error(node, "cannot determine type of tuple elements")
+               end
             end
          end,
       },
@@ -6649,36 +6790,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end,
          },
          ["union"] = {
-            after = function(typ: Type, children: {Type}): Type
-               -- check for limitations in our union support
-               -- due to codegen limitations (we only check with type() so far)
-               local n_table_types = 0
-               local n_function_types = 0
-               local n_string_enum = 0
-               for _, t in ipairs(typ.types) do
-                  t = resolve_unary(t)
-                  if table_types[t.typename] then
-                     n_table_types = n_table_types + 1
-                     if n_table_types > 1 then
-                        type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
-                        break
-                     end
-                  elseif t.typename == "function" then
-                     n_function_types = n_function_types + 1
-                     if n_function_types > 1 then
-                        type_error(typ, "cannot discriminate a union between multiple function types: %s", typ)
-                        break
-                     end
-                  elseif t.typename == "string" or t.typename == "enum" then
-                     n_string_enum = n_string_enum + 1
-                     if n_string_enum > 1 then
-                        type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
-                        break
-                     end
-                  end
-               end
-               return typ
-            end,
+            after = is_valid_union
          },
       },
       after = {
@@ -6690,6 +6802,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       }
    }
 
+   visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
    visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
    visit_type.cbs["typevar"] = visit_type.cbs["string"]

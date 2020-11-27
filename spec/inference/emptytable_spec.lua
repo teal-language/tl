@@ -8,7 +8,7 @@ describe("empty table without type annotation", function()
       local ret_value = {heyyyy()}
       table.unpack(ret_value)
    ]], {
-      { msg = "cannot determine type of array elements" },
+      { msg = "cannot determine type of tuple elements" },
    }))
 
    it("has its type determined by its first use", util.check_type_error([[
