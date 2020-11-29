@@ -8,7 +8,7 @@ describe("assignment to array", function()
       a = {"a", 100}
    ]], {
       { y = 2, msg = "got number, expected {string}" },
-      { y = 3, msg = "got {1: string, 2: number}, expected {string}" },
+      { y = 3, msg = "got {string | number} (from {1: string, 2: number}), expected {string}" },
    }))
 
    it("check expansion of expression inside array", util.check_type_error([[
@@ -18,7 +18,7 @@ describe("assignment to array", function()
       local a: {string}
       a = { f() }
    ]], {
-      { y = 5, msg = "in assignment: got {1: string, 2: number}, expected {string}" },
+      { y = 5, msg = "in assignment: got {string | number} (from {1: string, 2: number}), expected {string}" },
    }))
 
    it("accept expression", util.check [[
