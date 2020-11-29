@@ -1232,25 +1232,6 @@ local function parse_function_type(ps: ParseState, i: number): number, Type
    return i, node
 end
 
-local function parse_tupletable_type(ps: ParseState, i: number): number, Type
-   local t = new_type(ps, i, "tupletable")
-   i = verify_tk(ps, i, "[")
-   local n = 1
-   while true do
-      i, t[n] = parse_type(ps, i)
-      if not t[n] then
-         break
-      end
-      if ps.tokens[i].tk == "," then
-         n = n + 1
-         i = i + 1
-      else
-         break
-      end
-   end
-   return verify_tk(ps, i, "]"), t
-end
-
 local function parse_base_type(ps: ParseState, i: number): number, Type, number
    if ps.tokens[i].tk == "string"
       or ps.tokens[i].tk == "boolean"
@@ -1267,8 +1248,8 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
       return i + 1, typ
    elseif ps.tokens[i].tk == "function" then
       return parse_function_type(ps, i)
-   elseif ps.tokens[i].tk == "[" then
-      return parse_tupletable_type(ps, i)
+   -- elseif ps.tokens[i].tk == "[" then
+      -- return parse_tupletable_type(ps, i)
    elseif ps.tokens[i].tk == "{" then
       i = i + 1
       local decl = new_type(ps, i, "array")
@@ -1277,6 +1258,20 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
       if ps.tokens[i].tk == "}" then
          decl.elements = t
          decl.yend = ps.tokens[i].y
+         i = verify_tk(ps, i, "}")
+      elseif ps.tokens[i].tk == "," then
+         decl.typename = "tupletable"
+         decl[1] = t
+         local n = 2
+         repeat
+            i = i + 1
+            local it: Type
+            i, decl[n] = parse_type(ps, i)
+            if not decl[n] then
+               break
+            end
+            n = n + 1
+         until ps.tokens[i].tk ~= ","
          i = verify_tk(ps, i, "}")
       elseif ps.tokens[i].tk == ":" then
          decl.typename = "map"
@@ -3427,7 +3422,7 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
       for i, v in ipairs(t) do
          table.insert(out, tostring(i) .. ": " .. show(v))
       end
-      return "[" .. table.concat(out, ", ") .. "]"
+      return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "poly" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
@@ -4765,6 +4760,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          elseif t1.typename == "tupletable" then
             local arr_len = math.huge
             if t2.inferred_len then
+               if t2.inferred_len > #t1 then
+                  return false, terr(t2, "array is too long to fit into %s", t1)
+               end
                arr_len = t2.inferred_len
             end
             for i = 1, math.min(#t1, arr_len) do
@@ -4824,14 +4822,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if t1.typename == "tupletable" then
             for i = 1, math.min(#t1, #t2) do
                if not is_a(t1[i], t2[i], for_equality) then
-                  return false, terr(t1, "in tuple entry " .. i .. " got %s, expected %s", t1[i], t2[i])
+                  return false, terr(t1, "in tuple entry " .. i .. ": got %s, expected %s", t1[i], t2[i])
                end
             end
             if for_equality and #t1 ~= #t2 then
                return false, terr(t1, "tuples are not the same size")
             end
+            if #t1 > #t2 then
+               return false, terr(t1, "tuple %s is too big for tuple %s", t1, t2)
+            end
             return true
          elseif is_array_type(t1) then
+            if t1.inferred_len and t1.inferred_len > #t2 then
+               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t2) .. ", got " .. tostring(t1.inferred_len))
+            end
             for i = 1, math.min(#t2, t1.inferred_len or math.huge) do
                if not is_a(t2[i], t1.elements, for_equality) then
                   return false, terr(t1, "tuple entry " .. tostring(i) .. " %s does not match array of %s", t2[i], t1.elements)
@@ -5974,6 +5978,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   t.declared_at = node
                   t.assigned_to = var.tk
                end
+               t.inferred_len = nil
                assert(var)
                add_var(var, var.tk, t, var.is_const)
 
@@ -6016,6 +6021,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      t.declared_at = node
                      t.assigned_to = var.tk
                   end
+                  t.inferred_len = nil
                   add_global(var, var.tk, t, var.is_const)
 
                   dismiss_unresolved(var.tk)
