@@ -4596,9 +4596,13 @@ tl.type_check = function(ast, opts)
       return true
    end
 
+   local is_known_table_type
+
    local function a_union(types)
       local ts = {}
       local stack = {}
+
+      local primitives_seen = {}
       local i = 1
       while types[i] or stack[1] do
          local t
@@ -4613,7 +4617,14 @@ tl.type_check = function(ast, opts)
                table.insert(stack, s)
             end
          else
-            table.insert(ts, t)
+            if not is_known_table_type(t) then
+               if not primitives_seen[t.typename] then
+                  primitives_seen[t.typename] = true
+                  table.insert(ts, t)
+               end
+            else
+               table.insert(ts, t)
+            end
          end
       end
       return a_type({
@@ -4653,8 +4664,71 @@ tl.type_check = function(ast, opts)
       arrayrecord = true,
       tupletable = true,
    }
-   local function is_known_table_type(t)
+   is_known_table_type = function(t)
       return table_types[t.typename]
+   end
+
+   local function resolve_union(typ)
+      assert(typ.typename == "union")
+   end
+
+   local function is_valid_union(typ)
+
+
+      local n_table_types = 0
+      local n_function_types = 0
+      local n_string_enum = 0
+      local has_primitive = {}
+      local has_primitive_string_type = false
+      for _, t in ipairs(typ.types) do
+         t = resolve_unary(t)
+         if table_types[t.typename] then
+            n_table_types = n_table_types + 1
+            if n_table_types > 1 then
+               return false, "cannot discriminate a union between multiple table types: %s"
+            end
+         elseif t.typename == "function" then
+            n_function_types = n_function_types + 1
+            if n_function_types > 1 then
+               return false, "cannot discriminate a union between multiple function types: %s"
+            end
+         elseif t.typename == "enum" or (t.typename == "string" and not has_primitive_string_type) then
+            n_string_enum = n_string_enum + 1
+            if n_string_enum > 1 then
+               return false, "cannot discriminate a union between multiple string/enum types: %s"
+            end
+            if t.typename == "string" then
+               has_primitive_string_type = true
+            end
+         end
+      end
+      return true
+   end
+
+   local expand_type
+   local function arraytype_from_tuple(where, tupletype)
+
+      local element_type = a_union(tupletype)
+      local valid, err = is_valid_union(element_type)
+      if valid then
+         return a_type({
+            elements = element_type,
+            typename = "array",
+         })
+      end
+
+
+      local arr_type = a_type({
+         elements = tupletype[1],
+         typename = "array",
+      })
+      for i = 2, #tupletype do
+         arr_type = expand_type(where, arr_type, a_type({ elements = tupletype[i], typename = "array" }))
+         if not arr_type then
+            return nil, terr(tupletype, "unable to convert tuple %s to array", tupletype)
+         end
+      end
+      return arr_type
    end
 
    is_a = function(t1, t2, for_equality)
@@ -4758,17 +4832,17 @@ tl.type_check = function(ast, opts)
                return true
             end
          elseif t1.typename == "tupletable" then
-            local arr_len = math.huge
             if t2.inferred_len then
                if t2.inferred_len > #t1 then
                   return false, terr(t2, "array is too long to fit into %s", t1)
                end
-               arr_len = t2.inferred_len
             end
-            for i = 1, math.min(#t1, arr_len) do
-               if not is_a(t1[i], t2.elements) then
-                  return false, terr(t2, "got %s, expected %s", t1, t2)
-               end
+            local u, err = arraytype_from_tuple(t1.inferred_at, t1)
+            if not u then
+               return false, err
+            end
+            if not is_a(u, t2) then
+               return false, terr(t2, "got %s (from %s), expected %s", u, t1, t2)
             end
             return true
          elseif t1.typename == "map" then
@@ -5440,37 +5514,6 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function is_valid_union(typ)
-
-
-      local n_table_types = 0
-      local n_function_types = 0
-      local n_string_enum = 0
-      for _, t in ipairs(typ.types) do
-         t = resolve_unary(t)
-         if table_types[t.typename] then
-            n_table_types = n_table_types + 1
-            if n_table_types > 1 then
-               type_error(typ, "cannot discriminate a union between multiple table types: %s", typ)
-               break
-            end
-         elseif t.typename == "function" then
-            n_function_types = n_function_types + 1
-            if n_function_types > 1 then
-               type_error(typ, "cannot discriminate a union between multiple function types: %s", typ)
-               break
-            end
-         elseif t.typename == "string" or t.typename == "enum" then
-            n_string_enum = n_string_enum + 1
-            if n_string_enum > 1 then
-               type_error(typ, "cannot discriminate a union between multiple string/enum types: %s", typ)
-               break
-            end
-         end
-      end
-      return typ
-   end
-
    local function type_check_index(node, idxnode, a, b)
       local orig_a = a
       local orig_b = b
@@ -5487,10 +5530,11 @@ tl.type_check = function(ast, opts)
             end
             return a[idxnode.constnum]
          else
-            local u = a_union(a)
-            u.x = idxnode.x
-            u.y = idxnode.y
-            return is_valid_union(u)
+            local array_type = arraytype_from_tuple(idxnode, a)
+            if not array_type then
+               type_error(a, "tuple cannot be indexed with a variable")
+            end
+            return array_type.elements
          end
       elseif is_array_type(a) and is_a(b, NUMBER) then
          return a.elements
@@ -5537,7 +5581,7 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function expand_type(where, old, new)
+   expand_type = function(where, old, new)
       if not old then
          return new
       else
@@ -6180,9 +6224,16 @@ tl.type_check = function(ast, opts)
                      if not (lax and is_unknown(t)) then
                         node_error(exp1, "attempting pairs loop on something that's not a map or record: %s", exp1.e2.type)
                      end
-                  elseif exp1.e1.tk == "ipairs" and not is_array_type(t) then
-                     if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
-                        node_error(exp1, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
+                  elseif exp1.e1.tk == "ipairs" then
+                     if t.typename == "tupletable" then
+                        local arr_type = a_union(t)
+                        if not is_valid_union(arr_type) then
+                           node_error(exp1, "attempting ipairs loop on tuple that's not a valid array: %s", exp1.e2.type)
+                        end
+                     elseif not is_array_type(t) then
+                        if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
+                           node_error(exp1, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
+                        end
                      end
                   end
                end
@@ -6303,7 +6354,7 @@ tl.type_check = function(ast, opts)
                      for j, c in ipairs(child.vtype) do
                         array_len = array_len + 1
                         node.type.elements = expand_type(node, node.type.elements, c)
-                        node.type[j] = c
+                        node.type[i + j - 1] = c
                      end
                   else
                      array_len = array_len + 1
@@ -6773,7 +6824,13 @@ tl.type_check = function(ast, opts)
             end,
          },
          ["union"] = {
-            after = is_valid_union,
+            after = function(typ, children)
+               local valid, err = is_valid_union(typ)
+               if not valid then
+                  type_error(typ, err, typ)
+               end
+               return typ
+            end,
          },
       },
       after = {
