@@ -27,4 +27,15 @@ describe("tuple declarations", function()
    ]], {
       { y = 1, msg = "in local declaration: c: tuple {1: number, 2: string, 3: number} is too big for tuple {1: number, 2: string}" },
    }))
+
+   it("should work with explicit integer indeces", util.check [[
+      local a: {number, string} = { [1] = 10, [2] = "hello" }
+      local b: {number, string} = { [2] = "hello", [1] = 10 }
+   ]])
+
+   it("should error with explicit integer indeces that are out of range", util.check_type_error([[
+      local c: {number, string} = { [-1] = 10, [2] = "hello" }
+   ]], {
+
+   }))
 end)
