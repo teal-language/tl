@@ -6344,12 +6344,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                x = node.x,
                typename = "emptytable",
             }
+
+            local function is_positive_int(n: number): boolean
+               return n and n >= 1 and math.floor(n) == n
+            end
+
             local is_record = false
             local is_array = false
             local is_map = false
+
             local is_tuple = false
-            local array_len = 0
-            local pure_array = true
+            local last_array_idx = 1
+            local largest_array_idx = -1
+
             for i, child in ipairs(children) do
                assert(child.typename == "table_item")
                if child.kname then
@@ -6363,17 +6370,41 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                elseif child.ktype.typename == "number" then
                   is_array = true
                   is_tuple = true
-                  if i == #children and node[i].key_parsed == "implicit" and child.vtype.typename == "tuple" then
-                     -- need to expand last item in an array (e.g { 1, 2, 3, f() })
-                     for j, c in ipairs(child.vtype) do
-                        array_len = array_len + 1
-                        node.type.elements = expand_type(node, node.type.elements, c)
-                        node.type[i+j-1] = c
+
+                  if node[i].key_parsed == "implicit" then
+                     if i == #children and child.vtype.typename == "tuple" then
+                        -- need to expand last item in an array (e.g { 1, 2, 3, f() })
+                        for j, c in ipairs(child.vtype) do
+                           node.type.elements = expand_type(node, node.type.elements, c)
+                           node.type[last_array_idx] = c
+                           last_array_idx = last_array_idx + 1
+                        end
+                     else
+                        node.type[last_array_idx] = child.vtype
+                        last_array_idx = last_array_idx + 1
+                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
                      end
-                  else
-                     array_len = array_len + 1
-                     node.type[i] = child.vtype
-                     node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                  else -- explicit
+                     local n = node[i].key.constnum
+
+                     if not n or not is_positive_int(n) then
+                        is_map = true
+                        node.type.keys = expand_type(node, node.type.keys, child.ktype)
+                        node.type.values = expand_type(node, node.type.values, child.vtype)
+                     elseif n then
+                        if node.type[n] then
+                           node_error(node, "Overwriting index " .. n)
+                        end
+                        node.type[n] = child.vtype
+                        if n > largest_array_idx then
+                           largest_array_idx = n
+                        end
+                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                     end
+                  end
+
+                  if last_array_idx > largest_array_idx then
+                     largest_array_idx = last_array_idx
                   end
                   if not node.type.elements then
                      is_array = false
@@ -6400,17 +6431,29 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node_error(node, "cannot determine type of table literal")
                end
             elseif is_array then
-               for i = 2, #node.type do
-                  if not is_a(node.type[i], node.type[i-1]) then
-                     pure_array = false
-                     break
+               local pure_array = true
+               local last_idx = 1
+               for i = 2, largest_array_idx do
+                  if not node.type[i] then
+                     -- continue
+                  else
+                     if not node.type[last_idx] then
+                        last_idx = i
+                     else
+                        if not is_a(node.type[i], node.type[last_idx]) then
+                           pure_array = false
+                           break
+                        end
+                        last_idx = i
+                     end
                   end
                end
+
                if not pure_array then
                   node.type.typename = "tupletable"
                else
                   node.type.typename = "array"
-                  node.type.inferred_len = array_len
+                  node.type.inferred_len = largest_array_idx - 1
                end
             elseif is_record then
                node.type.typename = "record"
