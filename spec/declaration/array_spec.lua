@@ -31,7 +31,7 @@ describe("array declarations", function()
       print(x[RED])
    ]])
 
-   it("indirect only works for numeric keys", util.check_type_error([[
+   pending("indirect only works for numeric keys", util.check_type_error([[
       local RED = 1
       local BLUE = 2
       local GREEN: string = (function():string return "hello" end)()
@@ -45,7 +45,16 @@ describe("array declarations", function()
       { msg = "cannot determine type of table literal" },
    }))
 
-   it("indirect works array-records", util.check [[
+   it("explicit number indeces works array-records", util.check [[
+      local x = {
+         [1] = 2,
+         [2] = 3,
+         GREEN = 4,
+      }
+      print(x.GREEN)
+   ]])
+
+   pending("indirect works array-records", util.check [[
       local RED = 1
       local BLUE = 2
       local x = {
