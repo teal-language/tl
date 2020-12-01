@@ -1248,8 +1248,6 @@ local function parse_base_type(ps, i)
       return i + 1, typ
    elseif ps.tokens[i].tk == "function" then
       return parse_function_type(ps, i)
-
-
    elseif ps.tokens[i].tk == "{" then
       i = i + 1
       local decl = new_type(ps, i, "array")
@@ -1265,7 +1263,6 @@ local function parse_base_type(ps, i)
          local n = 2
          repeat
             i = i + 1
-            local it
             i, decl[n] = parse_type(ps, i)
             if not decl[n] then
                break
@@ -4724,7 +4721,7 @@ tl.type_check = function(ast, opts)
       })
       for i = 2, #tupletype do
          arr_type = expand_type(where, arr_type, a_type({ elements = tupletype[i], typename = "array" }))
-         if not arr_type then
+         if not arr_type or not arr_type.elements then
             return nil, terr(tupletype, "unable to convert tuple %s to array", tupletype)
          end
       end
@@ -4832,10 +4829,9 @@ tl.type_check = function(ast, opts)
                return true
             end
          elseif t1.typename == "tupletable" then
-            if t2.inferred_len then
-               if t2.inferred_len > #t1 then
-                  return false, terr(t2, "array is too long to fit into %s", t1)
-               end
+            if t2.inferred_len and t2.inferred_len > #t1 then
+
+               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1) .. ", got " .. tostring(t2.inferred_len))
             end
             local u, err = arraytype_from_tuple(t1.inferred_at, t1)
             if not u then
@@ -4896,7 +4892,7 @@ tl.type_check = function(ast, opts)
          if t1.typename == "tupletable" then
             for i = 1, math.min(#t1, #t2) do
                if not is_a(t1[i], t2[i], for_equality) then
-                  return false, terr(t1, "in tuple entry " .. i .. ": got %s, expected %s", t1[i], t2[i])
+                  return false, terr(t1, "in tuple entry " .. tostring(i) .. ": got %s, expected %s", t1[i], t2[i])
                end
             end
             if for_equality and #t1 ~= #t2 then
@@ -5533,6 +5529,7 @@ tl.type_check = function(ast, opts)
             local array_type = arraytype_from_tuple(idxnode, a)
             if not array_type then
                type_error(a, "tuple cannot be indexed with a variable")
+               return UNKNOWN
             end
             return array_type.elements
          end
@@ -6226,8 +6223,8 @@ tl.type_check = function(ast, opts)
                      end
                   elseif exp1.e1.tk == "ipairs" then
                      if t.typename == "tupletable" then
-                        local arr_type = a_union(t)
-                        if not is_valid_union(arr_type) then
+                        local arr_type = arraytype_from_tuple(exp1.e2, t)
+                        if not arr_type then
                            node_error(exp1, "attempting ipairs loop on tuple that's not a valid array: %s", exp1.e2.type)
                         end
                      elseif not is_array_type(t) then
@@ -6370,7 +6367,6 @@ tl.type_check = function(ast, opts)
                   node.type.values = expand_type(node, node.type.values, child.vtype)
                end
             end
-            node.type.inferred_len = array_len
             if is_array and is_map then
                node_error(node, "cannot determine type of table literal")
             elseif is_record and is_array then
@@ -6397,6 +6393,7 @@ tl.type_check = function(ast, opts)
                   node.type.typename = "tupletable"
                else
                   node.type.typename = "array"
+                  node.type.inferred_len = array_len
                end
             elseif is_record then
                node.type.typename = "record"
