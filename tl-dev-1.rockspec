@@ -21,6 +21,9 @@ dependencies = {
    -- needed for build options
    -- --build-dir, --source-dir, etc.
    "luafilesystem",
+
+   -- needed for ast print json
+   "luajson"
 }
 build = {
    modules = {

@@ -22,7 +22,7 @@ install:
   - luarocks install compat53
   - luarocks install argparse
   - luarocks install luafilesystem
-
+  - luarocks install luajson
 script:
   - luarocks lint tl-dev*rockspec
   - make

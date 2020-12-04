@@ -161,6 +161,9 @@ local function get_args_parser()
    build_command:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
                 :argname("<directory>")
 
+   local ast_command = parser:command("ast", "print ast by json")
+   ast_command:argument("script", 'The tl script'):args('+')
+
    return parser
 end
 
@@ -487,6 +490,32 @@ end
 
 if cmd == "build" and not config_from_file then
    die("Build error: tlconfig.lua not found")
+end
+
+---------------------------------------------------------------
+--                   ast                                     --
+---------------------------------------------------------------
+require('json')
+if cmd == 'ast' then
+   setup_env(args["script"][1])
+   local filename = args["script"][1]
+   local result, err = tl.process(filename, env, nil, modules)
+   if err then
+      die(err)
+   end
+   env = result.env
+
+   local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
+   if has_syntax_errors then
+      os.exit(1)
+   end
+   if filename:match("%.tl$") then
+      local ok = report_type_errors(result)
+      if not ok then
+         os.exit(1)
+      end
+   end
+   print(json.encode(result.ast))
 end
 
 
