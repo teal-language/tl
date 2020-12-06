@@ -516,6 +516,7 @@ if cmd == 'ast' then
       end
    end
    print(json.encode(result.ast))
+   os.exit(0)
 end
 
 
