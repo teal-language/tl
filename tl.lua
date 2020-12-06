@@ -199,6 +199,55 @@ local LexState = {}
 
 
 
+local escapable_characters = {
+   a = true,
+   b = true,
+   f = true,
+   n = true,
+   r = true,
+   t = true,
+   v = true,
+   z = true,
+   ["\\"] = true,
+   ["\'"] = true,
+   ["\""] = true,
+   ["\r"] = true,
+   ["\n"] = true,
+}
+
+local function lex_string_escape(input, i, c)
+   if escapable_characters[c] then
+      return 0, true
+   elseif c == "x" then
+      return 2, (
+      lex_hexadecimals[input:sub(i + 1, i + 1)] and
+      lex_hexadecimals[input:sub(i + 2, i + 2)])
+
+   elseif c == "u" then
+      if input:sub(i + 1, i + 1) == "{" then
+         local p = i + 2
+         if not lex_hexadecimals[input:sub(p, p)] then
+            return 2, false
+         end
+         while true do
+            p = p + 1
+            c = input:sub(p, p)
+            if not lex_hexadecimals[c] then
+               return p - i, c == "}"
+            end
+         end
+      end
+   elseif lex_decimals[c] then
+      return 2, (
+      lex_decimals[input:sub(i + 1, i + 1)] and
+      lex_decimals[input:sub(i + 2, i + 2)] and
+      tonumber(input:sub(i, i + 2)) < 256)
+
+   else
+      return 0, false
+   end
+end
+
 function tl.lex(input)
    local tokens = {}
 
@@ -382,6 +431,13 @@ function tl.lex(input)
             state = "any"
          end
       elseif state == "escape_dblquote_string" then
+         local skip, valid = lex_string_escape(input, i, c)
+         i = i + skip
+         if not valid then
+            end_token("$invalid$")
+            table.insert(errs, tokens[#tokens])
+         end
+         x = x + skip
          state = "dblquote_string"
       elseif state == "singlequote_string" then
          if c == "\\" then
@@ -391,6 +447,13 @@ function tl.lex(input)
             state = "any"
          end
       elseif state == "escape_singlequote_string" then
+         local skip, valid = lex_string_escape(input, i, c)
+         i = i + skip
+         if not valid then
+            end_token("$invalid$")
+            table.insert(errs, tokens[#tokens])
+         end
+         x = x + skip
          state = "singlequote_string"
       elseif state == "maybeequals" then
          if c == "=" then
