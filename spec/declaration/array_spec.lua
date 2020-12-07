@@ -49,7 +49,7 @@ describe("array declarations", function()
       { msg = "cannot determine type of table literal" },
    }))
 
-   it("explicit number indeces works array-records", util.check [[
+   it("explicit number indices work with array-records", util.check [[
       local x = {
          [1] = 2,
          [2] = 3,
@@ -58,7 +58,7 @@ describe("array declarations", function()
       print(x.GREEN)
    ]])
 
-   pending("indirect works array-records", util.check [[
+   pending("indirect works with array-records", util.check [[
       local RED = 1
       local BLUE = 2
       local x = {

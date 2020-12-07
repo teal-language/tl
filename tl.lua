@@ -4692,7 +4692,6 @@ tl.type_check = function(ast, opts)
       local n_table_types = 0
       local n_function_types = 0
       local n_string_enum = 0
-      local has_primitive = {}
       local has_primitive_string_type = false
       for _, t in ipairs(typ.types) do
          t = resolve_unary(t)
