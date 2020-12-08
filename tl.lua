@@ -5439,7 +5439,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function expand_type(where, old, new)
-      if not old then
+      if not old or old.typename == "nil" then
          return new
       else
          if not is_a(new, old) then

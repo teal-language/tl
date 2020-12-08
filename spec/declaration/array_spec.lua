@@ -14,6 +14,10 @@ describe("array declarations", function()
       print(x[10])
    ]])
 
+   it("skips over nils when defining the type (regression test for #268)", util.check [[
+      local x: {number} = {nil, 5}
+   ]])
+
    it("can be declared as a nominal type", util.check [[
       local type Booleans = {boolean}
       local bs: Booleans = {

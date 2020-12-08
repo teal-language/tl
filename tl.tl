@@ -5439,7 +5439,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    end
 
    local function expand_type(where: Node, old: Type, new: Type): Type
-      if not old then
+      if not old or old.typename == "nil" then
          return new
       else
          if not is_a(new, old) then
