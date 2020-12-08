@@ -155,7 +155,7 @@ for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", "#", "`", ";"}) do
 end
 
 local lex_op_start: {string:boolean} = {}
-for _, c in ipairs({"+", "*", "/", "|", "&", "%", "^"}) do
+for _, c in ipairs({"+", "*", "|", "&", "%", "^"}) do
    lex_op_start[c] = true
 end
 
@@ -181,6 +181,7 @@ local enum LexState
    "hex_float"
    "lt"
    "gt"
+   "div"
    "colon"
    "maybeequals"
    "maybelongstring"
@@ -307,6 +308,9 @@ function tl.lex(input: string): {Token}, {Token}
          elseif c == ">" then
             state = "gt"
             begin_token()
+         elseif c == "/" then
+            state = "div"
+            begin_token()
          elseif c == "=" or c == "~" then
             state = "maybeequals"
             begin_token()
@@ -416,6 +420,15 @@ function tl.lex(input: string): {Token}, {Token}
          end
       elseif state == "gt" then
          if c == "=" or c == ">" then
+            end_token("op")
+            state = "any"
+         else
+            end_token("op", i - 1)
+            fwd = false
+            state = "any"
+         end
+      elseif state == "div" then
+         if c == "/" then
             end_token("op")
             state = "any"
          else
@@ -3293,6 +3306,7 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    ["*"] = numeric_binop,
    ["%"] = numeric_binop,
    ["/"] = numeric_binop,
+   ["//"] = numeric_binop,
    ["^"] = numeric_binop,
    ["&"] = numeric_binop,
    ["|"] = numeric_binop,
