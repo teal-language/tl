@@ -5917,7 +5917,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       elseif node.e1.tk == "print_type" then
          print(show_type(b))
-         return BOOLEAN
+         return b
       elseif node.e1.tk == "require" then
          if #b == 1 then
             if node.e2[1].kind == "string" then
