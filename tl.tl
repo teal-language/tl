@@ -4621,11 +4621,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local is_known_table_type: function(t: Type): boolean
 
-   local function a_union(types: {Type}): Type
+   local function unite(types: {Type}): Type
+      if #types == 1 then
+         return types[1]
+      end
+
       local ts: {Type} = {}
       local stack: {Type} = {}
+
       -- Make things like string | string resolve to string
-      local primitives_seen: {TypeName:boolean} = {}
+      local types_seen: {(number|string):boolean} = {}
+      -- but never add nil as a type in the union
+      types_seen[NIL.typeid] = true
+      types_seen["nil"] = true
+
       local i = 1
       while types[i] or stack[1] do
          local t: Type
@@ -4641,19 +4650,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
          else
             if primitive[t.typename] then
-               if not primitives_seen[t.typename] then
-                  primitives_seen[t.typename] = true
+               if not types_seen[t.typename] then
+                  types_seen[t.typename] = true
                   table.insert(ts, t)
                end
-            else
+            elseif not types_seen[t.typeid] then
+               types_seen[t.typeid] = true
                table.insert(ts, t)
             end
          end
       end
-      return a_type {
-         typename = "union",
-         types = ts,
-      }
+
+      if #ts == 1 then
+         return ts[1]
+      else
+         return a_type {
+            typename = "union",
+            types = ts,
+         }
+      end
    end
 
    local function is_vararg(t: Type): boolean
@@ -4730,8 +4745,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local expand_type: function(where: Node, old: Type, new: Type): Type
    local function arraytype_from_tuple(where: Node, tupletype: Type): Type, {Error}
       -- first just try a basic union
-      local element_type = a_union(tupletype.types)
-      local valid, err = is_valid_union(element_type)
+      local element_type = unite(tupletype.types)
+      local valid = element_type.typename ~= "union" and true or is_valid_union(element_type)
       if valid then
          return a_type {
             elements = element_type,
@@ -5650,7 +5665,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             else
                old.tk = nil
                new.tk = nil
-               return a_union({ old, new })
+               return unite({ old, new })
             end
          end
       end
@@ -5750,11 +5765,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
 
          if all_is then
-            if #types == 1 then
-               return true, types[1]
-            else
-               return true, a_union(types)
-            end
+            return true, unite(types)
          else
             return false
          end
@@ -5772,11 +5783,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
 
          if all_is then
-            if #types == 1 then
-               return true, types[1]
-            else
-               return true, a_union(types)
-            end
+            return true, unite(types)
          else
             return false
          end
@@ -5802,11 +5809,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             return INVALID
          end
 
-         if #types == 1 then
-            return types[1]
-         else
-            return a_union(types)
-         end
+         return unite(types)
       end
 
       facts_and = function(f1: {Fact}, f2: {Fact}, errnode: Node): {Fact}
