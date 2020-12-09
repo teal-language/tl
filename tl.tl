@@ -4894,6 +4894,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       elseif t2.typename == "arrayrecord" then
          if t1.typename == "array" then
             return is_a(t1.elements, t2.elements)
+         elseif t1.typename == "tupletable" then
+            if t2.inferred_len and t2.inferred_len > #t1.types then
+               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len))
+            end
+            local u, err = arraytype_from_tuple(t1.inferred_at, t1)
+            if not u then
+               return false, err
+            end
+            if not is_a(u, t2) then
+               return false, terr(t2, "got %s (from %s), expected %s", u, t1, t2)
+            end
+            return true
          elseif t1.typename == "record" then
             return match_fields_to_record(t1, t2)
          elseif t1.typename == "arrayrecord" then
