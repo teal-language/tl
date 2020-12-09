@@ -33,7 +33,7 @@ describe("tuple declarations", function()
       local b: {number, string} = { [2] = "hello", [1] = 10 }
    ]])
 
-   it("should error with explicit integer indices that are out of range", util.check_type_error([[
+   pending("should error with explicit integer indices that are out of range", util.check_type_error([[
       local c: {number, string} = { [-1] = 10 }
    ]], {
       { msg = "in local declaration: c: got {number : number}, expected {1: number, 2: string}" },
