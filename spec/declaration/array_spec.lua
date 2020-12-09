@@ -31,7 +31,7 @@ describe("array declarations", function()
       print(x[RED])
    ]])
 
-   pending("indirect only works for numeric keys", util.check_type_error([[
+   it("indirect only works for numeric keys", util.check_type_error([[
       local RED = 1
       local BLUE = 2
       local GREEN: string = (function():string return "hello" end)()
@@ -54,7 +54,7 @@ describe("array declarations", function()
       print(x.GREEN)
    ]])
 
-   pending("indirect works with array-records", util.check [[
+   it("indirect works with array-records", util.check [[
       local RED = 1
       local BLUE = 2
       local x = {
