@@ -125,7 +125,7 @@ describe("[]", function()
          local x: number = 1
          local var = t[x]
       ]], {
-         { msg = "tuple cannot be indexed with a variable" },
+         { msg = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime" },
       }))
    end)
 end)
