@@ -16,6 +16,18 @@ describe("tuple declarations", function()
       { y = 1, msg = "in local declaration: a: incompatible length, expected maximum length of 2, got 3" }
    }))
 
+   it("should report when an array is of incorrect type of a tuple entry", util.check_type_error([[
+      local a: {number, string} = { [-1] = "hi" } -- infers to {string}
+      local b: {number, string} = { "hi" } -- infers to {string}
+      local c: {string, number} = { [-1] = "hi" } -- infers to {string}
+      local d: {string, number} = { "hi" } -- infers to {string}
+   ]], {
+      { y = 1, msg = "in local declaration: a: tuple entry 1 of type number does not match type of array elements, which is string" },
+      { y = 2, msg = "in local declaration: b: tuple entry 1 of type number does not match type of array elements, which is string" },
+      { y = 3, msg = "in local declaration: c: tuple entry 2 of type number does not match type of array elements, which is string" },
+      { y = 4, msg = "in local declaration: d: tuple entry 2 of type number does not match type of array elements, which is string" },
+   }))
+
    it("should report when a tuple has incompatible entries", util.check_type_error([[
       local b: {number, string} = { 1, false }
    ]], {
