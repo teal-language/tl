@@ -6371,6 +6371,8 @@ tl.type_check = function(ast, opts)
             local is_map = false
 
             local is_tuple = false
+            local is_not_tuple = false
+
             local last_array_idx = 1
             local largest_array_idx = -1
 
@@ -6386,7 +6388,9 @@ tl.type_check = function(ast, opts)
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
-                  is_tuple = true
+                  if not is_not_tuple then
+                     is_tuple = true
+                  end
                   if not node.type.types then
                      node.type.types = {}
                   end
@@ -6407,14 +6411,14 @@ tl.type_check = function(ast, opts)
                   else
                      local n = node[i].key.constnum
 
-                     if not n or not is_positive_int(n) then
-                        is_map = true
-                        node.type.keys = expand_type(node, node.type.keys, child.ktype)
-                        node.type.values = expand_type(node, node.type.values, child.vtype)
+                     if not is_positive_int(n) then
+                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                        is_not_tuple = true
                      elseif n then
-                        if node.type.types[n] then
-                           node_error(node, "Overwriting index " .. n)
-                        end
+
+
+
+
                         node.type.types[n] = resolve_tuple(child.vtype)
                         if n > largest_array_idx then
                            largest_array_idx = n
@@ -6451,24 +6455,29 @@ tl.type_check = function(ast, opts)
                   node_error(node, "cannot determine type of table literal")
                end
             elseif is_array then
-               local pure_array = true
-
-               local last_t
-               for _, current_t in pairs(node.type.types) do
-                  if last_t then
-                     if not same_type(last_t, current_t) then
-                        pure_array = false
-                        break
-                     end
-                  end
-                  last_t = current_t
-               end
-
-               if not pure_array then
-                  node.type.typename = "tupletable"
-               else
+               if is_not_tuple then
                   node.type.typename = "array"
                   node.type.inferred_len = largest_array_idx - 1
+               else
+                  local pure_array = true
+
+                  local last_t
+                  for _, current_t in pairs(node.type.types) do
+                     if last_t then
+                        if not same_type(last_t, current_t) then
+                           pure_array = false
+                           break
+                        end
+                     end
+                     last_t = current_t
+                  end
+
+                  if not pure_array then
+                     node.type.typename = "tupletable"
+                  else
+                     node.type.typename = "array"
+                     node.type.inferred_len = largest_array_idx - 1
+                  end
                end
             elseif is_record then
                node.type.typename = "record"
@@ -6476,7 +6485,7 @@ tl.type_check = function(ast, opts)
                node.type.typename = "map"
             elseif is_tuple then
                node.type.typename = "tupletable"
-               if #node.type == 0 then
+               if not node.type.types or #node.type.types == 0 then
                   node_error(node, "cannot determine type of tuple elements")
                end
             end
