@@ -6,7 +6,7 @@ env:
   - LUA="lua=5.2"
   - LUA="lua=5.3"
   - LUA="luajit=2.0"
-  - LUA="luajit=2.1"
+  - LUA="luajit https://github.com/luajit/luajit.git@v2.1"
 
 jobs:
   - os: osx
