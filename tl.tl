@@ -3431,7 +3431,7 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
    elseif t.typename == "tupletable" then
       local out: {string} = {}
       for i, v in ipairs(t.types) do
-         table.insert(out, tostring(i) .. ": " .. show(v))
+         table.insert(out, show(v))
       end
       return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "poly" then

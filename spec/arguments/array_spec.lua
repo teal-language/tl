@@ -11,7 +11,7 @@ describe("array argument", function()
          a(100)
       end
    ]], {
-      { y = 6, msg = 'argument 1: got {string | number} (from {1: string, 2: number}), expected {string}' },
+      { y = 6, msg = 'argument 1: got {string | number} (from {string, number}), expected {string}' },
       { y = 7, msg = 'argument 1: got number, expected {string}' },
    }))
 

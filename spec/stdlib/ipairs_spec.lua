@@ -5,7 +5,7 @@ describe("ipairs", function()
       for i, v in ipairs({{1}, {"a"}}) do
       end
    ]], {
-      { msg = [[attempting ipairs loop on tuple that's not a valid array: ({1: {number}, 2: {string "a"}})]] },
-      { msg = [[argument 1: unable to convert tuple {1: {number}, 2: {string "a"}} to array]] },
+      { msg = [[attempting ipairs loop on tuple that's not a valid array: ({{number}, {string "a"}})]] },
+      { msg = [[argument 1: unable to convert tuple {{number}, {string "a"}} to array]] },
    }))
 end)
