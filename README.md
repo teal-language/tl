@@ -54,7 +54,8 @@ Teal language support is currently available for [Vim](https://github.com/teal-l
 
 ## Community
 
-Join the chat on [Gitter](https://gitter.im/teal-language/community)!
+* Join the chat on [Gitter](https://gitter.im/teal-language/community)!
+  * You can also join via Matrix at https://matrix.to/#/#teal-language_community:gitter.im
 
 Teal is a project started by [Hisham Muhammad](https://hisham.hm),
 developed by a [growing number of contributors](https://github.com/teal-language/tl/graphs/contributors)
