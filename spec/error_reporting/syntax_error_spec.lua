@@ -30,6 +30,42 @@ describe("syntax errors", function()
       { y = 1, msg = "syntax error" },
    }))
 
+   it("malformed string: non escapable character", util.check_syntax_error([[
+      print("\s")
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
+   it("malformed string: bad hex character", util.check_syntax_error([[
+      print("\xZZ")
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
+   it("malformed string: bad UTF-8 character", util.check_syntax_error([[
+      print("\u{ZZ}")
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
+   it("malformed string: bad UTF-8 character", util.check_syntax_error([[
+      print("\")
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
+   it("valid strings: numbered escape", util.check [[
+      print("hello\1hello")
+      print("hello\12hello")
+      print("hello\123hello")
+   ]])
+
+   it("malformed string: numbered escape", util.check_syntax_error([[
+      print("hello\300hello")
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[

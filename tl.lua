@@ -238,11 +238,10 @@ local function lex_string_escape(input, i, c)
          end
       end
    elseif lex_decimals[c] then
-      return 2, (
-      lex_decimals[input:sub(i + 1, i + 1)] and
-      lex_decimals[input:sub(i + 2, i + 2)] and
-      tonumber(input:sub(i, i + 2)) < 256)
-
+      local len = lex_decimals[input:sub(i + 1, i + 1)] and
+      (lex_decimals[input:sub(i + 2, i + 2)] and 3 or 2) or
+      1
+      return len, tonumber(input:sub(i, i + len - 1)) < 256
    else
       return 0, false
    end
