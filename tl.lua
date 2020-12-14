@@ -4218,7 +4218,23 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local no_nested_types = {
+      ["string"] = true,
+      ["number"] = true,
+      ["boolean"] = true,
+      ["thread"] = true,
+      ["any"] = true,
+      ["enum"] = true,
+      ["nil"] = true,
+   }
+
    local function resolve_typevars(t, seen)
+
+      if t.typename and (no_nested_types[t.typename] or
+         (t.typename == "nominal" and not t.typevals)) then
+         return t
+      end
+
       seen = seen or {}
       if seen[t] then
          return seen[t]
@@ -5036,6 +5052,14 @@ tl.type_check = function(ast, opts)
       return false, terr(t1, "got %s, expected %s", t1, t2)
    end
 
+   local function shallow_copy(t)
+      local copy = {}
+      for k, v in pairs(t) do
+         copy[k] = v
+      end
+      return copy
+   end
+
    local function assert_is_a(node, t1, t2, context, name)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
@@ -5055,7 +5079,7 @@ tl.type_check = function(ast, opts)
          return
       elseif t2.typename == "emptytable" then
          if is_known_table_type(t1) then
-            infer_var(t2, t1, node)
+            infer_var(t2, shallow_copy(t1), node)
          elseif t1.typename ~= "emptytable" then
             node_error(node, "in " .. context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
          end
@@ -5919,7 +5943,7 @@ tl.type_check = function(ast, opts)
       end
       for _, f in ipairs(facts) do
          if f.fact == "is" then
-            local t = resolve_typevars(f.typ)
+            local t = shallow_copy(f.typ)
             t.inferred_at = where
             t.inferred_at_file = filename
             add_var(nil, f.var, t, nil, true)

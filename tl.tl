@@ -4218,7 +4218,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local no_nested_types: {string:boolean} = {
+      ["string"] = true,
+      ["number"] = true,
+      ["boolean"] = true,
+      ["thread"] = true,
+      ["any"] = true,
+      ["enum"] = true,
+      ["nil"] = true,
+   }
+
    local function resolve_typevars(t: Type, seen: {Type:Type}): Type
+      -- avoid copies of types that do not contain type variables
+      if t.typename and (no_nested_types[t.typename]
+         or (t.typename == "nominal" and not t.typevals)) then
+         return t
+      end
+
       seen = seen or {}
       if seen[t] then
          return seen[t]
@@ -5036,6 +5052,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return false, terr(t1, "got %s, expected %s", t1, t2)
    end
 
+   local function shallow_copy(t: Type): Type
+      local copy = {}
+      for k, v in pairs(t as {any:any}) do
+         copy[k] = v
+      end
+      return copy as Type
+   end
+
    local function assert_is_a(node: Node, t1: Type, t2: Type, context: string, name: string)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
@@ -5055,7 +5079,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return
       elseif t2.typename == "emptytable" then
          if is_known_table_type(t1) then
-            infer_var(t2, t1, node)
+            infer_var(t2, shallow_copy(t1), node)
          elseif t1.typename ~= "emptytable" then
             node_error(node, "in " .. context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
          end
@@ -5919,7 +5943,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
       for _, f in ipairs(facts) do
          if f.fact == "is" then
-            local t = resolve_typevars(f.typ) -- new type object
+            local t = shallow_copy(f.typ) -- new type object
             t.inferred_at = where
             t.inferred_at_file = filename
             add_var(nil, f.var, t, nil, true)
