@@ -107,6 +107,17 @@ describe("global", function()
       ]], {
          { msg = "cannot redeclare global with a different type" },
       }))
+
+      it("fails if types don't match", util.check_type_error([[
+         local record AR
+            {number}
+         end
+
+         global u: AR | number
+         global u: {number} | number
+      ]], {
+         { msg = "cannot redeclare global with a different type" },
+      }))
    end)
 
    describe("redeclared across files", function()

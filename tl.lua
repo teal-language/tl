@@ -4439,7 +4439,7 @@ tl.type_check = function(ast, opts)
                table.insert(fielderrs, error_in_type(f, "unknown field " .. k))
             end
          else
-            local match, errs = is_a(f, t2k)
+            local match, errs = cmp(f, t2k)
             add_errs_prefixing(errs, fielderrs, "record field doesn't match: " .. k .. ": ")
          end
       end
@@ -4471,11 +4471,11 @@ tl.type_check = function(ast, opts)
 
    local same_type
 
-   local function has_all_types_of(t1s, t2s)
+   local function has_all_types_of(t1s, t2s, cmp)
       for _, t1 in ipairs(t1s) do
          local found = false
          for _, t2 in ipairs(t2s) do
-            if is_a(t2, t1) then
+            if cmp(t2, t1) then
                found = true
                break
             end
@@ -4547,6 +4547,7 @@ tl.type_check = function(ast, opts)
       end
    end
 
+
    same_type = function(t1, t2)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -4581,8 +4582,8 @@ tl.type_check = function(ast, opts)
          end
          return any_errors(all_errs)
       elseif t1.typename == "union" then
-         if has_all_types_of(t1.types, t2.types) and
-            has_all_types_of(t2.types, t1.types) then
+         if has_all_types_of(t1.types, t2.types, same_type) and
+            has_all_types_of(t2.types, t1.types, same_type) then
             return true
          else
             return false, terr(t1, "got %s, expected %s", t1, t2)
@@ -4768,6 +4769,7 @@ tl.type_check = function(ast, opts)
       return arr_type
    end
 
+
    is_a = function(t1, t2, for_equality)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
@@ -4804,7 +4806,7 @@ tl.type_check = function(ast, opts)
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
       elseif t1.typename == "union" and t2.typename == "union" then
-         if has_all_types_of(t1.types, t2.types) then
+         if has_all_types_of(t1.types, t2.types, is_a) then
             return true
          else
             return false, terr(t1, "got %s, expected %s", t1, t2)
