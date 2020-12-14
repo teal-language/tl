@@ -5099,7 +5099,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if t1.inferred_len and t1.inferred_len > #t2.types then
                return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t2.types) .. ", got " .. tostring(t1.inferred_len))
             end
-            for i = 1, #t2.types do
+
+            -- for array literals (which is the only case where inferred_len is defined),
+            -- only check the entries present
+            local len = (t1.inferred_len and t1.inferred_len > 0)
+                        and t1.inferred_len
+                        or  #t2.types
+
+            for i = 1, len do
                if not is_a(t2.types[i], t1.elements, for_equality) then
                   return false, terr(t1, "tuple entry " .. tostring(i) .. " of type %s does not match type of array elements, which is %s", t2.types[i], t1.elements)
                end

@@ -17,16 +17,20 @@ describe("tuple declarations", function()
    }))
 
    it("should report when an array is of incorrect type of a tuple entry", util.check_type_error([[
-      local a: {number, string} = { [-1] = "hi" } -- infers to {string}
-      local b: {number, string} = { "hi" } -- infers to {string}
-      local c: {string, number} = { [-1] = "hi" } -- infers to {string}
-      local d: {string, number} = { "hi" } -- infers to {string}
+      local a: {number, string} = { [-1] = "hi" } -- infers to {string} with a length of 0, which is incompatible with {number, string}
+      local b: {number, string} = { "hi" } -- infers to {string} with a length of 1, which is incompatible with {number, string}
+      local c: {string, number} = { [-1] = "hi" } -- infers to {string} with a length of 0, which should maybe be compatible with {string, number}?
    ]], {
       { y = 1, msg = "in local declaration: a: tuple entry 1 of type number does not match type of array elements, which is string" },
       { y = 2, msg = "in local declaration: b: tuple entry 1 of type number does not match type of array elements, which is string" },
       { y = 3, msg = "in local declaration: c: tuple entry 2 of type number does not match type of array elements, which is string" },
-      { y = 4, msg = "in local declaration: d: tuple entry 2 of type number does not match type of array elements, which is string" },
    }))
+
+   it("should allow array literals that fit within then tuple length", util.check [[
+      local a: {number, string} = { 1 }
+      local b: {boolean, boolean, number} = { false, true }
+      local c: {string, number} = { "hi" }
+   ]])
 
    it("should report when a tuple has incompatible entries", util.check_type_error([[
       local b: {number, string} = { 1, false }
@@ -44,10 +48,4 @@ describe("tuple declarations", function()
       local a: {number, string} = { [1] = 10, [2] = "hello" }
       local b: {number, string} = { [2] = "hello", [1] = 10 }
    ]])
-
-   pending("should error with explicit integer indices that are out of range", util.check_type_error([[
-      local c: {number, string} = { [-1] = 10 }
-   ]], {
-      { msg = "in local declaration: c: got {number : number}, expected {number, string}" },
-   }))
 end)
