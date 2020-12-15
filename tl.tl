@@ -3400,6 +3400,7 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
    ["|"] = numeric_binop,
    ["<<"] = numeric_binop,
    [">>"] = numeric_binop,
+   ["~"] = numeric_binop,
    ["=="] = equality_binop,
    ["~="] = equality_binop,
    ["<="] = relational_binop,
