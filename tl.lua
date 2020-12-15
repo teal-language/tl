@@ -7,6 +7,8 @@ local TypeCheckOptions = {}
 
 
 
+
+
 local LoadMode = {}
 
 
@@ -1510,6 +1512,8 @@ local function parse_literal(ps, i)
    return fail(ps, i)
 end
 
+local an_operator
+
 do
    local precedences = {
       [1] = {
@@ -1557,6 +1561,10 @@ do
    local function new_operator(tk, arity, op)
       op = op or tk.tk
       return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
+   end
+
+   an_operator = function(node, arity, op)
+      return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
    local E
@@ -1776,10 +1784,9 @@ local function parse_function(ps, i)
       local owner = names[1]
       owner.kind = "variable"
       for i2 = 2, #names - 1 do
-         local dot = { y = names[i2].y, x = names[i2].x - 1, arity = 2, op = "." }
+         local dot = an_operator(names[i2], 2, ".")
          names[i2].kind = "identifier"
-         local op = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
-         owner = op
+         owner = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
       end
       fn.fn_owner = owner
    end
@@ -3365,6 +3372,9 @@ local unop_types = {
    ["-"] = {
       ["number"] = NUMBER,
    },
+   ["~"] = {
+      ["number"] = NUMBER,
+   },
    ["not"] = {
       ["string"] = BOOLEAN,
       ["number"] = BOOLEAN,
@@ -4153,6 +4163,8 @@ local function add_compat53_entries(program, used_set)
 
          if name == "table.unpack" then
             load_code(name, "local _tl_table_unpack = unpack or table.unpack")
+         elseif name == "bit32" then
+            load_code(name, "local bit32 = bit32 or require('bit32')")
          else
             if not compat53_loaded then
                load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
@@ -4191,6 +4203,26 @@ local function get_stdlib_compat53(lax)
          ["rawlen"] = true,
       }
    end
+end
+
+local bit_operators = {
+   ["&"] = "band",
+   ["|"] = "bor",
+   ["~"] = "bxor",
+   [">>"] = "rshift",
+   ["<<"] = "lshift",
+}
+
+local function convert_node_to_compat_call(node, mod_name, fn_name, e1, e2)
+   node.op.op = "@funcall"
+   node.op.arity = 2
+   node.op.prec = 100
+   node.e1 = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, ".") }
+   node.e1.e1 = { y = node.y, x = node.x, kind = "identifier", tk = mod_name }
+   node.e1.e2 = { y = node.y, x = node.x, kind = "identifier", tk = fn_name }
+   node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
+   node.e2[1] = e1
+   node.e2[2] = e2
 end
 
 local function init_globals(lax)
@@ -6859,6 +6891,12 @@ tl.type_check = function(ast, opts)
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", orig_a)
                   end
                end
+
+               if node.op.op == "~" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  all_needs_compat53["bit32"] = true
+                  convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
+               end
+
             elseif node.op.arity == 2 and binop_types[node.op.op] then
                if node.op.op == "or" then
                   node.facts = facts_or(node.e1.facts, node.e2.facts)
@@ -6874,6 +6912,14 @@ tl.type_check = function(ast, opts)
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
                   end
+               end
+
+               if node.op.op == "//" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  local div = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
+                  convert_node_to_compat_call(node, "math", "floor", div)
+               elseif bit_operators[node.op.op] and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  all_needs_compat53["bit32"] = true
+                  convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
                end
             else
                error("unknown node op " .. node.op.op)

@@ -7,6 +7,8 @@ local record TypeCheckOptions
    result: Result
 end
 
+global _VERSION: string
+
 local enum LoadMode
    "b"
    "t"
@@ -1510,6 +1512,8 @@ local function parse_literal(ps: ParseState, i: number): number, Node
    return fail(ps, i)
 end
 
+local an_operator: function(Node, number, string): Operator
+
 do
    local precedences: {number:{string:number}} = {
       [1] = {
@@ -1557,6 +1561,10 @@ do
    local function new_operator(tk: Token, arity: number, op: string): Operator
       op = op or tk.tk
       return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
+   end
+
+   an_operator = function(node: Node, arity: number, op: string): Operator
+      return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
    local E: function(ParseState, number, Node, number): number, Node
@@ -1776,10 +1784,9 @@ local function parse_function(ps: ParseState, i: number): number, Node
       local owner = names[1]
       owner.kind = "variable"
       for i2 = 2, #names - 1 do
-         local dot = { y = names[i2].y, x = names[i2].x - 1, arity = 2, op = "." }
+         local dot = an_operator(names[i2], 2, ".")
          names[i2].kind = "identifier"
-         local op = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
-         owner = op
+         owner = { y = names[i2].y, x = names[i2].x, kind = "op", op = dot, e1 = owner, e2 = names[i2] }
       end
       fn.fn_owner = owner
    end
@@ -3365,6 +3372,9 @@ local unop_types: {string:{string:Type}} = {
    ["-"] = {
       ["number"] = NUMBER,
    },
+   ["~"] = {
+      ["number"] = NUMBER,
+   },
    ["not"] = {
       ["string"] = BOOLEAN,
       ["number"] = BOOLEAN,
@@ -4153,6 +4163,8 @@ local function add_compat53_entries(program: Node, used_set: {string: boolean})
          -- TODO generic support for individual functions
          if name == "table.unpack" then
             load_code(name, "local _tl_table_unpack = unpack or table.unpack")
+         elseif name == "bit32" then
+            load_code(name, "local bit32 = bit32 or require('bit32')")
          else
             if not compat53_loaded then
                load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
@@ -4191,6 +4203,26 @@ local function get_stdlib_compat53(lax: boolean): {string:boolean}
          ["rawlen"] = true,
       }
    end
+end
+
+local bit_operators: {string:string} = {
+   ["&"] = "band",
+   ["|"] = "bor",
+   ["~"] = "bxor",
+   [">>"] = "rshift",
+   ["<<"] = "lshift",
+}
+
+local function convert_node_to_compat_call(node: Node, mod_name: string, fn_name: string, e1: Node, e2: Node)
+   node.op.op = "@funcall"
+   node.op.arity = 2
+   node.op.prec = 100
+   node.e1 = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, ".") }
+   node.e1.e1 = { y = node.y, x = node.x, kind = "identifier", tk = mod_name }
+   node.e1.e2 = { y = node.y, x = node.x, kind = "identifier", tk = fn_name }
+   node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
+   node.e2[1] = e1
+   node.e2[2] = e2
 end
 
 local function init_globals(lax: boolean): {string:Variable}
@@ -6859,6 +6891,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", orig_a)
                   end
                end
+
+               if node.op.op == "~" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  all_needs_compat53["bit32"] = true
+                  convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
+               end
+
             elseif node.op.arity == 2 and binop_types[node.op.op] then
                if node.op.op == "or" then
                   node.facts = facts_or(node.e1.facts, node.e2.facts)
@@ -6874,6 +6912,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
                   end
+               end
+
+               if node.op.op == "//" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  local div: Node = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
+                  convert_node_to_compat_call(node, "math", "floor", div)
+               elseif bit_operators[node.op.op] and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+                  all_needs_compat53["bit32"] = true
+                  convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
                end
             else
                error("unknown node op " .. node.op.op)
