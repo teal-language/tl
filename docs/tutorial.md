@@ -306,7 +306,8 @@ explicitly annotate it as such:
 local array_of_union: {string | number} = {1, 2, "hello", "hi"}
 ```
 
-And if you want a tuple containing all the same type, annotate that as well:
+And if you want a tuple where all elements have the same type, annotate that
+as well:
 
 ```
 local tuple_of_nums: {number, number} = {1, 2}

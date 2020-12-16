@@ -79,11 +79,8 @@ precedence, see below.
    fieldlist ::= field {fieldsep field} [fieldsep]
 
    field ::= ‘[’ exp ‘]’ ‘=’ exp |
-+     Name [‘:’ type] ‘=’ exp |
-*     ‘record’ Name recordbody |
-*     ‘enum’ Name enumbody |
-*     ‘type’ Name ‘=’ newtype |
-      exp
++      Name [‘:’ type] ‘=’ exp |
+       exp
 
    fieldsep ::= ‘,’ | ‘;’
 
@@ -108,7 +105,9 @@ precedence, see below.
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  recordbody ::= [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {Name ‘:’ type} ‘end’
+*  recordbody ::= [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {recordkey ‘:’ type} ‘end’
+
+*  recordkey ::= Name | ‘[’ LiteralString ‘]’
 
 *  enumbody ::= {LiteralString} ‘end’
 

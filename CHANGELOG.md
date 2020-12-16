@@ -1,3 +1,61 @@
+# 0.9.0
+
+2020-12-16
+
+Three months after 0.8, it's time to release Teal 0.9! It features
+language improvements, bugfixes, new contributors.
+
+This release features commits by Domingo Alvarez Duarte, Corey Williamson,
+Pierre Chapuis and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* New tuple type!
+  * You can declare a type such as `local t: {string, number} = {"hi", 1}`
+    and then `t[1]` gets correctly resolved as `string` and `t[2]` as number.
+    `t[x]` with an unknown `x` gets resolved as `string | number`.
+  * Inference between arrays and tuples allows for some automatic conversions.
+* `record` declarations now accept arbitrary strings as field names, using
+  square brackets and string notations, similar to Lua tables:
+  `[ "end" ] : string`
+* Support for the `//` integer division operator
+  * This is also supported for target VMs that do not support it natively!
+    For those environments, it outputs `math.floor(x / y)` in the Lua code.
+* Additions and tweaks to the standard library definitions:
+  * `string.gsub` function argument return values
+
+### Tooling
+
+* Error messages of the type `X is not a X` (when two different nominal types
+  happen to have the same name) are now disambiguated by presenting the
+  filenames and locations of the two different declarations, as in
+  `X (declared in foo.tl:9:2) is not a X (declared in bar.tl:8:2)`
+* The `tl` compiler module now exposes some of its external types for use by
+  tooling (such as the `tl` CLI script)
+* Compiler now generates compatibility code using `bit32` library
+  (part of `compat53`) for target VMs that do not support bitwise
+  operators natively.
+* Performance improvements in the compiler!
+  * `./tl check tl.tl` went from avg 612ms in 0.8.2 to 315ms
+* CI now tests Teal with Lua 5.4 as well.
+
+### Fixes
+
+* Fixed the support for bitwise xor operator `~`
+* Fixed the support for escapes in string literals, including Unicode
+  escapes.
+* Various fixes to the inference of unions.
+  * Fixed invariant type comparisons for union types.
+  * It now skips `nil` correctly when expanding union types:
+    For example, `{ 5, nil }` is now correctly inferred as `{ number }`
+    instead of `{ number | nil }`, because nil is valid for all types.
+* Cleaned up shadowed variable declarations in the compiler.
+* Cleaned up and added more extensive test cases for subtyping rules
+  for `nil`, `any`, union and intersection types, and caught some edge
+  cases in the process.
+
 # 0.8.2
 
 2020-11-06
