@@ -110,7 +110,11 @@ describe("tl run", function()
          local pd = io.popen("./tl run " .. name .. " 2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(nil, "exit", 1, pd:close())
-         assert.match("attempt to perform arithmetic on", output, 1, true)
+         if _VERSION == "Lua 5.4" then
+            assert.match("attempt to add a 'string' with a 'number'", output, 1, true)
+         else
+            assert.match("attempt to perform arithmetic on", output, 1, true)
+         end
       end)
 
       it("reports number of errors in stderr and code 1 on syntax errors", function()
