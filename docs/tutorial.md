@@ -275,7 +275,7 @@ local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2: n
 ```
 
 When indexing with a `number` variable, Teal will do its best by making a
-[union](#union_types) of all the types in the tuple (following the
+[union](#union-types) of all the types in the tuple (following the
 restrictions on unions detailed below)
 
 ```
