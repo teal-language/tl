@@ -16,6 +16,23 @@ describe("record method call", function()
       (r):f(3, "abc")
    ]])
 
+   it("method call with different call forms", util.check [[
+      local foo = {bar = function(x: any, t: any) end}
+      print(foo:bar())
+      print(foo:bar{})
+      print(foo:bar"hello")
+   ]])
+
+   it("catches wrong use of : without a call", util.check_syntax_error([[
+      local foo = {bar = function(x: any, t: any) end}
+      print(foo:bar)
+   ]], {
+      { y = 2, msg = "expected a function call" },
+      { y = 2, msg = "expected an expression" },
+      { y = 2, msg = "syntax error" },
+      { y = 2, msg = "syntax error" },
+   }))
+
    it("nested record method calls", util.check [[
       local r = {
          x = 2,

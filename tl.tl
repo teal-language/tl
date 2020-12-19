@@ -1567,6 +1567,12 @@ do
       return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
+   local args_starters: {string:boolean} = {
+      ["("] = true,
+      ["{"] = true,
+      ["string"] = true,
+   }
+
    local E: function(ParseState, number, Node, number): number, Node
 
    local function P(ps: ParseState, i: number): number, Node
@@ -1625,6 +1631,9 @@ do
             local key: Node
             i = i + 1
             i, key = verify_kind(ps, i, "identifier")
+            if op.op == ":" and not args_starters[ps.tokens[i].kind] then
+               return fail(ps, i, "expected a function call for a method")
+            end
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif ps.tokens[i].tk == "as" or ps.tokens[i].tk == "is" then

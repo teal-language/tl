@@ -34,6 +34,7 @@ describe("records", function()
       p.y = 12
    ]], {
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local record Point'" },
+      { msg = "expected a function call" },
       { msg = "syntax error" },
    }))
 
