@@ -2339,6 +2339,24 @@ parse_statements = function(ps, i, filename, toplevel)
    return i, node
 end
 
+local function clear_redundant_errors(errors)
+   local redundant = {}
+   local lastx, lasty = 0, 0
+   table.sort(errors, function(a, b)
+      return ((a.filename and b.filename) and a.filename < b.filename) or
+      (a.filename == b.filename and ((a.y < b.y) or (a.y == b.y and a.x < b.x)))
+   end)
+   for i, err in ipairs(errors) do
+      if err.x == lastx and err.y == lasty then
+         table.insert(redundant, i)
+      end
+      lastx, lasty = err.x, err.y
+   end
+   for i = #redundant, 1, -1 do
+      table.remove(errors, redundant[i])
+   end
+end
+
 function tl.parse_program(tokens, errs, filename)
    errs = errs or {}
    local ps = {
@@ -2348,7 +2366,9 @@ function tl.parse_program(tokens, errs, filename)
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
-   return parse_statements(ps, 1, filename, true)
+   local i, node = parse_statements(ps, 1, filename, true)
+   clear_redundant_errors(errs)
+   return i, node
 end
 
 
@@ -7139,21 +7159,7 @@ tl.type_check = function(ast, opts)
 
    close_types(st[1])
 
-   local redundant = {}
-   local lastx, lasty = 0, 0
-   table.sort(errors, function(a, b)
-      return ((a.filename and b.filename) and a.filename < b.filename) or
-      (a.filename == b.filename and ((a.y < b.y) or (a.y == b.y and a.x < b.x)))
-   end)
-   for i, err in ipairs(errors) do
-      if err.x == lastx and err.y == lasty then
-         table.insert(redundant, i)
-      end
-      lastx, lasty = err.x, err.y
-   end
-   for i = #redundant, 1, -1 do
-      table.remove(errors, redundant[i])
-   end
+   clear_redundant_errors(errors)
 
    if not opts.skip_compat53 then
       add_compat53_entries(ast, all_needs_compat53)

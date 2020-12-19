@@ -28,8 +28,6 @@ describe("record method call", function()
       print(foo:bar)
    ]], {
       { y = 2, msg = "expected a function call" },
-      { y = 2, msg = "expected an expression" },
-      { y = 2, msg = "syntax error" },
       { y = 2, msg = "syntax error" },
    }))
 
