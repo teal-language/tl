@@ -11,6 +11,14 @@ describe("string method call", function()
       ]], {
          { msg = "argument 1: got string" },
       }))
+
+      it("cannot call on a bare string", util.check_syntax_error([[
+         print("  ":rep("foo"))
+      ]], {
+         { msg = "cannot call a method on this expression" },
+         { msg = "expected an expression" },
+         { msg = "syntax error" },
+      }))
    end)
    describe("with variable", function()
       it("pass", util.check [[
@@ -26,9 +34,15 @@ describe("string method call", function()
       }))
    end)
    describe("chained", function()
-      it("pass", util.check [[
+      it("pass", util.gen([[
          print(("xy"):rep(12):sub(1,3))
-      ]])
+         print(("%s"):format"%s":format(2))
+         print(("%s b"):format"a":upper())
+      ]], [[
+         print(("xy"):rep(12):sub(1,3))
+         print(("%s"):format("%s"):format(2))
+         print(("%s b"):format("a"):upper())
+      ]]))
 
       it("fail", util.check_type_error([[
          print(("xy"):rep(12):subo(1,3))

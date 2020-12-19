@@ -1567,13 +1567,25 @@ do
       return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
-   local args_starters: {string:boolean} = {
+   local args_starters: {TokenKind:boolean} = {
       ["("] = true,
       ["{"] = true,
       ["string"] = true,
    }
 
    local E: function(ParseState, number, Node, number): number, Node
+
+   local function after_valid_prefixexp(ps: ParseState, prevnode: Node, i: number): boolean
+      return ps.tokens[i - 1].kind == ")" -- '(' exp ')'
+         or (prevnode.kind == "op"
+             and (prevnode.op.op == "@funcall"
+                  or prevnode.op.op == "@index"
+                  or prevnode.op.op == "."
+                  or prevnode.op.op == ":")
+             )
+         or prevnode.kind == "identifier"
+         or prevnode.kind == "variable"
+   end
 
    local function P(ps: ParseState, i: number): number, Node
       if ps.tokens[i].kind == "$EOF$" then
@@ -1612,8 +1624,15 @@ do
          elseif ps.tokens[i].tk == "(" then
             local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
 
+            local prev_i = i
+
             local args = new_node(ps.tokens, i, "expression_list")
             i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               fail(ps, prev_i, "cannot call this expression")
+               return i + 1
+            end
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif ps.tokens[i].tk == "[" then
@@ -1628,11 +1647,21 @@ do
          elseif ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
             local op: Operator = new_operator(ps.tokens[i], 2)
 
+            local prev_i = i
+
             local key: Node
             i = i + 1
             i, key = verify_kind(ps, i, "identifier")
-            if op.op == ":" and not args_starters[ps.tokens[i].kind] then
-               return fail(ps, i, "expected a function call for a method")
+
+            if op.op == ":" then
+               if not args_starters[ps.tokens[i].kind] then
+                  return fail(ps, i, "expected a function call for a method")
+               end
+
+               if not after_valid_prefixexp(ps, e1, prev_i) then
+                  fail(ps, prev_i, "cannot call a method on this expression")
+                  return i + 1
+               end
             end
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
