@@ -54,6 +54,23 @@ describe("warnings", function()
       { y = 1, msg = "unused function foo: function()" }
    }))
 
+   it("does not report used labels", util.check_warnings([[
+      global function f()
+         ::foo::
+         if math.random(1, 2) then
+            goto foo
+         end
+      end
+   ]], {}))
+
+   it("reports unused labels as 'label' and not 'variable'", util.check_warnings([[
+      global function f()
+         ::foo::
+      end
+   ]], {
+      { y = 2, msg = "unused label ::foo::" },
+   }))
+
    it("reports unused function arguments as 'argument' and not 'variable'", util.check_warnings([[
       local function foo(x: number)
       end

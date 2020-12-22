@@ -5276,16 +5276,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             and not var.is_narrowed
             and name:sub(1, 1) ~= "_"
          then
-            node_warning(
-               var.declared_at,
-               "unused %s %s: %s",
-               var.is_func_arg and "argument"
-                  or var.t.typename == "function" and "function"
-                  or is_type(var.t) and "type"
-                  or "variable",
-               name,
-               show_type(var.t)
-            )
+            if name:sub(1, 2) == "::" then
+               node_warning(var.declared_at, "unused label %s", name)
+            else
+               node_warning(
+                  var.declared_at,
+                  "unused %s %s: %s",
+                  var.is_func_arg and "argument"
+                     or var.t.typename == "function" and "function"
+                     or is_type(var.t) and "type"
+                     or "variable",
+                  name,
+                  show_type(var.t)
+               )
+            end
          end
       end
    end
