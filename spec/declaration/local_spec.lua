@@ -131,4 +131,16 @@ describe("local", function()
          print(enum + 123)
       ]])
    end)
+
+   describe("annotation", function()
+      it("fails with unknown annotations", util.check_syntax_error([[
+         local x <blergh> = 1
+      ]], {
+         { msg = "unknown variable annotation: blergh" },
+      }))
+
+      it("accepts known annotations", util.check [[
+         local x <const> = 1
+      ]])
+   end)
 end)

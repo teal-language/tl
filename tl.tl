@@ -1727,8 +1727,14 @@ local function parse_variable_name(ps: ParseState, i: number): number, Node, num
       i = i + 1
       local annotation: Node
       i, annotation = verify_kind(ps, i, "identifier")
-      if annotation and annotation.tk == "const" then
-         is_const = true
+      if annotation then
+         if annotation.tk == "const" then
+            is_const = true
+         else
+            fail(ps, i, "unknown variable annotation: " .. annotation.tk)
+         end
+      else
+         fail(ps, i, "expected a variable annotation")
       end
       i = verify_tk(ps, i, ">")
    end
