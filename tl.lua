@@ -5294,6 +5294,7 @@ var.declared_at,
 "unused %s %s: %s",
 var.is_func_arg and "argument" or
             var.t.typename == "function" and "function" or
+            is_type(var.t) and "type" or
             "variable",
 name,
 show_type(var.t))
