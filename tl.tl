@@ -37,6 +37,7 @@ local record tl
       syntax_errors: {Error}
       type_errors: {Error}
       unknowns: {Error}
+      warnings: {Error}
       env: Env
    end
 
@@ -1611,15 +1612,15 @@ do
          if ps.tokens[i].kind == "string" or ps.tokens[i].kind == "{" then
             local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
             local args = new_node(ps.tokens, i, "expression_list")
-            local arg: Node
+            local argument: Node
             if ps.tokens[i].kind == "string" then
-               arg = new_node(ps.tokens, i)
-               arg.conststr = unquote(ps.tokens[i].tk)
+               argument = new_node(ps.tokens, i)
+               argument.conststr = unquote(ps.tokens[i].tk)
                i = i + 1
             else
-               i, arg = parse_table_literal(ps, i)
+               i, argument = parse_table_literal(ps, i)
             end
-            table.insert(args, arg)
+            table.insert(args, argument)
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif ps.tokens[i].tk == "(" then
             local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
@@ -3694,6 +3695,7 @@ local record Variable
    needs_compat53: boolean
    narrowed_from: Type
    is_narrowed: boolean
+   declared_at: Node
 end
 
 local function fill_field_order(t: Type)
@@ -4327,6 +4329,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       syntax_errors = {},
       type_errors = {},
       unknowns = {},
+      warnings = {},
    }
 
    local stdlib_compat53 = get_stdlib_compat53(lax)
@@ -4335,11 +4338,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local all_needs_compat53 = {}
 
+   local warnings: {Error} = result.warnings or {}
    local errors: {Error} = result.type_errors or {}
    local unknowns: {Error} = result.unknowns or {}
    local module_type: Type
 
-   local function find_var(name: string): Type, boolean
+   local function find_var(name: string): Variable
+      for i = #st, 1, -1 do
+         local scope = st[i]
+         if scope[name] then
+            if i == 1 and scope[name].needs_compat53 then
+               all_needs_compat53[name] = true
+            end
+            return scope[name]
+         end
+      end
+   end
+
+   local function find_var_type(name: string): Type, boolean
       if name == "_G" then
          -- this is a static approximation of _G
          local globals: {string:Type} = {}
@@ -4358,16 +4374,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             fields = globals,
          }, false
       end
-      for i = #st, 1, -1 do
-         local scope = st[i]
-         if scope[name] then
-            if i == 1 and scope[name].needs_compat53 then
-               all_needs_compat53[name] = true
-            end
-            local typ = scope[name].t
-
-            return typ, scope[name].is_const
-         end
+      local var = find_var(name)
+      if var then
+         return var.t, var.is_const
       end
    end
 
@@ -4396,7 +4405,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       local orig_t = t
       local clear_tk = false
       if t.typename == "typevar" then
-         local tv = find_var(t.typevar)
+         local tv = find_var_type(t.typevar)
          if tv then
             t = tv
             clear_tk = true
@@ -4425,7 +4434,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    end
 
    local function find_type(names: {string}, accept_typearg: boolean): Type
-      local typ = find_var(names[1])
+      local typ = find_var_type(names[1])
       if not typ then
          return nil
       end
@@ -4516,6 +4525,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local function node_warning(node: Node, fmt: string, ...: any)
+      table.insert(warnings, {
+         y = node.y,
+         x = node.x,
+         msg = fmt:format(...),
+         filename = filename,
+      })
+   end
+
    local function node_error(node: Node, msg: string, ...:Type): Type
       local ok = type_error(node as Type, msg, ...)
       node.type = INVALID
@@ -4541,15 +4559,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          st[#st][var].is_narrowed = true
          st[#st][var].t = valtype
       else
-         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing }
+         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing, declared_at = node }
       end
    end
 
    local type CompareTypes = function(Type, Type, boolean): boolean, {Error}
 
    local function compare_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
-      local tv1 = find_var(t1.typevar)
-      local tv2 = find_var(t2.typevar)
+      local tv1 = find_var_type(t1.typevar)
+      local tv2 = find_var_type(t2.typevar)
       if t1.typevar == t2.typevar then
          local has_t1 = not not tv1
          local has_t2 = not not tv2
@@ -4558,7 +4576,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       end
       local function cmp(k: string, v: Type, a: Type, b: Type): boolean, {Error}
-         if find_var(k) then
+         if find_var_type(k) then
             return comp(a, b)
          else
             add_var(nil, k, resolve_typevars(v))
@@ -4866,7 +4884,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local resolve_unary: function(t: Type): Type = nil
 
-   local table_types: {TypeName:boolean} = {
+   local known_table_types: {TypeName:boolean} = {
       array = true,
       map = true,
       record = true,
@@ -4874,7 +4892,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       tupletable = true,
    }
    is_known_table_type = function(t: Type): boolean
-      return table_types[t.typename]
+      return known_table_types[t.typename]
    end
 
    local function resolve_union(typ: Type)
@@ -5071,8 +5089,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
             return true
          elseif t1.typename == "map" then
-            local _, errs_keys = is_a(t1.keys, NUMBER)
-            local _, errs_values = is_a(t1.values, t2.elements)
+            local _, errs_keys, errs_values: any, {Error}, {Error}
+            _, errs_keys = is_a(t1.keys, NUMBER)
+            _, errs_values = is_a(t1.values, t2.elements)
             return combine_errs(errs_keys, errs_values)
          end
       elseif t2.typename == "record" then
@@ -5106,8 +5125,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       elseif t2.typename == "map" then
          if t1.typename == "map" then
-            local _, errs_keys = is_a(t1.keys, t2.keys)
-            local _, errs_values = is_a(t2.values, t1.values)
+            local _, errs_keys, errs_values: any, {Error}, {Error}
+            _, errs_keys = is_a(t1.keys, t2.keys)
+            _, errs_values = is_a(t2.values, t1.values)
             if t2.values.typename == "any" then -- special-case hack for {any:any}
                errs_values = {}
             end
@@ -5123,8 +5143,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             else
                elements = t1.elements
             end
-            local _, errs_keys = is_a(NUMBER, t2.keys)
-            local _, errs_values = is_a(elements, t2.values)
+            local _, errs_keys, errs_values: any, {Error}, {Error}
+            _, errs_keys = is_a(NUMBER, t2.keys)
+            _, errs_values = is_a(elements, t2.values)
             return combine_errs(errs_keys, errs_values)
          elseif is_record_type(t1) then -- FIXME
             if not is_a(t2.keys, STRING) then
@@ -5310,15 +5331,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                        or math.min(#args, #f.args)
 
          for a = 1, nargs do
-            local arg = args[a]
+            local argument = args[a]
             local farg = f.args[a] or (va and f.args[#f.args])
-            if arg == nil then
+            if argument == nil then
                if farg.is_va then
                   break
                end
             else
                local at = node.e2 and node.e2[a] or node
-               if not arg_check(is_a, arg, farg, at, (a + argdelta), errs) then
+               if not arg_check(is_a, argument, farg, at, (a + argdelta), errs) then
                   ok = false
                   break
                end
@@ -5329,10 +5350,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
             -- resolve inference of emptytables used as arguments
             for a = 1, #args do
-               local arg = args[a]
+               local argument = args[a]
                local farg = f.args[a] or (va and f.args[#f.args])
-               if arg.typename == "emptytable" then
-                  infer_var(arg, resolve_typevars(farg), node.e2[a])
+               if argument.typename == "emptytable" then
+                  infer_var(argument, resolve_typevars(farg), node.e2[a])
                end
             end
 
@@ -5478,7 +5499,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       tbl = resolve_unary(tbl)
       local type_description = tbl.typename
       if tbl.typename == "string" or tbl.typename == "enum" then
-         tbl = find_var("string") -- simulate string metatable
+         tbl = find_var_type("string") -- simulate string metatable
       end
 
       if lax and (is_unknown(tbl) or tbl.typename == "typevar") then
@@ -5585,7 +5606,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return
       end
       if t.typename == "typevar" then
-         if not find_var(t.typevar) then
+         if not find_var_type(t.typevar) then
             node_error(node, "unknown type variable " .. t.typevar)
          end
          return
@@ -5894,7 +5915,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local function find_in_scope(exp: Node): Type
       if exp.kind == "variable" then
-         local t = find_var(exp.tk)
+         local t = find_var_type(exp.tk)
          if t.def then
             if not t.def.closed and not t.closed then
                return t.def
@@ -6083,7 +6104,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
          local out: {Fact} = {}
          for v, fs in pairs(join_facts({f1})) do
-            local realtype = find_var(v)
+            local realtype = find_var_type(v)
             if realtype then
                realtype = resolve_unary(realtype)
                local ok, u = sum_facts(fs) -- is this correct?
@@ -6277,6 +6298,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   t.assigned_to = var.tk
                end
                t.inferred_len = nil
+
+               do
+                  local old_var = find_var(var.tk)
+                  if old_var then
+                     if old_var.declared_at then
+                        node_warning(var, "redeclaration of variable '%s' (originally declared at %d:%d)", var.tk, old_var.declared_at.y, old_var.declared_at.x)
+                     else
+                        node_warning(var, "redeclaration of variable '%s'", var.tk)
+                     end
+                  end
+               end
+
                assert(var)
                add_var(var, var.tk, t, var.is_const)
 
@@ -6339,7 +6372,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
                if varnode.kind == "variable" then
                   if widen_back_var(varnode.tk) then
-                     vartype = find_var(varnode.tk)
+                     vartype = find_var_type(varnode.tk)
                   end
                end
                if vartype then
@@ -6440,7 +6473,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["goto"] = {
          after = function(node: Node, children: {Type}): Type
-            if not find_var("::" .. node.label .. "::") then
+            if not find_var_type("::" .. node.label .. "::") then
                local unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
                if not unresolved then
                   unresolved = { typename = "unresolved", labels = {}, nominals = {} }
@@ -6518,7 +6551,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       ["fornum"] = {
          before = function(node: Node)
             begin_scope()
-            add_var(nil, node.var.tk, NUMBER)
+            add_var(node.var, node.var.tk, NUMBER)
          end,
          after = function(node: Node, children: {Type}): Type
             end_scope()
@@ -6527,7 +6560,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
-            local rets = assert(find_var("@return"))
+            local rets = assert(find_var_type("@return"))
             local nrets = #rets
             local vatype: Type
             if nrets > 0 then
@@ -6638,10 +6671,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                         node.type.elements = expand_type(node, node.type.elements, child.vtype)
                         is_not_tuple = true
                      elseif n then
-                        -- TODO: Implement warnings
-                        -- if node.type.types[n] then
-                        --    node_error(node, "Overwriting index " .. n)
-                        -- end
+                        if node.type.types[n] then
+                           node_warning(node, "Overwriting table index %d", n)
+                        end
                         node.type.types[n] = resolve_tuple(child.vtype)
                         if n > largest_array_idx then
                            largest_array_idx = n
@@ -6995,14 +7027,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       ["variable"] = {
          after = function(node: Node, children: {Type}): Type
             if node.tk == "..." then
-               local va_sentinel = find_var("@is_va")
+               local va_sentinel = find_var_type("@is_va")
                if not va_sentinel or va_sentinel.typename == "nil" then
                   node.type = UNKNOWN
                   node_error(node, "cannot use '...' outside a vararg function")
                end
             end
 
-            node.type, node.is_const = find_var(node.tk)
+            node.type, node.is_const = find_var_type(node.tk)
             if node.type == nil then
                node.type = a_type { typename = "unknown" }
                if lax then
@@ -7130,7 +7162,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   end
                else
                   local name = typ.names[1]
-                  local unresolved = find_var("@unresolved")
+                  local unresolved = find_var_type("@unresolved")
                   if not unresolved then
                      unresolved = { typename = "unresolved", labels = {}, nominals = {} }
                      add_var(nil, "@unresolved", unresolved)
@@ -7241,6 +7273,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
       return env.loaded[filename]
    end
    result = {
+      warnings = result and result.warnings or {},
       syntax_errors = result and result.syntax_errors or {},
       type_errors = result and result.type_errors or {},
       unknowns = result and result.unknowns or {},
@@ -7274,7 +7307,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
       end
    end
 
-   local error, unknown: {Error}, {Error}
+   local err, unknown: {Error}, {Error}
    local opts: TypeCheckOptions = {
       lax = is_lua,
       filename = filename,
@@ -7282,7 +7315,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
       result = result,
       skip_compat53 = env.skip_compat53,
    }
-   error, unknown, result.type = tl.type_check(program, opts)
+   err, unknown, result.type = tl.type_check(program, opts)
 
    result.ast = program
    result.env = env

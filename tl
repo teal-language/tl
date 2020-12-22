@@ -241,6 +241,10 @@ local function report_type_errors(result)
    return not has_type_errors
 end
 
+local function report_warnings(result)
+   report_errors("warning", result.warnings)
+end
+
 local env = nil
 
 local function get_shared_library_ext()
@@ -327,6 +331,7 @@ local function type_check_file(file_name)
    if not ok then
       exit = 1
    end
+   report_warnings(result)
 
    if exit == 0 and tlconfig["quiet"] == false and #args["script"] == 1 then
       local output_file = get_output_filename(file_name)
@@ -789,6 +794,7 @@ for i, files in ipairs(sorted_source_file_arr) do
    end
    local ok = report_type_errors(result)
    if ok then
+      report_warnings(result)
       write_out(result, output_file)
    end
 end
