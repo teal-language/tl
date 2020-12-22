@@ -32,6 +32,10 @@ describe("warnings", function()
       { y = 1, msg = [[unused variable foo: string "bar"]] }
    }))
 
+   it("does not report unused global variables", util.check_warnings([[
+      global foo = "bar"
+   ]], { }))
+
    it("doesn't report unused variables that start with '_'", util.check_warnings([[
       local _foo = "bar"
    ]], { }))
