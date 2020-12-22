@@ -1794,18 +1794,18 @@ parse_argument_type_list = function(ps: ParseState, i: number): number, Type
 end
 
 local function parse_local_function(ps: ParseState, i: number): number, Node
-   local node = new_node(ps.tokens, i, "local_function")
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
+   local node = new_node(ps.tokens, i, "local_function")
    i, node.name = verify_kind(ps, i, "identifier")
    return parse_function_args_rets_body(ps, i, node)
 end
 
 local function parse_function(ps: ParseState, i: number): number, Node
    local orig_i = i
+   i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
    local node = fn
-   i = verify_tk(ps, i, "function")
    local names: {Node} = {}
    i, names[1] = verify_kind(ps, i, "identifier")
    while ps.tokens[i].tk == "." do

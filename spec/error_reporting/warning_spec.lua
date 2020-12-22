@@ -55,7 +55,7 @@ describe("warnings", function()
       local function foo()
       end
    ]], {
-      { y = 1, msg = "unused function foo: function()" }
+      { y = 1, x = 22, msg = "unused function foo: function()" }
    }))
 
    it("does not report used labels", util.check_warnings([[
