@@ -2218,7 +2218,7 @@ local function parse_variable_declarations(ps, i, node_name)
    if #asgn.vars == 0 then
       return fail(ps, i, "expected a local variable definition")
    end
-   local lhs = asgn.vars[1]
+
 
    i, asgn.decltype = parse_type_list(ps, i, "decltype")
 
@@ -2453,7 +2453,7 @@ local function recurse_type(ast, visit)
    end
 
    if ast.types then
-      for i, child in ipairs(ast.types) do
+      for _, child in ipairs(ast.types) do
          table.insert(xs, recurse_type(child, visit))
       end
    end
@@ -2552,7 +2552,7 @@ visit_type)
          cbs.before_statements(ast, xs)
       end
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
-      for i, e in ipairs(ast.elseifs) do
+      for _, e in ipairs(ast.elseifs) do
          table.insert(xs, recurse_node(e, visit_node, visit_type))
       end
       if ast.elsepart then
@@ -2762,14 +2762,14 @@ function tl.pretty_print_ast(ast, mode)
       increment_indent = nil
    end
 
-   local function add(out, s)
-      table.insert(out, s)
-   end
+
+
+
 
    local function add_string(out, s)
       table.insert(out, s)
       if string.find(s, "\n", 1, true) then
-         for nl in s:gmatch("\n") do
+         for _nl in s:gmatch("\n") do
             out.h = out.h + 1
          end
       end
@@ -2831,8 +2831,8 @@ function tl.pretty_print_ast(ast, mode)
          after = function(node, children)
             local out = { y = node.y, h = 0 }
             local space
-            for i, child in ipairs(children) do
-               add_child(out, children[i], space, indent)
+            for _, child in ipairs(children) do
+               add_child(out, child, space, indent)
                space = "; "
             end
             return out
@@ -2990,7 +2990,7 @@ function tl.pretty_print_ast(ast, mode)
          end,
       },
       ["break"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local out = { y = node.y, h = 0 }
             table.insert(out, "break")
             return out
@@ -3196,14 +3196,14 @@ function tl.pretty_print_ast(ast, mode)
          end,
       },
       ["variable"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local out = { y = node.y, h = 0 }
             add_string(out, node.tk)
             return out
          end,
       },
       ["newtype"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local out = { y = node.y, h = 0 }
             if is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
@@ -3214,7 +3214,7 @@ function tl.pretty_print_ast(ast, mode)
          end,
       },
       ["goto"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local out = { y = node.y, h = 0 }
             table.insert(out, "goto ")
             table.insert(out, node.label)
@@ -3222,7 +3222,7 @@ function tl.pretty_print_ast(ast, mode)
          end,
       },
       ["label"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local out = { y = node.y, h = 0 }
             table.insert(out, "::")
             table.insert(out, node.label)
@@ -3235,7 +3235,7 @@ function tl.pretty_print_ast(ast, mode)
    local visit_type = {}
    visit_type.cbs = {
       ["string"] = {
-         after = function(typ, children)
+         after = function(typ, _children)
             local out = { y = typ.y, h = 0 }
             table.insert(out, primitive[typ.typename] or "table")
             return out
@@ -3563,7 +3563,7 @@ local function show_type_base(t, seen)
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "tupletable" then
       local out = {}
-      for i, v in ipairs(t.types) do
+      for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
       return "{" .. table.concat(out, ", ") .. "}"
@@ -3698,10 +3698,12 @@ local Variable = {}
 
 
 
+
+
 local function fill_field_order(t)
    if t.typename == "record" then
       t.field_order = {}
-      for k, v in pairs(t.fields) do
+      for k in pairs(t.fields) do
          table.insert(t.field_order, k)
       end
       table.sort(t.field_order)
@@ -3717,20 +3719,20 @@ local function require_module(module_name, lax, env, result)
    end
    modules[module_name] = UNKNOWN
 
-   local found, fd, tried = tl.search_module(module_name, true)
+   local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$")) then
       fd:close()
-      local _result, err = tl.process(found, env, result)
-      assert(_result, err)
+      local found_result, err = tl.process(found, env, result)
+      assert(found_result, err)
 
-      if not _result.type then
-         _result.type = BOOLEAN
+      if not found_result.type then
+         found_result.type = BOOLEAN
       end
 
-      loaded[found] = _result
-      modules[module_name] = _result.type
+      loaded[found] = found_result
+      modules[module_name] = found_result.type
 
-      return _result.type, true
+      return found_result.type, true
    end
 
    return UNKNOWN, found ~= nil
@@ -4215,10 +4217,11 @@ local function add_compat53_entries(program, used_set)
       n = n + 1
    end
 
-   for i, name in ipairs(used_list) do
-      local mod, fn = name:match("([^.]*)%.(.*)")
-      local errs = {}
-      local text
+   for _, name in ipairs(used_list) do
+
+
+
+
       local code = compat53_code_cache[name]
       if not code then
 
@@ -4332,8 +4335,6 @@ tl.type_check = function(ast, opts)
       warnings = {},
    }
 
-   local stdlib_compat53 = get_stdlib_compat53(lax)
-
    local st = { opts.env.globals }
 
    local all_needs_compat53 = {}
@@ -4350,6 +4351,7 @@ tl.type_check = function(ast, opts)
             if i == 1 and scope[name].needs_compat53 then
                all_needs_compat53[name] = true
             end
+            scope[name].used = true
             return scope[name]
          end
       end
@@ -4535,7 +4537,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function node_error(node, msg, ...)
-      local ok = type_error(node, msg, ...)
+      type_error(node, msg, ...)
       node.type = INVALID
       return node.type
    end
@@ -4561,6 +4563,7 @@ tl.type_check = function(ast, opts)
       else
          st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing, declared_at = node }
       end
+      return st[#st][var]
    end
 
    local CompareTypes = {}
@@ -4594,7 +4597,7 @@ tl.type_check = function(ast, opts)
       if not src then
          return
       end
-      for i, err in ipairs(src) do
+      for _, err in ipairs(src) do
          err.msg = prefix .. err.msg
 
 
@@ -4627,7 +4630,7 @@ tl.type_check = function(ast, opts)
                table.insert(fielderrs, error_in_type(f, "unknown field " .. k))
             end
          else
-            local match, errs = cmp(f, t2k)
+            local __, errs = cmp(f, t2k)
             add_errs_prefixing(errs, fielderrs, "record field doesn't match: " .. k .. ": ")
          end
       end
@@ -4709,7 +4712,7 @@ tl.type_check = function(ast, opts)
          elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
             local all_errs = {}
             for i = 1, #t1.typevals do
-               local ok, errs = same_type(t2.typevals[i], t1.typevals[i])
+               local _, errs = same_type(t2.typevals[i], t1.typevals[i])
                add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t1.typevals[i]) .. ">: ", t1)
             end
             if #all_errs == 0 then
@@ -4793,7 +4796,7 @@ tl.type_check = function(ast, opts)
             arg_check(same_type, t1.args[i], t2.args[i], t1, i, all_errs)
          end
          for i = 1, #t1.rets do
-            local ok, errs = same_type(t1.rets[i], t2.rets[i])
+            local _, errs = same_type(t1.rets[i], t2.rets[i])
             add_errs_prefixing(errs, all_errs, "return " .. i, t1)
          end
          return any_errors(all_errs)
@@ -4895,9 +4898,9 @@ tl.type_check = function(ast, opts)
       return known_table_types[t.typename]
    end
 
-   local function resolve_union(typ)
-      assert(typ.typename == "union")
-   end
+
+
+
 
    local function is_valid_union(typ)
 
@@ -5214,7 +5217,7 @@ tl.type_check = function(ast, opts)
                nrets = nrets - 1
             end
             for i = 1, nrets do
-               local ok, errs = is_a(t1.rets[i], t2.rets[i])
+               local _, errs = is_a(t1.rets[i], t2.rets[i])
                add_errs_prefixing(errs, all_errs, "return " .. i .. ": ")
             end
          end
@@ -5267,14 +5270,33 @@ tl.type_check = function(ast, opts)
          return
       end
 
-      local match, match_errs = is_a(t1, t2)
+      local _, match_errs = is_a(t1, t2)
       add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and (name .. ": ") or ""), node)
    end
 
    local function close_types(vars)
-      for name, var in pairs(vars) do
+      for _, var in pairs(vars) do
          if var.t.typename == "typetype" then
             var.t.closed = true
+         end
+      end
+   end
+
+   local function check_for_unused_vars(vars)
+      for name, var in pairs(vars) do
+         if var.declared_at and
+            not var.used and
+            name:sub(1, 1) ~= "_" then
+
+            node_warning(
+var.declared_at,
+"unused %s %s: %s",
+var.is_func_arg and "argument" or
+            var.t.typename == "function" and "function" or
+            "variable",
+name,
+show_type(var.t))
+
          end
       end
    end
@@ -5305,6 +5327,7 @@ tl.type_check = function(ast, opts)
          end
       end
       close_types(st[#st])
+      check_for_unused_vars(st[#st])
       table.remove(st)
    end
 
@@ -5635,7 +5658,7 @@ tl.type_check = function(ast, opts)
 
    local function add_function_definition_for_recursion(node)
       local args = {}
-      for i, arg in ipairs(node.args) do
+      for _, arg in ipairs(node.args) do
          table.insert(args, arg.type)
       end
 
@@ -5655,7 +5678,7 @@ tl.type_check = function(ast, opts)
                node_error(node, "no visible label '" .. name .. "' for goto")
             end
          end
-         for name, types in pairs(unresolved.t.nominals) do
+         for _, types in pairs(unresolved.t.nominals) do
             for _, typ in ipairs(types) do
                assert(typ.x)
                assert(typ.y)
@@ -6227,7 +6250,7 @@ tl.type_check = function(ast, opts)
          before = function()
             begin_scope()
          end,
-         after = function(node, children)
+         after = function(node, _children)
 
             if #st == 2 then
                fail_unresolved()
@@ -6244,7 +6267,7 @@ tl.type_check = function(ast, opts)
          before = function(node)
             add_var(node.var, node.var.tk, node.value.newtype, node.var.is_const)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             dismiss_unresolved(node.var.tk)
             node.type = NONE
          end,
@@ -6253,7 +6276,7 @@ tl.type_check = function(ast, opts)
          before = function(node)
             add_global(node.var, node.var.tk, node.value.newtype, node.var.is_const)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             local existing, existing_is_const = find_global(node.var.tk)
             local var = node.var
             if existing then
@@ -6396,7 +6419,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["do"] = {
-         after = function(node, children)
+         after = function(node, _children)
             node.type = NONE
          end,
       },
@@ -6405,13 +6428,13 @@ tl.type_check = function(ast, opts)
             begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             end_scope()
             node.type = NONE
          end,
       },
       ["elseif"] = {
-         before = function(node)
+         before = function(_node)
             end_scope()
             begin_scope()
          end,
@@ -6423,7 +6446,7 @@ tl.type_check = function(ast, opts)
             f = facts_and(f, node.exp.facts, node)
             apply_facts(node.exp, f)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             node.type = NONE
          end,
       },
@@ -6437,7 +6460,7 @@ tl.type_check = function(ast, opts)
             end
             apply_facts(node, f)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             node.type = NONE
          end,
       },
@@ -6450,7 +6473,7 @@ tl.type_check = function(ast, opts)
             begin_scope()
             apply_facts(node.exp, node.exp.facts)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             end_scope()
             node.type = NONE
          end,
@@ -6472,7 +6495,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["goto"] = {
-         after = function(node, children)
+         after = function(node, _children)
             if not find_var_type("::" .. node.label .. "::") then
                local unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
                if not unresolved then
@@ -6490,7 +6513,7 @@ tl.type_check = function(ast, opts)
 
             widen_all_unions()
          end,
-         after = function(node, children)
+         after = function(node, _children)
 
             end_scope()
             node.type = NONE
@@ -6543,7 +6566,7 @@ tl.type_check = function(ast, opts)
                end
             end
          end,
-         after = function(node, children)
+         after = function(node, _children)
             end_scope()
             node.type = NONE
          end,
@@ -6553,7 +6576,7 @@ tl.type_check = function(ast, opts)
             begin_scope()
             add_var(node.var, node.var.tk, NUMBER)
          end,
-         after = function(node, children)
+         after = function(node, _children)
             end_scope()
             node.type = NONE
          end,
@@ -6654,7 +6677,7 @@ tl.type_check = function(ast, opts)
                   if node[i].key_parsed == "implicit" then
                      if i == #children and child.vtype.typename == "tuple" then
 
-                        for j, c in ipairs(child.vtype) do
+                        for _, c in ipairs(child.vtype) do
                            node.type.elements = expand_type(node, node.type.elements, c)
                            node.type.types[last_array_idx] = resolve_tuple(c)
                            last_array_idx = last_array_idx + 1
@@ -6671,9 +6694,6 @@ tl.type_check = function(ast, opts)
                         node.type.elements = expand_type(node, node.type.elements, child.vtype)
                         is_not_tuple = true
                      elseif n then
-                        if node.type.types[n] then
-                           node_warning(node, "Overwriting table index %d", n)
-                        end
                         node.type.types[n] = resolve_tuple(child.vtype)
                         if n > largest_array_idx then
                            largest_array_idx = n
@@ -6766,7 +6786,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["local_function"] = {
-         before = function(node)
+         before = function(_node)
             begin_scope()
          end,
          before_statements = function(node)
@@ -6777,7 +6797,7 @@ tl.type_check = function(ast, opts)
             end_function_scope()
             local rets = get_rets(children[3])
 
-            add_var(nil, node.name.tk, a_type({
+            add_var(node, node.name.tk, a_type({
                typename = "function",
                args = children[2],
                rets = rets,
@@ -6786,7 +6806,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["global_function"] = {
-         before = function(node)
+         before = function(_node)
             begin_scope()
          end,
          before_statements = function(node)
@@ -6804,7 +6824,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["record_function"] = {
-         before = function(node)
+         before = function(_node)
             begin_scope()
          end,
          before_statements = function(node, children)
@@ -6853,14 +6873,14 @@ tl.type_check = function(ast, opts)
                end
             end
          end,
-         after = function(node, children)
+         after = function(node, _children)
             end_function_scope()
 
             node.type = NONE
          end,
       },
       ["function"] = {
-         before = function(node)
+         before = function(_node)
             begin_scope()
          end,
          before_statements = function(node)
@@ -6880,7 +6900,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["cast"] = {
-         after = function(node, children)
+         after = function(node, _children)
             node.type = node.casttype
          end,
       },
@@ -6890,7 +6910,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["op"] = {
-         before = function(node)
+         before = function(_node)
             begin_scope()
          end,
          before_e2 = function(node)
@@ -7025,7 +7045,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["variable"] = {
-         after = function(node, children)
+         after = function(node, _children)
             if node.tk == "..." then
                local va_sentinel = find_var_type("@is_va")
                if not va_sentinel or va_sentinel.typename == "nil" then
@@ -7046,7 +7066,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["argument"] = {
-         after = function(node, children)
+         after = function(node, _children)
             local t = node.decltype
             if not t then
                t = a_type({ typename = "unknown" })
@@ -7056,16 +7076,16 @@ tl.type_check = function(ast, opts)
             end
             check_typevars(node, t)
             node.type = t
-            add_var(node, node.tk, t)
+            add_var(node, node.tk, t).is_func_arg = true
          end,
       },
       ["identifier"] = {
-         after = function(node, children)
+         after = function(node, _children)
             node.type = NONE
          end,
       },
       ["newtype"] = {
-         after = function(node, children)
+         after = function(node, _children)
             node.type = node.newtype
          end,
       },
@@ -7078,7 +7098,7 @@ tl.type_check = function(ast, opts)
    visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
 
    visit_node.cbs["string"] = {
-      after = function(node, children)
+      after = function(node, _children)
          node.type = a_type({
             y = node.y,
             x = node.x,
@@ -7094,7 +7114,7 @@ tl.type_check = function(ast, opts)
    visit_node.cbs["..."] = visit_node.cbs["variable"]
 
    visit_node.after = {
-      after = function(node, children)
+      after = function(node, _children)
          assert(type(node.type) == "table", node.kind .. " did not produce a type")
          assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
          return node.type
@@ -7104,21 +7124,21 @@ tl.type_check = function(ast, opts)
    local visit_type = {
       cbs = {
          ["string"] = {
-            after = function(typ, children)
+            after = function(typ, _children)
                return typ
             end,
          },
          ["function"] = {
-            before = function(typ, children)
+            before = function(_typ, _children)
                begin_scope()
             end,
-            after = function(typ, children)
+            after = function(typ, _children)
                end_scope()
                return typ
             end,
          },
          ["record"] = {
-            before = function(typ, children)
+            before = function(typ, _children)
                begin_scope()
                for name, typ2 in pairs(typ.fields) do
                   if typ2.typename == "typetype" then
@@ -7127,9 +7147,9 @@ tl.type_check = function(ast, opts)
                   end
                end
             end,
-            after = function(typ, children)
+            after = function(typ, _children)
                end_scope()
-               for name, typ2 in pairs(typ.fields) do
+               for _, typ2 in pairs(typ.fields) do
                   if typ2.typename == "nestedtype" then
                      typ2.typename = "typetype"
                   end
@@ -7138,7 +7158,7 @@ tl.type_check = function(ast, opts)
             end,
          },
          ["typearg"] = {
-            after = function(typ, children)
+            after = function(typ, _children)
                add_var(nil, typ.typearg, a_type({
                   y = typ.y,
                   x = typ.x,
@@ -7149,7 +7169,7 @@ tl.type_check = function(ast, opts)
             end,
          },
          ["nominal"] = {
-            after = function(typ, children)
+            after = function(typ, _children)
                local t = find_type(typ.names, true)
                if t then
                   if t.typename == "typearg" then
@@ -7174,7 +7194,7 @@ tl.type_check = function(ast, opts)
             end,
          },
          ["union"] = {
-            after = function(typ, children)
+            after = function(typ, _children)
                local valid, err = is_valid_union(typ)
                if not valid then
                   type_error(typ, err, typ)
@@ -7184,7 +7204,7 @@ tl.type_check = function(ast, opts)
          },
       },
       after = {
-         after = function(typ, children, ret)
+         after = function(typ, _children, ret)
             assert(type(ret) == "table", typ.typename .. " did not produce a type")
             assert(type(ret.typename) == "string", "type node does not have a typename")
             return ret
@@ -7219,6 +7239,7 @@ tl.type_check = function(ast, opts)
    recurse_node(ast, visit_node, visit_type)
 
    close_types(st[1])
+   check_for_unused_vars(st[1])
 
    clear_redundant_errors(errors)
 
@@ -7244,7 +7265,7 @@ tl.process = function(filename, env, result, preload_modules)
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   local basename, extension = filename:match("(.*)%.([a-z]+)$")
+   local _, extension = filename:match("(.*)%.([a-z]+)$")
    extension = extension and extension:lower()
 
    local is_lua
@@ -7283,7 +7304,7 @@ filename)
 
    local tokens, errs = tl.lex(input)
    if errs then
-      for i, err in ipairs(errs) do
+      for _, err in ipairs(errs) do
          table.insert(result.syntax_errors, {
             y = err.y,
             x = err.x,
@@ -7293,7 +7314,7 @@ filename)
       end
    end
 
-   local i, program = tl.parse_program(tokens, result.syntax_errors, filename)
+   local _, program = tl.parse_program(tokens, result.syntax_errors, filename)
    if #result.syntax_errors > 0 then
       return result
    end
@@ -7358,7 +7379,7 @@ local function tl_package_loader(module_name)
             return ret
          end
       else
-         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
+         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
       end
    end
    return table.concat(tried, "\n\t")
@@ -7375,7 +7396,7 @@ end
 tl.load = function(input, chunkname, mode, env)
    local tokens = tl.lex(input)
    local errs = {}
-   local i, program = tl.parse_program(tokens, errs, chunkname)
+   local _, program = tl.parse_program(tokens, errs, chunkname)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end

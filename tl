@@ -242,7 +242,9 @@ local function report_type_errors(result)
 end
 
 local function report_warnings(result)
-   report_errors("warning", result.warnings)
+   if not args["quiet"] then
+      report_errors("warning", result.warnings)
+   end
 end
 
 local env = nil

@@ -343,6 +343,31 @@ function util.check_syntax_error(code, syntax_errors)
    end
 end
 
+function util.check_warnings(code, warnings)
+   assert(type(code) == "string")
+   assert(type(warnings) == "table")
+
+   return function()
+      local result = tl.process_string(code)
+      assert.same(#warnings, #result.warnings, "Expected same amount of warnings:")
+      for i, warning in ipairs(warnings) do
+
+         if warning.y then
+            assert.same(warning.y, result.warnings[i].y, "[" .. i .. "] Expected same y location:")
+         end
+         if warning.x then
+            assert.same(warning.x, result.warnings[i].x,  "[" .. i .. "] Expected same x location:")
+         end
+         if warning.msg then
+            assert.match(warning.msg, result.warnings[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+         end
+         if warning.filename then
+            assert.match(warning.filename, result.warnings[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+         end
+      end
+   end
+end
+
 local function gen(lax, code, expected)
    return function()
       local tokens = tl.lex(code)
