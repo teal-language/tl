@@ -5286,6 +5286,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       for name, var in pairs(vars) do
          if var.declared_at
             and not var.used
+            and not var.is_narrowed
             and name:sub(1, 1) ~= "_"
          then
             node_warning(

@@ -61,4 +61,16 @@ describe("warnings", function()
    ]], {
       { y = 1, msg = "unused argument x: number" }
    }))
+
+   it("should not report that a narrowed variable is unused", util.check_warnings([[
+      local function foo(bar: string | number): string
+         if bar is string then
+            if string.sub(bar, 1, 1) == "#" then
+               bar = string.sub(bar, 2, -1)
+            end
+            bar = tonumber(bar, 16)
+         end
+      end
+      foo()
+   ]], { }))
 end)
