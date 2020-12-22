@@ -3,27 +3,30 @@ local util = require("spec.util")
 describe("warnings", function()
    it("reports redefined variables", util.check_warnings([[
       local a = 1
+      print(a)
       local a = 2
       print(a)
    ]], {
-      { y = 2, msg = "redeclaration of variable 'a' (originally declared at 1:13)" },
+      { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:13)" },
    }))
 
    it("reports redefined variables in for loops", util.check_warnings([[
       for i = 1, 10 do
+         print(i)
          local i = 15
          print(i)
       end
 
       for k, v in pairs{'a', 'b', 'c'} do
+         print(k, v)
          local k = 2
          local v = 'd'
          print(k, v)
       end
    ]], {
-      { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:11)" },
-      { y = 7, msg = "redeclaration of variable 'k' (originally declared at 6:11)" },
-      { y = 8, msg = "redeclaration of variable 'v' (originally declared at 6:14)" },
+      { y = 3, msg = "redeclaration of variable 'i' (originally declared at 1:11)" },
+      { y = 9, msg = "redeclaration of variable 'k' (originally declared at 7:11)" },
+      { y = 10, msg = "redeclaration of variable 'v' (originally declared at 7:14)" },
    }))
 
    it("reports unused variables", util.check_warnings([[
@@ -40,7 +43,7 @@ describe("warnings", function()
       local _foo = "bar"
    ]], { }))
 
-   pending("reports both unused and redefined variables of the same name", util.check_warnings([[
+   it("reports both unused and redefined variables of the same name", util.check_warnings([[
       local a = 10
       do
          local a = 12
@@ -48,7 +51,7 @@ describe("warnings", function()
       end
    ]], {
       { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:13)" },
-      { y = 1, msg = "unused variable 'a'" },
+      { y = 1, msg = "unused variable a: number" },
    }))
 
    it("reports unused functions as 'function' and not 'variable'", util.check_warnings([[

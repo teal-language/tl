@@ -4341,20 +4341,22 @@ tl.type_check = function(ast, opts)
    local unknowns = result.unknowns or {}
    local module_type
 
-   local function find_var(name)
+   local function find_var(name, raw)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
             if i == 1 and scope[name].needs_compat53 then
                all_needs_compat53[name] = true
             end
-            scope[name].used = true
+            if not raw then
+               scope[name].used = true
+            end
             return scope[name]
          end
       end
    end
 
-   local function find_var_type(name)
+   local function find_var_type(name, raw)
       if name == "_G" then
 
          local globals = {}
@@ -4373,7 +4375,7 @@ tl.type_check = function(ast, opts)
             fields = globals,
          }), false
       end
-      local var = find_var(name)
+      local var = find_var(name, raw)
       if var then
          return var.t, var.is_const
       end
@@ -4547,20 +4549,59 @@ tl.type_check = function(ast, opts)
       table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
    end
 
+   local function redeclaration_warning(node, old_var)
+      if old_var.declared_at then
+         node_warning(node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
+      else
+         node_warning(node, "redeclaration of variable '%s'", node.tk)
+      end
+   end
+
+   local function unused_warning(name, var)
+      if var.declared_at and
+         not var.is_narrowed and
+         name:sub(1, 1) ~= "_" then
+
+         if name:sub(1, 2) == "::" then
+            node_warning(var.declared_at, "unused label %s", name)
+         else
+            node_warning(
+var.declared_at,
+"unused %s %s: %s",
+var.is_func_arg and "argument" or
+            var.t.typename == "function" and "function" or
+            is_type(var.t) and "type" or
+            "variable",
+name,
+show_type(var.t))
+
+         end
+      end
+   end
+
    local function add_var(node, var, valtype, is_const, is_narrowing)
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
       end
-      if st[#st][var] and is_narrowing then
-         if not st[#st][var].is_narrowed then
-            st[#st][var].narrowed_from = st[#st][var].t
+      local scope = st[#st]
+      local old_var = scope[var]
+      if old_var and is_narrowing then
+         if not old_var.is_narrowed then
+            old_var.narrowed_from = old_var.t
          end
-         st[#st][var].is_narrowed = true
-         st[#st][var].t = valtype
+         old_var.is_narrowed = true
+         old_var.t = valtype
       else
-         st[#st][var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing, declared_at = node }
+         scope[var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing, declared_at = node }
+         if old_var then
+
+
+            if not old_var.used then
+               unused_warning(var, old_var)
+            end
+         end
       end
-      return st[#st][var]
+      return scope[var]
    end
 
    local CompareTypes = {}
@@ -5277,25 +5318,8 @@ tl.type_check = function(ast, opts)
 
    local function check_for_unused_vars(vars)
       for name, var in pairs(vars) do
-         if var.declared_at and
-            not var.used and
-            not var.is_narrowed and
-            name:sub(1, 1) ~= "_" then
-
-            if name:sub(1, 2) == "::" then
-               node_warning(var.declared_at, "unused label %s", name)
-            else
-               node_warning(
-var.declared_at,
-"unused %s %s: %s",
-var.is_func_arg and "argument" or
-               var.t.typename == "function" and "function" or
-               is_type(var.t) and "type" or
-               "variable",
-name,
-show_type(var.t))
-
-            end
+         if not var.used then
+            unused_warning(name, var)
          end
       end
    end
@@ -6322,13 +6346,9 @@ show_type(var.t))
                t.inferred_len = nil
 
                do
-                  local old_var = find_var(var.tk)
+                  local old_var = find_var(var.tk, true)
                   if old_var then
-                     if old_var.declared_at then
-                        node_warning(var, "redeclaration of variable '%s' (originally declared at %d:%d)", var.tk, old_var.declared_at.y, old_var.declared_at.x)
-                     else
-                        node_warning(var, "redeclaration of variable '%s'", var.tk)
-                     end
+                     redeclaration_warning(var, old_var)
                   end
                end
 
