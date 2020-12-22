@@ -73,4 +73,10 @@ describe("warnings", function()
       end
       foo()
    ]], { }))
+
+   it("should report unused types", util.check_warnings([[
+      local type Foo = number
+   ]], {
+      { y = 1, msg = "unused type Foo: type number" }
+   }))
 end)
