@@ -96,4 +96,14 @@ describe("enum declaration", function()
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'global enum t'" },
       { msg = "syntax error" },
    }))
+
+   it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[
+      local t = {
+         Point = enum
+            "hi"
+         end
+      }
+   ]], {
+      { y = 2, msg = "syntax error: this syntax is no longer valid; declare nested enum inside a record" },
+   }))
 end)

@@ -164,11 +164,11 @@ describe("require", function()
             return bar
          ]],
          ["bla.tl"] = [[
-            local bla = {
-               subtype = record
+            local type bla = record
+               record subtype
                   xx: number
                end
-            }
+            end
 
             function bla.func(): bla.subtype
                return { xx = 2 }
@@ -386,14 +386,14 @@ describe("require", function()
       -- ok
       util.mock_io(finally, {
          ["box.tl"] = [[
-            local box = {
-               Box = record
+            local record box
+               record Box
                   x: number
                   y: number
                   w: number
                   h: number
                end
-            }
+            end
 
             function box.foo(self: box.Box): string
                return "hello " .. tostring(self.w)

@@ -1066,6 +1066,8 @@ local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
 local parse_type: function(ParseState, number): number, Type, number
 local parse_newtype: function(ps: ParseState, i: number): number, Node
+local parse_enum_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+local parse_record_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
 
 local function fail(ps: ParseState, i: number, msg: string): number
    if not ps.tokens[i] then
@@ -1124,18 +1126,24 @@ local function failskip(ps: ParseState, i: number, msg: string, skip_fn: SkipFun
    return skip_i or (i + 1)
 end
 
-local is_newtype: {string:boolean} = {
-   ["enum"] = true,
-   ["record"] = true,
-}
+local function skip_record(ps: ParseState, i: number): number, Node
+   i = i + 1
+   return parse_record_body(ps, i, {}, {})
+end
 
-local function parse_table_value(ps: ParseState, i: number): number, Node
-   if is_newtype[ps.tokens[i].tk] then
-      return parse_newtype(ps, i)
-   else
-      local i2, node, _ = parse_expression(ps, i)
-      return i2, node
+local function skip_enum(ps: ParseState, i: number): number, Node
+   i = i + 1
+   return parse_enum_body(ps, i, {}, {})
+end
+
+local function parse_table_value(ps: ParseState, i: number): number, Node, number
+   local next_word = ps.tokens[i].tk
+   if next_word == "record" then
+      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record", skip_record)
+   elseif next_word == "enum" then
+      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
    end
+   return parse_expression(ps, i)
 end
 
 local function parse_table_item(ps: ParseState, i: number, n: number): number, Node, number
@@ -2057,7 +2065,7 @@ local function parse_nested_type(ps: ParseState, i: number, def: Type, typename:
    return i
 end
 
-local function parse_enum_body(ps: ParseState, i: number, def: Type, node: Node): number, Node
+parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
    def.enumset = {}
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
       local item: Node
@@ -2072,7 +2080,7 @@ local function parse_enum_body(ps: ParseState, i: number, def: Type, node: Node)
    return i, node
 end
 
-local function parse_record_body(ps: ParseState, i: number, def: Type, node: Node): number, Node
+parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
    def.fields = {}
    def.field_order = {}
    if ps.tokens[i].tk == "<" then
