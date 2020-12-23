@@ -1117,6 +1117,18 @@ local is_newtype = {
    ["record"] = true,
 }
 
+local SkipFunction = {}
+
+local function failskip(ps, i, msg, skip_fn, starti)
+   local err_ps = {
+      tokens = ps.tokens,
+      errs = {},
+   }
+   local skip_i = skip_fn(err_ps, starti or i)
+   fail(ps, starti or i, msg)
+   return skip_i or (i + 1)
+end
+
 local function parse_table_value(ps, i)
    if is_newtype[ps.tokens[i].tk] then
       return parse_newtype(ps, i)
@@ -2203,12 +2215,7 @@ local function parse_call_or_assignment(ps, i)
       return i, asgn
    end
    if #asgn.vars > 1 then
-      local err_ps = {
-         tokens = ps.tokens,
-         errs = {},
-      }
-      local expi = parse_expression(err_ps, tryi)
-      return fail(ps, expi or i)
+      return failskip(ps, i, nil, parse_expression, tryi)
    end
    if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs

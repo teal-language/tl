@@ -1112,6 +1112,18 @@ local function verify_kind(ps: ParseState, i: number, kind: TokenKind, node_kind
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
+local type SkipFunction = function(ParseState, number): number, Node
+
+local function failskip(ps: ParseState, i: number, msg: string, skip_fn: SkipFunction, starti: number): number
+   local err_ps: ParseState = {
+      tokens = ps.tokens,
+      errs = {},
+   }
+   local skip_i = skip_fn(err_ps, starti or i)
+   fail(ps, starti or i, msg)
+   return skip_i or (i + 1)
+end
+
 local is_newtype: {string:boolean} = {
    ["enum"] = true,
    ["record"] = true,
@@ -2203,12 +2215,7 @@ local function parse_call_or_assignment(ps: ParseState, i: number): number, Node
       return i, asgn
    end
    if #asgn.vars > 1 then
-      local err_ps: ParseState = {
-         tokens = ps.tokens,
-         errs = {},
-      }
-      local expi = parse_expression(err_ps, tryi)
-      return fail(ps, expi or i)
+      return failskip(ps, i, nil, parse_expression, tryi)
    end
    if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs
