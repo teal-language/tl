@@ -103,8 +103,10 @@ local function get_config()
    end
 
    -- Merge tlconfig with the default config
-   for k, v in pairs(user_config) do
-      config[k] = v
+   if user_config then
+      for k, v in pairs(user_config) do
+         config[k] = v
+      end
    end
 
    err = validate_config(config)
@@ -798,6 +800,8 @@ for i, files in ipairs(sorted_source_file_arr) do
    if ok then
       report_warnings(result)
       write_out(result, output_file)
+   else
+      exit = 1
    end
 end
 

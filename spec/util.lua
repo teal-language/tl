@@ -7,6 +7,14 @@ local current_dir = lfs.currentdir()
 local tl_executable = current_dir .. "/tl"
 local tl_lib = current_dir .. "/tl.lua"
 
+function util.do_in(dir, func, ...)
+   local cdir = assert(lfs.currentdir())
+   assert(lfs.chdir(dir))
+   local res = {pcall(func, ...)}
+   assert(lfs.chdir(cdir))
+   return (unpack or table.unpack)(res)
+end
+
 function util.mock_io(finally, files)
    assert(type(finally) == "function")
    assert(type(files) == "table")
@@ -168,17 +176,24 @@ function util.run_mock_project(finally, t)
    local actual_dir_name = util.write_tmp_dir(finally, t.dir_structure)
    lfs.link(tl_executable, actual_dir_name .. "/tl")
    lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
-   local expected_dir_structure = {
-      ["tl"] = true,
-      ["tl.lua"] = true,
-   }
-   insert_into(expected_dir_structure, t.dir_structure)
-   insert_into(expected_dir_structure, t.generated_files)
-   assert(lfs.chdir(actual_dir_name))
-   local pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or "") .. " 2>&1")
-   local output = pd:read("*a")
-   local actual_dir_structure = util.get_dir_structure(".")
-   assert(lfs.chdir(current_dir))
+   local expected_dir_structure
+   if t.generated_files then
+      expected_dir_structure = {
+         ["tl"] = true,
+         ["tl.lua"] = true,
+      }
+      insert_into(expected_dir_structure, t.dir_structure)
+      insert_into(expected_dir_structure, t.generated_files)
+   end
+
+   local pd, output, actual_dir_structure
+   assert(util.do_in(actual_dir_name, function()
+      pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or "") .. " 2>&1")
+      output = pd:read("*a")
+      if expected_dir_structure then
+         actual_dir_structure = util.get_dir_structure(".")
+      end
+   end))
    if t.popen then
       util.assert_popen_close(
          t.popen.status,
@@ -190,7 +205,9 @@ function util.run_mock_project(finally, t)
    if t.cmd_output then
       assert.are.equal(output, t.cmd_output)
    end
-   assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
+   if expected_dir_structure then
+      assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
+   end
 end
 
 function util.read_file(name)
