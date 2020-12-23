@@ -4558,9 +4558,11 @@ tl.type_check = function(ast, opts)
    end
 
    local function unused_warning(name, var)
+      local prefix = name:sub(1, 1)
       if var.declared_at and
          not var.is_narrowed and
-         name:sub(1, 1) ~= "_" then
+         prefix ~= "_" and
+         prefix ~= "@" then
 
          if name:sub(1, 2) == "::" then
             node_warning(var.declared_at, "unused label %s", name)
