@@ -38,6 +38,17 @@ describe("records", function()
       { msg = "syntax error" },
    }))
 
+   it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[
+      local t = {
+         Point = record
+            x: number
+            y: number
+         end
+      }
+   ]], {
+      { y = 2, msg = "syntax error: this syntax is no longer valid; declare nested record inside a record" },
+   }))
+
    it("can be declared with 'global type'", util.check [[
       global type Point = record
          x: number

@@ -1066,6 +1066,8 @@ local parse_argument_list
 local parse_argument_type_list
 local parse_type
 local parse_newtype
+local parse_enum_body
+local parse_record_body
 
 local function fail(ps, i, msg)
    if not ps.tokens[i] then
@@ -1112,11 +1114,6 @@ local function verify_kind(ps, i, kind, node_kind)
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
-local is_newtype = {
-   ["enum"] = true,
-   ["record"] = true,
-}
-
 local SkipFunction = {}
 
 local function failskip(ps, i, msg, skip_fn, starti)
@@ -1129,13 +1126,24 @@ local function failskip(ps, i, msg, skip_fn, starti)
    return skip_i or (i + 1)
 end
 
+local function skip_record(ps, i)
+   i = i + 1
+   return parse_record_body(ps, i, {}, {})
+end
+
+local function skip_enum(ps, i)
+   i = i + 1
+   return parse_enum_body(ps, i, {}, {})
+end
+
 local function parse_table_value(ps, i)
-   if is_newtype[ps.tokens[i].tk] then
-      return parse_newtype(ps, i)
-   else
-      local i2, node, _ = parse_expression(ps, i)
-      return i2, node
+   local next_word = ps.tokens[i].tk
+   if next_word == "record" then
+      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record", skip_record)
+   elseif next_word == "enum" then
+      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
    end
+   return parse_expression(ps, i)
 end
 
 local function parse_table_item(ps, i, n)
@@ -2057,7 +2065,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
    return i
 end
 
-local function parse_enum_body(ps, i, def, node)
+parse_enum_body = function(ps, i, def, node)
    def.enumset = {}
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
       local item
@@ -2072,7 +2080,7 @@ local function parse_enum_body(ps, i, def, node)
    return i, node
 end
 
-local function parse_record_body(ps, i, def, node)
+parse_record_body = function(ps, i, def, node)
    def.fields = {}
    def.field_order = {}
    if ps.tokens[i].tk == "<" then
