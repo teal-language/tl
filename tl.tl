@@ -6508,11 +6508,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                node_error(node, "label '" .. node.label .. "' already defined at " .. filename )
             end
             local unresolved = st[#st]["@unresolved"]
+            node.type = a_type { y = node.y, x = node.x, typename = "none", }
+            local var = add_var(node, label_id, node.type)
             if unresolved then
+               if unresolved.t.labels[node.label] then
+                  var.used = true
+               end
                unresolved.t.labels[node.label] = nil
             end
-            node.type = a_type { y = node.y, x = node.x, typename = "none", }
-            add_var(node, label_id, node.type)
          end,
       },
       ["goto"] = {
