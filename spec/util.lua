@@ -3,16 +3,18 @@ local util = {}
 local tl = require("tl")
 local assert = require("luassert")
 local lfs = require("lfs")
-local current_dir = lfs.currentdir()
+local current_dir = assert(lfs.currentdir(), "unable to get current dir")
 local tl_executable = current_dir .. "/tl"
 local tl_lib = current_dir .. "/tl.lua"
+
+local t_unpack = unpack or table.unpack
 
 function util.do_in(dir, func, ...)
    local cdir = assert(lfs.currentdir())
    assert(lfs.chdir(dir))
    local res = {pcall(func, ...)}
    assert(lfs.chdir(cdir))
-   return (unpack or table.unpack)(res)
+   return select(2, assert(t_unpack(res)))
 end
 
 function util.mock_io(finally, files)
@@ -47,6 +49,32 @@ local function unindent(code)
    return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function indent(str)
+   assert(type(str) == "string")
+   return (str:gsub("\n", "\n   "))
+end
+
+local function batch_assertions()
+   return {
+      add = function(self, assert_func, ...)
+         table.insert(self, { fn = assert_func, nargs = select("#", ...), args = {...} })
+         return self
+      end,
+      assert = function(self)
+         local err_batch = { "\n" }
+         local passed = true
+         for _, assertion in ipairs(self) do
+            local ok, err = pcall(assertion.fn, t_unpack(assertion.args, 1, assertion.nargs))
+            if not ok then
+               passed = false
+               table.insert(err_batch, indent(tostring(err)))
+            end
+         end
+         assert(passed, "batch assertion failed:" .. indent(table.concat(err_batch, "\n\n")))
+      end,
+   }
+end
+
 function util.assert_line_by_line(s1, s2)
    assert(type(s1) == "string")
    assert(type(s2) == "string")
@@ -61,9 +89,11 @@ function util.assert_line_by_line(s1, s2)
    for l in s2:gmatch("[^\n]*") do
       table.insert(l2, l)
    end
+   local batch = batch_assertions()
    for i in ipairs(l1) do
-      assert.same(l1[i], l2[i], "mismatch at line " .. i .. ":")
+      batch:add(assert.same, l1[i], l2[i], "mismatch at line " .. i .. ":")
    end
+   batch:assert()
 end
 
 function util.chdir_setup()
@@ -163,16 +193,18 @@ local function insert_into(tab, files)
       end
    end
 end
+local valid_commands = {
+   gen = true,
+   check = true,
+   run = true,
+   build = true,
+}
 function util.run_mock_project(finally, t)
    assert(type(finally) == "function")
    assert(type(t) == "table")
    assert(type(t.cmd) == "string", "tl <cmd> not given")
-   assert(({
-      gen = true,
-      check = true,
-      run = true,
-      build = true,
-   })[t.cmd], "Invalid command tl " .. t.cmd)
+   assert(valid_commands[t.cmd], "Invalid command tl " .. t.cmd)
+
    local actual_dir_name = util.write_tmp_dir(finally, t.dir_structure)
    lfs.link(tl_executable, actual_dir_name .. "/tl")
    lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
@@ -187,15 +219,17 @@ function util.run_mock_project(finally, t)
    end
 
    local pd, output, actual_dir_structure
-   assert(util.do_in(actual_dir_name, function()
+   util.do_in(actual_dir_name, function()
       pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or "") .. " 2>&1")
       output = pd:read("*a")
       if expected_dir_structure then
          actual_dir_structure = util.get_dir_structure(".")
       end
-   end))
+   end)
+
+   local batch = batch_assertions()
    if t.popen then
-      util.assert_popen_close(
+      batch:add(util.assert_popen_close,
          t.popen.status,
          t.popen.exit,
          t.popen.code,
@@ -203,11 +237,12 @@ function util.run_mock_project(finally, t)
       )
    end
    if t.cmd_output then
-      assert.are.equal(output, t.cmd_output)
+      batch:add(assert.are.equal, output, t.cmd_output)
    end
    if expected_dir_structure then
-      assert.are.same(expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
+      batch:add(assert.are.same, expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
    end
+   batch:assert()
 end
 
 function util.read_file(name)
@@ -225,9 +260,11 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
    assert(type(want3) == "number")
 
    if _VERSION == "Lua 5.3" then
-      assert.same(want1, ret1)
-      assert.same(want2, ret2)
-      assert.same(want3, ret3)
+      batch_assertions()
+         :add(assert.same, want1, ret1)
+         :add(assert.same, want2, ret2)
+         :add(assert.same, want3, ret3)
+         :assert()
    end
 end
 
@@ -237,25 +274,27 @@ local function check(lax, code, unknowns)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
+      local batch = batch_assertions()
       local errors, unks = tl.type_check(ast, { filename = "foo.lua", lax = lax })
-      assert.same({}, errors)
+      batch:add(assert.same, {}, errors)
       if unknowns then
          assert.same(#unknowns, #unks, "Expected same number of unknowns:")
          for i, u in ipairs(unknowns) do
             if u.y then
-               assert.same(u.y, unks[i].y)
+               batch:add(assert.same, u.y, unks[i].y)
             end
             if u.x then
-               assert.same(u.x, unks[i].x)
+               batch:add(assert.same, u.x, unks[i].x)
             end
             if u.msg then
-               assert.same(u.msg, unks[i].msg)
+               batch:add(assert.same, u.msg, unks[i].msg)
             end
             if u.filename then
-               assert.same(u.filename, unks[i].filename)
+               batch:add(assert.same, u.filename, unks[i].filename)
             end
          end
       end
+      batch:assert()
       return true, ast
    end
 end
@@ -266,22 +305,24 @@ local function check_type_error(lax, code, type_errors)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
+      local batch = batch_assertions()
       local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
-      assert.same(#type_errors, #errors, "Expected same number of errors:")
+      batch:add(assert.same, #type_errors, #errors, "Expected same number of errors:")
       for i, err in ipairs(type_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y,  "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, err.y, errors[i].y,  "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if err.filename then
-            assert.match(err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
+      batch:assert()
    end
 end
 
@@ -342,21 +383,23 @@ function util.check_syntax_error(code, syntax_errors)
       local tokens = tl.lex(code)
       local errors = {}
       tl.parse_program(tokens, errors)
-      assert.same(#syntax_errors, #errors, "Expected same amount of syntax errors:")
+      local batch = batch_assertions()
+      batch:add(assert.same, #syntax_errors, #errors, "Expected same amount of syntax errors:")
       for i, err in ipairs(syntax_errors) do
          if err.y then
-            assert.same(err.y, errors[i].y, "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, err.y, errors[i].y, "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            assert.same(err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            assert.match(err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if err.filename then
-            assert.match(err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
+      batch:assert()
    end
 end
 
@@ -366,22 +409,24 @@ function util.check_warnings(code, warnings)
 
    return function()
       local result = tl.process_string(code)
-      assert.same(#warnings, #result.warnings, "Expected same amount of warnings:")
+      local batch = batch_assertions()
+      batch:add(assert.same, #warnings, #result.warnings, "Expected same amount of warnings:")
       for i, warning in ipairs(warnings) do
 
          if warning.y then
-            assert.same(warning.y, result.warnings[i].y, "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, warning.y, result.warnings[i].y, "[" .. i .. "] Expected same y location:")
          end
          if warning.x then
-            assert.same(warning.x, result.warnings[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, warning.x, result.warnings[i].x,  "[" .. i .. "] Expected same x location:")
          end
          if warning.msg then
-            assert.match(warning.msg, result.warnings[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, warning.msg, result.warnings[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if warning.filename then
-            assert.match(warning.filename, result.warnings[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, warning.filename, result.warnings[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
+      batch:assert()
    end
 end
 
