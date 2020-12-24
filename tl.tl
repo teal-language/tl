@@ -832,7 +832,7 @@ local record Type
    -- Lua compatibilty
    needs_compat53: boolean
 
-   -- vararg
+   -- tuple
    is_va: boolean
 
    -- poly, union, tupletable
@@ -852,7 +852,7 @@ local record Type
 
    -- array
    elements: Type
-   -- tuples/array
+   -- tupletable/array
    inferred_len: number
 
    -- function
@@ -1304,8 +1304,8 @@ local function parse_function_type(ps: ParseState, i: number): number, Type
       i, node.args = parse_argument_type_list(ps, i)
       i, node.rets = parse_return_types(ps, i)
    else
-      node.args = { a_type { typename = "any", is_va = true } }
-      node.rets = { a_type { typename = "any", is_va = true } }
+      node.args = a_type { typename = "tuple", is_va = true, a_type { typename = "any" } }
+      node.rets = a_type { typename = "tuple", is_va = true, a_type { typename = "any" } }
    end
    return i, node
 end
@@ -1441,7 +1441,7 @@ parse_type_list = function(ps: ParseState, i: number, mode: ParseTypeListMode): 
       i = i + 1
       local nrets = #list
       if nrets > 0 then
-         list[nrets].is_va = true
+         list.is_va = true
       else
          return fail(ps, i, "unexpected '...'")
       end
@@ -1788,6 +1788,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
 
    local typ: Type; i, typ = parse_type(ps, i)
    if typ then
+      -- HACK: we're storing the attribute in the wrong node during the iteration...
       typ.is_va = is_va
    end
 
@@ -1796,7 +1797,13 @@ end
 
 parse_argument_type_list = function(ps: ParseState, i: number): number, Type
    local list = new_type(ps, i, "tuple")
-   return parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
+   i = parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
+   -- HACK: ...and then cleaning it up and setting in the right node
+   if list[#list] and list[#list].is_va then
+      list[#list].is_va = nil
+      list.is_va = true
+   end
+   return i, list
 end
 
 local function parse_local_function(ps: ParseState, i: number): number, Node
@@ -3297,6 +3304,13 @@ end
 -- Type check
 --------------------------------------------------------------------------------
 
+local function VARARG(t: {Type}): Type
+   local tuple = t as Type
+   tuple.typename = "tuple"
+   tuple.is_va = true
+   return t
+end
+
 local ANY = a_type { typename = "any" }
 local NONE = a_type { typename = "none" }
 local NIL = a_type { typename = "nil" }
@@ -3304,11 +3318,6 @@ local NUMBER = a_type { typename = "number" }
 local STRING = a_type { typename = "string" }
 local OPT_NUMBER = a_type { typename = "number" }
 local OPT_STRING = a_type { typename = "string" }
-local VARARG_ANY = a_type { typename = "any", is_va = true }
-local VARARG_STRING = a_type { typename = "string", is_va = true }
-local VARARG_NUMBER = a_type { typename = "number", is_va = true }
-local VARARG_UNKNOWN = a_type { typename = "unknown", is_va = true }
-local VARARG_ALPHA = a_type { typename = "typevar", typevar = "@a", is_va = true }
 local BOOLEAN = a_type { typename = "boolean" }
 local ARG_ALPHA = a_type { typename = "typearg", typearg = "@a" }
 local ARG_BETA = a_type { typename = "typearg", typearg = "@b" }
@@ -3318,7 +3327,7 @@ local ARRAY_OF_STRING = a_type { typename = "array", elements = STRING }
 local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
 local TABLE = a_type { typename = "map", keys = ANY, values = ANY }
-local FUNCTION = a_type { typename = "function", args = { a_type { typename = "any", is_va = true } }, rets = { a_type { typename = "any", is_va = true } } }
+local FUNCTION = a_type { typename = "function", args = VARARG { ANY }, rets = VARARG { ANY } }
 local THREAD = a_type { typename = "thread" }
 local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
@@ -3752,7 +3761,7 @@ local standard_library: {string:Type} = {
       }
    },
    ["collectgarbage"] = a_type { typename = "function", args = { STRING }, rets = { a_type { typename = "union", types = { BOOLEAN, NUMBER } }, NUMBER, NUMBER } },
-   ["dofile"] = a_type { typename = "function", args = { OPT_STRING }, rets = { VARARG_ANY } },
+   ["dofile"] = a_type { typename = "function", args = { OPT_STRING }, rets = VARARG { ANY } },
    ["error"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = {} },
    ["getmetatable"] = a_type { typename = "function", args = { ANY }, rets = { NOMINAL_METATABLE } },
    ["ipairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
@@ -3788,9 +3797,9 @@ local standard_library: {string:Type} = {
    ["pairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
       a_type { typename = "function", args = {}, rets = { ALPHA, BETA } },
    } },
-   ["pcall"] = a_type { typename = "function", args = { FUNCTION, VARARG_ANY }, rets = { BOOLEAN, ANY } },
-   ["xpcall"] = a_type { typename = "function", args = { FUNCTION, FUNCTION, VARARG_ANY }, rets = { BOOLEAN, ANY } },
-   ["print"] = a_type { typename = "function", args = { VARARG_ANY }, rets = {} },
+   ["pcall"] = a_type { typename = "function", args = VARARG { FUNCTION, ANY }, rets = { BOOLEAN, ANY } },
+   ["xpcall"] = a_type { typename = "function", args = VARARG { FUNCTION, FUNCTION, ANY }, rets = { BOOLEAN, ANY } },
+   ["print"] = a_type { typename = "function", args = VARARG { ANY }, rets = {} },
    ["rawequal"] = a_type { typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } },
    ["rawget"] = a_type { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
    ["rawlen"] = a_type {
@@ -3812,9 +3821,9 @@ local standard_library: {string:Type} = {
    ["select"] = a_type {
       typename = "poly",
       types = {
-         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { NUMBER, VARARG_ALPHA }, rets = { ALPHA } },
-         a_type { typename = "function", args = { NUMBER, VARARG_ANY }, rets = { ANY } },
-         a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { NUMBER } },
+         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = VARARG { NUMBER, ALPHA }, rets = { ALPHA } },
+         a_type { typename = "function", args = VARARG { NUMBER, ANY }, rets = { ANY } },
+         a_type { typename = "function", args = VARARG { STRING, ANY }, rets = { NUMBER } },
       }
    },
    ["setmetatable"] = a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE }, rets = { ALPHA } },
@@ -3828,8 +3837,8 @@ local standard_library: {string:Type} = {
          fields = {
             ["close"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
             ["flush"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = {} },
-            ["lines"] = a_type { typename = "function", args = { NOMINAL_FILE, a_type { typename = "union", types = { STRING, NUMBER }, is_va = true } }, rets = {
-               a_type { typename = "function", args = {}, rets = { VARARG_STRING } },
+            ["lines"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, a_type { typename = "union", types = { STRING, NUMBER } } }, rets = {
+               a_type { typename = "function", args = {}, rets = VARARG { STRING } },
             } },
             ["read"] = a_type {
                typename = "poly",
@@ -3847,7 +3856,7 @@ local standard_library: {string:Type} = {
                }
             },
             ["setvbuf"] = a_type { typename = "function", args = { NOMINAL_FILE, STRING, OPT_NUMBER }, rets = {} },
-            ["write"] = a_type { typename = "function", args = { NOMINAL_FILE, VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+            ["write"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, STRING }, rets = { NOMINAL_FILE, STRING } },
             -- TODO complete...
          },
       },
@@ -3897,11 +3906,11 @@ local standard_library: {string:Type} = {
          ["create"] = a_type { typename = "function", args = { FUNCTION }, rets = { THREAD } },
          ["close"] = a_type { typename = "function", args = { THREAD }, rets = { BOOLEAN, STRING } },
          ["isyieldable"] = a_type { typename = "function", args = {}, rets = { BOOLEAN } },
-         ["resume"] = a_type { typename = "function", args = { THREAD, VARARG_ANY }, rets = { BOOLEAN, VARARG_ANY } },
+         ["resume"] = a_type { typename = "function", args = VARARG { THREAD, ANY }, rets = VARARG { BOOLEAN, ANY } },
          ["running"] = a_type { typename = "function", args = {}, rets = { THREAD, BOOLEAN } },
          ["status"] = a_type { typename = "function", args = { THREAD }, rets = { STRING } },
          ["wrap"] = a_type { typename = "function", args = { FUNCTION }, rets = { FUNCTION } },
-         ["yield"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { VARARG_ANY } },
+         ["yield"] = a_type { typename = "function", args = VARARG { ANY }, rets = VARARG { ANY } },
       }
    },
    ["debug"] = a_type {
@@ -3943,8 +3952,8 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", args = { NOMINAL_FILE }, rets = { NOMINAL_FILE } },
             },
          },
-         ["lines"] = a_type { typename = "function", args = { OPT_STRING, a_type { typename = "union", types = { STRING, NUMBER }, is_va = true } }, rets = {
-            a_type { typename = "function", args = {}, rets = { VARARG_STRING } },
+         ["lines"] = a_type { typename = "function", args = VARARG { OPT_STRING, a_type { typename = "union", types = { STRING, NUMBER } } }, rets = {
+            a_type { typename = "function", args = {}, rets = VARARG { STRING } },
          } },
          ["open"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
          ["output"] = a_type {
@@ -3968,7 +3977,7 @@ local standard_library: {string:Type} = {
          ["stdout"] = NOMINAL_FILE,
          ["tmpfile"] = a_type { typename = "function", args = {}, rets = { NOMINAL_FILE } },
          ["type"] = a_type { typename = "function", args = { ANY }, rets = { STRING } },
-         ["write"] = a_type { typename = "function", args = { VARARG_STRING }, rets = { NOMINAL_FILE, STRING } },
+         ["write"] = a_type { typename = "function", args = VARARG { STRING }, rets = { NOMINAL_FILE, STRING } },
       },
    },
    ["math"] = a_type {
@@ -3997,9 +4006,9 @@ local standard_library: {string:Type} = {
          ["ldexp"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["log"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["log10"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-         ["max"] = a_type { typename = "function", args = { VARARG_NUMBER }, rets = { NUMBER } },
+         ["max"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { NUMBER } },
          ["maxinteger"] = NUMBER,
-         ["min"] = a_type { typename = "function", args = { VARARG_NUMBER }, rets = { NUMBER } },
+         ["min"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { NUMBER } },
          ["mininteger"] = NUMBER,
          ["modf"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER, NUMBER } },
          ["pi"] = NUMBER,
@@ -4077,10 +4086,10 @@ local standard_library: {string:Type} = {
             types = {
                a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
                a_type { typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
-               a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { VARARG_NUMBER } },
+               a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = VARARG { NUMBER } },
             }
          },
-         ["char"] = a_type { typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
+         ["char"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { STRING } },
          ["dump"] = a_type {
                typename = "poly",
                types = {
@@ -4091,13 +4100,13 @@ local standard_library: {string:Type} = {
          ["find"] = a_type {
             typename = "poly",
             types = {
-               a_type { typename = "function", args = { STRING, STRING }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-               a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = { NUMBER, NUMBER, VARARG_STRING } },
-               a_type { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = { NUMBER, NUMBER, VARARG_STRING } },
+               a_type { typename = "function", args = { STRING, STRING }, rets = VARARG { NUMBER, NUMBER, STRING } },
+               a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = VARARG { NUMBER, NUMBER, STRING } },
+               a_type { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = VARARG { NUMBER, NUMBER, STRING } },
                -- FIXME any other modes
             }
          },
-         ["format"] = a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
+         ["format"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = { STRING } },
          ["gmatch"] = a_type { typename = "function", args = { STRING, STRING }, rets = {
             a_type { typename = "function", args = {}, rets = { STRING } },
          } },
@@ -4106,22 +4115,22 @@ local standard_library: {string:Type} = {
             types = {
                a_type { typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } },
                a_type { typename = "function", args = { STRING, STRING, a_type { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = { STRING, NUMBER } },
-               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = { VARARG_STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
-               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = { VARARG_STRING }, rets = { NUMBER } } }, rets = { STRING, NUMBER } },
-               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = { VARARG_STRING }, rets = { BOOLEAN } } }, rets = { STRING, NUMBER } },
-               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = { VARARG_STRING }, rets = {} } }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = { STRING } } }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = { NUMBER } } }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = { BOOLEAN } } }, rets = { STRING, NUMBER } },
+               a_type { typename = "function", args = { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = {} } }, rets = { STRING, NUMBER } },
                -- FIXME any other modes
             }
          },
          ["len"] = a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
          ["lower"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
-         ["match"] = a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = { VARARG_STRING } },
-         ["pack"] = a_type { typename = "function", args = { STRING, VARARG_ANY }, rets = { STRING } },
+         ["match"] = a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = VARARG { STRING } },
+         ["pack"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = { STRING } },
          ["packsize"] = a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
          ["rep"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
          ["reverse"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
          ["sub"] = a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } },
-         ["unpack"] = a_type { typename = "function", args = { STRING, STRING, OPT_NUMBER }, rets = { VARARG_ANY } },
+         ["unpack"] = a_type { typename = "function", args = { STRING, STRING, OPT_NUMBER }, rets = VARARG { ANY } },
          ["upper"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
       },
    },
@@ -4143,7 +4152,7 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = { ARRAY_OF_ALPHA } },
             }
          },
-         ["pack"] = a_type { typename = "function", args = { VARARG_ANY }, rets = { TABLE } },
+         ["pack"] = a_type { typename = "function", args = VARARG { ANY }, rets = { TABLE } },
          ["remove"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } },
          ["sort"] = a_type {
             typename = "poly",
@@ -4157,16 +4166,16 @@ local standard_library: {string:Type} = {
             needs_compat53 = true,
             typeargs = { ARG_ALPHA },
             args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
-            rets = { VARARG_ALPHA },
+            rets = VARARG { ALPHA },
          },
       },
    },
    ["utf8"] = a_type {
       typename = "record",
       fields = {
-         ["char"] = a_type { typename = "function", args = { VARARG_NUMBER }, rets = { STRING } },
+         ["char"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { STRING } },
          ["charpattern"] = STRING,
-         ["codepoint"] = a_type { typename = "function", args = { STRING, OPT_NUMBER, OPT_NUMBER }, rets = { VARARG_NUMBER } },
+         ["codepoint"] = a_type { typename = "function", args = { STRING, OPT_NUMBER, OPT_NUMBER }, rets = VARARG { NUMBER } },
          ["codes"] = a_type { typename = "function", args = { STRING }, rets = {
             a_type { typename = "function", args = {}, rets = { NUMBER, STRING } },
          }, },
@@ -4297,7 +4306,7 @@ local function init_globals(lax: boolean): {string:Variable}
    -- only global scope and vararg functions accept `...`:
    -- `@is_va` is an internal sentinel value which is
    -- `any` if `...` is accepted in this scope or `nil` if it isn't.
-   globals["@is_va"] = { t = VARARG_ANY }
+   globals["@is_va"] = { t = ANY }
 
    return globals
 end
@@ -4903,10 +4912,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
-   local function is_vararg(t: Type): boolean
-      return t.args and #t.args > 0 and t.args[#t.args].is_va
-   end
-
    local function combine_errs(...: {Error}): boolean, {Error}
       local errs: {Error}
       for i = 1, select("#", ...) do
@@ -5233,7 +5238,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
-         if (not is_vararg(t2)) and #t1.args > #t2.args then
+         if (not t2.args.is_va) and #t1.args > #t2.args then
             t1.args.typename = "tuple"
             t2.args.typename = "tuple"
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
@@ -5242,7 +5247,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
             end
          end
-         local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets[#t2.rets].is_va
+         local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
          if #t1.rets < #t2.rets and not diff_by_va then
             t1.rets.typename = "tuple"
             t2.rets.typename = "tuple"
@@ -5373,7 +5378,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             return nil, errs
          end
 
-         local va = is_vararg(f)
+         local va = f.args.is_va
          local nargs = va
                        and math.max(#args, #f.args)
                        or math.min(#args, #f.args)
@@ -5382,7 +5387,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local argument = args[a]
             local farg = f.args[a] or (va and f.args[#f.args])
             if argument == nil then
-               if farg.is_va then
+               if va then
                   break
                end
             else
@@ -5436,7 +5441,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          assert(type(args) == "table")
 
          if lax and is_unknown(func) then
-            func = a_type { typename = "function", args = { VARARG_UNKNOWN }, rets = { VARARG_UNKNOWN } }
+            func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
          end
 
          func = resolve_unary(func)
@@ -5456,8 +5461,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   return node_error(node, "not a function: %s", f)
                end
                table.insert(expects, tostring(#f.args or 0))
-               local va = is_vararg(f)
-               if #args == (#f.args or 0) or (va and #args > #f.args) then
+               if #args == (#f.args or 0) or (f.args.is_va and #args > #f.args) then
                   tried[i] = true
                   local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                   if matched then
@@ -5488,7 +5492,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          -- now try vararg functions
          for i, f in ipairs(poly.types) do
             if not tried[i] then
-               if is_vararg(f) and #args > (#f.args or 0) then
+               if f.args.is_va and #args > (#f.args or 0) then
                   tried[i] = true
                   local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
                   if matched then
@@ -5669,14 +5673,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local function get_rets(rets: {Type}): {Type}
       if lax and (#rets == 0) then
-         return {a_type { typename = "unknown", is_va = true }}
+         return VARARG { a_type { typename = "unknown" }}
       end
       return rets
    end
 
    local function add_internal_function_variables(node: Node)
-      local is_va = #node.args > 0 and node.args[#node.args].type.is_va
-      add_var(nil, "@is_va", is_va and VARARG_ANY or NIL)
+      add_var(nil, "@is_va", node.args.type.is_va and ANY or NIL)
 
       add_var(nil, "@return", node.rets or a_type { typename = "tuple" })
    end
@@ -5801,29 +5804,35 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return exps
    end
 
-   local function get_assignment_values(vals: {Type}, wanted: number): {Type}
+   local function get_assignment_values(vals: Type, wanted: number): {Type}
       local ret: {Type} = {}
       if vals == nil then
          return ret
       end
+
       -- get all arguments except the last...
+      local is_va = vals.is_va
       for i = 1, #vals - 1 do
          ret[i] = vals[i]
       end
+
       local last = vals[#vals]
-      -- ...if the last is a tuple, unpack it
       if last.typename == "tuple" then
+         -- ...if the last is a tuple, unpack it
+         is_va = last.is_va
          for _, v in ipairs(last) do
             table.insert(ret, v)
          end
+      else
+         -- ...otherwise simply get it
+         table.insert(ret, last)
+      end
+
       -- ...if the last is vararg, repeat its type until it matches the number of wanted args
-      elseif last.is_va and #ret < wanted then
+      if is_va and last and #ret < wanted then
          while #ret < wanted do
             table.insert(ret, last)
          end
-      -- ...otherwise simply get it
-      else
-         table.insert(ret, last)
       end
       return ret
    end
@@ -6257,7 +6266,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                if node.e1.e1.kind == "variable" then
                   add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                end
-               return VARARG_UNKNOWN
+               return VARARG { UNKNOWN }
             else
                return INVALID
             end
@@ -6575,7 +6584,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                for i, v in ipairs(node.vars) do
                   local r = exp1type.rets[i]
                   if not r then
-                     if last and last.is_va then
+                     if exp1type.rets.is_va then
                         r = last
                      else
                         r = UNKNOWN
@@ -6611,7 +6620,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local nrets = #rets
             local vatype: Type
             if nrets > 0 then
-               vatype = rets[nrets].is_va and rets[nrets]
+               vatype = rets.is_va and rets[nrets]
             end
 
             if #children[1] > nrets and (not lax) and not vatype then
@@ -6647,6 +6656,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             -- explode last tuple: (1, 2, (3, 4)) becomes (1, 2, 3, 4)
             local n = #children
             if n > 0 and children[n].typename == "tuple" then
+               if children[n].is_va then
+                  node.type.is_va = true
+               end
                local tuple = children[n]
                for i, c in ipairs(tuple) do
                   children[n + i - 1] = c
@@ -7096,7 +7108,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                t = a_type { typename = "unknown" }
             end
             if node.tk == "..." then
-               t.is_va = true
+               t = a_type { typename = "tuple", is_va = true, t }
             end
             check_typevars(node, t)
             node.type = t
