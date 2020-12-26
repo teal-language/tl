@@ -1,0 +1,57 @@
+name: playground
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        repository: 'teal-language/teal-playground'
+        ref: 'master'
+        path: 'tl/teal-playground'
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: install
+      run: |
+        cd ${{ github.workspace }}/teal-playground
+        yarn install
+    - name: build
+      run: |
+        echo "${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}"
+        cd ${{ github.workspace }}/teal-playground
+        yarn build
+      env:
+        VUE_APP_TL_PACKAGE_PATH_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}/?.lua
+    - name: netlify deploy
+      id: netlify-deploy
+      run: |
+        yarn global add netlify-cli
+        cd ${{ github.workspace }}/teal-playground
+        NETLIFY_URL=$(netlify deploy --dir=dist --alias=${{ github.event.pull_request.user.login }}-${{ github.event.pull_request.id }} | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*(--)[a-zA-Z0-9./?=_-]*')
+        echo "$NETLIFY_URL"
+        echo "::set-output name=NETLIFY_URL::$NETLIFY_URL"
+      env:
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_TEAL_PLAYGROUND_SITE_ID }}
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_TEAL_PLAYGROUND_TOKEN }}
+    - name: 'comment on pull-request'
+      uses: actions/github-script@0.3.0
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
+          const comments = await github.issues.listComments({ owner, repo, issue_number });
+          if (comments.data.filter(c => c.user.type === 'Bot').length > 0) {
+            console.log('Already commented. Playground url is unchanged.')
+            return
+          }
+
+          github.issues.createComment({ issue_number, owner, repo, body: 'Teal Playground URL: ${{ steps.netlify-deploy.outputs.NETLIFY_URL }}' });
