@@ -1,0 +1,29 @@
+name: playground
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        repository: 'teal-language/teal-playground'
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: install
+      run: |
+        yarn install
+    - name: build
+      run: |
+        yarn build
+      env:
+        VUE_APP_TL_PACKAGE_PATH_URL: https://raw.githubusercontent.com/${{ github.head_ref }}/master/?.lua
+
