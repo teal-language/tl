@@ -4876,6 +4876,7 @@ show_type(var.t))
             t = types[i]
             i = i + 1
          end
+         t = resolve_tuple(t)
          if t.typename == "union" then
             for _, s in ipairs(t.types) do
                table.insert(stack, s)
