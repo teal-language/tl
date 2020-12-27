@@ -8,12 +8,14 @@ describe("forin", function()
             print(i)
          end
       ]])
+
       it("with two variables", util.check [[
          local t = { 1, 2, 3 }
          for i, v in ipairs(t) do
             print(i, v)
          end
       ]])
+
       it("with nested ipairs", util.check [[
          local t = { {"a", "b"}, {"c"} }
          for i, a in ipairs(t) do
@@ -22,6 +24,7 @@ describe("forin", function()
             end
          end
       ]])
+
       it("unknown with nested ipairs", util.lax_check([[
          local t = {}
          for i, a in ipairs(t) do
@@ -33,6 +36,7 @@ describe("forin", function()
          { msg = "a" },
          { msg = "b" },
       }))
+
       it("rejects nested unknown ipairs", util.check_type_error([[
          local t = {}
          for i, a in ipairs(t) do
@@ -47,6 +51,7 @@ describe("forin", function()
          { msg = "cannot use operator '..'" },
       }))
    end)
+
    it("with an explicit iterator", util.check [[
       local function iter(t): number
       end
@@ -55,16 +60,7 @@ describe("forin", function()
          print(i + 1)
       end
    ]])
-   it("with an iterator declared as a nominal (regression test for #183)", util.check [[
-      local type Iterator = function(): string
 
-      local function it(): Iterator
-          return nil
-      end
-
-      for _, v in it() do
-      end
-   ]])
    it("with an iterator declared as a function type", util.check [[
       local function it(): function(): string
          return nil
@@ -73,7 +69,34 @@ describe("forin", function()
       for _, v in it() do
       end
    ]])
-   describe("regressions", function()
+
+   describe("regression tests", function()
+      it("with an iterator declared as a nominal (#183)", util.check [[
+         local type Iterator = function(): string
+
+         local function it(): Iterator
+             return nil
+         end
+
+         for _, v in it() do
+         end
+      ]])
+
+      it("type inference for variadic return (#237)", util.check [[
+         local function unpacker<T>(arr: {{T}}): function(): T...
+            local i = 0
+            return function(): T...
+               i = i + 1
+               if not arr[i] then return end
+               return table.unpack(arr[i])
+            end
+         end
+
+         for a, b in unpacker{{'a', 'b'}, {'c', 'd'}, {'e', 'f'}} do
+            print(a .. b)
+         end
+      ]])
+
       it("accepts nested unresolved values", util.lax_check([[
          function fun(xss)
            for _, xs in pairs(xss) do
