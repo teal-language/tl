@@ -6380,6 +6380,14 @@ show_type(var.t))
       return UNKNOWN
    end
 
+
+   local function is_localizing_a_variable(node, i)
+      return node.exps and
+      node.exps[i] and
+      node.exps[i].kind == "variable" and
+      node.exps[i].tk == node.vars[i].tk
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -6461,7 +6469,7 @@ show_type(var.t))
 
                do
                   local old_var = find_var(var.tk, true)
-                  if old_var then
+                  if old_var and not is_localizing_a_variable(node, i) then
                      redeclaration_warning(var, old_var)
                   end
                end

@@ -30,6 +30,18 @@ describe("warnings", function()
          { y = 10, msg = "redeclaration of variable 'v' (originally declared at 7:17)" },
       }))
 
+      it("does not report localized globals", util.check_warnings([[
+         global x = 9
+
+         do
+            local x = x
+            print(x)
+         end
+
+         local os = os
+         print(os)
+      ]], { }))
+
       it("reports unused variables", util.check_warnings([[
          local foo = "bar"
       ]], {

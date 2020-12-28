@@ -6380,6 +6380,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return UNKNOWN
    end
 
+   -- is the i-th assignment in a local declaration of the form `x = x` ?
+   local function is_localizing_a_variable(node: Node, i: number): boolean
+      return node.exps
+         and node.exps[i]
+         and node.exps[i].kind == "variable"
+         and node.exps[i].tk == node.vars[i].tk
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -6461,7 +6469,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
                do
                   local old_var <const> = find_var(var.tk, true)
-                  if old_var then
+                  if old_var and not is_localizing_a_variable(node, i) then
                      redeclaration_warning(var, old_var)
                   end
                end
