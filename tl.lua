@@ -896,6 +896,8 @@ local Type = {}
 
 
 
+
+
 local Operator = {}
 
 
@@ -1793,39 +1795,37 @@ parse_argument_list = function(ps, i)
    return i, node
 end
 
-do
-   local function parse_argument_type(ps, i)
-      local is_va = false
-      if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+local function parse_argument_type(ps, i)
+   local is_va = false
+   if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+      i = i + 2
+   elseif ps.tokens[i].tk == "..." then
+      if ps.tokens[i + 1].tk == ":" then
          i = i + 2
-      elseif ps.tokens[i].tk == "..." then
-         if ps.tokens[i + 1].tk == ":" then
-            i = i + 2
-            is_va = true
-         else
-            return fail(ps, i, "cannot have untyped '...' when declaring the type of an argument")
-         end
+         is_va = true
+      else
+         return fail(ps, i, "cannot have untyped '...' when declaring the type of an argument")
       end
-
-      local typ; i, typ = parse_type(ps, i)
-      if typ then
-
-         typ.is_va = is_va
-      end
-
-      return i, typ, 0
    end
 
-   parse_argument_type_list = function(ps, i)
-      local list = new_type(ps, i, "tuple")
-      i = parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
+   local typ; i, typ = parse_type(ps, i)
+   if typ then
 
-      if list[#list] and list[#list].is_va then
-         list[#list].is_va = nil
-         list.is_va = true
-      end
-      return i, list
+      typ.is_va = is_va
    end
+
+   return i, typ, 0
+end
+
+parse_argument_type_list = function(ps, i)
+   local list = new_type(ps, i, "tuple")
+   i = parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
+
+   if list[#list] and list[#list].is_va then
+      list[#list].is_va = nil
+      list.is_va = true
+   end
+   return i, list
 end
 
 local function parse_local_function(ps, i)
@@ -2089,6 +2089,31 @@ parse_enum_body = function(ps, i, def, node)
    return i, node
 end
 
+local metamethod_names = {
+   ["__add"] = true,
+   ["__sub"] = true,
+   ["__mul"] = true,
+   ["__div"] = true,
+   ["__mod"] = true,
+   ["__pow"] = true,
+   ["__unm"] = true,
+   ["__idiv"] = true,
+   ["__band"] = true,
+   ["__bor"] = true,
+   ["__bxor"] = true,
+   ["__bnot"] = true,
+   ["__shl"] = true,
+   ["__shr"] = true,
+   ["__concat"] = true,
+   ["__len"] = true,
+   ["__eq"] = true,
+   ["__lt"] = true,
+   ["__le"] = true,
+   ["__index"] = true,
+   ["__newindex"] = true,
+   ["__call"] = true,
+}
+
 parse_record_body = function(ps, i, def, node)
    def.fields = {}
    def.field_order = {}
@@ -2134,6 +2159,12 @@ parse_record_body = function(ps, i, def, node)
       elseif ps.tokens[i].tk == "enum" and ps.tokens[i + 1].tk ~= ":" then
          i = parse_nested_type(ps, i, def, "enum", parse_enum_body)
       else
+         local is_metamethod = false
+         if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
+            is_metamethod = true
+            i = i + 1
+         end
+
          local v
          if ps.tokens[i].tk == "[" then
             i, v = parse_literal(ps, i + 1)
@@ -2148,8 +2179,9 @@ parse_record_body = function(ps, i, def, node)
          if not v then
             return fail(ps, i, "expected a variable name")
          end
+
          if ps.tokens[i].tk == ":" then
-            i = verify_tk(ps, i, ":")
+            i = i + 1
             local t
             i, t = parse_type(ps, i)
             if not t then
@@ -2157,14 +2189,27 @@ parse_record_body = function(ps, i, def, node)
             end
 
             local field_name = v.conststr or v.tk
-            if not def.fields[field_name] then
-               def.fields[field_name] = t
-               table.insert(def.field_order, field_name)
+            local fields = def.fields
+            local field_order = def.field_order
+            if is_metamethod then
+               if not def.meta_fields then
+                  def.meta_fields = {}
+                  def.meta_field_order = {}
+               end
+               fields = def.meta_fields
+               field_order = def.meta_field_order
+               if not metamethod_names[field_name] then
+                  fail(ps, i - 1, "not a valid metamethod: " .. field_name)
+               end
+            end
+            if not fields[field_name] then
+               fields[field_name] = t
+               table.insert(field_order, field_name)
             else
-               local prev_t = def.fields[field_name]
+               local prev_t = fields[field_name]
                if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[field_name] = new_type(ps, iv, "poly")
-                  def.fields[field_name].types = { prev_t, t }
+                  fields[field_name] = new_type(ps, iv, "poly")
+                  fields[field_name].types = { prev_t, t }
                elseif t.typename == "function" and prev_t.typename == "poly" then
                   table.insert(prev_t.types, t)
                else
@@ -3349,7 +3394,7 @@ local THREAD = a_type({ typename = "thread" })
 local INVALID = a_type({ typename = "invalid" })
 local UNKNOWN = a_type({ typename = "unknown" })
 local NOMINAL_FILE = a_type({ typename = "nominal", names = { "FILE" } })
-local NOMINAL_METATABLE = a_type({ typename = "nominal", names = { "METATABLE" } })
+local NOMINAL_METATABLE_OF_ALPHA = a_type({ typename = "nominal", names = { "metatable" }, typevals = { ALPHA } })
 
 local OS_DATE_TABLE = a_type({
    typename = "record",
@@ -3780,7 +3825,7 @@ local standard_library = {
    ["collectgarbage"] = a_type({ typename = "function", args = { STRING }, rets = { a_type({ typename = "union", types = { BOOLEAN, NUMBER } }), NUMBER, NUMBER } }),
    ["dofile"] = a_type({ typename = "function", args = { OPT_STRING }, rets = VARARG({ ANY }) }),
    ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
-   ["getmetatable"] = a_type({ typename = "function", args = { ANY }, rets = { NOMINAL_METATABLE } }),
+   ["getmetatable"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { NOMINAL_METATABLE_OF_ALPHA } }),
    ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
          a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
       }, }),
@@ -3843,7 +3888,7 @@ local standard_library = {
          a_type({ typename = "function", args = VARARG({ STRING, ANY }), rets = { NUMBER } }),
       },
    }),
-   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE }, rets = { ALPHA } }),
+   ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE_OF_ALPHA }, rets = { ALPHA } }),
    ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
    ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
    ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
@@ -3878,42 +3923,41 @@ local standard_library = {
          },
       }),
    }),
-   ["METATABLE"] = a_type({
+   ["metatable"] = a_type({
       typename = "typetype",
       def = a_type({
          typename = "record",
+         typeargs = { ARG_ALPHA },
          fields = {
-            ["__call"] = FUNCTION,
-            ["__gc"] = a_type({ typename = "function", args = { ANY }, rets = {} }),
+            ["__call"] = a_type({ typename = "function", args = VARARG({ ALPHA, ANY }), rets = VARARG({ ANY }) }),
+            ["__gc"] = a_type({ typename = "function", args = { ALPHA }, rets = {} }),
             ["__index"] = ANY,
-            ["__len"] = a_type({ typename = "function", args = { ANY }, rets = { NUMBER } }),
+            ["__len"] = a_type({ typename = "function", args = { ALPHA }, rets = { NUMBER } }),
             ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
             ["__newindex"] = ANY,
             ["__pairs"] = a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
                   a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
                }, }),
-            ["__tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
+            ["__tostring"] = a_type({ typename = "function", args = { ALPHA }, rets = { STRING } }),
             ["__name"] = STRING,
-
-
-            ["__add"] = FUNCTION,
-            ["__sub"] = FUNCTION,
-            ["__mul"] = FUNCTION,
-            ["__div"] = FUNCTION,
-            ["__idiv"] = FUNCTION,
-            ["__mod"] = FUNCTION,
-            ["__pow"] = FUNCTION,
-            ["__unm"] = FUNCTION,
-            ["__band"] = FUNCTION,
-            ["__bor"] = FUNCTION,
-            ["__bxor"] = FUNCTION,
-            ["__bnot"] = FUNCTION,
-            ["__shl"] = FUNCTION,
-            ["__shr"] = FUNCTION,
-            ["__concat"] = FUNCTION,
-            ["__eq"] = FUNCTION,
-            ["__lt"] = FUNCTION,
-            ["__le"] = FUNCTION,
+            ["__add"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__sub"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__mul"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__div"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__idiv"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__mod"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__pow"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__unm"] = a_type({ typename = "function", args = { ALPHA }, rets = { ANY } }),
+            ["__band"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__bor"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__bxor"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__bnot"] = a_type({ typename = "function", args = { ALPHA }, rets = { ANY } }),
+            ["__shl"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__shr"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__concat"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
+            ["__eq"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
+            ["__lt"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
+            ["__le"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
          },
       }),
    }),
@@ -4212,7 +4256,7 @@ fill_field_order(OS_DATE_TABLE)
 fill_field_order(DEBUG_GETINFO_TABLE)
 
 NOMINAL_FILE.found = standard_library["FILE"]
-NOMINAL_METATABLE.found = standard_library["METATABLE"]
+NOMINAL_METATABLE_OF_ALPHA.found = standard_library["metatable"]
 
 local compat53_code_cache = {}
 
@@ -5379,6 +5423,15 @@ show_type(var.t))
       table.remove(st)
    end
 
+   local unknown_dots = {}
+
+   local function add_unknown_dot(node, name)
+      if not unknown_dots[name] then
+         unknown_dots[name] = true
+         add_unknown(node, name)
+      end
+   end
+
    local type_check_function_call
    do
       local function try_match_func_args(node, f, args, is_method, argdelta)
@@ -5460,9 +5513,20 @@ show_type(var.t))
 
          if lax and is_unknown(func) then
             func = a_type({ typename = "function", args = VARARG({ UNKNOWN }), rets = VARARG({ UNKNOWN }) })
+            if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
+               add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
+            end
          end
 
          func = resolve_unary(func)
+
+         if func.typename ~= "function" and func.typename ~= "poly" then
+            if func.meta_fields and func.meta_fields["__call"] then
+               table.insert(args, 1, func)
+               func = func.meta_fields["__call"]
+               is_method = true
+            end
+         end
 
          args = args or {}
          local poly = func.typename == "poly" and func or { types = { func } }
@@ -5542,15 +5606,6 @@ show_type(var.t))
          local ret = check_call(node, func, args, is_method, argdelta)
          end_scope()
          return ret
-      end
-   end
-
-   local unknown_dots = {}
-
-   local function add_unknown_dot(node, name)
-      if not unknown_dots[name] then
-         unknown_dots[name] = true
-         add_unknown(node, name)
       end
    end
 
@@ -6275,20 +6330,8 @@ show_type(var.t))
          table.insert(rets, 1, BOOLEAN)
          return rets
       elseif node.e1.op and node.e1.op.op == ":" then
-         local func = node.e1.type
-         if func.typename == "function" or func.typename == "poly" then
-            table.insert(b, 1, node.e1.e1.type)
-            return type_check_function_call(node, func, b, true)
-         else
-            if lax and (is_unknown(func)) then
-               if node.e1.e1.kind == "variable" then
-                  add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-               end
-               return VARARG({ UNKNOWN })
-            else
-               return INVALID
-            end
-         end
+         table.insert(b, 1, node.e1.e1.type)
+         return type_check_function_call(node, a, b, true)
       else
          return type_check_function_call(node, a, b, false, argdelta)
       end

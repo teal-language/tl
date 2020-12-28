@@ -105,7 +105,7 @@ precedence, see below.
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  recordbody ::= [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {recordkey ‘:’ type} ‘end’
+*  recordbody ::= [typeargs] [‘{’ type ‘}’] {Name ‘=’ newtype} {[‘metamethod’] recordkey ‘:’ type} ‘end’
 
 *  recordkey ::= Name | ‘[’ LiteralString ‘]’
 
