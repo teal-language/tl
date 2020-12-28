@@ -3519,6 +3519,12 @@ local unop_types = {
    },
 }
 
+local unop_to_metamethod = {
+   ["#"] = "__len",
+   ["-"] = "__unm",
+   ["~"] = "__bnot",
+}
+
 local binop_types = {
    ["+"] = numeric_binop,
    ["-"] = numeric_binop,
@@ -3592,6 +3598,25 @@ local binop_types = {
          ["enum"] = STRING,
       },
    },
+}
+
+local binop_to_metamethod = {
+   ["+"] = "__add",
+   ["-"] = "__sub",
+   ["*"] = "__mul",
+   ["/"] = "__div",
+   ["%"] = "__mod",
+   ["^"] = "__pow",
+   ["//"] = "__idiv",
+   ["&"] = "__band",
+   ["|"] = "__bor",
+   ["~"] = "__bxor",
+   ["<<"] = "__shl",
+   [">>"] = "__shr",
+   [".."] = "__concat",
+   ["=="] = "__eq",
+   ["<"] = "__lt",
+   ["<="] = "__le",
 }
 
 
@@ -3932,7 +3957,7 @@ local standard_library = {
             ["__call"] = a_type({ typename = "function", args = VARARG({ ALPHA, ANY }), rets = VARARG({ ANY }) }),
             ["__gc"] = a_type({ typename = "function", args = { ALPHA }, rets = {} }),
             ["__index"] = ANY,
-            ["__len"] = a_type({ typename = "function", args = { ALPHA }, rets = { NUMBER } }),
+            ["__len"] = a_type({ typename = "function", args = { ALPHA }, rets = { ANY } }),
             ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
             ["__newindex"] = ANY,
             ["__pairs"] = a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
@@ -3940,24 +3965,24 @@ local standard_library = {
                }, }),
             ["__tostring"] = a_type({ typename = "function", args = { ALPHA }, rets = { STRING } }),
             ["__name"] = STRING,
-            ["__add"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__sub"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__mul"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__div"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__idiv"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__mod"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__pow"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__unm"] = a_type({ typename = "function", args = { ALPHA }, rets = { ANY } }),
-            ["__band"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__bor"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__bxor"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__bnot"] = a_type({ typename = "function", args = { ALPHA }, rets = { ANY } }),
-            ["__shl"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__shr"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__concat"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { ANY } }),
-            ["__eq"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
-            ["__lt"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
-            ["__le"] = a_type({ typename = "function", args = { ALPHA, ANY }, rets = { BOOLEAN } }),
+            ["__add"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__sub"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__mul"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__div"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__idiv"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__mod"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__pow"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__unm"] = a_type({ typename = "function", args = { ANY }, rets = { ANY } }),
+            ["__band"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__bor"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__bxor"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__bnot"] = a_type({ typename = "function", args = { ANY }, rets = { ANY } }),
+            ["__shl"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__shr"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__concat"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
+            ["__eq"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } }),
+            ["__lt"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } }),
+            ["__le"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } }),
          },
       }),
    }),
@@ -4289,20 +4314,18 @@ local function add_compat53_entries(program, used_set)
    end
 
    for _, name in ipairs(used_list) do
-      local code = compat53_code_cache[name]
-      if not code then
-
-         if name == "table.unpack" then
-            load_code(name, "local _tl_table_unpack = unpack or table.unpack")
-         elseif name == "bit32" then
-            load_code(name, "local bit32 = bit32 or require('bit32')")
-         else
-            if not compat53_loaded then
-               load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
-               compat53_loaded = true
-            end
-            load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
+      if name == "table.unpack" then
+         load_code(name, "local _tl_table_unpack = unpack or table.unpack")
+      elseif name == "bit32" then
+         load_code(name, "local bit32 = bit32 or require('bit32')")
+      elseif name == "mt" then
+         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
+      else
+         if not compat53_loaded then
+            load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
+            compat53_loaded = true
          end
+         load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
       end
    end
    program.y = 1
@@ -4354,6 +4377,18 @@ local function convert_node_to_compat_call(node, mod_name, fn_name, e1, e2)
    node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
    node.e2[1] = e1
    node.e2[2] = e2
+end
+
+local function convert_node_to_compat_mt_call(node, mt_name, which_self, e1, e2)
+   node.op.op = "@funcall"
+   node.op.arity = 2
+   node.op.prec = 100
+   node.e1 = { y = node.y, x = node.x, kind = "identifier", tk = "_tl_mt" }
+   node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
+   node.e2[1] = { y = node.y, x = node.x, kind = "string", tk = "\"" .. mt_name .. "\"" }
+   node.e2[2] = { y = node.y, x = node.x, kind = "number", tk = tostring(which_self) }
+   node.e2[3] = e1
+   node.e2[4] = e2
 end
 
 local function init_globals(lax)
@@ -7099,8 +7134,12 @@ show_type(var.t))
                a = ua
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
+               local metamethod
                if not node.type then
-                  if lax and is_unknown(a) then
+                  metamethod = a.meta_fields and a.meta_fields[unop_to_metamethod[node.op.op] or ""]
+                  if metamethod then
+                     node.type = resolve_unary(type_check_function_call(node, metamethod, { a }, false, 0))
+                  elseif lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", orig_a)
@@ -7108,8 +7147,13 @@ show_type(var.t))
                end
 
                if node.op.op == "~" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
-                  all_needs_compat53["bit32"] = true
-                  convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
+                  if metamethod then
+                     all_needs_compat53["mt"] = true
+                     convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
+                  else
+                     all_needs_compat53["bit32"] = true
+                     convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
+                  end
                end
 
             elseif node.op.arity == 2 and binop_types[node.op.op] then
@@ -7121,8 +7165,17 @@ show_type(var.t))
                b = ub
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
+               local metamethod
+               local meta_self = 1
                if not node.type then
-                  if lax and (is_unknown(a) or is_unknown(b)) then
+                  metamethod = a.meta_fields and a.meta_fields[binop_to_metamethod[node.op.op] or ""]
+                  if not metamethod then
+                     metamethod = b.meta_fields and b.meta_fields[binop_to_metamethod[node.op.op] or ""]
+                     meta_self = 2
+                  end
+                  if metamethod then
+                     node.type = resolve_unary(type_check_function_call(node, metamethod, { a, b }, false, 0))
+                  elseif lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
@@ -7130,11 +7183,21 @@ show_type(var.t))
                end
 
                if node.op.op == "//" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
-                  local div = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
-                  convert_node_to_compat_call(node, "math", "floor", div)
+                  if metamethod then
+                     all_needs_compat53["mt"] = true
+                     convert_node_to_compat_mt_call(node, "__idiv", meta_self, node.e1, node.e2)
+                  else
+                     local div = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
+                     convert_node_to_compat_call(node, "math", "floor", div)
+                  end
                elseif bit_operators[node.op.op] and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
-                  all_needs_compat53["bit32"] = true
-                  convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
+                  if metamethod then
+                     all_needs_compat53["mt"] = true
+                     convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_self, node.e1, node.e2)
+                  else
+                     all_needs_compat53["bit32"] = true
+                     convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
+                  end
                end
             else
                error("unknown node op " .. node.op.op)

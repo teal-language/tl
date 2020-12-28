@@ -35,10 +35,12 @@ describe("string method call", function()
    end)
    describe("chained", function()
       it("pass", util.gen([[
+
          print(("xy"):rep(12):sub(1,3))
          print(("%s"):format"%s":format(2))
          print(("%s b"):format"a":upper())
       ]], [[
+         local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local string = _tl_compat53 and _tl_compat53.string or string
          print(("xy"):rep(12):sub(1,3))
          print(("%s"):format("%s"):format(2))
          print(("%s b"):format("a"):upper())
