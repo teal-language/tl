@@ -280,17 +280,18 @@ local function check(lax, code, unknowns)
       if unknowns then
          assert.same(#unknowns, #unks, "Expected same number of unknowns:")
          for i, u in ipairs(unknowns) do
+            local got = unks[i] or {}
             if u.y then
-               batch:add(assert.same, u.y, unks[i].y)
+               batch:add(assert.same, u.y, got.y)
             end
             if u.x then
-               batch:add(assert.same, u.x, unks[i].x)
+               batch:add(assert.same, u.x, got.x)
             end
             if u.msg then
-               batch:add(assert.same, u.msg, unks[i].msg)
+               batch:add(assert.same, u.msg, got.msg or "")
             end
             if u.filename then
-               batch:add(assert.same, u.filename, unks[i].filename)
+               batch:add(assert.same, u.filename, got.filename or "")
             end
          end
       end
@@ -309,17 +310,18 @@ local function check_type_error(lax, code, type_errors)
       local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
       batch:add(assert.same, #type_errors, #errors, "Expected same number of errors:")
       for i, err in ipairs(type_errors) do
+         local got = errors[i] or {}
          if err.y then
-            batch:add(assert.same, err.y, errors[i].y,  "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, err.y, got.y,  "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            batch:add(assert.same, err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, err.x, got.x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            batch:add(assert.match, err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, err.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if err.filename then
-            batch:add(assert.match, err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, err.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
       batch:assert()
@@ -386,17 +388,18 @@ function util.check_syntax_error(code, syntax_errors)
       local batch = batch_assertions()
       batch:add(assert.same, #syntax_errors, #errors, "Expected same amount of syntax errors:")
       for i, err in ipairs(syntax_errors) do
+         local got = errors[i] or {}
          if err.y then
-            batch:add(assert.same, err.y, errors[i].y, "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, err.y, got.y, "[" .. i .. "] Expected same y location:")
          end
          if err.x then
-            batch:add(assert.same, err.x, errors[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, err.x, got.x,  "[" .. i .. "] Expected same x location:")
          end
          if err.msg then
-            batch:add(assert.match, err.msg, errors[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, err.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if err.filename then
-            batch:add(assert.match, err.filename, errors[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, err.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
       batch:assert()
@@ -412,18 +415,18 @@ function util.check_warnings(code, warnings)
       local batch = batch_assertions()
       batch:add(assert.same, #warnings, #result.warnings, "Expected same amount of warnings:")
       for i, warning in ipairs(warnings) do
-
+         local got = result.warnings[i] or {}
          if warning.y then
-            batch:add(assert.same, warning.y, result.warnings[i].y, "[" .. i .. "] Expected same y location:")
+            batch:add(assert.same, warning.y, got.y, "[" .. i .. "] Expected same y location:")
          end
          if warning.x then
-            batch:add(assert.same, warning.x, result.warnings[i].x,  "[" .. i .. "] Expected same x location:")
+            batch:add(assert.same, warning.x, got.x,  "[" .. i .. "] Expected same x location:")
          end
          if warning.msg then
-            batch:add(assert.match, warning.msg, result.warnings[i].msg, 1, true,  "[" .. i .. "] Expected messages to match:")
+            batch:add(assert.match, warning.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
          end
          if warning.filename then
-            batch:add(assert.match, warning.filename, result.warnings[i].filename, 1, true,  "[" .. i .. "] Expected filenames to match:")
+            batch:add(assert.match, warning.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
          end
       end
       batch:assert()
