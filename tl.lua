@@ -2397,12 +2397,22 @@ local function parse_return(ps, i)
    return i, node
 end
 
-local function store_field_in_record(name, def, nt)
-   if def.fields[name] then
-      return false
+local function store_field_in_record(ps, i, field_name, t, fields, field_order)
+   if not fields[field_name] then
+      fields[field_name] = t
+      table.insert(field_order, field_name)
+   else
+      local prev_t = fields[field_name]
+      if t.typename == "function" and prev_t.typename == "function" then
+         fields[field_name] = new_type(ps, i, "poly")
+         fields[field_name].types = { prev_t, t }
+      elseif t.typename == "function" and prev_t.typename == "poly" then
+         table.insert(prev_t.types, t)
+      else
+         fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
+         return false
+      end
    end
-   def.fields[name] = nt.newtype
-   table.insert(def.field_order, name)
    return true
 end
 
@@ -2426,10 +2436,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
       nt.newtype.def = rdef
    end
 
-   local ok = store_field_in_record(v.tk, def, nt)
-   if not ok then
-      fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-   end
+   store_field_in_record(ps, i, v.tk, nt.newtype, def.fields, def.field_order)
    return i
 end
 
@@ -2505,6 +2512,7 @@ parse_record_body = function(ps, i, def, node)
          end
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
+         local iv = i
          local v
          i, v = verify_kind(ps, i, "identifier", "type_identifier")
          if not v then
@@ -2517,10 +2525,7 @@ parse_record_body = function(ps, i, def, node)
             return fail(ps, i, "expected a type definition")
          end
 
-         local ok = store_field_in_record(v.tk, def, nt)
-         if not ok then
-            return fail(ps, i, "attempt to redeclare field '" .. v.tk .. "' (only functions can be overloaded)")
-         end
+         store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
       elseif ps.tokens[i].tk == "record" and ps.tokens[i + 1].tk ~= ":" then
          i = parse_nested_type(ps, i, def, "record", parse_record_body)
       elseif ps.tokens[i].tk == "enum" and ps.tokens[i + 1].tk ~= ":" then
@@ -2569,20 +2574,7 @@ parse_record_body = function(ps, i, def, node)
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
             end
-            if not fields[field_name] then
-               fields[field_name] = t
-               table.insert(field_order, field_name)
-            else
-               local prev_t = fields[field_name]
-               if t.typename == "function" and prev_t.typename == "function" then
-                  fields[field_name] = new_type(ps, iv, "poly")
-                  fields[field_name].types = { prev_t, t }
-               elseif t.typename == "function" and prev_t.typename == "poly" then
-                  table.insert(prev_t.types, t)
-               else
-                  return fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
-               end
-            end
+            store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
             if next_word == "record" or next_word == "enum" then
