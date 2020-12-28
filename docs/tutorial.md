@@ -421,7 +421,7 @@ where the record type is defined:
 
 ```
 function Point.new(x: number, y: number): Point
-   local self: Point = setmetatable({}, { __index = Point })
+   local self = setmetatable({} as Point, { __index = Point })
    self.x = x or 0
    self.y = y or 0
    return self

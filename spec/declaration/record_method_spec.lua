@@ -164,10 +164,10 @@ describe("record method", function()
                __index: Point
             end
 
-            Point.__index = Point as Point
+            Point.__index = Point
 
             function Point.new(x: number, y: number): Point
-               local self: Point = setmetatable({}, Point as METATABLE)
+               local self = setmetatable({} as Point, Point as metatable<Point>)
 
                self.x = x or 0
                self.y = y or 0
@@ -217,7 +217,10 @@ describe("record method", function()
    end)
 
    it("record method assignment must match record type", util.check_type_error([[
-      local foo_mt: METATABLE = {}
+      local type Foo = record
+         x: string
+      end
+      local foo_mt: metatable<Foo> = {}
       foo_mt.__tostring = function()
          return "hello"
       end
@@ -234,12 +237,12 @@ describe("record method", function()
                y: number
             end
 
-            local PointMetatable: METATABLE = {
+            local PointMetatable: metatable<Point> = {
                __index = Point
             }
 
             function Point.new(x: number, y: number): Point
-               local self = setmetatable({}, PointMetatable) as Point
+               local self = setmetatable({} as Point, PointMetatable)
 
                self.x = x or 0
                self.y = y or 0
