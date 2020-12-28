@@ -57,6 +57,8 @@ local function validate_config(config)
       skip_compat53 = "boolean",
       disable_warnings = "{string}",
       warning_error = "{string}",
+      build_file = "string",
+      build_file_output_dir = "string"
    }
 
    for k, v in pairs(config) do
@@ -129,11 +131,18 @@ local function get_config()
    end
    config_from_file = true
 
+   
+
    local ok, user_config = pcall(conf)
    if not ok then
       die("Error loading config:\n" .. err)
    end
 
+   if not user_config.build_file then
+      if lfs.attributes("./build.tl","mode") == "file" then
+         user_config.build_file = "./build.tl"
+      end
+   end
    -- Merge tlconfig with the default config
    if user_config then
       for k, v in pairs(user_config) do
@@ -314,6 +323,11 @@ if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
    os.exit(1)
 end
 
+if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
+   print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
+   tlconfig["build_file_output_dir"] = "./generated_code"
+end
+
 local function report_errors(category, errors)
    if not errors then
       return false
@@ -389,6 +403,13 @@ end
 
 for _, include in ipairs(tlconfig["include_dir"]) do
    prepend_to_path(include)
+end
+
+local build_path
+if tlconfig["build_file"] then
+   build_path = "/tmp/tl_temp_out" .. os.time(os.date("!*t"))
+   lfs.mkdir(build_path)
+   prepend_to_path(build_path)
 end
 
 local modules = tlconfig.preload_modules
@@ -498,6 +519,20 @@ local function type_check_and_load(filename, modules)
    return chunk
 end
 
+--------------------------------------------------------------------
+--                        RUN BUILD SCRIPT                        --
+--------------------------------------------------------------------
+local script = {}
+if tlconfig.build_file then
+   script = type_check_and_load(tlconfig.build_file,modules)()
+end
+local full_path
+if script["gen_code"] then
+   full_path = build_path .. "/" .. tlconfig["build_file_output_dir"]
+   lfs.rmdir(full_path)
+   lfs.mkdir(full_path)
+   script["gen_code"](full_path)
+end
 --------------------------------------------------------------------
 --                            RUN                                 --
 --------------------------------------------------------------------
