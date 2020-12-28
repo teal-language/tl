@@ -4486,6 +4486,72 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function error_in_type(where, msg, ...)
+      local n = select("#", ...)
+      if n > 0 then
+         local showt = {}
+         for i = 1, n do
+            local t = select(i, ...)
+            if t.typename == "invalid" then
+               return nil
+            end
+            showt[i] = show_type(t)
+         end
+         msg = msg:format(_tl_table_unpack(showt))
+      end
+
+      return {
+         y = where.y,
+         x = where.x,
+         msg = msg,
+         filename = where.filename or filename,
+      }
+   end
+
+   local function type_error(t, msg, ...)
+      local e = error_in_type(t, msg, ...)
+      if e then
+         table.insert(errors, e)
+         return true
+      else
+         return false
+      end
+   end
+
+   local resolve_unary = nil
+
+   local function is_valid_union(typ)
+
+
+      local n_table_types = 0
+      local n_function_types = 0
+      local n_string_enum = 0
+      local has_primitive_string_type = false
+      for _, t in ipairs(typ.types) do
+         t = resolve_unary(t)
+         if table_types[t.typename] then
+            n_table_types = n_table_types + 1
+            if n_table_types > 1 then
+               return false, "cannot discriminate a union between multiple table types: %s"
+            end
+         elseif t.typename == "function" then
+            n_function_types = n_function_types + 1
+            if n_function_types > 1 then
+               return false, "cannot discriminate a union between multiple function types: %s"
+            end
+         elseif t.typename == "enum" or (t.typename == "string" and not has_primitive_string_type) then
+            n_string_enum = n_string_enum + 1
+            if n_string_enum > 1 then
+               return false, "cannot discriminate a union between multiple string/enum types: %s"
+            end
+            if t.typename == "string" then
+               has_primitive_string_type = true
+            end
+         end
+      end
+      return true
+   end
+
    local no_nested_types = {
       ["string"] = true,
       ["number"] = true,
@@ -4496,7 +4562,7 @@ tl.type_check = function(ast, opts)
       ["nil"] = true,
    }
 
-   local function resolve_typevars(t, seen)
+   local function resolve_typevars(t, seen, where)
 
       if t.typename and (no_nested_types[t.typename] or
          (t.typename == "nominal" and not t.typevals)) then
@@ -4526,7 +4592,7 @@ tl.type_check = function(ast, opts)
       for k, v in pairs(t) do
          local cp = copy
          if type(v) == "table" then
-            cp[k] = resolve_typevars(v, seen)
+            cp[k] = resolve_typevars(v, seen, where)
          else
             cp[k] = v
          end
@@ -4534,6 +4600,13 @@ tl.type_check = function(ast, opts)
 
       if clear_tk then
          copy.tk = nil
+      end
+
+      if copy.typename == "union" then
+         local ok, err = is_valid_union(copy)
+         if not ok then
+            type_error(where or t, err, t)
+         end
       end
 
       return copy
@@ -4597,38 +4670,6 @@ tl.type_check = function(ast, opts)
          return NIL
       end
       return t
-   end
-
-   local function error_in_type(where, msg, ...)
-      local n = select("#", ...)
-      if n > 0 then
-         local showt = {}
-         for i = 1, n do
-            local t = select(i, ...)
-            if t.typename == "invalid" then
-               return nil
-            end
-            showt[i] = show_type(t)
-         end
-         msg = msg:format(_tl_table_unpack(showt))
-      end
-
-      return {
-         y = where.y,
-         x = where.x,
-         msg = msg,
-         filename = where.filename or filename,
-      }
-   end
-
-   local function type_error(t, msg, ...)
-      local e = error_in_type(t, msg, ...)
-      if e then
-         table.insert(errors, e)
-         return true
-      else
-         return false
-      end
    end
 
    local function node_warning(node, fmt, ...)
@@ -5027,8 +5068,6 @@ show_type(var.t))
       end
    end
 
-   local resolve_unary = nil
-
    local known_table_types = {
       array = true,
       map = true,
@@ -5038,38 +5077,6 @@ show_type(var.t))
    }
    is_known_table_type = function(t)
       return known_table_types[t.typename]
-   end
-
-   local function is_valid_union(typ)
-
-
-      local n_table_types = 0
-      local n_function_types = 0
-      local n_string_enum = 0
-      local has_primitive_string_type = false
-      for _, t in ipairs(typ.types) do
-         t = resolve_unary(t)
-         if table_types[t.typename] then
-            n_table_types = n_table_types + 1
-            if n_table_types > 1 then
-               return false, "cannot discriminate a union between multiple table types: %s"
-            end
-         elseif t.typename == "function" then
-            n_function_types = n_function_types + 1
-            if n_function_types > 1 then
-               return false, "cannot discriminate a union between multiple function types: %s"
-            end
-         elseif t.typename == "enum" or (t.typename == "string" and not has_primitive_string_type) then
-            n_string_enum = n_string_enum + 1
-            if n_string_enum > 1 then
-               return false, "cannot discriminate a union between multiple string/enum types: %s"
-            end
-            if t.typename == "string" then
-               has_primitive_string_type = true
-            end
-         end
-      end
-      return true
    end
 
    local expand_type
@@ -5840,7 +5847,7 @@ show_type(var.t))
          for i, tt in ipairs(t.typevals) do
             add_var(nil, def.typeargs[i].typearg, tt)
          end
-         local ret = resolve_typevars(def)
+         local ret = resolve_typevars(def, nil, t)
          end_scope()
          return ret
       elseif t.typevals then

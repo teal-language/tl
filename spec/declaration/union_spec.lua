@@ -55,6 +55,22 @@ describe("union declaration", function()
       { msg = "cannot discriminate a union between multiple table types" },
    }))
 
+   it("cannot declare a union between multiple records indirectly (#290)", util.check_type_error([[
+      local record R<A, B>
+         x: A | B
+      end
+
+      local r: R<number, string> = {}
+      r.x = 1
+      r.x = "hello"
+
+      local oops: R<{number}, {string}> = {}
+      oops.x = {1, 2, 3}
+      oops.x = {"hello", "world"}
+   ]], {
+      { y = 9, msg = "cannot discriminate a union between multiple table types" },
+   }))
+
    it("cannot declare a union between multiple function types", util.check_type_error([[
       local t: function():(number) | function():(string)
    ]], {
