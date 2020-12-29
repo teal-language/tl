@@ -857,13 +857,15 @@ end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 local build_ref = {}
-local build_dir, build_paths, emptyref = traverse(build_path,project.emptyref,true,build_ref)
 project.generatedref = build_ref
-for k,v in pairs(build_dir) do
-   project.dir[k] = v
-end
-for k,v in pairs(build_paths) do
-   project.paths[k] = v
+if build_path then
+   local build_dir, build_paths, emptyref = traverse(build_path,project.emptyref,true,build_ref)
+   for k,v in pairs(build_dir) do
+      project.dir[k] = v
+   end
+   for k,v in pairs(build_paths) do
+      project.paths[k] = v
+   end
 end
 
 project.source_file_map = {}
@@ -873,7 +875,8 @@ if cmd == "build" then
       local project_source = project:find(tlconfig["source_dir"])
       if not project_source then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' doesn't exist")
-      elseif getmetatable(project_source).empty == project.emptyref then
+      local meta_table = getmetatable(project_source)
+      elseif meta_table and meta_table.empty == project.emptyref then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' is not a directory")
       end
    end
