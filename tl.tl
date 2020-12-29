@@ -7055,6 +7055,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["paren"] = {
          after = function(node: Node, children: {Type}): Type
+            node.facts = node.e1 and node.e1.facts
             node.type = resolve_unary(children[1])
          end,
       },

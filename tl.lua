@@ -7055,6 +7055,7 @@ show_type(var.t))
       },
       ["paren"] = {
          after = function(node, children)
+            node.facts = node.e1 and node.e1.facts
             node.type = resolve_unary(children[1])
          end,
       },

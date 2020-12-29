@@ -89,38 +89,42 @@ describe("flow analysis with is", function()
          end
       ]])
 
-      it("resolves partially", util.check [[
+      it("resolves partially", util.check_type_error([[
          local v: number | string | {boolean}
          if v is number then
             print(v + 1)
          else
-            -- v is string | {boolean}
-            v = "hello"
-            v = {true, false}
+            print(v:upper()) -- v is string | {boolean}
          end
-      ]])
+      ]], {
+         { msg = "cannot index something that is not a record: string | {boolean}" }
+      }))
 
-      it("builds union types with is and or", util.check [[
-         local v: number | string | {boolean}
-         if (v is number) or (v is string) then
-            v = 2
-            v = "hello"
+      it("builds union types with is and or", util.check_type_error([[
+         local v: number | boolean | {string}
+         if (v is number) or (v is boolean) then
+            print(v + 1) -- ERR
          else
-            -- v is {boolean}
-            v = {true, false}
+            for _, s in ipairs(v) do
+               print(s:upper())
+            end
          end
-      ]])
+      ]], {
+         { msg = "cannot use operator '+' for types number | boolean" },
+      }))
 
-      it("builds union types with is and or (parses priorities correctly)", util.check [[
-         local v: number | string | {boolean}
-         if v is number or v is string then
-            v = 2
-            v = "hello"
+      it("builds union types with is and or (parses priorities correctly)", util.check_type_error([[
+         local v: number | boolean | {string}
+         if v is number or v is boolean then
+            print(v + 1) -- ERR
          else
-            -- v is {boolean}
-            v = {true, false}
+            for _, s in ipairs(v) do
+               print(s:upper())
+            end
          end
-      ]])
+      ]], {
+         { msg = "cannot use operator '+' for types number | boolean" },
+      }))
 
       it("resolves incrementally with elseif and negation", util.check [[
          local v: number | string | {boolean}
