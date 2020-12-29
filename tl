@@ -325,7 +325,7 @@ end
 
 if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
    print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
-   tlconfig["build_file_output_dir"] = "./generated_code"
+   tlconfig["build_file_output_dir"] = "generated_code"
 end
 
 local function report_errors(category, errors)
@@ -526,12 +526,12 @@ local script = {}
 if tlconfig.build_file then
    script = type_check_and_load(tlconfig.build_file,modules)()
 end
-local full_path
+
 if script["gen_code"] then
-   full_path = build_path .. "/" .. tlconfig["build_file_output_dir"]
-   lfs.rmdir(full_path)
-   lfs.mkdir(full_path)
-   script["gen_code"](full_path)
+   -- TODO: better path concationation
+   lfs.rmdir(build_path .. "/" .. tlconfig["build_file_output_dir"] )
+   lfs.mkdir(build_path .. "/" .. tlconfig["build_file_output_dir"])
+   script["gen_code"](build_path .. "/" .. tlconfig["build_file_output_dir"])
 end
 --------------------------------------------------------------------
 --                            RUN                                 --
@@ -743,18 +743,19 @@ local function remove_leading_path(leading_part, path)
    return path
 end
 
-local function traverse(dirname, emptyref)
+local function traverse(dirname, emptyref,is_generated,generated_ref)
    local files = {}
    local paths = {} --lookup table for string paths to help
    -- with pattern matching while iterating over a project
    -- paths[files.foo.bar] -> "foo/bar"
    emptyref = emptyref or {}
+   generated_ref = generated_ref or {}
    for file in lfs.dir(dirname) do
       if file ~= "." and file ~= ".." then
          if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
             local p
             local prefix = dirname
-            files[file], p = traverse(path_concat(dirname, file), emptyref)
+            files[file], p = traverse(path_concat(dirname, file), emptyref,is_generated,generated_ref)
             paths[files[file]] = file
             for k, v in pairs(p) do
                paths[k] = path_concat(file, v)
@@ -765,7 +766,11 @@ local function traverse(dirname, emptyref)
             -- names so we use a table with specific metatable to mark
             -- something as the end of a traversal to have a property attached
             -- to the table, without creating an entry in the table
-            files[file] = setmetatable({}, emptyref)
+            local meta_table = {empty=emptyref}
+            if is_generated then
+               meta_table["generated"] = generated_ref
+            end
+            files[file] = setmetatable({}, meta_table)
             paths[files[file]] = file
          end
       end
@@ -773,8 +778,8 @@ local function traverse(dirname, emptyref)
    return files, paths, emptyref
 end
 
-local project = {} -- This will probably get exposed in the api if that happens
-function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the files in the project adhering to the provided patterns
+local project = {}
+function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
    local iter_dir
    if dirname then
       iter_dir = project:find(dirname)
@@ -792,28 +797,35 @@ function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the 
          if dirname then
             path = remove_leading_path(dirname, path)
          end
-         if getmetatable(file) == self.emptyref then
+         local meta_table = getmetatable(file)
+         if meta_table and meta_table.empty == self.emptyref then
+            
             local include = true
 
             if tlconfig["files"] then
                include = false
             end
-            -- TODO: print out patterns that include/exclude paths to help
-            -- users debug tlconfig.lua (this is why match returns the array index)
-            if #inc_patt_arr > 0 then
-               local idx = match(inc_patt_arr, path)
-               if not idx then
-                  include = false
+            if build_path and meta_table.generated and meta_table.generated == self.generatedref then
+               coroutine.yield(build_path .. "/" .. path,true)
+            else
+
+               -- TODO: print out patterns that include/exclude paths to help
+               -- users debug tlconfig.lua (this is why match returns the array index)
+               if #inc_patt_arr > 0 then
+                  local idx = match(inc_patt_arr, path)
+                  if not idx then
+                     include = false
+                  end
                end
-            end
-            if #exc_patt_arr > 0 then
-               local idx = match(exc_patt_arr, path)
-               if include and idx then
-                  include = false
+               if #exc_patt_arr > 0 then
+                  local idx = match(exc_patt_arr, path)
+                  if include and idx then
+                     include = false
+                  end
                end
-            end
-            if include then
-               coroutine.yield(self.paths[file])
+               if include then
+                  coroutine.yield(self.paths[file],false)
+               end
             end
          else
             iter(file, fname)
@@ -821,6 +833,14 @@ function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the 
       end
    end
    return coroutine.wrap(iter), iter_dir
+end
+-- This will probably get exposed in the api if that happens
+function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the files in the project adhering to the provided patterns
+   local func = project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
+   return function(a)
+      local res = func(a)
+      return res
+   end
 end
 function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
    if not path then return nil end
@@ -836,6 +856,16 @@ function project:find(path) -- allow for indexing with paths project:find("foo/b
 end
 
 project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
+local build_ref = {}
+local build_dir, build_paths, emptyref = traverse(build_path,project.emptyref,true,build_ref)
+project.generatedref = build_ref
+for k,v in pairs(build_dir) do
+   project.dir[k] = v
+end
+for k,v in pairs(build_paths) do
+   project.paths[k] = v
+end
+
 project.source_file_map = {}
 if cmd == "build" then
    if tlconfig["source_dir"] then
@@ -843,7 +873,7 @@ if cmd == "build" then
       local project_source = project:find(tlconfig["source_dir"])
       if not project_source then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' doesn't exist")
-      elseif getmetatable(project_source) == project.emptyref then
+      elseif getmetatable(project_source).empty == project.emptyref then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' is not a directory")
       end
    end
@@ -898,14 +928,18 @@ if cmd == "build" then
          check_parent_dirs(project.source_file_map[fname])
       end
    end
-   for path in project:files(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
+   for path,is_build in project:file_with_is_build(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
       --TODO: make this better
       local valid = true
       if not (path:match("%.tl$") and not path:match("%.d%.tl$")) then
          valid = false
       end
       if valid then
-         project.source_file_map[path] = path:gsub("%.tl$", ".lua")
+         local work_on = path:gsub("%.tl$", ".lua")
+         if is_build then
+            work_on = work_on:gsub(build_path,"")
+         end
+         project.source_file_map[path] = work_on
          if tlconfig["build_dir"] then
             if tlconfig["source_dir"] then
                project.source_file_map[path] = remove_leading_path(tlconfig["source_dir"], project.source_file_map[path])
