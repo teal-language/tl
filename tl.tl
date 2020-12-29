@@ -6577,17 +6577,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
       },
       ["elseif"] = {
-         before = function(_node: Node)
+         before = function(node: Node)
             end_scope()
             begin_scope()
-         end,
-         before_statements = function(node: Node)
             local f = facts_not(node.parent_if.exp.facts)
             for e = 1, node.elseif_n - 1 do
                f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.facts), node)
             end
-            f = facts_and(f, node.exp.facts, node)
             apply_facts(node.exp, f)
+         end,
+         before_statements = function(node: Node)
+            apply_facts(node.exp, node.exp.facts)
          end,
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE

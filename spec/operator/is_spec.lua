@@ -77,6 +77,18 @@ describe("flow analysis with is", function()
          end
       ]])
 
+      it("can use inferred facts in elseif expression", util.check [[
+         local record Rec
+            op: string
+         end
+         local v: string | Rec
+         if v is string then
+            v = v:upper()
+         elseif v.op:match("something") then
+            print(v.op:upper())
+         end
+      ]])
+
       it("resolves partially", util.check [[
          local v: number | string | {boolean}
          if v is number then
