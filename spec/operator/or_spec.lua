@@ -26,6 +26,19 @@ describe("or", function()
       { msg = "cannot use operator 'or' for types R2 and R1" }
    }))
 
+   it("or works with subtypes", util.check [[
+      local record R1
+         x: string
+         y: string
+      end
+      local r1: R1
+
+      local u: string | R1 = "hello"
+
+      local u2 = u or r1
+      u2 = "world" -- u2 is a u
+   ]])
+
    it("string or enum matches enum", util.check [[
       local type Dir = enum
          "left"

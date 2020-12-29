@@ -7121,7 +7121,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif node.op.op == "or" and b.typename == "emptytable" then
                node.facts = nil
                node.type = resolve_tuple(a)
-            elseif node.op.op == "or" and same_type(ua, ub) then
+            elseif node.op.op == "or" and is_a(ub, ua) then
                node.facts = facts_or(node.e1.facts, node.e2.facts)
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
@@ -7132,12 +7132,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                     or  (ua.typename == "string" and ub.typename == "enum" and is_a(ua, ub))) then
                node.facts = nil
                node.type = (ua.typename == "enum" and ua or ub)
-            elseif node.op.op == "or"
-                   and (a.typename == "nominal" or a.typename == "map")
-                   and is_record_type(b)
-                   and is_a(b, a) then
-               node.facts = nil
-               node.type = resolve_tuple(a)
             elseif node.op.op == "==" or node.op.op == "~=" then
                if is_a(a, b, true) or is_a(b, a, true) then
                   node.type = BOOLEAN
