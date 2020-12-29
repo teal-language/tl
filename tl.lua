@@ -6017,25 +6017,27 @@ show_type(var.t))
          end
       elseif node.e2.kind == "string" or node.e2.kind == "enum_item" then
          return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
-      elseif is_record_type(a) and b.typename == "enum" then
-         local field_names = {}
-         for k, _ in pairs(b.enumset) do
-            table.insert(field_names, k)
-         end
-         table.sort(field_names)
-         for _, k in ipairs(field_names) do
-            if not a.fields[k] then
-               return node_error(idxnode, "enum value '" .. k .. "' is not a field in %s", a)
+      elseif is_record_type(a) then
+         if b.typename == "enum" then
+            local field_names = {}
+            for k, _ in pairs(b.enumset) do
+               table.insert(field_names, k)
             end
-         end
-         return match_all_record_field_names(idxnode, a, field_names,
+            table.sort(field_names)
+            for _, k in ipairs(field_names) do
+               if not a.fields[k] then
+                  return node_error(idxnode, "enum value '" .. k .. "' is not a field in %s", a)
+               end
+            end
+            return match_all_record_field_names(idxnode, a, field_names,
 "cannot index, not all enum values map to record fields of the same type")
-      elseif lax and is_unknown(a) then
-         return UNKNOWN
-      else
-         if is_a(b, STRING) then
+         elseif is_a(b, STRING) then
             return node_error(idxnode, "cannot index object of type %s with a string, consider using an enum", orig_a)
          end
+      end
+      if lax and is_unknown(a) then
+         return UNKNOWN
+      else
          return node_error(idxnode, "cannot index object of type %s with %s", orig_a, orig_b)
       end
    end
