@@ -138,15 +138,17 @@ local function get_config()
       die("Error loading config:\n" .. err)
    end
 
-   if not user_config.build_file then
-      if lfs.attributes("./build.tl","mode") == "file" then
-         user_config.build_file = "./build.tl"
-      end
-   end
+   
    -- Merge tlconfig with the default config
    if user_config then
       for k, v in pairs(user_config) do
          config[k] = v
+      end
+   end
+
+   if not config.build_file then
+      if lfs.attributes("./build.tl","mode") == "file" then
+         config.build_file = "./build.tl"
       end
    end
 
