@@ -19,7 +19,7 @@ describe("Uncaught compiler errors", function()
             ["my_script.tl"] = [[local mod = require("my_module"); mod.do_things()]],
          },
          cmd = "run",
-         args = "my_script.tl",
+         args = { "my_script.tl" },
          generated_files = {},
          popen = {
             status = nil,

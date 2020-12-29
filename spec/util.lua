@@ -5,16 +5,20 @@ local assert = require("luassert")
 local lfs = require("lfs")
 local current_dir = assert(lfs.currentdir(), "unable to get current dir")
 local tl_executable = current_dir .. "/tl"
-local tl_lib = current_dir .. "/tl.lua"
 
 local t_unpack = unpack or table.unpack
+
+util.tl_executable = tl_executable
 
 function util.do_in(dir, func, ...)
    local cdir = assert(lfs.currentdir())
    assert(lfs.chdir(dir))
    local res = {pcall(func, ...)}
    assert(lfs.chdir(cdir))
-   return select(2, assert(t_unpack(res)))
+   if not table.remove(res, 1) then
+      error(res[1], 2)
+   end
+   return t_unpack(res)
 end
 
 function util.mock_io(finally, files)
@@ -61,7 +65,7 @@ local function batch_assertions()
          return self
       end,
       assert = function(self)
-         local err_batch = { "\n" }
+         local err_batch = { }
          local passed = true
          for _, assertion in ipairs(self) do
             local ok, err = pcall(assertion.fn, t_unpack(assertion.args, 1, assertion.nargs))
@@ -70,7 +74,7 @@ local function batch_assertions()
                table.insert(err_batch, indent(tostring(err)))
             end
          end
-         assert(passed, "batch assertion failed:" .. indent(table.concat(err_batch, "\n\n")))
+         assert(passed, "batch assertion failed:\n   " .. indent(table.concat(err_batch, "\n\n")))
       end,
    }
 end
@@ -96,27 +100,44 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
+local valid_commands = {
+   gen = true,
+   check = true,
+   run = true,
+   build = true,
+}
+function util.tl_cmd(name, ...)
+   assert(name, "no command provided")
+   assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
+
+   local cmd = {
+      tl_executable,
+      name
+   }
+   for i = 1, select("#", ...) do
+      table.insert(cmd, string.format("%q", (select(i, ...))))
+   end
+   return table.concat(cmd, " ") .. " "
+end
+
 function util.chdir_setup()
-   assert(lfs.link("tl", "/tmp/tl"))
-   assert(lfs.link("tl.lua", "/tmp/tl.lua"))
    assert(lfs.chdir("/tmp"))
 end
 
 function util.chdir_teardown()
-   -- explicitly use /tmp here
-   -- just in case it may remove the actual tl file
-   os.remove("/tmp/tl.lua")
-   os.remove("/tmp/tl")
    assert(lfs.chdir(current_dir))
 end
 
-function util.write_tmp_file(finally, name, content)
+local tmp_files = 0
+function util.write_tmp_file(finally, content, ext)
+   if not ext then ext = "tl" end
    assert(type(finally) == "function")
-   assert(type(name) == "string")
    assert(type(content) == "string")
 
-   local full_name = "/tmp/" .. name
-   local fd = io.open(full_name, "w")
+   tmp_files = tmp_files + 1
+   local full_name = "/tmp/teal_tmp_file" .. tostring(tmp_files) .. "." .. ext
+
+   local fd = assert(io.open(full_name, "w"))
    fd:write(content)
    fd:close()
    finally(function()
@@ -125,14 +146,12 @@ function util.write_tmp_file(finally, name, content)
    return full_name
 end
 
-local tmp_files = 1
-
 function util.write_tmp_dir(finally, dir_structure)
    assert(type(finally) == "function")
    assert(type(dir_structure) == "table")
 
-   local full_name = "/tmp/teal_spec" .. tostring(tmp_files) .. "/"
    tmp_files = tmp_files + 1
+   local full_name = "/tmp/teal_tmp_dir" .. tostring(tmp_files) .. "/"
    assert(lfs.mkdir(full_name))
    local function traverse_dir(dir_structure, prefix)
       prefix = prefix or full_name
@@ -193,12 +212,7 @@ local function insert_into(tab, files)
       end
    end
 end
-local valid_commands = {
-   gen = true,
-   check = true,
-   run = true,
-   build = true,
-}
+
 function util.run_mock_project(finally, t)
    assert(type(finally) == "function")
    assert(type(t) == "table")
@@ -206,22 +220,18 @@ function util.run_mock_project(finally, t)
    assert(valid_commands[t.cmd], "Invalid command tl " .. t.cmd)
 
    local actual_dir_name = util.write_tmp_dir(finally, t.dir_structure)
-   lfs.link(tl_executable, actual_dir_name .. "/tl")
-   lfs.link(tl_lib, actual_dir_name .. "/tl.lua")
    local expected_dir_structure
    if t.generated_files then
-      expected_dir_structure = {
-         ["tl"] = true,
-         ["tl.lua"] = true,
-      }
+      expected_dir_structure = {}
       insert_into(expected_dir_structure, t.dir_structure)
       insert_into(expected_dir_structure, t.generated_files)
    end
 
-   local pd, output, actual_dir_structure
+   local pd, actual_output, actual_dir_structure
    util.do_in(actual_dir_name, function()
-      pd = io.popen("./tl " .. t.cmd .. " " .. (t.args or "") .. " 2>&1")
-      output = pd:read("*a")
+      local cmd = util.tl_cmd(t.cmd, t_unpack(t.args or {})) .. "2>&1"
+      pd = assert(io.popen(cmd, "r"))
+      actual_output = pd:read("*a")
       if expected_dir_structure then
          actual_dir_structure = util.get_dir_structure(".")
       end
@@ -237,7 +247,7 @@ function util.run_mock_project(finally, t)
       )
    end
    if t.cmd_output then
-      batch:add(assert.are.equal, output, t.cmd_output)
+      batch:add(assert.are.equal, t.cmd_output, actual_output)
    end
    if expected_dir_structure then
       batch:add(assert.are.same, expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")
