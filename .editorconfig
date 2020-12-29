@@ -6,11 +6,7 @@ insert_final_newline     = true
 trim_trailing_whitespace = true
 charset                  = utf-8
 
-[*.lua]
-indent_style             = space
-indent_size              = 3
-
-[*.tl]
+[{*.lua,*.tl,tl,.busted}]
 indent_style             = space
 indent_size              = 3
 

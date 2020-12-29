@@ -10,7 +10,7 @@ describe("-o --output", function()
          },
          generated_files = { "foo.lua" },
          cmd = "gen",
-         args = "bar/foo.tl",
+         args = { "bar/foo.tl" },
          popen = {
             status = true,
             exit = "exit",
@@ -23,7 +23,7 @@ describe("-o --output", function()
          dir_structure = {a={b={c={["foo.tl"] = [[print 'hey']]}}}},
          generated_files = { "foo.lua" },
          cmd = "gen",
-         args = "a/b/c/foo.tl",
+         args = { "a/b/c/foo.tl" },
          popen = {
             status = true,
             exit = "exit",
@@ -33,7 +33,7 @@ describe("-o --output", function()
    end)
    it("should write to the given filename", function()
       util.run_mock_project(finally, {
-         args = "foo.tl -o my_output_file.lua",
+         args = { "foo.tl", "-o", "my_output_file.lua" },
          dir_structure = { ["foo.tl"] = [[print 'hey']] },
          generated_files = { "my_output_file.lua" },
          cmd = "gen",
@@ -46,7 +46,7 @@ describe("-o --output", function()
    end)
    it("should write to the given filename in a directory", function()
       util.run_mock_project(finally, {
-         args = "foo.tl -o a/b/c/d.lua",
+         args = { "foo.tl", "-o", "a/b/c/d.lua" },
          dir_structure = {
             ["foo.tl"] = [[print 'hey']],
             a={b={c={}}},
@@ -64,7 +64,7 @@ describe("-o --output", function()
    end)
    it("should gracefully error when the output directory doesn't exist", function()
       util.run_mock_project(finally, {
-         args = "foo.tl -o a/b/c/d.lua",
+         args = { "foo.tl", "-o", "a/b/c/d.lua" },
          dir_structure = {
             ["foo.tl"] = [[print 'hey']],
          },
