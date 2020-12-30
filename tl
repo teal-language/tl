@@ -407,9 +407,83 @@ for _, include in ipairs(tlconfig["include_dir"]) do
    prepend_to_path(include)
 end
 
+--------------------------------------------------------------------
+--                     FILESYSTEM HELPERS                         --
+--------------------------------------------------------------------
+local function cleanup_file_name(name) --remove trailing and extra path separators, substitute './' for 'current_dir/'
+   return (name
+      :gsub("^(%.)(.?)", function(a, b)
+         assert(a == ".")
+         if b == "." then
+            die("Config error: .." .. path_separator .. " not allowed, please use direct paths")
+         elseif b == path_separator then
+            return ""
+         else
+            return b
+         end
+      end)
+      :gsub(path_separator .. "+", path_separator))
+      :gsub(path_separator .. "+$", "")
+end
+
+local function path_concat(...)
+   local path = {}
+   for i = 1, select("#", ...) do
+      local fname = cleanup_file_name((select(i, ...)))
+      if #fname > 0 then
+         table.insert(path, fname)
+      end
+   end
+   return table.concat(path, path_separator)
+end
+
+local function remove_leading_path(leading_part, path)
+   local s, e = path:find("^" .. leading_part .. path_separator .. "?")
+   if s then
+      return path:sub(e+1, -1)
+   end
+   return path
+end
+
+local function traverse(dirname, emptyref,is_generated,generated_ref)
+   local files = {}
+   local paths = {} --lookup table for string paths to help
+   -- with pattern matching while iterating over a project
+   -- paths[files.foo.bar] -> "foo/bar"
+   emptyref = emptyref or {}
+   generated_ref = generated_ref or {}
+   for file in lfs.dir(dirname) do
+      if file ~= "." and file ~= ".." then
+         if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
+            local p
+            local prefix = dirname
+            files[file], p = traverse(path_concat(dirname, file), emptyref,is_generated,generated_ref)
+            paths[files[file]] = file
+            for k, v in pairs(p) do
+               paths[k] = path_concat(file, v)
+            end
+         else
+            -- storing a special entry in this table to it mark as empty could
+            -- interfere with convoluted or maliciously constructed directory
+            -- names so we use a table with specific metatable to mark
+            -- something as the end of a traversal to have a property attached
+            -- to the table, without creating an entry in the table
+            local meta_table = {empty=emptyref}
+            if is_generated then
+               meta_table["generated"] = generated_ref
+            end
+            files[file] = setmetatable({}, meta_table)
+            paths[files[file]] = file
+         end
+      end
+   end
+   return files, paths, emptyref
+end
+
 local build_path
 if tlconfig["build_file"] then
-   build_path = "/tmp/tl_temp_out" .. os.time(os.date("!*t"))
+   local tmp_dir = os.getenv("TMP") or os.getenv("TMPDIR") or "/tmp" --fall back to /tmp, apparently some (mine?) computers don't have a variable set for it.
+   build_path = path_concat(tmp_dir,"tl_temp_out" .. os.time(os.date("!*t")))
    lfs.mkdir(build_path)
    prepend_to_path(build_path)
 end
@@ -530,10 +604,13 @@ if tlconfig.build_file then
 end
 
 if script["gen_code"] then
-   -- TODO: better path concationation
-   lfs.rmdir(build_path .. "/" .. tlconfig["build_file_output_dir"] )
-   lfs.mkdir(build_path .. "/" .. tlconfig["build_file_output_dir"])
-   script["gen_code"](build_path .. "/" .. tlconfig["build_file_output_dir"])
+   --that the directory exposed to the script has the same name as the the folder it ends up at is kind of a hack (that I accidentally stumbled on)
+   --however, it is also a usefull hack as it provides a way to store the last build time without the 2 locations interfering.
+   --this is useful information so the result of the build.tl file can be cached, which can be benefical if the code generation takes a lot of time.
+   local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
+   lfs.rmdir(full_path)
+   lfs.mkdir(full_path)
+   script["gen_code"](full_path)
 end
 --------------------------------------------------------------------
 --                            RUN                                 --
@@ -706,79 +783,9 @@ local function matcher(str)
    end
 end
 
---------------------------------------------------------------------
---                     FILESYSTEM HELPERS                         --
---------------------------------------------------------------------
 
 -- prepare build and source dirs
 local curr_dir = lfs.currentdir()
-local function cleanup_file_name(name) --remove trailing and extra path separators, substitute './' for 'current_dir/'
-   return (name
-      :gsub("^(%.)(.?)", function(a, b)
-         assert(a == ".")
-         if b == "." then
-            die("Config error: .." .. path_separator .. " not allowed, please use direct paths")
-         elseif b == path_separator then
-            return ""
-         else
-            return b
-         end
-      end)
-      :gsub(path_separator .. "+", path_separator))
-      :gsub(path_separator .. "+$", "")
-end
-local function path_concat(...)
-   local path = {}
-   for i = 1, select("#", ...) do
-      local fname = cleanup_file_name((select(i, ...)))
-      if #fname > 0 then
-         table.insert(path, fname)
-      end
-   end
-   return table.concat(path, path_separator)
-end
-local function remove_leading_path(leading_part, path)
-   local s, e = path:find("^" .. leading_part .. path_separator .. "?")
-   if s then
-      return path:sub(e+1, -1)
-   end
-   return path
-end
-
-local function traverse(dirname, emptyref,is_generated,generated_ref)
-   local files = {}
-   local paths = {} --lookup table for string paths to help
-   -- with pattern matching while iterating over a project
-   -- paths[files.foo.bar] -> "foo/bar"
-   emptyref = emptyref or {}
-   generated_ref = generated_ref or {}
-   for file in lfs.dir(dirname) do
-      if file ~= "." and file ~= ".." then
-         if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
-            local p
-            local prefix = dirname
-            files[file], p = traverse(path_concat(dirname, file), emptyref,is_generated,generated_ref)
-            paths[files[file]] = file
-            for k, v in pairs(p) do
-               paths[k] = path_concat(file, v)
-            end
-         else
-            -- storing a special entry in this table to it mark as empty could
-            -- interfere with convoluted or maliciously constructed directory
-            -- names so we use a table with specific metatable to mark
-            -- something as the end of a traversal to have a property attached
-            -- to the table, without creating an entry in the table
-            local meta_table = {empty=emptyref}
-            if is_generated then
-               meta_table["generated"] = generated_ref
-            end
-            files[file] = setmetatable({}, meta_table)
-            paths[files[file]] = file
-         end
-      end
-   end
-   return files, paths, emptyref
-end
 
 local project = {}
 function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
