@@ -2123,19 +2123,20 @@ parse_record_body = function(ps, i, def, node)
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
       if ps.tokens[i].tk == "{" then
          if def.typename == "arrayrecord" then
-            return fail(ps, i, "duplicated declaration of array element type in record")
-         end
-         i = i + 1
-         local t
-         i, t = parse_type(ps, i)
-         if ps.tokens[i].tk == "}" then
-            node.yend = ps.tokens[i].y
-            i = verify_tk(ps, i, "}")
+            i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
          else
-            return fail(ps, i, "expected an array declaration")
+            i = i + 1
+            local t
+            i, t = parse_type(ps, i)
+            if ps.tokens[i].tk == "}" then
+               node.yend = ps.tokens[i].y
+               i = verify_tk(ps, i, "}")
+            else
+               return fail(ps, i, "expected an array declaration")
+            end
+            def.typename = "arrayrecord"
+            def.elements = t
          end
-         def.typename = "arrayrecord"
-         def.elements = t
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
          local v
