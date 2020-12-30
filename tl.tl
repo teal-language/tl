@@ -851,6 +851,7 @@ local record Type
    field_order: {string}
    meta_fields: {string: Type}
    meta_field_order: {string}
+   is_userdata: boolean
 
    -- array
    elements: Type
@@ -2136,7 +2137,14 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
       i, def.typeargs = parse_typearg_list(ps, i)
    end
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
-      if ps.tokens[i].tk == "{" then
+      if ps.tokens[i].tk == "userdata" and ps.tokens[i+1].tk ~= ":" then
+         if def.is_userdata then
+            fail(ps, i, "duplicated 'userdata' declaration in record")
+         else
+            def.is_userdata = true
+         end
+         i = i + 1
+      elseif ps.tokens[i].tk == "{" then
          if def.typename == "arrayrecord" then
             i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
          else
@@ -3939,6 +3947,7 @@ local standard_library: {string:Type} = {
       typename = "typetype",
       def = a_type {
          typename = "record",
+         is_userdata = true,
          fields = {
             ["close"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING} },
             ["flush"] = a_type { typename = "function", args = { NOMINAL_FILE }, rets = {} },
@@ -4544,11 +4553,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       -- due to codegen limitations (we only check with type() so far)
       local n_table_types = 0
       local n_function_types = 0
+      local n_userdata_types = 0
       local n_string_enum = 0
       local has_primitive_string_type = false
       for _, t in ipairs(typ.types) do
          t = resolve_unary(t)
-         if table_types[t.typename] then
+         if t.is_userdata then -- must be tested before table_types
+            n_userdata_types = n_userdata_types + 1
+            if n_userdata_types > 1 then
+               return false, "cannot discriminate a union between multiple userdata types: %s"
+            end
+         elseif table_types[t.typename] then
             n_table_types = n_table_types + 1
             if n_table_types > 1 then
                return false, "cannot discriminate a union between multiple table types: %s"

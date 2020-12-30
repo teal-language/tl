@@ -43,6 +43,32 @@ describe("union declaration", function()
       { msg = "cannot discriminate a union between multiple table types" },
    }))
 
+   it("cannot declare a union between multiple userdata types", util.check_type_error([[
+      local record R1
+         userdata
+      end
+
+      local record R2
+         userdata
+      end
+
+      local t: R1 | R2
+   ]], {
+      { msg = "cannot discriminate a union between multiple userdata types" },
+   }))
+
+   it("can declare a union between one table and one userdata type", util.check [[
+      local record R1
+         userdata
+      end
+
+      local record R2
+         x: number
+      end
+
+      local t: R1 | R2 | number
+   ]])
+
    it("cannot declare a union between multiple records", util.check_type_error([[
       local type R1 = record
          f: string
