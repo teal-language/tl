@@ -480,7 +480,29 @@ local function traverse(dirname, emptyref,is_generated,generated_ref)
    return files, paths, emptyref
 end
 
+local function delete_dir(dir)
+   for file in lfs.dir(dir) do
+      if file ~= "." and file ~= ".." then 
+         local file_path = path_concat(dir,file)
+         if file ~= "." and file ~= ".." then
+            if lfs.attributes(file_path, 'mode') == 'file' then
+                  os.remove(file_path)
+            elseif lfs.attributes(file_path, 'mode') == 'directory' then
+                  delete_dir(file_path)
+            end
+         end
+      end
+   end
+   lfs.rmdir(dir)
+end
+
 local build_path
+
+local function cleanup_generated_files()
+   if build_path then
+      delete_dir(build_path)
+   end
+end
 if tlconfig["build_file"] then
    local tmp_dir = os.getenv("TMP") or os.getenv("TMPDIR") or "/tmp" --fall back to /tmp, apparently some (mine?) computers don't have a variable set for it.
    build_path = path_concat(tmp_dir,"tl_temp_out" .. os.time(os.date("!*t")))
@@ -652,7 +674,9 @@ if cmd == "run" then
    end
 
    tl.loader()
-   return chunk((unpack or table.unpack)(arg))
+   local res = chunk((unpack or table.unpack)(arg))
+   cleanup_generated_files()
+   return res
 end
 
 --------------------------------------------------------------------
@@ -663,6 +687,7 @@ if cmd == "check" then
    for i, input_file in ipairs(args["file"]) do
       type_check_file(input_file)
    end
+   cleanup_generated_files()
    os.exit(exit)
 end
 
@@ -724,6 +749,7 @@ if cmd == "gen" then
          write_out(res.tl_result, args["output"] or res.output_file)
       end
    end
+   cleanup_generated_files()
    os.exit(exit)
 end
 
@@ -1003,5 +1029,5 @@ for i, files in ipairs(sorted_source_file_arr) do
       exit = 1
    end
 end
-
+cleanup_generated_files()
 os.exit(exit)
