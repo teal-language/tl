@@ -3427,6 +3427,8 @@ local OS_DATE_TABLE = a_type {
    }
 }
 
+local OS_DATE_TABLE_FORMAT = a_type { typename = "enum", enumset = { ["!*t"] = true, ["*t"] = true } }
+
 local DEBUG_GETINFO_TABLE = a_type {
    typename = "record",
    fields = {
@@ -4136,7 +4138,8 @@ local standard_library: {string:Type} = {
             typename = "poly",
             types = {
                a_type { typename = "function", args = {}, rets = { STRING } },
-               a_type { typename = "function", args = { STRING, OPT_STRING }, rets = { a_type { typename = "union", types = { STRING, OS_DATE_TABLE } } } },
+               a_type { typename = "function", args = { OS_DATE_TABLE_FORMAT, NUMBER }, rets = { OS_DATE_TABLE } },
+               a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
             }
          },
          ["difftime"] = a_type { typename = "function", args = { NUMBER, NUMBER}, rets = { NUMBER } },
