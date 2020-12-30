@@ -129,22 +129,59 @@ we'll focus on the things that Teal adds to Lua, and those are primarily type
 declarations.
 
 Types in Teal are more specific than in Lua, because Lua tables are so general.
-These are the types in Teal:
+These are the basic types in Teal:
 
-* nil
-* boolean
-* number
-* string
-* thread
-* userdata
-* function
-* array
-* record
-* arrayrecord
-* tuple
-* map
+* `any`
+* `nil`
+* `boolean`
+* `number`
+* `string`
+* `thread` (coroutine)
+
+You can also declare more types using type constructors. This is the summary
+list with a few examples of each; we'll discuss them in more detail below:
+
+* arrays - `{number}`, `{{number}}`
+* tuples - `{number, number, string}`
+* maps - `{string:boolean}`
+* functions - `function(number, string): {number}, string`
+
+Finally, there are types that must be declared and referred to using names:
+
 * enum
-* any
+* record
+  * userdata
+  * arrayrecord
+
+Here is an example declaration of each. Again, we'll go into more detail below,
+but this should give you an overview:
+
+```
+-- an enum: a set of accepted strings
+local enum State
+   "open"
+   "closed"
+end
+
+-- a record: a table with a known set of fields
+local record Point
+   x: number
+   y: number
+end
+
+-- a userdata record: a record which is implemented as a userdata
+local record File
+   userdata
+   status: function(): State
+   close: function(File): boolean, string
+end
+
+-- an arrayrecord: a record which doubles as a record and an array
+local record TreeNode<T>
+   {TreeNode<T>}
+   item: T
+end
+```
 
 ## Local variables
 
