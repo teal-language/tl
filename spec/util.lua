@@ -268,6 +268,31 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
    end
 end
 
+local function batch_compare(batch, category, expected, got)
+   batch:add(assert.same, #expected, #got, "Expected same number of " .. category .. ":")
+   for i = 1, #expected do
+      local e = expected[i] or {}
+      local g = got[i] or {}
+      if e.y then
+         batch:add(assert.same, e.y, g.y,  "[" .. i .. "] Expected same y location:")
+      end
+      if e.x then
+         batch:add(assert.same, e.x, g.x,  "[" .. i .. "] Expected same x location:")
+      end
+      if e.msg then
+         batch:add(assert.match, e.msg, g.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
+      end
+      if e.filename then
+         batch:add(assert.match, e.filename, g.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
+      end
+   end
+   if #got > #expected then
+      for i = #expected + 1, #got do
+         batch:add(assert.same, {}, got[i],  "[" .. i .. "] Did not expect:")
+      end
+   end
+end
+
 local function check(lax, code, unknowns)
    return function()
       local tokens = tl.lex(code)
@@ -278,22 +303,7 @@ local function check(lax, code, unknowns)
       local errors, unks = tl.type_check(ast, { filename = "foo.lua", lax = lax })
       batch:add(assert.same, {}, errors)
       if unknowns then
-         assert.same(#unknowns, #unks, "Expected same number of unknowns:")
-         for i, u in ipairs(unknowns) do
-            local got = unks[i] or {}
-            if u.y then
-               batch:add(assert.same, u.y, got.y)
-            end
-            if u.x then
-               batch:add(assert.same, u.x, got.x)
-            end
-            if u.msg then
-               batch:add(assert.same, u.msg, got.msg or "")
-            end
-            if u.filename then
-               batch:add(assert.same, u.filename, got.filename or "")
-            end
-         end
+         batch_compare(batch, "unknowns", unknowns, unks)
       end
       batch:assert()
       return true, ast
@@ -309,21 +319,7 @@ local function check_type_error(lax, code, type_errors)
       local batch = batch_assertions()
       local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
       batch:add(assert.same, #type_errors, #errors, "Expected same number of errors:")
-      for i, err in ipairs(type_errors) do
-         local got = errors[i] or {}
-         if err.y then
-            batch:add(assert.same, err.y, got.y,  "[" .. i .. "] Expected same y location:")
-         end
-         if err.x then
-            batch:add(assert.same, err.x, got.x,  "[" .. i .. "] Expected same x location:")
-         end
-         if err.msg then
-            batch:add(assert.match, err.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
-         end
-         if err.filename then
-            batch:add(assert.match, err.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
-         end
-      end
+      batch_compare(batch, "type errors", type_errors, errors)
       batch:assert()
    end
 end
@@ -386,22 +382,7 @@ function util.check_syntax_error(code, syntax_errors)
       local errors = {}
       tl.parse_program(tokens, errors)
       local batch = batch_assertions()
-      batch:add(assert.same, #syntax_errors, #errors, "Expected same amount of syntax errors:")
-      for i, err in ipairs(syntax_errors) do
-         local got = errors[i] or {}
-         if err.y then
-            batch:add(assert.same, err.y, got.y, "[" .. i .. "] Expected same y location:")
-         end
-         if err.x then
-            batch:add(assert.same, err.x, got.x,  "[" .. i .. "] Expected same x location:")
-         end
-         if err.msg then
-            batch:add(assert.match, err.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
-         end
-         if err.filename then
-            batch:add(assert.match, err.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
-         end
-      end
+      batch_compare(batch, "syntax errors", syntax_errors, errors)
       batch:assert()
    end
 end
@@ -413,22 +394,7 @@ function util.check_warnings(code, warnings)
    return function()
       local result = tl.process_string(code)
       local batch = batch_assertions()
-      batch:add(assert.same, #warnings, #result.warnings, "Expected same amount of warnings:")
-      for i, warning in ipairs(warnings) do
-         local got = result.warnings[i] or {}
-         if warning.y then
-            batch:add(assert.same, warning.y, got.y, "[" .. i .. "] Expected same y location:")
-         end
-         if warning.x then
-            batch:add(assert.same, warning.x, got.x,  "[" .. i .. "] Expected same x location:")
-         end
-         if warning.msg then
-            batch:add(assert.match, warning.msg, got.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
-         end
-         if warning.filename then
-            batch:add(assert.match, warning.filename, got.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
-         end
-      end
+      batch_compare(batch, "warnings", warnings, result.warnings)
       batch:assert()
    end
 end
