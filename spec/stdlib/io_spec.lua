@@ -37,6 +37,14 @@ describe("io", function()
    end)
 
    describe("FILE", function()
+      it("is userdata", util.check [[
+         local record R
+            x: number
+         end
+         local fd = io.open("filename")
+         local u: R | FILE
+      ]])
+
       describe("lines", function()
          it("with no arguments", util.check [[
             for l in io.popen("ls"):lines() do

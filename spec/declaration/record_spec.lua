@@ -452,4 +452,23 @@ describe("records", function()
          [ [[  "hi"  ]] ]: table
       end
    ]=])
+
+   it("can be declared as userdata", util.check [[
+      local type foo = record
+         userdata
+         x: number
+         y: number
+      end
+   ]])
+
+   it("cannot be declared as userdata twice", util.check_syntax_error([[
+      local type foo = record
+         userdata
+         userdata
+         x: number
+         y: number
+      end
+   ]], {
+      { msg = "duplicated 'userdata' declaration in record" },
+   }))
 end)
