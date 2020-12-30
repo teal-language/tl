@@ -1088,6 +1088,13 @@ local function verify_tk(ps: ParseState, i: number, tk: string): number
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
+local function verify_end(ps: ParseState, i: number, istart: number): number
+   if ps.tokens[i].tk == "end" then
+      return i + 1
+   end
+   return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. (ps.filename or "") .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
+end
+
 local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
@@ -1477,6 +1484,7 @@ parse_type_list = function(ps: ParseState, i: number, mode: ParseTypeListMode): 
 end
 
 local function parse_function_args_rets_body(ps: ParseState, i: number, node: Node): number, Node
+   local istart = i - 1
    if ps.tokens[i].tk == "<" then
       i, node.typeargs = parse_typearg_list(ps, i)
    end
@@ -1484,7 +1492,7 @@ local function parse_function_args_rets_body(ps: ParseState, i: number, node: No
    i, node.rets = parse_return_types(ps, i)
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
@@ -1880,6 +1888,7 @@ local function parse_function(ps: ParseState, i: number): number, Node
 end
 
 local function parse_if(ps: ParseState, i: number): number, Node
+   local istart = i
    local node = new_node(ps.tokens, i, "if")
    i = verify_tk(ps, i, "if")
    i, node.exp = parse_expression(ps, i)
@@ -1906,22 +1915,24 @@ local function parse_if(ps: ParseState, i: number): number, Node
       node.elsepart = subnode
    end
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
 local function parse_while(ps: ParseState, i: number): number, Node
+   local istart = i
    local node = new_node(ps.tokens, i, "while")
    i = verify_tk(ps, i, "while")
    i, node.exp = parse_expression(ps, i)
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
 local function parse_fornum(ps: ParseState, i: number): number, Node
+   local istart = i
    local node = new_node(ps.tokens, i, "fornum")
    i = i + 1
    i, node.var = verify_kind(ps, i, "identifier")
@@ -1936,11 +1947,12 @@ local function parse_fornum(ps: ParseState, i: number): number, Node
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
 local function parse_forin(ps: ParseState, i: number): number, Node
+   local istart = i
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
    node.vars = new_node(ps.tokens, i, "variables")
@@ -1956,7 +1968,7 @@ local function parse_forin(ps: ParseState, i: number): number, Node
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
@@ -1980,11 +1992,12 @@ local function parse_repeat(ps: ParseState, i: number): number, Node
 end
 
 local function parse_do(ps: ParseState, i: number): number, Node
+   local istart = i
    local node = new_node(ps.tokens, i, "do")
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
@@ -2075,6 +2088,7 @@ local function parse_nested_type(ps: ParseState, i: number, def: Type, typename:
 end
 
 parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+   local istart = i - 1
    def.enumset = {}
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
       local item: Node
@@ -2085,7 +2099,7 @@ parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): nu
       end
    end
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 
@@ -2115,6 +2129,7 @@ local metamethod_names: {string:boolean} = {
 }
 
 parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+   local istart = i - 1
    def.fields = {}
    def.field_order = {}
    if ps.tokens[i].tk == "<" then
@@ -2230,7 +2245,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
       end
    end
    node.yend = ps.tokens[i].y
-   i = verify_tk(ps, i, "end")
+   i = verify_end(ps, i, istart)
    return i, node
 end
 

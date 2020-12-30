@@ -66,6 +66,26 @@ describe("syntax errors", function()
       { y = 1, msg = "syntax error" },
    }))
 
+   it("reports on approximate source of missing 'end'", util.check_syntax_error([[
+      local function foo1()
+         bar()
+      end
+
+      local function foo2()
+         if condition then
+            if something_missing_here then
+               bar()
+            something_else()
+         end
+      end
+
+      local function foo3()
+         bar()
+      end
+   ]], {
+      { y = 15, msg = "syntax error, expected 'end' to close construct started at :5:22:" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[
