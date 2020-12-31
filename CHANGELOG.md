@@ -1,3 +1,75 @@
+# 0.10.0
+
+2020-12-31
+
+We've had a lot of activity in Teal this month, so let's wrap it with a
+new release! We had our very first Teal meetup
+([recording](https://www.youtube.com/watch?v=cY9wANsoVx0&list=PL0NqP86GtfLF-7NKGzNeRcUtN-XqE0ej_)),
+a [Twitch stream](https://twitch.tv/HishamHM) session,
+lots of activity in our [Gitter chat](https://gitter.im/teal-language/community)
+with folks from the community building various projects, and providing
+great feedback which helped us prioritize and shape the evolution of
+the language. So let's celebrate with Teal 0.10.0, which packs a lot of
+new stuff! Happy New Year! :tada:
+
+This release features commits by Enrique García Cota, Darren Jennings,
+Corey Williamson and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Metamethods!
+  * Records can now declare metamethods as part of their definitions, which
+    informs the Teal type checker about supported operations for that record
+    type. (#299)
+  * Metatables are not automatically attached, you still need to use
+    `setmetatable`: check the [documentation](https://github.com/teal-language/tl/blob/master/docs/tutorial.md#metamethods)
+    for an example on using records with metamethods and metatables.
+  * Operator metamethods for `//` and bitwise ops are supported even when
+    running Teal on top of Lua 5.1.
+* Userdata records
+  * The practical difference, as far as type checking goes, is that
+    they no longer count as a "table" type in unions.
+* `or` expressions now accept subtypes: for example, an `or` between a union
+  and one of its elements is now accepted.
+* Some breaking changes for cleaning things up:
+  * The language now rejects unknown variable annotations. That includes
+    `<close>`, which is not currently supported. Note that Teal does support
+    the `<const>` annotation (for all Lua versions) and performs the check
+    at compile time.
+  * Dropped. support for record and enum definitions inside table literals.
+    This was a remnant from when variable and type definitions were mixed. Now
+    all record and enum definitions need to happen inside a `local type` or
+    `global type` definition (and may be nested).
+* Standard library definition improvements:
+  * `math.log` accepts a second argument
+
+### Tooling
+
+* Compiler warnings!
+  * The Teal compiler now features a warning system, and reports on unused
+    variables.
+* Teal Playground integration in the Teal repository
+  * Now, every PR triggers a Github Action that produces a link to
+    a [Teal Playground](https://teal-playground.netlify.app/)
+    which allows you to test the compiler changes
+    introduced by the PR right from your browser!
+* `tl build` now returns a non-zero error code on type errors
+
+### Fixes
+
+* Detects a bad use of `:` without a proper `()` call (#282)
+* Fixed type inference for variadic return in `for` loops (#293)
+* Always check for union validity after type arguments are resolved
+  when declaring a record (#290)
+* No longer suggest "consider using an enum" when indexing non-records
+* Fixes for control-flow based inference
+  * Fix expression inference in `elseif`
+  * Propagate facts across parentheses
+* Standard library definition fixes:
+  * `os.date` second argument was fixed
+
 # 0.9.0
 
 2020-12-16
