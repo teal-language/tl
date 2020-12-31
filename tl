@@ -4,7 +4,7 @@
 --                           SETUP                                --
 --------------------------------------------------------------------
 
-local version_string = "0.9.0+dev"
+local version_string = "0.10.0"
 local path_separator = package.config:sub(1, 1)
 
 local function script_path()
