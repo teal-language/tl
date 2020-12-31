@@ -9,4 +9,11 @@ describe("math", function()
       ]])
    end)
 
+   describe("log", function()
+      it("accepts one or two arguments (regression test for #308)", util.check [[
+         local x: number = math.log(1)
+         local z: number = math.log(1, 2)
+      ]])
+   end)
+
 end)

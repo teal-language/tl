@@ -4117,7 +4117,7 @@ local standard_library: {string:Type} = {
          ["frexp"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER, NUMBER } },
          ["huge"] = NUMBER,
          ["ldexp"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-         ["log"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
+         ["log"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["log10"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["max"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { NUMBER } },
          ["maxinteger"] = NUMBER,
