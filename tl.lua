@@ -4730,6 +4730,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function redeclaration_warning(node, old_var)
+      if node.tk:sub(1, 1) == "_" then          return end
       if old_var.declared_at then
          node_warning(node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
       else

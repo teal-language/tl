@@ -48,6 +48,13 @@ describe("warnings", function()
          { y = 1, msg = [[unused variable foo: string "bar"]] }
       }))
 
+      it("does not report redeclaration of variables prefixed with '_'", util.check_warnings([[
+         local _ = 1
+         print(_) -- ensure usage
+         local _ = 2
+         print(_)
+      ]], { }))
+
       it("does not report unused global variables", util.check_warnings([[
          global foo = "bar"
       ]], { }))
