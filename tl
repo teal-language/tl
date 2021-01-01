@@ -127,7 +127,7 @@ local lfs = require("lfs")
 local function get_args_parser()
    local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-   parser:option("-l --preload", "Execute the equivalent of require('modulename') before executing the tl script(s).")
+   parser:option("-l --preload", "Execute the equivalent of require('modulename') before processing Teal files.")
          :argname("<modulename>")
          :count("*")
 
@@ -146,16 +146,16 @@ local function get_args_parser()
    parser:require_command(false)
    parser:command_target("command")
 
-   local check_command = parser:command("check", "Type-check one or more tl script.")
-   check_command:argument("script", "The tl script."):args("+")
+   local check_command = parser:command("check", "Type-check one or more Teal files.")
+   check_command:argument("file", "The Teal source file."):args("+")
 
-   local gen_command = parser:command("gen", "Generate a Lua file for one or more tl script.")
-   gen_command:argument("script", "The tl script."):args("+")
+   local gen_command = parser:command("gen", "Generate a Lua file for one or more Teal files.")
+   gen_command:argument("file", "The Teal source file."):args("+")
    gen_command:option("-o --output", "Write to <filename> instead.")
               :argname("<filename>")
 
-   local run_command = parser:command("run", "Run a tl script.")
-   run_command:argument("script", "The tl script."):args("+")
+   local run_command = parser:command("run", "Run a Teal script.")
+   run_command:argument("script", "The Teal script."):args("+")
 
    local build_command = parser:command("build", "Build your project according to tlconfig.lua by type checking and compiling each specified file.")
    build_command:option("-b --build-dir", "Put all generated files in <directory>.")
@@ -209,7 +209,7 @@ if cmd == "build" then
    tlconfig["build_dir"] = args["build_dir"] or tlconfig["build_dir"]
 end
 tlconfig["skip_compat53"] = args["skip_compat53"] or tlconfig["skip_compat53"]
-if cmd == "gen" and args["output"] and #args["script"] ~= 1 then
+if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
    print("Error: --output can only be used to map one input to one output")
    os.exit(1)
 end
@@ -337,7 +337,7 @@ local function type_check_file(file_name)
    end
    report_warnings(result)
 
-   if exit == 0 and tlconfig["quiet"] == false and #args["script"] == 1 then
+   if exit == 0 and tlconfig["quiet"] == false and #args["file"] == 1 then
       local output_file = get_output_filename(file_name)
       print("========================================")
       print("Type checked " .. file_name)
@@ -427,7 +427,7 @@ end
 --------------------------------------------------------------------
 
 if cmd == "check" then
-   for i, input_file in ipairs(args["script"]) do
+   for i, input_file in ipairs(args["file"]) do
       type_check_file(input_file)
    end
    os.exit(exit)
@@ -462,7 +462,7 @@ end
 if cmd == "gen" then
    local results = {}
    local err
-   for i, input_file in ipairs(args["script"]) do
+   for i, input_file in ipairs(args["file"]) do
       setup_env(input_file)
       local res = {
          input_file = input_file,

@@ -23,7 +23,7 @@ return {
 
 | Command line option | Config key | Type | Relevant Commands | Description |
 | --- | --- | --- | --- | --- |
-| `-l --preload`  | `preload_modules` | `{string}` | `build` `check` `gen` `run` | Execute the equivalent of `require('modulename')` before executing the tl script(s). |
+| `-l --preload`  | `preload_modules` | `{string}` | `build` `check` `gen` `run` | Execute the equivalent of `require('modulename')` before processing Teal files. |
 | `-I --include-dir` |  `include_dir` | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
 | `--skip-compat53` | `skip_compat53` | `boolean` | `build` `gen` | Skip compat53 insertions.
 || `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
