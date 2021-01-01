@@ -150,6 +150,10 @@ local function get_config()
       if lfs.attributes("./build.tl","mode") == "file" then
          config.build_file = "./build.tl"
       end
+   else
+      if lfs.attributes(config.build_file,"mode") ~= "file" then
+         die("The configured build script is not a file")
+      end
    end
 
    err = validate_config(config)
