@@ -5963,7 +5963,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       -- get all arguments except the last...
       local is_va = vals.is_va
       for i = 1, #vals - 1 do
-         ret[i] = vals[i]
+         if vals[i].typename == "tuple" then
+            -- result of function call in explist
+            -- adjust to 1 result
+            ret[i] = vals[i][1] or NIL
+         else
+            ret[i] = vals[i]
+         end
       end
 
       local last = vals[#vals]
