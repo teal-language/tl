@@ -5963,13 +5963,7 @@ show_type(var.t))
 
       local is_va = vals.is_va
       for i = 1, #vals - 1 do
-         if vals[i].typename == "tuple" then
-
-
-            ret[i] = vals[i][1] or NIL
-         else
-            ret[i] = vals[i]
-         end
+         ret[i] = resolve_tuple(vals[i])
       end
 
       local last = vals[#vals]
