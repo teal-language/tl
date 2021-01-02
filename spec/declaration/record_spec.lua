@@ -94,6 +94,14 @@ describe("records", function()
       end
    ]])
 
+   it("recursive types don't trip up the resolver", util.check [[
+      local type EmptyString = enum "" end
+      local record ltn12
+         type FancySource = function<T>(): T|EmptyString, string|FancySource<T>
+      end
+      return ltn12
+   ]])
+
    it("can overload functions", util.check [[
       global type love_graphics = record
          print: function(text: string, x: number, y: number, r: number, sx: number, sy: number, ox: number, oy: number, kx: number, ky:number)

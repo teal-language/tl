@@ -898,7 +898,6 @@ local Type = {}
 
 
 
-
 local Operator = {}
 
 
@@ -4550,106 +4549,6 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local resolve_unary = nil
-
-   local function is_valid_union(typ)
-
-
-      local n_table_types = 0
-      local n_function_types = 0
-      local n_userdata_types = 0
-      local n_string_enum = 0
-      local has_primitive_string_type = false
-      for _, t in ipairs(typ.types) do
-         t = resolve_unary(t)
-         if t.is_userdata then
-            n_userdata_types = n_userdata_types + 1
-            if n_userdata_types > 1 then
-               return false, "cannot discriminate a union between multiple userdata types: %s"
-            end
-         elseif table_types[t.typename] then
-            n_table_types = n_table_types + 1
-            if n_table_types > 1 then
-               return false, "cannot discriminate a union between multiple table types: %s"
-            end
-         elseif t.typename == "function" then
-            n_function_types = n_function_types + 1
-            if n_function_types > 1 then
-               return false, "cannot discriminate a union between multiple function types: %s"
-            end
-         elseif t.typename == "enum" or (t.typename == "string" and not has_primitive_string_type) then
-            n_string_enum = n_string_enum + 1
-            if n_string_enum > 1 then
-               return false, "cannot discriminate a union between multiple string/enum types: %s"
-            end
-            if t.typename == "string" then
-               has_primitive_string_type = true
-            end
-         end
-      end
-      return true
-   end
-
-   local no_nested_types = {
-      ["string"] = true,
-      ["number"] = true,
-      ["boolean"] = true,
-      ["thread"] = true,
-      ["any"] = true,
-      ["enum"] = true,
-      ["nil"] = true,
-   }
-
-   local function resolve_typevars(t, seen, where)
-
-      if t.typename and (no_nested_types[t.typename] or
-         (t.typename == "nominal" and not t.typevals)) then
-         return t
-      end
-
-      seen = seen or {}
-      if seen[t] then
-         return seen[t]
-      end
-
-      local orig_t = t
-      local clear_tk = false
-      if t.typename == "typevar" then
-         local tv = find_var_type(t.typevar)
-         if tv then
-            t = tv
-            clear_tk = true
-         else
-            t = UNKNOWN
-         end
-      end
-
-      local copy = {}
-      seen[orig_t] = copy
-
-      for k, v in pairs(t) do
-         local cp = copy
-         if type(v) == "table" then
-            cp[k] = resolve_typevars(v, seen, where)
-         else
-            cp[k] = v
-         end
-      end
-
-      if clear_tk then
-         copy.tk = nil
-      end
-
-      if copy.typename == "union" then
-         local ok, err = is_valid_union(copy)
-         if not ok then
-            type_error(where or t, err, t)
-         end
-      end
-
-      return copy
-   end
-
    local function find_type(names, accept_typearg)
       local typ = find_var_type(names[1])
       if not typ then
@@ -4675,6 +4574,188 @@ tl.type_check = function(ast, opts)
          end
       end
       return nil
+   end
+
+   local function union_type(t)
+      if t.typename == "typetype" then
+         return union_type(t.def)
+      elseif t.typename == "tuple" then
+         return union_type(t[1])
+      elseif t.typename == "nominal" then
+         local typetype = t.found or find_type(t.names)
+         return union_type(typetype)
+      elseif t.typename == "record" then
+         if t.is_userdata then
+            return "userdata"
+         end
+         return "table"
+      elseif table_types[t.typename] then
+         return "table"
+      else
+         return t.typename
+      end
+   end
+
+   local function is_valid_union(typ)
+
+
+      local n_table_types = 0
+      local n_function_types = 0
+      local n_userdata_types = 0
+      local n_string_enum = 0
+      local has_primitive_string_type = false
+      for _, t in ipairs(typ.types) do
+         local ut = union_type(t)
+         if ut == "userdata" then
+            n_userdata_types = n_userdata_types + 1
+            if n_userdata_types > 1 then
+               return false, "cannot discriminate a union between multiple userdata types: %s"
+            end
+         elseif ut == "table" then
+            n_table_types = n_table_types + 1
+            if n_table_types > 1 then
+               return false, "cannot discriminate a union between multiple table types: %s"
+            end
+         elseif ut == "function" then
+            n_function_types = n_function_types + 1
+            if n_function_types > 1 then
+               return false, "cannot discriminate a union between multiple function types: %s"
+            end
+         elseif ut == "enum" or (ut == "string" and not has_primitive_string_type) then
+            n_string_enum = n_string_enum + 1
+            if n_string_enum > 1 then
+               return false, "cannot discriminate a union between multiple string/enum types: %s"
+            end
+            if ut == "string" then
+               has_primitive_string_type = true
+            end
+         end
+      end
+      return true
+   end
+
+   local no_nested_types = {
+      ["string"] = true,
+      ["number"] = true,
+      ["boolean"] = true,
+      ["thread"] = true,
+      ["any"] = true,
+      ["enum"] = true,
+      ["nil"] = true,
+      ["unknown"] = true,
+   }
+
+   local function resolve_typevars(t, seen, where)
+
+      if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
+         return t
+      end
+
+      seen = seen or {}
+      if seen[t] then
+         return seen[t]
+      end
+
+      local orig_t = t
+      if t.typename == "typevar" then
+         t = find_var_type(t.typevar)
+         local rt
+         if not t then
+            rt = UNKNOWN
+         elseif t.typename == "string" then
+
+            rt = STRING
+         elseif no_nested_types[t.typename] or
+            (t.typename == "nominal" and not t.typevals) then
+            rt = t
+         end
+         if rt then
+            seen[orig_t] = rt
+            return rt
+         end
+      end
+
+      local copy = {}
+      seen[orig_t] = copy
+
+      copy.typename = t.typename
+      copy.filename = t.filename
+      copy.typeid = t.typeid
+      copy.x = t.x
+      copy.y = t.y
+      copy.yend = t.yend
+      copy.names = t.names
+
+      for i, tf in ipairs(t) do
+         copy[i] = resolve_typevars(tf, seen, where)
+      end
+
+      if t.typename == "array" then
+         copy.elements = resolve_typevars(t.elements, seen, where)
+
+      elseif t.typename == "typearg" then
+         copy.typearg = t.typearg
+      elseif t.typename == "typevar" then
+         copy.typevar = t.typevar
+      elseif t.typename == "typetype" then
+         copy.def = resolve_typevars(t.def, seen, where)
+      elseif t.typename == "nominal" then
+         copy.typevals = resolve_typevars(t.typevals, seen, where)
+      elseif t.typename == "function" then
+         if t.typeargs then
+            copy.typeargs = {}
+            for i, tf in ipairs(t.typeargs) do
+               copy.typeargs[i] = resolve_typevars(tf, seen, where)
+            end
+         end
+
+         copy.is_method = t.is_method
+         copy.args = resolve_typevars(t.args, seen, where)
+         copy.rets = resolve_typevars(t.rets, seen, where)
+      elseif t.typename == "record" or t.typename == "arrayrecord" then
+         if t.typeargs then
+            copy.typeargs = {}
+            for i, tf in ipairs(t.typeargs) do
+               copy.typeargs[i] = resolve_typevars(tf, seen, where)
+            end
+         end
+
+         copy.fields = {}
+         for _, k in ipairs(t.field_order) do
+            copy.fields[k] = resolve_typevars(t.fields[k], seen, where)
+         end
+         copy.field_order = t.field_order
+
+         if t.meta_fields then
+            copy.meta_fields = {}
+            for _, k in ipairs(t.meta_field_order) do
+               copy.meta_fields[k] = resolve_typevars(t.meta_fields[k], seen, where)
+            end
+            copy.meta_field_order = t.meta_field_order
+         end
+      elseif t.typename == "map" then
+         copy.keys = resolve_typevars(t.keys, seen, where)
+         copy.values = resolve_typevars(t.values, seen, where)
+      elseif t.typename == "union" then
+         copy.types = {}
+         for i, tf in ipairs(t.types) do
+            copy.types[i] = resolve_typevars(tf, seen, where)
+         end
+
+         local ok, err = is_valid_union(copy)
+         if not ok then
+            type_error(where or t, err, t)
+         end
+      elseif t.typename == "poly" or t.typename == "tupletable" then
+         copy.types = {}
+         for i, tf in ipairs(t.types) do
+            copy.types[i] = resolve_typevars(tf, seen, where)
+         end
+      elseif t.typename == "tuple" then
+         copy.is_va = t.is_va
+      end
+
+      return copy
    end
 
    local function infer_var(emptytable, t, node)
@@ -5143,6 +5224,8 @@ show_type(var.t))
       end
       return arr_type
    end
+
+   local resolve_unary = nil
 
 
    is_a = function(t1, t2, for_equality)
