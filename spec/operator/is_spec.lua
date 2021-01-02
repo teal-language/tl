@@ -288,22 +288,32 @@ describe("flow analysis with is", function()
       ]]))
 
       it("generates type checks for non-primitive types", util.gen([[
-         function process(ts: {number | {string} | boolean})
-            local t: number | {string} | boolean
+         local type U = record
+            userdata
+         end
+         function process(ts: {number | {string} | boolean | U})
+            local t: number | {string} | boolean | U
             t = ts[1]
             if t is number then
                print(t + 1)
             elseif t is {string} or t is boolean then
                print(t)
+            elseif t is U then
+               print(t)
             end
          end
       ]], [[
+         local U = {}
+
+
          function process(ts)
             local t
             t = ts[1]
             if type(t) == "number" do
                print(t + 1)
             elseif type(t) == "table" or type(t) == "boolean" then
+               print(t)
+            elseif type(t) == "userdata" then
                print(t)
             end
          end

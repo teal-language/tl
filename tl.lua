@@ -3331,7 +3331,11 @@ function tl.pretty_print_ast(ast, mode)
       ["string"] = {
          after = function(typ, _children)
             local out = { y = typ.y, h = 0 }
-            table.insert(out, primitive[typ.typename] or "table")
+            local r = typ.resolved or typ
+            local lua_type = primitive[r.typename] or
+            (r.is_userdata and "userdata") or
+            "table"
+            table.insert(out, lua_type)
             return out
          end,
       },
