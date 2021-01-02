@@ -1323,21 +1323,21 @@ local function parse_return_types(ps, i)
 end
 
 local function parse_function_type(ps, i)
-   local node = new_type(ps, i, "function")
-   node.args = {}
-   node.rets = {}
+   local typ = new_type(ps, i, "function")
+   typ.args = {}
+   typ.rets = {}
    i = i + 1
    if ps.tokens[i].tk == "<" then
-      i, node.typeargs = parse_typearg_list(ps, i)
+      i, typ.typeargs = parse_typearg_list(ps, i)
    end
    if ps.tokens[i].tk == "(" then
-      i, node.args = parse_argument_type_list(ps, i)
-      i, node.rets = parse_return_types(ps, i)
+      i, typ.args = parse_argument_type_list(ps, i)
+      i, typ.rets = parse_return_types(ps, i)
    else
-      node.args = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
-      node.rets = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
+      typ.args = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
+      typ.rets = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
    end
-   return i, node
+   return i, typ
 end
 
 local function parse_base_type(ps, i)
