@@ -37,6 +37,8 @@ Once `tl` is in your path, there are a few subcommands:
 * `tl gen module.tl` will check for syntax errors and
   generate a `module.lua` file in plain Lua with all type annotations
   stripped.
+* `tl build` will compile your project via the rules defined in `tlconfig.lua`.
+* `tl warnings` will list all warnings the compiler can generate.
 
 ## Documentation
 

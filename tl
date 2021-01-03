@@ -4,6 +4,10 @@
 --                           SETUP                                --
 --------------------------------------------------------------------
 
+local tl = require("tl")
+local argparse = require("argparse")
+local lfs = require("lfs")
+
 local version_string = "0.10.0+dev"
 local path_separator = package.config:sub(1, 1)
 
@@ -51,6 +55,8 @@ local function validate_config(config)
       quiet = "boolean",
       source_dir = "string",
       skip_compat53 = "boolean",
+      disable_warnings = "{string}",
+      warning_error = "{string}",
    }
 
    for k, v in pairs(config) do
@@ -76,6 +82,30 @@ local function validate_config(config)
       end
    end
 
+   if config.disable_warnings then
+      local unknown = {}
+      for _, warning in ipairs(config.disable_warnings) do
+         if not tl.warning_kinds[warning] then
+            table.insert(unknown, string.format("%q", warning))
+         end
+      end
+      if #unknown > 0 then
+         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+      end
+   end
+
+   if config.warning_error then
+      local unknown = {}
+      for _, warning in ipairs(config.disable_warnings) do
+         if not tl.warning_kinds[warning] then
+            table.insert(unknown, string.format("%q", warning))
+         end
+      end
+      if #unknown > 0 then
+         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+      end
+   end
+
    return nil
 end
 
@@ -84,6 +114,8 @@ local function get_config()
    local config = {
       preload_modules = {},
       include_dir = {},
+      disable_warnings = {},
+      warning_error = {},
       quiet = false
    }
 
@@ -120,10 +152,6 @@ end
 
 package.path = script_path() .. "/?.lua;" .. package.path
 
-local tl = require("tl")
-local argparse = require("argparse")
-local lfs = require("lfs")
-
 local function get_args_parser()
    local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
@@ -134,6 +162,16 @@ local function get_args_parser()
    parser:option("-I --include-dir", "Prepend this directory to the module search path.")
          :argname("<directory>")
          :count("*")
+
+   parser:option("--wdisable", "Disable the given kind of warning.")
+         :argname("<warning>")
+         :count("*")
+
+   parser:option("--werror", "Promote the given kind of warning to an error. Use '--werror all' to promote all warnings to errors")
+         :argname("<warning>")
+         :count("*")
+
+   parser:option("--warning-error-all")
 
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
 
@@ -163,6 +201,8 @@ local function get_args_parser()
    build_command:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
                 :argname("<directory>")
 
+   parser:command("warnings", "List each kind of warning the compiler can produce.")
+
    return parser
 end
 
@@ -183,6 +223,66 @@ if not cmd then
    print()
    print("Error: a command is required")
    os.exit(1)
+end
+
+local function merge_list(a, b)
+   a = a or {}
+   b = b or {}
+   local c = {}
+   for i, v in ipairs(a) do
+      table.insert(c, v)
+   end
+   for i, v in ipairs(b) do
+      table.insert(c, v)
+   end
+   return c
+end
+
+local disabled_warnings = {}
+local warning_errors = {}
+do
+   local default_true_mt = { __index = function() return true end }
+   local function enable(tab, warning)
+      if warning == "all" then
+         setmetatable(tab, default_true_mt)
+      else
+         tab[warning] = true
+      end
+   end
+   for _, warning in ipairs(merge_list(tlconfig["disable_warnings"], args["wdisable"])) do
+      enable(disabled_warnings, warning)
+   end
+   for _, warning in ipairs(merge_list(tlconfig["warning_error"], args["werror"])) do
+      enable(warning_errors, warning)
+   end
+end
+
+if cmd == "warnings" then
+   local function right_pad(str, wid)
+      return (" "):rep(wid - #str) .. str
+   end
+   local w = {}
+   local longest = 0
+   for warning in pairs(tl.warning_kinds) do
+      if #warning > longest then
+         longest = #warning
+      end
+      table.insert(w, warning)
+   end
+   table.sort(w)
+   print("Compiler warnings:")
+   for _, v in ipairs(w) do
+      io.write(" ", right_pad(v, longest), " : ")
+      if disabled_warnings[v] then
+         io.write("disabled")
+      elseif warning_errors[v] then
+         io.write("promoted to error")
+      else
+         io.write("enabled")
+      end
+      io.write("\n")
+   end
+   os.exit(0)
 end
 
 --------------------------------------------------------------------
@@ -236,17 +336,29 @@ local exit = 0
 --                        ENVIRONMENT                             --
 --------------------------------------------------------------------
 
-local function report_type_errors(result)
-   local has_type_errors = report_errors("error", result.type_errors)
-   report_errors("unknown variable", result.unknowns)
-
-   return not has_type_errors
-end
-
 local function report_warnings(result)
    if not args["quiet"] then
-      report_errors("warning", result.warnings)
+      local res_warnings = {}
+      for _, warning in ipairs(result.warnings) do
+         if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
+            table.insert(res_warnings, warning)
+         end
+      end
+      return not report_errors("warning", res_warnings)
    end
+end
+
+local function get_warning_errors(result)
+   local res_warnings = {}
+   for _, warning in ipairs(result.warnings) do
+      local tag = warning.tag
+      if warning_errors[tag]
+         and not disabled_warnings[tag]
+      then
+         table.insert(res_warnings, warning)
+      end
+   end
+   return res_warnings
 end
 
 local env = nil
@@ -316,6 +428,14 @@ local function get_output_filename(file_name)
    end
 end
 
+local function report_result(result)
+   report_warnings(result)
+   local errs = merge_list(result.type_errors, get_warning_errors(result))
+   local ok = not report_errors("error", errs)
+   report_errors("unknown variable", result.unknowns)
+   return ok
+end
+
 local function type_check_file(file_name)
    setup_env(file_name)
 
@@ -331,11 +451,10 @@ local function type_check_file(file_name)
       return
    end
 
-   local ok = report_type_errors(result)
+   local ok = report_result(result)
    if not ok then
       exit = 1
    end
-   report_warnings(result)
 
    if exit == 0 and tlconfig["quiet"] == false and #args["script"] == 1 then
       local output_file = get_output_filename(file_name)
@@ -366,7 +485,7 @@ local function type_check_and_load(filename, modules)
       os.exit(1)
    end
    if filename:match("%.tl$") then
-      local ok = report_type_errors(result)
+      local ok = report_result(result)
       if not ok then
          os.exit(1)
       end
@@ -374,7 +493,7 @@ local function type_check_and_load(filename, modules)
 
    local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
    if err then
-      die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl")
+      die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. tostring(err))
    end
    return chunk
 end
@@ -796,9 +915,8 @@ for i, files in ipairs(sorted_source_file_arr) do
       exit = 1
       break
    end
-   local ok = report_type_errors(result)
+   local ok = report_result(result)
    if ok then
-      report_warnings(result)
       write_out(result, output_file)
    else
       exit = 1

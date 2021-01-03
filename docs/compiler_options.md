@@ -28,10 +28,12 @@ return {
 | `--skip-compat53` | `skip_compat53` | `boolean` | `build` `gen` | Skip compat53 insertions.
 || `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
 || `exclude` | `{string}` | `build` | The set of files to exclude. See below for details on patterns.
-| `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `gen` will compile every .tl file in every subdirectory by default.
+| `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
 | `-b --build-dir` | `build_dir` | `string` | `build` | Set the directory for generated files, mimicking the file structure of the source files.
 || `files` | `{string}` | `build` | The names of files to be compiled. Does not accept patterns like `include`.
-| `-p --pretend --dry-run` ||| `build` `gen`  | Don't compile/write to any files, but type check and log what files would be written to.
+| `-p --pretend` ||| `build` `gen`  | Don't compile/write to any files, but type check and log what files would be written to.
+| `--wdisable` | `disable_warnings` | `{string}` | `build` `check` `run` | Disable the given warnings.
+| `--werror` | `warning_error` | `{string}` | `build` `check` `run` | Promote the given warnings to errors.
 
 ### Include/Exclude patterns
 

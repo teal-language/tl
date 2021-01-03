@@ -41,13 +41,25 @@ local record tl
       env: Env
    end
 
+   enum WarningKind
+      "unused"
+      "redeclaration"
+   end
+   warning_kinds: {WarningKind:boolean}
    record Error
       y: number
       x: number
       msg: string
       filename: string
+
+      tag: WarningKind
    end
 end
+
+tl.warning_kinds = {
+   ["unused"] = true,
+   ["redeclaration"] = true,
+}
 
 local Result = tl.Result
 local Env = tl.Env
@@ -4710,12 +4722,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return t
    end
 
-   local function node_warning(node: Node, fmt: string, ...: any)
+   local function node_warning(tag: tl.WarningKind, node: Node, fmt: string, ...: any)
       table.insert(warnings, {
          y = node.y,
          x = node.x,
          msg = fmt:format(...),
          filename = filename,
+         tag = tag,
       })
    end
 
@@ -4736,9 +4749,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local function redeclaration_warning(node: Node, old_var: Variable)
       if node.tk:sub(1, 1) == "_" then return end
       if old_var.declared_at then
-         node_warning(node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
+         node_warning("redeclaration", node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
       else
-         node_warning(node, "redeclaration of variable '%s'", node.tk)
+         node_warning("redeclaration", node, "redeclaration of variable '%s'", node.tk)
       end
    end
 
@@ -4750,9 +4763,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          and prefix ~= "@"
       then
          if name:sub(1, 2) == "::" then
-            node_warning(var.declared_at, "unused label %s", name)
+            node_warning("unused", var.declared_at, "unused label %s", name)
          else
             node_warning(
+               "unused",
                var.declared_at,
                "unused %s %s: %s",
                var.is_func_arg and "argument"
