@@ -3611,7 +3611,6 @@ local binop_types = {
          ["enum"] = STRING,
       },
       ["function"] = {
-         ["function"] = FUNCTION,
          ["boolean"] = BOOLEAN,
       },
       ["array"] = {
@@ -4803,7 +4802,10 @@ show_type(var.t))
          if find_var_type(k) then
             return comp(a, b)
          else
-            add_var(nil, k, resolve_typevars(v))
+            local resolved = resolve_typevars(v)
+            if resolved.typename ~= "unknown" then
+               add_var(nil, k, resolved)
+            end
             return true
          end
       end
