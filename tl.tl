@@ -3400,13 +3400,15 @@ local function VARARG(t: {Type}): Type
    return t
 end
 
+local function UNION(t: {Type}): Type
+   return a_type { typename = "union", types = t }
+end
+
 local ANY = a_type { typename = "any" }
 local NONE = a_type { typename = "none" }
 local NIL = a_type { typename = "nil" }
 local NUMBER = a_type { typename = "number" }
 local STRING = a_type { typename = "string" }
-local OPT_NUMBER = a_type { typename = "number" }
-local OPT_STRING = a_type { typename = "string" }
 local BOOLEAN = a_type { typename = "boolean" }
 local ARG_ALPHA = a_type { typename = "typearg", typearg = "@a" }
 local ARG_BETA = a_type { typename = "typearg", typearg = "@b" }
@@ -3422,6 +3424,8 @@ local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
 local NOMINAL_METATABLE_OF_ALPHA = a_type { typename = "nominal", names = {"metatable"}, typevals = { ALPHA } }
+
+local LOAD_FUNCTION = a_type { typename = "function", args = {}, rets = { STRING } }
 
 local OS_DATE_TABLE = a_type {
    typename = "record",
@@ -3459,6 +3463,19 @@ local DEBUG_GETINFO_TABLE = a_type {
       ["activelines"] = a_type { typename = "map", keys = NUMBER, values = BOOLEAN },
    }
 }
+
+local TABLE_SORT_FUNCTION = a_type { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } }
+
+-- placeholders for when we have optional arity annotations
+local OPT_NUMBER = NUMBER
+local OPT_STRING = STRING
+local OPT_ALPHA = ALPHA
+local OPT_BETA = BETA
+local OPT_TABLE = TABLE
+local OPT_UNION = UNION
+local OPT_BOOLEAN = BOOLEAN
+local OPT_NOMINAL_FILE = NOMINAL_FILE
+local OPT_TABLE_SORT_FUNCTION = TABLE_SORT_FUNCTION
 
 local numeric_binop = {
    ["number"] = {
@@ -3865,17 +3882,11 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
 end
 
 local standard_library: {string:Type} = {
-   ["..."] = a_type { typename = "tuple", STRING, STRING, STRING, STRING, STRING },
+   ["..."] = VARARG { STRING },
    ["@return"] = a_type { typename = "tuple", ANY },
    ["any"] = a_type { typename = "typetype", def = ANY },
    ["arg"] = ARRAY_OF_STRING,
-   ["assert"] = a_type {
-      typename = "poly",
-      types = {
-         a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { ALPHA } },
-         a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, BETA }, rets = { ALPHA } },
-      }
-   },
+   ["assert"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, OPT_BETA }, rets = { ALPHA } },
    ["collectgarbage"] = a_type { typename = "function", args = { STRING }, rets = { a_type { typename = "union", types = { BOOLEAN, NUMBER } }, NUMBER, NUMBER } },
    ["dofile"] = a_type { typename = "function", args = { OPT_STRING }, rets = VARARG { ANY } },
    ["error"] = a_type { typename = "function", args = { STRING, NUMBER }, rets = {} },
@@ -3883,31 +3894,13 @@ local standard_library: {string:Type} = {
    ["ipairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
       a_type { typename = "function", args = {}, rets = { NUMBER, ALPHA } },
    } },
-   ["load"] = a_type {
-      typename = "poly",
-      types = {
-         a_type { typename = "function", args = { STRING }, rets = { FUNCTION, STRING } },
-         a_type { typename = "function", args = { STRING, STRING }, rets = { FUNCTION, STRING } },
-         a_type { typename = "function", args = { STRING, STRING, STRING }, rets = { FUNCTION, STRING } },
-         a_type { typename = "function", args = { STRING, STRING, STRING, TABLE }, rets = { FUNCTION, STRING } },
-      },
-   },
-   ["loadfile"] = a_type {
-      typename = "poly",
-      types = {
-         a_type { typename = "function", args = {}, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING }, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING, STRING }, rets = { FUNCTION, ANY } },
-         a_type { typename = "function", args = { STRING, STRING, TABLE }, rets = { FUNCTION, ANY } },
-      },
-   },
+   ["load"] = a_type { typename = "function", args = { UNION { STRING, LOAD_FUNCTION }, OPT_STRING, OPT_STRING, OPT_TABLE }, rets = { FUNCTION, STRING } },
+   ["loadfile"] = a_type { typename = "function", args = { OPT_STRING, OPT_STRING, OPT_TABLE }, rets = { FUNCTION, STRING } },
    ["next"] = a_type {
       typename = "poly",
       types = {
-         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA }, rets = { ALPHA, BETA } },
-         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, ALPHA }, rets = { ALPHA, BETA } },
-         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA }, rets = { NUMBER, ALPHA } },
-         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, ALPHA }, rets = { NUMBER, ALPHA } },
+         a_type { typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { MAP_OF_ALPHA_TO_BETA, OPT_ALPHA }, rets = { ALPHA, BETA } },
+         a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ARRAY_OF_ALPHA, OPT_ALPHA }, rets = { NUMBER, ALPHA } },
       },
    },
    ["pairs"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = {
@@ -3918,13 +3911,7 @@ local standard_library: {string:Type} = {
    ["print"] = a_type { typename = "function", args = VARARG { ANY }, rets = {} },
    ["rawequal"] = a_type { typename = "function", args = { ANY, ANY }, rets = { BOOLEAN } },
    ["rawget"] = a_type { typename = "function", args = { TABLE, ANY }, rets = { ANY } },
-   ["rawlen"] = a_type {
-      typename = "poly",
-      types = {
-         a_type { typename = "function", args = { TABLE }, rets = { NUMBER } },
-         a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
-      },
-   },
+   ["rawlen"] = a_type { typename = "function", args = { UNION { TABLE, STRING } }, rets = { NUMBER } },
    ["rawset"] = a_type {
       typename = "poly",
       types = {
@@ -3957,21 +3944,8 @@ local standard_library: {string:Type} = {
             ["lines"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, a_type { typename = "union", types = { STRING, NUMBER } } }, rets = {
                a_type { typename = "function", args = {}, rets = VARARG { STRING } },
             } },
-            ["read"] = a_type {
-               typename = "poly",
-               types = {
-                  a_type { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
-                  a_type { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
-               }
-            },
-            ["seek"] = a_type {
-               typename = "poly",
-               types = {
-                  a_type { typename = "function", args = { NOMINAL_FILE }, rets = { NUMBER, STRING } },
-                  a_type { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { NUMBER, STRING } },
-                  a_type { typename = "function", args = { NOMINAL_FILE, STRING, NUMBER }, rets = { NUMBER, STRING } },
-               }
-            },
+            ["read"] = a_type { typename = "function", args = { NOMINAL_FILE, UNION { STRING, NUMBER } }, rets = { STRING, STRING } },
+            ["seek"] = a_type { typename = "function", args = { NOMINAL_FILE, OPT_STRING, OPT_NUMBER }, rets = { NUMBER, STRING } },
             ["setvbuf"] = a_type { typename = "function", args = { NOMINAL_FILE, STRING, OPT_NUMBER }, rets = {} },
             ["write"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, STRING }, rets = { NOMINAL_FILE, STRING } },
             -- TODO complete...
@@ -4052,42 +4026,16 @@ local standard_library: {string:Type} = {
    ["io"] = a_type {
       typename = "record",
       fields = {
-         ["close"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = {  }, rets = { BOOLEAN, STRING } },
-               a_type { typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } },
-            }
-         },
+         ["close"] = a_type { typename = "function", args = { OPT_NOMINAL_FILE }, rets = { BOOLEAN, STRING } },
          ["flush"] = a_type { typename = "function", args = {}, rets = {} },
-         ["input"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = {  }, rets = { NOMINAL_FILE } },
-               a_type { typename = "function", args = { STRING }, rets = { NOMINAL_FILE } },
-               a_type { typename = "function", args = { NOMINAL_FILE }, rets = { NOMINAL_FILE } },
-            },
-         },
+         ["input"] = a_type { typename = "function", args = { OPT_UNION { STRING, NOMINAL_FILE } }, rets = { NOMINAL_FILE } },
          ["lines"] = a_type { typename = "function", args = VARARG { OPT_STRING, a_type { typename = "union", types = { STRING, NUMBER } } }, rets = {
             a_type { typename = "function", args = {}, rets = VARARG { STRING } },
          } },
          ["open"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-         ["output"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = {  }, rets = { NOMINAL_FILE } },
-               a_type { typename = "function", args = { STRING }, rets = { NOMINAL_FILE } },
-               a_type { typename = "function", args = { NOMINAL_FILE }, rets = { NOMINAL_FILE } },
-            },
-         },
+         ["output"] = a_type { typename = "function", args = { OPT_UNION { STRING, NOMINAL_FILE } }, rets = { NOMINAL_FILE } },
          ["popen"] = a_type { typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } },
-         ["read"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = { NOMINAL_FILE, STRING }, rets = { STRING, STRING } },
-               a_type { typename = "function", args = { NOMINAL_FILE, NUMBER }, rets = { STRING, STRING } },
-            }
-         },
+         ["read"] = a_type { typename = "function", args = { NOMINAL_FILE, UNION { STRING, NUMBER } }, rets = { STRING, STRING } },
          ["stderr"] = NOMINAL_FILE,
          ["stdin"] = NOMINAL_FILE,
          ["stdout"] = NOMINAL_FILE,
@@ -4102,13 +4050,7 @@ local standard_library: {string:Type} = {
          ["abs"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["acos"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["asin"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-         ["atan"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
-               a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            },
-         },
+         ["atan"] = a_type { typename = "function", args = { NUMBER, OPT_NUMBER }, rets = { NUMBER } },
          ["atan2"] = a_type { typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } },
          ["ceil"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
          ["cos"] = a_type { typename = "function", args = { NUMBER }, rets = { NUMBER } },
@@ -4151,18 +4093,12 @@ local standard_library: {string:Type} = {
             types = {
                a_type { typename = "function", args = {}, rets = { STRING } },
                a_type { typename = "function", args = { OS_DATE_TABLE_FORMAT, NUMBER }, rets = { OS_DATE_TABLE } },
-               a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
+               a_type { typename = "function", args = { OPT_STRING, OPT_NUMBER }, rets = { STRING } },
             }
          },
          ["difftime"] = a_type { typename = "function", args = { NUMBER, NUMBER}, rets = { NUMBER } },
          ["execute"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } },
-         ["exit"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = { NUMBER, BOOLEAN }, rets = {} },
-               a_type { typename = "function", args = { BOOLEAN, BOOLEAN }, rets = {} },
-            }
-         },
+         ["exit"] = a_type { typename = "function", args = { UNION { NUMBER, BOOLEAN }, BOOLEAN }, rets = {} },
          ["getenv"] = a_type { typename = "function", args = { STRING }, rets = { STRING } },
          ["remove"] = a_type { typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } },
          ["rename"] = a_type { typename = "function", args = { STRING, STRING}, rets = { BOOLEAN, STRING } },
@@ -4201,28 +4137,13 @@ local standard_library: {string:Type} = {
          ["byte"] = a_type {
             typename = "poly",
             types = {
-               a_type { typename = "function", args = { STRING }, rets = { NUMBER } },
-               a_type { typename = "function", args = { STRING, NUMBER }, rets = { NUMBER } },
+               a_type { typename = "function", args = { STRING, OPT_NUMBER }, rets = { NUMBER } },
                a_type { typename = "function", args = { STRING, NUMBER, NUMBER }, rets = VARARG { NUMBER } },
-            }
+            },
          },
          ["char"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = { STRING } },
-         ["dump"] = a_type {
-               typename = "poly",
-               types = {
-                  a_type({ typename = "function", args = { FUNCTION }, rets = { STRING } }),
-                  a_type({ typename = "function", args = { FUNCTION, BOOLEAN }, rets = { STRING } }),
-               },
-            },
-         ["find"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", args = { STRING, STRING }, rets = VARARG { NUMBER, NUMBER, STRING } },
-               a_type { typename = "function", args = { STRING, STRING, NUMBER }, rets = VARARG { NUMBER, NUMBER, STRING } },
-               a_type { typename = "function", args = { STRING, STRING, NUMBER, BOOLEAN }, rets = VARARG { NUMBER, NUMBER, STRING } },
-               -- FIXME any other modes
-            }
-         },
+         ["dump"] = a_type({ typename = "function", args = { FUNCTION, OPT_BOOLEAN }, rets = { STRING } }),
+         ["find"] = a_type { typename = "function", args = { STRING, STRING, OPT_NUMBER, OPT_BOOLEAN }, rets = VARARG { NUMBER, NUMBER, STRING } },
          ["format"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = { STRING } },
          ["gmatch"] = a_type { typename = "function", args = { STRING, STRING }, rets = {
             a_type { typename = "function", args = {}, rets = VARARG { STRING } },
@@ -4271,20 +4192,8 @@ local standard_library: {string:Type} = {
          },
          ["pack"] = a_type { typename = "function", args = VARARG { ANY }, rets = { TABLE } },
          ["remove"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } },
-         ["sort"] = a_type {
-            typename = "poly",
-            types = {
-               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {} },
-               a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, a_type { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } } }, rets = {} },
-            }
-         },
-         ["unpack"] = a_type {
-            typename = "function",
-            needs_compat53 = true,
-            typeargs = { ARG_ALPHA },
-            args = { ARRAY_OF_ALPHA, NUMBER, NUMBER },
-            rets = VARARG { ALPHA },
-         },
+         ["sort"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_TABLE_SORT_FUNCTION }, rets = {} },
+         ["unpack"] = a_type { typename = "function", needs_compat53 = true, typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = VARARG { ALPHA } },
       },
    },
    ["utf8"] = a_type {
