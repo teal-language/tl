@@ -3654,14 +3654,14 @@ local function is_unknown(t: Type): boolean
        or t.typename == "unknown_emptytable_value"
 end
 
-local show_type: function(Type, {Type:boolean}): string
+local show_type: function(Type, {Type:string}): string
 
-local function show_type_base(t: Type, seen: {Type:boolean}): string
+local function show_type_base(t: Type, seen: {Type:string}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist
    if seen[t] then
-      return "..."
+      return seen[t]
    end
-   seen[t] = true
+   seen[t] = "..."
 
    local function show(t: Type): string
       return show_type(t, seen)
@@ -3770,11 +3770,13 @@ local function show_type_base(t: Type, seen: {Type:boolean}): string
    end
 end
 
-show_type = function(t: Type, seen: {Type:boolean}): string
-   local ret = show_type_base(t, seen or {})
+show_type = function(t: Type, seen: {Type:string}): string
+   seen = seen or {}
+   local ret = show_type_base(t, seen)
    if t.inferred_at then
       ret = ret .. " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..": )"
    end
+   seen[t] = ret
    return ret
 end
 

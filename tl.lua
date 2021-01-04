@@ -3659,9 +3659,9 @@ local show_type
 local function show_type_base(t, seen)
 
    if seen[t] then
-      return "..."
+      return seen[t]
    end
-   seen[t] = true
+   seen[t] = "..."
 
    local function show(t)
       return show_type(t, seen)
@@ -3771,10 +3771,12 @@ local function show_type_base(t, seen)
 end
 
 show_type = function(t, seen)
-   local ret = show_type_base(t, seen or {})
+   seen = seen or {}
+   local ret = show_type_base(t, seen)
    if t.inferred_at then
       ret = ret .. " (inferred at " .. t.inferred_at_file .. ":" .. t.inferred_at.y .. ":" .. t.inferred_at.x .. ": )"
    end
+   seen[t] = ret
    return ret
 end
 
