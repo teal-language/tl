@@ -45,6 +45,21 @@ describe("io", function()
          local u: R | FILE
       ]])
 
+      describe("read", function()
+         it("accepts a union (#317)", util.check [[
+            local function loadFile(textFile: string, amount: string | number): string, FILE
+                local file = io.open(textFile, "r")
+                if not file then error("ftcsv: File not found at " .. textFile) end
+                local lines: string
+                file:read(amount)
+                if amount == "*all" then
+                    file:close()
+                end
+                return lines, file
+            end
+         ]])
+      end)
+
       describe("lines", function()
          it("with no arguments", util.check [[
             for l in io.popen("ls"):lines() do
