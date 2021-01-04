@@ -36,7 +36,7 @@ jobs:
       run: |
         yarn global add netlify-cli
         cd ${{ github.workspace }}/teal-playground
-        NETLIFY_URL=$(netlify deploy --dir=dist --alias=${{ github.event.pull_request.user.login }}-${{ github.event.pull_request.id }} | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*(--)[a-zA-Z0-9./?=_-]*')
+        NETLIFY_URL=$(netlify deploy --dir=dist --alias=${{ github.event.pull_request.number }} | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*(--)[a-zA-Z0-9./?=_-]*')
         echo "$NETLIFY_URL"
         echo "::set-output name=NETLIFY_URL::$NETLIFY_URL"
       env:
