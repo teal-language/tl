@@ -111,6 +111,7 @@ function util.tl_cmd(name, ...)
    assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
 
    local cmd = {
+      string.format("LUA_PATH=%q", package.path),
       tl_executable,
       name
    }
@@ -134,6 +135,11 @@ function util.write_tmp_file(finally, content, ext)
    assert(type(finally) == "function")
    assert(type(content) == "string")
 
+   -- TODO: since busted runs tests concurrently, the following race condition happens occasionally
+   --    test a: starts, touches /tmp/teal_tmp_file1.tl
+   --    test b: finishes, deleting /tmp/teal_tmp_file1.tl
+   --    test a: attempts to read from /tmp/teal_tmp_file1.tl, fails
+   -- solution: use rng?, a simple uuid impl? set an environment var to increment?
    tmp_files = tmp_files + 1
    local full_name = "/tmp/teal_tmp_file" .. tostring(tmp_files) .. "." .. ext
 
