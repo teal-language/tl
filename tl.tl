@@ -5967,7 +5967,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       -- get all arguments except the last...
       local is_va = vals.is_va
       for i = 1, #vals - 1 do
-         ret[i] = vals[i]
+         ret[i] = resolve_tuple(vals[i])
       end
 
       local last = vals[#vals]
