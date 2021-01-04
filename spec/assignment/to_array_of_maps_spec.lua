@@ -13,4 +13,10 @@ describe("assignment to array of maps", function()
          },
       }
    ]])
+
+   it("resolves subtypes correctly for empty tables (#318)", util.check [[
+      local map: {boolean:{number}} = {
+         [true] = {},
+      }
+   ]])
 end)

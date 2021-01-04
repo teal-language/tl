@@ -5018,8 +5018,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
             local all_errs = {}
             for i = 1, #t1.typevals do
-               local _, errs = same_type(t2.typevals[i], t1.typevals[i])
-               add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t1.typevals[i]) .. ">: ", t1 as Node)
+               local _, errs = same_type(t1.typevals[i], t2.typevals[i])
+               add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t2.typevals[i]) .. ">: ", t1 as Node)
             end
             if #all_errs == 0 then
                return true
@@ -5044,6 +5044,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local is_known_table_type: function(t: Type): boolean
+
    -- invariant type comparison
    same_type = function(t1: Type, t2: Type): boolean, {Error}
       assert(type(t1) == "table")
@@ -5051,6 +5053,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
       if t1.typename == "typevar" or t2.typename == "typevar" then
          return compare_typevars(t1, t2, same_type)
+      end
+
+      if t1.typename == "emptytable" and is_known_table_type(t2) then
+         return true
       end
 
       if t1.typename ~= t2.typename then
@@ -5116,8 +5122,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
       return true
    end
-
-   local is_known_table_type: function(t: Type): boolean
 
    local function unite(types: {Type}): Type
       if #types == 1 then
@@ -5396,10 +5400,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       elseif t2.typename == "map" then
          if t1.typename == "map" then
             local _, errs_keys, errs_values: any, {Error}, {Error}
-            _, errs_keys = is_a(t1.keys, t2.keys)
-            _, errs_values = is_a(t2.values, t1.values)
-            if t2.values.typename == "any" then -- special-case hack for {any:any}
-               errs_values = {}
+            if t2.keys.typename ~= "any" then -- FIXME hack for {any:any}
+               _, errs_keys = same_type(t2.keys, t1.keys)
+            end
+            if t2.values.typename ~= "any" then -- FIXME hack for {any:any}
+               _, errs_values = same_type(t1.values, t2.values)
             end
             return combine_errs(errs_keys, errs_values)
          elseif t1.typename == "array" or t1.typename == "tupletable" then
