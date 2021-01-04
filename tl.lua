@@ -7114,6 +7114,12 @@ show_type(var.t))
             local orig_b = b
             local ua = a and resolve_unary(a)
             local ub = b and resolve_unary(b)
+            if ua and ua.typename == "typetype" and ua.def.typename == "record" then
+               ua = ua.def
+            end
+            if ub and ub.typename == "typetype" and ub.def.typename == "record" then
+               ub = ub.def
+            end
             if node.op.op == "@funcall" then
                node.type = type_check_funcall(node, a, b)
             elseif node.op.op == "@index" then

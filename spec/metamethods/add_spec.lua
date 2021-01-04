@@ -27,6 +27,29 @@ describe("binary metamethod __add", function()
       print(r("!!!", 34))
    ]])
 
+   it("can be used on a record prototype", util.check [[
+      local record A
+         value: number
+         metamethod __call: function(A, number): A
+         metamethod __add: function(A, A): A
+      end
+      local A_mt: metatable<A>
+      A_mt = {
+         __call = function(a: A, v: number): A
+            return setmetatable({value = v} as A, A_mt)
+         end,
+         __add = function(a: A, b: A): A
+            local res = setmetatable({} as A, A_mt)
+            res.value = a.value + b.value
+            return res
+         end,
+      }
+
+      A.value = 10
+      local c = A + A
+      print(c.value)
+   ]])
+
    it("can be used via the second argument", util.check [[
       local type Rec = record
          x: number
