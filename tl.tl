@@ -4225,7 +4225,7 @@ local standard_library: {string:Type} = {
          },
          ["format"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = { STRING } },
          ["gmatch"] = a_type { typename = "function", args = { STRING, STRING }, rets = {
-            a_type { typename = "function", args = {}, rets = { STRING } },
+            a_type { typename = "function", args = {}, rets = VARARG { STRING } },
          } },
          ["gsub"] = a_type {
             typename = "poly",
