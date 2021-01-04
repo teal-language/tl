@@ -6460,8 +6460,22 @@ show_type(var.t))
             node_error(node, "rawget expects two arguments")
          end
       elseif node.e1.tk == "print_type" then
-         print(show_type(b))
-         return b
+         if #b == 0 then
+
+            print("-----------------------------------------")
+            for i, s in ipairs(st) do
+               for s, v in pairs(s) do
+                  print(("%2d %-14s %-11s %s"):format(i, s, v.t.typename, show_type(v.t):sub(1, 50)))
+               end
+            end
+            print("-----------------------------------------")
+            return NONE
+         else
+            local t = show_type(b[1])
+            print(t)
+            node_warning(node.e2[1], "type is: %s", t)
+            return b
+         end
       elseif node.e1.tk == "require" then
          if #b == 1 then
             if node.e2[1].kind == "string" then
