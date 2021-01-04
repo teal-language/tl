@@ -19,6 +19,22 @@ describe("metamethod __call", function()
       print(r("!!!", 34))
    ]])
 
+   it("can be used on a record prototype", util.check [[
+      local record A
+         value: number
+         metamethod __call: function(A, number): A
+      end
+      local A_mt: metatable<A>
+      A_mt = {
+         __call = function(a: A, v: number): A
+            return setmetatable({value = v} as A, A_mt)
+         end
+      }
+
+      local inst = A(2)
+      print(inst.value)
+   ]])
+
    it("can type check arguments and argument count skips self", util.check_type_error([[
       local type Rec = record
          x: number

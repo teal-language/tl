@@ -5594,6 +5594,9 @@ show_type(var.t))
          func = resolve_unary(func)
 
          if func.typename ~= "function" and func.typename ~= "poly" then
+            if func.typename == "typetype" and func.def.typename == "record" then
+               func = func.def
+            end
             if func.meta_fields and func.meta_fields["__call"] then
                table.insert(args, 1, func)
                func = func.meta_fields["__call"]
