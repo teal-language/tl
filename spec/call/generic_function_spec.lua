@@ -424,5 +424,11 @@ describe("generic function", function()
       end
    ]])
 
+   it("generic function definitions do not leak type variables (#322)", util.check [[
+      local function my_unpack<T>(_list: {T}, _x: number, _y: number): T...
+      end
+      local _tbl_unpack = my_unpack or table.unpack
+      local _map: {string:number} = setmetatable(assert({}), { __mode = "k" })
+   ]])
 end)
 

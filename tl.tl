@@ -3588,7 +3588,6 @@ local binop_types: {string:{TypeName:{TypeName:Type}}} = {
          ["enum"] = STRING,
       },
       ["function"] = {
-         ["function"] = FUNCTION,
          ["boolean"] = BOOLEAN,
       },
       ["array"] = {
@@ -4888,7 +4887,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if find_var_type(k) then
             return comp(a, b)
          else
-            add_var(nil, k, resolve_typevars(v))
+            local resolved = resolve_typevars(v)
+            if resolved.typename ~= "unknown" then
+               add_var(nil, k, resolved)
+            end
             return true
          end
       end
