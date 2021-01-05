@@ -134,7 +134,7 @@ function util.chdir_teardown()
    assert(lfs.chdir(current_dir))
 end
 
-math.randomseed(os.clock())
+math.randomseed(os.time())
 local function tmp_file_name()
    return "/tmp/teal_tmp" .. math.random(99999999)
 end
