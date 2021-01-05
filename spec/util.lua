@@ -106,13 +106,18 @@ local valid_commands = {
    run = true,
    build = true,
 }
+local cmd_prefix = { string.format("LUA_PATH=%q", package.path) }
+for i = 1, 4 do
+   table.insert(cmd_prefix, string.format("LUA_PATH_5_%d=%q", i, package.path))
+end
+table.insert(cmd_prefix, tl_executable)
+cmd_prefix = table.concat(cmd_prefix, " ")
 function util.tl_cmd(name, ...)
    assert(name, "no command provided")
    assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
 
    local cmd = {
-      string.format("LUA_PATH=%q", package.path),
-      tl_executable,
+      cmd_prefix,
       name
    }
    for i = 1, select("#", ...) do
@@ -129,19 +134,16 @@ function util.chdir_teardown()
    assert(lfs.chdir(current_dir))
 end
 
-local tmp_files = 0
+math.randomseed(os.clock())
+local function tmp_file_name()
+   return "/tmp/teal_tmp" .. math.random(99999999)
+end
 function util.write_tmp_file(finally, content, ext)
    if not ext then ext = "tl" end
    assert(type(finally) == "function")
    assert(type(content) == "string")
 
-   -- TODO: since busted runs tests concurrently, the following race condition happens occasionally
-   --    test a: starts, touches /tmp/teal_tmp_file1.tl
-   --    test b: finishes, deleting /tmp/teal_tmp_file1.tl
-   --    test a: attempts to read from /tmp/teal_tmp_file1.tl, fails
-   -- solution: use rng?, a simple uuid impl? set an environment var to increment?
-   tmp_files = tmp_files + 1
-   local full_name = "/tmp/teal_tmp_file" .. tostring(tmp_files) .. "." .. ext
+   local full_name = tmp_file_name() .. "." .. ext
 
    local fd = assert(io.open(full_name, "w"))
    fd:write(content)
@@ -156,8 +158,7 @@ function util.write_tmp_dir(finally, dir_structure)
    assert(type(finally) == "function")
    assert(type(dir_structure) == "table")
 
-   tmp_files = tmp_files + 1
-   local full_name = "/tmp/teal_tmp_dir" .. tostring(tmp_files) .. "/"
+   local full_name = tmp_file_name() .. "/"
    assert(lfs.mkdir(full_name))
    local function traverse_dir(dir_structure, prefix)
       prefix = prefix or full_name
