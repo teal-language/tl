@@ -1059,7 +1059,7 @@ local function is_record_type(t)
    return t.typename == "record" or t.typename == "arrayrecord"
 end
 
-local function is_type(t)
+local function is_typetype(t)
    return t.typename == "typetype" or t.typename == "nestedtype"
 end
 
@@ -2926,7 +2926,7 @@ function tl.pretty_print_ast(ast, mode)
    local function print_record_def(typ)
       local out = { "{" }
       for _, name in ipairs(typ.field_order) do
-         if typ.fields[name].typename == "typetype" and is_record_type(typ.fields[name].def) then
+         if is_typetype(typ.fields[name]) and is_record_type(typ.fields[name].def) then
             table.insert(out, name)
             table.insert(out, " = ")
             table.insert(out, print_record_def(typ.fields[name].def))
@@ -3798,7 +3798,7 @@ local function show_type_base(t, seen)
       return "<any type>"
    elseif t.typename == "nil" then
       return "nil"
-   elseif t.typename == "typetype" then
+   elseif is_typetype(t) then
       return "type " .. show(t.def)
    elseif t.typename == "bad_nominal" then
       return table.concat(t.names, ".") .. " (an unknown type)"
@@ -4234,7 +4234,7 @@ local standard_library = {
 
 for _, t in pairs(standard_library) do
    fill_field_order(t)
-   if t.typename == "typetype" then
+   if is_typetype(t) then
       fill_field_order(t.def)
    end
 end
@@ -4499,7 +4499,7 @@ tl.type_check = function(ast, opts)
          if accept_typearg and typ.typename == "typearg" then
             return typ
          end
-         if is_type(typ) then
+         if is_typetype(typ) then
             return typ
          end
       end
@@ -4507,7 +4507,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function union_type(t)
-      if t.typename == "typetype" then
+      if is_typetype(t) then
          return union_type(t.def)
       elseif t.typename == "tuple" then
          return union_type(t[1])
@@ -4562,6 +4562,14 @@ tl.type_check = function(ast, opts)
          end
       end
       return true
+   end
+
+   local function resolve_typetype(t)
+      if is_typetype(t) then
+         return t.def
+      else
+         return t
+      end
    end
 
    local no_nested_types = {
@@ -4627,7 +4635,7 @@ tl.type_check = function(ast, opts)
          copy.typearg = t.typearg
       elseif t.typename == "typevar" then
          copy.typevar = t.typevar
-      elseif t.typename == "typetype" then
+      elseif is_typetype(t) then
          copy.def = resolve_typevars(t.def, seen, where)
       elseif t.typename == "nominal" then
          copy.typevals = resolve_typevars(t.typevals, seen, where)
@@ -4770,7 +4778,7 @@ var.declared_at,
 "unused %s %s: %s",
 var.is_func_arg and "argument" or
             var.t.typename == "function" and "function" or
-            is_type(var.t) and "type" or
+            is_typetype(var.t) and "type" or
             "variable",
 name,
 show_type(var.t))
@@ -4822,6 +4830,7 @@ show_type(var.t))
          else
             local resolved = resolve_typevars(v)
             if resolved.typename ~= "unknown" then
+               resolved = resolve_typetype(resolved)
                add_var(nil, k, resolved)
             end
             return true
@@ -5303,14 +5312,10 @@ show_type(var.t))
             _, errs_values = is_a(t1.values, t2.elements)
             return combine_errs(errs_keys, errs_values)
          end
-      elseif t2.typename == "typetype" then
-         if t1.typename == "record" and t2.def.typename == "record" then
-            return is_a(t1, t2.def, for_equality)
-         end
       elseif t2.typename == "record" then
          if is_record_type(t1) then
             return match_fields_to_record(t1, t2)
-         elseif t1.typename == "typetype" and t1.def.typename == "record" then
+         elseif is_typetype(t1) and t1.def.typename == "record" then
             return is_a(t1.def, t2, for_equality)
          end
       elseif t2.typename == "arrayrecord" then
@@ -5487,7 +5492,7 @@ show_type(var.t))
 
    local function close_types(vars)
       for _, var in pairs(vars) do
-         if var.t.typename == "typetype" then
+         if is_typetype(var.t) then
             var.t.closed = true
          end
       end
@@ -5629,7 +5634,7 @@ show_type(var.t))
          func = resolve_unary(func)
 
          if func.typename ~= "function" and func.typename ~= "poly" then
-            if func.typename == "typetype" and func.def.typename == "record" then
+            if is_typetype(func) and func.def.typename == "record" then
                func = func.def
             end
             if func.meta_fields and func.meta_fields["__call"] then
@@ -5720,14 +5725,6 @@ show_type(var.t))
       end
    end
 
-   local function get_self_type(t)
-      if t.typename == "typetype" then
-         return t.def
-      else
-         return t
-      end
-   end
-
    local function match_record_key(node, tbl, key, orig_tbl)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
@@ -5745,7 +5742,7 @@ show_type(var.t))
          return UNKNOWN
       end
 
-      tbl = get_self_type(tbl)
+      tbl = resolve_typetype(tbl)
 
       if tbl.typename == "emptytable" then
       elseif is_record_type(tbl) then
@@ -5940,7 +5937,7 @@ show_type(var.t))
       local typetype = t.found or find_type(t.names)
       if not typetype then
          type_error(t, "unknown type %s", t)
-      elseif is_type(typetype) then
+      elseif is_typetype(typetype) then
          resolved = match_typevals(t, typetype.def)
       else
          type_error(t, table.concat(t.names, ".") .. " is not a type")
@@ -6626,7 +6623,7 @@ show_type(var.t))
                end
                if vartype then
                   local val = exps[i]
-                  if resolve_unary(vartype).typename == "typetype" then
+                  if is_typetype(resolve_unary(vartype)) then
                      node_error(varnode, "cannot reassign a type")
                   elseif val then
                      assert_is_a(varnode, val, vartype, "assignment")
@@ -7070,12 +7067,12 @@ show_type(var.t))
          before_statements = function(node, children)
             add_internal_function_variables(node)
             if node.is_method then
-               local rtype = get_self_type(children[1])
+               local rtype = resolve_typetype(children[1])
                children[3][1] = rtype
                add_var(nil, "self", rtype)
             end
 
-            local rtype = resolve_unary(get_self_type(children[1]))
+            local rtype = resolve_unary(resolve_typetype(children[1]))
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
             end
@@ -7171,10 +7168,10 @@ show_type(var.t))
             local orig_b = b
             local ua = a and resolve_unary(a)
             local ub = b and resolve_unary(b)
-            if ua and ua.typename == "typetype" and ua.def.typename == "record" then
+            if ua and is_typetype(ua) and ua.def.typename == "record" then
                ua = ua.def
             end
-            if ub and ub.typename == "typetype" and ub.def.typename == "record" then
+            if ub and is_typetype(ub) and ub.def.typename == "record" then
                ub = ub.def
             end
             if node.op.op == "@funcall" then

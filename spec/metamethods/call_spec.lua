@@ -92,6 +92,40 @@ describe("metamethod __call", function()
       })
    ]])
 
+   it("can use nested record prototypes in setmetatable and types flow through correctly", util.check [[
+      local record Rec
+         record Type
+            x: number
+            y: number
+            metamethod __call: function(Rec.Type): number
+         end
+         metamethod __call: function(Rec, number, number): Rec.Type
+      end
+
+      local Rec_instance_mt = {
+         __call = function(self: Rec.Type): number
+            return self.x + self.y
+         end
+      }
+
+      local Rec_class_mt = {
+         __call = function(_: Rec, x, y): Rec.Type
+            return setmetatable({ x = x, y = y } as Rec.Type, Rec_instance_mt)
+         end
+      }
+
+      setmetatable(Rec, Rec_class_mt)
+
+      local a = Rec(10, 20)
+      local b = Rec(1, 2)
+      print(a() + b())
+
+      local function f(_t: Rec)
+      end
+
+      f(Rec)
+   ]])
+
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
    -- metamethod definition inside Rec.
