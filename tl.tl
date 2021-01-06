@@ -6733,11 +6733,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      end
                   end
                end
+
                local last: Type
+               local rets = exp1type.rets
                for i, v in ipairs(node.vars) do
-                  local r = exp1type.rets[i]
+                  local r = rets[i]
                   if not r then
-                     if exp1type.rets.is_va then
+                     if rets.is_va then
                         r = last
                      else
                         r = UNKNOWN
@@ -6745,6 +6747,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   end
                   add_var(v, v.tk, r)
                   last = r
+               end
+               if (not lax) and (not rets.is_va and #node.vars > #rets) then
+                  local nrets = #rets
+                  local at = node.vars[nrets + 1]
+                  local n_values = nrets == 1 and "1 value" or tostring(nrets) .. " value%s"
+                  node_error(at, "too many variables for this iterator; it produces " .. n_values)
                end
             else
                if not (lax and is_unknown(exp1type)) then

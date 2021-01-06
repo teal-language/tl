@@ -328,7 +328,6 @@ local function check_type_error(lax, code, type_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
-      batch:add(assert.same, #type_errors, #errors, "Expected same number of errors:")
       batch_compare(batch, "type errors", type_errors, errors)
       batch:assert()
    end

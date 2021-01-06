@@ -66,9 +66,20 @@ describe("forin", function()
          return nil
       end
 
-      for _, v in it() do
+      for v in it() do
       end
    ]])
+
+   it("catches when too many values are passed", util.check_type_error([[
+      local function it(): function(): string
+         return nil
+      end
+
+      for k, v in it() do
+      end
+   ]], {
+      { x = 14, y = 5, msg = "too many variables for this iterator; it produces 1 value" }
+   }))
 
    describe("regression tests", function()
       it("with an iterator declared as a nominal (#183)", util.check [[
@@ -78,7 +89,7 @@ describe("forin", function()
              return nil
          end
 
-         for _, v in it() do
+         for v in it() do
          end
       ]])
 
