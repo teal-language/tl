@@ -5303,6 +5303,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             _, errs_values = is_a(t1.values, t2.elements)
             return combine_errs(errs_keys, errs_values)
          end
+      elseif t2.typename == "typetype" then
+         if t1.typename == "record" and t2.def.typename == "record" then
+            return is_a(t1, t2.def, for_equality)
+         end
       elseif t2.typename == "record" then
          if is_record_type(t1) then
             return match_fields_to_record(t1, t2)

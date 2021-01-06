@@ -76,6 +76,22 @@ describe("metamethod __call", function()
       { msg = "not a function" }
    }))
 
+   it("can use the record prototype in setmetatable and types flow through correctly", util.check [[
+      local record mymod
+        metamethod __call: function(mymod, string): string
+      end
+
+      function mymod.myfunc(s: string):string
+         return "Hello, " .. s .. "!"
+      end
+
+      return setmetatable(mymod, {
+        __call = function(_: mymod, s: string): string
+          return mymod.myfunc(s)
+        end
+      })
+   ]])
+
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
    -- metamethod definition inside Rec.
