@@ -56,9 +56,11 @@ local tl = {Env = {}, Result = {}, Error = {}, }
 
 
 
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
+   ["debug"] = true,
 }
 
 local Result = tl.Result
@@ -6410,7 +6412,7 @@ show_type(var.t))
          else
             local t = show_type(b[1])
             print(t)
-            node_warning(node.e2[1], "type is: %s", t)
+            node_warning("debug", node.e2[1], "type is: %s", t)
             return b
          end
       elseif node.e1.tk == "require" then

@@ -44,6 +44,7 @@ local record tl
    enum WarningKind
       "unused"
       "redeclaration"
+      "debug"
    end
    warning_kinds: {WarningKind:boolean}
    record Error
@@ -59,6 +60,7 @@ end
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
+   ["debug"] = true,
 }
 
 local Result = tl.Result
@@ -6410,7 +6412,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          else
             local t = show_type(b[1])
             print(t)
-            node_warning(node.e2[1], "type is: %s", t)
+            node_warning("debug", node.e2[1], "type is: %s", t)
             return b
          end
       elseif node.e1.tk == "require" then
