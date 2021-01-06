@@ -1,3 +1,4 @@
+local assert = require("luassert")
 local util = require("spec.util")
 
 describe("tl check", function()
@@ -25,7 +26,7 @@ describe("tl check", function()
             print(add("string", 20))
             print(add(10, true))
          ]])
-         local pd = io.popen("./tl check " .. name .. " 2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("check", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(nil, "exit", 1, pd:close())
          assert.match("2 errors:", output, 1, true)

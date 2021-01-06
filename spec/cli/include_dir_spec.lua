@@ -1,3 +1,4 @@
+local assert = require("luassert")
 local util = require("spec.util")
 
 describe("-I --include-dir argument", function()
@@ -9,7 +10,6 @@ describe("-I --include-dir argument", function()
          assert(x == 3)
       ]])
 
-      local pd = io.popen("./tl -I spec check " .. name, "r")
       local pd = io.popen(util.tl_cmd("check", "-I", "spec", name), "r")
       local output = pd:read("*a")
       util.assert_popen_close(true, "exit", 0, pd:close())

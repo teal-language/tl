@@ -1,3 +1,4 @@
+local assert = require("luassert")
 local util = require("spec.util")
 
 describe("-l --preload argument", function()
@@ -6,7 +7,6 @@ describe("-l --preload argument", function()
          print(add(10, 20))
       ]])
 
-      local pd = io.popen("./tl -l spec.add check " .. name, "r")
       local pd = io.popen(util.tl_cmd("check", "-l", "spec.add", name), "r")
       local output = pd:read("*a")
       util.assert_popen_close(true, "exit", 0, pd:close())
