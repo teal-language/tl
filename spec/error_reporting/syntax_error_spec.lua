@@ -86,6 +86,19 @@ describe("syntax errors", function()
       { y = 15, msg = "syntax error, expected 'end' to close construct started at :5:22:" },
    }))
 
+   it("type missing local or global", util.check_syntax_error([[
+      type foo = record
+         x: number
+      end
+
+      -- skips over correctly and continues parsing
+      local function foo2()
+         bar()
+      end
+   ]], {
+      { y = 1, msg = "types need to be declared with 'local type' or 'global type'" },
+   }))
+
    it("in a nested required package refer to the correct filename of required file", function ()
       util.mock_io(finally, {
          ["aaa.tl"] = [[

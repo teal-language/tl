@@ -2384,6 +2384,10 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    return i, asgn
 end
 
+local function skip_type_declaration(ps, i)
+   return (parse_type_declaration(ps, i, "local_type"))
+end
+
 local function parse_statement(ps, i)
    if ps.tokens[i].tk == "local" then
       if ps.tokens[i + 1].tk == "type" and ps.tokens[i + 2].kind == "identifier" then
@@ -2432,6 +2436,8 @@ local function parse_statement(ps, i)
       return parse_goto(ps, i)
    elseif ps.tokens[i].tk == "::" then
       return parse_label(ps, i)
+   elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].kind == "identifier" then
+      return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    else
       return parse_call_or_assignment(ps, i)
    end
