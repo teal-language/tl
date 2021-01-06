@@ -8,6 +8,12 @@ describe("syntax errors", function()
       { y = 1, msg = "expected an expression" },
    }))
 
+   it("incomplete expression", util.check_syntax_error([[
+      return 1 +
+   ]], {
+      { y = 1, msg = "expected an expression" },
+   }))
+
    it("in enum", util.check_syntax_error([[
       local type Direction = enum
          "north",

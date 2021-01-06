@@ -1737,10 +1737,16 @@ do
          i = i + 1
          local rhs
          i, rhs = P(ps, i)
+         if not rhs then
+            return fail(ps, i, "expected an expression")
+         end
          lookahead = ps.tokens[i].tk
          while precedences[2][lookahead] and ((precedences[2][lookahead] > (precedences[2][op.op])) or
             (is_right_assoc[lookahead] and (precedences[2][lookahead] == precedences[2][op.op]))) do
             i, rhs = E(ps, i, rhs, precedences[2][lookahead])
+            if not rhs then
+               return fail(ps, i, "expected an expression")
+            end
             lookahead = ps.tokens[i].tk
          end
          lhs = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = lhs, e2 = rhs }
