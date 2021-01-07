@@ -1,3 +1,52 @@
+# 0.10.1
+
+2021-01-07
+
+Fixes, lots of fixes! We shipped a bunch of stuff in 0.10, so it's time
+to clean some rough edges, thanks to the great feedback we've received
+in that release. No big changes in the language this time (other than some
+things that should have worked but didn't now do!). In the tooling
+department, we now have configurable warnings, so you can enable or
+disable them by category.
+Also, stay tuned for the next Teal meetup later this month!
+
+This release features commits by Darren Jennings, Corey Williamson and Hisham
+Muhammad.
+
+## What's New
+
+### Language
+
+* Allow using metamethods such as `__call` and operators on the `record`
+  prototype itself (#313)
+* Maps are now invariant on key and value types (#318)
+* It is now an error to declare too many iteration variables in a `for-in`
+  construct
+* Some standard library definitions were changed from using polymorphic
+  function to using union types (#317)
+
+### Tooling
+
+* Warning categories
+  * You can disable specific warning categories such as redeclared
+    variables with the `--wdisable` flag or with the `disable_warnings`
+    entry in `tlconfig.lua`
+  * You can list existing warning categories with `tl warnings`
+* You can turn warnings into errors with `--werror`
+* Nicer error message when `type` is declared without a `local` or `global`
+  qualifier
+
+### Fixes
+
+* Fixed a parser crash on incomplete expressions
+* Nested record prototypes can be used everywhere record prototypes can
+* Fixed a leak of type variables when defining generic functions (#322)
+* Fixed resolution of type arguments in recursive type definitions
+  to avoid crashing the compiler
+* Ensured that n-ary function returns don't leak into variable
+  declaration types (#309)
+* Fix `is` code generation for userdata
+
 # 0.10.0
 
 2020-12-31
