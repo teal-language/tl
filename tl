@@ -8,7 +8,7 @@ local tl = require("tl")
 local argparse = require("argparse")
 local lfs = require("lfs")
 
-local version_string = "0.10.0+dev"
+local version_string = "0.10.1"
 local path_separator = package.config:sub(1, 1)
 
 local function script_path()
