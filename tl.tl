@@ -77,33 +77,6 @@ local inspect = function(x: any):string
    return tostring(x)
 end
 
-local keywords: {string:boolean} = {
-   ["and"] = true,
-   ["break"] = true,
-   ["do"] = true,
-   ["else"] = true,
-   ["elseif"] = true,
-   ["end"] = true,
-   ["false"] = true,
-   ["for"] = true,
-   ["function"] = true,
-   ["goto"] = true,
-   ["if"] = true,
-   ["in"] = true,
-   ["local"] = true,
-   ["nil"] = true,
-   ["not"] = true,
-   ["or"] = true,
-   ["repeat"] = true,
-   ["return"] = true,
-   ["then"] = true,
-   ["true"] = true,
-   ["until"] = true,
-   ["while"] = true,
-
---   ["global"] = true,
-}
-
 local enum TokenKind
    "keyword"
    "op"
@@ -125,543 +98,96 @@ local record Token
    kind: TokenKind
 end
 
-local lex_word_start: {string:boolean} = {}
-for c = string.byte("a"), string.byte("z") do
-   lex_word_start[string.char(c)] = true
-end
-for c = string.byte("A"), string.byte("Z") do
-   lex_word_start[string.char(c)] = true
-end
-lex_word_start["_"] = true
+local lpeg = require("lpeg")
+local re = require("re")
 
-local lex_word: {string:boolean} = {}
-for c = string.byte("a"), string.byte("z") do
-   lex_word[string.char(c)] = true
-end
-for c = string.byte("A"), string.byte("Z") do
-   lex_word[string.char(c)] = true
-end
-for c = string.byte("0"), string.byte("9") do
-   lex_word[string.char(c)] = true
-end
-lex_word["_"] = true
+local lexer_grammar = re.compile([[
+   tks <- hash? %s* {| (ignore / {| {:i: {} :} token |} )* |}
 
-local lex_decimal_start: {string:boolean} = {}
-for c = string.byte("1"), string.byte("9") do
-   lex_decimal_start[string.char(c)] = true
-end
+   hash <- "#!" [^%nl]* %nl
 
-local lex_decimals: {string:boolean} = {}
-for c = string.byte("0"), string.byte("9") do
-   lex_decimals[string.char(c)] = true
-end
+   ignore <- %s
+           / longcomment
+           / comment
+   longcomment <- '--' longstring
+   comment <- '--' [^%nl]* %nl
 
-local lex_hexadecimals: {string:boolean} = {}
-for c = string.byte("0"), string.byte("9") do
-   lex_hexadecimals[string.char(c)] = true
-end
-for c = string.byte("a"), string.byte("f") do
-   lex_hexadecimals[string.char(c)] = true
-end
-for c = string.byte("A"), string.byte("F") do
-   lex_hexadecimals[string.char(c)] = true
-end
+   token <- {:tk: keyword ![A-Za-z0-9_] :}   {:kind: () -> 'keyword' :}
+          / {:tk: string :}     {:kind: () -> 'string' :}
+          / {:tk: symbol1 :}
+          / {:tk: op :}         {:kind: () -> 'op' :}
+          / {:tk: symbol :}
+          / {:tk: identifier :} {:kind: () -> 'identifier' :}
+          / {:tk: number :}     {:kind: () -> 'number' :}
 
-local lex_char_symbols: {string:boolean} = {}
-for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", "#", "`", ";"}) do
-   lex_char_symbols[c] = true
-end
+   keyword <- "and" / "break" / "do" / "elseif" / "else" / "end" / "false"
+            / "for" / "function" / "goto" / "if" / "in" / "local" / "nil"
+            / "not" / "or" / "repeat" / "return" / "then" / "true"
+            / "until" / "while"
 
-local lex_op_start: {string:boolean} = {}
-for _, c in ipairs({"+", "*", "|", "&", "%", "^"}) do
-   lex_op_start[c] = true
-end
+   symbol1 <- "..."
 
-local lex_space: {string:boolean} = {}
-for _, c in ipairs({" ", "\t", "\v", "\n", "\r"}) do
-   lex_space[c] = true
-end
+   op <- "+" / "-" / "*" / "//" / "/" / "~=" / "~" / "|" / "&" / "%" / "^"
+       / "==" / "=" / ">>" / ">=" / ">" / "<<" / "<=" / "<" / ".."
 
-local enum LexState
-   "start"
-   "any"
-   "identifier"
-   "maybecomment"
-   "maybecomment2"
-   "maybedotdot"
-   "maybedotdotdot"
-   "decimal_number"
-   "decimal_or_hex"
-   "decimal_float"
-   "power"
-   "power_sign"
-   "hex_number"
-   "hex_float"
-   "lt"
-   "gt"
-   "div"
-   "colon"
-   "maybeequals"
-   "maybelongstring"
-   "dblquote_string"
-   "singlequote_string"
-   "escape_dblquote_string"
-   "escape_singlequote_string"
-   "comment"
-   "longcomment"
-   "maybelongcomment"
-   "maybelongcommentend"
-   "longstring"
-   "maybelongstring"
-   "maybelongstringend"
-end
+   symbol <- "[" / "]" / "(" / ")" / "{" / "}" / "," / "::" / ":"
+           / "#" / "`" /  "." / ";"
 
-local escapable_characters: {string:boolean} = {
-   a = true,
-   b = true,
-   f = true,
-   n = true,
-   r = true,
-   t = true,
-   v = true,
-   z = true,
-   ["\\"] = true,
-   ["\'"] = true,
-   ["\""] = true,
-   ["\r"] = true,
-   ["\n"] = true,
-}
+   string <- shortstring / longstring
+   shortstring <- '"' ( escape / [^\"] )* '"'
+                / "'" ( escape / [^\'] )* "'"
+   escape <- "\" ( [abfnrtvz"'\]
+                 / %nl
+                 / decimalescape
+                 / hexescape
+                 / utfescape )
+   decimalescape <- digit digit digit / digit digit / digit -- TODO: fail if number > 255
+   hexescape <- 'x' hexdigit
+   utfescape <- 'u{' hexdigit+ '}'
 
-local function lex_string_escape(input: string, i: number, c: string): number, boolean
-   if escapable_characters[c] then
-      return 0, true
-   elseif c == "x" then
-      return 2, (
-         lex_hexadecimals[input:sub(i+1, i+1)] and
-         lex_hexadecimals[input:sub(i+2, i+2)]
-      )
-   elseif c == "u" then
-      if input:sub(i+1, i+1) == "{" then
-          local p = i + 2
-          if not lex_hexadecimals[input:sub(p, p)] then
-            return 2, false
-          end
-          while true do
-            p = p + 1
-            c = input:sub(p, p)
-            if not lex_hexadecimals[c] then
-               return p - i, c == "}"
-            end
-         end
-      end
-   elseif lex_decimals[c] then
-      local len = lex_decimals[input:sub(i+1, i+1)]
-                  and (lex_decimals[input:sub(i+2, i+2)] and 3 or 2)
-                  or  1
-      return len, tonumber(input:sub(i, i+len-1)) < 256
-   else
-      return 0, false
-   end
-end
+   identifier <- [a-zA-Z_][a-zA-Z_0-9]*
+
+   number <- hexfloat / hex / float / int
+   int <- digit+
+   hex <- "0" [xX] hexdigit+
+   digit <- [0-9]
+   float <- '.' digit* exponentpart?
+          / ( digit+ ( '.' digit* exponentpart?
+                     / exponentpart ))
+   exponentpart <- [eE] [+-]? digit+
+   hexdigit <- [0-9a-fA-F]
+   hexfloat <- "0" [xX] ( '.' hexdigit+ hexexponentpart?
+                        / ( hexdigit+ ( '.' hexdigit* hexexponentpart?
+                                      / hexexponentpart )))
+   hexexponentpart <- [pP] [+-]? digit+
+
+   longstring <- ('[' {:eq: '='* :} '[' close)
+   close <- ']' =eq ']' / . close
+]])
 
 function tl.lex(input: string): {Token}, {Token}
-   local tokens: {Token} = {}
-
-   local state: LexState = "start"
-   local fwd = true
+   local tokens = lpeg.match(lexer_grammar, input) as {Token}
+   local ys = { 1 }
+   local n = 2
+   for i in input:gmatch("\n()") do
+      ys[n] = i as number
+      n = n + 1
+   end
+   ys[n] = math.huge
    local y = 1
-   local x = 0
-   local i = 0
-   local lc_open_lvl = 0
-   local lc_close_lvl = 0
-   local ls_open_lvl = 0
-   local ls_close_lvl = 0
-   local errs: {Token} = {}
-
-   local tx: number
-   local ty: number
-   local ti: number
-   local in_token = false
-
-   local function begin_token()
-      tx = x
-      ty = y
-      ti = i
-      in_token = true
+   for _, t in ipairs(tokens) do
+      while t.i >= ys[y + 1] do
+         y = y + 1
+      end
+      t.y = y
+      t.x = t.i - ys[y] + 1
+      t.kind = t.kind or (t.tk as TokenKind)
    end
-
-   local function end_token(kind: TokenKind, last: number, t: string)
-      local tk = t or input:sub(ti, last or i) or ""
-      if keywords[tk] then
-         kind = "keyword"
-      end
-      table.insert(tokens, {
-         x = tx,
-         y = ty,
-         i = ti,
-         tk = tk,
-         kind = kind,
-      })
-      in_token = false
+   if tokens then
+      return tokens, {}
+   else
+      return {}, {}
    end
-
-   local function drop_token()
-      in_token = false
-   end
-
-   while i <= #input do
-      if fwd then
-         i = i + 1
-         if i > #input then
-            break
-         end
-      end
-
-      local c: string = input:sub(i, i)
-
-      if fwd then
-         if c == "\n" then
-            y = y + 1
-            x = 0
-         else
-            x = x + 1
-         end
-      else
-         fwd = true
-      end
-
-      if state == "start" then
-         if input:sub(1,2) == "#!" then
-            i = input:find("\n")
-            if not i then
-               break
-            end
-            c = "\n"
-            y = 2
-            x = 0
-         end
-         state = "any"
-      end
-
-      if state == "any" then
-         if c == "-" then
-            state = "maybecomment"
-            begin_token()
-         elseif c == "." then
-            state = "maybedotdot"
-            begin_token()
-         elseif c == "\"" then
-            state = "dblquote_string"
-            begin_token()
-         elseif c == "'" then
-            state = "singlequote_string"
-            begin_token()
-         elseif lex_word_start[c] then
-            state = "identifier"
-            begin_token()
-         elseif c == "0" then
-            state = "decimal_or_hex"
-            begin_token()
-         elseif lex_decimal_start[c] then
-            state = "decimal_number"
-            begin_token()
-         elseif c == "<" then
-            state = "lt"
-            begin_token()
-         elseif c == ":" then
-            state = "colon"
-            begin_token()
-         elseif c == ">" then
-            state = "gt"
-            begin_token()
-         elseif c == "/" then
-            state = "div"
-            begin_token()
-         elseif c == "=" or c == "~" then
-            state = "maybeequals"
-            begin_token()
-         elseif c == "[" then
-            state = "maybelongstring"
-            begin_token()
-         elseif lex_char_symbols[c] then
-            begin_token()
-            end_token(c as TokenKind)
-         elseif lex_op_start[c] then
-            begin_token()
-            end_token("op")
-         elseif lex_space[c] then
-            -- continue
-         else
-            begin_token()
-            end_token("$invalid$")
-            table.insert(errs, tokens[#tokens])
-         end
-      elseif state == "maybecomment" then
-         if c == "-" then
-            state = "maybecomment2"
-         else
-            end_token("op", nil, "-")
-            fwd = false
-            state = "any"
-         end
-      elseif state == "maybecomment2" then
-         if c == "[" then
-            state = "maybelongcomment"
-         else
-            fwd = false
-            state = "comment"
-            drop_token()
-         end
-      elseif state == "maybelongcomment" then
-         if c == "[" then
-            state = "longcomment"
-         elseif c == "=" then
-            lc_open_lvl = lc_open_lvl + 1
-         else
-            fwd = false
-            state = "comment"
-            drop_token()
-            lc_open_lvl = 0
-         end
-      elseif state == "longcomment" then
-         if c == "]" then
-            state = "maybelongcommentend"
-         end
-      elseif state == "maybelongcommentend" then
-         if c == "]" and lc_close_lvl == lc_open_lvl then
-            drop_token()
-            state = "any"
-            lc_open_lvl = 0
-            lc_close_lvl = 0
-         elseif c == "=" then
-            lc_close_lvl = lc_close_lvl + 1
-         else
-            state = "longcomment"
-            lc_close_lvl = 0
-         end
-      elseif state == "dblquote_string" then
-         if c == "\\" then
-            state = "escape_dblquote_string"
-         elseif c == "\"" then
-            end_token("string")
-            state = "any"
-         end
-      elseif state == "escape_dblquote_string" then
-         local skip, valid = lex_string_escape(input, i, c)
-         i = i + skip
-         if not valid then
-            end_token("$invalid$")
-            table.insert(errs, tokens[#tokens])
-         end
-         x = x + skip
-         state = "dblquote_string"
-      elseif state == "singlequote_string" then
-         if c == "\\" then
-            state = "escape_singlequote_string"
-         elseif c == "'" then
-            end_token("string")
-            state = "any"
-         end
-      elseif state == "escape_singlequote_string" then
-         local skip, valid = lex_string_escape(input, i, c)
-         i = i + skip
-         if not valid then
-            end_token("$invalid$")
-            table.insert(errs, tokens[#tokens])
-         end
-         x = x + skip
-         state = "singlequote_string"
-      elseif state == "maybeequals" then
-         if c == "=" then
-            end_token("op")
-            state = "any"
-         else
-            end_token("op", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "lt" then
-         if c == "=" or c == "<" then
-            end_token("op")
-            state = "any"
-         else
-            end_token("op", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "colon" then
-         if c == ":" then
-            end_token("::")
-            state = "any"
-         else
-            end_token(":", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "gt" then
-         if c == "=" or c == ">" then
-            end_token("op")
-            state = "any"
-         else
-            end_token("op", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "div" then
-         if c == "/" then
-            end_token("op")
-            state = "any"
-         else
-            end_token("op", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "maybelongstring" then
-         if c == "[" then
-            state = "longstring"
-         elseif c == "=" then
-            ls_open_lvl = ls_open_lvl + 1
-         else
-            end_token("[", i - 1)
-            fwd = false
-            state = "any"
-            ls_open_lvl = 0
-         end
-      elseif state == "longstring" then
-         if c == "]" then
-            state = "maybelongstringend"
-         end
-      elseif state == "maybelongstringend" then
-         if c == "]" then
-            if ls_close_lvl == ls_open_lvl then
-               end_token("string")
-               state = "any"
-               ls_open_lvl = 0
-               ls_close_lvl = 0
-            end
-         elseif c == "=" then
-            ls_close_lvl = ls_close_lvl + 1
-         else
-            state = "longstring"
-            ls_close_lvl = 0
-         end
-      elseif state == "maybedotdot" then
-         if c == "." then
-            state = "maybedotdotdot"
-         elseif lex_decimals[c] then
-            state = "decimal_float"
-         else
-            end_token(".", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "maybedotdotdot" then
-         if c == "." then
-            end_token("...")
-            state = "any"
-         else
-            end_token("op", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "comment" then
-         if c == "\n" then
-            state = "any"
-         end
-      elseif state == "identifier" then
-         if not lex_word[c] then
-            end_token("identifier", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "decimal_or_hex" then
-         if c == "x" or c == "X" then
-            state = "hex_number"
-         elseif c == "e" or c == "E" then
-            state = "power_sign"
-         elseif lex_decimals[c] then
-            state = "decimal_number"
-         elseif c == "." then
-            state = "decimal_float"
-         else
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "hex_number" then
-         if c == "." then
-            state = "hex_float"
-         elseif c == "p" or c == "P" then
-            state = "power_sign"
-         elseif not lex_hexadecimals[c] then
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "hex_float" then
-         if c == "p" or c == "P" then
-            state = "power_sign"
-         elseif not lex_hexadecimals[c] then
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "decimal_number" then
-         if c == "." then
-            state = "decimal_float"
-         elseif c == "e" or c == "E" then
-            state = "power_sign"
-         elseif not lex_decimals[c] then
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "decimal_float" then
-         if c == "e" or c == "E" then
-            state = "power_sign"
-         elseif not lex_decimals[c] then
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      elseif state == "power_sign" then
-         if c == "-" or c == "+" then
-            state = "power"
-         elseif lex_decimals[c] then
-            state = "power"
-         else
-            end_token("$invalid$")
-            table.insert(errs, tokens[#tokens])
-            state = "any" -- FIXME report malformed number
-         end
-      elseif state == "power" then
-         if not lex_decimals[c] then
-            end_token("number", i - 1)
-            fwd = false
-            state = "any"
-         end
-      end
-   end
-
-   local terminals: {LexState:TokenKind} = {
-      ["identifier"] = "identifier",
-      ["decimal_or_hex"] = "number",
-      ["decimal_number"] = "number",
-      ["decimal_float"] = "number",
-      ["hex_number"] = "number",
-      ["hex_float"] = "number",
-      ["power"] = "number",
-   }
-
-   if in_token then
-      if terminals[state] then
-         end_token(terminals[state], i - 1)
-      else
-         drop_token()
-      end
-   end
-
-   return tokens, (#errs > 0) and errs
 end
 
 --------------------------------------------------------------------------------
