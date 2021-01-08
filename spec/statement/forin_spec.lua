@@ -81,6 +81,20 @@ describe("forin", function()
       { x = 14, y = 5, msg = "too many variables for this iterator; it produces 1 value" }
    }))
 
+   it("catches when too many values are passed, smart behavior about tuples", util.check_type_error([[
+      local record R
+         fields: function({number, nil}, string): (function(): string)
+         fields: function({number, number}, string): (function(): string, string)
+         fields: function({number} | number, string): (function(): string...)
+      end
+
+      for a, b in R.fields({1}, "hello") do
+         -- if you try to put "for a, b" here you get an error
+      end
+   ]], {
+      { y = 7, "too many variables for this iterator; it produces 1 value" }
+   }))
+
    describe("regression tests", function()
       it("with an iterator declared as a nominal (#183)", util.check [[
          local type Iterator = function(): string

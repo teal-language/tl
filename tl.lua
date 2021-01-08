@@ -5411,7 +5411,7 @@ show_type(var.t))
             #t2.types
 
             for i = 1, len do
-               if not is_a(t2.types[i], t1.elements, for_equality) then
+               if not is_a(t1.elements, t2.types[i], for_equality) then
                   return false, terr(t1, "tuple entry " .. tostring(i) .. " of type %s does not match type of array elements, which is %s", t2.types[i], t1.elements)
                end
             end
