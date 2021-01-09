@@ -359,7 +359,7 @@ local exit = 0
 local function report_warnings(result)
    if not args["quiet"] then
       local res_warnings = {}
-      for _, warning in ipairs(result.warnings) do
+      for _, warning in ipairs(result.warnings or {}) do
          if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
             table.insert(res_warnings, warning)
          end
@@ -370,7 +370,7 @@ end
 
 local function get_warning_errors(result)
    local res_warnings = {}
-   for _, warning in ipairs(result.warnings) do
+   for _, warning in ipairs(result.warnings or {}) do
       local tag = warning.tag
       if warning_errors[tag]
          and not disabled_warnings[tag]
@@ -626,17 +626,32 @@ end
 --------------------------------------------------------------------
 local script = {}
 if tlconfig.build_file then
-   script = type_check_and_load(tlconfig.build_file,modules)()
+   local chunk = type_check_and_load(tlconfig.build_file,modules)
+   local success,res = pcall(chunk)
+   if success then
+      script = res
+   else
+      die("The build file could not be executed.")
+   end 
 end
 
-if script["gen_code"] then
-   --that the directory exposed to the script has the same name as the the folder it ends up at is kind of a hack (that I accidentally stumbled on)
-   --however, it is also a usefull hack as it provides a way to store the last build time without the 2 locations interfering.
-   --this is useful information so the result of the build.tl file can be cached, which can be benefical if the code generation takes a lot of time.
-   local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
-   lfs.rmdir(full_path)
-   lfs.mkdir(full_path)
-   script["gen_code"](full_path)
+local gen_code = script["gen_code"]
+if gen_code then
+   
+   if type(gen_code) == "function" then
+      --that the directory exposed to the script has the same name as the the folder it ends up at is kind of a hack (that I accidentally stumbled on)
+      --however, it is also a usefull hack as it provides a way to store the last build time without the 2 locations interfering.
+      --this is useful information so the result of the build.tl file can be cached, which can be benefical if the code generation takes a lot of time.
+      local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
+      lfs.rmdir(full_path)
+      lfs.mkdir(full_path)
+      local success,message = pcall(gen_code,full_path)
+      if not success then
+         die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
+      end
+   else
+      die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
+   end
 end
 --------------------------------------------------------------------
 --                            RUN                                 --
@@ -678,8 +693,9 @@ if cmd == "run" then
    end
 
    tl.loader()
-   local res = chunk((unpack or table.unpack)(arg))
+   local success,res = pcall(chunk,(unpack or table.unpack)(arg))
    cleanup_generated_files()
+   assert(success,res)
    return res
 end
 
@@ -818,6 +834,7 @@ end
 local curr_dir = lfs.currentdir()
 
 local project = {}
+-- This will probably get exposed in the api if that happens
 function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
    local iter_dir
    if dirname then
@@ -872,14 +889,6 @@ function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
       end
    end
    return coroutine.wrap(iter), iter_dir
-end
--- This will probably get exposed in the api if that happens
-function project:files(inc_patt_arr, exc_patt_arr, dirname) -- iterate over the files in the project adhering to the provided patterns
-   local func = project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
-   return function(a)
-      local res = func(a)
-      return res
-   end
 end
 function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
    if not path then return nil end
@@ -979,7 +988,7 @@ if cmd == "build" then
       if valid then
          local work_on = path:gsub("%.tl$", ".lua")
          if is_build then
-            work_on = work_on:gsub(build_path,"")
+            work_on = remove_leading_path(build_path, work_on)
          end
          project.source_file_map[path] = work_on
          if tlconfig["build_dir"] then
