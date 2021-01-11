@@ -7383,7 +7383,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif node.op.op == "as" then
                node.type = b
             elseif node.op.op == "is" then
-               if node.e1.kind == "variable" then
+               if ua.typename == "typetype" then
+                  node_error(node, "can only use 'is' on variables, not types")
+               elseif node.e1.kind == "variable" then
                   node.known = Fact { fact = "is", var = node.e1.tk, typ = b, where = node }
                else
                   node_error(node, "can only use 'is' on variables")
