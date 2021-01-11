@@ -52,7 +52,7 @@ contribution!
 
 ## Text editor support
 
-Teal language support is currently available for [Vim](https://github.com/teal-language/vim-teal) and [Visual Studio Code](https://github.com/teal-language/vscode-teal).
+Teal language support is currently available for [Vim](https://github.com/teal-language/vim-teal), [Visual Studio Code](https://github.com/teal-language/vscode-teal) and [lite](https://github.com/rxi/lite-plugins/blob/master/plugins/language_teal.lua) with [linter](https://github.com/drmargarido/linters/blob/master/linter_teal.lua) support.
 
 ## Community
 
