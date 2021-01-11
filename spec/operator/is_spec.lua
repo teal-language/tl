@@ -159,7 +159,7 @@ describe("flow analysis with is", function()
             print(t)
          end
       ]], {
-         { y = 6, msg = 'branch is always false' },
+         { y = 6, msg = 'cannot resolve a type for t here' },
       }))
    end)
 
@@ -218,7 +218,20 @@ describe("flow analysis with is", function()
             print("hello")
          end
       ]], {
-         { msg = "unknown variable: x" },
+         { y = 2, x = 13, msg = "unknown variable: x" },
+         { y = 4, x = 10, msg = "cannot resolve a type for x here" },
+      }))
+
+      it("can resolve on else block even if it can't on if block (#210)", util.check_warnings([[
+         function foo(v: any)
+            if not v is string then
+               print("foo")
+            else
+               print(v:upper())
+            end
+         end
+      ]], {
+         { y = 2, x = 20, msg = "v: type cannot be narrowed in this branch" }
       }))
    end)
 

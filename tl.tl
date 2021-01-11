@@ -44,6 +44,7 @@ local record tl
    enum WarningKind
       "unused"
       "redeclaration"
+      "branch"
       "debug"
    end
    warning_kinds: {WarningKind:boolean}
@@ -60,6 +61,7 @@ end
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
+   ["branch"] = true,
    ["debug"] = true,
 }
 
@@ -966,12 +968,24 @@ end
 
 local enum FactType
    "is"
+   "and"
+   "or"
+   "not"
 end
 
 local record Fact
    fact: FactType
+   where: Node
+
+   -- is
    var: string
    typ: Type
+
+   -- not, and, or
+   f1: Fact
+   f2: Fact
+
+   metamethod __call: function(Fact, Fact): Fact
 end
 
 local enum KeyParsed
@@ -989,7 +1003,7 @@ local record Node
 
    yend: number
 
-   facts: {Fact}
+   known: Fact
 
    key: Node
    value: Node
@@ -6306,193 +6320,246 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
-   local facts_and: function(f1: {Fact}, f2: {Fact}, errnode: Node): {Fact}
-   local facts_or:  function(f1: {Fact}, f2: {Fact}): {Fact}
-   local facts_not: function(f1: {Fact}): {Fact}
+   -- Inference engine for 'is' operator
+   local facts_and: function(f1: Fact, f2: Fact, where: Node): Fact
+   local facts_or: function(f1: Fact, f2: Fact, where: Node): Fact
+   local facts_not: function(f1: Fact, where: Node): Fact
+   local apply_facts: function(where: Node, known: Fact)
    do
-      local function join_facts(fss: {{Fact}}): {string:{Fact}}
-         local vars: {string:{Fact}} = {}
-
-         for _, fs in ipairs(fss) do
-            for _, f in ipairs(fs) do
-               if not vars[f.var] then
-                  vars[f.var] = {}
+      setmetatable(Fact, {
+         __call = function(_: Fact, f: Fact): Fact
+            return setmetatable(f, {
+               __tostring = function(f: Fact): string
+                  if f.fact == "is" then
+                     return ("(%s is %s)"):format(f.var, show_type(f.typ))
+                  elseif f.fact == "not" then
+                     return ("(not %s)"):format(tostring(f.f1))
+                  elseif f.fact == "or" then
+                     return ("(%s or %s)"):format(tostring(f.f1), tostring(f.f2))
+                  elseif f.fact == "and" then
+                     return ("(%s and %s)"):format(tostring(f.f1), tostring(f.f2))
+                  end
                end
-               table.insert(vars[f.var], f)
-            end
+            })
+         end,
+      })
+
+      facts_and = function(f1: Fact, f2: Fact, where: Node): Fact
+         if f1 and f2 then
+            return Fact { fact = "and", f1 = f1, f2 = f2, where = where }
+         elseif f1 then
+            return f1
+         elseif f2 then
+            return f2
          end
-         return vars
       end
 
-      local function intersect<T>(xs: {T}, ys: {T}, same: function(T, T): boolean): {T}
-         local rs = {}
-         for i = #xs, 1, -1 do
-            local x = xs[i]
-            for _, y in ipairs(ys) do
-               if same(x, y) then
-                  table.insert(rs, x)
-                  break
-               end
-            end
+      facts_or = function(f1: Fact, f2: Fact, where: Node): Fact
+         if f1 and f2 then
+            return Fact { fact = "or", f1 = f1, f2 = f2, where = where }
+         else
+            return nil
          end
-         return rs
       end
 
-      local function same_type_for_intersect(t: Type, u: Type): boolean
-         return (same_type(t, u))
+      facts_not = function(f1: Fact, where: Node): Fact
+         if f1 then
+            return Fact { fact = "not", f1 = f1, where = where }
+         else
+            return nil
+         end
       end
 
-      local function intersect_facts(fs: {Fact}, errnode: Node): boolean, Type
-         local all_is = true
-         local types = {}
-         for i, f in ipairs(fs) do
-            if f.fact ~= "is" then
-               all_is = false
-               break
-            end
-            if f.typ.typename == "union" then
-               if i == 1 then
-                  types = f.typ.types
-               else
-                  types = intersect(types, f.typ.types, same_type_for_intersect)
+      -- t1 ∪ t2
+      local function unite_types(t1: Type, t2: Type): Type, string
+         return unite({t2, t1})
+      end
+
+      -- t1 ∩ t2
+      local function intersect_types(t1: Type, t2: Type): Type, string
+         if t2.typename == "union" then
+            t1, t2 = t2, t1
+         end
+         if t1.typename == "union" then
+            local out = {}
+            for _, t in ipairs(t1.types) do
+               if is_a(t, t2) then
+                  table.insert(out, t)
                end
+            end
+            return unite(out)
+         else
+            if is_a(t1, t2) then
+               return t1
+            elseif is_a(t2, t1) then
+               return t2
             else
-               if i == 1 then
-                  types = { f.typ }
-               else
-                  types = intersect(types, { f.typ }, same_type_for_intersect)
-               end
+               return INVALID
             end
-         end
-
-         if #types == 0 then
-            node_error(errnode, "branch is always false")
-            return false
-         end
-
-         if all_is then
-            return true, unite(types)
-         else
-            return false
          end
       end
 
-      local function sum_facts(fs: {Fact}): boolean, Type
-         local all_is = true
-         local types: {Type} = {}
-         for _, f in ipairs(fs) do
-            if f.fact ~= "is" then
-               all_is = false
-               break
-            end
-            table.insert(types, f.typ)
+      local function resolve_if_union(t: Type): Type
+         local u = resolve_unary(t)
+         if u.typename == "union" then
+            return u
          end
-
-         if all_is then
-            return true, unite(types)
-         else
-            return false
-         end
+         return t
       end
 
-      local function subtract_types(u1: Type, u2: Type, errt: Type): Type
+      -- t1 - t2
+      local function subtract_types(t1: Type, t2: Type): Type, string
          local types: {Type} = {}
-         for _, rt in ipairs(u1.types or { u1 }) do
+
+         t1 = resolve_if_union(t1)
+
+         -- things like "not x is string" given "x: any" can't be narrowed.
+         -- also, poly are not first-class, so we don't handle them here
+         if t1.typename ~= "union" then
+            return t1, "type cannot be narrowed in this branch"
+         end
+
+         t2 = resolve_if_union(t2)
+         local t2types = t2.types or { t2 }
+
+         for _, at in ipairs(t1.types) do
             local not_present = true
-            for _, ft in ipairs(u2.types or { u2 }) do
-               if same_type(rt, ft) then
+            for _, bt in ipairs(t2types) do
+               if same_type(at, bt) then
                   not_present = false
                   break
                end
             end
             if not_present then
-               table.insert(types, rt)
+               table.insert(types, at)
             end
          end
 
          if #types == 0 then
-            type_error(errt, "branch is always false")
-            return INVALID
+            return INVALID, "no valid types match in this branch"
          end
 
          return unite(types)
       end
 
-      facts_and = function(f1: {Fact}, f2: {Fact}, errnode: Node): {Fact}
-         if not f1 then
-            return f2
-         end
-         if not f2 then
-            return f1
-         end
+      local eval_not: function(f: Fact): {string:Type}
+      local or_types: function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+      local and_types: function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+      local eval_fact: function(f: Fact): {string:Type}
 
-         local out: {Fact} = {}
-         for v, fs in pairs(join_facts({f1, f2})) do
-            local ok, u = intersect_facts(fs, errnode)
-
-            if ok then
-               table.insert(out, { fact = "is", var = v, typ = u })
-            else
-               -- FIXME handle non-"is" facts... when we have them
-               for _, f in ipairs(fs) do
-                  table.insert(out, f)
-               end
-            end
-         end
-         return out
-      end
-
-      facts_or = function(f1: {Fact}, f2: {Fact}): {Fact}
-         if not f1 or not f2 then
-            return nil
-         end
-
-         local out: {Fact} = {}
-         for v, fs in pairs(join_facts({f1, f2})) do
-            local ok, u = sum_facts(fs)
-            if ok then
-               table.insert(out, { fact = "is", var = v, typ = u })
-            else
-               -- FIXME handle non-"is" facts... when we have them
-               for _, f in ipairs(fs) do
-                  table.insert(out, f)
-               end
-            end
-         end
-         return out
-      end
-
-      facts_not = function(f1: {Fact}): {Fact}
-         if not f1 then
-            return nil
-         end
-
-         local out: {Fact} = {}
-         for v, fs in pairs(join_facts({f1})) do
-            local realtype = find_var_type(v)
-            if realtype then
-               realtype = resolve_unary(realtype)
-               local ok, u = sum_facts(fs) -- is this correct?
-               if ok then
-                  local not_typ = subtract_types(realtype, u, fs[1].typ)
-                  table.insert(out, { fact = "is", var = v, typ = not_typ })
-               end
-            end
-         end
-         return out
-      end
-   end
-
-   local function apply_facts(where: Node, facts: {Fact})
-      if not facts then
-         return
-      end
-      for _, f in ipairs(facts) do
+      eval_not = function(f: Fact): {string:Type}
          if f.fact == "is" then
-            local t = shallow_copy(f.typ) -- new type object
+            local typ = find_var_type(f.var, true)
+            if not typ then
+               return { [f.var] = INVALID }
+            end
+            if not is_a(f.typ, typ) then
+               node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+               return { [f.var] = INVALID }
+            else
+               local sub, warn = subtract_types(typ, f.typ)
+               if warn then
+                  node_warning("branch", f.where, f.var .. ": " .. warn)
+               end
+               return { [f.var] = sub }
+            end
+         elseif f.fact == "not" then
+            return eval_fact(f.f1)
+         elseif f.fact == "and" then
+            return or_types(eval_not(f.f1), eval_not(f.f2))
+         elseif f.fact == "or" then
+            return and_types(eval_not(f.f1), eval_not(f.f2))
+         end
+      end
+
+      or_types = function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+         local realtypes: {string:Type} = {}
+
+         local ret: {string:Type} = {}
+
+         for var, typ in pairs(vs1) do
+            local vt = find_var_type(var, true) or INVALID
+            realtypes[var] = vt
+            if not is_a(typ, vt) then
+               return vs2
+            end
+            ret[var] = typ
+         end
+
+         for var, typ in pairs(vs2) do
+            local vt = realtypes[var] or find_var_type(var, true) or INVALID
+            realtypes[var] = vt
+            if not is_a(typ, vt) then
+               return vs1
+            end
+            ret[var] = unite_types(typ, ret[var])
+         end
+
+         return ret
+      end
+
+      and_types = function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+         local realtypes: {string:Type} = {}
+
+         local ret: {string:Type} = {}
+
+         for var, typ in pairs(vs1) do
+            local vt = find_var_type(var, true) or INVALID
+            realtypes[var] = vt
+            if not is_a(typ, vt) then
+               return {}
+            end
+            ret[var] = typ
+         end
+
+         for var, typ in pairs(vs2) do
+            local vt = realtypes[var] or find_var_type(var, true) or INVALID
+            realtypes[var] = vt
+            if not is_a(typ, vt) then
+               return {}
+            end
+            ret[var] = ret[var] and intersect_types(typ, ret[var]) or typ
+         end
+
+         return ret
+      end
+
+      eval_fact = function(f: Fact): {string:Type}
+         if f.fact == "is" then
+            local typ = find_var_type(f.var, true)
+            if not typ then
+               return { [f.var] = INVALID }
+            end
+            if not is_a(f.typ, typ) then
+               node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
+               return { [f.var] = INVALID }
+            else
+               return { [f.var] = f.typ }
+            end
+         elseif f.fact == "not" then
+            return eval_not(f.f1)
+         elseif f.fact == "and" then
+            return and_types(eval_fact(f.f1), eval_fact(f.f2))
+         elseif f.fact == "or" then
+            return or_types(eval_fact(f.f1), eval_fact(f.f2))
+         end
+      end
+
+      apply_facts = function(where: Node, known: Fact)
+         if not known then
+            return
+         end
+
+         local vars = eval_fact(known)
+
+         for v, t in pairs(vars) do
+            if t.typename == "invalid" then
+               node_error(where, "cannot resolve a type for " .. v .. " here")
+            end
+            t = shallow_copy(t) -- new type object
             t.inferred_at = where
             t.inferred_at_file = filename
-            add_var(nil, f.var, t, nil, true)
+            add_var(nil, v, t, nil, true)
          end
       end
    end
@@ -6774,7 +6841,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       ["if"] = {
          before_statements = function(node: Node)
             begin_scope()
-            apply_facts(node.exp, node.exp.facts)
+            apply_facts(node.exp, node.exp.known)
          end,
          after = function(node: Node, _children: {Type}): Type
             end_scope()
@@ -6785,14 +6852,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          before = function(node: Node)
             end_scope()
             begin_scope()
-            local f = facts_not(node.parent_if.exp.facts)
+            local f = facts_not(node.parent_if.exp.known)
             for e = 1, node.elseif_n - 1 do
-               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.facts), node)
+               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.known), node)
             end
             apply_facts(node.exp, f)
          end,
          before_statements = function(node: Node)
-            apply_facts(node.exp, node.exp.facts)
+            apply_facts(node.exp, node.exp.known)
          end,
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE
@@ -6802,9 +6869,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          before = function(node: Node)
             end_scope()
             begin_scope()
-            local f = facts_not(node.parent_if.exp.facts)
+            local f = facts_not(node.parent_if.exp.known)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
-               f = facts_and(f, facts_not(elseifnode.exp.facts), node)
+               f = facts_and(f, facts_not(elseifnode.exp.known), node)
             end
             apply_facts(node, f)
          end,
@@ -6819,7 +6886,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
          before_statements = function(node: Node)
             begin_scope()
-            apply_facts(node.exp, node.exp.facts)
+            apply_facts(node.exp, node.exp.known)
          end,
          after = function(node: Node, _children: {Type}): Type
             end_scope()
@@ -7278,7 +7345,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["paren"] = {
          after = function(node: Node, children: {Type}): Type
-            node.facts = node.e1 and node.e1.facts
+            node.known = node.e1 and node.e1.known
             node.type = resolve_unary(children[1])
          end,
       },
@@ -7288,9 +7355,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
          before_e2 = function(node: Node)
             if node.op.op == "and" then
-               apply_facts(node, node.e1.facts)
+               apply_facts(node, node.e1.known)
             elseif node.op.op == "or" then
-               apply_facts(node, facts_not(node.e1.facts))
+               apply_facts(node, facts_not(node.e1.known))
             end
          end,
          after = function(node: Node, children: {Type}): Type
@@ -7317,7 +7384,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                node.type = b
             elseif node.op.op == "is" then
                if node.e1.kind == "variable" then
-                  node.facts = { { fact = "is", var = node.e1.tk, typ = b } }
+                  node.known = Fact { fact = "is", var = node.e1.tk, typ = b, where = node }
                else
                   node_error(node, "can only use 'is' on variables")
                end
@@ -7342,24 +7409,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
             elseif node.op.op == "not" then
-               node.facts = facts_not(node.e1.facts)
+               node.known = facts_not(node.e1.known)
                node.type = BOOLEAN
             elseif node.op.op == "and" then
-               node.facts = facts_and(node.e1.facts, node.e2.facts, node)
+               node.known = facts_and(node.e1.known, node.e2.known, node)
                node.type = resolve_tuple(b)
             elseif node.op.op == "or" and b.typename == "emptytable" then
-               node.facts = nil
+               node.known = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and is_a(ub, ua) then
-               node.facts = facts_or(node.e1.facts, node.e2.facts)
+               node.known = facts_or(node.e1.known, node.e2.known)
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
-               node.facts = nil
+               node.known = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or"
                    and ((ua.typename == "enum" and ub.typename == "string" and is_a(ub, ua))
                     or  (ua.typename == "string" and ub.typename == "enum" and is_a(ua, ub))) then
-               node.facts = nil
+               node.known = nil
                node.type = (ua.typename == "enum" and ua or ub)
             elseif node.op.op == "==" or node.op.op == "~=" then
                if is_a(a, b, true) or is_a(b, a, true) then
@@ -7399,7 +7466,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
             elseif node.op.arity == 2 and binop_types[node.op.op] then
                if node.op.op == "or" then
-                  node.facts = facts_or(node.e1.facts, node.e2.facts)
+                  node.known = facts_or(node.e1.known, node.e2.known)
                end
 
                a = ua
