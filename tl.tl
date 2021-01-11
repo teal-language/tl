@@ -1224,6 +1224,9 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    node.key.constnum = n
    node.key.tk = tostring(n)
    i, node.value = parse_expression(ps, i)
+   if not node.value then
+      return fail(ps, i)
+   end
    return i, node, n + 1
 end
 
@@ -1252,7 +1255,23 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
       elseif not close[ps.tokens[i].tk] then
-         return fail(ps, i)
+         local options = {}
+         for k, _ in pairs(close) do
+            table.insert(options, "'" .. k .. "'")
+         end
+         table.sort(options)
+         table.insert(options, "','")
+         local expected = "syntax error, expected one of: " .. table.concat(options, ", ")
+         fail(ps, i, expected)
+         local first = options[1]:sub(2, -2)
+         -- heuristic for error recovery to avoid a cascade of errors:
+         -- * if we're parsing a bracketed list, assume the missing token is a separator;
+         -- * otherwise, if we have a line break, insert expected terminator token.
+         if first ~= "}" and ps.tokens[i].y ~= ps.tokens[i-1].y then
+            -- FIXME closing token may not be a keyword (but non-keywords are checked with verify_tk, so it should work)
+            table.insert(ps.tokens, i, { tk = first, y = ps.tokens[i-1].y, x = ps.tokens[i-1].x + 1, kind = "keyword" })
+            return i, list
+         end
       end
    end
    return i, list
@@ -1676,17 +1695,24 @@ do
 
             if not after_valid_prefixexp(ps, e1, prev_i) then
                fail(ps, prev_i, "cannot call this expression")
-               return i + 1
+               return i
             end
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif ps.tokens[i].tk == "[" then
             local op: Operator = new_operator(ps.tokens[i], 2, "@index")
 
+            local prev_i = i
+
             local idx: Node
             i = i + 1
             i, idx = parse_expression(ps, i)
             i = verify_tk(ps, i, "]")
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               fail(ps, prev_i, "cannot index this expression")
+               return i
+            end
 
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = idx }
          elseif ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
@@ -1700,12 +1726,13 @@ do
 
             if op.op == ":" then
                if not args_starters[ps.tokens[i].kind] then
-                  return fail(ps, i, "expected a function call for a method")
+                  fail(ps, i, "expected a function call for a method")
+                  return i
                end
 
                if not after_valid_prefixexp(ps, e1, prev_i) then
                   fail(ps, prev_i, "cannot call a method on this expression")
-                  return i + 1
+                  return i
                end
             end
 
@@ -1738,14 +1765,16 @@ do
          local rhs: Node
          i, rhs = P(ps, i)
          if not rhs then
-            return fail(ps, i, "expected an expression")
+            fail(ps, i, "expected an expression")
+            return i
          end
          lookahead = ps.tokens[i].tk
          while precedences[2][lookahead] and ((precedences[2][lookahead] > (precedences[2][op.op]))
             or (is_right_assoc[lookahead] and (precedences[2][lookahead] == precedences[2][op.op]))) do
             i, rhs = E(ps, i, rhs, precedences[2][lookahead])
             if not rhs then
-               return fail(ps, i, "expected an expression")
+               fail(ps, i, "expected an expression")
+               return i
             end
             lookahead = ps.tokens[i].tk
          end
@@ -1756,12 +1785,17 @@ do
 
    parse_expression = function(ps: ParseState, i: number): number, Node, number
       local lhs: Node
+      local istart = i
       i, lhs = P(ps, i)
       i, lhs = E(ps, i, lhs, 0)
       if lhs then
          return i, lhs, 0
       else
-         return fail(ps, i, "expected an expression")
+         if i == istart then
+            return fail(ps, i, "expected an expression")
+         else
+            return i -- a more specific error was already thrown
+         end
       end
    end
 end
@@ -2211,7 +2245,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
          local v: Node
          if ps.tokens[i].tk == "[" then
             i, v = parse_literal(ps, i+1)
-            if not v.conststr then
+            if v and not v.conststr then
                return fail(ps, i, "expected a string literal")
             end
             i = verify_tk(ps, i, "]")

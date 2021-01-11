@@ -119,8 +119,6 @@ describe("global function", function()
                { y = 1 },
                { y = 1 },
                { y = 1 },
-               { y = 1 },
-               { y = 7 },
             }))
 
             it("has no ambiguity with parentheses in function type return", util.check([[
