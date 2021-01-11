@@ -164,7 +164,7 @@ describe("tl run", function()
             -6 nil
             -5 nil
             -4 nil
-            -3 lua
+            -3 ]] .. util.lua_interpreter .. "\n" .. [[
             -2 ]] .. util.tl_executable .. "\n" .. [[
             -1 run
             0 ]] .. name .. "\n" .. [[
@@ -197,7 +197,7 @@ describe("tl run", function()
             -7 nil
             -6 nil
             -5 nil
-            -4 lua
+            -4 ]] .. util.lua_interpreter .. "\n" .. [[
             -3 ]] .. util.tl_executable .. "\n" .. [[
             -2 run
             -1 --
@@ -231,7 +231,7 @@ describe("tl run", function()
             -7 nil
             -6 nil
             -5 nil
-            -4 lua
+            -4 ]] .. util.lua_interpreter .. "\n" .. [[
             -3 ]] .. util.tl_executable .. "\n" .. [[
             -2 run
             -1 --
@@ -263,7 +263,7 @@ describe("tl run", function()
             -9 nil
             -8 nil
             -7 nil
-            -6 lua
+            -6 ]] .. util.lua_interpreter .. "\n" .. [[
             -5 ]] .. util.tl_executable .. "\n" .. [[
             -4 run
             -3 -I
