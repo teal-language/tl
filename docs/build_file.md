@@ -34,3 +34,18 @@ Another use case could be when using a teal version of a library like [pgtyped](
 ## Limitations
 
 Right now the `build.tl` file is mostly useful for programs and less for libraries. This is because `teal` does not have its own package manager able to run the `build.tl` files from required dependencies.
+
+## Example
+
+```lua
+return {
+    gen_code = function(path:string) 
+        local file = io.open(path .. "/generated.tl", "w")
+        file:write([[
+function add(a : number, b : number): number
+    return a + b
+end
+]])
+    end
+}
+```
