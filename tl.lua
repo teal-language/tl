@@ -5291,6 +5291,10 @@ show_type(var.t))
          return true
       end
 
+      if t1.typename == "bad_nominal" or t2.typename == "bad_nominal" then
+         return false
+      end
+
 
       if t1.typename == "nil" then
          return true
@@ -5358,7 +5362,17 @@ show_type(var.t))
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         return are_same_nominals(t1, t2)
+         local same, err = are_same_nominals(t1, t2)
+         if same then
+            return true
+         end
+         local t1u = resolve_unary(t1)
+         local t2u = resolve_unary(t2)
+         if is_record_type(t1u) and is_record_type(t2u) then
+            return same, err
+         else
+            return is_a(t1u, t2u, for_equality)
+         end
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok
          if for_equality then
