@@ -123,6 +123,14 @@ local cmd_prefix = { string.format("LUA_PATH=%q", package.path) }
 for i = 1, 4 do
    table.insert(cmd_prefix, string.format("LUA_PATH_5_%d=%q", i, package.path))
 end
+
+local first_arg = 0
+while arg[first_arg - 1] do
+   first_arg = first_arg - 1
+end
+util.lua_interpreter = arg[first_arg]
+
+table.insert(cmd_prefix, util.lua_interpreter) -- Lua interpreter used by Busted
 table.insert(cmd_prefix, tl_executable)
 cmd_prefix = table.concat(cmd_prefix, " ")
 function util.tl_cmd(name, ...)
