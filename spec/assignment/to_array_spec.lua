@@ -41,8 +41,7 @@ describe("assignment to array", function()
          }
       }
    ]], {
+      { y = 6, x = 10, msg = "cannot index this expression" },
       { y = 6, msg = "syntax error" },
-      { y = 6, msg = "syntax error" },
-      { y = 8, msg = "syntax error" },
    }))
 end)

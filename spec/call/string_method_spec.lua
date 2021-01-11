@@ -16,8 +16,7 @@ describe("string method call", function()
          print("  ":rep("foo"))
       ]], {
          { msg = "cannot call a method on this expression" },
-         { msg = "expected an expression" },
-         { msg = "syntax error" },
+         { msg = "syntax error, expected one of: ')', ','" },
       }))
    end)
    describe("with variable", function()

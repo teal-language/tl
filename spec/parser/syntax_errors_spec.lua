@@ -8,7 +8,7 @@ describe("syntax errors", function()
 
       print("what")
    ]], {
-      { y = 3, "syntax error" },
+      { y = 3, msg = "syntax error" },
    }))
 
    it("in table declaration", util.check_syntax_error([[
@@ -18,9 +18,8 @@ describe("syntax errors", function()
          foo = 9
       }
    ]], {
-      { y = 3, "syntax error" },
-      { y = 3, "syntax error" },
-      { y = 4, "expected an expression" },
+      { y = 3, x = 15, msg = "syntax error, expected one of: '}', ','" },
+      { y = 3, x = 17, msg = "syntax error" },
    }))
 
    it("missing separators in table", util.check_syntax_error([[
@@ -30,28 +29,28 @@ describe("syntax errors", function()
          brain = true
       }
    ]], {
-      { y = 3, "syntax error" },
-      { y = 3, "syntax error" },
-      { y = 4, "syntax error" },
+      { y = 3, msg = "syntax error, expected one of: '}', ','" },
+      { y = 4, msg = "syntax error, expected one of: '}', ','" },
    }))
 
    it("missing separators", util.check_syntax_error([[
       local function x(a b c)
 
       end
+   ]], {
+      { y = 1, x = 26, msg = "syntax error, expected one of: ')', ','" },
+      { y = 1, x = 28, msg = "syntax error, expected one of: ')', ','" },
+   }))
 
+   it("missing separators with types", util.check_syntax_error([[
       local function y(a: string b: string c: string)
          print(a b c)
       end
    ]], {
-      { y = 1, "syntax error" },
-      { y = 1, "expected an expression" },
-      { y = 1, "syntax error" },
-      { y = 5, "expected an expression" },
-      { y = 5, "syntax error" },
-      { y = 5, "expected an expression" },
-      { y = 5, "syntax error" },
-      { y = 5, "expected an expression" },
+      { y = 1, x = 34, msg = "syntax error, expected one of: ')', ','" },
+      { y = 1, x = 44, msg = "syntax error, expected one of: ')', ','" },
+      { y = 2, x = 18, msg = "syntax error, expected one of: ')', ','" },
+      { y = 2, x = 20, msg = "syntax error, expected one of: ')', ','" },
    }))
 
    it("in variadic return type", util.check_syntax_error([[
@@ -70,13 +69,13 @@ describe("syntax errors", function()
          end
       end
    ]], {
-      { y = 1, "expected a type list" },
+      { y = 1, msg = "expected a type list" },
    }))
 
    it("cannot use keyword as an identifier in an argument list", util.check_syntax_error([[
       local function foo(do: number | string) end
    ]], {
-      { y = 1, "syntax error, expected identifier" },
+      { y = 1, msg = "syntax error, expected identifier" },
    }))
 end)
 
