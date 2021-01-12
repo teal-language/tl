@@ -2597,6 +2597,11 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
          table.insert(xs, recurse_type(child, visit))
       end
    end
+   if ast.meta_fields then
+      for _, child in pairs(ast.meta_fields) do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
    if ast.args then
       for i, child in ipairs(ast.args) do
          if i > 1 or not ast.is_method then
