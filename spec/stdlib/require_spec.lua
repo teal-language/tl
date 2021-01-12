@@ -444,6 +444,63 @@ describe("require", function()
       assert.same(0, #result.unknowns)
    end)
 
+   it("nested types resolve in definition files required with different name", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["someds.d.tl"] = [[
+            local type someds = record
+               type Event = record
+               end
+               type Callback = function(Event)
+               subscribe: function(callback: Callback)
+            end
+
+            return someds
+         ]],
+         ["main.tl"] = [[
+            local som = require("someds")
+
+            function main()
+               local b:som.Callback = function(event: som.Event)
+               end
+               som.subscribe(b)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same(0, #result.syntax_errors)
+      assert.same(0, #result.type_errors)
+      assert.same(0, #result.unknowns)
+   end)
+
+   it("nested types with metamethods resolve in definition files required with different names (#326)", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["my_huge_lib_name.d.tl"] = [[
+            local record my_huge_lib_name
+              record nested_type
+                f: function(my_huge_lib_name.nested_type, my_huge_lib_name.nested_type)
+                metamethod __add: function(my_huge_lib_name.nested_type, number)
+              end
+              new: function(): my_huge_lib_name.nested_type
+            end
+            return my_huge_lib_name
+         ]],
+         ["main.tl"] = [[
+            local lib = require 'my_huge_lib_name'
+            local v = lib.new()
+            v:f(v) -- this works fine
+            print(v + 2)
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
+
    it("generic nested types resolve in definition files", function ()
       -- ok
       util.mock_io(finally, {
