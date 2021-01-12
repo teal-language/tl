@@ -101,6 +101,7 @@ describe("build.tl", function()
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
+               build_file_output_dir = "generated_code"
             }]],
             ["foo.tl"] = [[print(require("generated_code/generated"))]],
             ["build.tl"] = [[
@@ -117,8 +118,7 @@ describe("build.tl", function()
          },
          cmd = "build",
          cmd_output=
-[[A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code
-========================================
+[[========================================
 1 syntax error:
 ./build.tl:8:17: syntax error
 ]]
@@ -129,6 +129,7 @@ describe("build.tl", function()
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
+               build_file_output_dir = "generated_code"
             }]],
             ["foo.tl"] = [[print(require("generated_code/generated"))]],
             ["build.tl"] = [[
@@ -141,8 +142,7 @@ describe("build.tl", function()
          },
          cmd = "build",
          cmd_output=
-[[A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code
-the key "gen_code" exists in the build file, but it is not a function. Value: I am a string
+[[the key "gen_code" exists in the build file, but it is not a function. Value: I am a string
 ]]
       })
    end)
