@@ -5000,6 +5000,7 @@ show_type(var.t))
    end
 
    local is_known_table_type
+   local resolve_unary = nil
 
 
    same_type = function(t1, t2)
@@ -5010,7 +5011,7 @@ show_type(var.t))
          return compare_typevars(t1, t2, same_type)
       end
 
-      if t1.typename == "emptytable" and is_known_table_type(t2) then
+      if t1.typename == "emptytable" and is_known_table_type(resolve_unary(t2)) then
          return true
       end
 
@@ -5183,8 +5184,6 @@ show_type(var.t))
       end
       return arr_type
    end
-
-   local resolve_unary = nil
 
 
    is_a = function(t1, t2, for_equality)
@@ -6958,6 +6957,7 @@ show_type(var.t))
                   end
                else
                   is_map = true
+                  child.ktype.tk = nil
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)
                   node.type.values = expand_type(node, node.type.values, child.vtype)
                end
