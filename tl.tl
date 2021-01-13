@@ -3818,11 +3818,15 @@ local function show_type_base(t: Type, seen: {Type:string}): string
    end
 end
 
+local function inferred_msg(t: Type): string
+   return " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..")"
+end
+
 show_type = function(t: Type, seen: {Type:string}): string
    seen = seen or {}
    local ret = show_type_base(t, seen)
    if t.inferred_at then
-      ret = ret .. " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..": )"
+      ret = ret .. inferred_msg(t)
    end
    seen[t] = ret
    return ret
@@ -3915,7 +3919,6 @@ end
 
 local standard_library: {string:Type} = {
    ["..."] = VARARG { STRING },
-   ["@return"] = a_type { typename = "tuple", ANY },
    ["any"] = a_type { typename = "typetype", def = ANY },
    ["arg"] = ARRAY_OF_STRING,
    ["assert"] = a_type { typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, OPT_BETA }, rets = { ALPHA } },
@@ -6827,7 +6830,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
-            local rets = assert(find_var_type("@return"))
+            local rets = find_var_type("@return")
+            if not rets then
+               -- if at the toplevel
+               rets = children[1]
+               rets.inferred_at = node
+               rets.inferred_at_file = filename
+               module_type = resolve_unary(rets)
+               module_type.tk = nil
+               st[2]["@return"] = { t = rets }
+            end
+            local what = "return value"
+            if rets.inferred_at then
+               what = what .. inferred_msg(rets)
+            end
+
             local nrets = #rets
             local vatype: Type
             if nrets > 0 then
@@ -6837,7 +6854,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if #children[1] > nrets and (not lax) and not vatype then
                rets.typename = "tuple"
                children[1].typename = "tuple"
-               node_error(node, "excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
+               node_error(node, "in " .. what ..": excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
             end
 
             for i = 1, #children[1] do
@@ -6848,13 +6865,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                                 and node.exps[i]
                                 or  node.exps
                   assert(where and where.x)
-                  assert_is_a(where, children[1][i], expected, "return value")
+                  assert_is_a(where, children[1][i], expected, what)
                end
-            end
-
-            -- if at the toplevel
-            if #st == 2 then
-               module_type = resolve_unary(children[1])
             end
 
             node.type = NONE
@@ -7513,6 +7525,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    visit_type.cbs["unresolved"] = visit_type.cbs["string"]
    visit_type.cbs["none"] = visit_type.cbs["string"]
 
+   assert(ast.kind == "statements")
    recurse_node(ast, visit_node, visit_type)
 
    close_types(st[1])
