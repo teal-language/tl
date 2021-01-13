@@ -65,4 +65,24 @@ describe("return", function()
       ]])
    end)
 
+   describe("module is inferred", function()
+      it("from first use (#334)", util.check [[
+         if math.random(2) then
+            return "hello"
+         else
+            return "world"
+         end
+      ]])
+
+      it("detects mismatches (#334)", util.check_type_error([[
+         if math.random(2) then
+            return "hello"
+         else
+            return 123
+         end
+      ]], {
+         { msg = "in return value (inferred at foo.tl:2:13): got number, expected string" }
+      }))
+   end)
+
 end)

@@ -145,8 +145,8 @@ describe("flow analysis with is", function()
             print(t + 1)
          end
       ]], {
-         { y = 3, msg = 'cannot index something that is not a record: number (inferred at foo.tl:2:13: )' },
-         { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10: ) and number]] },
+         { y = 3, msg = 'cannot index something that is not a record: number (inferred at foo.tl:2:13)' },
+         { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10) and number]] },
       }))
 
       it("detects empty unions", util.check_type_error([[

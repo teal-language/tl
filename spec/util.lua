@@ -21,20 +21,33 @@ function util.do_in(dir, func, ...)
    return t_unpack(res)
 end
 
-function util.mock_io(finally, files)
+function util.mock_io(finally, filemap)
    assert(type(finally) == "function")
-   assert(type(files) == "table")
+   assert(type(filemap) == "table")
 
    local io_open = io.open
    finally(function() io.open = io_open end)
    io.open = function (filename, mode)
-      local basename = string.match(filename, "([^/]+)$")
-      if files[basename] then
+      local ps = {}
+      for p in filename:gmatch("[^/]+") do
+         table.insert(ps, p)
+      end
+
+      -- try to find suffixes in filemap, from shortest to longest
+      local basename
+      for i = #ps, 1, -1 do
+         basename = table.concat(ps, "/", i)
+         if filemap[basename] then
+            break
+         end
+      end
+
+      if filemap[basename] then
          -- Return a stub file handle
          return {
             read = function (_, format)
                if format == "*a" then
-                  return files[basename]     -- Return fake bar.tl content
+                  return filemap[basename]   -- Return fake file content
                else
                   error("Not implemented!")  -- Implement other modes if needed
                end

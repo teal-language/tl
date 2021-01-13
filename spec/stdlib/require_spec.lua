@@ -696,4 +696,39 @@ describe("require", function()
       assert.same({}, result.type_errors)
       assert.same({}, result.unknowns)
    end)
+
+   it("can use type definitions to do dynamic dispatch on module returns (#334)", function()
+      util.mock_io(finally, {
+         ["minimal/type/Front.d.tl"] = [[
+            local record Front
+               bool: boolean
+            end
+            return Front
+         ]],
+         ["minimal/back.tl"] = [[
+            local Front = require "minimal.type.Front"
+            return function(bool: boolean): Front return {bool = bool} end
+         ]],
+         ["minimal/middle-true.tl"] = [[
+            return (require "minimal.back")(true)
+         ]],
+         ["minimal/middle-false.tl"] = [[
+            return (require "minimal.back")(false)
+         ]],
+         ["minimal/front.tl"] = [[
+            if true then return require "minimal.middle-true" else return require "minimal.middle-false" end
+         ]],
+         ["minimal/proof.tl"] = [[
+            local front = require "minimal.front"
+            print(front.bool)
+         ]],
+      })
+
+      local result, err = tl.process("minimal/proof.tl")
+
+      assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same({}, result.unknowns)
+   end)
 end)
