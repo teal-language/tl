@@ -5000,6 +5000,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    end
 
    local is_known_table_type: function(t: Type): boolean
+   local resolve_unary: function(t: Type): Type = nil
 
    -- invariant type comparison
    same_type = function(t1: Type, t2: Type): boolean, {Error}
@@ -5010,7 +5011,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return compare_typevars(t1, t2, same_type)
       end
 
-      if t1.typename == "emptytable" and is_known_table_type(t2) then
+      if t1.typename == "emptytable" and is_known_table_type(resolve_unary(t2)) then
          return true
       end
 
@@ -5183,8 +5184,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
       return arr_type
    end
-
-   local resolve_unary: function(t: Type): Type = nil
 
    -- subtyping comparison
    is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
@@ -6958,6 +6957,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   end
                else
                   is_map = true
+                  child.ktype.tk = nil
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)
                   node.type.values = expand_type(node, node.type.values, child.vtype)
                end

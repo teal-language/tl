@@ -20,4 +20,20 @@ describe("assignment to maps", function()
          world = "south",
       }
    ]])
+
+   it("resolves empty tables in values to nominals (regression test for #332)", util.check [[
+      local keystr = "aaaa"
+
+      local record user_login_count_t
+      end
+
+      local data:{string: user_login_count_t} = {
+         key={},
+         [keystr]={}
+      }
+
+      for k, v in pairs(data) do
+         print(k, v)
+      end
+   ]])
 end)
