@@ -58,7 +58,8 @@ local function validate_config(config)
       disable_warnings = "{string}",
       warning_error = "{string}",
       build_file = "string",
-      build_file_output_dir = "string"
+      build_file_output_dir = "string",
+      internal_compiler_output = "string"
    }
 
    for k, v in pairs(config) do
@@ -334,6 +335,12 @@ if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
    tlconfig["build_file_output_dir"] = "generated_code"
 end
 
+if tlconfig["build_file"] and not tlconfig["internal_compiler_output"] then
+   print("A build file is detected, but there is no place configured to store temporary compiler output. Defaulting to ./internal_compiler_output")
+   tlconfig["internal_compiler_output"] = "internal_compiler_output"
+end
+
+
 local function report_errors(category, errors)
    if not errors then
       return false
@@ -484,6 +491,7 @@ local function traverse(dirname, emptyref,is_generated,generated_ref)
    return files, paths, emptyref
 end
 
+--May not be a bad idea to have a command that cleans all the cache....
 local function delete_dir(dir)
    for file in lfs.dir(dir) do
       if file ~= "." and file ~= ".." then 
@@ -501,17 +509,10 @@ local function delete_dir(dir)
 end
 
 local build_path
-
 local function cleanup_generated_files()
    if build_path then
       delete_dir(build_path)
    end
-end
-if tlconfig["build_file"] then
-   local tmp_dir = os.getenv("TMP") or os.getenv("TMPDIR") or "/tmp" --fall back to /tmp, apparently some (mine?) computers don't have a variable set for it.
-   build_path = path_concat(tmp_dir,"tl_temp_out" .. os.time(os.date("!*t")))
-   lfs.mkdir(build_path)
-   prepend_to_path(build_path)
 end
 
 local modules = tlconfig.preload_modules
@@ -622,10 +623,42 @@ local function type_check_and_load(filename, modules)
 end
 
 --------------------------------------------------------------------
+--                      Setup internal output                     --
+--------------------------------------------------------------------
+local internal_output
+if tlconfig["internal_compiler_output"] then
+
+   internal_output = path_concat(lfs.currentdir(),tlconfig["internal_compiler_output"])
+   local mode = lfs.attributes(internal_output,"mode")
+   if not mode then
+      local parts = ""
+      for v in string.gmatch(internal_output, "[^/]+") do
+         parts = parts .. "/" .. v
+         local mode = lfs.attributes(parts,"mode")
+         if mode == nil then
+            local res, message = lfs.mkdir(parts)
+            if not res then
+               die("Could not create directory to store internal output. Error: " .. message)
+            end
+         elseif mode ~= "directory" then
+            die("Could not create directory to store the internal output. Path: " .. parts .. "is not a directory")
+         end
+       end
+   end
+end
+--------------------------------------------------------------------
 --                        RUN BUILD SCRIPT                        --
 --------------------------------------------------------------------
-local script = {}
+
+if tlconfig["build_file"] then
+   build_path = path_concat(internal_output,"build_script_output")
+   lfs.mkdir(build_path)
+   prepend_to_path(build_path)
+end
+
+
 if tlconfig.build_file then
+   local script = {}
    local chunk = type_check_and_load(tlconfig.build_file,modules)
    local success,res = pcall(chunk)
    if success then
@@ -633,24 +666,34 @@ if tlconfig.build_file then
    else
       die("The build file could not be executed.")
    end 
-end
 
-local gen_code = script["gen_code"]
-if gen_code then
-   
-   if type(gen_code) == "function" then
-      --that the directory exposed to the script has the same name as the the folder it ends up at is kind of a hack (that I accidentally stumbled on)
-      --however, it is also a usefull hack as it provides a way to store the last build time without the 2 locations interfering.
-      --this is useful information so the result of the build.tl file can be cached, which can be benefical if the code generation takes a lot of time.
-      local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
-      lfs.rmdir(full_path)
-      lfs.mkdir(full_path)
-      local success,message = pcall(gen_code,full_path)
-      if not success then
-         die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
+   if cmd == "check" or cmd == "build" then
+
+      local time_keeper_path = path_concat(internal_output, "last_build_script_time")
+      --no need to read the file if we can just look up when it was last modified. Should have about the same effect and is easier.
+      local last_run_time = lfs.attributes(time_keeper_path, "modification")
+      local last_edit_time = lfs.attributes(tlconfig.build_file, "modification")
+
+      local should_rerun = last_run_time == nil or last_run_time <= last_edit_time
+
+      local gen_code = script["gen_code"]
+      if should_rerun and gen_code then
+         if type(gen_code) == "function" then
+            local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
+            lfs.rmdir(full_path)
+            lfs.mkdir(full_path)
+            local success,message = pcall(gen_code,full_path)
+            if not success then
+               die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
+            end
+            local file = io.open(time_keeper_path, "w")
+            file:write(last_edit_time)
+            file:flush()
+            file:close()
+         else
+            die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
+         end
       end
-   else
-      die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
    end
 end
 --------------------------------------------------------------------
@@ -694,7 +737,6 @@ if cmd == "run" then
 
    tl.loader()
    local success,res = pcall(chunk,(unpack or table.unpack)(arg))
-   cleanup_generated_files()
    assert(success,res)
    return res
 end
@@ -707,7 +749,6 @@ if cmd == "check" then
    for i, input_file in ipairs(args["file"]) do
       type_check_file(input_file)
    end
-   cleanup_generated_files()
    os.exit(exit)
 end
 
@@ -769,7 +810,6 @@ if cmd == "gen" then
          write_out(res.tl_result, args["output"] or res.output_file)
       end
    end
-   cleanup_generated_files()
    os.exit(exit)
 end
 
@@ -828,7 +868,9 @@ local function matcher(str)
       return patt_match(chunks, str)
    end
 end
-
+if internal_output then
+   table.insert(exc_patterns,matcher(path_concat(tlconfig["internal_compiler_output"], "**/*.*")))
+end
 
 -- prepare build and source dirs
 local curr_dir = lfs.currentdir()
@@ -1042,5 +1084,4 @@ for i, files in ipairs(sorted_source_file_arr) do
       exit = 1
    end
 end
-cleanup_generated_files()
 os.exit(exit)
