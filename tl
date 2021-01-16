@@ -323,7 +323,7 @@ local function report_errors(category, errors)
       printerr("========================================")
       printerr(n .. " " .. category .. (n ~= 1 and "s" or "") .. ":")
       for _, err in ipairs(errors) do
-         printerr(err.filename .. ":" .. (err.y or "?") .. ":" .. (err.x or "?") .. ": " .. (err.msg or ""))
+         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
       end
       return true
    end
