@@ -116,12 +116,20 @@ function util.tl_cmd(name, ...)
    assert(name, "no command provided")
    assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
 
+   local pre_command_args = {}
+   local first = select(1, ...)
+   local has_pre_commands = false
+   if type(first) == "table" then
+      pre_command_args = first
+      has_pre_commands = true
+   end
    local cmd = {
       cmd_prefix,
+      table.concat(pre_command_args," "),
       name
    }
-   for i = 1, select("#", ...) do
-      table.insert(cmd, string.format("%q", (select(i, ...))))
+   for i = (has_pre_commands and 2) or 1 , select("#", ...) do
+      table.insert(cmd, string.format("%q", select(i, ...)))
    end
    return table.concat(cmd, " ") .. " "
 end
@@ -236,7 +244,7 @@ function util.run_mock_project(finally, t)
 
    local pd, actual_output, actual_dir_structure
    util.do_in(actual_dir_name, function()
-      local cmd = util.tl_cmd(t.cmd, t_unpack(t.args or {})) .. "2>&1"
+      local cmd = util.tl_cmd(t.cmd, t.pre_args or {}, t_unpack(t.args or {})) .. "2>&1"
       pd = assert(io.popen(cmd, "r"))
       actual_output = pd:read("*a")
       if expected_dir_structure then

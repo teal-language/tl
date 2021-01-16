@@ -59,7 +59,8 @@ local function validate_config(config)
       warning_error = "{string}",
       build_file = "string",
       build_file_output_dir = "string",
-      internal_compiler_output = "string"
+      internal_compiler_output = "string",
+      run_build_script="boolean"
    }
 
    for k, v in pairs(config) do
@@ -196,6 +197,7 @@ local function get_args_parser()
    parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
    parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
+   parser:flag("--run-build-script","Run the build script if needed, even when not running the build comamnd.")
 
    parser:require_command(false)
    parser:command_target("command")
@@ -305,6 +307,10 @@ end
 --                     CONFIG VALIDATION                          --
 --------------------------------------------------------------------
 
+function check_should_run_build_script()
+   return cmd == "build" or tlconfig["run_build_script"] or args["run_build_script"]
+end
+
 for _, preload_module_cli in ipairs(args["preload"]) do
    if not find_in_sequence(tlconfig.preload_modules, preload_module_cli) then
       table.insert(tlconfig.preload_modules, preload_module_cli)
@@ -330,16 +336,17 @@ if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
    os.exit(1)
 end
 
-if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
-   print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
-   tlconfig["build_file_output_dir"] = "generated_code"
-end
+if check_should_run_build_script() then
+   if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
+      print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
+      tlconfig["build_file_output_dir"] = "generated_code"
+   end
 
-if tlconfig["build_file"] and not tlconfig["internal_compiler_output"] then
-   print("A build file is detected, but there is no place configured to store temporary compiler output. Defaulting to ./internal_compiler_output")
-   tlconfig["internal_compiler_output"] = "internal_compiler_output"
+   if tlconfig["build_file"] and not tlconfig["internal_compiler_output"] then
+      print("A build file is detected, but there is no place configured to store temporary compiler output. Defaulting to ./internal_compiler_output")
+      tlconfig["internal_compiler_output"] = "internal_compiler_output"
+   end
 end
-
 
 local function report_errors(category, errors)
    if not errors then
@@ -626,7 +633,7 @@ end
 --                      Setup internal output                     --
 --------------------------------------------------------------------
 local internal_output
-if tlconfig["internal_compiler_output"] then
+if check_should_run_build_script() and tlconfig["internal_compiler_output"] then
 
    internal_output = path_concat(lfs.currentdir(),tlconfig["internal_compiler_output"])
    local mode = lfs.attributes(internal_output,"mode")
@@ -650,14 +657,14 @@ end
 --                        RUN BUILD SCRIPT                        --
 --------------------------------------------------------------------
 
-if tlconfig["build_file"] then
+if check_should_run_build_script() and tlconfig["build_file"] then
    build_path = path_concat(internal_output,"build_script_output")
    lfs.mkdir(build_path)
    prepend_to_path(build_path)
 end
 
 
-if tlconfig.build_file then
+if check_should_run_build_script() and tlconfig.build_file then
    local script = {}
    local chunk = type_check_and_load(tlconfig.build_file,modules)
    local success,res = pcall(chunk)
@@ -667,32 +674,30 @@ if tlconfig.build_file then
       die("The build file could not be executed.")
    end 
 
-   if cmd == "check" or cmd == "build" then
 
-      local time_keeper_path = path_concat(internal_output, "last_build_script_time")
-      --no need to read the file if we can just look up when it was last modified. Should have about the same effect and is easier.
-      local last_run_time = lfs.attributes(time_keeper_path, "modification")
-      local last_edit_time = lfs.attributes(tlconfig.build_file, "modification")
+   local time_keeper_path = path_concat(internal_output, "last_build_script_time")
+   --no need to read the file if we can just look up when it was last modified. Should have about the same effect and is easier.
+   local last_run_time = lfs.attributes(time_keeper_path, "modification")
+   local last_edit_time = lfs.attributes(tlconfig.build_file, "modification")
 
-      local should_rerun = last_run_time == nil or last_run_time <= last_edit_time
+   local should_rerun = last_run_time == nil or last_run_time <= last_edit_time
 
-      local gen_code = script["gen_code"]
-      if should_rerun and gen_code then
-         if type(gen_code) == "function" then
-            local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
-            lfs.rmdir(full_path)
-            lfs.mkdir(full_path)
-            local success,message = pcall(gen_code,full_path)
-            if not success then
-               die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
-            end
-            local file = io.open(time_keeper_path, "w")
-            file:write(last_edit_time)
-            file:flush()
-            file:close()
-         else
-            die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
+   local gen_code = script["gen_code"]
+   if should_rerun and gen_code then
+      if type(gen_code) == "function" then
+         local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
+         lfs.rmdir(full_path)
+         lfs.mkdir(full_path)
+         local success,message = pcall(gen_code,full_path)
+         if not success then
+            die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
          end
+         local file = io.open(time_keeper_path, "w")
+         file:write(last_edit_time)
+         file:flush()
+         file:close()
+      else
+         die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
       end
    end
 end
