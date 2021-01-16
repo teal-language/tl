@@ -1,8 +1,9 @@
 # build.tl file
-Teal has the ability to run a custom function at compile time. This file by default is called `build.tl` but the name can be changed by setting `build_file` in `tlconfig.lua`.
+Teal has the ability to run a custom function at compile time. The file containing this function is by default called `build.tl` but the name can be changed by setting `build_file` in `tlconfig.lua`.
 
-This file can be used to automatically generate code/types without the need for external build tools like `make`. 
+This function can be used to automatically generate code/types without the need for external build tools like `make`. 
 
+The results of executing this function are cached, and the cache is automatically made invalid if the build script changed since last execution. 
 ## Layout
 
 A build.tl file needs at least the following layout:
