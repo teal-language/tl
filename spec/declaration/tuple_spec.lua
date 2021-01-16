@@ -48,4 +48,23 @@ describe("tuple declarations", function()
       local a: {number, string} = { [1] = 10, [2] = "hello" }
       local b: {number, string} = { [2] = "hello", [1] = 10 }
    ]])
+
+   describe("fixed length array syntactic sugar", function()
+      it("should not error", util.check [[
+         local _arr: { 3 of number }
+      ]])
+      it("should be compatible with regular tuples", util.check [[
+         local _a: { 3 of number } = {} as {number, number, number}
+      ]])
+      it("should be used when showing a unary tuple", util.check_warnings([[
+         local a: { 1 of number }
+      ]], {
+         { y = 1, msg = "unused variable a: {1 of number}"}
+      }))
+      it("should report an error when something other than a positive integer is used", util.check_syntax_error([[
+         local arr: {1.5 of number}
+      ]], {
+         { y = 1, msg = "expected a positive integer, got 1.5" }
+      }))
+   end)
 end)

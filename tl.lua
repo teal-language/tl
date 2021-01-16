@@ -1353,6 +1353,10 @@ local function parse_function_type(ps, i)
    return i, typ
 end
 
+local function is_positive_int(n)
+   return n and n >= 1 and math.floor(n) == n
+end
+
 local function parse_base_type(ps, i)
    if ps.tokens[i].tk == "string" or
       ps.tokens[i].tk == "boolean" or
@@ -1374,6 +1378,21 @@ local function parse_base_type(ps, i)
       i = i + 1
       local decl = new_type(ps, i, "array")
       local t
+      if ps.tokens[i].kind == "number" then
+         local len = tonumber(ps.tokens[i].tk)
+         if not is_positive_int(len) then
+            fail(ps, i, "expected a positive integer, got " .. ps.tokens[i].tk)
+         end
+         i = verify_tk(ps, i + 1, "of")
+         i, t = parse_type(ps, i)
+         i = verify_tk(ps, i, "}")
+         decl.typename = "tupletable"
+         decl.types = {}
+         for _ = 1, len do
+            table.insert(decl.types, t)
+         end
+         return i, decl
+      end
       i, t = parse_type(ps, i)
       if ps.tokens[i].tk == "}" then
          decl.elements = t
@@ -3736,8 +3755,17 @@ local function show_type_base(t, seen)
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "tupletable" then
       local out = {}
+      local all_same = true
+      local last_t
       for _, v in ipairs(t.types) do
+         if last_t and v ~= last_t then
+            all_same = false
+         end
          table.insert(out, show(v))
+         last_t = v
+      end
+      if all_same then
+         return "{" .. tostring(#t.types) .. " of " .. show(t.types[1]) .. "}"
       end
       return "{" .. table.concat(out, ", ") .. "}"
    elseif t.typename == "poly" then
@@ -6899,10 +6927,6 @@ show_type(var.t))
                x = node.x,
                typename = "emptytable",
             })
-
-            local function is_positive_int(n)
-               return n and n >= 1 and math.floor(n) == n
-            end
 
             local is_record = false
             local is_array = false
