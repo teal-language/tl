@@ -3456,6 +3456,8 @@ local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
 local NOMINAL_METATABLE_OF_ALPHA = a_type { typename = "nominal", names = {"metatable"}, typevals = { ALPHA } }
 
+local USERDATA = ANY -- Placeholder for maybe having a userdata "primitive" type
+
 local LOAD_FUNCTION = a_type { typename = "function", args = {}, rets = { STRING } }
 
 local OS_DATE_TABLE = a_type {
@@ -3495,11 +3497,28 @@ local DEBUG_GETINFO_TABLE = a_type {
    }
 }
 
+local DEBUG_HOOK_EVENT = a_type {
+   typename = "enum",
+   enumset = {
+      ["call"] = true,
+      ["tail call"] = true,
+      ["return"] = true,
+      ["line"] = true,
+      ["count"] = true,
+   },
+}
+local DEBUG_HOOK_FUNCTION = a_type {
+   typename = "function",
+   args = { DEBUG_HOOK_EVENT, NUMBER },
+   rets = {},
+}
+
 local TABLE_SORT_FUNCTION = a_type { typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } }
 
 -- placeholders for when we have optional arity annotations
 local OPT_NUMBER = NUMBER
 local OPT_STRING = STRING
+local OPT_THREAD = THREAD
 local OPT_ALPHA = ALPHA
 local OPT_BETA = BETA
 local OPT_TABLE = TABLE
@@ -4041,6 +4060,49 @@ local standard_library: {string:Type} = {
    ["debug"] = a_type {
       typename = "record",
       fields = {
+         ["Info"] = a_type {
+            typename = "typetype",
+            def = DEBUG_GETINFO_TABLE,
+         },
+         ["Hook"] = a_type {
+            typename = "typetype",
+            def = DEBUG_HOOK_FUNCTION,
+         },
+         ["HookEvent"] = a_type {
+            typename = "typetype",
+            def = DEBUG_HOOK_EVENT,
+         },
+
+         ["debug"] = a_type { typename = "function", args = {}, rets = {} },
+         ["gethook"] = a_type { typename = "function", args = { OPT_THREAD }, rets = { DEBUG_HOOK_FUNCTION, NUMBER } },
+         ["getlocal"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { THREAD, FUNCTION, NUMBER }, rets = {} },
+               a_type { typename = "function", args = { FUNCTION, NUMBER }, rets = {} },
+            },
+         },
+         ["getmetatable"] = a_type { typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { NOMINAL_METATABLE_OF_ALPHA } },
+         ["getregistry"] = a_type { typename = "function", args = {}, rets = { TABLE } },
+         ["getupvalue"] = a_type { typename = "function", args = { FUNCTION, NUMBER }, rets = { ANY } },
+         ["getuservalue"] = a_type { typename = "function", args = { USERDATA, NUMBER }, rets = { ANY } },
+         ["sethook"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { THREAD, DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} },
+               a_type { typename = "function", args = { DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} },
+            }
+         },
+         ["setlocal"] = a_type {
+            typename = "poly",
+            types = {
+               a_type { typename = "function", args = { THREAD, NUMBER, NUMBER, ANY }, rets = { STRING } },
+               a_type { typename = "function", args = { NUMBER, NUMBER, ANY }, rets = { STRING } },
+            }
+         },
+         ["setmetatable"] = a_type { typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE_OF_ALPHA }, rets = { ALPHA } },
+         ["setupvalue"] = a_type { typename = "function", args = { FUNCTION, NUMBER, ANY }, rets = { STRING } },
+         ["setuservalue"] = a_type { typename = "function", args = { USERDATA, ANY, NUMBER }, rets = { USERDATA } },
          ["traceback"] = a_type {
             typename = "poly",
             types = {
@@ -4048,6 +4110,8 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", args = { STRING, NUMBER }, rets = { STRING } },
             },
          },
+         ["upvalueid"] = a_type { typename = "function", args = { FUNCTION, NUMBER }, rets = { USERDATA } },
+         ["upvaluejoin"] = a_type { typename = "function", args = { FUNCTION, NUMBER, FUNCTION, NUMBER }, rets = {} },
          ["getinfo"] = a_type {
             typename = "poly",
             types = {
@@ -4055,7 +4119,7 @@ local standard_library: {string:Type} = {
                a_type { typename = "function", args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
                a_type { typename = "function", args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
             },
-         }
+         },
       },
    },
    ["io"] = a_type {
