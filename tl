@@ -43,6 +43,15 @@ local function find_in_sequence(seq, value)
    return false
 end
 
+local function keys(t)
+   local ks = {}
+   for k, _ in pairs(t) do
+      table.insert(ks, k)
+   end
+   table.sort(ks)
+   return ks
+end
+
 -- FIXME
 local function validate_config(config)
    local valid_keys = {
@@ -55,6 +64,8 @@ local function validate_config(config)
       quiet = "boolean",
       source_dir = "string",
       skip_compat53 = "boolean",
+      gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
+      gen_target = { ["5.1"] = true, ["5.3"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
    }
@@ -62,6 +73,11 @@ local function validate_config(config)
    for k, v in pairs(config) do
       if not valid_keys[k] then
          print(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
+      elseif type(valid_keys[k]) == "table" then
+         if not valid_keys[k][v] then
+            return "Invalid value for " .. k .. ", expected one of: " ..
+                   table.concat(keys(valid_keys[k][v]), ", ")
+         end
       else
          -- TODO: could we type-check the config file using tl?
          local arr_type = valid_keys[k]:match("{(.*)}")
@@ -80,6 +96,10 @@ local function validate_config(config)
             end
          end
       end
+   end
+
+   if config.skip_compat53 then
+      config.gen_compat = "off"
    end
 
    if config.disable_warnings then
@@ -173,7 +193,17 @@ local function get_args_parser()
 
    parser:option("--warning-error-all")
 
+   parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
+         :choices({ "off", "optional", "required" })
+         :default("optional")
+         :defmode("a")
+
+   parser:option("--gen-target", "Minimum targeted Lua version for generated code.")
+         :choices({ "5.1", "5.3" })
+
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
+         :hidden(true)
+         :action(function(args) args.gen_compat = "off" end)
 
    parser:flag("--version", "Print version and exit")
 
@@ -308,7 +338,9 @@ if cmd == "build" then
    tlconfig["source_dir"] = args["source_dir"] or tlconfig["source_dir"]
    tlconfig["build_dir"] = args["build_dir"] or tlconfig["build_dir"]
 end
-tlconfig["skip_compat53"] = args["skip_compat53"] or tlconfig["skip_compat53"]
+tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
+tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]
+                                            or (tlconfig["skip_compat53"] and "off")
 if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
    print("Error: --output can only be used to map one input to one output")
    os.exit(1)
@@ -408,9 +440,10 @@ local function setup_env(filename)
          lax_mode = false
       end
 
-      local skip_compat53 = tlconfig["skip_compat53"]
+      local gen_compat = tlconfig["gen_compat"]
+      local gen_target = tlconfig["gen_target"]
 
-      env = tl.init_env(lax_mode, skip_compat53)
+      env = tl.init_env(lax_mode, gen_compat, gen_target)
    end
 end
 

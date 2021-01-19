@@ -25,7 +25,8 @@ return {
 | --- | --- | --- | --- | --- |
 | `-l --preload`  | `preload_modules` | `{string}` | `build` `check` `gen` `run` | Execute the equivalent of `require('modulename')` before processing Teal files. |
 | `-I --include-dir` |  `include_dir` | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
-| `--skip-compat53` | `skip_compat53` | `boolean` | `build` `gen` | Skip compat53 insertions.
+| `--gen-compat` | `gen_compat` | `string` | `build` `gen` `run` | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
+| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1` and `5.3`. See [below](#generated-code) for details.
 || `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
 || `exclude` | `{string}` | `build` | The set of files to exclude. See below for details on patterns.
 | `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
@@ -34,6 +35,69 @@ return {
 | `-p --pretend` ||| `build` `gen`  | Don't compile/write to any files, but type check and log what files would be written to.
 | `--wdisable` | `disable_warnings` | `{string}` | `build` `check` `run` | Disable the given warnings.
 | `--werror` | `warning_error` | `{string}` | `build` `check` `run` | Promote the given warnings to errors.
+
+### Generated code
+
+Teal is a Lua dialect that most closely resembles Lua 5.3-5.4, but it is able
+to target Lua 5.1 (including LuaJIT) and Lua 5.2 as well. The compiler attempts
+to produce code that, given an input `.tl` file, generates the same behavior
+on various Lua versions.
+
+However, there are limitations in the portability across Lua versions, and the
+options `--gen-target` and `--gen-compat` give you some control over the generated
+code.
+
+#### Target version
+
+The configuration option `gen_target` (`--gen-target` in the CLI) allow you to
+choose what is the minimum Lua version you want to target. Valid options are
+`5.1` (for Lua 5.1 and above, including LuaJIT) and `5.3` for Lua 5.3 and above.
+
+Using `5.1`, Teal will generate compatibility code for the integer division operator,
+a compatibility forward declaration for `table.unpack` and will use the `bit32`
+library for bitwise operators.
+
+Using `5.3`, Teal will generate code using the native `//` and bitwise operators.
+
+Code generated with `--gen-target=5.1` will still run on Lua 5.3+, but not
+optimally: the native Lua 5.3+ operators have better performance and better
+precision.
+
+#### Compatibility wrappers
+
+Another source of incompatibility across Lua versions is the standard library.
+This is mostly fixable via compatibility wrappers, implemented by the
+[compat53](https://github.com/keplerproject/lua-compat-5.3) Lua library.
+
+Teal's own standard library definition as used by its type checker most
+closely resembles that of Lua 5.3+, and the compiler's code generator can
+generate code that uses compat53 in order to produce consistent behavior
+across Lua versions, at the cost of adding a dependency when running on older
+Lua versions. For Lua 5.3 and above, compat53 is never needed.
+
+To avoid forcing a dependency on Teal users running Lua 5.1, 5.2 or LuaJIT,
+especially those who take care to avoid incompatibilities in the Lua standard
+library and hence wouldn't need compat53 in their code, Teal offers three
+modes of operation for compatibility wrapper generation via the `gen_compat`
+flag (and `--gen-compat` CLI option):
+
+* `off` - you can choose to disable generating compatibility code entirely.
+  When type checking, Teal will still assume the standard library is 5.3-compatible.
+  If you run the Teal module on an older Lua version and use any functionality
+  from the standard library that is not available on that version, you will
+  get a runtime error, similar to trying to run Lua 5.3 code on an older version.
+* `optional` (*default*) - Teal will generate compatibility code which
+  initializes the the compat53 library wrapping `require` with a `pcall`,
+  so that it doesn't produce a failure if the library is missing. This means
+  that, if compat53 is installed, you'll get the compliant standard library
+  behavior when running on Lua 5.2 and below, but if compat53 is missing,
+  you'll get the same behavior as described for `off` above.
+* `required` - Teal will generate compatibility code which initializes compat53
+  with a plain `require`, meaning that you'll get a runtime error when loading
+  the generated module from Lua if compat53 is missing. You can use this option
+  if you are distributing the generated Lua code for users running different
+  Lua versions and you want to ensure that your Teal code behaves the same
+  way on all Lua versions, even if at the cost of an additional dependency.
 
 ### Include/Exclude patterns
 

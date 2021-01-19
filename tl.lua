@@ -1,5 +1,7 @@
-local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m end end; local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack
-local TypeCheckOptions = {}
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+
+
+local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, }
 
 
 
@@ -9,14 +11,26 @@ local TypeCheckOptions = {}
 
 
 
-local LoadMode = {}
 
 
 
 
-local LoadFunction = {}
 
-local tl = {Env = {}, Result = {}, Error = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -68,6 +82,11 @@ tl.warning_kinds = {
 local Result = tl.Result
 local Env = tl.Env
 local Error = tl.Error
+local CompatMode = tl.CompatMode
+local TypeCheckOptions = tl.TypeCheckOptions
+local LoadMode = tl.LoadMode
+local LoadFunction = tl.LoadFunction
+local TargetMode = tl.TargetMode
 
 
 
@@ -4373,7 +4392,7 @@ local standard_library = {
          ["pack"] = a_type({ typename = "function", args = VARARG({ ANY }), rets = { TABLE } }),
          ["remove"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } }),
          ["sort"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_TABLE_SORT_FUNCTION }, rets = {} }),
-         ["unpack"] = a_type({ typename = "function", needs_compat53 = true, typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = VARARG({ ALPHA }) }),
+         ["unpack"] = a_type({ typename = "function", needs_compat = true, typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = VARARG({ ALPHA }) }),
       },
    }),
    ["utf8"] = a_type({
@@ -4403,10 +4422,10 @@ fill_field_order(DEBUG_GETINFO_TABLE)
 NOMINAL_FILE.found = standard_library["FILE"]
 NOMINAL_METATABLE_OF_ALPHA.found = standard_library["metatable"]
 
-local compat53_code_cache = {}
+local compat_code_cache = {}
 
-local function add_compat53_entries(program, used_set)
-   if not next(used_set) then
+local function add_compat_entries(program, used_set, gen_compat)
+   if gen_compat == "off" or not next(used_set) then
       return
    end
 
@@ -4416,18 +4435,18 @@ local function add_compat53_entries(program, used_set)
    end
    table.sort(used_list)
 
-   local compat53_loaded = false
+   local compat_loaded = false
 
    local n = 1
    local function load_code(name, text)
-      local code = compat53_code_cache[name]
+      local code = compat_code_cache[name]
       if not code then
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, { lax = false, skip_compat53 = true })
+         tl.type_check(code, { lax = false, gen_compat = "off" })
          code = code
-         compat53_code_cache[name] = code
+         compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
          table.insert(program, n, c)
@@ -4435,25 +4454,31 @@ local function add_compat53_entries(program, used_set)
       end
    end
 
+   local function req(m)
+      return (gen_compat == "optional") and
+      "pcall(require, '" .. m .. "')" or
+      "true, require('" .. m .. "')"
+   end
+
    for _, name in ipairs(used_list) do
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if m then bit32 = m; end")
+         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m; end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
       else
-         if not compat53_loaded then
-            load_code("compat53", "local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m; end")
-            compat53_loaded = true
+         if not compat_loaded then
+            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m; end")
+            compat_loaded = true
          end
-         load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
+         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
       end
    end
    program.y = 1
 end
 
-local function get_stdlib_compat53(lax)
+local function get_stdlib_compat(lax)
    if lax then
       return {
          ["utf8"] = true,
@@ -4515,10 +4540,10 @@ end
 
 local function init_globals(lax)
    local globals = {}
-   local stdlib_compat53 = get_stdlib_compat53(lax)
+   local stdlib_compat = get_stdlib_compat(lax)
 
    for name, typ in pairs(standard_library) do
-      globals[name] = { t = typ, needs_compat53 = stdlib_compat53[name], is_const = true }
+      globals[name] = { t = typ, needs_compat = stdlib_compat[name], is_const = true }
    end
 
 
@@ -4529,12 +4554,28 @@ local function init_globals(lax)
    return globals
 end
 
-tl.init_env = function(lax, skip_compat53)
+tl.init_env = function(lax, gen_compat, gen_target)
+   if gen_compat == true or gen_compat == nil then
+      gen_compat = "optional"
+   elseif gen_compat == false then
+      gen_compat = "off"
+   end
+   gen_compat = gen_compat
+
+   if not gen_target then
+      if _VERSION == "Lua 5.1" or _VERSION == "Lua 5.2" then
+         gen_target = "5.1"
+      else
+         gen_target = "5.3"
+      end
+   end
+
    local env = {
       modules = {},
       loaded = {},
       globals = init_globals(lax),
-      skip_compat53 = skip_compat53,
+      gen_compat = gen_compat,
+      gen_target = gen_target,
    }
 
 
@@ -4549,7 +4590,7 @@ end
 
 tl.type_check = function(ast, opts)
    opts = opts or {}
-   opts.env = opts.env or tl.init_env(opts.lax, opts.skip_compat53)
+   local env = opts.env or tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
    local lax = opts.lax
    local filename = opts.filename
    local result = opts.result or {
@@ -4559,9 +4600,9 @@ tl.type_check = function(ast, opts)
       warnings = {},
    }
 
-   local st = { opts.env.globals }
+   local st = { env.globals }
 
-   local all_needs_compat53 = {}
+   local all_needs_compat = {}
 
    local warnings = result.warnings or {}
    local errors = result.type_errors or {}
@@ -4572,8 +4613,8 @@ tl.type_check = function(ast, opts)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
-            if i == 1 and scope[name].needs_compat53 then
-               all_needs_compat53[name] = true
+            if i == 1 and scope[name].needs_compat then
+               all_needs_compat[name] = true
             end
             if not raw then
                scope[name].used = true
@@ -6650,7 +6691,7 @@ tl.type_check = function(ast, opts)
          if #b == 1 then
             if node.e2[1].kind == "string" then
                local module_name = assert(node.e2[1].conststr)
-               local t, found = require_module(module_name, lax, opts.env, result)
+               local t, found = require_module(module_name, lax, env, result)
                if not found then
                   node_error(node, "module not found: '" .. module_name .. "'")
                elseif not lax and is_unknown(t) then
@@ -7439,11 +7480,11 @@ tl.type_check = function(ast, opts)
                   end
                else
                   node.type = match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = node.e2.tk }, orig_a)
-                  if node.type.needs_compat53 and not opts.skip_compat53 then
+                  if node.type.needs_compat and opts.gen_compat ~= "off" then
                      local key = node.e1.tk .. "." .. node.e2.tk
                      node.kind = "variable"
                      node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
-                     all_needs_compat53[key] = true
+                     all_needs_compat[key] = true
                   end
                end
             elseif node.op.op == ":" then
@@ -7494,12 +7535,12 @@ tl.type_check = function(ast, opts)
                   end
                end
 
-               if node.op.op == "~" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+               if node.op.op == "~" and env.gen_target == "5.1" then
                   if metamethod then
-                     all_needs_compat53["mt"] = true
+                     all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
                   else
-                     all_needs_compat53["bit32"] = true
+                     all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
                   end
                end
@@ -7530,20 +7571,20 @@ tl.type_check = function(ast, opts)
                   end
                end
 
-               if node.op.op == "//" and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+               if node.op.op == "//" and env.gen_target == "5.1" then
                   if metamethod then
-                     all_needs_compat53["mt"] = true
+                     all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, "__idiv", meta_self, node.e1, node.e2)
                   else
                      local div = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
                      convert_node_to_compat_call(node, "math", "floor", div)
                   end
-               elseif bit_operators[node.op.op] and (_VERSION == "Lua 5.1" or _VERSION == "Lua 5.2") then
+               elseif bit_operators[node.op.op] and env.gen_target == "5.1" then
                   if metamethod then
-                     all_needs_compat53["mt"] = true
+                     all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_self, node.e1, node.e2)
                   else
-                     all_needs_compat53["bit32"] = true
+                     all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
                   end
                end
@@ -7752,9 +7793,7 @@ tl.type_check = function(ast, opts)
 
    clear_redundant_errors(errors)
 
-   if not opts.skip_compat53 then
-      add_compat53_entries(ast, all_needs_compat53)
-   end
+   add_compat_entries(ast, all_needs_compat, env.gen_compat)
 
    return errors, unknowns, module_type
 end
@@ -7843,7 +7882,7 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
       filename = filename,
       env = env,
       result = result,
-      skip_compat53 = env.skip_compat53,
+      gen_compat = env.gen_compat,
    }
    err, unknown, result.type = tl.type_check(program, opts)
 
