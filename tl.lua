@@ -1,4 +1,4 @@
-local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack
+local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m end end; local assert = _tl_compat53 and _tl_compat53.assert or assert; local io = _tl_compat53 and _tl_compat53.io or io; local ipairs = _tl_compat53 and _tl_compat53.ipairs or ipairs; local load = _tl_compat53 and _tl_compat53.load or load; local math = _tl_compat53 and _tl_compat53.math or math; local os = _tl_compat53 and _tl_compat53.os or os; local package = _tl_compat53 and _tl_compat53.package or package; local pairs = _tl_compat53 and _tl_compat53.pairs or pairs; local string = _tl_compat53 and _tl_compat53.string or string; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack
 local TypeCheckOptions = {}
 
 
@@ -4426,23 +4426,25 @@ local function add_compat53_entries(program, used_set)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
          tl.type_check(code, { lax = false, skip_compat53 = true })
-         code = code[1]
+         code = code
          compat53_code_cache[name] = code
       end
-      table.insert(program, n, code)
-      n = n + 1
+      for _, c in ipairs(code) do
+         table.insert(program, n, c)
+         n = n + 1
+      end
    end
 
    for _, name in ipairs(used_list) do
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32 or require('bit32')")
+         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if m then bit32 = m; end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
       else
          if not compat53_loaded then
-            load_code("compat53", "local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module')")
+            load_code("compat53", "local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m; end")
             compat53_loaded = true
          end
          load_code(name, (("local $NAME = _tl_compat53 and _tl_compat53.$NAME or $NAME"):gsub("$NAME", name)))
