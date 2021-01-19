@@ -7,6 +7,11 @@ Teal
 
 This is the repository of **tl**, the compiler for Teal, a typed dialect of Lua.
 
+The core compiler has no dependencies and is implemented as a single `tl.lua`
+file which you can load into your projects. Running `tl.loader()` will add
+Teal support to your package loader, meaning that `require()` will be able to
+run `.tl` files.
+
 ## Introduction
 
 Here are videos of talks given at FOSDEM 2019 and 2020 which discuss the

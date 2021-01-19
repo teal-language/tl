@@ -190,7 +190,7 @@ describe("tl gen", function()
          local lua_name = tl_to_lua(name)
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
-            local _tl_compat53 = ((tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3) and require('compat53.module'); local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { 1, 2, 3, 4 }
+            local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m end end; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { 1, 2, 3, 4 }
             print(_tl_table_unpack(t))
          ]], util.read_file(lua_name))
       end)
