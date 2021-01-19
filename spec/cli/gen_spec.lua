@@ -160,6 +160,44 @@ describe("tl gen", function()
       end)
    end)
 
+   describe("with --gen-target=5.1", function()
+      it("targets generated code to Lua 5.1+", function()
+         local name = util.write_tmp_file(finally, [[
+
+            local x = 2 // 3
+            local y = 2 << 3
+         ]])
+         local pd = io.popen(util.tl_cmd("gen", "--gen-target=5.1", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if p then bit32 = m end end
+            local x = math.floor(2 / 3)
+            local y = bit32.lshift(2, 3)
+         ]], util.read_file(lua_name))
+      end)
+   end)
+
+   describe("with --gen-target=5.3", function()
+      it("targets generated code to Lua 5.3+", function()
+         local name = util.write_tmp_file(finally, [[
+            local x = 2 // 3
+            local y = 2 << 3
+         ]])
+         local pd = io.popen(util.tl_cmd("gen", "--gen-target=5.3", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local x = 2 // 3
+            local y = 2 << 3
+         ]], util.read_file(lua_name))
+      end)
+   end)
+
    describe("with --skip-compat53", function()
       it("does not add compat53 insertions", function()
          local name = util.write_tmp_file(finally, [[
@@ -178,6 +216,64 @@ describe("tl gen", function()
       end)
    end)
 
+   describe("with --gen-compat=off", function()
+      it("does not add compat53 insertions", function()
+         local name = util.write_tmp_file(finally, [[
+            local t = {1, 2, 3, 4}
+            print(table.unpack(t))
+         ]])
+         local pd = io.popen(util.tl_cmd("gen", "--gen-compat=off", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local t = { 1, 2, 3, 4 }
+            print(table.unpack(t))
+         ]], util.read_file(lua_name))
+      end)
+   end)
+
+   describe("with --gen-compat=optional", function()
+      it("adds compat53 insertions with a pcall in the require", function()
+         local name = util.write_tmp_file(finally, [[
+
+            local t = {1, 2, 3, 4}
+            print(table.unpack(t))
+         ]])
+         local pd = io.popen(util.tl_cmd("gen", "--gen-compat=optional", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+            local t = { 1, 2, 3, 4 }
+            print(_tl_table_unpack(t))
+         ]], util.read_file(lua_name))
+      end)
+   end)
+
+   describe("with --gen-compat=required", function()
+      it("adds compat53 insertions", function()
+         local name = util.write_tmp_file(finally, [[
+
+            local t = {1, 2, 3, 4}
+            print(table.unpack(t))
+         ]])
+         local pd = io.popen(util.tl_cmd("gen", "--gen-compat=required", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[
+            local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+            local t = { 1, 2, 3, 4 }
+            print(_tl_table_unpack(t))
+         ]], util.read_file(lua_name))
+      end)
+   end)
+
    describe("without --skip-compat53", function()
       it("adds compat53 insertions by default", function()
          local name = util.write_tmp_file(finally, [[
@@ -190,7 +286,7 @@ describe("tl gen", function()
          local lua_name = tl_to_lua(name)
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
-            local _tl_compat53; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if m then _tl_compat53 = m end end; local table = _tl_compat53 and _tl_compat53.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { 1, 2, 3, 4 }
+            local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local t = { 1, 2, 3, 4 }
             print(_tl_table_unpack(t))
          ]], util.read_file(lua_name))
       end)
