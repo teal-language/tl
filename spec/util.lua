@@ -228,13 +228,13 @@ local function insert_into(tab, files)
    end
 end
 
-function util.run_mock_project(finally, t)
+function util.run_mock_project(finally, t, use_folder)
    assert(type(finally) == "function")
    assert(type(t) == "table")
    assert(type(t.cmd) == "string", "tl <cmd> not given")
    assert(valid_commands[t.cmd], "Invalid command tl " .. t.cmd)
 
-   local actual_dir_name = util.write_tmp_dir(finally, t.dir_structure)
+   local actual_dir_name = use_folder or util.write_tmp_dir(finally, t.dir_structure)
    local expected_dir_structure
    if t.generated_files then
       expected_dir_structure = {}

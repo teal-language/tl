@@ -679,8 +679,7 @@ if check_should_run_build_script() and tlconfig.build_file then
    --no need to read the file if we can just look up when it was last modified. Should have about the same effect and is easier.
    local last_run_time = lfs.attributes(time_keeper_path, "modification")
    local last_edit_time = lfs.attributes(tlconfig.build_file, "modification")
-
-   local should_rerun = last_run_time == nil or last_run_time <= last_edit_time
+   local should_rerun = last_run_time == nil or last_run_time < last_edit_time
 
    local gen_code = script["gen_code"]
    if should_rerun and gen_code then

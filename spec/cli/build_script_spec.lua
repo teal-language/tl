@@ -219,6 +219,52 @@ describe("build.tl", function()
       })
       
    end)
+
+   it("It should only run the build script if it changed since last time",function()
+      local path = util.write_tmp_dir(
+         finally,
+         {
+            ["tlconfig.lua"] = [[return {
+               build_dir = "build",
+               build_file_output_dir = "generated_code",
+               internal_compiler_output = "test"
+            }]],
+            ["build.tl"] = [[
+               return {
+                  gen_code = function(_:string) 
+                     
+                     print("This text should appear only once")
+                  end
+                  
+               }
+            ]],
+         }
+      )
+      util.run_mock_project(
+         finally, 
+         {
+            cmd = "build",
+            cmd_output=[[
+This text should appear only once
+Wrote: build/build.lua
+]]
+         },
+         path
+      )
+      util.run_mock_project(
+         finally, 
+         {
+            cmd = "build",
+            cmd_output=[[
+Wrote: build/build.lua
+]]
+         },
+         path
+      )
+      
+   end)
+
+
    it("Should give an error if the build script contains invalid teal", function()
       util.run_mock_project(finally, {
          dir_structure = {
