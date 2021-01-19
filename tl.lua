@@ -2698,8 +2698,8 @@ local function recurse_typeargs(ast, visit_type)
 end
 
 local function recurse_node(ast,
-visit_node,
-visit_type)
+   visit_node,
+   visit_type)
    if not ast then
 
       return
@@ -2942,12 +2942,36 @@ function tl.pretty_print_ast(ast, mode)
 
 
 
-   local function increment_indent()
-      indent = indent + 1
+   local save_indent = {}
+
+   local function increment_indent(node)
+      local child = node.body or node.thenpart or node[1]
+      if not child then
+         return
+      end
+      if child.y ~= node.y then
+         if indent == 0 and #save_indent > 0 then
+            indent = save_indent[#save_indent] + 1
+         else
+            indent = indent + 1
+         end
+      else
+         table.insert(save_indent, indent)
+         indent = 0
+      end
+   end
+
+   local function decrement_indent(node, child)
+      if child.y ~= node.y then
+         indent = indent - 1
+      else
+         indent = table.remove(save_indent)
+      end
    end
 
    if not opts.preserve_indent then
       increment_indent = nil
+      decrement_indent = function() end
    end
 
    local function add_string(out, s)
@@ -3081,7 +3105,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[1], " ")
             table.insert(out, " then")
             add_child(out, children[2], " ")
-            indent = indent - 1
+            decrement_indent(node, node.thenpart)
             for i = 3, #children do
                add_child(out, children[i], " ", indent)
             end
@@ -3097,7 +3121,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[1], " ")
             table.insert(out, " do")
             add_child(out, children[2], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3108,9 +3132,7 @@ function tl.pretty_print_ast(ast, mode)
             local out = { y = node.y, h = 0 }
             table.insert(out, "repeat")
             add_child(out, children[1], " ")
-            if opts.preserve_indent then
-               indent = indent - 1
-            end
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
             return out
@@ -3122,7 +3144,7 @@ function tl.pretty_print_ast(ast, mode)
             local out = { y = node.y, h = 0 }
             table.insert(out, "do")
             add_child(out, children[1], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3137,7 +3159,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[2], " ")
             table.insert(out, " do")
             add_child(out, children[3], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3158,7 +3180,7 @@ function tl.pretty_print_ast(ast, mode)
             end
             table.insert(out, " do")
             add_child(out, children[5], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3207,7 +3229,7 @@ function tl.pretty_print_ast(ast, mode)
                   table.insert(out, ",")
                   space = " "
                end
-               add_child(out, child, space)
+               add_child(out, child, space, child.y ~= node.y and indent)
             end
             return out
          end,
@@ -3217,7 +3239,6 @@ function tl.pretty_print_ast(ast, mode)
          after = function(node, children)
             local out = { y = node.y, h = 0 }
             if #children == 0 then
-               indent = indent - 1
                table.insert(out, "{}")
                return out
             end
@@ -3229,7 +3250,7 @@ function tl.pretty_print_ast(ast, mode)
                   table.insert(out, ",")
                end
             end
-            indent = indent - 1
+            decrement_indent(node, node[1])
             add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
             return out
          end,
@@ -3262,7 +3283,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[2])
             table.insert(out, ")")
             add_child(out, children[4], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3277,7 +3298,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[2])
             table.insert(out, ")")
             add_child(out, children[4], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3302,7 +3323,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[3])
             table.insert(out, ")")
             add_child(out, children[5], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3315,7 +3336,7 @@ function tl.pretty_print_ast(ast, mode)
             add_child(out, children[1])
             table.insert(out, ")")
             add_child(out, children[3], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -4006,8 +4027,8 @@ local standard_library = {
    ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
    ["getmetatable"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { NOMINAL_METATABLE_OF_ALPHA } }),
    ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
-         a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
-      }, }),
+      a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
+   }, }),
    ["load"] = a_type({ typename = "function", args = { UNION({ STRING, LOAD_FUNCTION }), OPT_STRING, OPT_STRING, OPT_TABLE }, rets = { FUNCTION, STRING } }),
    ["loadfile"] = a_type({ typename = "function", args = { OPT_STRING, OPT_STRING, OPT_TABLE }, rets = { FUNCTION, STRING } }),
    ["next"] = a_type({
@@ -4018,8 +4039,8 @@ local standard_library = {
       },
    }),
    ["pairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
-         a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
-      }, }),
+      a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
+   }, }),
    ["pcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, ANY }), rets = { BOOLEAN, ANY } }),
    ["xpcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, FUNCTION, ANY }), rets = { BOOLEAN, ANY } }),
    ["print"] = a_type({ typename = "function", args = VARARG({ ANY }), rets = {} }),
@@ -4056,8 +4077,8 @@ local standard_library = {
             ["close"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
             ["flush"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = {} }),
             ["lines"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = {
-                  a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
-               }, }),
+               a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
+            }, }),
             ["read"] = a_type({ typename = "function", args = { NOMINAL_FILE, UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
             ["seek"] = a_type({ typename = "function", args = { NOMINAL_FILE, OPT_STRING, OPT_NUMBER }, rets = { NUMBER, STRING } }),
             ["setvbuf"] = a_type({ typename = "function", args = { NOMINAL_FILE, STRING, OPT_NUMBER }, rets = {} }),
@@ -4079,8 +4100,8 @@ local standard_library = {
             ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
             ["__newindex"] = ANY,
             ["__pairs"] = a_type({ typeargs = { ARG_ALPHA, ARG_BETA }, typename = "function", args = { a_type({ typename = "map", keys = ALPHA, values = BETA }) }, rets = {
-                  a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
-               }, }),
+               a_type({ typename = "function", args = {}, rets = { ALPHA, BETA } }),
+            }, }),
             ["__tostring"] = a_type({ typename = "function", args = { ALPHA }, rets = { STRING } }),
             ["__name"] = STRING,
             ["__add"] = a_type({ typename = "function", args = { ANY, ANY }, rets = { ANY } }),
@@ -4189,8 +4210,8 @@ local standard_library = {
          ["flush"] = a_type({ typename = "function", args = {}, rets = {} }),
          ["input"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } }),
          ["lines"] = a_type({ typename = "function", args = VARARG({ OPT_STRING, a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = {
-               a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
-            }, }),
+            a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
+         }, }),
          ["open"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
          ["output"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } }),
          ["popen"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
@@ -4305,8 +4326,8 @@ local standard_library = {
          ["find"] = a_type({ typename = "function", args = { STRING, STRING, OPT_NUMBER, OPT_BOOLEAN }, rets = VARARG({ NUMBER, NUMBER, STRING }) }),
          ["format"] = a_type({ typename = "function", args = VARARG({ STRING, ANY }), rets = { STRING } }),
          ["gmatch"] = a_type({ typename = "function", args = { STRING, STRING }, rets = {
-               a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
-            }, }),
+            a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
+         }, }),
          ["gsub"] = a_type({
             typename = "poly",
             types = {
@@ -4362,8 +4383,8 @@ local standard_library = {
          ["charpattern"] = STRING,
          ["codepoint"] = a_type({ typename = "function", args = { STRING, OPT_NUMBER, OPT_NUMBER }, rets = VARARG({ NUMBER }) }),
          ["codes"] = a_type({ typename = "function", args = { STRING }, rets = {
-               a_type({ typename = "function", args = {}, rets = { NUMBER, STRING } }),
-            }, }),
+            a_type({ typename = "function", args = {}, rets = { NUMBER, STRING } }),
+         }, }),
          ["len"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
          ["offset"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { NUMBER } }),
       },
@@ -4892,7 +4913,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function redeclaration_warning(node, old_var)
-      if node.tk:sub(1, 1) == "_" then          return end
+      if node.tk:sub(1, 1) == "_" then return end
       if old_var.declared_at then
          node_warning("redeclaration", node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
       else
@@ -4911,15 +4932,15 @@ tl.type_check = function(ast, opts)
             node_warning("unused", var.declared_at, "unused label %s", name)
          else
             node_warning(
-"unused",
-var.declared_at,
-"unused %s %s: %s",
-var.is_func_arg and "argument" or
+            "unused",
+            var.declared_at,
+            "unused %s %s: %s",
+            var.is_func_arg and "argument" or
             var.t.typename == "function" and "function" or
             is_typetype(var.t) and "type" or
             "variable",
-name,
-show_type(var.t))
+            name,
+            show_type(var.t))
 
          end
       end
@@ -5029,11 +5050,11 @@ show_type(var.t))
    end
 
    local function match_fields_to_record(t1, t2, cmp)
-      return match_record_fields(t1, function(k)          return t2.fields[k] end, cmp)
+      return match_record_fields(t1, function(k) return t2.fields[k] end, cmp)
    end
 
    local function match_fields_to_map(t1, t2)
-      if not match_record_fields(t1, function(_)             return t2.values end) then
+      if not match_record_fields(t1, function(_) return t2.values end) then
          return false, { error_in_type(t1, "not all fields have type %s", t2.values) }
       end
       return true
@@ -6247,7 +6268,7 @@ show_type(var.t))
                end
             end
             return match_all_record_field_names(idxnode, a, field_names,
-"cannot index, not all enum values map to record fields of the same type")
+            "cannot index, not all enum values map to record fields of the same type")
          elseif is_a(b, STRING) then
             return node_error(idxnode, "cannot index object of type %s with a string, consider using an enum", orig_a)
          end
@@ -7773,7 +7794,7 @@ tl.process = function(filename, env, result, preload_modules)
 end
 
 function tl.process_string(input, is_lua, env, result, preload_modules,
-filename)
+   filename)
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
