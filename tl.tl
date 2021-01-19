@@ -2942,12 +2942,36 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       h: number
    end
 
-   local function increment_indent()
-      indent = indent + 1
+   local save_indent: {number} = {}
+
+   local function increment_indent(node: Node)
+      local child = node.body or node.thenpart or node[1]
+      if not child then
+         return
+      end
+      if child.y ~= node.y then
+         if indent == 0 and #save_indent > 0 then
+            indent = save_indent[#save_indent] + 1
+         else
+            indent = indent + 1
+         end
+      else
+         table.insert(save_indent, indent)
+         indent = 0
+      end
+   end
+
+   local function decrement_indent(node: Node, child: Node)
+      if child.y ~= node.y then
+         indent = indent - 1
+      else
+         indent = table.remove(save_indent)
+      end
    end
 
    if not opts.preserve_indent then
       increment_indent = nil
+      decrement_indent = function() end
    end
 
    local function add_string(out: Output, s: string)
@@ -3081,7 +3105,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[1], " ")
             table.insert(out, " then")
             add_child(out, children[2], " ")
-            indent = indent - 1
+            decrement_indent(node, node.thenpart)
             for i = 3, #children do
                add_child(out, children[i], " ", indent)
             end
@@ -3097,7 +3121,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[1], " ")
             table.insert(out, " do")
             add_child(out, children[2], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3108,9 +3132,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "repeat")
             add_child(out, children[1], " ")
-            if opts.preserve_indent then
-               indent = indent - 1
-            end
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
             return out
@@ -3122,7 +3144,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "do")
             add_child(out, children[1], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3137,7 +3159,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[2], " ")
             table.insert(out, " do")
             add_child(out, children[3], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3158,7 +3180,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             end
             table.insert(out, " do")
             add_child(out, children[5], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3207,7 +3229,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
                   table.insert(out, ",")
                   space = " "
                end
-               add_child(out, child, space)
+               add_child(out, child, space, child.y ~= node.y and indent)
             end
             return out
          end,
@@ -3217,7 +3239,6 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if #children == 0 then
-               indent = indent - 1
                table.insert(out, "{}")
                return out
             end
@@ -3229,7 +3250,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
                   table.insert(out, ",")
                end
             end
-            indent = indent - 1
+            decrement_indent(node, node[1])
             add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
             return out
          end,
@@ -3262,7 +3283,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[2])
             table.insert(out, ")")
             add_child(out, children[4], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3277,7 +3298,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[2])
             table.insert(out, ")")
             add_child(out, children[4], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3302,7 +3323,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[3])
             table.insert(out, ")")
             add_child(out, children[5], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -3315,7 +3336,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             add_child(out, children[1])
             table.insert(out, ")")
             add_child(out, children[3], " ")
-            indent = indent - 1
+            decrement_indent(node, node.body)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
