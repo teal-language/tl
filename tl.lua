@@ -6465,7 +6465,10 @@ show_type(var.t))
             if not typ then
                return { [f.var] = INVALID }
             end
-            if not is_a(f.typ, typ) then
+            if typ.typename == "typevar" then
+
+               return {}
+            elseif not is_a(f.typ, typ) then
                node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
                return { [f.var] = INVALID }
             else
@@ -6542,7 +6545,7 @@ show_type(var.t))
             if not typ then
                return { [f.var] = INVALID }
             end
-            if not is_a(f.typ, typ) then
+            if typ.typename ~= "typevar" and not is_a(f.typ, typ) then
                node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
                return { [f.var] = INVALID }
             else

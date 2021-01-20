@@ -31,6 +31,26 @@ describe("flow analysis with is", function()
          end
       ]])
 
+      it("works for type arguments", util.check [[
+         local function test<T>(t: T)
+            if t is number then
+               print(t + 1)
+            else
+               print(t)
+            end
+         end
+      ]])
+
+      it("not works for type arguments", util.check [[
+         local function test<T>(t: T)
+            if not t is number then
+               print(t)
+            else
+               print(t + 1)
+            end
+         end
+      ]])
+
       it("negates with not", util.check [[
          local t: number | string
          if not t is number then
