@@ -6453,7 +6453,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if not typ then
                return { [f.var] = INVALID }
             end
-            if not is_a(f.typ, typ) then
+            if typ.typename == "typevar" then
+               -- nothing is known from negation on typeargs
+               return {}
+            elseif not is_a(f.typ, typ) then
                node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
                return { [f.var] = INVALID }
             else
@@ -6530,7 +6533,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if not typ then
                return { [f.var] = INVALID }
             end
-            if not is_a(f.typ, typ) then
+            if typ.typename ~= "typevar" and not is_a(f.typ, typ) then
                node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
                return { [f.var] = INVALID }
             else
