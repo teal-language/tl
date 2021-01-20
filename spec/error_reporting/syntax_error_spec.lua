@@ -48,25 +48,31 @@ describe("syntax errors", function()
    it("malformed string: non escapable character", util.check_syntax_error([[
       print("\s")
    ]], {
-      { y = 1, msg = "syntax error" },
+      { y = 1, msg = "malformed string" },
    }))
 
    it("malformed string: bad hex character", util.check_syntax_error([[
       print("\xZZ")
    ]], {
-      { y = 1, msg = "syntax error" },
+      { y = 1, msg = "malformed string" },
    }))
 
    it("malformed string: bad UTF-8 character", util.check_syntax_error([[
       print("\u{ZZ}")
    ]], {
-      { y = 1, msg = "syntax error" },
+      { y = 1, msg = "malformed string" },
    }))
 
    it("malformed string: bad UTF-8 character", util.check_syntax_error([[
-      print("\")
+      print("\u{ZZ}")
    ]], {
-      { y = 1, msg = "syntax error" },
+      { y = 1, msg = "malformed string" },
+   }))
+
+   it("malformed number", util.check_syntax_error([[
+      print(0eh)
+   ]], {
+      { y = 1, msg = "malformed number" },
    }))
 
    it("valid strings: numbered escape", util.check [[
@@ -78,7 +84,7 @@ describe("syntax errors", function()
    it("malformed string: numbered escape", util.check_syntax_error([[
       print("hello\300hello")
    ]], {
-      { y = 1, msg = "syntax error" },
+      { y = 1, msg = "malformed string" },
    }))
 
    it("reports on approximate source of missing 'end'", util.check_syntax_error([[

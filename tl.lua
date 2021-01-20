@@ -119,6 +119,8 @@ local TokenKind = {}
 
 
 
+
+
 local Token = {}
 
 
@@ -452,7 +454,7 @@ function tl.lex(input)
          local skip, valid = lex_string_escape(input, i, c)
          i = i + skip
          if not valid then
-            end_token("$invalid$")
+            end_token("$invalid_string$")
             table.insert(errs, tokens[#tokens])
          end
          x = x + skip
@@ -468,7 +470,7 @@ function tl.lex(input)
          local skip, valid = lex_string_escape(input, i, c)
          i = i + skip
          if not valid then
-            end_token("$invalid$")
+            end_token("$invalid_string$")
             table.insert(errs, tokens[#tokens])
          end
          x = x + skip
@@ -632,7 +634,7 @@ function tl.lex(input)
          elseif lex_decimals[c] then
             state = "power"
          else
-            end_token("$invalid$")
+            end_token("$invalid_number$")
             table.insert(errs, tokens[#tokens])
             state = "any"
          end
@@ -1105,7 +1107,7 @@ local function fail(ps, i, msg)
       table.insert(ps.errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
       return #ps.tokens
    end
-   table.insert(ps.errs, { y = ps.tokens[i].y, x = ps.tokens[i].x, msg = msg or "syntax error" })
+   table.insert(ps.errs, { y = ps.tokens[i].y, x = ps.tokens[i].x, msg = assert(msg, "syntax error, but no error message provided") })
    return math.min(#ps.tokens, i + 1)
 end
 
@@ -1186,7 +1188,7 @@ end
 local function parse_table_item(ps, i, n)
    local node = new_node(ps.tokens, i, "table_item")
    if ps.tokens[i].kind == "$EOF$" then
-      return fail(ps, i)
+      return fail(ps, i, "unexpected eof")
    end
 
    if ps.tokens[i].tk == "[" then
@@ -1239,7 +1241,7 @@ local function parse_table_item(ps, i, n)
    node.key.tk = tostring(n)
    i, node.value = parse_expression(ps, i)
    if not node.value then
-      return fail(ps, i)
+      return fail(ps, i, "expected an expression")
    end
    return i, node, n + 1
 end
@@ -1264,7 +1266,7 @@ local function parse_list(ps, i, list, close, sep, parse_item)
       if ps.tokens[i].tk == "," then
          i = i + 1
          if sep == "sep" and close[ps.tokens[i].tk] then
-            return fail(ps, i)
+            return fail(ps, i, "unexpected '" .. ps.tokens[i].tk .. "'")
          end
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
@@ -1455,7 +1457,7 @@ local function parse_base_type(ps, i)
       end
       return i, typ
    end
-   return fail(ps, i)
+   return fail(ps, i, "expected a type")
 end
 
 parse_type = function(ps, i)
@@ -1586,8 +1588,12 @@ local function parse_literal(ps, i)
       return verify_kind(ps, i, "keyword", "nil")
    elseif ps.tokens[i].tk == "function" then
       return parse_function_value(ps, i)
+   elseif ps.tokens[i].kind == "$invalid_string$" then
+      return fail(ps, i, "malformed string")
+   elseif ps.tokens[i].kind == "$invalid_number$" then
+      return fail(ps, i, "malformed number")
    end
-   return fail(ps, i)
+   return fail(ps, i, "syntax error")
 end
 
 local an_operator
@@ -1685,6 +1691,9 @@ do
          i, e1 = parse_literal(ps, i)
       end
 
+      if not e1 then
+         return i
+      end
       while true do
          if ps.tokens[i].kind == "string" or ps.tokens[i].kind == "{" then
             local op = new_operator(ps.tokens[i], 2, "@funcall")
@@ -1760,6 +1769,9 @@ do
                i, cast.casttype = parse_type_list(ps, i, "casttype")
             else
                i, cast.casttype = parse_type(ps, i)
+            end
+            if not cast.casttype then
+               return i
             end
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
@@ -2343,7 +2355,7 @@ parse_newtype = function(ps, i)
       i, node.newtype.def = parse_type(ps, i)
       return i, node
    end
-   return fail(ps, i)
+   return fail(ps, i, "expected a type")
 end
 
 local function parse_call_or_assignment(ps, i)
@@ -2353,7 +2365,7 @@ local function parse_call_or_assignment(ps, i)
    asgn.vars = new_node(ps.tokens, i, "variables")
    i = parse_trying_list(ps, i, asgn.vars, parse_expression)
    if #asgn.vars < 1 then
-      return fail(ps, i)
+      return fail(ps, i, "syntax error")
    end
    local lhs = asgn.vars[1]
 
@@ -2368,12 +2380,12 @@ local function parse_call_or_assignment(ps, i)
       return i, asgn
    end
    if #asgn.vars > 1 then
-      return failskip(ps, i, nil, parse_expression, tryi)
+      return failskip(ps, i, "syntax error", parse_expression, tryi)
    end
    if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
       return i, lhs
    end
-   return fail(ps, i)
+   return fail(ps, i, "syntax error")
 end
 
 local function parse_variable_declarations(ps, i, node_name)
@@ -4108,6 +4120,10 @@ local standard_library = {
    ["debug"] = a_type({
       typename = "record",
       fields = {
+         ["Info"] = a_type({
+            typename = "typetype",
+            def = DEBUG_GETINFO_TABLE,
+         }),
          ["Hook"] = a_type({
             typename = "typetype",
             def = DEBUG_HOOK_FUNCTION,

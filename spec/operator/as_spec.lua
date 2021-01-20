@@ -51,4 +51,16 @@ describe("cast", function()
       local z = 10
    ]])
 
+   it("should not crash on unexpected eof (#345)", util.check_syntax_error([[
+      local x = 1 as
+   ]], {
+      { msg = "expected a type" }
+   }))
+
+   it("should not crash when casting an empty expression (#345)", util.check_syntax_error([[
+      local x = () as string
+   ]], {
+      { msg = "syntax error" },
+      { msg = "syntax error, expected ')'" }
+   }))
 end)
