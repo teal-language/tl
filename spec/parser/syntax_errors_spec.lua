@@ -8,7 +8,7 @@ describe("syntax errors", function()
 
       print("what")
    ]], {
-      { y = 3, msg = "syntax error" },
+      { y = 3, msg = "expected one or more expressions" },
    }))
 
    it("in table declaration", util.check_syntax_error([[
@@ -19,7 +19,7 @@ describe("syntax errors", function()
       }
    ]], {
       { y = 3, x = 15, msg = "syntax error, expected one of: '}', ','" },
-      { y = 3, x = 17, msg = "syntax error" },
+      { y = 3, x = 17, msg = "expected an expression" },
    }))
 
    it("missing separators in table", util.check_syntax_error([[

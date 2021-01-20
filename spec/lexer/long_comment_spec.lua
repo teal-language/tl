@@ -63,7 +63,7 @@ describe("long comment", function()
       ]=]
       local foo = 1
    ]], {
-      { msg = "syntax error" }
+      { msg = "expected either an assignment or function call" }
    }))
 
    pending("export Lua", function()

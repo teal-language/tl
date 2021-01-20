@@ -65,7 +65,7 @@ describe("long string", function()
             long string line 2
          ]=]
    ]], {
-      { y = 6, x = 18, msg = "syntax error" },
+      { y = 6, x = 18, msg = "expected either an assignment or function call" },
    }))
 
    it("export Lua", function()

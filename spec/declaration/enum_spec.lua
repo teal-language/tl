@@ -76,7 +76,7 @@ describe("enum declaration", function()
       end
    ]], {
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local enum t'" },
-      { msg = "syntax error" },
+      { msg = "expected one or more expressions" },
    }))
 
    it("produces a nice error when global declared with the old syntax", util.check_syntax_error([[
@@ -94,7 +94,7 @@ describe("enum declaration", function()
       end
    ]], {
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'global enum t'" },
-      { msg = "syntax error" },
+      { msg = "expected one or more expressions" },
    }))
 
    it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[

@@ -42,6 +42,9 @@ describe("assignment to array", function()
       }
    ]], {
       { y = 6, x = 10, msg = "cannot index this expression" },
-      { y = 6, msg = "syntax error" },
+      { y = 6, msg = "expected a literal" },
+      { y = 6, msg = "expected an expression" },
+      { y = 7, msg = "syntax error, expected one of: '}', ','" },
+      { y = 10, msg = "expected one or more expressions" },
    }))
 end)
