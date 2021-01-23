@@ -1,4 +1,3 @@
-local tl = require("tl")
 local util = require("spec.util")
 
 describe("generic function", function()
