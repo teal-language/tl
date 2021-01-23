@@ -7497,10 +7497,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                else
                   node.type = match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = node.e2.tk }, orig_a)
                   if node.type.needs_compat and opts.gen_compat ~= "off" then
-                     local key = node.e1.tk .. "." .. node.e2.tk
-                     node.kind = "variable"
-                     node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
-                     all_needs_compat[key] = true
+                     -- only apply to a literal use, not a propagated type
+                     if node.e1.kind == "variable" and node.e2.kind == "identifier" then
+                        local key = node.e1.tk .. "." .. node.e2.tk
+                        node.kind = "variable"
+                        node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
+                        all_needs_compat[key] = true
+                     end
                   end
                end
             elseif node.op.op == ":" then
