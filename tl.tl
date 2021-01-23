@@ -71,6 +71,8 @@ local record tl
    gen: function(string, Env): string
    type_check: function(Node, TypeCheckOptions): ({Error}, {Error}, Type)
    init_env: function(boolean, boolean | CompatMode, TargetMode): Env
+
+   package_loader_env: Env
 end
 
 tl.warning_kinds = {
@@ -7931,12 +7933,26 @@ local function tl_package_loader(module_name: string): any
    local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
       local input = fd:read("*a")
+      if not input then
+         goto fail
+      end
       fd:close()
       local errs: {Error} = {}
       local _, program = tl.parse_program(tl.lex(input), errs, module_name)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
+      local lax = not not found_filename:match("lua$")
+      if not tl.package_loader_env then
+         tl.package_loader_env = tl.init_env(lax)
+      end
+
+      tl.type_check(program, {
+         lax = lax,
+         filename = found_filename,
+         env = tl.package_loader_env,
+      })
+
       local code = tl.pretty_print_ast(program, true)
       local chunk, err = load(code, module_name, "t")
       if chunk then
@@ -7949,6 +7965,7 @@ local function tl_package_loader(module_name: string): any
          error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
       end
    end
+   ::fail::
    return table.concat(tried, "\n\t")
 end
 
