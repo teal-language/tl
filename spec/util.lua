@@ -155,23 +155,37 @@ function util.chdir_teardown()
    assert(lfs.chdir(current_dir))
 end
 
+local finally_queue
+
 math.randomseed(os.time())
 local function tmp_file_name()
    return "/tmp/teal_tmp" .. math.random(99999999)
 end
 function util.write_tmp_file(finally, content, ext)
-   if not ext then ext = "tl" end
    assert(type(finally) == "function")
    assert(type(content) == "string")
 
-   local full_name = tmp_file_name() .. "." .. ext
+   local full_name = tmp_file_name() .. "." .. (ext or "tl")
 
    local fd = assert(io.open(full_name, "w"))
    fd:write(content)
    fd:close()
-   finally(function()
-      os.remove(full_name)
-   end)
+
+   if not finally_queue then
+      finally(function()
+         for _, f in ipairs(finally_queue) do
+            os.remove(f)
+         end
+         finally_queue = nil
+      end)
+      finally_queue = {}
+   end
+
+   table.insert(finally_queue, full_name)
+   if not ext then
+      table.insert(finally_queue, (full_name:gsub("%.tl$", ".lua")))
+   end
+
    return full_name
 end
 
