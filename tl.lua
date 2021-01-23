@@ -272,9 +272,9 @@ do
          end
       elseif lex_decimals[c] then
          local len = lex_decimals[input:sub(i + 1, i + 1)] and
-         (lex_decimals[input:sub(i + 2, i + 2)] and 3 or 2) or
-         1
-         return len, tonumber(input:sub(i, i + len - 1)) < 256
+         (lex_decimals[input:sub(i + 2, i + 2)] and 2 or 1) or
+         0
+         return len, tonumber(input:sub(i, i + len)) < 256
       else
          return 0, false
       end
