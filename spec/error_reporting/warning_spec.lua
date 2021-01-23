@@ -18,7 +18,7 @@ describe("warnings", function()
             print(i)
          end
 
-         for k, v in pairs{'a', 'b', 'c'} do
+         for k, v in ipairs{'a', 'b', 'c'} do
             print(k, v)
             local k = 2
             local v = 'd'
@@ -28,6 +28,14 @@ describe("warnings", function()
          { y = 3, msg = "redeclaration of variable 'i' (originally declared at 1:14)" },
          { y = 9, msg = "redeclaration of variable 'k' (originally declared at 7:14)" },
          { y = 10, msg = "redeclaration of variable 'v' (originally declared at 7:17)" },
+      }))
+
+      it("reports use of pairs on arrays", util.check_warnings([[
+         for k, v in pairs{'a', 'b', 'c'} do
+            print(k, v)
+         end
+      ]], {
+         { y = 1, msg = "applying pairs on an array: did you intend to apply ipairs?" },
       }))
 
       it("does not report localized globals", util.check_warnings([[

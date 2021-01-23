@@ -51,6 +51,7 @@ local record tl
       "unused"
       "redeclaration"
       "branch"
+      "hint"
       "debug"
    end
    warning_kinds: {WarningKind:boolean}
@@ -76,6 +77,7 @@ tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
    ["branch"] = true,
+   ["hint"] = true,
    ["debug"] = true,
 }
 
@@ -7030,19 +7032,30 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                -- check common errors:
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_unary(exp1.e2.type)
-                  if exp1.e1.tk == "pairs" and not (t.typename == "map" or t.typename == "record") then
+                  if exp1.e1.tk == "pairs" and t.typename == "array" then
+                     node_warning("hint", exp1, "applying pairs on an array: did you intend to apply ipairs?")
+                  end
+
+                  if exp1.e1.tk == "pairs" and t.typename ~= "map" then
                      if not (lax and is_unknown(t)) then
-                        node_error(exp1, "attempting pairs loop on something that's not a map or record: %s", exp1.e2.type)
+                        if t.typename == "record" then
+                           match_all_record_field_names(exp1.e2, t, t.field_order,
+                              "attempting pairs loop on a record with attributes of different types")
+                        elseif t.typename == "arrayrecord" then
+                           node_error(exp1.e2, "attempting pairs loop on a mixed array-record object: %s", exp1.e2.type)
+                        else
+                           node_error(exp1.e2, "cannot apply pairs on values of type: %s", exp1.e2.type)
+                        end
                      end
                   elseif exp1.e1.tk == "ipairs" then
                      if t.typename == "tupletable" then
                         local arr_type = arraytype_from_tuple(exp1.e2, t)
                         if not arr_type then
-                           node_error(exp1, "attempting ipairs loop on tuple that's not a valid array: %s", exp1.e2.type)
+                           node_error(exp1.e2, "attempting ipairs loop on tuple that's not a valid array: %s", exp1.e2.type)
                         end
                      elseif not is_array_type(t) then
                         if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
-                           node_error(exp1, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
+                           node_error(exp1.e2, "attempting ipairs loop on something that's not an array: %s", exp1.e2.type)
                         end
                      end
                   end
