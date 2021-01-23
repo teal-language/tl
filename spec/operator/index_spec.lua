@@ -12,7 +12,7 @@ describe("[]", function()
          local y = "baz"
          local n: number = x[y]
       ]], {
-         { msg = "cannot index object of type {foo: number, bar: number} with a string, consider using an enum" },
+         { msg = "cannot index object of type record (foo: number; bar: number) with a string, consider using an enum" },
       }))
 
       it("fail without declaration if record is not homogenous", util.check_type_error([[
@@ -21,7 +21,7 @@ describe("[]", function()
          local y = "baz"
          local n: string = x[y]
       ]], {
-         { msg = "cannot index object of type {foo: number, bar: string} with a string, consider using an enum" },
+         { msg = "cannot index object of type record (foo: number; bar: string) with a string, consider using an enum" },
       }))
 
       it("ok without declaration if key is enum and all keys map to the same type", util.check [[

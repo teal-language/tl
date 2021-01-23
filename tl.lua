@@ -3877,11 +3877,14 @@ local function show_type_base(t, seen)
       return t.names and table.concat(t.names, ".") or "enum"
    elseif is_record_type(t) then
       local out = {}
+      if t.elements then
+         table.insert(out, "{" .. show(t.elements) .. "}")
+      end
       for _, k in ipairs(t.field_order) do
          local v = t.fields[k]
          table.insert(out, k .. ": " .. show(v))
       end
-      return "{" .. table.concat(out, ", ") .. "}"
+      return "record (" .. table.concat(out, "; ") .. ")"
    elseif t.typename == "function" then
       local out = {}
       table.insert(out, "function(")
