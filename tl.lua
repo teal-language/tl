@@ -4597,6 +4597,7 @@ tl.type_check = function(ast, opts)
    local env = opts.env or tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
    local lax = opts.lax
    local filename = opts.filename
+
    local result = opts.result or {
       syntax_errors = {},
       type_errors = {},
@@ -6767,6 +6768,7 @@ tl.type_check = function(ast, opts)
             end
 
             node.type = NONE
+            return node.type
          end,
       },
       ["local_type"] = {
@@ -6776,6 +6778,7 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             dismiss_unresolved(node.var.tk)
             node.type = NONE
+            return node.type
          end,
       },
       ["global_type"] = {
@@ -6798,6 +6801,7 @@ tl.type_check = function(ast, opts)
             end
             dismiss_unresolved(var.tk)
             node.type = NONE
+            return node.type
          end,
       },
       ["local_declaration"] = {
@@ -6841,6 +6845,7 @@ tl.type_check = function(ast, opts)
                dismiss_unresolved(var.tk)
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["global_declaration"] = {
@@ -6884,6 +6889,7 @@ tl.type_check = function(ast, opts)
                end
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["assignment"] = {
@@ -6918,11 +6924,13 @@ tl.type_check = function(ast, opts)
                end
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["do"] = {
          after = function(node, _children)
             node.type = NONE
+            return node.type
          end,
       },
       ["if"] = {
@@ -6933,6 +6941,7 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["elseif"] = {
@@ -6950,6 +6959,7 @@ tl.type_check = function(ast, opts)
          end,
          after = function(node, _children)
             node.type = NONE
+            return node.type
          end,
       },
       ["else"] = {
@@ -6964,6 +6974,7 @@ tl.type_check = function(ast, opts)
          end,
          after = function(node, _children)
             node.type = NONE
+            return node.type
          end,
       },
       ["while"] = {
@@ -6978,6 +6989,7 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["label"] = {
@@ -7011,6 +7023,7 @@ tl.type_check = function(ast, opts)
                table.insert(unresolved.labels[node.label], node)
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["repeat"] = {
@@ -7022,6 +7035,7 @@ tl.type_check = function(ast, opts)
 
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["forin"] = {
@@ -7093,6 +7107,7 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["fornum"] = {
@@ -7103,6 +7118,7 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["return"] = {
@@ -7147,6 +7163,7 @@ tl.type_check = function(ast, opts)
             end
 
             node.type = NONE
+            return node.type
          end,
       },
       ["variables"] = {
@@ -7166,6 +7183,7 @@ tl.type_check = function(ast, opts)
             end
 
             node.type.typename = "tuple"
+            return node.type
          end,
       },
       ["table_literal"] = {
@@ -7301,6 +7319,7 @@ tl.type_check = function(ast, opts)
                   node_error(node, "cannot determine type of tuple elements")
                end
             end
+            return node.type
          end,
       },
       ["table_item"] = {
@@ -7320,6 +7339,7 @@ tl.type_check = function(ast, opts)
                ktype = ktype,
                vtype = vtype,
             })
+            return node.type
          end,
       },
       ["local_function"] = {
@@ -7340,6 +7360,7 @@ tl.type_check = function(ast, opts)
                rets = rets,
             }))
             node.type = NONE
+            return node.type
          end,
       },
       ["global_function"] = {
@@ -7358,6 +7379,7 @@ tl.type_check = function(ast, opts)
                rets = get_rets(children[3]),
             }))
             node.type = NONE
+            return node.type
          end,
       },
       ["record_function"] = {
@@ -7414,6 +7436,7 @@ tl.type_check = function(ast, opts)
             end_function_scope()
 
             node.type = NONE
+            return node.type
          end,
       },
       ["function"] = {
@@ -7434,17 +7457,20 @@ tl.type_check = function(ast, opts)
                args = children[1],
                rets = children[2],
             })
+            return node.type
          end,
       },
       ["cast"] = {
          after = function(node, _children)
             node.type = node.casttype
+            return node.type
          end,
       },
       ["paren"] = {
          after = function(node, children)
             node.known = node.e1 and node.e1.known
             node.type = resolve_unary(children[1])
+            return node.type
          end,
       },
       ["op"] = {
@@ -7613,6 +7639,7 @@ tl.type_check = function(ast, opts)
             else
                error("unknown node op " .. node.op.op)
             end
+            return node.type
          end,
       },
       ["variable"] = {
@@ -7634,6 +7661,7 @@ tl.type_check = function(ast, opts)
                   node_error(node, "unknown variable: " .. node.tk)
                end
             end
+            return node.type
          end,
       },
       ["argument"] = {
@@ -7648,16 +7676,19 @@ tl.type_check = function(ast, opts)
             check_typevars(node, t)
             node.type = t
             add_var(node, node.tk, t).is_func_arg = true
+            return node.type
          end,
       },
       ["identifier"] = {
          after = function(node, _children)
             node.type = NONE
+            return node.type
          end,
       },
       ["newtype"] = {
          after = function(node, _children)
             node.type = node.newtype
+            return node.type
          end,
       },
    }
@@ -7782,6 +7813,11 @@ tl.type_check = function(ast, opts)
          end,
       },
    }
+
+   if not opts.run_internal_compiler_checks then
+      visit_node.after = nil
+      visit_type.after = nil
+   end
 
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
@@ -7952,6 +7988,7 @@ local function tl_package_loader(module_name)
          lax = lax,
          filename = found_filename,
          env = tl.package_loader_env,
+         run_internal_compiler_checks = false,
       })
 
       local code = tl.pretty_print_ast(program, true)

@@ -27,6 +27,7 @@ local record tl
       gen_target: TargetMode
       env: Env
       result: Result
+      run_internal_compiler_checks: boolean
    end
 
    record Env
@@ -4596,6 +4597,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local env = opts.env or tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
    local lax = opts.lax
    local filename = opts.filename
+
    local result = opts.result or {
       syntax_errors = {},
       type_errors = {},
@@ -6766,6 +6768,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
             -- TODO extract node type from `return`
             node.type = NONE
+            return node.type
          end
       },
       ["local_type"] = {
@@ -6775,6 +6778,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             dismiss_unresolved(node.var.tk)
             node.type = NONE
+            return node.type
          end,
       },
       ["global_type"] = {
@@ -6797,6 +6801,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
             dismiss_unresolved(var.tk)
             node.type = NONE
+            return node.type
          end,
       },
       ["local_declaration"] = {
@@ -6840,6 +6845,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                dismiss_unresolved(var.tk)
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["global_declaration"] = {
@@ -6883,6 +6889,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["assignment"] = {
@@ -6917,11 +6924,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["do"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE
+            return node.type
          end,
       },
       ["if"] = {
@@ -6932,6 +6941,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["elseif"] = {
@@ -6949,6 +6959,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE
+            return node.type
          end,
       },
       ["else"] = {
@@ -6963,6 +6974,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE
+            return node.type
          end,
       },
       ["while"] = {
@@ -6977,6 +6989,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["label"] = {
@@ -7010,6 +7023,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                table.insert(unresolved.labels[node.label], node)
             end
             node.type = NONE
+            return node.type
          end,
       },
       ["repeat"] = {
@@ -7021,6 +7035,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             -- only end scope after checking `until`, `statements` in repeat body has is_return == true
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["forin"] = {
@@ -7092,6 +7107,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["fornum"] = {
@@ -7102,6 +7118,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             end_scope()
             node.type = NONE
+            return node.type
          end,
       },
       ["return"] = {
@@ -7146,6 +7163,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
 
             node.type = NONE
+            return node.type
          end,
       },
       ["variables"] = {
@@ -7165,6 +7183,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
 
             node.type.typename = "tuple"
+            return node.type
          end,
       },
       ["table_literal"] = {
@@ -7300,6 +7319,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node_error(node, "cannot determine type of tuple elements")
                end
             end
+            return node.type
          end,
       },
       ["table_item"] = {
@@ -7319,6 +7339,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                ktype = ktype,
                vtype = vtype,
             }
+            return node.type
          end,
       },
       ["local_function"] = {
@@ -7339,6 +7360,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                rets = rets,
             })
             node.type = NONE
+            return node.type
          end,
       },
       ["global_function"] = {
@@ -7357,6 +7379,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                rets = get_rets(children[3]),
             })
             node.type = NONE
+            return node.type
          end,
       },
       ["record_function"] = {
@@ -7413,6 +7436,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end_function_scope()
 
             node.type = NONE
+            return node.type
          end,
       },
       ["function"] = {
@@ -7433,17 +7457,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                args = children[1],
                rets = children[2],
             }
+            return node.type
          end,
       },
       ["cast"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = node.casttype
+            return node.type
          end
       },
       ["paren"] = {
          after = function(node: Node, children: {Type}): Type
             node.known = node.e1 and node.e1.known
             node.type = resolve_unary(children[1])
+            return node.type
          end,
       },
       ["op"] = {
@@ -7612,6 +7639,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             else
                error("unknown node op " .. node.op.op)
             end
+            return node.type
          end,
       },
       ["variable"] = {
@@ -7633,6 +7661,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node_error(node, "unknown variable: " .. node.tk)
                end
             end
+            return node.type
          end,
       },
       ["argument"] = {
@@ -7647,16 +7676,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             check_typevars(node, t)
             node.type = t
             add_var(node, node.tk, t).is_func_arg = true
+            return node.type
          end,
       },
       ["identifier"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE -- type is resolved elsewhere
+            return node.type
          end,
       },
       ["newtype"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = node.newtype
+            return node.type
          end,
       }
    }
@@ -7781,6 +7813,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       }
    }
+
+   if not opts.run_internal_compiler_checks then
+      visit_node.after = nil
+      visit_type.after = nil
+   end
 
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
@@ -7951,6 +7988,7 @@ local function tl_package_loader(module_name: string): any
          lax = lax,
          filename = found_filename,
          env = tl.package_loader_env,
+         run_internal_compiler_checks = false,
       })
 
       local code = tl.pretty_print_ast(program, true)
