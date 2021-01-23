@@ -4859,6 +4859,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
          end
 
+         if t.elements then
+            copy.elements = resolve_typevars(t.elements, seen, where)
+         end
+
          copy.fields = {}
          for _, k in ipairs(t.field_order) do
             copy.fields[k] = resolve_typevars(t.fields[k], seen, where)
