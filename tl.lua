@@ -7912,7 +7912,7 @@ local function tl_package_loader(module_name)
       local errs = {}
       local _, program = tl.parse_program(tl.lex(input), errs, module_name)
       if #errs > 0 then
-         error(module_name .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
+         error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
       local code = tl.pretty_print_ast(program, true)
       local chunk, err = load(code, module_name, "t")
