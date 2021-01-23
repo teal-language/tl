@@ -1086,7 +1086,6 @@ local Node = {}
 
 
 
-
 local function is_array_type(t)
    return t.typename == "array" or t.typename == "arrayrecord"
 end
@@ -6722,7 +6721,7 @@ tl.type_check = function(ast, opts)
          local fnode = {
             y = node.y,
             x = node.x,
-            typename = "op",
+            kind = "op",
             op = { op = "@funcall" },
             e1 = node.e2[1],
             e2 = fe2,

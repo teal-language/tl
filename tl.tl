@@ -1082,7 +1082,6 @@ local record Node
 
    casttype: Type
 
-   typename: string
    type: Type
    decltype: Type
 end
@@ -6722,7 +6721,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          local fnode: Node = {
             y = node.y,
             x = node.x,
-            typename = "op",
+            kind = "op",
             op = { op = "@funcall" },
             e1 = node.e2[1],
             e2 = fe2,
