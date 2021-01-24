@@ -7720,8 +7720,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    visit_node.after = {
       after = function(node: Node, _children: {Type}): Type
-         assert(type(node.type) == "table", node.kind .. " did not produce a type")
-         assert(type(node.type.typename) == "string", node.kind .. " type does not have a typename")
+         if type(node.type) ~= "table" then
+            error(node.kind .. " did not produce a type")
+         end
+         if type(node.type.typename) ~= "string" then
+            error(node.kind .. " type does not have a typename")
+         end
          return node.type
       end
    }
@@ -7810,8 +7814,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       after = {
          after = function(typ: Type, _children: {Type}, ret: Type): Type
-            assert(type(ret) == "table", typ.typename .. " did not produce a type")
-            assert(type(ret.typename) == "string", "type node does not have a typename")
+            if type(ret) ~= "table" then
+               error(typ.typename .. " did not produce a type")
+            end
+            if type(ret.typename) ~= "string" then
+               error("type node does not have a typename")
+            end
             return ret
          end
       }
