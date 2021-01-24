@@ -1280,7 +1280,9 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
          break
       end
       local item: T
+      local oldn = n
       i, item, n = parse_item(ps, i, n)
+      n = n or oldn
       table.insert(list, item)
       if ps.tokens[i].tk == "," then
          i = i + 1
