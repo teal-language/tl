@@ -7982,7 +7982,7 @@ local function tl_package_loader(module_name: string): any
    if found_filename then
       local input = fd:read("*a")
       if not input then
-         goto fail
+         return table.concat(tried, "\n\t")
       end
       fd:close()
       local errs: {Error} = {}
@@ -8014,7 +8014,6 @@ local function tl_package_loader(module_name: string): any
          error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
       end
    end
-   ::fail::
    return table.concat(tried, "\n\t")
 end
 
