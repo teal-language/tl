@@ -270,7 +270,7 @@ local enum TokenKind
    "keyword"
    "op"
    "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "#" "." ";"
+   "[" "]" "(" ")" "{" "}" "," ":" "#" "." ";" "?"
    "::"
    "..."
    "identifier"
@@ -440,7 +440,7 @@ do
    end
 
    local lex_any_char_kinds: {string:TokenKind} = {}
-   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", "#", ";"}
+   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", "#", ";", "?"}
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
@@ -1077,6 +1077,9 @@ local record Type
    -- Lua compatibilty
    needs_compat: boolean
 
+   -- arguments: optional arity
+   opt: boolean
+
    -- tuple
    is_va: boolean
 
@@ -1110,6 +1113,7 @@ local record Type
 
    -- function
    is_method: boolean
+   min_arity: number
    args: Type
    rets: Type
 
@@ -1426,6 +1430,7 @@ local record Node
 
    type: Type
    decltype: Type
+   opt: boolean
 end
 
 local type Where
@@ -2425,6 +2430,10 @@ local function parse_argument(ps: ParseState, i: integer): integer, Node, intege
    if ps.tokens[i].tk == "..." then
       fail(ps, i, "'...' needs to be declared as a typed argument")
    end
+   if ps.tokens[i].tk == "?" then
+      i = i + 1
+      node.opt = true
+   end
    if ps.tokens[i].tk == ":" then
       i = i + 1
       local decltype: Type
@@ -2441,9 +2450,15 @@ end
 parse_argument_list = function(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "argument_list")
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   local opts = false
    for a, fnarg in ipairs(node) do
       if fnarg.tk == "..." and a ~= #node then
          fail(ps, i, "'...' can only be last argument")
+      end
+      if fnarg.opt then
+         opts = true
+      elseif opts then
+         return fail(ps, i, "non-optional arguments cannot follow optional arguments")
       end
    end
    return i, node
@@ -2458,9 +2473,21 @@ end
 local function parse_argument_type(ps: ParseState, i: integer): integer, TypeAndVararg, integer
    local is_va = false
    local argument_name: string = nil
-   if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+
+   local opt = false
+   if ps.tokens[i].kind == "identifier" then
       argument_name = ps.tokens[i].tk
-      i = i + 2
+      if ps.tokens[i + 1].tk == "?" then
+         opt = true
+         if ps.tokens[i + 2].tk == ":" then
+            i = i + 3
+         end
+      elseif ps.tokens[i + 1].tk == ":" then
+         i = i + 2
+      end
+   elseif ps.tokens[i].kind == "?" then
+      opt = true
+      i = i + 1
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == ":" then
          i = i + 2
@@ -2472,6 +2499,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, TypeAnd
 
    local typ: Type; i, typ = parse_type(ps, i)
    if typ then
+      typ.opt = opt
       if not is_va and ps.tokens[i].tk == "..." then
          i = i + 1
          is_va = true
@@ -4973,7 +5001,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       end
       for i, v in ipairs(t.args) do
          if not t.is_method or i > 1 then
-            table.insert(args, (i == #t.args and t.args.is_va and "...: " or "") .. show(v))
+            table.insert(args, ((i == #t.args and t.args.is_va) and "...: "
+                               or v.opt and "? "
+                               or "") .. show(v))
          end
       end
       table.insert(out, table.concat(args, ", "))
@@ -6341,6 +6371,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             copy.is_method = t.is_method
+            copy.min_arity = t.min_arity
             copy.args, same = resolve(t.args, same)
             copy.rets, same = resolve(t.rets, same)
          elseif is_record_type(t) then
@@ -10777,6 +10808,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if node.tk == "..." then
                t = a_type { typename = "tuple", is_va = true, t }
             end
+            t.opt = node.opt
             add_var(node, node.tk, t).is_func_arg = true
             return node.type
          end,
