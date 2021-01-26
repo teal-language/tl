@@ -43,6 +43,35 @@ local function find_in_sequence(seq, value)
    return false
 end
 
+local function str_split(str, delimiter)
+   local idx = 0
+   return function()
+      if not idx then return end
+      idx = idx + 1
+      local prev_idx = idx
+      local s_idx
+      s_idx, idx = str:find(delimiter, idx, true)
+      return str:sub(prev_idx, (s_idx or 0) - 1)
+   end
+end
+
+local function find_file_in_parent_dirs(fname)
+   local currentdir = lfs.currentdir()
+   local it = str_split(currentdir, path_separator)
+   local lead = it() -- grab leading '/' or 'C:\' etc.
+   local paths = { lead .. path_separator .. it() }
+   for chunk in it do
+      paths[#paths + 1] = paths[#paths] .. path_separator .. chunk
+   end
+   for i = #paths, 1, -1 do
+      for file in lfs.dir(paths[i]) do
+         if file == fname then
+            return paths[i] .. path_separator .. fname
+         end
+      end
+   end
+end
+
 local function keys(t)
    local ks = {}
    for k, _ in pairs(t) do
@@ -71,7 +100,7 @@ local function validate_config(config)
       build_file = "string",
       build_file_output_dir = "string",
       internal_compiler_output = "string",
-      run_build_script="boolean"
+      run_build_script = "boolean"
    }
 
    for k, v in pairs(config) do
@@ -131,60 +160,6 @@ local function validate_config(config)
    end
 
    return nil
-end
-
-local config_from_file = false
-local function get_config()
-   local config = {
-      preload_modules = {},
-      include_dir = {},
-      disable_warnings = {},
-      warning_error = {},
-      quiet = false
-   }
-
-   local conf, err = loadfile("tlconfig.lua")
-   if not conf then
-      if err:match("No such file or directory$") then
-         return config
-      else
-         die("Error loading config:\n" .. err)
-      end
-   end
-   config_from_file = true
-
-
-
-   local ok, user_config = pcall(conf)
-   if not ok then
-      die("Error loading config:\n" .. err)
-   end
-
-
-   -- Merge tlconfig with the default config
-   if user_config then
-      for k, v in pairs(user_config) do
-         config[k] = v
-      end
-   end
-
-   if not config.build_file then
-      if lfs.attributes("./build.tl", "mode") == "file" then
-         config.build_file = "./build.tl"
-      end
-   else
-      if lfs.attributes(config.build_file, "mode") ~= "file" then
-         die("The configured build script is not a file")
-      end
-   end
-
-   err = validate_config(config)
-
-   if err then
-      die("Error while loading config: " .. err)
-   end
-
-   return config
 end
 
 package.path = script_path() .. "/?.lua;" .. package.path
@@ -257,9 +232,6 @@ end
 local parser = get_args_parser()
 local args = parser:parse()
 
-local tlconfig = get_config()
-
-
 if args["version"] then
    print(version_string)
    os.exit(0)
@@ -272,6 +244,70 @@ if not cmd then
    print("Error: a command is required")
    os.exit(1)
 end
+
+local function get_config()
+   local config = {
+      preload_modules = {},
+      include_dir = {},
+      disable_warnings = {},
+      warning_error = {},
+      quiet = false
+   }
+
+   local config_path = cmd == "build"
+      and find_file_in_parent_dirs("tlconfig.lua")
+      or "tlconfig.lua"
+
+   local conf, err = loadfile(config_path)
+   if not conf then
+      if err:match("No such file or directory$") then
+         if cmd == "build" then
+            die("Build error: tlconfig.lua not found")
+         end
+      else
+         die("Error loading config: " .. err)
+      end
+   end
+
+   if conf then
+      local ok, user_config = pcall(conf)
+      if not ok then
+         die("Error loading config:" .. err)
+      end
+
+      -- Merge tlconfig with the default config
+      if user_config then
+         for k, v in pairs(user_config) do
+            config[k] = v
+         end
+      end
+   end
+
+   config_path = config_path:match("^(.+)" .. path_separator .. "tlconfig.lua$")
+   if cmd == "build" and config_path then
+      assert(lfs.chdir(config_path))
+   end
+
+   if not config.build_file then
+      if lfs.attributes("./build.tl", "mode") == "file" then
+         config.build_file = "./build.tl"
+      end
+   else
+      if lfs.attributes(config.build_file, "mode") ~= "file" then
+         die("The configured build script is not a file")
+      end
+   end
+
+   err = validate_config(config)
+
+   if err then
+      die("Error loading config: " .. err)
+   end
+
+   return config
+end
+
+local tlconfig = get_config()
 
 local function merge_list(a, b)
    a = a or {}
@@ -518,7 +554,7 @@ local function traverse(dirname, emptyref, is_generated, generated_ref)
             -- names so we use a table with specific metatable to mark
             -- something as the end of a traversal to have a property attached
             -- to the table, without creating an entry in the table
-            local meta_table = {empty=emptyref}
+            local meta_table = {empty = emptyref}
             if is_generated then
                meta_table["generated"] = generated_ref
             end
@@ -850,10 +886,6 @@ if cmd == "gen" then
    os.exit(exit)
 end
 
-if cmd == "build" and not config_from_file then
-   die("Build error: tlconfig.lua not found")
-end
-
 
 --------------------------------------------------------------------
 --                      PATTERN MATCHING                          --
@@ -870,17 +902,6 @@ end
 local inc_patterns = {}
 local exc_patterns = {}
 
-local function str_split(str, delimiter)
-   local idx = 0
-   return function()
-      if not idx then return end
-      idx = idx + 1
-      local prev_idx = idx
-      local s_idx
-      s_idx, idx = str:find(delimiter, idx, true)
-      return str:sub(prev_idx, (s_idx or 0) - 1)
-   end
-end
 local function patt_match(patt, str)
    local matches = true
    local idx = 1

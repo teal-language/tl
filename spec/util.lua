@@ -163,7 +163,7 @@ function util.tl_cmd(name, ...)
    assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
 
    local pre_command_args = {}
-   local first = select(1, ...)
+   local first = ...
    local has_pre_commands = false
    if type(first) == "table" then
       pre_command_args = first
