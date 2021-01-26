@@ -35,6 +35,9 @@ return {
 | `-p --pretend` ||| `build` `gen`  | Don't compile/write to any files, but type check and log what files would be written to.
 | `--wdisable` | `disable_warnings` | `{string}` | `build` `check` `run` | Disable the given warnings.
 | `--werror` | `warning_error` | `{string}` | `build` `check` `run` | Promote the given warnings to errors.
+| `--run-build-script` | `run_build_script` | `boolean` | `run` `check` `gen`| Runs the build script as if `tl build` was being run
+| | `build_file_output_dir` | `string` | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
+| | `internal_compiler_output` | `string` |`run` `check` `gen` `build` | Folder to store cache files for use by the compiler
 
 ### Generated code
 
