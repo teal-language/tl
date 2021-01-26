@@ -30,4 +30,18 @@ describe("build command", function()
          },
       })
    end)
+
+   it("should find tlconfig.lua in a parent directory", function()
+      util.do_in(util.write_tmp_dir(finally, {
+         ["tlconfig.lua"] = [[
+            return {
+               source_dir = "src"
+            }
+         ]],
+         src = {},
+      }), function()
+         local ph = io.popen("cd src && " .. util.tl_cmd("build"), "r")
+         util.assert_popen_close(true, "exit", 0, ph:close())
+      end)
+   end)
 end)
