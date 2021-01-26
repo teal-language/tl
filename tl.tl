@@ -7859,6 +7859,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local type_check_function_call: function(Node, {Node}, Type, {Type}, Node, boolean, integer): Type
    do
+      local function set_min_arity(t: Type): integer
+         if not t.args then
+            return
+         end
+         local min_arity = 0
+         for i, fnarg in ipairs(t.args) do
+            if not fnarg.opt then
+               min_arity = i
+            end
+         end
+         if t.args.is_va then
+            min_arity = min_arity - 1
+         end
+         t.min_arity = min_arity
+         return min_arity
+      end
+
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
@@ -8048,6 +8065,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      end
                   end
                   local expected = #f.args
+                  local min_arity = f.min_arity or set_min_arity(f)
 
                   -- simple functions:
                   if (is_func and (given <= expected or (f.args.is_va and given > expected)))
