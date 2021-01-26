@@ -127,11 +127,11 @@ precedence, see below.
 
 *  partypelist ::= partype {‘,’ partype}
 
-*  partype ::= [Name ‘:’] type
+*  partype ::= Name [‘?’] ‘:’ type | [‘?’] type
 
 *  parnamelist ::= parname {‘,’ parname}
 
-*  parname ::= Name [‘:’ type]
+*  parname ::= Name [‘?’] [‘:’ type]
 ```
 
 ## Operator precedence
