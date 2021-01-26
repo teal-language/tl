@@ -7935,21 +7935,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local type_check_function_call: function(Node, {Node}, Type, {Type}, Node, boolean, integer): Type
    do
-      local function set_min_arity(t: Type): integer
-         if not t.args then
+      local function set_min_arity(f: Type)
+         if f.min_arity then
+            return
+         end
+         if not f.args then
+            f.min_arity = 0
             return
          end
          local min_arity = 0
-         for i, fnarg in ipairs(t.args) do
+         for i, fnarg in ipairs(f.args) do
             if not fnarg.opt then
                min_arity = i
             end
          end
-         if t.args.is_va then
+         if f.args.is_va then
             min_arity = min_arity - 1
          end
-         t.min_arity = min_arity
-         return min_arity
+         f.min_arity = min_arity
       end
 
       local function mark_invalid_typeargs(f: Type)
@@ -8065,6 +8068,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
+      local function show_arity(f: Type): string
+         return f.min_arity < #f.args
+                and "at least " .. f.min_arity
+                or  tostring(#f.args or 0)
+      end
+
       local function fail_call(node: Node, func: Type, nargs: integer, errs: {Error}): Type
          if errs then
             -- report the errors from the first match
@@ -8076,7 +8085,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local expects: {string} = {}
             if func.typename == "poly" then
                for _, f in ipairs(func.types) do
-                  table.insert(expects, tostring(#f.args or 0))
+                  table.insert(expects, show_arity(f))
                end
                table.sort(expects)
                for i = #expects, 1, -1 do
@@ -8085,7 +8094,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
             else
-               table.insert(expects, tostring(#func.args or 0))
+               table.insert(expects, show_arity(func))
             end
             node_error(node, "wrong number of arguments (given " .. nargs .. ", expects " .. table.concat(expects, " or ") .. ")")
          end
@@ -8141,7 +8150,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      end
                   end
                   local expected = #f.args
-                  local min_arity = f.min_arity or set_min_arity(f)
+                  set_min_arity(f)
 
                   -- simple functions:
                   if (is_func and (given <= expected or (f.args.is_va and given > expected)))
