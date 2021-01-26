@@ -4,6 +4,22 @@
 --                           SETUP                                --
 --------------------------------------------------------------------
 
+local is_turbo_on = false
+local function turbo(on)
+   if on then
+      if jit then
+         jit.off()
+      end
+      collectgarbage("stop")
+   else
+      if jit then
+         jit.on()
+      end
+      collectgarbage("restart")
+   end
+   is_turbo_on = on
+end
+
 local tl = require("tl")
 local argparse = require("argparse")
 local lfs = require("lfs")
@@ -773,9 +789,10 @@ if cmd == "run" then
    end
 
    tl.loader()
-   local success, res = pcall(chunk, (unpack or table.unpack)(arg))
-   assert(success, res)
-   return res
+
+   assert(not is_turbo_on)
+
+   return chunk((unpack or table.unpack)(arg))
 end
 
 --------------------------------------------------------------------
@@ -783,8 +800,12 @@ end
 --------------------------------------------------------------------
 
 if cmd == "check" then
+   turbo(true)
    for i, input_file in ipairs(args["file"]) do
       type_check_file(input_file)
+      if i > 1 then
+         collectgarbage()
+      end
    end
    os.exit(exit)
 end
@@ -816,6 +837,7 @@ local function write_out(result, output_file)
 end
 
 if cmd == "gen" then
+   turbo(true)
    local results = {}
    local err
    for i, input_file in ipairs(args["file"]) do
@@ -835,6 +857,9 @@ if cmd == "gen" then
          exit = 1
       end
       table.insert(results, res)
+      if i > 1 then
+         collectgarbage()
+      end
    end
    if exit ~= 0 then
       for i, res in ipairs(results) do
@@ -1099,6 +1124,7 @@ for input_file, output_file in pairs(project.source_file_map) do
 end
 table.sort(sorted_source_file_arr, function(a, b) return a[1] < b[1] end)
 
+turbo(true)
 for i, files in ipairs(sorted_source_file_arr) do
    local input_file, output_file = files[1], files[2]
    setup_env(input_file)
@@ -1119,6 +1145,9 @@ for i, files in ipairs(sorted_source_file_arr) do
       write_out(result, output_file)
    else
       exit = 1
+   end
+   if i > 1 then
+      collectgarbage()
    end
 end
 os.exit(exit)

@@ -1,5 +1,10 @@
 local util = {}
 
+if jit then
+   jit.off()
+end
+collectgarbage("stop")
+
 local tl = require("tl")
 local assert = require("luassert")
 local lfs = require("lfs")
