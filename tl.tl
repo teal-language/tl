@@ -101,7 +101,7 @@ local enum TokenKind
    "keyword"
    "op"
    "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";"
+   "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";" "?"
    "::"
    "..."
    "identifier"
@@ -189,7 +189,7 @@ do
    end
 
    local lex_char_symbols: {string:boolean} = {}
-   for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", "#", "`", ";"}) do
+   for _, c in ipairs({"[", "]", "(", ")", "{", "}", ",", "#", "`", ";", "?"}) do
       lex_char_symbols[c] = true
    end
 
@@ -868,6 +868,9 @@ local record Type
    -- Lua compatibilty
    needs_compat: boolean
 
+   -- arguments: optional arity
+   opt: boolean
+
    -- tuple
    is_va: boolean
 
@@ -897,6 +900,7 @@ local record Type
 
    -- function
    is_method: boolean
+   min_arity: number
    args: Type
    rets: Type
 
@@ -1085,6 +1089,7 @@ local record Node
 
    type: Type
    decltype: Type
+   opt: boolean
 end
 
 local function is_array_type(t:Type): boolean
@@ -1881,6 +1886,10 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
+   if ps.tokens[i].tk == "?" then
+      i = i + 1
+      node.opt = true
+   end
    if ps.tokens[i].tk == ":" then
       i = i + 1
       local decltype: Type
@@ -1897,9 +1906,15 @@ end
 parse_argument_list = function(ps: ParseState, i: number): number, Node
    local node = new_node(ps.tokens, i, "argument_list")
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
+   local opts = false
    for a, arg in ipairs(node) do
       if arg.tk == "..." and a ~= #node then
          return fail(ps, i, "'...' can only be last argument")
+      end
+      if arg.opt then
+         opts = true
+      elseif opts then
+         return fail(ps, i, "non-optional arguments cannot follow optional arguments")
       end
    end
    return i, node
@@ -1907,8 +1922,19 @@ end
 
 local function parse_argument_type(ps: ParseState, i: number): number, Type, number
    local is_va = false
-   if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
-      i = i + 2
+   local opt = false
+   if ps.tokens[i].kind == "identifier" then
+      if ps.tokens[i + 1].tk == "?" then
+         opt = true
+         if ps.tokens[i + 2].tk == ":" then
+            i = i + 3
+         end
+      elseif ps.tokens[i + 1].tk == ":" then
+         i = i + 2
+      end
+   elseif ps.tokens[i].kind == "?" then
+      opt = true
+      i = i + 1
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == ":" then
          i = i + 2
@@ -1920,6 +1946,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
 
    local typ: Type; i, typ = parse_type(ps, i)
    if typ then
+      typ.opt = opt
       -- HACK: we're storing the attribute in the wrong node during the iteration...
       typ.is_va = is_va
    end
@@ -3909,7 +3936,7 @@ local function show_type_base(t: Type, seen: {Type:string}): string
       end
       for i, v in ipairs(t.args) do
          if not t.is_method or i > 1 then
-            table.insert(args, show(v))
+            table.insert(args, (v.opt and "? " or "") .. show(v))
          end
       end
       table.insert(out, table.concat(args, ","))
@@ -4867,6 +4894,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
 
          copy.is_method = t.is_method
+         copy.min_arity = t.min_arity
          copy.args = resolve_typevars(t.args, seen, where)
          copy.rets = resolve_typevars(t.rets, seen, where)
       elseif t.typename == "record" or t.typename == "arrayrecord" then
@@ -7663,6 +7691,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
             check_typevars(node, t)
             node.type = t
+            node.type.opt = node.opt
             add_var(node, node.tk, t).is_func_arg = true
             return node.type
          end,
