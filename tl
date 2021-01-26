@@ -668,7 +668,7 @@ end
 local internal_output
 if check_should_run_build_script() and tlconfig["internal_compiler_output"] then
 
-   internal_output = path_concat(lfs.currentdir(),tlconfig["internal_compiler_output"])
+   internal_output = path_concat(lfs.currentdir(), tlconfig["internal_compiler_output"])
    local mode = lfs.attributes(internal_output,"mode")
    if not mode then
       local parts = ""
@@ -691,15 +691,14 @@ end
 --------------------------------------------------------------------
 
 if check_should_run_build_script() and tlconfig["build_file"] then
-   build_path = path_concat(internal_output,"build_script_output")
+   build_path = path_concat(internal_output, "build_script_output")
    lfs.mkdir(build_path)
    prepend_to_path(build_path)
 end
 
-
+local script
 if check_should_run_build_script() and tlconfig.build_file then
-   local script = {}
-   local chunk = type_check_and_load(tlconfig.build_file,modules)
+   local chunk = type_check_and_load(tlconfig.build_file, modules)
    local success,res = pcall(chunk)
    if success then
       script = res
@@ -720,9 +719,13 @@ if check_should_run_build_script() and tlconfig.build_file then
          local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
          lfs.rmdir(full_path)
          lfs.mkdir(full_path)
-         local success,message = pcall(gen_code,full_path)
+         local success, messageOrShouldContinue, message = pcall(gen_code,full_path)
          if not success then
-            die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
+            die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(messageOrShouldContinue))
+         end
+         if messageOrShouldContinue ~= nil and not messageOrShouldContinue then
+            local reasonMessage = (message and "Reason:\n" .. message) or ""
+            die("Build interupted by build script." .. reasonMessage)
          end
          local file = io.open(time_keeper_path, "w")
          file:write(last_edit_time)
@@ -986,7 +989,7 @@ project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 local build_ref = {}
 project.generatedref = build_ref
 if build_path then
-   local build_dir, build_paths, emptyref = traverse(build_path,project.emptyref,true,build_ref)
+   local build_dir, build_paths, emptyref = traverse(build_path, project.emptyref, true, build_ref)
    for k,v in pairs(build_dir) do
       project.dir[k] = v
    end
@@ -1119,6 +1122,17 @@ for i, files in ipairs(sorted_source_file_arr) do
       write_out(result, output_file)
    else
       exit = 1
+   end
+end
+if script then
+   if script["after"] and type(script["after"]) == "function" then
+      local path = path_concat(lfs.currentdir(), tlconfig["build_dir"])
+      local success,message = pcall(script["after"], path)
+      if not success then
+         die("Something has gone wrong while executing the \"after\" part of the build file. Error : ".. tostring(message))
+      end
+   else
+      die("the key \"after\" exists in the build file, but it is not a function. Value : " .. tostring(script["after"]))
    end
 end
 os.exit(exit)
