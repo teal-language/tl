@@ -10,6 +10,31 @@ local t_unpack = unpack or table.unpack
 
 util.tl_executable = tl_executable
 
+--------------------------------------------------------------------------------
+-- 'finally' queue - each Busted test can trigger only one 'finally' callback.
+-- We build a queue of callbacks to run and nest them into one main 'finally'
+-- callback. Instead of using `finally(function() ... end`, do
+-- `on_finally(finally, function() ... end)`. We need to pass the original
+-- 'finally` around due to the way Busted deals with function environments.
+--------------------------------------------------------------------------------
+
+local finally_queue
+
+local function on_finally(finally, cb)
+   if not finally_queue then
+      finally(function()
+         for _, f in ipairs(finally_queue) do
+            f()
+         end
+         finally_queue = nil
+      end)
+      finally_queue = {}
+   end
+   table.insert(finally_queue, cb)
+end
+
+--------------------------------------------------------------------------------
+
 function util.do_in(dir, func, ...)
    local cdir = assert(lfs.currentdir())
    assert(lfs.chdir(dir))
@@ -26,7 +51,7 @@ function util.mock_io(finally, filemap)
    assert(type(filemap) == "table")
 
    local io_open = io.open
-   finally(function() io.open = io_open end)
+   on_finally(finally, function() io.open = io_open end)
    io.open = function (filename, mode)
       local ps = {}
       for p in filename:gmatch("[^/]+") do
@@ -163,8 +188,6 @@ function util.chdir_teardown()
    assert(lfs.chdir(current_dir))
 end
 
-local finally_queue
-
 math.randomseed(os.time())
 local function tmp_file_name()
    return "/tmp/teal_tmp" .. math.random(99999999)
@@ -179,20 +202,12 @@ function util.write_tmp_file(finally, content, ext)
    fd:write(content)
    fd:close()
 
-   if not finally_queue then
-      finally(function()
-         for _, f in ipairs(finally_queue) do
-            os.remove(f)
-         end
-         finally_queue = nil
-      end)
-      finally_queue = {}
-   end
-
-   table.insert(finally_queue, full_name)
-   if not ext then
-      table.insert(finally_queue, (full_name:gsub("%.tl$", ".lua")))
-   end
+   on_finally(finally, function()
+      os.remove(full_name)
+      if not ext then
+         os.remove((full_name:gsub("%.tl$", ".lua")))
+      end
+   end)
 
    return full_name
 end
@@ -217,7 +232,7 @@ function util.write_tmp_dir(finally, dir_structure)
       end
    end
    traverse_dir(dir_structure)
-   finally(function()
+   on_finally(finally, function()
       os.execute("rm -r " .. full_name)
       -- local function rm_dir(dir_structure, prefix)
       --    prefix = prefix or full_name
