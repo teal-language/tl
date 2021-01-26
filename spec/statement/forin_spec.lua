@@ -52,6 +52,27 @@ describe("forin", function()
       }))
    end)
 
+   describe("pairs", function()
+      it("rejects heterogenous records in pairs", util.check_type_error([[
+         local type Rec = record
+            n: number
+            fun: function(number, number)
+         end
+
+         local r: Rec = {}
+
+         function foo(init: Rec)
+            for k, v in pairs(init) do
+               r[k] = v
+            end
+         end
+      ]], {
+         { msg = "attempting pairs loop" },
+         { msg = "not all fields have the same type" },
+         { msg = "cannot index object of type Rec" },
+      }))
+   end)
+
    it("with an explicit iterator", util.check [[
       local function iter(t): number
       end

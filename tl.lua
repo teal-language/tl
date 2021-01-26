@@ -5110,7 +5110,7 @@ tl.type_check = function(ast, opts)
 
    local function match_fields_to_map(t1, t2)
       if not match_record_fields(t1, function(_) return t2.values end) then
-         return false, { error_in_type(t1, "not all fields have type %s", t2.values) }
+         return false, { error_in_type(t1, "record is not a valid map; not all fields have the same type") }
       end
       return true
    end
@@ -7052,17 +7052,17 @@ tl.type_check = function(ast, opts)
 
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_unary(exp1.e2.type)
-                  if exp1.e1.tk == "pairs" and t.typename == "array" then
-                     node_warning("hint", exp1, "applying pairs on an array: did you intend to apply ipairs?")
+                  if exp1.e1.tk == "pairs" and is_array_type(t) then
+                     node_warning("hint", exp1, "hint: applying pairs on an array: did you intend to apply ipairs?")
                   end
 
                   if exp1.e1.tk == "pairs" and t.typename ~= "map" then
                      if not (lax and is_unknown(t)) then
-                        if t.typename == "record" then
+                        if is_record_type(t) then
                            match_all_record_field_names(exp1.e2, t, t.field_order,
                            "attempting pairs loop on a record with attributes of different types")
-                        elseif t.typename == "arrayrecord" then
-                           node_error(exp1.e2, "attempting pairs loop on a mixed array-record object: %s", exp1.e2.type)
+                           local ct = t.typename == "record" and "{string:any}" or "{any:any}"
+                           node_warning("hint", exp1.e2, "hint: if you want to iterate over fields of a record, cast it to " .. ct)
                         else
                            node_error(exp1.e2, "cannot apply pairs on values of type: %s", exp1.e2.type)
                         end
