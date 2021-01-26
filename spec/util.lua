@@ -171,7 +171,7 @@ function util.tl_cmd(name, ...)
    end
    local cmd = {
       cmd_prefix,
-      table.concat(pre_command_args," "),
+      table.concat(pre_command_args, " "),
       name
    }
    for i = (has_pre_commands and 2) or 1 , select("#", ...) do

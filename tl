@@ -153,14 +153,14 @@ local function get_config()
    end
    config_from_file = true
 
-   
+
 
    local ok, user_config = pcall(conf)
    if not ok then
       die("Error loading config:\n" .. err)
    end
 
-   
+
    -- Merge tlconfig with the default config
    if user_config then
       for k, v in pairs(user_config) do
@@ -169,11 +169,11 @@ local function get_config()
    end
 
    if not config.build_file then
-      if lfs.attributes("./build.tl","mode") == "file" then
+      if lfs.attributes("./build.tl", "mode") == "file" then
          config.build_file = "./build.tl"
       end
    else
-      if lfs.attributes(config.build_file,"mode") ~= "file" then
+      if lfs.attributes(config.build_file, "mode") ~= "file" then
          die("The configured build script is not a file")
       end
    end
@@ -227,7 +227,7 @@ local function get_args_parser()
    parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
    parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
-   parser:flag("--run-build-script","Run the build script if needed, even when not running the build comamnd.")
+   parser:flag("--run-build-script", "Run the build script if needed, even when not running the build comamnd.")
 
    parser:require_command(false)
    parser:command_target("command")
@@ -495,7 +495,7 @@ local function remove_leading_path(leading_part, path)
    return path
 end
 
-local function traverse(dirname, emptyref,is_generated,generated_ref)
+local function traverse(dirname, emptyref, is_generated, generated_ref)
    local files = {}
    local paths = {} --lookup table for string paths to help
    -- with pattern matching while iterating over a project
@@ -507,7 +507,7 @@ local function traverse(dirname, emptyref,is_generated,generated_ref)
          if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
             local p
             local prefix = dirname
-            files[file], p = traverse(path_concat(dirname, file), emptyref,is_generated,generated_ref)
+            files[file], p = traverse(path_concat(dirname, file), emptyref, is_generated, generated_ref)
             paths[files[file]] = file
             for k, v in pairs(p) do
                paths[k] = path_concat(file, v)
@@ -533,8 +533,8 @@ end
 --May not be a bad idea to have a command that cleans all the cache....
 local function delete_dir(dir)
    for file in lfs.dir(dir) do
-      if file ~= "." and file ~= ".." then 
-         local file_path = path_concat(dir,file)
+      if file ~= "." and file ~= ".." then
+         local file_path = path_concat(dir, file)
          if file ~= "." and file ~= ".." then
             if lfs.attributes(file_path, 'mode') == 'file' then
                   os.remove(file_path)
@@ -668,13 +668,13 @@ end
 local internal_output
 if check_should_run_build_script() and tlconfig["internal_compiler_output"] then
 
-   internal_output = path_concat(lfs.currentdir(),tlconfig["internal_compiler_output"])
-   local mode = lfs.attributes(internal_output,"mode")
+   internal_output = path_concat(lfs.currentdir(), tlconfig["internal_compiler_output"])
+   local mode = lfs.attributes(internal_output, "mode")
    if not mode then
       local parts = ""
       for v in string.gmatch(internal_output, "[^/]+") do
          parts = parts .. "/" .. v
-         local mode = lfs.attributes(parts,"mode")
+         local mode = lfs.attributes(parts, "mode")
          if mode == nil then
             local res, message = lfs.mkdir(parts)
             if not res then
@@ -691,7 +691,7 @@ end
 --------------------------------------------------------------------
 
 if check_should_run_build_script() and tlconfig["build_file"] then
-   build_path = path_concat(internal_output,"build_script_output")
+   build_path = path_concat(internal_output, "build_script_output")
    lfs.mkdir(build_path)
    prepend_to_path(build_path)
 end
@@ -699,13 +699,13 @@ end
 
 if check_should_run_build_script() and tlconfig.build_file then
    local script = {}
-   local chunk = type_check_and_load(tlconfig.build_file,modules)
-   local success,res = pcall(chunk)
+   local chunk = type_check_and_load(tlconfig.build_file, modules)
+   local success, res = pcall(chunk)
    if success then
       script = res
    else
       die("The build file could not be executed.")
-   end 
+   end
 
 
    local time_keeper_path = path_concat(internal_output, "last_build_script_time")
@@ -720,7 +720,7 @@ if check_should_run_build_script() and tlconfig.build_file then
          local full_path = path_concat(build_path, tlconfig["build_file_output_dir"] )
          lfs.rmdir(full_path)
          lfs.mkdir(full_path)
-         local success,message = pcall(gen_code,full_path)
+         local success, message = pcall(gen_code, full_path)
          if not success then
             die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
          end
@@ -773,8 +773,8 @@ if cmd == "run" then
    end
 
    tl.loader()
-   local success,res = pcall(chunk,(unpack or table.unpack)(arg))
-   assert(success,res)
+   local success, res = pcall(chunk, (unpack or table.unpack)(arg))
+   assert(success, res)
    return res
 end
 
@@ -906,7 +906,7 @@ local function matcher(str)
    end
 end
 if internal_output then
-   table.insert(exc_patterns,matcher(path_concat(tlconfig["internal_compiler_output"], "**/*.*")))
+   table.insert(exc_patterns, matcher(path_concat(tlconfig["internal_compiler_output"], "**/*.*")))
 end
 
 -- prepare build and source dirs
@@ -914,7 +914,7 @@ local curr_dir = lfs.currentdir()
 
 local project = {}
 -- This will probably get exposed in the api if that happens
-function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
+function project:file_with_is_build(inc_patt_arr, exc_patt_arr, dirname)
    local iter_dir
    if dirname then
       iter_dir = project:find(dirname)
@@ -934,14 +934,14 @@ function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
          end
          local meta_table = getmetatable(file)
          if meta_table and meta_table.empty == self.emptyref then
-            
+
             local include = true
 
             if tlconfig["files"] then
                include = false
             end
             if build_path and meta_table.generated and meta_table.generated == self.generatedref then
-               coroutine.yield(build_path .. "/" .. path,true)
+               coroutine.yield(build_path .. "/" .. path, true)
             else
 
                -- TODO: print out patterns that include/exclude paths to help
@@ -959,7 +959,7 @@ function project:file_with_is_build(inc_patt_arr,exc_patt_arr,dirname)
                   end
                end
                if include then
-                  coroutine.yield(self.paths[file],false)
+                  coroutine.yield(self.paths[file], false)
                end
             end
          else
@@ -986,11 +986,11 @@ project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
 local build_ref = {}
 project.generatedref = build_ref
 if build_path then
-   local build_dir, build_paths, emptyref = traverse(build_path,project.emptyref,true,build_ref)
-   for k,v in pairs(build_dir) do
+   local build_dir, build_paths, emptyref = traverse(build_path, project.emptyref, true, build_ref)
+   for k, v in pairs(build_dir) do
       project.dir[k] = v
    end
-   for k,v in pairs(build_paths) do
+   for k, v in pairs(build_paths) do
       project.paths[k] = v
    end
 end
@@ -1058,7 +1058,7 @@ if cmd == "build" then
          check_parent_dirs(project.source_file_map[fname])
       end
    end
-   for path,is_build in project:file_with_is_build(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
+   for path, is_build in project:file_with_is_build(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
       --TODO: make this better
       local valid = true
       if not (path:match("%.tl$") and not path:match("%.d%.tl$")) then
