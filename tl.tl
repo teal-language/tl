@@ -5811,6 +5811,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local type_check_function_call: function(Node, Type, {Type}, boolean, number): Type
    do
+      local function set_min_arity(t: Type): number
+         if not t.args then
+            return
+         end
+         local min_arity = 0
+         for i, arg in ipairs(t.args) do
+            if not arg.opt then
+               min_arity = i
+            end
+         end
+         if t.args.is_va then
+            min_arity = min_arity - 1
+         end
+         t.min_arity = min_arity
+         return min_arity
+      end
+
       local function try_match_func_args(node: Node, f: Type, args: {Type}, is_method: boolean, argdelta: number): Type, {Error}
          local ok = true
          local errs = {}
@@ -5921,6 +5938,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             table.insert(expects, tostring(#f.args or 0))
             local given = #args
             local expected = #f.args
+            local min_arity = f.min_arity or set_min_arity(f)
             for pass = 1, 3 do
                if not tried[i] then
                   -- try exact match first
