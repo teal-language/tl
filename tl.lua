@@ -5923,7 +5923,6 @@ tl.type_check = function(ast, opts)
          args = args or {}
          local poly = func.typename == "poly" and func or { types = { func } }
          local first_errs
-         local expects = {}
 
          local tried = {}
          for i, f in ipairs(poly.types) do
@@ -5935,7 +5934,6 @@ tl.type_check = function(ast, opts)
             elseif f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
                return node_error(node, "invoked method as a regular function: use ':' instead of '.'")
             end
-            table.insert(expects, tostring(#f.args or 0))
             local given = #args
             local expected = #f.args
             local min_arity = f.min_arity or set_min_arity(f)
@@ -5962,6 +5960,12 @@ tl.type_check = function(ast, opts)
          end
 
          if not first_errs then
+            local expects = {}
+            for _, f in ipairs(poly.types) do
+               table.insert(expects, f.min_arity < #f.args and
+               "at least " .. f.min_arity or
+               tostring(#f.args))
+            end
             table.sort(expects)
             remove_sorted_duplicates(expects)
             node_error(node, "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")")
