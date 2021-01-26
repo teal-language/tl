@@ -3651,19 +3651,18 @@ local DEBUG_HOOK_FUNCTION = a_type({
    rets = {},
 })
 
-local TABLE_SORT_FUNCTION = a_type({ typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } })
-
-
-local OPT_NUMBER = NUMBER
-local OPT_STRING = STRING
-local OPT_THREAD = THREAD
-local OPT_ALPHA = ALPHA
-local OPT_BETA = BETA
-local OPT_TABLE = TABLE
-local OPT_UNION = UNION
-local OPT_BOOLEAN = BOOLEAN
-local OPT_NOMINAL_FILE = NOMINAL_FILE
-local OPT_TABLE_SORT_FUNCTION = TABLE_SORT_FUNCTION
+local OPT_NUMBER = a_type({ opt = true, typename = "number" })
+local OPT_STRING = a_type({ opt = true, typename = "string" })
+local OPT_THREAD = a_type({ opt = true, typename = "thread" })
+local OPT_ALPHA = a_type({ opt = true, typename = "typevar", typevar = "@a" })
+local OPT_BETA = a_type({ opt = true, typename = "typevar", typevar = "@b" })
+local OPT_TABLE = a_type({ opt = true, typename = "map", keys = ANY, values = ANY })
+local OPT_BOOLEAN = a_type({ opt = true, typename = "boolean" })
+local OPT_NOMINAL_FILE = a_type({ opt = true, typename = "nominal", names = { "FILE" } })
+local OPT_TABLE_SORT_FUNCTION = a_type({ opt = true, typename = "function", args = { ALPHA, ALPHA }, rets = { BOOLEAN } })
+local function OPT_UNION(t)
+   return a_type({ opt = true, typename = "union", types = t })
+end
 
 local numeric_binop = {
    ["number"] = {
@@ -4204,7 +4203,7 @@ local function init_globals(lax)
       ["assert"] = a_type({ typename = "function", typeargs = { ARG_ALPHA, ARG_BETA }, args = { ALPHA, OPT_BETA }, rets = { ALPHA } }),
       ["collectgarbage"] = a_type({ typename = "function", args = { STRING }, rets = { a_type({ typename = "union", types = { BOOLEAN, NUMBER } }), NUMBER, NUMBER } }),
       ["dofile"] = a_type({ typename = "function", args = { OPT_STRING }, rets = VARARG({ ANY }) }),
-      ["error"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = {} }),
+      ["error"] = a_type({ typename = "function", args = { STRING, OPT_NUMBER }, rets = {} }),
       ["getmetatable"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ALPHA }, rets = { NOMINAL_METATABLE_OF_ALPHA } }),
       ["ipairs"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA }, rets = {
          a_type({ typename = "function", args = {}, rets = { NUMBER, ALPHA } }),
@@ -4245,7 +4244,7 @@ local function init_globals(lax)
          },
       }),
       ["setmetatable"] = a_type({ typeargs = { ARG_ALPHA }, typename = "function", args = { ALPHA, NOMINAL_METATABLE_OF_ALPHA }, rets = { ALPHA } }),
-      ["tonumber"] = a_type({ typename = "function", args = { ANY, NUMBER }, rets = { NUMBER } }),
+      ["tonumber"] = a_type({ typename = "function", args = { ANY, OPT_NUMBER }, rets = { NUMBER } }),
       ["tostring"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
       ["type"] = a_type({ typename = "function", args = { ANY }, rets = { STRING } }),
       ["FILE"] = a_type({
@@ -4256,10 +4255,10 @@ local function init_globals(lax)
             fields = {
                ["close"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
                ["flush"] = a_type({ typename = "function", args = { NOMINAL_FILE }, rets = {} }),
-               ["lines"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = {
+               ["lines"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, a_type({ opt = true, typename = "union", types = { STRING, NUMBER } }) }), rets = {
                   a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
                }, }),
-               ["read"] = a_type({ typename = "function", args = { NOMINAL_FILE, UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
+               ["read"] = a_type({ typename = "function", args = { NOMINAL_FILE, OPT_UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
                ["seek"] = a_type({ typename = "function", args = { NOMINAL_FILE, OPT_STRING, OPT_NUMBER }, rets = { NUMBER, STRING } }),
                ["setvbuf"] = a_type({ typename = "function", args = { NOMINAL_FILE, STRING, OPT_NUMBER }, rets = {} }),
                ["write"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, STRING }), rets = { NOMINAL_FILE, STRING } }),
@@ -4389,13 +4388,13 @@ local function init_globals(lax)
             ["close"] = a_type({ typename = "function", args = { OPT_NOMINAL_FILE }, rets = { BOOLEAN, STRING } }),
             ["flush"] = a_type({ typename = "function", args = {}, rets = {} }),
             ["input"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } }),
-            ["lines"] = a_type({ typename = "function", args = VARARG({ OPT_STRING, a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = {
+            ["lines"] = a_type({ typename = "function", args = VARARG({ OPT_STRING, a_type({ opt = true, typename = "union", types = { STRING, NUMBER } }) }), rets = {
                a_type({ typename = "function", args = {}, rets = VARARG({ STRING }) }),
             }, }),
-            ["open"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
+            ["open"] = a_type({ typename = "function", args = { STRING, OPT_STRING }, rets = { NOMINAL_FILE, STRING } }),
             ["output"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } }),
-            ["popen"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
-            ["read"] = a_type({ typename = "function", args = { UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
+            ["popen"] = a_type({ typename = "function", args = { STRING, OPT_STRING }, rets = { NOMINAL_FILE, STRING } }),
+            ["read"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
             ["stderr"] = NOMINAL_FILE,
             ["stdin"] = NOMINAL_FILE,
             ["stdout"] = NOMINAL_FILE,
@@ -4422,7 +4421,7 @@ local function init_globals(lax)
             ["frexp"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER, NUMBER } }),
             ["huge"] = NUMBER,
             ["ldexp"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
-            ["log"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["log"] = a_type({ typename = "function", args = { NUMBER, OPT_NUMBER }, rets = { NUMBER } }),
             ["log10"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
             ["max"] = a_type({ typename = "function", args = VARARG({ NUMBER }), rets = { NUMBER } }),
             ["maxinteger"] = NUMBER,
@@ -4432,7 +4431,7 @@ local function init_globals(lax)
             ["pi"] = NUMBER,
             ["pow"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
             ["rad"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
-            ["random"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["random"] = a_type({ typename = "function", args = { OPT_NUMBER, OPT_NUMBER }, rets = { NUMBER } }),
             ["randomseed"] = a_type({ typename = "function", args = { NUMBER }, rets = {} }),
             ["sin"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
             ["sinh"] = a_type({ typename = "function", args = { NUMBER }, rets = { NUMBER } }),
@@ -4452,13 +4451,13 @@ local function init_globals(lax)
                typename = "poly",
                types = {
                   a_type({ typename = "function", args = {}, rets = { STRING } }),
-                  a_type({ typename = "function", args = { OS_DATE_TABLE_FORMAT, NUMBER }, rets = { OS_DATE_TABLE } }),
+                  a_type({ typename = "function", args = { OS_DATE_TABLE_FORMAT, OPT_NUMBER }, rets = { OS_DATE_TABLE } }),
                   a_type({ typename = "function", args = { OPT_STRING, OPT_NUMBER }, rets = { STRING } }),
                },
             }),
             ["difftime"] = a_type({ typename = "function", args = { NUMBER, NUMBER }, rets = { NUMBER } }),
             ["execute"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING, NUMBER } }),
-            ["exit"] = a_type({ typename = "function", args = { UNION({ NUMBER, BOOLEAN }), BOOLEAN }, rets = {} }),
+            ["exit"] = a_type({ typename = "function", args = { OPT_UNION({ NUMBER, BOOLEAN }), OPT_BOOLEAN }, rets = {} }),
             ["getenv"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
             ["remove"] = a_type({ typename = "function", args = { STRING }, rets = { BOOLEAN, STRING } }),
             ["rename"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { BOOLEAN, STRING } }),
@@ -4511,7 +4510,7 @@ local function init_globals(lax)
             ["gsub"] = a_type({
                typename = "poly",
                types = {
-                  a_type({ typename = "function", args = { STRING, STRING, STRING, NUMBER }, rets = { STRING, NUMBER } }),
+                  a_type({ typename = "function", args = { STRING, STRING, OPT_STRING, OPT_NUMBER }, rets = { STRING, NUMBER } }),
                   a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "map", keys = STRING, values = STRING }), NUMBER }, rets = { STRING, NUMBER } }),
                   a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "function", args = VARARG({ STRING }), rets = { STRING } }) }, rets = { STRING, NUMBER } }),
                   a_type({ typename = "function", args = { STRING, STRING, a_type({ typename = "function", args = VARARG({ STRING }), rets = { NUMBER } }) }, rets = { STRING, NUMBER } }),
@@ -4522,12 +4521,12 @@ local function init_globals(lax)
             }),
             ["len"] = a_type({ typename = "function", args = { STRING }, rets = { NUMBER } }),
             ["lower"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
-            ["match"] = a_type({ typename = "function", args = { STRING, STRING, NUMBER }, rets = VARARG({ STRING }) }),
+            ["match"] = a_type({ typename = "function", args = { STRING, OPT_STRING, OPT_NUMBER }, rets = VARARG({ STRING }) }),
             ["pack"] = a_type({ typename = "function", args = VARARG({ STRING, ANY }), rets = { STRING } }),
             ["packsize"] = a_type({ typename = "function", args = { STRING }, rets = { NUMBER } }),
             ["rep"] = a_type({ typename = "function", args = { STRING, NUMBER }, rets = { STRING } }),
             ["reverse"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
-            ["sub"] = a_type({ typename = "function", args = { STRING, NUMBER, NUMBER }, rets = { STRING } }),
+            ["sub"] = a_type({ typename = "function", args = { STRING, NUMBER, OPT_NUMBER }, rets = { STRING } }),
             ["unpack"] = a_type({ typename = "function", args = { STRING, STRING, OPT_NUMBER }, rets = VARARG({ ANY }) }),
             ["upper"] = a_type({ typename = "function", args = { STRING }, rets = { STRING } }),
          },
@@ -4553,7 +4552,7 @@ local function init_globals(lax)
             ["pack"] = a_type({ typename = "function", args = VARARG({ ANY }), rets = { TABLE } }),
             ["remove"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = { ALPHA } }),
             ["sort"] = a_type({ typename = "function", typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_TABLE_SORT_FUNCTION }, rets = {} }),
-            ["unpack"] = a_type({ typename = "function", needs_compat = true, typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = VARARG({ ALPHA }) }),
+            ["unpack"] = a_type({ typename = "function", needs_compat = true, typeargs = { ARG_ALPHA }, args = { ARRAY_OF_ALPHA, OPT_NUMBER, OPT_NUMBER }, rets = VARARG({ ALPHA }) }),
          },
       }),
       ["utf8"] = a_type({
