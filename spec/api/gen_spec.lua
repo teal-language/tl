@@ -2,6 +2,29 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("tl.gen", function()
+   it("can deal with semicolons to address grammar ambiguity", function()
+      local input = [[
+         local function f<A>(g: A): A return g end
+         local function g<A>(h: A): A return h end
+         local h = {}
+         local i = 1
+         local a = f(g);
+         (h)[i] = 1
+      ]]
+
+      local expected_output = [[
+         local function f(g) return g end
+         local function g(h) return h end
+         local h = {}
+         local i = 1
+         local a = f(g);
+         (h)[i] = 1
+      ]]
+
+      local output = tl.gen(input)
+      util.assert_line_by_line(expected_output, output)
+   end)
+
    it("can process tl strings", function()
       local input = [[
          local movie:string = "Star Wars: Episode"

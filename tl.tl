@@ -1022,6 +1022,7 @@ local record Node
    x: number
    tk: string
    kind: NodeKind
+   semicolon: boolean
 
    yend: number
 
@@ -2546,9 +2547,13 @@ end
 
 parse_statements = function(ps: ParseState, i: number, filename: string, toplevel: boolean): number, Node
    local node = new_node(ps.tokens, i, "statements")
+   local item: Node
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
+         if item then
+            item.semicolon = true
+         end
       end
       if ps.tokens[i].kind == "$EOF$" then
          break
@@ -2556,7 +2561,6 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
       if (not toplevel) and stop_statement_list[ps.tokens[i].tk] then
          break
       end
-      local item: Node
       i, item = parse_statement(ps, i)
       if filename then
          for j = 1, #ps.errs do
@@ -3060,9 +3064,14 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             local space: string
-            for _, child in ipairs(children) do
+            for i, child in ipairs(children) do
                add_child(out, child, space, indent)
-               space = "; "
+               if node[i].semicolon then
+                  table.insert(out, ";")
+                  space = " "
+               else
+                  space = "; "
+               end
             end
             return out
          end
@@ -4083,12 +4092,12 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m; end")
+         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
       else
          if not compat_loaded then
-            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m; end")
+            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
             compat_loaded = true
          end
          load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
