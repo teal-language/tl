@@ -5793,11 +5793,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             argdelta = 0
          end
 
-         if f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
-            table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
-            return nil, errs
-         end
-
          local va = f.args.is_va
          local nargs = va
                        and math.max(#args, #f.args)
@@ -5887,54 +5882,35 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          -- try exact match first
          local tried: {number:boolean} = {}
          for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               if f.typename ~= "function" then
-                  if lax and is_unknown(f) then
-                     return UNKNOWN
-                  end
-                  return node_error(node, "not a function: %s", f)
+            if f.typename ~= "function" then
+               if lax and is_unknown(f) then
+                  return UNKNOWN
                end
-               table.insert(expects, tostring(#f.args or 0))
-               if #args == (#f.args or 0) or (f.args.is_va and #args > #f.args) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
-                  end
-                  first_errs = first_errs or errs
-               end
+               return node_error(node, "not a function: %s", f)
+            elseif f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
+               return node_error(node, "invoked method as a regular function: use ':' instead of '.'")
             end
-         end
-         -- now try adjusting with nils to missing arguments or using '...'
-         for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               tried[i] = true
-               if #args < (#f.args or 0) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
+            table.insert(expects, tostring(#f.args or 0))
+            local given = #args
+            local expected = #f.args
+            for pass = 1, 3 do
+               if not tried[i] then
+                  -- try exact match first
+                  if (pass == 1 and given == expected)
+                  -- then try adjusting with nils to missing arguments or using '...'
+                  or (pass == 2 and given < expected)
+                  -- then finally try vararg functions
+                  or (pass == 3 and f.args.is_va and given > expected)
+                  then
+                     tried[i] = true
+                     local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
+                     if matched then
+                        return matched
+                     else
+                        revert_typeargs(f)
+                     end
+                     first_errs = first_errs or errs
                   end
-                  first_errs = first_errs or errs
-               end
-            end
-         end
-         -- now try vararg functions
-         for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               if f.args.is_va and #args > (#f.args or 0) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
-                  end
-                  first_errs = first_errs or errs
                end
             end
          end
