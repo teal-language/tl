@@ -192,7 +192,7 @@ describe("record method call", function()
          local record Foo
             x: integer
          end
-         function Foo:add(other: Foo)
+         function Foo:add(other?: Foo)
             self.x = other and (self.x + other.x) or self.x
          end
          local first: Foo = {}
