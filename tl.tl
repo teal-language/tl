@@ -1476,7 +1476,7 @@ local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node
 local parse_argument_type_list: function(ParseState, integer): integer, Type
 local parse_type: function(ParseState, integer): integer, Type, integer
-local parse_newtype: function(ps: ParseState, i: integer, name: string): integer, Node
+local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Node, name?: string): integer, Node
 local parse_enum_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
@@ -2824,7 +2824,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
    local nt: Node = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt, v.tk)
+   local iok = parse_body(ps, i, rdef, nt)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -3013,7 +3013,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
          end
          i = verify_tk(ps, i, "=")
          local nt: Node
-         i, nt = parse_newtype(ps, i, v.tk)
+         i, nt = parse_newtype(ps, i)
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -3114,14 +3114,14 @@ parse_type_body_fns = {
    ["enum"] = parse_enum_body,
 }
 
-parse_newtype = function(ps: ParseState, i: integer, name: string): integer, Node
+parse_newtype = function(ps: ParseState, i: integer): integer, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    local tn = ps.tokens[i].tk as TypeName
    if parse_type_body_fns[tn] then
       local def = new_type(ps, i, tn)
       i = i + 1
-      i = parse_type_body_fns[tn](ps, i, def, node, name)
+      i = parse_type_body_fns[tn](ps, i, def, node)
       node.newtype.def = def
       return i, node
    else
@@ -3258,7 +3258,7 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
       return i, asgn
    end
 
-   i, asgn.value = parse_newtype(ps, i, asgn.var.tk)
+   i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
       return i
    end
@@ -3285,7 +3285,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_body(ps, i, def, nt, asgn.var.tk)
+   i = parse_body(ps, i, def, nt)
    return i, asgn
 end
 
@@ -6276,6 +6276,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       f.min_arity = n
    end
 
+   local function show_arity(f: Type): string
+      return f.min_arity < #f.args
+             and "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. #f.args)
+             or  tostring(#f.args or 0)
+   end
+
    local function resolve_typetype(t: Type): Type
       if is_typetype(t) then
          return t.def
@@ -7989,12 +7995,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function show_arity(f: Type): string
-         return f.min_arity < #f.args
-                and "at least " .. f.min_arity
-                or  tostring(#f.args or 0)
-      end
-
       local function fail_call(node: Node, func: Type, nargs: integer, errs: {Error}): Type
          if errs then
             -- report the errors from the first match
@@ -8074,11 +8074,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   set_min_arity(f)
 
                   -- simple functions:
-                  if (is_func and (given <= expected or (f.args.is_va and given > expected)))
+                  if (is_func and ((given <= expected and given >= f.min_arity) or (f.args.is_va and given > expected) or (lax and given <= expected)))
                   -- poly, pass 1: try exact arity matches first
                   or (is_poly and ((pass == 1 and given == expected)
                   -- poly, pass 2: then try adjusting with nils to missing arguments or using '...'
-                                or (pass == 2 and given < expected)
+                                or (pass == 2 and given < expected and (lax or given >= f.min_arity))
                   -- poly, pass 3: then finally try vararg functions
                                 or (pass == 3 and f.args.is_va and given > expected)))
                   then
@@ -8154,7 +8154,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             where_args[2] = node.e2
             args[2] = orig_b
          end
-         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, true)), meta_on_operator
+         return resolve_tuple_and_nominal((type_check_function_call(node, where_args, metamethod, args, nil, true))), meta_on_operator
       else
          return nil, nil
       end

@@ -2824,7 +2824,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
    local nt = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt, v.tk)
+   local iok = parse_body(ps, i, rdef, nt)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -3013,7 +3013,7 @@ parse_record_body = function(ps, i, def, node, name)
          end
          i = verify_tk(ps, i, "=")
          local nt
-         i, nt = parse_newtype(ps, i, v.tk)
+         i, nt = parse_newtype(ps, i)
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -3114,14 +3114,14 @@ parse_type_body_fns = {
    ["enum"] = parse_enum_body,
 }
 
-parse_newtype = function(ps, i, name)
+parse_newtype = function(ps, i)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    local tn = ps.tokens[i].tk
    if parse_type_body_fns[tn] then
       local def = new_type(ps, i, tn)
       i = i + 1
-      i = parse_type_body_fns[tn](ps, i, def, node, name)
+      i = parse_type_body_fns[tn](ps, i, def, node)
       node.newtype.def = def
       return i, node
    else
@@ -3258,7 +3258,7 @@ local function parse_type_declaration(ps, i, node_name)
       return i, asgn
    end
 
-   i, asgn.value = parse_newtype(ps, i, asgn.var.tk)
+   i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
       return i
    end
@@ -3285,7 +3285,7 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_body(ps, i, def, nt, asgn.var.tk)
+   i = parse_body(ps, i, def, nt)
    return i, asgn
 end
 
@@ -6276,6 +6276,12 @@ tl.type_check = function(ast, opts)
       f.min_arity = n
    end
 
+   local function show_arity(f)
+      return f.min_arity < #f.args and
+      "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. #f.args) or
+      tostring(#f.args or 0)
+   end
+
    local function resolve_typetype(t)
       if is_typetype(t) then
          return t.def
@@ -7989,12 +7995,6 @@ tl.type_check = function(ast, opts)
          end
       end
 
-      local function show_arity(f)
-         return f.min_arity < #f.args and
-         "at least " .. f.min_arity or
-         tostring(#f.args or 0)
-      end
-
       local function fail_call(node, func, nargs, errs)
          if errs then
 
@@ -8074,11 +8074,11 @@ tl.type_check = function(ast, opts)
                   set_min_arity(f)
 
 
-                  if (is_func and (given <= expected or (f.args.is_va and given > expected))) or
+                  if (is_func and ((given <= expected and given >= f.min_arity) or (f.args.is_va and given > expected) or (lax and given <= expected))) or
 
                      (is_poly and ((pass == 1 and given == expected) or
 
-                     (pass == 2 and given < expected) or
+                     (pass == 2 and given < expected and (lax or given >= f.min_arity)) or
 
                      (pass == 3 and f.args.is_va and given > expected))) then
 
@@ -8154,7 +8154,7 @@ tl.type_check = function(ast, opts)
             where_args[2] = node.e2
             args[2] = orig_b
          end
-         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, true)), meta_on_operator
+         return resolve_tuple_and_nominal((type_check_function_call(node, where_args, metamethod, args, nil, true))), meta_on_operator
       else
          return nil, nil
       end
