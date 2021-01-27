@@ -39,7 +39,7 @@ describe("-s --source-dir argument", function()
          },
          cmd = "build",
          generated_files = {},
-         cmd_output = "Build error: source_dir 'src' doesn't exist\n",
+         cmd_output = "Build error: source_dir 'src' is not a directory\n",
       })
    end)
    it("should not include files from other directories", function()

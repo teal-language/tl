@@ -42,9 +42,9 @@ end
 
 function util.do_in(dir, func, ...)
    local cdir = assert(lfs.currentdir())
-   assert(lfs.chdir(dir))
+   assert(lfs.chdir(dir), "unable to chdir into " .. dir)
    local res = {pcall(func, ...)}
-   assert(lfs.chdir(cdir))
+   assert(lfs.chdir(cdir), "unable to chdir into " .. cdir)
    if not table.remove(res, 1) then
       error(res[1], 2)
    end

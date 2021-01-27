@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("build.tl", function()
-   it("defaults to the generated_code folder", function()
+   pending("defaults to the generated_code folder", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -40,7 +40,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have the location it stores altered by setting build_file_output_dir", function()
+   pending("can have the location it stores altered by setting build_file_output_dir", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -79,7 +79,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have a diffrent name by setting build_file", function()
+   pending("can have a diffrent name by setting build_file", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -119,7 +119,7 @@ describe("build.tl", function()
          }
       })
    end)
-   it("Can have the location for cached output files changed", function()
+   pending("Can have the location for cached output files changed", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -161,7 +161,7 @@ describe("build.tl", function()
       })
 
    end)
-   it("Should not run when running something else than build", function()
+   pending("Should not run when running something else than build", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -189,7 +189,7 @@ describe("build.tl", function()
       })
 
    end)
-   it("Should run when running something else than build and --run-build-script is passed", function()
+   pending("Should run when running something else than build and --run-build-script is passed", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -219,7 +219,7 @@ describe("build.tl", function()
 
    end)
 
-   it("It should only run the build script if it changed since last time", function()
+   pending("It should only run the build script if it changed since last time", function()
       local path = util.write_tmp_dir(
          finally,
          {
@@ -264,7 +264,7 @@ Wrote: build/build.lua
    end)
 
 
-   it("Should give an error if the build script contains invalid teal", function()
+   pending("Should give an error if the build script contains invalid teal", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -293,7 +293,7 @@ Wrote: build/build.lua
 ]]
       })
    end)
-   it("Should give an error if the key gen_code exists, but it is not a function", function()
+   pending("Should give an error if the key gen_code exists, but it is not a function", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {

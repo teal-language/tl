@@ -38,9 +38,12 @@ describe("build command", function()
                source_dir = "src"
             }
          ]],
-         src = {},
+         src = {
+            ["foo.tl"] = "",
+         },
       }), function()
          local ph = io.popen("cd src && " .. util.tl_cmd("build"), "r")
+         ph:read("*a")
          util.assert_popen_close(true, "exit", 0, ph:close())
       end)
    end)

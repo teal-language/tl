@@ -1,7 +1,7 @@
 #!/usr/bin/env lua
 
 --------------------------------------------------------------------
---                           SETUP                                --
+-- Setup
 --------------------------------------------------------------------
 
 local is_turbo_on = false
@@ -32,17 +32,12 @@ local function script_path()
    return str:match("(.*[/\\])") or "."
 end
 
-local function printerr(s)
-   io.stderr:write(s .. "\n")
-end
+--------------------------------------------------------------------
+-- String Utils
+--------------------------------------------------------------------
 
 local function trim(str)
    return str:gsub("^%s*(.-)%s*$", "%1")
-end
-
-local function die(msg)
-   printerr(msg)
-   os.exit(1)
 end
 
 local function is_nil_or_whitespace(str)
@@ -61,21 +56,89 @@ end
 
 local function str_split(str, delimiter)
    local idx = 0
+   local s_idx, prev_idx
    return function()
       if not idx then return end
       idx = idx + 1
-      local prev_idx = idx
-      local s_idx
+      prev_idx = idx
       s_idx, idx = str:find(delimiter, idx, true)
       return str:sub(prev_idx, (s_idx or 0) - 1)
    end
 end
 
+local function right_pad(str, wid)
+   return (" "):rep(wid - #str) .. str
+end
+
+--------------------------------------------------------------------
+-- Table Utils
+--------------------------------------------------------------------
+
+local function keys(t)
+   local ks = {}
+   for k, _ in pairs(t) do
+      table.insert(ks, k)
+   end
+   table.sort(ks)
+   return ks
+end
+
+
+local function merge_list(a, b)
+   a = a or {}
+   b = b or {}
+   local c = {}
+   for i, v in ipairs(a) do
+      table.insert(c, v)
+   end
+   for i, v in ipairs(b) do
+      table.insert(c, v)
+   end
+   return c
+end
+
+--------------------------------------------------------------------
+-- Logging
+--------------------------------------------------------------------
+
+local function logger(stream)
+   return function(...)
+      stream:write(...)
+      stream:write("\n")
+   end
+end
+
+local log = setmetatable({
+   default = logger(io.stdout),
+   err = logger(io.stderr),
+}, {
+   __call = function(self, ...)
+      self.default(...)
+   end
+})
+
+local logf = setmetatable({}, {
+   __index = function(self, key)
+      assert(log[key], "no logger for " .. tostring(key))
+      return function(fmt, ...)
+         log[key](string.format(fmt, ...))
+      end
+   end,
+   __call = function(self, ...)
+      logf.default(...)
+   end,
+})
+
+local function die(...)
+   log.err(...)
+   os.exit(1)
+end
+
+
 local function find_file_in_parent_dirs(fname)
    local currentdir = lfs.currentdir()
    local it = str_split(currentdir, path_separator)
-   local lead = it() -- grab leading '/' or 'C:\' etc.
-   local paths = { lead .. path_separator .. it() }
+   local paths = { (it() or "") .. path_separator .. (it() or "") } -- base path is '/' or 'C:\' etc.
    for chunk in it do
       paths[#paths + 1] = paths[#paths] .. path_separator .. chunk
    end
@@ -88,13 +151,12 @@ local function find_file_in_parent_dirs(fname)
    end
 end
 
-local function keys(t)
-   local ks = {}
-   for k, _ in pairs(t) do
-      table.insert(ks, k)
-   end
-   table.sort(ks)
-   return ks
+local function is_absolute_path(path)
+   return path and path:sub(1, 1) == "/"
+end
+
+local function file_is(path, kind)
+   return lfs.attributes(path, "mode") == kind
 end
 
 -- FIXME
@@ -121,7 +183,7 @@ local function validate_config(config)
 
    for k, v in pairs(config) do
       if not valid_keys[k] then
-         print(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
+         log(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
             return "Invalid value for " .. k .. ", expected one of: " ..
@@ -151,6 +213,10 @@ local function validate_config(config)
       config.gen_compat = "off"
    end
 
+   if is_absolute_path(config.source_dir) then
+      return "source_dir must be a relative path"
+   end
+
    if config.disable_warnings then
       local unknown = {}
       for _, warning in ipairs(config.disable_warnings) do
@@ -159,7 +225,7 @@ local function validate_config(config)
          end
       end
       if #unknown > 0 then
-         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+         log.err("Unknown warning", (#unknown > 1 and "s" or ""), " in config: ", table.concat(unknown, ", "))
       end
    end
 
@@ -171,7 +237,17 @@ local function validate_config(config)
          end
       end
       if #unknown > 0 then
-         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+         log.err("Unknown warning", (#unknown > 1 and "s" or ""), " in config: ", table.concat(unknown, ", "))
+      end
+   end
+
+   if not config.build_file then
+      if file_is("build.tl", "file") then
+         config.build_file = "build.tl"
+      end
+   else
+      if not file_is(config.build_file, "file") then
+         return "The configured build script is not a file"
       end
    end
 
@@ -180,49 +256,53 @@ end
 
 package.path = script_path() .. "/?.lua;" .. package.path
 
-local function get_args_parser()
-   local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
+--------------------------------------------------------------------
+-- Argparser
+--------------------------------------------------------------------
 
-   parser:option("-l --preload", "Execute the equivalent of require('modulename') before processing Teal files.")
-         :argname("<modulename>")
-         :count("*")
+local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-   parser:option("-I --include-dir", "Prepend this directory to the module search path.")
-         :argname("<directory>")
-         :count("*")
+parser:option("-l --preload", "Execute the equivalent of require('modulename') before processing Teal files.")
+      :argname("<modulename>")
+      :count("*")
 
-   parser:option("--wdisable", "Disable the given kind of warning.")
-         :argname("<warning>")
-         :count("*")
+parser:option("-I --include-dir", "Prepend this directory to the module search path.")
+      :argname("<directory>")
+      :count("*")
 
-   parser:option("--werror", "Promote the given kind of warning to an error. Use '--werror all' to promote all warnings to errors")
-         :argname("<warning>")
-         :count("*")
+parser:option("--wdisable", "Disable the given kind of warning.")
+      :argname("<warning>")
+      :count("*")
 
-   parser:option("--warning-error-all")
+parser:option("--werror", "Promote the given kind of warning to an error. Use '--werror all' to promote all warnings to errors")
+      :argname("<warning>")
+      :count("*")
 
-   parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
-         :choices({ "off", "optional", "required" })
-         :default("optional")
-         :defmode("a")
+parser:option("--warning-error-all")
 
-   parser:option("--gen-target", "Minimum targeted Lua version for generated code.")
-         :choices({ "5.1", "5.3" })
+parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
+      :choices({ "off", "optional", "required" })
+      :default("optional")
+      :defmode("a")
 
-   parser:flag("--skip-compat53", "Skip compat53 insertions.")
-         :hidden(true)
-         :action(function(args) args.gen_compat = "off" end)
+parser:option("--gen-target", "Minimum targeted Lua version for generated code.")
+      :choices({ "5.1", "5.3" })
 
-   parser:flag("--version", "Print version and exit")
+parser:flag("--skip-compat53", "Skip compat53 insertions.")
+      :hidden(true)
+      :action(function(args) args.gen_compat = "off" end)
 
-   parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
+parser:flag("--version", "Print version and exit")
 
-   parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
-   parser:flag("--run-build-script", "Run the build script if needed, even when not running the build comamnd.")
+parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
-   parser:require_command(false)
-   parser:command_target("command")
+parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
+parser:flag("--run-build-script", "Run the build script if needed, even when not running the build comamnd.")
 
+parser:require_command(false)
+parser:command_target("command")
+
+do
    local check_command = parser:command("check", "Type-check one or more Teal files.")
    check_command:argument("file", "The Teal source file."):args("+")
 
@@ -245,24 +325,20 @@ local function get_args_parser()
    local types_command = parser:command("types", "Report all types found in one or more Teal files")
    types_command:argument("file", "The Teal source file."):args("+")
    types_command:option("-p --position", "Report values in scope in position line[:column]")
-              :argname("<position>")
+                :argname("<position>")
 
-   return parser
 end
 
-local parser = get_args_parser()
 local args = parser:parse()
 
 if args["version"] then
-   print(version_string)
+   log(version_string)
    os.exit(0)
 end
 
 local cmd = args["command"]
 if not cmd then
-   print(parser:get_usage())
-   print()
-   print("Error: a command is required")
+   log(parser:get_usage(), "\nError: a command is required")
    os.exit(1)
 end
 
@@ -286,14 +362,14 @@ local function get_config()
             die("Build error: tlconfig.lua not found")
          end
       else
-         die("Error loading config: " .. err)
+         die("Error loading config: ", err)
       end
    end
 
    if conf then
       local ok, user_config = pcall(conf)
       if not ok then
-         die("Error loading config:" .. err)
+         die("Error loading config:", err)
       end
 
       -- Merge tlconfig with the default config
@@ -322,7 +398,7 @@ local function get_config()
    err = validate_config(config)
 
    if err then
-      die("Error loading config: " .. err)
+      die("Error loading config: ", err)
    end
 
    return config
@@ -362,10 +438,8 @@ do
    end
 end
 
+
 if cmd == "warnings" then
-   local function right_pad(str, wid)
-      return (" "):rep(wid - #str) .. str
-   end
    local w = {}
    local longest = 0
    for warning in pairs(tl.warning_kinds) do
@@ -375,23 +449,19 @@ if cmd == "warnings" then
       table.insert(w, warning)
    end
    table.sort(w)
-   print("Compiler warnings:")
+   log("Compiler warnings:")
    for _, v in ipairs(w) do
-      io.write(" ", right_pad(v, longest), " : ")
-      if disabled_warnings[v] then
-         io.write("disabled")
-      elseif warning_errors[v] then
-         io.write("promoted to error")
-      else
-         io.write("enabled")
-      end
-      io.write("\n")
+      log(" ", right_pad(v, longest), " : ",
+         disabled_warnings[v] and "disabled"
+         or warning_errors[v] and "promoted to error"
+         or "enabled"
+      )
    end
    os.exit(0)
 end
 
 --------------------------------------------------------------------
---                     CONFIG VALIDATION                          --
+-- Config Validation
 --------------------------------------------------------------------
 
 function check_should_run_build_script()
@@ -421,18 +491,18 @@ tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
 tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]
                                             or (tlconfig["skip_compat53"] and "off")
 if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
-   print("Error: --output can only be used to map one input to one output")
+   log.err("Error: --output can only be used to map one input to one output")
    os.exit(1)
 end
 
 if check_should_run_build_script() then
    if tlconfig["build_file"] and not tlconfig["build_file_output_dir"] then
-      print("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
+      log("A build file is detected, but build_file_output_dir is not set. Defaulting to ./generated_code")
       tlconfig["build_file_output_dir"] = "generated_code"
    end
 
    if tlconfig["build_file"] and not tlconfig["internal_compiler_output"] then
-      print("A build file is detected, but there is no place configured to store temporary compiler output. Defaulting to ./internal_compiler_output")
+      log("A build file is detected, but there is no place configured to store temporary compiler output. Defaulting to ./internal_compiler_output")
       tlconfig["internal_compiler_output"] = "internal_compiler_output"
    end
 end
@@ -443,10 +513,10 @@ local function report_errors(category, errors)
    end
    if #errors > 0 then
       local n = #errors
-      printerr("========================================")
-      printerr(n .. " " .. category .. (n ~= 1 and "s" or "") .. ":")
+      log.err("========================================")
+      log.err(n, " ", category, (n ~= 1 and "s" or ""), ":")
       for _, err in ipairs(errors) do
-         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
+         log.err(err.filename, ":", err.y, ":", err.x, ": ", err.msg or "")
       end
       return true
    end
@@ -456,7 +526,7 @@ end
 local exit = 0
 
 --------------------------------------------------------------------
---                        ENVIRONMENT                             --
+-- Environment
 --------------------------------------------------------------------
 
 local function report_warnings(result)
@@ -515,22 +585,80 @@ for _, include in ipairs(tlconfig["include_dir"]) do
 end
 
 --------------------------------------------------------------------
---                     FILESYSTEM HELPERS                         --
+-- Pattern Matching
 --------------------------------------------------------------------
-local function cleanup_file_name(name) --remove trailing and extra path separators, substitute './' for 'current_dir/'
+
+local new_matcher
+do
+   local function match_str(str)
+   end
+
+   local patterns = {}
+   local function make_pattern(str)
+      if not patterns[str] then
+         local chunks = {}
+         for piece in str_split(str, "**/") do
+            table.insert(chunks, (piece:gsub("%*", "[^/]-")))
+         end
+         chunks[1] = "^" .. chunks[1]
+         chunks[#chunks] = chunks[#chunks] .. "$"
+         patterns[str] = chunks
+      end
+      return patterns[str]
+   end
+
+   local function patt_match(patt, str)
+      local matches = true
+      local idx = 1
+      local s_idx
+      for _, v in ipairs(patt) do
+         s_idx, idx = str:find(v, idx)
+         if not s_idx then
+            matches = false
+            break
+         end
+      end
+      return matches
+   end
+
+   local Matcher = {}
+
+   function Matcher:match(str)
+      for i, patt_str in ipairs(self) do
+         if patt_match(make_pattern(patt_str), str) then
+            return i
+         end
+      end
+   end
+
+   function Matcher:add_pattern(pattstr)
+      table.insert(self, pattstr)
+   end
+
+   new_matcher = function(t)
+      return setmetatable(t or {}, { __index = Matcher })
+   end
+end
+
+--------------------------------------------------------------------
+-- Filesystem Helpers
+--------------------------------------------------------------------
+
+-- remove trailing and extra path separators, substitute './' for 'current_dir/'
+local function cleanup_file_name(name)
    return (name
       :gsub("^(%.)(.?)", function(a, b)
          assert(a == ".")
          if b == "." then
-            die("Config error: .." .. path_separator .. " not allowed, please use direct paths")
+            die("Config error: ../ not allowed, please use direct paths")
          elseif b == path_separator then
             return ""
          else
             return b
          end
       end)
-      :gsub(path_separator .. "+", path_separator))
-      :gsub(path_separator .. "+$", "")
+      :gsub("/+", "/"))
+      :gsub("/+$", "")
 end
 
 local function path_concat(...)
@@ -544,47 +672,109 @@ local function path_concat(...)
    return table.concat(path, path_separator)
 end
 
+local function is_in_dir(dirname, fname)
+   if dirname == fname then
+      return false
+   end
+
+   local dir_it, file_it = str_split(dirname, "/"), str_split(fname, "/")
+   local last_d, last_f
+
+   repeat last_d, last_f = dir_it(), file_it()
+   until last_d ~= last_f
+
+   return last_d == nil and last_f ~= nil
+end
+
+local function extension_split(path, ndots)
+   for n = ndots or 1, 1, -1 do
+      local patt = "^(.-)(" .. ("%.%a+"):rep(n) .. ")$"
+      local base, ext = path:match(patt)
+      if ext then
+         ext = ext:lower()
+         return base, ext
+      end
+   end
+   return path
+end
+
 local function remove_leading_path(leading_part, path)
-   local s, e = path:find("^" .. leading_part .. path_separator .. "?")
+   local s, e = path:find("^" .. leading_part .. path_separator)
    if s then
       return path:sub(e+1, -1)
    end
    return path
 end
 
-local function traverse(dirname, emptyref, is_generated, generated_ref)
-   local files = {}
-   local paths = {} --lookup table for string paths to help
-   -- with pattern matching while iterating over a project
-   -- paths[files.foo.bar] -> "foo/bar"
-   emptyref = emptyref or {}
-   generated_ref = generated_ref or {}
-   for file in lfs.dir(dirname) do
-      if file ~= "." and file ~= ".." then
-         if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
-            local p
-            local prefix = dirname
-            files[file], p = traverse(path_concat(dirname, file), emptyref, is_generated, generated_ref)
-            paths[files[file]] = file
-            for k, v in pairs(p) do
-               paths[k] = path_concat(file, v)
+local read_file, parse_file
+do
+   local read_cache = {}
+   read_file = function(fname)
+      if not read_cache[fname] then
+         local fh, err = io.open(fname)
+         if not fh then
+            return nil, err
+         end
+         read_cache[fname] = fh:read("*a")
+         fh:close()
+      end
+      return read_cache[fname]
+   end
+
+   local parse_cache = {}
+   parse_file = function(fname)
+      if not parse_cache[fname] then
+         local content = read_file(fname)
+         local tks, errs = tl.lex(content)
+         if errs then
+            return nil, errs
+         end
+         local parse_errs = {}
+         parse_cache[fname] = { select(2, tl.parse_program(tks, parse_errs, fname)) }
+      end
+      return parse_cache[fname][1], parse_cache[fname][2]
+   end
+end
+
+local scan_dir
+do
+   local function dir_iter(dirname)
+      for file in lfs.dir(dirname) do
+         if file:sub(1, 1) ~= "." then
+            local full_path = path_concat(dirname, file)
+            if file_is(full_path, "directory") then
+               dir_iter(full_path)
+            else
+               coroutine.yield(full_path)
             end
-         else
-            -- storing a special entry in this table to it mark as empty could
-            -- interfere with convoluted or maliciously constructed directory
-            -- names so we use a table with specific metatable to mark
-            -- something as the end of a traversal to have a property attached
-            -- to the table, without creating an entry in the table
-            local meta_table = {empty = emptyref}
-            if is_generated then
-               meta_table["generated"] = generated_ref
-            end
-            files[file] = setmetatable({}, meta_table)
-            paths[files[file]] = file
          end
       end
    end
-   return files, paths, emptyref
+
+   scan_dir = function(dirname, include_matcher, exclude_matcher)
+      return coroutine.wrap(function()
+         for file in coroutine.wrap(dir_iter), dirname do
+            local sub_path = remove_leading_path(dirname, file)
+
+            local include = true
+            if #include_matcher > 0 then
+               local idx = include_matcher:match(sub_path)
+               if not idx then
+                  include = false
+               end
+            end
+            if include and #exclude_matcher > 0 then
+               local idx = exclude_matcher:match(sub_path)
+               if idx then
+                  include = false
+               end
+            end
+            if include then
+               coroutine.yield(file)
+            end
+         end
+      end)
+   end
 end
 
 --May not be a bad idea to have a command that cleans all the cache....
@@ -593,10 +783,10 @@ local function delete_dir(dir)
       if file ~= "." and file ~= ".." then
          local file_path = path_concat(dir, file)
          if file ~= "." and file ~= ".." then
-            if lfs.attributes(file_path, 'mode') == 'file' then
-                  os.remove(file_path)
-            elseif lfs.attributes(file_path, 'mode') == 'directory' then
-                  delete_dir(file_path)
+            if file_is(file_path, "file") then
+               os.remove(file_path)
+            elseif file_is(file_path, "directory") then
+               delete_dir(file_path)
             end
          end
       end
@@ -615,8 +805,7 @@ local modules = tlconfig.preload_modules
 
 local function setup_env(filename)
    if not env then
-      local basename, extension = filename:match("(.*)%.([a-z]+)$")
-      extension = extension and extension:lower()
+      local _, extension = extension_split(filename)
 
       local lax_mode
       if extension == "tl" then
@@ -640,7 +829,7 @@ local function get_output_filename(file_name)
    if not tail then
       return
    end
-   local name, ext = tail:match("(.+)%.([a-zA-Z]+)$")
+   local name, ext = extension_split(tail)
    if not name then name = tail end
    if ext ~= "lua" then
       return name .. ".lua"
@@ -678,17 +867,17 @@ local function type_check_file(file_name)
 
    if exit == 0 and tlconfig["quiet"] == false and #args["file"] == 1 then
       local output_file = get_output_filename(file_name)
-      print("========================================")
-      print("Type checked " .. file_name)
-      print("0 errors detected -- you can use:")
-      print()
-      print("   tl run " .. file_name)
-      print()
-      print("       to run " .. file_name .. " as a program")
-      print()
-      print("   tl gen " .. file_name)
-      print()
-      print("       to generate " .. output_file)
+      log("========================================")
+      log("Type checked " .. file_name)
+      log("0 errors detected -- you can use:")
+      log()
+      log("   tl run " .. file_name)
+      log()
+      log("       to run " .. file_name .. " as a program")
+      log()
+      log("   tl gen " .. file_name)
+      log()
+      log("       to generate " .. output_file)
    end
    return result
 end
@@ -713,13 +902,13 @@ local function type_check_and_load(filename, modules)
 
    local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
    if err then
-      die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. tostring(err))
+      die("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n", tostring(err))
    end
    return chunk
 end
 
 --------------------------------------------------------------------
---                      Setup internal output                     --
+-- Setup Internal Output
 --------------------------------------------------------------------
 local internal_output
 if check_should_run_build_script() and tlconfig["internal_compiler_output"] then
@@ -734,16 +923,16 @@ if check_should_run_build_script() and tlconfig["internal_compiler_output"] then
          if mode == nil then
             local res, message = lfs.mkdir(parts)
             if not res then
-               die("Could not create directory to store internal output. Error: " .. message)
+               die("Could not create directory to store internal output. Error: ", message)
             end
          elseif mode ~= "directory" then
-            die("Could not create directory to store the internal output. Path: " .. parts .. "is not a directory")
+            die("Could not create directory to store the internal output. Path: ", parts, " is not a directory")
          end
        end
    end
 end
 --------------------------------------------------------------------
---                        RUN BUILD SCRIPT                        --
+-- Run Build Script
 --------------------------------------------------------------------
 
 if check_should_run_build_script() and tlconfig["build_file"] then
@@ -778,19 +967,19 @@ if check_should_run_build_script() and tlconfig.build_file then
          lfs.mkdir(full_path)
          local success, message = pcall(gen_code, full_path)
          if not success then
-            die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ".. tostring(message))
+            die("Something has gone wrong while executing the \"gen_code\" part of the build file. Error : ", tostring(message))
          end
          local file = io.open(time_keeper_path, "w")
          file:write(last_edit_time)
          file:flush()
          file:close()
       else
-         die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ".. tostring(gen_code))
+         die("the key \"gen_code\" exists in the build file, but it is not a function. Value: ", tostring(gen_code))
       end
    end
 end
 --------------------------------------------------------------------
---                            RUN                                 --
+-- Run
 --------------------------------------------------------------------
 
 if cmd == "run" then
@@ -836,7 +1025,7 @@ if cmd == "run" then
 end
 
 --------------------------------------------------------------------
---                           CHECK                                --
+-- Check
 --------------------------------------------------------------------
 
 if cmd == "check" then
@@ -944,28 +1133,27 @@ if cmd == "types" then
 end
 
 --------------------------------------------------------------------
---                            GEN                                 --
+-- Gen
 --------------------------------------------------------------------
 
-local function write_out(result, output_file)
-   if not args["pretend"] then
-      local ofd, err = io.open(output_file, "w")
+local function write_out(txt, output_file)
+   if args["pretend"] then
+      log("Would Write: " .. output_file)
+   else
+      local ofd, ok, err
+      ofd, err = io.open(output_file, "w")
 
       if not ofd then
-         die("cannot write " .. output_file .. ": " .. err)
+         die("cannot write ", output_file, ": ", err)
       end
 
-      local ok; ok, err = ofd:write(tl.pretty_print_ast(result.ast) .. "\n")
+      ok, err = ofd:write(txt, "\n")
       if err then
-         die("error writing " .. output_file .. ": " .. err)
+         die("error writing ", output_file, ": ", err)
       end
 
       ofd:close()
-   end
-   if args["pretend"] then
-      print("Would Write: " .. output_file)
-   else
-      print("Wrote: " .. output_file)
+      log("Wrote: ", output_file)
    end
 end
 
@@ -1002,152 +1190,26 @@ if cmd == "gen" then
       end
    else
       for i, res in ipairs(results) do
-         write_out(res.tl_result, args["output"] or res.output_file)
+         write_out(tl.pretty_print_ast(res.tl_result.ast), args["output"] or res.output_file)
       end
    end
    os.exit(exit)
 end
 
 
---------------------------------------------------------------------
---                      PATTERN MATCHING                          --
---------------------------------------------------------------------
-
-local function match(patt_arr, str)
-   for i, v in ipairs(patt_arr) do
-      if v(str) then
-         return i
-      end
-   end
-   return nil
-end
-local inc_patterns = {}
-local exc_patterns = {}
-
-local function patt_match(patt, str)
-   local matches = true
-   local idx = 1
-   local s_idx
-   for _, v in ipairs(patt) do
-      s_idx, idx = str:find(v, idx)
-      if not s_idx then
-         matches = false
-         break
-      end
-   end
-   return matches
-end
-local function matcher(str)
-   local chunks = {}
-   for piece in str_split(str, "**" .. path_separator) do
-      table.insert(chunks, (piece:gsub("%*", "[^" .. path_separator .. "]-")))
-   end
-   chunks[1] = "^" .. chunks[1]
-   chunks[#chunks] = chunks[#chunks] .. "$"
-   return function(str)
-      return patt_match(chunks, str)
-   end
-end
 if internal_output then
-   table.insert(exc_patterns, matcher(path_concat(tlconfig["internal_compiler_output"], "**/*.*")))
+   table.insert(exc_patterns, matcher(path_concat(tlconfig["internal_compiler_output"], "**/*")))
 end
 
 -- prepare build and source dirs
-local curr_dir = lfs.currentdir()
+local inc, exc = new_matcher(), new_matcher()
 
-local project = {}
--- This will probably get exposed in the api if that happens
-function project:file_with_is_build(inc_patt_arr, exc_patt_arr, dirname)
-   local iter_dir
-   if dirname then
-      iter_dir = project:find(dirname)
-   else
-      iter_dir = self.dir
-   end
-   if not iter_dir then
-      return function() end
-   end
-   inc_patt_arr = inc_patt_arr or {}
-   exc_patt_arr = exc_patt_arr or {}
-   local function iter(dirs)
-      for fname, file in pairs(dirs) do
-         local path = self.paths[file]
-         if dirname then
-            path = remove_leading_path(dirname, path)
-         end
-         local meta_table = getmetatable(file)
-         if meta_table and meta_table.empty == self.emptyref then
-
-            local include = true
-
-            if tlconfig["files"] then
-               include = false
-            end
-            if build_path and meta_table.generated and meta_table.generated == self.generatedref then
-               coroutine.yield(build_path .. "/" .. path, true)
-            else
-
-               -- TODO: print out patterns that include/exclude paths to help
-               -- users debug tlconfig.lua (this is why match returns the array index)
-               if #inc_patt_arr > 0 then
-                  local idx = match(inc_patt_arr, path)
-                  if not idx then
-                     include = false
-                  end
-               end
-               if #exc_patt_arr > 0 then
-                  local idx = match(exc_patt_arr, path)
-                  if include and idx then
-                     include = false
-                  end
-               end
-               if include then
-                  coroutine.yield(self.paths[file], false)
-               end
-            end
-         else
-            iter(file, fname)
-         end
-      end
-   end
-   return coroutine.wrap(iter), iter_dir
-end
-function project:find(path) -- allow for indexing with paths project:find("foo/bar") -> project.dir.foo.bar
-   if not path then return nil end
-   if path == "" then return self.dir end -- empty string is the current dir
-   local current_dir = self.dir
-   for dirname in str_split(path, path_separator) do
-      current_dir = current_dir[dirname]
-      if not current_dir then
-         return nil
-      end
-   end
-   return current_dir
-end
-
-project.dir, project.paths, project.emptyref = traverse(lfs.currentdir())
-local build_ref = {}
-project.generatedref = build_ref
-if build_path then
-   local build_dir, build_paths, emptyref = traverse(build_path, project.emptyref, true, build_ref)
-   for k, v in pairs(build_dir) do
-      project.dir[k] = v
-   end
-   for k, v in pairs(build_paths) do
-      project.paths[k] = v
-   end
-end
-
-project.source_file_map = {}
+local files = {}
 if cmd == "build" then
    if tlconfig["source_dir"] then
       tlconfig["source_dir"] = cleanup_file_name(tlconfig["source_dir"])
-      local project_source = project:find(tlconfig["source_dir"])
-      if not project_source then
-         die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' doesn't exist")
-      local meta_table = getmetatable(project_source)
-      elseif meta_table and meta_table.empty == project.emptyref then
-         die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' is not a directory")
+      if tlconfig["source_dir"] == "" then
+         tlconfig["source_dir"] = "."
       end
    end
    if tlconfig["build_dir"] then
@@ -1159,13 +1221,13 @@ if cmd == "build" then
    if tlconfig["include"] then
       for i, patt in ipairs(tlconfig["include"]) do
          patt = cleanup_file_name(patt)
-         table.insert(inc_patterns, matcher(patt))
+         inc:add_pattern(patt)
       end
    end
    if tlconfig["exclude"] then
       for i, patt in ipairs(tlconfig["exclude"]) do
          patt = cleanup_file_name(patt)
-         table.insert(exc_patterns, matcher(patt))
+         exc:add_pattern(patt)
       end
    end
 
@@ -1182,90 +1244,165 @@ if cmd == "build" then
                table.insert(dirs_to_be_mked, v)
                dirs_to_be_mked[v] = true
             elseif mode and mode ~= "directory" then
-               die("Build error: expected " .. v .. " to be a directory")
+               die("Build error: expected ", v, " to be a directory")
             end
          end
       end
    end
 
    if tlconfig["files"] then
-      -- TODO: check if files are not relative
       for i, fname in ipairs(tlconfig["files"]) do
-         if not project:find(fname) then
-            die("Build error: file \"" .. fname .. "\" not found")
+         if is_absolute_path(fname) then
+            die("Build error: in config, ", fname, " (files[", i, "]), files must be relative")
          end
-         project.source_file_map[fname] = fname:gsub("%.tl$", ".lua")
-         if tlconfig["build_dir"] then
-            project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
+         if not file_is(fname, "file") then
+            die("Build error: ", fname, " is not a file")
          end
-         check_parent_dirs(project.source_file_map[fname])
-      end
-   end
-   for path, is_build in project:file_with_is_build(inc_patterns, exc_patterns, tlconfig["source_dir"]) do
-      --TODO: make this better
-      local valid = true
-      if not (path:match("%.tl$") and not path:match("%.d%.tl$")) then
-         valid = false
-      end
-      if valid then
-         local work_on = path:gsub("%.tl$", ".lua")
-         if is_build then
-            work_on = remove_leading_path(build_path, work_on)
-         end
-         project.source_file_map[path] = work_on
+         local outfile = fname
          if tlconfig["build_dir"] then
             if tlconfig["source_dir"] then
-               project.source_file_map[path] = remove_leading_path(tlconfig["source_dir"], project.source_file_map[path])
+               outfile = remove_leading_path(tlconfig["source_dir"], outfile)
             end
-            project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
+            outfile = path_concat(tlconfig["build_dir"], outfile)
          end
-
-         check_parent_dirs(project.source_file_map[path])
+         local base, ext = extension_split(outfile)
+         outfile = base .. (ext == ".lua" and ".out.lua" or ".lua")
+         files[fname] = outfile
+         check_parent_dirs(outfile)
       end
    end
+
+   local source_dir = tlconfig["source_dir"] or "."
+   if not file_is(source_dir, "directory") then
+      die("Build error: source_dir '", source_dir, "' is not a directory")
+   end
+
+   if (tlconfig["files"] and (#inc > 0 or #exc > 0)) or not tlconfig["files"] then
+      for path in scan_dir(source_dir, inc, exc) do
+         local basename, ext = extension_split(path, 2)
+         if ext == ".tl" and not files[path] then
+            local outfile = basename .. ".lua"
+            if tlconfig["build_dir"] then
+               if tlconfig["source_dir"] then
+                  outfile = remove_leading_path(tlconfig["source_dir"], outfile)
+               end
+               outfile = path_concat(tlconfig["build_dir"], outfile)
+            end
+            check_parent_dirs(outfile)
+            files[path] = outfile
+         end
+      end
+   end
+
    for i, v in ipairs(dirs_to_be_mked) do
       if not lfs.mkdir(v) then
-         die("Build error: unable to mkdir \"" .. v .. "\"")
+         die("Build error: unable to mkdir \"", v, "\"")
+      end
+      log("Created directory: ", v)
+   end
+end
+
+--------------------------------------------------------------------
+-- Build
+--------------------------------------------------------------------
+turbo(true)
+
+
+--[[
+local record Node
+   input: string
+   output: string
+   modules: {string:string}
+   marked: boolean
+   dependents: {Node}
+end
+dag: {string:Node}
+-- dag = directed acyclic graph
+]]
+local dag = {}
+for input, output in pairs(files) do
+   local _, require_calls = parse_file(input)
+   local modules = {}
+   for _, req in ipairs(require_calls) do
+      local mod_name = req.e2[1].conststr
+      local found, fd = tl.search_module(mod_name, true)
+      if found then
+         modules[mod_name] = found
+         fd:close()
+      end
+   end
+   dag[input] = {
+      input = input,
+      output = output,
+      modules = modules,
+      dependents = {},
+      marked = false,
+   }
+end
+
+for file, node in pairs(dag) do
+   for _, mod_file in pairs(node.modules) do
+      local dep_node = dag[mod_file]
+      if dep_node then
+         table.insert(dep_node.dependents, node)
       end
    end
 end
 
---------------------------------------------------------------------
---                            BUILD                               --
---------------------------------------------------------------------
--- print(require"inspect"(project))
-
--- sort source map so that order is deterministic (helps for testing output)
-local sorted_source_file_arr = {}
-for input_file, output_file in pairs(project.source_file_map) do
-   table.insert(sorted_source_file_arr, {input_file, output_file})
+local function mark_for_update(node)
+   if node.marked then return end -- if a node is marked so are its children
+   node.marked = true
+   for _, dep in ipairs(node.dependents) do
+      mark_for_update(dep)
+   end
 end
-table.sort(sorted_source_file_arr, function(a, b) return a[1] < b[1] end)
 
-turbo(true)
-for i, files in ipairs(sorted_source_file_arr) do
-   local input_file, output_file = files[1], files[2]
-   setup_env(input_file)
-
-   local result, err = tl.process(input_file, env, nil, modules)
-   if err then
-      die(err)
+local function should_update(input, output)
+   local in_mod = lfs.attributes(input, "modification")
+   local out_mod = lfs.attributes(output, "modification")
+   if not out_mod then
+      return true
    end
-   env = result.env
+   return in_mod > out_mod
+end
 
-   local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
-   if has_syntax_errors then
+for file, node in pairs(dag) do
+   if should_update(file, node.output) then
+      mark_for_update(node)
+   end
+end
+
+local nodes_to_process = {}
+for file, node in pairs(dag) do
+   if node.marked then
+      table.insert(nodes_to_process, node)
+   end
+end
+
+if #nodes_to_process == 0 then
+   log("All files up to date")
+   os.exit(0)
+end
+
+table.sort(nodes_to_process, function(a, b)
+   return #a.dependents < #b.dependents
+end)
+
+for _, node in ipairs(nodes_to_process) do
+   local input, output = node.input, node.output
+   local ast = parse_file(input)
+
+   -- TODO: fill in the actual options here
+   local type_errors = tl.type_check(ast, { filename = input })
+   if report_errors("type error", type_errors) then
       exit = 1
-      break
-   end
-   local ok = report_result(result)
-   if ok then
-      write_out(result, output_file)
    else
-      exit = 1
+      local code = tl.pretty_print_ast(ast)
+      write_out(code, output)
    end
    if i > 1 then
       collectgarbage()
    end
 end
+
 os.exit(exit)

@@ -16,7 +16,7 @@ describe("globs", function()
                "b.lua",
                "c.lua",
             },
-            cmd_output = "Wrote: a.lua\nWrote: b.lua\nWrote: c.lua\n"
+            -- cmd_output = "Wrote: a.lua\nWrote: b.lua\nWrote: c.lua\n"
          })
       end)
       it("should match when other characters are present in the pattern", function()
@@ -37,7 +37,7 @@ describe("globs", function()
                "abfoocd.lua",
                "abzcd.lua",
             },
-            cmd_output = "Wrote: abbarcd.lua\nWrote: abcd.lua\nWrote: abfoocd.lua\nWrote: abzcd.lua\n"
+            -- cmd_output = "Wrote: abbarcd.lua\nWrote: abcd.lua\nWrote: abfoocd.lua\nWrote: abzcd.lua\n"
          })
       end)
       it("should only match .tl by default", function()

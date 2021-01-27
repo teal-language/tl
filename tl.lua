@@ -1249,6 +1249,7 @@ local function failskip(ps, i, msg, skip_fn, starti)
    local err_ps = {
       tokens = ps.tokens,
       errs = {},
+      require_calls = {},
    }
    local skip_i = skip_fn(err_ps, starti or i)
    fail(ps, starti or i, msg)
@@ -1409,6 +1410,7 @@ local function parse_trying_list(ps, i, list, parse_item)
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
+      require_calls = ps.require_calls,
    }
    local tryi, item = parse_item(try_ps, i)
    if not item then
@@ -1715,6 +1717,16 @@ local function parse_literal(ps, i)
    return fail(ps, i, "syntax error")
 end
 
+local function node_is_require_call(n)
+   return n.op and n.op.op == "@funcall" and
+   n.e1 and n.e2 and
+   n.e1.kind == "variable" and
+   n.e1.tk == "require" and
+   n.e2.kind == "expression_list" and
+   #n.e2 == 1 and
+   n.e2[1].kind == "string"
+end
+
 local an_operator
 
 do
@@ -1962,6 +1974,9 @@ do
          i, lhs = E(ps, i, lhs, 0)
       end
       if lhs then
+         if node_is_require_call(lhs) then
+            table.insert(ps.require_calls, lhs)
+         end
          return i, lhs, 0
       end
 
@@ -2597,14 +2612,6 @@ do
       return failskip(ps, i, "syntax error", parse_expression, tryi)
    end
    if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
-      if lhs.e1.kind == "variable" and
-         lhs.e1.tk == "require" and
-         lhs.e2.kind == "expression_list" and
-         #lhs.e2 == 1 and
-         lhs.e2[1].kind == "string" then
-
-         table.insert(ps.require_calls, lhs)
-      end
       return i, lhs
    end
    return fail(ps, i, "syntax error")
