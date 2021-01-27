@@ -5944,7 +5944,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   -- try exact match first
                   if (pass == 1 and given == expected)
                   -- then try adjusting with nils to missing arguments or using '...'
-                  or (pass == 2 and given < expected)
+                  or (pass == 2 and given < expected and (lax or given >= min_arity))
                   -- then finally try vararg functions
                   or (pass == 3 and f.args.is_va and given > expected)
                   then

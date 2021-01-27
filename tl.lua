@@ -5944,7 +5944,7 @@ tl.type_check = function(ast, opts)
 
                   if (pass == 1 and given == expected) or
 
-                     (pass == 2 and given < expected) or
+                     (pass == 2 and given < expected and (lax or given >= min_arity)) or
 
                      (pass == 3 and f.args.is_va and given > expected) then
 
