@@ -4368,7 +4368,7 @@ local function init_globals(lax)
             ["open"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
             ["output"] = a_type({ typename = "function", args = { OPT_UNION({ STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } }),
             ["popen"] = a_type({ typename = "function", args = { STRING, STRING }, rets = { NOMINAL_FILE, STRING } }),
-            ["read"] = a_type({ typename = "function", args = { NOMINAL_FILE, UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
+            ["read"] = a_type({ typename = "function", args = { UNION({ STRING, NUMBER }) }, rets = { STRING, STRING } }),
             ["stderr"] = NOMINAL_FILE,
             ["stdin"] = NOMINAL_FILE,
             ["stdout"] = NOMINAL_FILE,
