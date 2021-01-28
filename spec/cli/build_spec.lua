@@ -92,4 +92,22 @@ describe("build command", function()
          assert.are.same("Wrote: build/foo.lua\n", runcmd(build_cmd))
       end)
    end)
+
+   it("should recompile when given --update-all flag", function()
+      util.do_in(util.write_tmp_dir(finally, {
+         ["tlconfig.lua"] = [[
+            return {
+               source_dir = "src",
+               build_dir = "build",
+            }
+         ]],
+         ["src"] = {
+            ["foo.tl"] = [[]]
+         },
+      }), function()
+         local cmd = util.tl_cmd("build", "--update-all")
+         assert.are.same("Created directory: build\nWrote: build/foo.lua\n", runcmd(cmd))
+         assert.are.same("Wrote: build/foo.lua\n", runcmd(cmd))
+      end)
+   end)
 end)

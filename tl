@@ -537,8 +537,11 @@ do
    local build_command = parser:command("build", "Build your project according to tlconfig.lua by type checking and compiling each specified file.")
    build_command:option("-b --build-dir", "Put all generated files in <directory>.")
                 :argname("<directory>")
+
    build_command:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
                 :argname("<directory>")
+
+   build_command:flag("-u --update-all", "Compile every source file as though it has been edited")
 
    parser:command("warnings", "List each kind of warning the compiler can produce.")
 
@@ -824,29 +827,6 @@ do
    end
 end
 
-local function delete_dir(dir)
-   for file in lfs.dir(dir) do
-      if file ~= "." and file ~= ".." then
-         local file_path = path_concat(dir, file)
-         if file ~= "." and file ~= ".." then
-            if is_file(file_path) then
-               os.remove(file_path)
-            elseif is_dir(file_path) then
-               delete_dir(file_path)
-            end
-         end
-      end
-   end
-   lfs.rmdir(dir)
-end
-
-local build_path
-local function cleanup_generated_files()
-   if build_path then
-      delete_dir(build_path)
-   end
-end
-
 --------------------------------------------------------------------
 -- Environment
 --------------------------------------------------------------------
@@ -921,7 +901,7 @@ local function type_check_file(file_name, env)
       log("   tl run ", file_name, "\n")
       log("       to run ", file_name, " as a program\n")
       log("   tl gen ", file_name, "\n")
-      log("       to generate", output_file)
+      log("       to generate ", output_file)
    end
    return result
 end
@@ -1363,7 +1343,7 @@ local function should_update(input, output)
 end
 
 for file, node in pairs(dag) do
-   if should_update(file, node.output) then
+   if args["update_all"] or should_update(file, node.output) then
       mark_for_update(node)
    end
 end
