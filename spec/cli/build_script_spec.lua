@@ -1,6 +1,111 @@
 local util = require("spec.util")
 
-describe("build.tl", function()
+describe("build script", function()
+   it("should error when it is not a file", function()
+      util.run_mock_project(finally, {
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {
+               build_file = "foo.tl"
+            }]],
+         },
+         cmd = "build",
+         generated_files = {},
+         cmd_output = "Error loading config: Build script foo.tl is not a file\n",
+         popen = {
+            status = nil,
+            exit = "exit",
+            code = 1,
+         },
+      })
+   end)
+
+   it("is run when `tl build` is run", function()
+      util.run_mock_project(finally, {
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {
+               source_dir = "src",
+               build_dir = "build",
+            }]],
+            ["build.tl"] = [[
+               return {
+                  gen_code = function()
+                     print("Build Script")
+                  end,
+               }
+            ]],
+            src = {},
+            build = {},
+         },
+         cmd = "build",
+         generated_files = {},
+         cmd_output = "Build Script\nAll files up to date\n"
+      })
+   end)
+
+   it("should not be compiled when it is in the source_dir", function()
+      util.run_mock_project(finally, {
+         dir_structure = {
+            ["tlconfig.lua"] = [[return {}]],
+            ["build.tl"] = [[
+               return {
+                  gen_code = function()
+                     print("Build Script")
+                  end,
+               }
+            ]],
+         },
+         cmd = "build",
+         generated_files = {},
+         cmd_output = "Build Script\nAll files up to date\n"
+      })
+   end)
+
+   describe("gen_code", function()
+      it("should pass the tlconfig build_file_output_dir as an argument", function()
+         local path = "foo"
+         util.run_mock_project(finally, {
+            dir_structure = {
+               ["tlconfig.lua"] = ([[return {
+                  build_file_output_dir = %q
+               }]]):format(path),
+               ["build.tl"] = [[
+                  return {
+                     gen_code = function(path: string)
+                        print("Build Script")
+                        print(path)
+                     end,
+                  }
+               ]],
+            },
+            cmd = "build",
+            generated_files = {},
+            cmd_output = "Build Script\n" .. path .. package.config:sub(1, 1) .. "\nAll files up to date\n"
+         })
+      end)
+
+      it("should report errors", function()
+         util.run_mock_project(finally, {
+            dir_structure = {
+               ["tlconfig.lua"] = [[]],
+               ["build.tl"] = [[
+                  return {
+                     gen_code = function(_path: string)
+                        error("hello")
+                     end,
+                  }
+               ]],
+            },
+            cmd = "build",
+            generated_files = {},
+            cmd_output = table.concat({
+               "Error in gen_code: stack traceback:",
+               "[C]: in function 'error'",
+               "build.tl:3: in field 'gen_code'\n",
+            }, "\n\t"),
+         })
+      end)
+   end)
+
    pending("defaults to the generated_code folder", function()
       util.run_mock_project(finally, {
          dir_structure = {
@@ -40,6 +145,7 @@ describe("build.tl", function()
          },
       })
    end)
+
    pending("can have the location it stores altered by setting build_file_output_dir", function()
       util.run_mock_project(finally, {
          dir_structure = {
@@ -289,7 +395,7 @@ Wrote: build/build.lua
          cmd_output =
 [[========================================
 1 syntax error:
-./build.tl:8:17: syntax error
+build.tl:8:17: syntax error
 ]]
       })
    end)
