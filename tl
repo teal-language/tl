@@ -471,6 +471,10 @@ local function validate_config(config)
       config.build_file_output_dir = config.build_file_output_dir .. path_separator
    end
 
+   if config.build_file_output_dir and config.build_dir then
+      config.build_file_output_dir = path_concat(config.build_dir, config.build_file_output_dir)
+   end
+
    return nil
 end
 
@@ -702,9 +706,6 @@ end
 
 local new_matcher
 do
-   local function match_str(str)
-   end
-
    local patterns = {}
    local function make_pattern(str)
       if not patterns[str] then
@@ -1169,14 +1170,53 @@ for _, key_type in ipairs{
    nil_type_check_or_die(build_script[key_type[1]], key_type[2], ("Type error in build script %s: "):format(key_type[1]))
 end
 
-if build_script.gen_code then
-   pcall_or_die(function()
-      build_script.gen_code(tlconfig.build_file_output_dir)
-   end, "Error in gen_code: ")
-end
-
 -- prepare build and source dirs
 local inc, exc = new_matcher(), new_matcher()
+
+local function get_build_output_name(fname)
+   local outfile = fname
+   if tlconfig["build_dir"] then
+      if tlconfig["source_dir"] then
+         outfile = remove_leading_path(tlconfig["source_dir"], outfile)
+      end
+      outfile = path_concat(tlconfig["build_dir"], outfile)
+   end
+   local base, ext = extension_split(outfile)
+   return base .. (ext == ".lua" and ".out.lua" or ".lua")
+end
+
+local dirs_to_be_mked = {}
+
+local function check_dirs(paths, n)
+   for i = 1, n or #paths do
+      local chunk = paths[i]
+      local mode = lfs.attributes(chunk, "mode")
+      if not mode and not dirs_to_be_mked[chunk] then
+         table.insert(dirs_to_be_mked, chunk)
+         dirs_to_be_mked[chunk] = true
+      elseif mode and mode ~= "directory" then
+         die("Build error: expected ", chunk, " to be a directory")
+      end
+   end
+end
+
+local function leading_path_chunks(path)
+   local chunks = {}
+   for dir in str_split(path, path_separator) do
+      chunks[#chunks + 1] = #chunks > 0 and path_concat(chunks[#chunks], dir) or dir
+   end
+   return chunks
+end
+
+local function mkdirs()
+   for i, v in ipairs(dirs_to_be_mked) do
+      if not lfs.mkdir(v) then
+         die("Build error: unable to mkdir \"", v, "\"")
+      end
+      log("Created directory: ", v)
+   end
+   dirs_to_be_mked = {}
+end
 
 local files = {}
 if cmd == "build" then
@@ -1205,23 +1245,11 @@ if cmd == "build" then
       end
    end
 
-   local dirs_to_be_mked = {}
-   local function check_parent_dirs(path)
-      local parent_dirs = {}
-      for dir in str_split(path, path_separator) do
-         parent_dirs[#parent_dirs + 1] = #parent_dirs > 0 and path_concat(parent_dirs[#parent_dirs], dir) or dir
-      end
-      for i, v in ipairs(parent_dirs) do
-         if i < #parent_dirs then
-            local mode = lfs.attributes(v, "mode")
-            if not mode and not dirs_to_be_mked[v] then
-               table.insert(dirs_to_be_mked, v)
-               dirs_to_be_mked[v] = true
-            elseif mode and mode ~= "directory" then
-               die("Build error: expected ", v, " to be a directory")
-            end
-         end
-      end
+   local function add_file(fname)
+      local outfile = get_build_output_name(fname)
+      files[fname] = outfile
+      local chunks = leading_path_chunks(outfile)
+      check_dirs(chunks, #chunks - 1)
    end
 
    if tlconfig["files"] then
@@ -1232,17 +1260,7 @@ if cmd == "build" then
          if not is_file(fname) then
             die("Build error: ", fname, " is not a file")
          end
-         local outfile = fname
-         if tlconfig["build_dir"] then
-            if tlconfig["source_dir"] then
-               outfile = remove_leading_path(tlconfig["source_dir"], outfile)
-            end
-            outfile = path_concat(tlconfig["build_dir"], outfile)
-         end
-         local base, ext = extension_split(outfile)
-         outfile = base .. (ext == ".lua" and ".out.lua" or ".lua")
-         files[fname] = outfile
-         check_parent_dirs(outfile)
+         add_file(fname)
       end
    end
 
@@ -1255,32 +1273,15 @@ if cmd == "build" then
       for path in scan_dir(source_dir, inc, exc) do
          local basename, ext = extension_split(path, 2)
          if ext == ".tl" and not files[path] then
-            local outfile = basename .. ".lua"
-            if tlconfig["build_dir"] then
-               if tlconfig["source_dir"] then
-                  outfile = remove_leading_path(tlconfig["source_dir"], outfile)
-               end
-               outfile = path_concat(tlconfig["build_dir"], outfile)
-            end
-            check_parent_dirs(outfile)
-            files[path] = outfile
+            add_file(path)
          end
       end
    end
 
-   for i, v in ipairs(dirs_to_be_mked) do
-      if not lfs.mkdir(v) then
-         die("Build error: unable to mkdir \"", v, "\"")
-      end
-      log("Created directory: ", v)
-   end
+   mkdirs()
 end
 
---------------------------------------------------------------------
--- Build
---------------------------------------------------------------------
 turbo(true)
-
 
 --[[
 local record Node
@@ -1358,6 +1359,23 @@ end
 if #nodes_to_process == 0 then
    log("All files up to date")
    os.exit(0)
+end
+
+if build_script.gen_code then
+   check_dirs(leading_path_chunks(tlconfig.build_file_output_dir))
+   mkdirs()
+
+   pcall_or_die(function()
+      build_script.gen_code(tlconfig.build_file_output_dir)
+   end, "Error in gen_code: ")
+
+   for file in scan_dir(tlconfig.build_file_output_dir) do
+      table.insert(nodes_to_process, {
+         input = file,
+         output = get_build_output_name(file),
+         dependents = {},
+      })
+   end
 end
 
 table.sort(nodes_to_process, function(a, b)

@@ -8,6 +8,10 @@ local function runcmd(cmd)
    return out
 end
 
+local function lines(t)
+   return table.concat(t, "\n")
+end
+
 describe("build script", function()
    it("should error when it is not a file", function()
       util.run_mock_project(finally, {
@@ -41,12 +45,21 @@ describe("build script", function()
                   end,
                }
             ]],
-            src = {},
+            src = { ["foo.tl"] = [[]] },
             build = {},
          },
          cmd = "build",
-         generated_files = {},
-         cmd_output = "Build Script\nAll files up to date\n"
+         generated_files = {
+            build = {
+               "foo.lua",
+               generated_code = {},
+            }
+         },
+         cmd_output = lines{
+            "Created directory: build/generated_code",
+            "Build Script",
+            "Wrote: build/foo.lua\n"
+         },
       })
    end)
 
@@ -61,10 +74,18 @@ describe("build script", function()
                   end,
                }
             ]],
+            ["foo.tl"] = [[]]
          },
          cmd = "build",
-         generated_files = {},
-         cmd_output = "Build Script\nAll files up to date\n"
+         generated_files = {
+            "foo.lua",
+            generated_code = {},
+         },
+         cmd_output = lines{
+            "Created directory: generated_code",
+            "Build Script",
+            "Wrote: foo.lua\n"
+         },
       })
    end)
 
@@ -84,10 +105,19 @@ describe("build script", function()
                      end,
                   }
                ]],
+               ["foo.tl"] = [[]],
             },
             cmd = "build",
-            generated_files = {},
-            cmd_output = "Build Script\n" .. path .. package.config:sub(1, 1) .. "\nAll files up to date\n"
+            generated_files = {
+               "foo.lua",
+               foo = {},
+            },
+            cmd_output = lines{
+               "Created directory: " .. path,
+               "Build Script",
+               path .. package.config:sub(1, 1),
+               "Wrote: foo.lua\n",
+            },
          })
       end)
 
@@ -103,10 +133,18 @@ describe("build script", function()
                      end,
                   }
                ]],
+               ["foo.tl"] = [[]],
             },
             cmd = "build",
-            generated_files = {},
-            cmd_output = "Build Script\ngenerated_code" .. package.config:sub(1, 1) .. "\nAll files up to date\n"
+            generated_code = {
+               "foo.lua"
+            },
+            cmd_output = lines{
+               "Created directory: generated_code",
+               "Build Script",
+               "generated_code" .. package.config:sub(1, 1),
+               "Wrote: foo.lua\n",
+            },
          })
       end)
 
@@ -121,14 +159,16 @@ describe("build script", function()
                      end,
                   }
                ]],
+               ["foo.tl"] = [[]],
             },
             cmd = "build",
-            generated_files = {},
-            cmd_output = table.concat({
+            generated_code = {},
+            cmd_output = lines{
+               "Created directory: generated_code",
                "Error in gen_code: build.tl:3: hello\nstack traceback:",
-               "[C]: in function 'error'",
-               "build.tl:3: in field 'gen_code'\n",
-            }, "\n\t"),
+               "\t[C]: in function 'error'",
+               "\tbuild.tl:3: in field 'gen_code'\n",
+            },
          })
       end)
    end)
@@ -149,9 +189,12 @@ describe("build script", function()
             },
             cmd = "build",
             generated_files = {
-               "foo.lua"
+               "foo.lua",
             },
-            cmd_output = "Wrote: foo.lua\nAfter\n",
+            cmd_output = lines{
+               "Wrote: foo.lua",
+               "After\n",
+            },
          })
       end)
 
@@ -167,16 +210,19 @@ describe("build script", function()
                      end,
                   }
                ]],
+               generated_code = {},
             },
             cmd = "build",
             generated_files = {
                "foo.lua"
             },
-            cmd_output = "Wrote: foo.lua\nError in after: build.tl:3: After\n" .. table.concat({
+            cmd_output = lines{
+               "Wrote: foo.lua",
+               "Error in after: build.tl:3: After",
                "stack traceback:",
-               "[C]: in function 'error'",
-               "build.tl:3: in function <build.tl:2>\n",
-            }, "\n\t")
+               "\t[C]: in function 'error'",
+               "\tbuild.tl:3: in function <build.tl:2>\n",
+            },
          })
       end)
    end)
@@ -190,6 +236,7 @@ describe("build script", function()
             ["other_name.tl"] = [[
                return {}
             ]],
+            generated_code = {},
          },
          cmd = "build",
          generated_files = {},
@@ -215,7 +262,6 @@ describe("build script", function()
          args = { "foo.tl" },
          cmd_output = "build.tl did not run\n"
       })
-
    end)
 
    pending("Should run when running something else than build and --run-build-script is passed", function()
@@ -226,7 +272,7 @@ describe("build script", function()
                build_file_output_dir = "generated_code",
                internal_compiler_output = "this_other_folder_to_store_cached_items"
             }]],
-            ["foo.tl"] = [[local x =require("generated_code/generated") print(x)]],
+            ["foo.tl"] = [[local x = require("generated_code/generated") print(x)]],
             ["build.tl"] = [[
                return {
                   gen_code = function(path:string)
@@ -263,10 +309,12 @@ describe("build script", function()
             }
          ]],
          ["src"] = { ["foo.tl"] = [[]] },
-         ["build"] = {},
+         ["build"] = {
+            generated_code = {}
+         },
       }), function()
          assert.are.same("Gen Code\nWrote: build/foo.lua\n", runcmd(build_cmd))
-         assert.match("All files up to date\n", runcmd(build_cmd))
+         assert.are.same("All files up to date\n", runcmd(build_cmd))
          lfs.touch("src/foo.tl", os.time() + 5)
          assert.are.same("Gen Code\nWrote: build/foo.lua\n", runcmd(build_cmd))
       end)
