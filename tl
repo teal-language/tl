@@ -610,16 +610,6 @@ local function get_config()
       assert(lfs.chdir(config_path))
    end
 
-   if not config.build_file then
-      if lfs.attributes("./build.tl", "mode") == "file" then
-         config.build_file = "./build.tl"
-      end
-   else
-      if lfs.attributes(config.build_file, "mode") ~= "file" then
-         die("The configured build script is not a file")
-      end
-   end
-
    err = validate_config(config)
 
    if err then
@@ -635,8 +625,6 @@ local tlconfig = get_config()
 -- Warnings
 --------------------------------------------------------------------
 
-local disabled_warnings = {}
-local warning_errors = {}
 do
    local default_true_mt = { __index = function() return true end }
    local function enable(tab, warning)
@@ -1396,8 +1384,8 @@ table.sort(nodes_to_process, function(a, b)
    return #b.dependents < #a.dependents
 end)
 
-env = setup_env()
-for _, node in ipairs(nodes_to_process) do
+local env = setup_env()
+for i, node in ipairs(nodes_to_process) do
    local input, output = node.input, node.output
    local ast = parse_file(input)
 
