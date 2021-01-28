@@ -100,6 +100,7 @@ local function logger(stream)
    return function(...)
       stream:write(...)
       stream:write("\n")
+      stream:flush()
    end
 end
 
@@ -201,7 +202,7 @@ local function get_shared_library_ext()
    return package.cpath:match("%.(%w+)%s*$")
 end
 
-local function prepend_to_path(directory)
+local function prepend_to_lua_path(directory)
    local path_str = directory
 
    if string.sub(path_str, -1) == path_separator then
@@ -292,6 +293,9 @@ local function is_in_dir(dirname, fname)
 end
 
 local function extension_split(path, ndots)
+   if not path then
+      return path
+   end
    for n = ndots or 1, 1, -1 do
       local patt = "^(.-)(" .. ("%.%a+"):rep(n) .. ")$"
       local base, ext = path:match(patt)
@@ -318,16 +322,42 @@ end
 local function pcall_or_die(fn, prefix)
    prefix = prefix or ""
 
-   local ok, res = xpcall(fn, debug.traceback)
+   local co = coroutine.create(fn)
+   local ok, res = coroutine.resume(co)
    if not ok then
-      local s, e = res:find(self_path(), 1, true)
-      if s then
-         res = trim(res:sub(1, s-1))
+      local lines = {}
+      for ln in str_split(debug.traceback(co), "\n") do
+         table.insert(lines, ln)
       end
-      die(prefix, res)
+      for i = #lines, 1, -1 do
+         if lines[i]:find(self_path(), 2) then
+            lines[i] = nil
+         else
+            break
+         end
+      end
+      die(prefix, res, "\n", table.concat(lines, "\n"))
    end
 
    return res
+end
+
+---@param val: any the value to be type checked
+---@param expected: string the type val should be
+---@param prefix: string prepend this to the error message
+---@param get_type: function(any): string a custom type getting function to replace type()
+local function type_check_or_die(val, expected, prefix, get_type)
+   local got = (get_type or type)(val)
+   if got ~= expected then
+      die(prefix, "Expected ", tostring(expected), ", got ", tostring(got))
+   end
+end
+
+local function nil_type_check_or_die(val, expected, prefix, get_type)
+   if val == nil then
+      return
+   end
+   type_check_or_die(val, expected, prefix, get_type)
 end
 
 ---@param val: any the value to be type checked
@@ -373,8 +403,6 @@ local function validate_config(config)
       warning_error = "{string}",
       build_file = "string",
       build_file_output_dir = "string",
-      internal_compiler_output = "string",
-      run_build_script = "boolean"
    }
 
    for k, v in pairs(config) do
@@ -489,7 +517,7 @@ parser:flag("--version", "Print version and exit")
 parser:flag("-q --quiet", "Do not print information messages to stdout. Errors may still be printed to stderr.")
 
 parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
-parser:flag("--run-build-script", "Run the build script if needed, even when not running the build comamnd.")
+-- parser:flag("--run-build-script", "Run the build script if needed, even when not running the build comamnd.")
 
 parser:require_command(false)
 parser:command_target("command")
@@ -564,14 +592,14 @@ local function get_config()
    end
 
    if conf then
-      local ok, user_config = pcall(conf)
+      local ok, res = pcall(conf)
       if not ok then
-         die("Error loading config:", err)
+         die("Error loading config: ", res)
       end
 
       -- Merge tlconfig with the default config
-      if user_config then
-         for k, v in pairs(user_config) do
+      if res then
+         for k, v in pairs(res) do
             config[k] = v
          end
       end
@@ -670,12 +698,11 @@ tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
 tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]
                                             or (tlconfig["skip_compat53"] and "off")
 if cmd == "gen" and args["output"] and #args["file"] ~= 1 then
-   log.err("Error: --output can only be used to map one input to one output")
-   os.exit(1)
+   die("--output can only be used to map one input to one output")
 end
 
 for _, include in ipairs(tlconfig["include_dir"]) do
-   prepend_to_path(include)
+   prepend_to_lua_path(include)
 end
 
 --------------------------------------------------------------------
@@ -832,34 +859,40 @@ local function cleanup_generated_files()
    end
 end
 
-local modules = tlconfig.preload_modules
-
 --------------------------------------------------------------------
 -- Environment
 --------------------------------------------------------------------
 
-local env
 local exit = 0
 
 local function setup_env(filename)
-   if not env then
-      local _, extension = extension_split(filename)
+   local _, extension = extension_split(filename)
 
-      local lax_mode
-      if extension == "tl" then
-         lax_mode = false
-      elseif extension == "lua" then
-         lax_mode = true
-      else
-         -- if we can't decide based on the file extension, default to strict mode
-         lax_mode = false
-      end
-
-      local gen_compat = tlconfig["gen_compat"]
-      local gen_target = tlconfig["gen_target"]
-
-      env = tl.init_env(lax_mode, gen_compat, gen_target)
+   local lax_mode
+   if extension == "tl" then
+      lax_mode = false
+   elseif extension == "lua" then
+      lax_mode = true
+   else
+      -- if we can't decide based on the file extension, default to strict mode
+      lax_mode = false
    end
+
+   local gen_compat = tlconfig["gen_compat"]
+   local gen_target = tlconfig["gen_target"]
+
+   local env = tl.init_env(lax_mode, gen_compat, gen_target)
+
+   if tlconfig.preload_modules then
+      for _, mod in ipairs(tlconfig.preload_modules) do
+         local modtype = tl.require_module(mod, lax_mode, env)
+         if not modtype or modtype.typename == "unknown" then
+            die("Unable to preload module '", mod, "'")
+         end
+      end
+   end
+
+   return env
 end
 
 local function get_output_filename(file_name)
@@ -876,14 +909,11 @@ local function get_output_filename(file_name)
    end
 end
 
-local function type_check_file(file_name)
-   setup_env(file_name)
-
-   local result, err = tl.process(file_name, env, nil, modules)
+local function type_check_file(file_name, env)
+   local result, err = tl.process(file_name, env)
    if err then
       die(err)
    end
-   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
@@ -898,26 +928,22 @@ local function type_check_file(file_name)
    if exit == 0 and #args["file"] == 1 then
       local output_file = get_output_filename(file_name)
       log("========================================")
-      log("Type checked " .. file_name)
-      log("0 errors detected -- you can use:")
-      log()
-      log("   tl run " .. file_name)
-      log()
-      log("       to run " .. file_name .. " as a program")
-      log()
-      log("   tl gen " .. file_name)
-      log()
-      log("       to generate " .. output_file)
+      log("Type checked ", file_name)
+      log("0 errors detected -- you can use:\n")
+      log("   tl run ", file_name, "\n")
+      log("       to run ", file_name, " as a program\n")
+      log("   tl gen ", file_name, "\n")
+      log("       to generate", output_file)
    end
    return result
 end
 
-local function type_check_and_load(filename, modules)
-   local result, err = tl.process(filename, env, nil, modules)
+local function type_check_and_load(filename, env)
+   env = env or setup_env(filename)
+   local result, err = tl.process(filename, env)
    if err then
       die(err)
    end
-   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
@@ -942,8 +968,8 @@ end
 --------------------------------------------------------------------
 
 if cmd == "run" then
-   setup_env(args["script"][1])
-   local chunk = type_check_and_load(args["script"][1], modules)
+   local env = setup_env(args["script"][1])
+   local chunk = type_check_and_load(args["script"][1], env)
 
    -- collect all non-arguments including negative arg values
    local neg_arg = {}
@@ -989,8 +1015,9 @@ end
 
 if cmd == "check" then
    turbo(true)
+   local env = setup_env(args["file"][1])
    for i, input_file in ipairs(args["file"]) do
-      type_check_file(input_file)
+      type_check_file(input_file, env)
       if i > 1 then
          collectgarbage()
       end
@@ -1121,13 +1148,13 @@ if cmd == "gen" then
    local results = {}
    local err
    for i, input_file in ipairs(args["file"]) do
-      setup_env(input_file)
+      local env = setup_env(input_file)
       local res = {
          input_file = input_file,
          output_file = get_output_filename(input_file)
       }
 
-      res.tl_result, err = tl.process(input_file, env, nil, modules)
+      res.tl_result, err = tl.process(input_file, env)
       if err then
          die(err)
       end
@@ -1155,20 +1182,26 @@ if cmd == "gen" then
    os.exit(exit)
 end
 
-
 --------------------------------------------------------------------
 -- Build
 --------------------------------------------------------------------
 
-
 -- load build script (if neccesary)
-local build_script
+local build_script = {}
 if is_file(tlconfig.build_file) then
    local chunk = type_check_and_load(tlconfig.build_file)
    build_script = pcall_or_die(chunk, "Error in build script: ")
 end
 
-if build_script and build_script.gen_code then
+-- validate build script
+for _, key_type in ipairs{
+   {"gen_code", "function"},
+   {"after", "function"},
+} do
+   nil_type_check_or_die(build_script[key_type[1]], key_type[2], ("Type error in build script %s: "):format(key_type[1]))
+end
+
+if build_script.gen_code then
    pcall_or_die(function()
       build_script.gen_code(tlconfig.build_file_output_dir)
    end, "Error in gen_code: ")
@@ -1363,12 +1396,15 @@ table.sort(nodes_to_process, function(a, b)
    return #b.dependents < #a.dependents
 end)
 
+env = setup_env()
 for _, node in ipairs(nodes_to_process) do
    local input, output = node.input, node.output
    local ast = parse_file(input)
 
-   -- TODO: fill in the actual options here
-   local type_errors = tl.type_check(ast, { filename = input })
+   local type_errors = tl.type_check(ast, {
+      filename = input,
+      env = env,
+   })
    if report_errors("type error", type_errors) then
       exit = 1
    else
@@ -1380,8 +1416,8 @@ for _, node in ipairs(nodes_to_process) do
    end
 end
 
-if build_script and build_script.after then
-   pcall_or_die(build_script.after)
+if exit == 0 and build_script.after then
+   pcall_or_die(build_script.after, "Error in after: ")
 end
 
 os.exit(exit)

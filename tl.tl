@@ -4255,12 +4255,13 @@ local function fill_field_order(t: Type)
    end
 end
 
-local function require_module(module_name: string, lax: boolean, env: Env, result: Result): Type, boolean
+function tl.require_module(module_name: string, lax: boolean, env: Env, result: Result): Type, boolean
+   env = env or tl.init_env(lax)
    local modules = env.modules
    local loaded = env.loaded
 
    if modules[module_name] then
-      if not result.dependencies[module_name] then
+      if result and not result.dependencies[module_name] then
          -- TODO: should we store a map of module names to file names in Env to get rid of this redundant search?
          local found, fd = tl.search_module(module_name, true)
          if found then
@@ -4284,7 +4285,9 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
 
       loaded[found] = found_result
       modules[module_name] = found_result.type
-      result.dependencies[module_name] = found
+      if result then
+         result.dependencies[module_name] = found
+      end
 
       return found_result.type, true
    end
@@ -4952,7 +4955,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local warnings: {Error} = result.warnings or {}
    local errors: {Error} = result.type_errors or {}
    local unknowns: {Error} = result.unknowns or {}
-   -- local dependencies: {string:string} = result.dependencies or {}
    local module_type: Type
 
    local function find_var(name: string, raw: boolean): Variable
@@ -7122,7 +7124,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if #b == 1 then
             if node.e2[1].kind == "string" then
                local module_name = assert(node.e2[1].conststr)
-               local t, found = require_module(module_name, lax, env, result)
+               local t, found = tl.require_module(module_name, lax, env, result)
                if not found then
                   node_error(node, "module not found: '" .. module_name .. "'")
                elseif not lax and is_unknown(t) then
@@ -8656,7 +8658,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, result: Res
 
    -- Preload modules
    for _, name in ipairs(preload_modules) do
-      local module_type = require_module(name, is_lua, env, result)
+      local module_type = tl.require_module(name, is_lua, env, result)
 
       if module_type == UNKNOWN then
          return nil, string.format("Error: could not preload module '%s'", name)
