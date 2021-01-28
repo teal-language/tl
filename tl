@@ -242,11 +242,11 @@ local function mode(path)
 end
 
 local function is_file(path)
-   return mode(path) == "file"
+   return path and mode(path) == "file"
 end
 
 local function is_dir(path)
-   return mode(path) == "directory"
+   return path and mode(path) == "directory"
 end
 
 -- remove trailing and extra path separators, substitute './' for 'current_dir/'
@@ -312,11 +312,51 @@ local function remove_leading_path(leading_part, path)
 end
 
 --------------------------------------------------------------------
+-- Runtime type checking/error handling
+--------------------------------------------------------------------
+
+local function pcall_or_die(fn, prefix)
+   prefix = prefix or ""
+
+   local ok, res = xpcall(fn, debug.traceback)
+   if not ok then
+      local s, e = res:find(self_path(), 1, true)
+      if s then
+         res = trim(res:sub(1, s-1))
+      end
+      die(prefix, res)
+   end
+
+   return res
+end
+
+---@param val: any the value to be type checked
+---@param default: string if the array is empty, treat it as an array of 'default'
+---@return string the type of val, in the case of an array
+--- output will be formatted like {string}
+--- behaves like default type(val) otherwise
+local function get_array_type(val, default)
+   if type(val) ~= "table" then
+      return type(val)
+   end
+   local set = {}
+   for i, v in ipairs(val) do
+      set[type(v)] = true
+   end
+   local ts = keys(set)
+   if #ts == 0 then
+      ts[1] = default
+   end
+   return "{" .. table.concat(ts, "|") .. "}"
+end
+
+--------------------------------------------------------------------
 -- Config Validation
 --------------------------------------------------------------------
 
 -- FIXME
 local function validate_config(config)
+   -- TODO: could we type-check the config file using tl?
    local valid_keys = {
       build_dir = "string",
       exclude = "{string}",
@@ -346,21 +386,9 @@ local function validate_config(config)
                    table.concat(keys(valid_keys[k][v]), ", ")
          end
       else
-         -- TODO: could we type-check the config file using tl?
-         local arr_type = valid_keys[k]:match("{(.*)}")
-         if arr_type then
-            if type(v) ~= "table" then
-               return "Expected " .. k .. " to be a " .. valid_keys[k]
-            end
-            for i, val in ipairs(v) do
-               if type(val) ~= arr_type then
-                  return "Expected " .. k .. "[" .. i .. "] to be a " .. valid_keys[k]
-               end
-            end
-         else
-            if type(v) ~= valid_keys[k] then
-               return "Expected " .. k .. " to be a " .. valid_keys[k]
-            end
+         local vtype = get_array_type(v, valid_keys[k]:match("^{(.*)}$"))
+         if vtype ~= valid_keys[k] then
+            return "Expected " .. k .. " to be a " .. valid_keys[k] .. ", got " .. vtype
          end
       end
    end
@@ -1132,24 +1160,6 @@ end
 -- Build
 --------------------------------------------------------------------
 
-local function pcall_or_die(fn, prefix)
-   -- actually use a coroutine so we can get a traceback that doesn't point to inside this file
-   -- TODO: maybe use xpcall?
-   prefix = prefix or ""
-
-   local co = coroutine.create(fn)
-   local ok, res = coroutine.resume(co)
-   if not ok then
-      local traceback = debug.traceback(co)
-      local s, e = traceback:find(self_path(), 1, true)
-      if s then
-         traceback = trim(traceback:sub(1, s-1))
-      end
-      die(prefix, traceback)
-   end
-
-   return res
-end
 
 -- load build script (if neccesary)
 local build_script
@@ -1158,7 +1168,7 @@ if is_file(tlconfig.build_file) then
    build_script = pcall_or_die(chunk, "Error in build script: ")
 end
 
-if build_script then
+if build_script and build_script.gen_code then
    pcall_or_die(function()
       build_script.gen_code(tlconfig.build_file_output_dir)
    end, "Error in gen_code: ")
@@ -1370,4 +1380,9 @@ for _, node in ipairs(nodes_to_process) do
    end
 end
 
+if build_script and build_script.after then
+   pcall_or_die(build_script.after)
+end
+
 os.exit(exit)
+
