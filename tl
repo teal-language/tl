@@ -330,7 +330,7 @@ local function pcall_or_die(fn, prefix)
          table.insert(lines, ln)
       end
       for i = #lines, 1, -1 do
-         if lines[i]:find(self_path(), 2) then
+         if lines[i]:find(self_path(), 2, true) then
             lines[i] = nil
          else
             break
@@ -1288,7 +1288,11 @@ local record Node
    input: string
    output: string
    modules: {string:string}
-   marked: boolean
+   enum Mark
+      "typecheck"
+      "compile"
+   end
+   mark: number
    dependents: {Node}
 end
 dag: {string:Node}
@@ -1312,7 +1316,7 @@ for input, output in pairs(files) do
          output = output,
          modules = modules,
          dependents = {},
-         marked = false,
+         mark = nil
       }
    end
 end
@@ -1326,11 +1330,19 @@ for file, node in pairs(dag) do
    end
 end
 
-local function mark_for_update(node)
-   if node.marked then return end -- if a node is marked so are its children
-   node.marked = true
+local function mark_for_typecheck(node)
+   if node.mark ~= "compile" then
+      node.mark = "typecheck"
+      for _, dep in ipairs(node.dependents) do
+         mark_for_typecheck(dep)
+      end
+   end
+end
+
+local function mark_for_recompile(node)
+   node.mark = "compile"
    for _, dep in ipairs(node.dependents) do
-      mark_for_update(dep)
+      mark_for_typecheck(dep)
    end
 end
 
@@ -1345,13 +1357,13 @@ end
 
 for file, node in pairs(dag) do
    if args["update_all"] or should_update(file, node.output) then
-      mark_for_update(node)
+      mark_for_recompile(node)
    end
 end
 
 local nodes_to_process = {}
 for file, node in pairs(dag) do
-   if node.marked then
+   if node.mark then
       table.insert(nodes_to_process, node)
    end
 end
@@ -1374,6 +1386,7 @@ if build_script.gen_code then
          input = file,
          output = get_build_output_name(file),
          dependents = {},
+         mark = "compile",
       })
    end
 end
@@ -1393,7 +1406,7 @@ for i, node in ipairs(nodes_to_process) do
    })
    if report_errors("type error", type_errors) then
       exit = 1
-   else
+   elseif node.mark == "compile" then
       local code = tl.pretty_print_ast(ast)
       write_out(code, output)
    end
