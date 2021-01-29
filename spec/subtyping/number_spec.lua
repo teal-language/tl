@@ -49,7 +49,7 @@ describe("subtyping of number:", function()
    }))
 
    it("number <╱: thread", util.check_type_error([[
-      local c = coroutine.create()
+      local c = coroutine.create(function() end)
       c = 1.5
    ]], {
       { msg = "got number, expected thread" }
