@@ -79,6 +79,62 @@ describe("flow analysis with ==", function()
          { msg = "cannot index something that is not a record: number | string" }
       }))
 
+      it("propagates string constants for use as enums", util.check [[
+         local enum Direction
+            "north"
+            "south"
+            "east"
+            "west"
+         end
+
+         local function f(d: Direction)
+            print(d)
+         end
+
+         local s: string
+         if s == "north" then
+            f(s)
+         end
+      ]])
+
+      it("combines string constants for use as enums", util.check [[
+         local enum Direction
+            "north"
+            "south"
+            "east"
+            "west"
+         end
+
+         local function f(d: Direction)
+            print(d)
+         end
+
+         local s: string
+         if s == "north" or s == "south" then
+            f(s)
+         end
+      ]])
+
+      it("does not combine if not valid as enums", util.check_type_error([[
+         local enum Direction
+            "north"
+            "south"
+            "east"
+            "west"
+         end
+
+         local function f(d: Direction)
+            print(d)
+         end
+
+         local s: string
+         if s == "north" or s == "bad" then
+            f(s)
+         end
+      ]], {
+         { msg = [[argument 1: got string "north" | string "bad" (inferred at foo.tl:13:26), expected Direction]] }
+      }))
+
       it("works for type arguments", util.check [[
          local function test<T>(t: T)
             if t == 9 then
