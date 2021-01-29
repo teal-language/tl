@@ -5292,7 +5292,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return true
    end
 
-   local function unite(types: {Type}): Type
+   local function unite(types: {Type}, flatten_constants: boolean): Type
       if #types == 1 then
          return types[1]
       end
@@ -5300,7 +5300,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       local ts: {Type} = {}
       local stack: {Type} = {}
 
-      -- Make things like string | string resolve to string
+      -- Make things like number | number resolve to number
       local types_seen: {(number|string):boolean} = {}
       -- but never add nil as a type in the union
       types_seen[NIL.typeid] = true
@@ -5321,7 +5321,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                table.insert(stack, s)
             end
          else
-            if primitive[t.typename] then
+            if primitive[t.typename] and (flatten_constants or not t.tk) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
                   table.insert(ts, t)
@@ -7591,6 +7591,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
                a = ua
+               if a.typename == "union" then
+                  a = unite(a.types, true) -- squash unions of string constants
+               end
+
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
                local metamethod: Type
@@ -7622,6 +7626,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
                a = ua
                b = ub
+
+               if a.typename == "union" then
+                  a = unite(a.types, true) -- squash unions of string constants
+               end
+               if b.typename == "union" then
+                  b = unite(b.types, true) -- squash unions of string constants
+               end
+
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local metamethod: Type

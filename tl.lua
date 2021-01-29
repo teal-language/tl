@@ -5292,7 +5292,7 @@ tl.type_check = function(ast, opts)
       return true
    end
 
-   local function unite(types)
+   local function unite(types, flatten_constants)
       if #types == 1 then
          return types[1]
       end
@@ -5321,7 +5321,7 @@ tl.type_check = function(ast, opts)
                table.insert(stack, s)
             end
          else
-            if primitive[t.typename] then
+            if primitive[t.typename] and (flatten_constants or not t.tk) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
                   table.insert(ts, t)
@@ -7591,6 +7591,10 @@ tl.type_check = function(ast, opts)
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
                a = ua
+               if a.typename == "union" then
+                  a = unite(a.types, true)
+               end
+
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
                local metamethod
@@ -7622,6 +7626,14 @@ tl.type_check = function(ast, opts)
 
                a = ua
                b = ub
+
+               if a.typename == "union" then
+                  a = unite(a.types, true)
+               end
+               if b.typename == "union" then
+                  b = unite(b.types, true)
+               end
+
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local metamethod
