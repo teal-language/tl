@@ -4820,6 +4820,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local function shallow_copy(t: Type): Type
+      local copy = {}
+      for k, v in pairs(t as {any:any}) do
+         copy[k] = v
+      end
+      return copy as Type
+   end
+
    local no_nested_types: {string:boolean} = {
       ["string"] = true,
       ["number"] = true,
@@ -4835,7 +4843,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    do
       local function resolve(t: Type, seen?: {Type:Type}, where?: Type): Type
          -- avoid copies of types that do not contain type variables
-         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
+         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals and not t.opt) then
             return t
          end
 
@@ -4853,8 +4861,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif t.typename == "string" then
                -- tk is not propagated
                rt = STRING
-            elseif no_nested_types[t.typename]
-                   or (t.typename == "nominal" and not t.typevals) then
+            elseif (no_nested_types[t.typename]
+                   or (t.typename == "nominal" and not t.typevals))
+                   and not orig_t.opt then
                rt = t
             end
             if rt then
@@ -4865,6 +4874,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
          local copy: Type = {}
          seen[orig_t] = copy
+
+         copy.opt = orig_t.opt
 
          copy.typename = t.typename
          copy.filename = t.filename
@@ -4888,7 +4899,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          elseif is_typetype(t) then
             copy.def = resolve(t.def, seen, where)
          elseif t.typename == "nominal" then
-            copy.typevals = resolve(t.typevals, seen, where)
+            if t.typevals then
+               copy.typevals = resolve(t.typevals, seen, where)
+            end
          elseif t.typename == "function" then
             if t.typeargs then
                copy.typeargs = {}
@@ -5723,14 +5736,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
 
       return false, terr(t1, "got %s, expected %s", t1, t2)
-   end
-
-   local function shallow_copy(t: Type): Type
-      local copy = {}
-      for k, v in pairs(t as {any:any}) do
-         copy[k] = v
-      end
-      return copy as Type
    end
 
    local function assert_is_a(node: Node, t1: Type, t2: Type, context: string, name?: string)

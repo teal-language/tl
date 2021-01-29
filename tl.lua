@@ -4820,6 +4820,14 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function shallow_copy(t)
+      local copy = {}
+      for k, v in pairs(t) do
+         copy[k] = v
+      end
+      return copy
+   end
+
    local no_nested_types = {
       ["string"] = true,
       ["number"] = true,
@@ -4835,7 +4843,7 @@ tl.type_check = function(ast, opts)
    do
       local function resolve(t, seen, where)
 
-         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
+         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals and not t.opt) then
             return t
          end
 
@@ -4853,8 +4861,9 @@ tl.type_check = function(ast, opts)
             elseif t.typename == "string" then
 
                rt = STRING
-            elseif no_nested_types[t.typename] or
-               (t.typename == "nominal" and not t.typevals) then
+            elseif (no_nested_types[t.typename] or
+               (t.typename == "nominal" and not t.typevals)) and
+               not orig_t.opt then
                rt = t
             end
             if rt then
@@ -4865,6 +4874,8 @@ tl.type_check = function(ast, opts)
 
          local copy = {}
          seen[orig_t] = copy
+
+         copy.opt = orig_t.opt
 
          copy.typename = t.typename
          copy.filename = t.filename
@@ -4888,7 +4899,9 @@ tl.type_check = function(ast, opts)
          elseif is_typetype(t) then
             copy.def = resolve(t.def, seen, where)
          elseif t.typename == "nominal" then
-            copy.typevals = resolve(t.typevals, seen, where)
+            if t.typevals then
+               copy.typevals = resolve(t.typevals, seen, where)
+            end
          elseif t.typename == "function" then
             if t.typeargs then
                copy.typeargs = {}
@@ -5723,14 +5736,6 @@ tl.type_check = function(ast, opts)
       end
 
       return false, terr(t1, "got %s, expected %s", t1, t2)
-   end
-
-   local function shallow_copy(t)
-      local copy = {}
-      for k, v in pairs(t) do
-         copy[k] = v
-      end
-      return copy
    end
 
    local function assert_is_a(node, t1, t2, context, name)
