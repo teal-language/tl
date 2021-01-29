@@ -5324,6 +5324,13 @@ tl.type_check = function(ast, opts)
          local all_errs = {}
          for i = 1, #t1.args do
             arg_check(same_type, t1.args[i], t2.args[i], t1, i, all_errs)
+            local t1opt = not not t1.args[i].opt
+            local t2opt = not not t2.args[i].opt
+            if t1opt ~= t2opt then
+               return false, terr(t1, "argument " .. i .. ": got " ..
+               (t1opt and "optional" or "non-optional") .. ", expected " ..
+               (t2opt and "optional" or "non-optional"))
+            end
          end
          for i = 1, #t1.rets do
             local _, errs = same_type(t1.rets[i], t2.rets[i])
