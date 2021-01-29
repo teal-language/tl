@@ -1121,7 +1121,7 @@ local parse_expression: function(ParseState, number): number, Node, number
 local parse_statements: function(ParseState, number, ? string, ? boolean): number, Node
 local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
-local parse_type: function(ParseState, number): number, Type, number
+local parse_type: function(ParseState, number): number, Type, nil
 local parse_newtype: function(ps: ParseState, i: number): number, Node
 local parse_enum_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
 local parse_record_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
@@ -1210,7 +1210,9 @@ local function parse_table_value(ps: ParseState, i: number): number, Node, numbe
    return parse_expression(ps, i)
 end
 
-local function parse_table_item(ps: ParseState, i: number, n: number): number, Node, number
+local function parse_table_item(ps: ParseState, i: number, n?: number): number, Node, number
+   n = n or 1
+
    local node = new_node(ps.tokens, i, "table_item")
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
@@ -1271,15 +1273,15 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    return i, node, n + 1
 end
 
-local type ParseItem = function<T>(ParseState, number, ? number): number, T, number
+local type ParseItem = function<T,S>(ParseState, number, ? S): number, T, S
 
 local enum SeparatorMode
    "sep"
    "term"
 end
 
-local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
-   local n = 1
+local function parse_list<T,S>(ps: ParseState, i: number, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T,S>): number, {T}
+   local n: S
    while ps.tokens[i].kind ~= "$EOF$" do
       if close[ps.tokens[i].tk] then
          (list as Node).yend = ps.tokens[i].y
@@ -1320,7 +1322,7 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
    return i, list
 end
 
-local function parse_bracket_list<T>(ps: ParseState, i: number, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
+local function parse_bracket_list<T,S>(ps: ParseState, i: number, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T,S>): number, {T}
    i = verify_tk(ps, i, open)
    i = parse_list(ps, i, list, { [close] = true }, sep, parse_item)
    i = verify_tk(ps, i, close)
@@ -1332,13 +1334,13 @@ local function parse_table_literal(ps: ParseState, i: number): number, Node
    return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_item: ParseItem<T>): number, {T}
+local function parse_trying_list<T,S>(ps: ParseState, i: number, list: {T}, parse_item: ParseItem<T,S>): number, {T}
    local try_ps: ParseState = {
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
    }
-   local tryi, item = parse_item(try_ps, i)
+   local tryi, item, n = parse_item(try_ps, i)
    if not item then
       return i, list
    end
@@ -1350,14 +1352,16 @@ local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_
    if ps.tokens[i].tk == "," then
       while ps.tokens[i].tk == "," do
          i = i + 1
-         i, item = parse_item(ps, i)
+         local oldn = n
+         i, item = parse_item(ps, i, n)
+         n = n or oldn
          table.insert(list, item)
       end
    end
    return i, list
 end
 
-local function parse_typearg_type(ps: ParseState, i: number): number, Type, number
+local function parse_typearg_type(ps: ParseState, i: number): number, Type, nil
    local backtick = false
    if ps.tokens[i].tk == "`" then
       i = verify_tk(ps, i, "`")
@@ -1372,7 +1376,7 @@ local function parse_typearg_type(ps: ParseState, i: number): number, Type, numb
    }
 end
 
-local function parse_typevar_type(ps: ParseState, i: number): number, Type, number
+local function parse_typevar_type(ps: ParseState, i: number): number, Type
    i = verify_tk(ps, i, "`")
    i = verify_kind(ps, i, "identifier")
    return i, a_type {
@@ -1415,7 +1419,7 @@ local function parse_function_type(ps: ParseState, i: number): number, Type
    return i, typ
 end
 
-local function parse_base_type(ps: ParseState, i: number): number, Type, number
+local function parse_base_type(ps: ParseState, i: number): number, Type
    if ps.tokens[i].tk == "string"
       or ps.tokens[i].tk == "boolean"
       or ps.tokens[i].tk == "nil"
@@ -1487,7 +1491,7 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
    return fail(ps, i, "expected a type")
 end
 
-parse_type = function(ps: ParseState, i: number): number, Type, number
+parse_type = function(ps: ParseState, i: number): number, Type, nil
    if ps.tokens[i].tk == "(" then
       i = i + 1
       local t: Type
@@ -1920,7 +1924,7 @@ parse_argument_list = function(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_argument_type(ps: ParseState, i: number): number, Type, number
+local function parse_argument_type(ps: ParseState, i: number): number, Type, nil
    local is_va = false
    local opt = false
    if ps.tokens[i].kind == "identifier" then
@@ -1951,7 +1955,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
       typ.is_va = is_va
    end
 
-   return i, typ, 0
+   return i, typ
 end
 
 parse_argument_type_list = function(ps: ParseState, i: number): number, Type
@@ -6462,7 +6466,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local apply_facts: function(where: Node, known: Fact)
    do
       setmetatable(Fact, {
-         __call = function(_: Fact, f: Fact): Fact
+         __call = function(_: Fact, f?: Fact): Fact -- FIXME ARITY
             return setmetatable(f, {
                __tostring = function(f: Fact): string
                   if f.fact == "is" then

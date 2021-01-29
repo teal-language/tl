@@ -1211,6 +1211,8 @@ local function parse_table_value(ps, i)
 end
 
 local function parse_table_item(ps, i, n)
+   n = n or 1
+
    local node = new_node(ps.tokens, i, "table_item")
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
@@ -1279,7 +1281,7 @@ local SeparatorMode = {}
 
 
 local function parse_list(ps, i, list, close, sep, parse_item)
-   local n = 1
+   local n
    while ps.tokens[i].kind ~= "$EOF$" do
       if close[ps.tokens[i].tk] then
          (list).yend = ps.tokens[i].y
@@ -1338,7 +1340,7 @@ local function parse_trying_list(ps, i, list, parse_item)
       tokens = ps.tokens,
       errs = {},
    }
-   local tryi, item = parse_item(try_ps, i)
+   local tryi, item, n = parse_item(try_ps, i)
    if not item then
       return i, list
    end
@@ -1350,7 +1352,9 @@ local function parse_trying_list(ps, i, list, parse_item)
    if ps.tokens[i].tk == "," then
       while ps.tokens[i].tk == "," do
          i = i + 1
-         i, item = parse_item(ps, i)
+         local oldn = n
+         i, item = parse_item(ps, i, n)
+         n = n or oldn
          table.insert(list, item)
       end
    end
@@ -1951,7 +1955,7 @@ local function parse_argument_type(ps, i)
       typ.is_va = is_va
    end
 
-   return i, typ, 0
+   return i, typ
 end
 
 parse_argument_type_list = function(ps, i)
