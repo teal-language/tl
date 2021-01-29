@@ -47,7 +47,7 @@ describe("subtyping of integer:", function()
    }))
 
    it("integer <╱: thread", util.check_type_error([[
-      local c = coroutine.create()
+      local c = coroutine.create(function() end)
       c = 42
    ]], {
       { msg = "got integer, expected thread" }
