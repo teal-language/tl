@@ -17,7 +17,7 @@ describe("record method call", function()
    ]]))
 
    it("method call with different call forms", util.check([[
-      local foo = {bar = function(x: any, t: any) end}
+      local foo = {bar = function(x: any, t?: any) end}
       print(foo:bar())
       print(foo:bar{})
       print(foo:bar"hello")
@@ -126,7 +126,7 @@ describe("record method call", function()
          { y = 6, msg = "invoked method as a regular function: use ':' instead of '.'" },
          { y = 7, msg = "invoked method as a regular function: use ':' instead of '.'" },
       }))
-   
+
    end)
 
    describe("reports potentially wrong use of self. in call", function()
@@ -187,7 +187,7 @@ describe("record method call", function()
 
    end)
 
-   describe("accepts use of dot call", function() 
+   describe("accepts use of dot call", function()
       it("for method on record typetype", util.check_warnings([[
          local record Foo
             x: integer
@@ -243,13 +243,13 @@ describe("record method call", function()
             hadd = first.add
          }
          tab.hadd(first)
-   
+
       ]], {}, {}))
-   
+
    end)
 
    describe("reports correct errors", function()
-   
+
       it("for calls on aliases of method", util.check_type_error([[
          local record Foo
             x: integer
@@ -268,7 +268,7 @@ describe("record method call", function()
          tab.hadd(14)
 
       ]],
-      { 
+      {
          { y = 9, msg = "argument 1: got integer, expected Foo" },
          { y = 11, msg = "argument 1: got integer, expected Foo" },
          { y = 15, msg = "argument 1: got integer, expected Foo" },
@@ -284,7 +284,7 @@ describe("record method call", function()
          local first: Foo = {}
          first.add(first)
       ]],
-      { 
+      {
          { y = 8, msg = "argument 1: Foo is not a Bar" },
       }))
 
@@ -296,10 +296,10 @@ describe("record method call", function()
          local first: Foo<string> = {}
          first.add(first)
       ]],
-      { 
+      {
          { y = 6, msg = "argument 1: type parameter <integer>: got string, expected integer" },
       }))
-   
+
    end)
 
 end)
