@@ -5454,6 +5454,36 @@ tl.type_check = function(ast, opts)
       return arr_type
    end
 
+   local function set_min_arity(t)
+      local min_arity = 0
+      for i, arg in ipairs(t.args) do
+         if not arg.opt then
+            min_arity = i
+         end
+      end
+      if t.args.is_va then
+         min_arity = min_arity - 1
+      end
+      t.min_arity = min_arity
+      return min_arity
+   end
+
+   local function function_args_arity_message(f, given)
+      local arity = #f.args
+      local min_arity = f.min_arity or set_min_arity(f)
+      if f.is_va then
+         return "at least " .. min_arity
+      elseif min_arity < arity then
+         if given > arity then
+            return "at most " .. arity
+         else
+            return "from " .. min_arity .. " to " .. arity
+         end
+      else
+         return tostring(arity)
+      end
+   end
+
 
    is_a = function(t1, t2, for_equality)
       assert(type(t1) == "table")
@@ -5706,13 +5736,27 @@ tl.type_check = function(ast, opts)
          end
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
-         if (not t2.args.is_va) and #t1.args > #t2.args then
+         local t1_min_arity = t1.min_arity or set_min_arity(t1)
+         local t2_min_arity = t1.min_arity or set_min_arity(t2)
+
+         if (not t2.args.is_va) and t1_min_arity > t2_min_arity then
             t1.args.typename = "tuple"
             t2.args.typename = "tuple"
-            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
+            local expected = function_args_arity_message(t2, #t1.args)
+            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. expected .. " %s", t1.args, t2.args))
          else
-            for i = (t1.is_method and 2 or 1), #t1.args do
-               arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
+            local t1nargs = #t1.args
+            local t2nargs = #t2.args
+            for i = (t1.is_method and 2 or 1), t1nargs do
+               local t1a = t1.args[i]
+               local t2a = t2.args[i] or (t2.args.is_va and t2.args[#t2.args])
+               local t1aopt = t1a and (t1a.opt or (t1.args.is_va and i >= t1nargs))
+               local t2aopt = t2a and (t2a.opt or (t2.args.is_va and i >= t2nargs))
+               if not t1aopt and t2aopt then
+                  table.insert(all_errs, error_in_type(t1, "argument " .. i .. " is non-optional, but is optional in expected type %s", t2))
+               else
+                  arg_check(is_a, t1a, t2a, nil, i, all_errs)
+               end
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
@@ -5832,20 +5876,6 @@ tl.type_check = function(ast, opts)
 
    local type_check_function_call
    do
-      local function set_min_arity(t)
-         local min_arity = 0
-         for i, arg in ipairs(t.args) do
-            if not arg.opt then
-               min_arity = i
-            end
-         end
-         if t.args.is_va then
-            min_arity = min_arity - 1
-         end
-         t.min_arity = min_arity
-         return min_arity
-      end
-
       local function try_match_func_args(node, f, args, is_method, argdelta)
          local ok = true
          local errs = {}
@@ -5981,18 +6011,7 @@ tl.type_check = function(ast, opts)
             local expects = {}
             local given = #args
             for _, f in ipairs(poly.types) do
-               local arity = #f.args
-               if f.is_va then
-                  table.insert(expects, "at least " .. f.min_arity)
-               elseif f.min_arity < arity then
-                  if given > arity then
-                     table.insert(expects, "at most " .. arity)
-                  else
-                     table.insert(expects, "from " .. f.min_arity .. " to " .. arity)
-                  end
-               else
-                  table.insert(expects, tostring(arity))
-               end
+               table.insert(expects, function_args_arity_message(f, given))
             end
             table.sort(expects)
             remove_sorted_duplicates(expects)
