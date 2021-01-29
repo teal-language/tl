@@ -554,9 +554,9 @@ local type Tree = record<X>
 end
 
 local t: Tree<number> = {
-   item: 1,
-   { item: 2 },
-   { item: 3, { item: 4 } },
+   item = 1,
+   { item = 2 },
+   { item = 3, { item = 4 } },
 }
 ```
 
