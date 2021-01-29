@@ -13,6 +13,7 @@ local tl_executable = current_dir .. "/tl"
 
 local t_unpack = unpack or table.unpack
 
+util.lua_subversion = tonumber(_VERSION:match("Lua %d.(%d)"))
 util.tl_executable = tl_executable
 
 --------------------------------------------------------------------------------
@@ -331,7 +332,7 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
    assert(type(want2) == "string")
    assert(type(want3) == "number")
 
-   if _VERSION == "Lua 5.3" then
+   if util.lua_subversion == 3 then
       batch_assertions("popen close")
          :add(assert.same, want1, ret1)
          :add(assert.same, want2, ret2)

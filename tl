@@ -780,10 +780,11 @@ do
          if errs then
             return nil, errs
          end
-         local parse_errs = {}
-         parse_cache[fname] = { select(2, tl.parse_program(tks, parse_errs, fname)) }
+         local errs = {}
+         local _, ast, reqs = tl.parse_program(tks, errs, fname)
+         parse_cache[fname] = { ast = ast, reqs = reqs, errs = errs }
       end
-      return parse_cache[fname][1], parse_cache[fname][2]
+      return parse_cache[fname]
    end
 end
 
@@ -1091,10 +1092,11 @@ end
 -- Gen
 --------------------------------------------------------------------
 
-local function write_out(txt, output_file)
+local function write_out(ast, output_file)
    if args["pretend"] then
       log("Would Write: " .. output_file)
    else
+      assert(type(ast) == "table")
       local ofd, ok, err
       ofd, err = io.open(output_file, "w")
 
@@ -1102,7 +1104,7 @@ local function write_out(txt, output_file)
          die("cannot write ", output_file, ": ", err)
       end
 
-      ok, err = ofd:write(txt, "\n")
+      ok, err = ofd:write(tl.pretty_print_ast(ast), "\n")
       if err then
          die("error writing ", output_file, ": ", err)
       end
@@ -1145,7 +1147,7 @@ if cmd == "gen" then
       end
    else
       for i, res in ipairs(results) do
-         write_out(tl.pretty_print_ast(res.tl_result.ast), args["output"] or res.output_file)
+         write_out(res.tl_result.ast, args["output"] or res.output_file)
       end
    end
    os.exit(exit)
@@ -1301,7 +1303,7 @@ dag: {string:Node}
 local dag = {}
 for input, output in pairs(files) do
    if input ~= tlconfig.build_file then
-      local _, require_calls = parse_file(input)
+      local require_calls = parse_file(input).reqs
       local modules = {}
       for _, req in ipairs(require_calls) do
          local mod_name = req.e2[1].conststr
@@ -1398,17 +1400,19 @@ end)
 local env = setup_env()
 for i, node in ipairs(nodes_to_process) do
    local input, output = node.input, node.output
-   local ast = parse_file(input)
-
-   local type_errors = tl.type_check(ast, {
-      filename = input,
-      env = env,
-   })
-   if report_errors("type error", type_errors) then
+   local parsed = parse_file(input)
+   if report_errors("syntax error", parsed.errs) then
       exit = 1
-   elseif node.mark == "compile" then
-      local code = tl.pretty_print_ast(ast)
-      write_out(code, output)
+   else
+      local type_errors = tl.type_check(parsed.ast, {
+         filename = input,
+         env = env,
+      })
+      if report_errors("type error", type_errors) then
+         exit = 1
+      elseif node.mark == "compile" then
+         write_out(parsed.ast, output)
+      end
    end
    if i > 1 then
       collectgarbage()
