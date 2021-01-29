@@ -995,6 +995,7 @@ local FactType = {}
 
 
 
+
 local Fact = {}
 
 
@@ -5011,7 +5012,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function add_var(node, var, valtype, is_const, is_narrowing)
-      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
+      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
       end
       local scope = st[#st]
@@ -6563,6 +6564,8 @@ tl.type_check = function(ast, opts)
                end
                return { [f.var] = sub }
             end
+         elseif f.fact == "==" then
+            return {}
          elseif f.fact == "not" then
             return eval_fact(f.f1)
          elseif f.fact == "and" then
@@ -6636,6 +6639,8 @@ tl.type_check = function(ast, opts)
             else
                return { [f.var] = f.typ }
             end
+         elseif f.fact == "==" then
+            return { [f.var] = f.typ }
          elseif f.fact == "not" then
             return eval_not(f.f1)
          elseif f.fact == "and" then
@@ -7570,14 +7575,19 @@ tl.type_check = function(ast, opts)
                node.known = nil
                node.type = (ua.typename == "enum" and ua or ub)
             elseif node.op.op == "==" or node.op.op == "~=" then
-               if is_a(a, b, true) or is_a(b, a, true) then
-                  node.type = BOOLEAN
-               else
-                  if lax and (is_unknown(a) or is_unknown(b)) then
-                     node.type = UNKNOWN
-                  else
-                     node_error(node, "types are not comparable for equality: %s and %s", a, b)
+               node.type = BOOLEAN
+               if is_a(b, a, true) or a.typename == "typevar" then
+                  if node.op.op == "==" and node.e1.kind == "variable" then
+                     node.known = Fact({ fact = "==", var = node.e1.tk, typ = b, where = node })
                   end
+               elseif is_a(a, b, true) or b.typename == "typevar" then
+                  if node.op.op == "==" and node.e2.kind == "variable" then
+                     node.known = Fact({ fact = "==", var = node.e2.tk, typ = a, where = node })
+                  end
+               elseif lax and (is_unknown(a) or is_unknown(b)) then
+                  node.type = UNKNOWN
+               else
+                  node_error(node, "types are not comparable for equality: %s and %s", a, b)
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
                a = ua
