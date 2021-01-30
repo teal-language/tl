@@ -1163,7 +1163,7 @@ local record ParseState
    errs: {Error}
    filename: string
 
-   require_calls: {Node}
+   required_modules: {string}
 end
 
 local enum ParseTypeListMode
@@ -1249,7 +1249,7 @@ local function failskip(ps: ParseState, i: number, msg: string, skip_fn: SkipFun
    local err_ps: ParseState = {
       tokens = ps.tokens,
       errs = {},
-      require_calls = {},
+      required_modules = {},
    }
    local skip_i = skip_fn(err_ps, starti or i)
    fail(ps, starti or i, msg)
@@ -1310,7 +1310,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
          filename = ps.filename,
          tokens = ps.tokens,
          errs = {},
-         require_calls = ps.require_calls,
+         required_modules = ps.required_modules,
       }
       i, node.key = verify_kind(try_ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
@@ -1410,7 +1410,7 @@ local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      require_calls = ps.require_calls,
+      required_modules = ps.required_modules,
    }
    local tryi, item = parse_item(try_ps, i)
    if not item then
@@ -1717,14 +1717,18 @@ local function parse_literal(ps: ParseState, i: number): number, Node
    return fail(ps, i, "syntax error")
 end
 
-local function node_is_require_call(n: Node): boolean
-   return n.op and n.op.op == "@funcall"
-      and n.e1 and n.e2
+local function node_is_require_call(n: Node): string
+   if n.e1 and n.e2
       and n.e1.kind == "variable"
       and n.e1.tk == "require"
       and n.e2.kind == "expression_list"
       and #n.e2 == 1
       and n.e2[1].kind == "string"
+   then
+      return n.e2[1].conststr
+   else
+      return nil -- table.insert cares about arity
+   end
 end
 
 local an_operator: function(Node, number, string): Operator
@@ -1862,9 +1866,11 @@ do
             end
 
             table.insert(args, argument)
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tkop.tk == "(" then
-            local op: Operator = new_operator(tkop, 2, "@funcall")
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
+
+            table.insert(ps.required_modules, node_is_require_call(e1))
+         elseif ps.tokens[i].tk == "(" then
+            local op: Operator = new_operator(ps.tokens[i], 2, "@funcall")
 
             local prev_i = i
 
@@ -1876,9 +1882,11 @@ do
                return i
             end
 
-            e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tkop.tk == "[" then
-            local op: Operator = new_operator(tkop, 2, "@index")
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
+
+            table.insert(ps.required_modules, node_is_require_call(e1))
+         elseif ps.tokens[i].tk == "[" then
+            local op: Operator = new_operator(ps.tokens[i], 2, "@index")
 
             local prev_i = i
 
@@ -1974,9 +1982,6 @@ do
          i, lhs = E(ps, i, lhs, 0)
       end
       if lhs then
-         if node_is_require_call(lhs) then
-            table.insert(ps.require_calls, lhs)
-         end
          return i, lhs, 0
       end
       -- if cursor moved, a more specific error was already thrown
@@ -2830,19 +2835,19 @@ local function clear_redundant_errors(errors: {Error})
    end
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): number, Node, {Node}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): number, Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens,
       errs = errs,
       filename = filename,
-      require_calls = {},
+      required_modules = {},
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    local i, node = parse_statements(ps, 1, filename, true)
    clear_redundant_errors(errs)
-   return i, node, ps.require_calls
+   return i, node, ps.required_modules
 end
 
 --------------------------------------------------------------------------------
@@ -4262,12 +4267,7 @@ function tl.require_module(module_name: string, lax: boolean, env: Env, result: 
 
    if modules[module_name] then
       if result and not result.dependencies[module_name] then
-         -- TODO: should we store a map of module names to file names in Env to get rid of this redundant search?
-         local found, fd = tl.search_module(module_name, true)
-         if found then
-            fd:close()
-         end
-         result.dependencies[module_name] = found
+         result.dependencies[module_name] = env.modules[module_name].filename
       end
       return modules[module_name], true
    end

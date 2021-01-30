@@ -1249,7 +1249,7 @@ local function failskip(ps, i, msg, skip_fn, starti)
    local err_ps = {
       tokens = ps.tokens,
       errs = {},
-      require_calls = {},
+      required_modules = {},
    }
    local skip_i = skip_fn(err_ps, starti or i)
    fail(ps, starti or i, msg)
@@ -1310,7 +1310,7 @@ local function parse_table_item(ps, i, n)
          filename = ps.filename,
          tokens = ps.tokens,
          errs = {},
-         require_calls = ps.require_calls,
+         required_modules = ps.required_modules,
       }
       i, node.key = verify_kind(try_ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
@@ -1410,7 +1410,7 @@ local function parse_trying_list(ps, i, list, parse_item)
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      require_calls = ps.require_calls,
+      required_modules = ps.required_modules,
    }
    local tryi, item = parse_item(try_ps, i)
    if not item then
@@ -1718,13 +1718,17 @@ local function parse_literal(ps, i)
 end
 
 local function node_is_require_call(n)
-   return n.op and n.op.op == "@funcall" and
-   n.e1 and n.e2 and
-   n.e1.kind == "variable" and
-   n.e1.tk == "require" and
-   n.e2.kind == "expression_list" and
-   #n.e2 == 1 and
-   n.e2[1].kind == "string"
+   if n.e1 and n.e2 and
+      n.e1.kind == "variable" and
+      n.e1.tk == "require" and
+      n.e2.kind == "expression_list" and
+      #n.e2 == 1 and
+      n.e2[1].kind == "string" then
+
+      return n.e2[1].conststr
+   else
+      return nil
+   end
 end
 
 local an_operator
@@ -1862,9 +1866,12 @@ do
             end
 
             table.insert(args, argument)
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tkop.tk == "(" then
-            local op = new_operator(tkop, 2, "@funcall")
+
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
+
+            table.insert(ps.required_modules, node_is_require_call(e1))
+         elseif ps.tokens[i].tk == "(" then
+            local op = new_operator(ps.tokens[i], 2, "@funcall")
 
             local prev_i = i
 
@@ -1876,9 +1883,11 @@ do
                return i
             end
 
-            e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif tkop.tk == "[" then
-            local op = new_operator(tkop, 2, "@index")
+            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
+
+            table.insert(ps.required_modules, node_is_require_call(e1))
+         elseif ps.tokens[i].tk == "[" then
+            local op = new_operator(ps.tokens[i], 2, "@index")
 
             local prev_i = i
 
@@ -1974,9 +1983,6 @@ do
          i, lhs = E(ps, i, lhs, 0)
       end
       if lhs then
-         if node_is_require_call(lhs) then
-            table.insert(ps.require_calls, lhs)
-         end
          return i, lhs, 0
       end
 
@@ -2835,13 +2841,13 @@ function tl.parse_program(tokens, errs, filename)
       tokens = tokens,
       errs = errs,
       filename = filename,
-      require_calls = {},
+      required_modules = {},
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    local i, node = parse_statements(ps, 1, filename, true)
    clear_redundant_errors(errs)
-   return i, node, ps.require_calls
+   return i, node, ps.required_modules
 end
 
 
@@ -4261,12 +4267,7 @@ function tl.require_module(module_name, lax, env, result)
 
    if modules[module_name] then
       if result and not result.dependencies[module_name] then
-
-         local found, fd = tl.search_module(module_name, true)
-         if found then
-            fd:close()
-         end
-         result.dependencies[module_name] = found
+         result.dependencies[module_name] = env.modules[module_name].filename
       end
       return modules[module_name], true
    end
