@@ -69,15 +69,31 @@ end
 -- Table Utils
 --------------------------------------------------------------------
 
-local function keys(t)
+table.unpack = unpack or table.unpack
+
+local function map(t, fn)
+   local new = {}
+   for k, v in pairs(t) do
+      new[k] = fn(v)
+   end
+   return new
+end
+
+local function sort(t, fn)
+   table.sort(t, fn)
+   return t
+end
+
+local function keys(t, should_sort)
    local ks = {}
    for k, _ in pairs(t) do
       table.insert(ks, k)
    end
-   table.sort(ks)
+   if should_sort then
+      table.sort(ks)
+   end
    return ks
 end
-
 
 local function merge_list(a, b)
    a = a or {}
@@ -104,11 +120,20 @@ local function logger(stream)
    end
 end
 
+local stdout_logger = logger(io.stdout)
+local stderr_logger = logger(io.stderr)
+
 local log = setmetatable({
-   default = logger(io.stdout),
-   err = logger(io.stderr),
-   warn = logger(io.stderr),
+   default = stdout_logger,
+   err = stderr_logger,
+   warn = stderr_logger,
    null = function() end,
+   debug = function(...)
+      local _, inspect = pcall(require, "inspect")
+      inspect = inspect or tostring
+
+      stderr_logger(table.concat(map({...}, inspect), " ", 1, select("#", ...)))
+   end,
 }, {
    __call = function(self, ...)
       self.default(...)
@@ -373,7 +398,7 @@ local function get_array_type(val, default)
    for i, v in ipairs(val) do
       set[type(v)] = true
    end
-   local ts = keys(set)
+   local ts = keys(set, true)
    if #ts == 0 then
       ts[1] = default
    end
@@ -411,7 +436,7 @@ local function validate_config(config)
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
             return "Invalid value for " .. k .. ", expected one of: " ..
-                   table.concat(keys(valid_keys[k][v]), ", ")
+                   table.concat(keys(valid_keys[k][v], true), ", ")
          end
       else
          local vtype = get_array_type(v, valid_keys[k]:match("^{(.*)}$"))
@@ -855,9 +880,11 @@ local function setup_env(filename)
 
    if tlconfig.preload_modules then
       for _, mod in ipairs(tlconfig.preload_modules) do
-         local modtype = tl.require_module(mod, lax_mode, env)
-         if not modtype or modtype.typename == "unknown" then
-            die("Unable to preload module '", mod, "'")
+         local modtype, found = tl.require_module(mod, lax_mode, env)
+         if not found then
+            die("Unable to find module '", mod, "'")
+         elseif not modtype or modtype.typename == "unknown" then
+            die("Preloaded module '", mod, "' has no type information")
          end
       end
    end
@@ -976,7 +1003,7 @@ if cmd == "run" then
 
    assert(not is_turbo_on)
 
-   return chunk((unpack or table.unpack)(arg))
+   return chunk(table.unpack(arg))
 end
 
 --------------------------------------------------------------------
@@ -1325,12 +1352,57 @@ for input, output in pairs(files) do
    end
 end
 
+-- Build the graph from each node's dependencies
 for file, node in pairs(dag) do
    for _, mod_file in pairs(node.modules) do
       local dep_node = dag[mod_file]
       if dep_node then
          table.insert(dep_node.dependents, node)
       end
+   end
+end
+
+do -- catch circular deps
+   local acyclic_cache = {}
+   local function get_cycle(node, parents)
+      parents = parents or {}
+      parents[node] = true
+      for _, dep in pairs(node.dependents) do
+         if parents[dep] then
+            return parents
+         end
+         if get_cycle(dep, parents) then
+            parents[dep] = true
+            return parents
+         end
+      end
+      parents[node] = false
+      acyclic_cache[node] = true
+   end
+
+   local nodes_in_cycles = {}
+   for input, node in pairs(dag) do
+      if get_cycle(node) then
+         table.insert(nodes_in_cycles, node)
+      end
+   end
+
+   if #nodes_in_cycles > 0 then
+      log.err("Circular dependency detected in the following files:")
+      local sorter = function(a, b) return a.input < b.input end
+      for _, n in ipairs(sort(nodes_in_cycles, sorter)) do
+         local deps = n.dependents
+         if #deps > 0 then
+            local fs = sort(map(n.dependents, function(_) return _.input end))
+            logf.err(
+               "   %s %s on: %s",
+               table.concat(fs, ", "),
+               #n.dependents == 1 and "depends" or "all depend",
+               n.input
+            )
+         end
+      end
+      os.exit(1)
    end
 end
 
