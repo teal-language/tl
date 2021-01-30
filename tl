@@ -1411,6 +1411,10 @@ for i, node in ipairs(nodes_to_process) do
          env = env,
       })
       if report_errors("type error", type_errors) then
+         lfs.touch(input)
+         -- We touch the file here to help in the case of a dependency changing
+         -- a type that causes an error. If we didn't do this, the next build
+         -- wouldn't type check this file but it would have a type error
          exit = 1
       elseif node.mark == "compile" then
          write_out(parsed.ast, output)
