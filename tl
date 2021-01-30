@@ -1305,10 +1305,12 @@ for input, output in pairs(files) do
    if input ~= tlconfig.build_file then
       local require_calls = parse_file(input).reqs
       local modules = {}
-      for _, req in ipairs(require_calls) do
-         local mod_name = req.e2[1].conststr
-         local found, fd = tl.search_module(mod_name, true)
+      for _, mod_name in ipairs(require_calls) do
+         local found, fd, tried = tl.search_module(mod_name, true)
          if found then
+            if found:sub(1, 2) == "." .. path_separator then
+               found = found:sub(3)
+            end
             modules[mod_name] = found
             fd:close()
          end
