@@ -1,7 +1,29 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 
 
-local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, }
+local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -95,6 +117,9 @@ local TypeCheckOptions = tl.TypeCheckOptions
 local LoadMode = tl.LoadMode
 local LoadFunction = tl.LoadFunction
 local TargetMode = tl.TargetMode
+local TypeInfo = tl.TypeInfo
+local TypeReport = tl.TypeReport
+local TypeReportEnv = tl.TypeReportEnv
 
 
 
@@ -8143,6 +8168,151 @@ tl.type_check = function(ast, opts)
 
    return errors, unknowns, module_type
 end
+
+
+
+
+
+function tl.get_types(filename, ast, trenv)
+   assert(filename)
+
+   if not trenv then
+      trenv = {
+         next_num = 1,
+
+         typeid_to_num = {},
+         tr = {
+            by_pos = {},
+            types = {},
+         },
+      }
+   end
+
+   local tr = trenv.tr
+
+   local typeid_to_num = trenv.typeid_to_num
+
+   local function get_typenum(t)
+      assert(t.typeid)
+
+      local n = typeid_to_num[t.typeid]
+      if n then
+         return n
+      end
+
+      local s
+      if t.typename == "string" then
+         s = "string"
+      else
+         s = show_type(t, true)
+      end
+
+
+
+
+
+
+
+      n = trenv.next_num
+      local ti = {
+         str = s,
+         file = t.filename,
+         y = t.y,
+         x = t.x,
+      }
+      tr.types[n] = ti
+
+      typeid_to_num[t.typeid] = n
+      trenv.next_num = trenv.next_num + 1
+
+      local rt = t
+      if rt.typename == "typetype" then
+         rt = rt.def
+      end
+      if t.found then
+         ti.ref = get_typenum(t.found)
+      end
+      if t.resolved then
+         rt = t
+      end
+      assert(rt.typename ~= "typetype")
+
+
+      if is_record_type(rt) then
+         local r = {}
+         for k, v in pairs(rt.fields) do
+            r[k] = get_typenum(v)
+         end
+         ti.fields = r
+      end
+
+
+      if rt.typename == "enum" then
+         local e = {}
+         for k, _ in pairs(rt.enumset) do
+            table.insert(e, k)
+         end
+         table.sort(e)
+         ti.enums = e
+         ti.enums[0] = false
+      end
+
+      return n
+   end
+
+   local visit_node = { allow_missing_cbs = true }
+   local visit_type = { allow_missing_cbs = true }
+
+   local skip = {
+      ["none"] = true,
+      ["tuple"] = true,
+      ["table_item"] = true,
+      ["enum_item"] = true,
+   }
+
+   local ft = {}
+   tr.by_pos[filename] = ft
+
+   local function store(y, x, typ)
+      if skip[typ.typename] then
+         return
+      end
+
+      local yt = ft[y]
+      if not yt then
+         yt = {}
+         ft[y] = yt
+      end
+
+      if yt[x] then
+         return
+      end
+
+      yt[x] = get_typenum(typ)
+   end
+
+   visit_node.after = {
+      ["after"] = function(node)
+         store(node.y, node.x, node.type)
+      end,
+   }
+
+   visit_type.after = {
+      ["after"] = function(typ)
+         store(typ.y or 0, typ.x or 0, typ)
+      end,
+   }
+
+   recurse_node(ast, visit_node, visit_type)
+
+   tr.by_pos[filename][0] = nil
+
+   return tr, trenv
+end
+
+
+
+
 
 tl.process = function(filename, env, result, preload_modules)
    if env and env.loaded and env.loaded[filename] then

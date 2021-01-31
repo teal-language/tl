@@ -69,6 +69,28 @@ local record tl
       i: number
    end
 
+   record TypeInfo
+      str: string
+      file: string
+      x: number
+      y: number
+      ref: number
+      fields: {string: number}
+      enums: {string}
+   end
+
+   record TypeReport
+      by_pos: {string: {number: {number: number}}}
+      types: {number: TypeInfo}
+   end
+
+   record TypeReportEnv
+      str_to_num: {string: number}
+      typeid_to_num: {number: number}
+      next_num: number
+      tr: TypeReport
+   end
+
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env, Result, {string}): (Result, string)
    process_string: function(string, boolean, Env, Result, {string}, string): (Result, string)
@@ -95,6 +117,9 @@ local TypeCheckOptions = tl.TypeCheckOptions
 local LoadMode = tl.LoadMode
 local LoadFunction = tl.LoadFunction
 local TargetMode = tl.TargetMode
+local TypeInfo = tl.TypeInfo
+local TypeReport = tl.TypeReport
+local TypeReportEnv = tl.TypeReportEnv
 
 --------------------------------------------------------------------------------
 -- Lexer
@@ -8143,6 +8168,151 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    return errors, unknowns, module_type
 end
+
+--------------------------------------------------------------------------------
+-- Report types
+--------------------------------------------------------------------------------
+
+function tl.get_types(filename: string, ast: Node, trenv: TypeReportEnv): TypeReport, TypeReportEnv
+   assert(filename)
+
+   if not trenv then
+      trenv = {
+         next_num = 1,
+--         str_to_num = {},
+         typeid_to_num = {},
+         tr = {
+            by_pos = {},
+            types = {},
+         },
+      }
+   end
+
+   local tr = trenv.tr
+--   local str_to_num = trenv.str_to_num
+   local typeid_to_num = trenv.typeid_to_num
+
+   local function get_typenum(t: Type): number
+      assert(t.typeid)
+      -- try by typeid
+      local n = typeid_to_num[t.typeid]
+      if n then
+         return n
+      end
+--      -- try by string representation
+      local s: string
+      if t.typename == "string" then
+         s = "string"
+      else
+         s = show_type(t, true)
+      end
+--      n = str_to_num[s]
+--      if n then
+--         typeid_to_num[t.typeid] = n
+--         return n
+--      end
+
+      -- it's a new entry: store and increment
+      n = trenv.next_num
+      local ti: TypeInfo = {
+         str = s,
+         file = t.filename,
+         y = t.y,
+         x = t.x,
+      }
+      tr.types[n] = ti
+--      str_to_num[s] = n
+      typeid_to_num[t.typeid] = n
+      trenv.next_num = trenv.next_num + 1
+
+      local rt = t
+      if rt.typename == "typetype" then
+         rt = rt.def
+      end
+      if t.found then
+         ti.ref = get_typenum(t.found)
+      end
+      if t.resolved then
+         rt = t
+      end
+      assert(rt.typename ~= "typetype")
+
+      -- store record field info
+      if is_record_type(rt) then
+         local r = {}
+         for k, v in pairs(rt.fields) do
+            r[k] = get_typenum(v)
+         end
+         ti.fields = r
+      end
+
+      -- store enum info
+      if rt.typename == "enum" then
+         local e = {}
+         for k, _ in pairs(rt.enumset) do
+            table.insert(e, k)
+         end
+         table.sort(e)
+         ti.enums = e
+         ti.enums[0] = false as string -- special array marker for json dump
+      end
+
+      return n
+   end
+
+   local visit_node: Visitor<NodeKind, Node, nil> = { allow_missing_cbs = true }
+   local visit_type: Visitor<TypeName, Type, nil> = { allow_missing_cbs = true }
+
+   local skip: {TypeName: boolean} = {
+      ["none"] = true,
+      ["tuple"] = true,
+      ["table_item"] = true,
+      ["enum_item"] = true,
+   }
+
+   local ft: {number:{number:number}} = {}
+   tr.by_pos[filename] = ft
+
+   local function store(y: number, x: number, typ: Type)
+      if skip[typ.typename] then
+         return
+      end
+
+      local yt = ft[y]
+      if not yt then
+         yt = {}
+         ft[y] = yt
+      end
+
+      if yt[x] then
+         return
+      end
+
+      yt[x] = get_typenum(typ)
+   end
+
+   visit_node.after = {
+      ["after"] = function(node: Node): nil
+         store(node.y, node.x, node.type)
+      end
+   }
+
+   visit_type.after = {
+      ["after"] = function(typ: Type): nil
+         store(typ.y or 0, typ.x or 0, typ)
+      end
+   }
+
+   recurse_node(ast, visit_node, visit_type)
+
+   tr.by_pos[filename][0] = nil
+
+   return tr, trenv
+end
+
+--------------------------------------------------------------------------------
+-- High-level API
+--------------------------------------------------------------------------------
 
 tl.process = function(filename: string, env: Env, result: Result, preload_modules: {string}): Result, string
    if env and env.loaded and env.loaded[filename] then
