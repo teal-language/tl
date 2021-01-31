@@ -2648,12 +2648,21 @@ local VisitorCallbacks = {}
 
 
 
+local VisitorExtraCallback = {}
+
+
+
+
 local Visitor = {}
 
 
 
 
+
 local function visit_before(ast, kind, visit)
+   if visit.allow_missing_cbs and not visit.cbs then
+      return
+   end
    assert(visit.cbs[kind], "no visitor for " .. (kind))
    if visit.cbs[kind].before then
       visit.cbs[kind].before(ast)
@@ -2665,7 +2674,7 @@ local function visit_after(ast, kind, visit, xs)
       visit.after.before(ast, xs)
    end
    local ret
-   if visit.cbs[kind].after then
+   if visit.cbs and visit.cbs[kind].after then
       ret = visit.cbs[kind].after(ast, xs)
    end
    if visit.after and visit.after.after then
@@ -2750,6 +2759,20 @@ local function recurse_typeargs(ast, visit_type)
    end
 end
 
+local function extra_callback(name,
+   ast,
+   xs,
+   visit_node,
+   ast_kind)
+   local cbs = visit_node.cbs
+   if not cbs then return end
+   local nbs = cbs[ast_kind]
+   if not nbs then return end
+   local bs = nbs[name]
+   if not bs then return end
+   bs(ast, xs)
+end
+
 local function recurse_node(ast,
    visit_node,
    visit_type)
@@ -2760,7 +2783,6 @@ local function recurse_node(ast,
 
    visit_before(ast, ast.kind, visit_node)
    local xs = {}
-   local cbs = visit_node.cbs[ast.kind]
    if ast.kind == "statements" or
       ast.kind == "variables" or
       ast.kind == "values" or
@@ -2792,9 +2814,7 @@ local function recurse_node(ast,
       end
    elseif ast.kind == "if" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
       for _, e in ipairs(ast.elseifs) do
          table.insert(xs, recurse_node(e, visit_node, visit_type))
@@ -2804,9 +2824,7 @@ local function recurse_node(ast,
       end
    elseif ast.kind == "while" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[2] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "repeat" then
       xs[1] = recurse_node(ast.body, visit_node, visit_type)
@@ -2815,16 +2833,12 @@ local function recurse_node(ast,
       recurse_typeargs(ast, visit_type)
       xs[1] = recurse_node(ast.args, visit_node, visit_type)
       xs[2] = recurse_type(ast.rets, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "forin" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
       xs[2] = recurse_node(ast.exps, visit_node, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[3] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "fornum" then
       xs[1] = recurse_node(ast.var, visit_node, visit_type)
@@ -2834,9 +2848,7 @@ local function recurse_node(ast,
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "elseif" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
    elseif ast.kind == "else" then
       xs[1] = recurse_node(ast.elsepart, visit_node, visit_type)
@@ -2851,9 +2863,7 @@ local function recurse_node(ast,
       xs[1] = recurse_node(ast.name, visit_node, visit_type)
       xs[2] = recurse_node(ast.args, visit_node, visit_type)
       xs[3] = recurse_type(ast.rets, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[4] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "record_function" then
       recurse_typeargs(ast, visit_type)
@@ -2861,9 +2871,7 @@ local function recurse_node(ast,
       xs[2] = recurse_node(ast.name, visit_node, visit_type)
       xs[3] = recurse_node(ast.args, visit_node, visit_type)
       xs[4] = recurse_type(ast.rets, visit_type)
-      if cbs.before_statements then
-         cbs.before_statements(ast, xs)
-      end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "paren" then
       xs[1] = recurse_node(ast.e1, visit_node, visit_type)
@@ -2875,9 +2883,7 @@ local function recurse_node(ast,
       end
       xs[2] = p1
       if ast.op.arity == 2 then
-         if cbs.before_e2 then
-            cbs.before_e2(ast, xs)
-         end
+         extra_callback("before_e2", ast, xs, visit_node, ast.kind)
          if ast.op.op == "is" or ast.op.op == "as" then
             xs[3] = recurse_type(ast.e2.casttype, visit_type)
          else
