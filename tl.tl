@@ -85,7 +85,6 @@ local record tl
    end
 
    record TypeReportEnv
-      str_to_num: {string: number}
       typeid_to_num: {number: number}
       next_num: number
       tr: TypeReport
@@ -8179,7 +8178,6 @@ function tl.get_types(filename: string, ast: Node, trenv: TypeReportEnv): TypeRe
    if not trenv then
       trenv = {
          next_num = 1,
---         str_to_num = {},
          typeid_to_num = {},
          tr = {
             by_pos = {},
@@ -8189,7 +8187,6 @@ function tl.get_types(filename: string, ast: Node, trenv: TypeReportEnv): TypeRe
    end
 
    local tr = trenv.tr
---   local str_to_num = trenv.str_to_num
    local typeid_to_num = trenv.typeid_to_num
 
    local function get_typenum(t: Type): number
@@ -8199,29 +8196,16 @@ function tl.get_types(filename: string, ast: Node, trenv: TypeReportEnv): TypeRe
       if n then
          return n
       end
---      -- try by string representation
-      local s: string
-      if t.typename == "string" then
-         s = "string"
-      else
-         s = show_type(t, true)
-      end
---      n = str_to_num[s]
---      if n then
---         typeid_to_num[t.typeid] = n
---         return n
---      end
 
       -- it's a new entry: store and increment
       n = trenv.next_num
       local ti: TypeInfo = {
-         str = s,
+         str = show_type(t, true),
          file = t.filename,
          y = t.y,
          x = t.x,
       }
       tr.types[n] = ti
---      str_to_num[s] = n
       typeid_to_num[t.typeid] = n
       trenv.next_num = trenv.next_num + 1
 

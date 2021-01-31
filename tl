@@ -242,6 +242,9 @@ local function get_args_parser()
 
    parser:command("warnings", "List each kind of warning the compiler can produce.")
 
+   local types_command = parser:command("types", "Report all types found in one or more Teal files")
+   types_command:argument("file", "The Teal source file."):args("+")
+
    return parser
 end
 
@@ -842,6 +845,67 @@ if cmd == "check" then
       if i > 1 then
          collectgarbage()
       end
+   end
+   os.exit(exit)
+end
+
+
+--------------------------------------------------------------------
+--                           TYPES                                --
+--------------------------------------------------------------------
+
+local function json_out(fd, x)
+   local tx = type(x)
+   if tx == "number" or tx == "string" then
+      fd:write(string.format("%q", x))
+      return
+   end
+   assert(tx == "table")
+   if x[0] == false then -- special array marker for json dump
+      fd:write("[")
+      local l = #x
+      for i, v in ipairs(x) do
+         json_out(fd, v)
+         if i < l then
+            fd:write(",\n")
+         end
+      end
+      fd:write("]")
+   else
+      fd:write("{")
+      local c = ""
+      for k, v in pairs(x) do
+         fd:write(string.format("%s%q:", c, tostring(k)))
+         c = ",\n"
+         json_out(fd, v)
+      end
+      fd:write("}")
+   end
+end
+
+if cmd == "types" then
+   turbo(true)
+   tlconfig["quiet"] = true
+   tlconfig["gen_compat"] = "off"
+   local tr, trenv
+   local errs = false
+   for i, input_file in ipairs(args["file"]) do
+      local result = type_check_file(input_file)
+      if result and result.ast then
+         tr, trenv = tl.get_types(input_file, result.ast, trenv)
+      end
+      if #result.warnings > 0 or #result.syntax_errors > 0 or #result.type_errors > 0 then
+         errs = true
+      end
+      if i > 1 then
+         collectgarbage()
+      end
+   end
+   if tr then
+      if errs then
+         printerr("")
+      end
+      json_out(io.stdout, tr)
    end
    os.exit(exit)
 end

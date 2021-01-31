@@ -100,7 +100,6 @@ local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo =
 
 
 
-
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -8179,7 +8178,6 @@ function tl.get_types(filename, ast, trenv)
    if not trenv then
       trenv = {
          next_num = 1,
-
          typeid_to_num = {},
          tr = {
             by_pos = {},
@@ -8189,7 +8187,6 @@ function tl.get_types(filename, ast, trenv)
    end
 
    local tr = trenv.tr
-
    local typeid_to_num = trenv.typeid_to_num
 
    local function get_typenum(t)
@@ -8200,28 +8197,15 @@ function tl.get_types(filename, ast, trenv)
          return n
       end
 
-      local s
-      if t.typename == "string" then
-         s = "string"
-      else
-         s = show_type(t, true)
-      end
-
-
-
-
-
-
 
       n = trenv.next_num
       local ti = {
-         str = s,
+         str = show_type(t, true),
          file = t.filename,
          y = t.y,
          x = t.x,
       }
       tr.types[n] = ti
-
       typeid_to_num[t.typeid] = n
       trenv.next_num = trenv.next_num + 1
 
