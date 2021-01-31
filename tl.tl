@@ -3828,16 +3828,14 @@ local binop_to_metamethod: {string:string} = {
    ["<="] = "__le",
 }
 
---local show_type: function(Type): string
-
 local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
        or t.typename == "unknown_emptytable_value"
 end
 
-local show_type: function(Type, {Type:string}): string
+local show_type: function(Type, boolean, {Type:string}): string
 
-local function show_type_base(t: Type, seen: {Type:string}): string
+local function show_type_base(t: Type, short: boolean, seen: {Type:string}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist
    if seen[t] then
       return seen[t]
@@ -3845,7 +3843,7 @@ local function show_type_base(t: Type, seen: {Type:string}): string
    seen[t] = "..."
 
    local function show(t: Type): string
-      return show_type(t, seen)
+      return show_type(t, short, seen)
    end
 
    if t.typename == "nominal" then
@@ -3894,15 +3892,19 @@ local function show_type_base(t: Type, seen: {Type:string}): string
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
    elseif is_record_type(t) then
-      local out: {string} = {}
-      if t.elements then
-         table.insert(out, "{" .. show(t.elements) .. "}")
+      if short then
+         return "record"
+      else
+         local out: {string} = {}
+         if t.elements then
+            table.insert(out, "{" .. show(t.elements) .. "}")
+         end
+         for _, k in ipairs(t.field_order) do
+            local v = t.fields[k]
+            table.insert(out, k .. ": " .. show(v))
+         end
+         return "record (" .. table.concat(out, "; ") .. ")"
       end
-      for _, k in ipairs(t.field_order) do
-         local v = t.fields[k]
-         table.insert(out, k .. ": " .. show(v))
-      end
-      return "record (" .. table.concat(out, "; ") .. ")"
    elseif t.typename == "function" then
       local out: {string} = {}
       table.insert(out, "function")
@@ -3941,8 +3943,12 @@ local function show_type_base(t: Type, seen: {Type:string}): string
        or t.typename == "thread" then
       return t.typename
    elseif t.typename == "string" then
-      return t.typename ..
-             (t.tk and " " .. t.tk or "")
+      if short then
+         return "string"
+      else
+         return t.typename ..
+                (t.tk and " " .. t.tk or "")
+      end
    elseif t.typename == "typevar" then
       return t.typevar
    elseif t.typename == "typearg" then
@@ -3955,6 +3961,8 @@ local function show_type_base(t: Type, seen: {Type:string}): string
       return "<any type>"
    elseif t.typename == "nil" then
       return "nil"
+   elseif t.typename == "none" then
+      return ""
    elseif is_typetype(t) then
       return "type " .. show(t.def)
    elseif t.typename == "bad_nominal" then
@@ -3968,9 +3976,9 @@ local function inferred_msg(t: Type): string
    return " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..")"
 end
 
-show_type = function(t: Type, seen: {Type:string}): string
+show_type = function(t: Type, short: boolean, seen: {Type:string}): string
    seen = seen or {}
-   local ret = show_type_base(t, seen)
+   local ret = show_type_base(t, short, seen)
    if t.inferred_at then
       ret = ret .. inferred_msg(t)
    end
