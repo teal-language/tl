@@ -2789,6 +2789,9 @@ local function recurse_node<T>(ast: Node,
    elseif ast.kind == "table_item" then
       xs[1] = recurse_node(ast.key, visit_node, visit_type)
       xs[2] = recurse_node(ast.value, visit_node, visit_type)
+      if ast.decltype then
+         xs[3] = recurse_type(ast.decltype, visit_type)
+      end
    elseif ast.kind == "if" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
       if cbs.before_statements then
