@@ -165,7 +165,7 @@ describe("flow analysis with is", function()
             print(t + 1)
          end
       ]], {
-         { y = 3, msg = 'cannot index something that is not a record: number (inferred at foo.tl:2:13)' },
+         { y = 3, msg = 'cannot index something that is not a record: number (inferred at foo.tl:2:15)' },
          { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10) and number]] },
       }))
 
@@ -239,6 +239,7 @@ describe("flow analysis with is", function()
          end
       ]], {
          { y = 2, x = 13, msg = "unknown variable: x" },
+         { y = 2, x = 15, msg = "cannot resolve a type for x here" },
          { y = 4, x = 10, msg = "cannot resolve a type for x here" },
       }))
 
@@ -251,7 +252,7 @@ describe("flow analysis with is", function()
             end
          end
       ]], {
-         { y = 2, x = 20, msg = "v: type cannot be narrowed in this branch" }
+         { y = 2, x = 22, msg = "v: type cannot be narrowed in this branch" }
       }))
 
       it("attempting to use a type as a value produces sensible messages (#210)", util.check_type_error([[

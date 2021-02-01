@@ -1718,21 +1718,22 @@ do
          return i
       end
       while true do
-         if ps.tokens[i].kind == "string" or ps.tokens[i].kind == "{" then
-            local op = new_operator(ps.tokens[i], 2, "@funcall")
+         local tkop = ps.tokens[i]
+         if tkop.kind == "string" or tkop.kind == "{" then
+            local op = new_operator(tkop, 2, "@funcall")
             local args = new_node(ps.tokens, i, "expression_list")
             local argument
-            if ps.tokens[i].kind == "string" then
+            if tkop.kind == "string" then
                argument = new_node(ps.tokens, i)
-               argument.conststr = unquote(ps.tokens[i].tk)
+               argument.conststr = unquote(tkop.tk)
                i = i + 1
             else
                i, argument = parse_table_literal(ps, i)
             end
             table.insert(args, argument)
-            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif ps.tokens[i].tk == "(" then
-            local op = new_operator(ps.tokens[i], 2, "@funcall")
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
+         elseif tkop.tk == "(" then
+            local op = new_operator(tkop, 2, "@funcall")
 
             local prev_i = i
 
@@ -1744,9 +1745,9 @@ do
                return i
             end
 
-            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
-         elseif ps.tokens[i].tk == "[" then
-            local op = new_operator(ps.tokens[i], 2, "@index")
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
+         elseif tkop.tk == "[" then
+            local op = new_operator(tkop, 2, "@index")
 
             local prev_i = i
 
@@ -1759,9 +1760,9 @@ do
                return i
             end
 
-            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = idx }
-         elseif ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
-            local op = new_operator(ps.tokens[i], 2)
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = idx }
+         elseif tkop.tk == "." or tkop.tk == ":" then
+            local op = new_operator(tkop, 2)
 
             local prev_i = i
 
@@ -1781,9 +1782,9 @@ do
                end
             end
 
-            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = key }
-         elseif ps.tokens[i].tk == "as" or ps.tokens[i].tk == "is" then
-            local op = new_operator(ps.tokens[i], 2, ps.tokens[i].tk)
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
+         elseif tkop.tk == "as" or tkop.tk == "is" then
+            local op = new_operator(tkop, 2, tkop.tk)
 
             i = i + 1
             local cast = new_node(ps.tokens, i, "cast")
@@ -1795,7 +1796,7 @@ do
             if not cast.casttype then
                return i
             end
-            e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
             break
          end
@@ -7458,6 +7459,8 @@ tl.type_check = function(ast, opts)
             local rets = get_rets(children[3])
 
             add_var(node, node.name.tk, a_type({
+               y = node.y,
+               x = node.x,
                typename = "function",
                args = children[2],
                rets = rets,
@@ -7477,6 +7480,8 @@ tl.type_check = function(ast, opts)
          after = function(node, children)
             end_function_scope()
             add_global(nil, node.name.tk, a_type({
+               y = node.y,
+               x = node.x,
                typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
