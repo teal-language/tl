@@ -18,7 +18,7 @@ describe("<", function()
          z = false
       end
    ]], {
-      { msg = "cannot use operator '<' for types number and string \"hello\"" }
+      { msg = "cannot use operator '<' for types number and string" }
    }))
 
    it("fails with not gotcha", util.check_type_error([[

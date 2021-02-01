@@ -53,7 +53,7 @@ describe("warnings", function()
       it("reports unused variables", util.check_warnings([[
          local foo = "bar"
       ]], {
-         { y = 1, msg = [[unused variable foo: string "bar"]] }
+         { y = 1, msg = [[unused variable foo: string]] }
       }))
 
       it("does not report redeclaration of variables prefixed with '_'", util.check_warnings([[

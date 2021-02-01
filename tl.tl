@@ -4990,7 +4990,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if scope[emptytable.assigned_to] then
             scope[emptytable.assigned_to] = {
                t = t,
-               is_const = false,
+               is_const = true,
             }
             t.inferred_at = node
             t.inferred_at_file = filename
@@ -5073,12 +5073,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local function shallow_copy(t: Type): Type
+      local copy = {}
+      for k, v in pairs(t as {any:any}) do
+         copy[k] = v
+      end
+      return copy as Type
+   end
+
    local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean): Variable
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
       end
       local scope <const> = st[#st]
       local old_var <const> = scope[var]
+      if not is_const then
+         valtype = shallow_copy(valtype)
+         valtype.tk = nil
+      end
       if old_var and is_narrowing then
          if not old_var.is_narrowed then
             old_var.narrowed_from = old_var.t
@@ -5367,11 +5379,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          local t1name = show_type(t1)
          local t2name = show_type(t2)
          if t1name == t2name then
-            local t1r = t1.resolved or t1
+            local t1r = resolve_nominal(t1)
             if t1r.filename then
                t1name = t1name .. " (defined in " .. t1r.filename .. ":" .. t1r.y .. ")"
             end
-            local t2r = t2.resolved or t2
+            local t2r = resolve_nominal(t2)
             if t2r.filename then
                t2name = t2name .. " (defined in " .. t2r.filename .. ":" .. t2r.y .. ")"
             end
@@ -5855,14 +5867,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
 
       return false, terr(t1, "got %s, expected %s", t1, t2)
-   end
-
-   local function shallow_copy(t: Type): Type
-      local copy = {}
-      for k, v in pairs(t as {any:any}) do
-         copy[k] = v
-      end
-      return copy as Type
    end
 
    local function assert_is_a(node: Node, t1: Type, t2: Type, context: string, name: string)
@@ -6729,7 +6733,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             t = shallow_copy(t) -- new type object
             t.inferred_at = where
             t.inferred_at_file = filename
-            add_var(nil, v, t, nil, true)
+            add_var(nil, v, t, true, true)
          end
       end
    end
@@ -6980,13 +6984,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local exps = flatten_list(vals)
             for i, vartype in ipairs(children[1]) do
                local varnode = node.vars[i]
-               if varnode.is_const then
-                  node_error(varnode, "cannot assign to <const> variable")
-               end
+               local is_const = varnode.is_const
                if varnode.kind == "variable" then
                   if widen_back_var(varnode.tk) then
-                     vartype = find_var_type(varnode.tk)
+                     vartype, is_const = find_var_type(varnode.tk)
                   end
+               end
+               if is_const then
+                  node_error(varnode, "cannot assign to <const> variable")
                end
                if vartype then
                   local val = exps[i]
