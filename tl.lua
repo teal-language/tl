@@ -100,6 +100,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo =
 
 
 
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -1016,6 +1017,7 @@ local NodeKind = {}
 
 
 
+
 local FactType = {}
 
 
@@ -1237,12 +1239,18 @@ end
 
 local function parse_table_value(ps, i)
    local next_word = ps.tokens[i].tk
+   local e
    if next_word == "record" then
-      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record", skip_record)
+      i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record", skip_record)
    elseif next_word == "enum" then
-      return failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
+      i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
+   else
+      i, e = parse_expression(ps, i)
    end
-   return parse_expression(ps, i)
+   if not e then
+      e = new_node(ps.tokens, i - 1, "error_node")
+   end
+   return i, e
 end
 
 local function parse_table_item(ps, i, n)
@@ -1327,7 +1335,8 @@ local function parse_list(ps, i, list, close, sep, parse_item)
       if ps.tokens[i].tk == "," then
          i = i + 1
          if sep == "sep" and close[ps.tokens[i].tk] then
-            return fail(ps, i, "unexpected '" .. ps.tokens[i].tk .. "'")
+            fail(ps, i, "unexpected '" .. ps.tokens[i].tk .. "'")
+            return i, list
          end
       elseif sep == "term" and ps.tokens[i].tk == ";" then
          i = i + 1
@@ -1509,6 +1518,9 @@ local function parse_base_type(ps, i)
          i = i + 1
          decl.keys = t
          i, decl.values = parse_type(ps, i)
+         if not decl.values then
+            return i
+         end
          end_at(decl, ps.tokens[i])
          i = verify_tk(ps, i, "}")
       else
@@ -1600,7 +1612,7 @@ parse_type_list = function(ps, i, mode)
       if nrets > 0 then
          list.is_va = true
       else
-         return fail(ps, i, "unexpected '...'")
+         fail(ps, i, "unexpected '...'")
       end
    end
 
@@ -1917,22 +1929,26 @@ do
       local lhs
       local istart = i
       i, lhs = P(ps, i)
-      i, lhs = E(ps, i, lhs, 0)
+      if lhs then
+         i, lhs = E(ps, i, lhs, 0)
+      end
       if lhs then
          return i, lhs, 0
-      else
-         if i == istart then
-            return fail(ps, i, "expected an expression")
-         else
-            return i
-         end
       end
+
+      if i == istart then
+         i = fail(ps, i, "expected an expression")
+      end
+      return i
    end
 end
 
 parse_expression_and_tk = function(ps, i, tk)
    local e
    i, e = parse_expression(ps, i)
+   if not e then
+      e = new_node(ps.tokens, i - 1, "error_node")
+   end
    if ps.tokens[i].tk == tk then
       i = i + 1
    else
@@ -2003,7 +2019,7 @@ parse_argument_list = function(ps, i)
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
    for a, arg in ipairs(node) do
       if arg.tk == "..." and a ~= #node then
-         return fail(ps, i, "'...' can only be last argument")
+         fail(ps, i, "'...' can only be last argument")
       end
    end
    return i, node
@@ -2042,11 +2058,19 @@ parse_argument_type_list = function(ps, i)
    return i, list
 end
 
+local function parse_identifier(ps, i)
+   if ps.tokens[i].kind == "identifier" then
+      return i + 1, new_node(ps.tokens, i, "identifier")
+   end
+   i = fail(ps, i, "syntax error, expected identifier")
+   return i, new_node(ps.tokens, i, "error_node")
+end
+
 local function parse_local_function(ps, i)
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
    local node = new_node(ps.tokens, i, "local_function")
-   i, node.name = verify_kind(ps, i, "identifier")
+   i, node.name = parse_identifier(ps, i)
    return parse_function_args_rets_body(ps, i, node)
 end
 
@@ -2056,14 +2080,14 @@ local function parse_global_function(ps, i)
    local fn = new_node(ps.tokens, i, "global_function")
    local node = fn
    local names = {}
-   i, names[1] = verify_kind(ps, i, "identifier")
+   i, names[1] = parse_identifier(ps, i)
    while ps.tokens[i].tk == "." do
       i = i + 1
-      i, names[#names + 1] = verify_kind(ps, i, "identifier")
+      i, names[#names + 1] = parse_identifier(ps, i)
    end
    if ps.tokens[i].tk == ":" then
       i = i + 1
-      i, names[#names + 1] = verify_kind(ps, i, "identifier")
+      i, names[#names + 1] = parse_identifier(ps, i)
       fn.is_method = true
    end
 
@@ -2136,7 +2160,7 @@ local function parse_fornum(ps, i)
    local istart = i
    local node = new_node(ps.tokens, i, "fornum")
    i = i + 1
-   i, node.var = verify_kind(ps, i, "identifier")
+   i, node.var = parse_identifier(ps, i)
    i = verify_tk(ps, i, "=")
    i, node.from = parse_expression_and_tk(ps, i, ",")
    i, node.to = parse_expression(ps, i)
@@ -2533,6 +2557,12 @@ do
          i = i + 1
          local val
          i, val = parse_expression(ps, i)
+         if not val then
+            if #asgn.exps == 0 then
+               asgn.exps = nil
+            end
+            return i
+         end
          table.insert(asgn.exps, val)
       until ps.tokens[i].tk ~= ","
       return i, asgn
@@ -2555,6 +2585,7 @@ local function parse_variable_declarations(ps, i, node_name)
       local next_word = ps.tokens[i + 1].tk
       if next_word == "record" then
          local scope = node_name == "local_declaration" and "local" or "global"
+
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " record " .. asgn.vars[1].tk .. "'", skip_record)
       elseif next_word == "enum" then
          local scope = node_name == "local_declaration" and "local" or "global"
@@ -2570,6 +2601,12 @@ local function parse_variable_declarations(ps, i, node_name)
          i = i + 1
          local val
          i, val = parse_expression(ps, i)
+         if not val then
+            if #asgn.exps == 0 then
+               asgn.exps = nil
+            end
+            return i
+         end
          table.insert(asgn.exps, val)
          v = v + 1
       until ps.tokens[i].tk ~= ","
@@ -2618,7 +2655,7 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
 end
 
 local function skip_type_declaration(ps, i)
-   return (parse_type_declaration(ps, i, "local_type"))
+   return (parse_type_declaration(ps, i - 1, "local_type"))
 end
 
 local function parse_statement(ps, i)
@@ -2694,7 +2731,9 @@ parse_statements = function(ps, i, filename, toplevel)
       if (not toplevel) and stop_statement_list[ps.tokens[i].tk] then
          break
       end
+      local prev_i = i
       i, item = parse_statement(ps, i)
+      assert(i > prev_i)
       if filename then
          for j = 1, #ps.errs do
             if not ps.errs[j].filename then
@@ -2702,10 +2741,15 @@ parse_statements = function(ps, i, filename, toplevel)
             end
          end
       end
-      if not item then
-         break
+      if item then
+         table.insert(node, item)
+      elseif i > 1 then
+
+         local lasty = ps.tokens[i - 1].y
+         while ps.tokens[i].kind ~= "$EOF$" and ps.tokens[i].y == lasty do
+            i = i + 1
+         end
       end
-      table.insert(node, item)
    end
    end_at(node, ps.tokens[i])
    return i, node
@@ -3035,6 +3079,7 @@ local function recurse_node(ast,
       ast.kind == "label" or
       ast.kind == "nil" or
       ast.kind == "..." or
+      ast.kind == "error_node" or
       ast.kind == "boolean" then
       if ast.decltype then
          xs[1] = recurse_type(ast.decltype, visit_type)
@@ -7995,6 +8040,12 @@ tl.type_check = function(ast, opts)
             return node.type
          end,
       },
+      ["error_node"] = {
+         after = function(node, _children)
+            node.type = INVALID
+            return node.type
+         end,
+      },
    }
 
    visit_node.cbs["break"] = visit_node.cbs["do"]
@@ -8363,7 +8414,7 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
    end
 
    local _, program = tl.parse_program(tokens, result.syntax_errors, filename)
-   if #result.syntax_errors > 0 then
+   if (not env.keep_going) and #result.syntax_errors > 0 then
       return result
    end
 
@@ -8396,12 +8447,11 @@ end
 tl.gen = function(input, env)
    env = env or tl.init_env()
    local result, err = tl.process_string(input, false, env)
-
    if err then
       return nil, nil
    end
 
-   if not result.ast then
+   if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
 

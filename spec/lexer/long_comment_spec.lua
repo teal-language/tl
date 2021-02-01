@@ -63,6 +63,7 @@ describe("long comment", function()
       ]=]
       local foo = 1
    ]], {
-      { msg = "syntax error" },
+      { y = 6, msg = "syntax error" },
+      { y = 7, msg = "syntax error" },
    }))
 end)

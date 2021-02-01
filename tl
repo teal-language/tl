@@ -667,7 +667,6 @@ local function type_check_file(file_name)
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
       exit = 1
-      return
    end
 
    local ok = report_result(result)
@@ -887,6 +886,10 @@ if cmd == "types" then
    turbo(true)
    tlconfig["quiet"] = true
    tlconfig["gen_compat"] = "off"
+
+   setup_env(args["file"][1])
+   env.keep_going = true
+
    local tr, trenv
    local errs = false
    for i, input_file in ipairs(args["file"]) do

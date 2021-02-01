@@ -69,6 +69,7 @@ describe("long string", function()
          ]=]
    ]], {
       { y = 6, x = 18, msg = "syntax error" },
+      { y = 7, x = 10, msg = "syntax error" },
    }))
 
    it("export Lua", function()

@@ -61,6 +61,7 @@ describe("cast", function()
       local x = () as string
    ]], {
       { msg = "syntax error" },
-      { msg = "syntax error, expected ')'" }
+      { msg = "syntax error, expected ')'" },
+      { msg = "syntax error" },
    }))
 end)

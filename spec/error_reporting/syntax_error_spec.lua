@@ -93,6 +93,7 @@ describe("syntax errors", function()
       print(4)
    ]], {
       { y = 1, msg = "syntax error" },
+      { y = 2, msg = "syntax error" },
    }))
 
    it("malformed string: non escapable character", util.check_syntax_error([[

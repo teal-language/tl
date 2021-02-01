@@ -5,7 +5,6 @@ describe("call", function()
       print("hello", "world",)
    ]], {
       { msg = "unexpected ')'" },
-      { msg = "syntax error, expected ')'" },
    }))
 
    it("cannot call a string", util.check_syntax_error([[

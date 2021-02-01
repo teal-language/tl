@@ -451,10 +451,11 @@ function util.check_syntax_error(code, syntax_errors)
    return function()
       local tokens = tl.lex(code)
       local errors = {}
-      tl.parse_program(tokens, errors)
+      local _, ast = tl.parse_program(tokens, errors)
       local batch = batch_assertions()
       batch_compare(batch, "syntax errors", syntax_errors, errors)
       batch:assert()
+      tl.type_check(ast, { filename = "foo.tl", lax = false })
    end
 end
 
