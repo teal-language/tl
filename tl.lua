@@ -1114,6 +1114,7 @@ local ParseTypeListMode = {}
 
 local parse_type_list
 local parse_expression
+local parse_expression_and_tk
 local parse_statements
 local parse_argument_list
 local parse_argument_type_list
@@ -1215,8 +1216,7 @@ local function parse_table_item(ps, i, n)
    if ps.tokens[i].tk == "[" then
       node.key_parsed = "long"
       i = i + 1
-      i, node.key = parse_expression(ps, i)
-      i = verify_tk(ps, i, "]")
+      i, node.key = parse_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
       i, node.value = parse_table_value(ps, i)
       return i, node, n
@@ -1707,9 +1707,8 @@ do
          e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
-         i, e1 = parse_expression(ps, i)
+         i, e1 = parse_expression_and_tk(ps, i, ")")
          e1 = { y = t1.y, x = t1.x, kind = "paren", e1 = e1 }
-         i = verify_tk(ps, i, ")")
       else
          i, e1 = parse_literal(ps, i)
       end
@@ -1752,8 +1751,7 @@ do
 
             local idx
             i = i + 1
-            i, idx = parse_expression(ps, i)
-            i = verify_tk(ps, i, "]")
+            i, idx = parse_expression_and_tk(ps, i, "]")
 
             if not after_valid_prefixexp(ps, e1, prev_i) then
                fail(ps, prev_i, "cannot index this expression")
@@ -1847,6 +1845,27 @@ do
          end
       end
    end
+end
+
+parse_expression_and_tk = function(ps, i, tk)
+   local e
+   i, e = parse_expression(ps, i)
+   if ps.tokens[i].tk == tk then
+      i = i + 1
+   else
+
+      for n = 0, 19 do
+         local t = ps.tokens[i + n]
+         if t.kind == "$EOF$" then
+            break
+         end
+         if t.tk == tk then
+            return i + n + 1, e
+         end
+      end
+      i = fail(ps, i, "syntax error, expected '" .. tk .. "'")
+   end
+   return i, e
 end
 
 local function parse_variable_name(ps, i)
@@ -1994,8 +2013,7 @@ local function parse_if(ps, i)
    local istart = i
    local node = new_node(ps.tokens, i, "if")
    i = verify_tk(ps, i, "if")
-   i, node.exp = parse_expression(ps, i)
-   i = verify_tk(ps, i, "then")
+   i, node.exp = parse_expression_and_tk(ps, i, "then")
    i, node.thenpart = parse_statements(ps, i)
    node.elseifs = {}
    local n = 0
@@ -2005,8 +2023,7 @@ local function parse_if(ps, i)
       subnode.parent_if = node
       subnode.elseif_n = n
       i = i + 1
-      i, subnode.exp = parse_expression(ps, i)
-      i = verify_tk(ps, i, "then")
+      i, subnode.exp = parse_expression_and_tk(ps, i, "then")
       i, subnode.thenpart = parse_statements(ps, i)
       table.insert(node.elseifs, subnode)
    end
@@ -2026,8 +2043,7 @@ local function parse_while(ps, i)
    local istart = i
    local node = new_node(ps.tokens, i, "while")
    i = verify_tk(ps, i, "while")
-   i, node.exp = parse_expression(ps, i)
-   i = verify_tk(ps, i, "do")
+   i, node.exp = parse_expression_and_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
    i = verify_end(ps, i, istart)
@@ -2040,14 +2056,14 @@ local function parse_fornum(ps, i)
    i = i + 1
    i, node.var = verify_kind(ps, i, "identifier")
    i = verify_tk(ps, i, "=")
-   i, node.from = parse_expression(ps, i)
-   i = verify_tk(ps, i, ",")
+   i, node.from = parse_expression_and_tk(ps, i, ",")
    i, node.to = parse_expression(ps, i)
    if ps.tokens[i].tk == "," then
       i = i + 1
-      i, node.step = parse_expression(ps, i)
+      i, node.step = parse_expression_and_tk(ps, i, "do")
+   else
+      i = verify_tk(ps, i, "do")
    end
-   i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
    node.yend = ps.tokens[i].y
    i = verify_end(ps, i, istart)
