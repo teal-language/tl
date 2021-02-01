@@ -3905,7 +3905,17 @@ local function show_type_base(t, seen)
       return "record (" .. table.concat(out, "; ") .. ")"
    elseif t.typename == "function" then
       local out = {}
-      table.insert(out, "function(")
+      table.insert(out, "function")
+      if t.typeargs then
+         table.insert(out, "<")
+         local typeargs = {}
+         for _, v in ipairs(t.typeargs) do
+            table.insert(typeargs, show(v))
+         end
+         table.insert(out, table.concat(typeargs, ","))
+         table.insert(out, ">")
+      end
+      table.insert(out, "(")
       local args = {}
       if t.is_method then
          table.insert(args, "self")
