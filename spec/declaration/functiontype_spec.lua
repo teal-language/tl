@@ -17,7 +17,6 @@ describe("functiontype declaration", function()
       end
    ]], {
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local type t = function('..." },
-      { y = 3, msg = "expected a function call" },
    }))
 
    it("functiontype can return a union including itself (#135)", util.check [[

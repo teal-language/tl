@@ -1968,7 +1968,7 @@ local function parse_local_function(ps: ParseState, i: number): number, Node
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local function parse_function(ps: ParseState, i: number): number, Node
+local function parse_global_function(ps: ParseState, i: number): number, Node
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
@@ -2005,7 +2005,7 @@ local function parse_function(ps: ParseState, i: number): number, Node
    end
 
    if not fn.name then
-      return orig_i
+      return orig_i + 1
    end
 
    return i, node
@@ -2442,14 +2442,16 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
 
    if ps.tokens[i].tk == "=" then
       -- produce nice error message when using <= 0.7.1 syntax
-      if ps.tokens[i + 1].tk == "record" or
-         ps.tokens[i + 1].tk == "enum"
-      then
+      local next_word = ps.tokens[i + 1].tk
+      if next_word == "record" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. ps.tokens[i + 1].tk .. " " .. asgn.vars[1].tk .. "'")
-      elseif ps.tokens[i + 1].tk == "functiontype" then
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " record " .. asgn.vars[1].tk .. "'", skip_record)
+      elseif next_word == "enum" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...")
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " enum " .. asgn.vars[1].tk .. "'", skip_enum)
+      elseif next_word == "functiontype" then
+         local scope = node_name == "local_declaration" and "local" or "global"
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...", parse_function_type)
       end
 
       asgn.exps = new_node(ps.tokens, i, "values")
@@ -2532,7 +2534,7 @@ local function parse_statement(ps: ParseState, i: number): number, Node
          return parse_type_constructor(ps, i, "global_type", "enum", parse_enum_body)
       elseif ps.tokens[i+1].tk == "function" then
          i = i + 1
-         return parse_function(ps, i)
+         return parse_global_function(ps, i)
       elseif ps.tokens[i+1].kind == "identifier" then
          i = i + 1
          return parse_variable_declarations(ps, i, "global_declaration")
@@ -2540,7 +2542,7 @@ local function parse_statement(ps: ParseState, i: number): number, Node
          return parse_call_or_assignment(ps, i) -- global is a soft keyword
       end
    elseif ps.tokens[i].tk == "function" then
-      return parse_function(ps, i)
+      return parse_global_function(ps, i)
    elseif ps.tokens[i].tk == "if" then
       return parse_if(ps, i)
    elseif ps.tokens[i].tk == "while" then

@@ -34,7 +34,6 @@ describe("records", function()
       p.y = 12
    ]], {
       { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local record Point'" },
-      { msg = "syntax error" },
    }))
 
    it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[
