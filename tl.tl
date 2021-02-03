@@ -1434,6 +1434,9 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
       local decl = new_type(ps, i, "array")
       local t: Type
       i, t = parse_type(ps, i)
+      if not t then
+         return i
+      end
       if ps.tokens[i].tk == "}" then
          decl.elements = t
          decl.yend = ps.tokens[i].y
@@ -1458,6 +1461,8 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
          i, decl.values = parse_type(ps, i)
          decl.yend = ps.tokens[i].y
          i = verify_tk(ps, i, "}")
+      else
+         return fail(ps, i, "syntax error; did you forget a '}'?")
       end
       return i, decl
    elseif ps.tokens[i].tk == "`" then
@@ -1769,6 +1774,9 @@ do
             local key: Node
             i = i + 1
             i, key = verify_kind(ps, i, "identifier")
+            if not key then
+               return i
+            end
 
             if op.op == ":" then
                if not args_starters[ps.tokens[i].kind] then
