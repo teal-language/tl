@@ -1762,7 +1762,7 @@ do
                return i
             end
 
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
+            e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif tkop.tk == "[" then
             local op: Operator = new_operator(tkop, 2, "@index")
 
@@ -1802,7 +1802,7 @@ do
                end
             end
 
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
+            e1 = { y = key.y, x = key.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif tkop.tk == "as" or tkop.tk == "is" then
             local op: Operator = new_operator(tkop, 2, tkop.tk)
 
