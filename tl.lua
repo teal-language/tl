@@ -5222,6 +5222,112 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function close_types(vars)
+      for _, var in pairs(vars) do
+         if is_typetype(var.t) then
+            var.t.closed = true
+         end
+      end
+   end
+
+   local function check_for_unused_vars(vars)
+      for name, var in pairs(vars) do
+         if not var.used then
+            unused_warning(name, var)
+         end
+      end
+   end
+
+   local function begin_scope()
+      table.insert(st, {})
+   end
+
+   local function end_scope()
+      local unresolved = st[#st]["@unresolved"]
+      if unresolved then
+         local upper = st[#st - 1]["@unresolved"]
+         if upper then
+            for name, nodes in pairs(unresolved.t.labels) do
+               for _, node in ipairs(nodes) do
+                  upper.t.labels[name] = upper.t.labels[name] or {}
+                  table.insert(upper.t.labels[name], node)
+               end
+            end
+            for name, types in pairs(unresolved.t.nominals) do
+               for _, typ in ipairs(types) do
+                  upper.t.nominals[name] = upper.t.nominals[name] or {}
+                  table.insert(upper.t.nominals[name], typ)
+               end
+            end
+         else
+            st[#st - 1]["@unresolved"] = unresolved
+         end
+      end
+      close_types(st[#st])
+      check_for_unused_vars(st[#st])
+      table.remove(st)
+   end
+
+   local resolve_nominal
+   do
+      local function match_typevals(t, def)
+         if t.typevals and def.typeargs then
+            if #t.typevals ~= #def.typeargs then
+               type_error(t, "mismatch in number of type arguments")
+               return nil
+            end
+
+            begin_scope()
+            for i, tt in ipairs(t.typevals) do
+               add_var(nil, def.typeargs[i].typearg, tt)
+            end
+            local ret = resolve_typevars(def, nil, t)
+            end_scope()
+            return ret
+         elseif t.typevals then
+            type_error(t, "spurious type arguments")
+            return nil
+         elseif def.typeargs then
+            type_error(t, "missing type arguments in %s", def)
+            return nil
+         else
+            return def
+         end
+      end
+
+      resolve_nominal = function(t)
+         if t.resolved then
+            return t.resolved
+         end
+
+         local resolved
+
+         local typetype = t.found or find_type(t.names)
+         if not typetype then
+            type_error(t, "unknown type %s", t)
+         elseif is_typetype(typetype) then
+            resolved = match_typevals(t, typetype.def)
+         else
+            type_error(t, table.concat(t.names, ".") .. " is not a type")
+         end
+
+         if not resolved then
+            resolved = a_type({ typename = "bad_nominal", names = t.names })
+         end
+
+         if not t.filename then
+            t.filename = resolved.filename
+            if t.x == nil and t.y == nil then
+               t.x = resolved.x
+               t.y = resolved.y
+            end
+         end
+         t.found = typetype
+         t.resolved = resolved
+         return resolved
+      end
+   end
+
    local function are_same_nominals(t1, t2)
       local same_names
       if t1.found and t2.found then
@@ -5789,52 +5895,6 @@ tl.type_check = function(ast, opts)
       add_errs_prefixing(match_errs, errors, "in " .. context .. ": " .. (name and (name .. ": ") or ""), node)
    end
 
-   local function close_types(vars)
-      for _, var in pairs(vars) do
-         if is_typetype(var.t) then
-            var.t.closed = true
-         end
-      end
-   end
-
-   local function check_for_unused_vars(vars)
-      for name, var in pairs(vars) do
-         if not var.used then
-            unused_warning(name, var)
-         end
-      end
-   end
-
-   local function begin_scope()
-      table.insert(st, {})
-   end
-
-   local function end_scope()
-      local unresolved = st[#st]["@unresolved"]
-      if unresolved then
-         local upper = st[#st - 1]["@unresolved"]
-         if upper then
-            for name, nodes in pairs(unresolved.t.labels) do
-               for _, node in ipairs(nodes) do
-                  upper.t.labels[name] = upper.t.labels[name] or {}
-                  table.insert(upper.t.labels[name], node)
-               end
-            end
-            for name, types in pairs(unresolved.t.nominals) do
-               for _, typ in ipairs(types) do
-                  upper.t.nominals[name] = upper.t.nominals[name] or {}
-                  table.insert(upper.t.nominals[name], typ)
-               end
-            end
-         else
-            st[#st - 1]["@unresolved"] = unresolved
-         end
-      end
-      close_types(st[#st])
-      check_for_unused_vars(st[#st])
-      table.remove(st)
-   end
-
    local unknown_dots = {}
 
    local function add_unknown_dot(node, name)
@@ -6199,63 +6259,6 @@ tl.type_check = function(ast, opts)
    local function end_function_scope()
       fail_unresolved()
       end_scope()
-   end
-
-   local function match_typevals(t, def)
-      if t.typevals and def.typeargs then
-         if #t.typevals ~= #def.typeargs then
-            type_error(t, "mismatch in number of type arguments")
-            return nil
-         end
-
-         begin_scope()
-         for i, tt in ipairs(t.typevals) do
-            add_var(nil, def.typeargs[i].typearg, tt)
-         end
-         local ret = resolve_typevars(def, nil, t)
-         end_scope()
-         return ret
-      elseif t.typevals then
-         type_error(t, "spurious type arguments")
-         return nil
-      elseif def.typeargs then
-         type_error(t, "missing type arguments in %s", def)
-         return nil
-      else
-         return def
-      end
-   end
-
-   local function resolve_nominal(t)
-      if t.resolved then
-         return t.resolved
-      end
-
-      local resolved
-
-      local typetype = t.found or find_type(t.names)
-      if not typetype then
-         type_error(t, "unknown type %s", t)
-      elseif is_typetype(typetype) then
-         resolved = match_typevals(t, typetype.def)
-      else
-         type_error(t, table.concat(t.names, ".") .. " is not a type")
-      end
-
-      if not resolved then
-         resolved = a_type({ typename = "bad_nominal", names = t.names })
-      end
-
-      if not t.filename then
-         t.filename = resolved.filename
-         if t.x == nil and t.y == nil then
-            t.x = resolved.x
-            t.y = resolved.y
-         end
-      end
-      t.found = typetype
-      t.resolved = resolved
-      return resolved
    end
 
    resolve_unary = function(t)
