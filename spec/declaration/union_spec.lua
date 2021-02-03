@@ -37,6 +37,13 @@ describe("union declaration", function()
       local params3: {string:P3} = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
 
+   it("cannot declare a union with an unknown type", util.check_type_error([[
+      local function f(a: number | unknown_t)
+      end
+   ]], {
+      { msg = "unknown type unknown_t" },
+   }))
+
    it("cannot declare a union between multiple table types", util.check_type_error([[
       local t: number | {number} | {string:boolean}
    ]], {

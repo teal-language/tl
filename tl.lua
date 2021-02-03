@@ -4745,6 +4745,9 @@ tl.type_check = function(ast, opts)
          return union_type(t[1])
       elseif t.typename == "nominal" then
          local typetype = t.found or find_type(t.names)
+         if not typetype then
+            return "table"
+         end
          return union_type(typetype)
       elseif t.typename == "record" then
          if t.is_userdata then
