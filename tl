@@ -244,6 +244,8 @@ local function get_args_parser()
 
    local types_command = parser:command("types", "Report all types found in one or more Teal files")
    types_command:argument("file", "The Teal source file."):args("+")
+   types_command:option("-p --position", "Report values in scope in position line[:column]")
+              :argname("<position>")
 
    return parser
 end
@@ -863,10 +865,11 @@ local function json_out(fd, x)
    if x[0] == false then -- special array marker for json dump
       fd:write("[")
       local l = #x
+      local colon = "," .. (#x < 10 and "" or "\n")
       for i, v in ipairs(x) do
          json_out(fd, v)
          if i < l then
-            fd:write(",\n")
+            fd:write(colon)
          end
       end
       fd:write("]")
@@ -895,7 +898,7 @@ if cmd == "types" then
    for i, input_file in ipairs(args["file"]) do
       local result = type_check_file(input_file)
       if result and result.ast then
-         tr, trenv = tl.get_types(input_file, result.ast, trenv)
+         tr, trenv = tl.get_types(result, trenv)
       end
       if #result.warnings > 0 or #result.syntax_errors > 0 or #result.type_errors > 0 then
          errs = true
@@ -908,7 +911,17 @@ if cmd == "types" then
       if errs then
          printerr("")
       end
-      json_out(io.stdout, tr)
+
+      local pos = args["position"]
+      if pos then
+         local y, x = pos:match("^(%d+):?(%d*)")
+         y = tonumber(y) or 1
+         x = tonumber(x) or 1
+         json_out(io.stdout, tl.symbols_in_scope(tr, y, x))
+      else
+         json_out(io.stdout, tr)
+      end
+
    end
    os.exit(exit)
 end

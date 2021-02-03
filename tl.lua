@@ -1,7 +1,18 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 
 
-local tl = {TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -120,6 +131,7 @@ local TargetMode = tl.TargetMode
 local TypeInfo = tl.TypeInfo
 local TypeReport = tl.TypeReport
 local TypeReportEnv = tl.TypeReportEnv
+local Symbol = tl.Symbol
 
 
 
@@ -4883,6 +4895,10 @@ tl.type_check = function(ast, opts)
 
    local st = { env.globals }
 
+   local symbol_list = {}
+   local symbol_list_n = 0
+   local symbol_list_scopes = {}
+
    local all_needs_compat = {}
 
    local warnings = result.warnings or {}
@@ -5321,6 +5337,12 @@ tl.type_check = function(ast, opts)
             end
          end
       end
+
+      if node and valtype.typename ~= "unresolved" then
+         symbol_list_n = symbol_list_n + 1
+         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
+      end
+
       return scope[var]
    end
 
@@ -5468,11 +5490,17 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function begin_scope()
+   local function begin_scope(node)
       table.insert(st, {})
+
+      if node then
+         symbol_list_n = symbol_list_n + 1
+         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{", other = -1 }
+         table.insert(symbol_list_scopes, symbol_list_n)
+      end
    end
 
-   local function end_scope()
+   local function end_scope(node)
       local unresolved = st[#st]["@unresolved"]
       if unresolved then
          local upper = st[#st - 1]["@unresolved"]
@@ -5496,6 +5524,14 @@ tl.type_check = function(ast, opts)
       close_types(st[#st])
       check_for_unused_vars(st[#st])
       table.remove(st)
+
+      if node then
+         symbol_list_n = symbol_list_n + 1
+         local other = assert(table.remove(symbol_list_scopes))
+         assert(symbol_list[other].name == "@{")
+         symbol_list[symbol_list_n] = { y = node.yend or node.y, x = node.xend or node.x, name = "@}", other = other }
+         symbol_list[other].other = symbol_list_n
+      end
    end
 
    local function resolve_typevars_at(t, where)
@@ -6488,9 +6524,9 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function end_function_scope()
+   local function end_function_scope(node)
       fail_unresolved()
-      end_scope()
+      end_scope(node)
    end
 
    resolve_unary = function(t)
@@ -7075,8 +7111,8 @@ tl.type_check = function(ast, opts)
 
    visit_node.cbs = {
       ["statements"] = {
-         before = function()
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          after = function(node, _children)
 
@@ -7085,7 +7121,7 @@ tl.type_check = function(ast, opts)
             end
 
             if not node.is_repeat then
-               end_scope()
+               end_scope(node)
             end
 
             node.type = NONE
@@ -7266,19 +7302,19 @@ tl.type_check = function(ast, opts)
       },
       ["if"] = {
          before_statements = function(node)
-            begin_scope()
+            begin_scope(node)
             apply_facts(node.exp, node.exp.known)
          end,
          after = function(node, _children)
-            end_scope()
+            end_scope(node)
             node.type = NONE
             return node.type
          end,
       },
       ["elseif"] = {
          before = function(node)
-            end_scope()
-            begin_scope()
+            end_scope(node)
+            begin_scope(node)
             local f = facts_not(node.parent_if.exp.known)
             for e = 1, node.elseif_n - 1 do
                f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.known), node)
@@ -7295,8 +7331,8 @@ tl.type_check = function(ast, opts)
       },
       ["else"] = {
          before = function(node)
-            end_scope()
-            begin_scope()
+            end_scope(node)
+            begin_scope(node)
             local f = facts_not(node.parent_if.exp.known)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
                f = facts_and(f, facts_not(elseifnode.exp.known), node)
@@ -7314,11 +7350,11 @@ tl.type_check = function(ast, opts)
             widen_all_unions()
          end,
          before_statements = function(node)
-            begin_scope()
+            begin_scope(node)
             apply_facts(node.exp, node.exp.known)
          end,
          after = function(node, _children)
-            end_scope()
+            end_scope(node)
             node.type = NONE
             return node.type
          end,
@@ -7364,14 +7400,14 @@ tl.type_check = function(ast, opts)
          end,
          after = function(node, _children)
 
-            end_scope()
+            end_scope(node)
             node.type = NONE
             return node.type
          end,
       },
       ["forin"] = {
-         before = function()
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          before_statements = function(node)
             local exp1 = node.exps[1]
@@ -7436,18 +7472,18 @@ tl.type_check = function(ast, opts)
             end
          end,
          after = function(node, _children)
-            end_scope()
+            end_scope(node)
             node.type = NONE
             return node.type
          end,
       },
       ["fornum"] = {
          before = function(node)
-            begin_scope()
+            begin_scope(node)
             add_var(node.var, node.var.tk, NUMBER)
          end,
          after = function(node, _children)
-            end_scope()
+            end_scope(node)
             node.type = NONE
             return node.type
          end,
@@ -7671,15 +7707,15 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["local_function"] = {
-         before = function(_node)
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          before_statements = function(node)
             add_internal_function_variables(node)
             add_function_definition_for_recursion(node)
          end,
          after = function(node, children)
-            end_function_scope()
+            end_function_scope(node)
             local rets = get_rets(children[3])
 
             add_var(node, node.name.tk, a_type({
@@ -7694,15 +7730,15 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["global_function"] = {
-         before = function(_node)
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          before_statements = function(node)
             add_internal_function_variables(node)
             add_function_definition_for_recursion(node)
          end,
          after = function(node, children)
-            end_function_scope()
+            end_function_scope(node)
             add_global(nil, node.name.tk, a_type({
                y = node.y,
                x = node.x,
@@ -7715,8 +7751,8 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["record_function"] = {
-         before = function(_node)
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          before_statements = function(node, children)
             add_internal_function_variables(node)
@@ -7765,21 +7801,21 @@ tl.type_check = function(ast, opts)
             end
          end,
          after = function(node, _children)
-            end_function_scope()
+            end_function_scope(node)
 
             node.type = NONE
             return node.type
          end,
       },
       ["function"] = {
-         before = function(_node)
-            begin_scope()
+         before = function(node)
+            begin_scope(node)
          end,
          before_statements = function(node)
             add_internal_function_variables(node)
          end,
          after = function(node, children)
-            end_function_scope()
+            end_function_scope(node)
 
 
             node.type = a_type({
@@ -7806,7 +7842,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["op"] = {
-         before = function(_node)
+         before = function()
             begin_scope()
          end,
          before_e2 = function(node)
@@ -8216,15 +8252,21 @@ tl.type_check = function(ast, opts)
 
    add_compat_entries(ast, all_needs_compat, env.gen_compat)
 
-   return errors, unknowns, module_type
+   return errors, unknowns, module_type, symbol_list
 end
 
 
 
 
 
-function tl.get_types(filename, ast, trenv)
-   assert(filename)
+function tl.get_types(result, trenv)
+   local filename = result.filename or "?"
+
+   local function mark_array(x)
+      local arr = x
+      arr[0] = false
+      return x
+   end
 
    if not trenv then
       trenv = {
@@ -8233,6 +8275,7 @@ function tl.get_types(filename, ast, trenv)
          tr = {
             by_pos = {},
             types = {},
+            symbols = mark_array({}),
          },
       }
    end
@@ -8275,7 +8318,8 @@ function tl.get_types(filename, ast, trenv)
 
       if is_record_type(rt) then
          local r = {}
-         for k, v in pairs(rt.fields) do
+         for _, k in ipairs(rt.field_order) do
+            local v = rt.fields[k]
             r[k] = get_typenum(v)
          end
          ti.fields = r
@@ -8283,13 +8327,7 @@ function tl.get_types(filename, ast, trenv)
 
 
       if rt.typename == "enum" then
-         local e = {}
-         for k, _ in pairs(rt.enumset) do
-            table.insert(e, k)
-         end
-         table.sort(e)
-         ti.enums = e
-         ti.enums[0] = false
+         ti.enums = mark_array(sorted_keys(rt.enumset))
       end
 
       return n
@@ -8319,9 +8357,9 @@ function tl.get_types(filename, ast, trenv)
          ft[y] = yt
       end
 
-      if yt[x] then
-         return
-      end
+
+
+
 
       yt[x] = get_typenum(typ)
    end
@@ -8338,11 +8376,76 @@ function tl.get_types(filename, ast, trenv)
       end,
    }
 
-   recurse_node(ast, visit_node, visit_type)
+   recurse_node(result.ast, visit_node, visit_type)
 
    tr.by_pos[filename][0] = nil
 
+   for _, s in ipairs(result.symbol_list) do
+      local id
+      if s.other then
+         if s.name == "@}" then
+            id = s.other - 1
+         else
+            id = s.other
+         end
+      else
+         assert(s.typ)
+         id = get_typenum(s.typ)
+      end
+      assert(id)
+      local sym = mark_array({ s.y, s.x, s.name, id })
+      table.insert(tr.symbols, sym)
+   end
+
    return tr, trenv
+end
+
+function tl.symbols_in_scope(tr, y, x)
+   local function le(vy, vx, y, x)
+      return vy < y or (vy == y and vx <= x)
+   end
+
+   local function find(symbols, y, x)
+      local len = #symbols
+      local s, mid, e = 1, 0, len
+      while s <= e do
+         mid = math.floor((s + e) / 2)
+         local v = symbols[mid]
+         if le(v[1], v[2], y, x) then
+            if mid == len then
+               return mid
+            else
+               local nv = symbols[mid + 1]
+               if not le(nv[1], nv[2], y, x) then
+                  return mid
+               end
+            end
+            s = mid + 1
+         else
+            e = mid - 1
+         end
+      end
+      return 0
+   end
+
+   local ret = {}
+
+   local n = find(tr.symbols, y, x)
+
+   local symbols = tr.symbols
+   while n >= 1 do
+      local s = symbols[n]
+      if s[3] == "@{" then
+         n = n - 1
+      elseif s[3] == "@}" then
+         n = s[4]
+      else
+         ret[s[3]] = s[4]
+         n = n - 1
+      end
+   end
+
+   return ret
 end
 
 
@@ -8435,8 +8538,9 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
       result = result,
       gen_compat = env.gen_compat,
    }
-   err, unknown, result.type = tl.type_check(program, opts)
+   err, unknown, result.type, result.symbol_list = tl.type_check(program, opts)
 
+   result.filename = filename
    result.ast = program
    result.env = env
 
