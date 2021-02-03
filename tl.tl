@@ -4167,9 +4167,19 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
    node.e2[4] = e2
 end
 
+local globals_typeid: number
+
 local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    local globals: {string:Variable} = {}
    local stdlib_compat = get_stdlib_compat(lax)
+
+   -- ensure globals are always initialized with the same typeids
+   local save_typeid = last_typeid
+   if not globals_typeid then
+      globals_typeid = last_typeid
+   else
+      last_typeid = globals_typeid
+   end
 
    local standard_library: {string:Type} = {
       ["..."] = VARARG { STRING },
@@ -4565,6 +4575,8 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    -- `@is_va` is an internal sentinel value which is
    -- `any` if `...` is accepted in this scope or `nil` if it isn't.
    globals["@is_va"] = { t = ANY }
+
+   last_typeid = save_typeid
 
    return globals, standard_library
 end

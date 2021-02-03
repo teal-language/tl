@@ -4167,9 +4167,19 @@ local function convert_node_to_compat_mt_call(node, mt_name, which_self, e1, e2)
    node.e2[4] = e2
 end
 
+local globals_typeid
+
 local function init_globals(lax)
    local globals = {}
    local stdlib_compat = get_stdlib_compat(lax)
+
+
+   local save_typeid = last_typeid
+   if not globals_typeid then
+      globals_typeid = last_typeid
+   else
+      last_typeid = globals_typeid
+   end
 
    local standard_library = {
       ["..."] = VARARG({ STRING }),
@@ -4565,6 +4575,8 @@ local function init_globals(lax)
 
 
    globals["@is_va"] = { t = ANY }
+
+   last_typeid = save_typeid
 
    return globals, standard_library
 end
