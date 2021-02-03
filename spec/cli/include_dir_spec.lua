@@ -3,17 +3,35 @@ local util = require("spec.util")
 
 describe("-I --include-dir argument", function()
    it("adds a directory to package.path", function()
-      local name = util.write_tmp_file(finally, [[
-         require("add")
-         local x: number = add(1, 2)
+      util.do_in(util.write_tmp_dir(finally, {
+         mod = {
+            ["add.tl"] = [[
+               function add(n: number, m: number): number
+                   return n + m
+               end
 
-         assert(x == 3)
-      ]])
+               return add
+            ]],
+            ["subtract.tl"] = [[
+               function subtract(n: number, m: number): number
+                   return n - m
+               end
 
-      local pd = io.popen(util.tl_cmd("check", "-I", "spec", name), "r")
-      local output = pd:read("*a")
-      util.assert_popen_close(true, "exit", 0, pd:close())
-      assert.match("0 errors detected", output, 1, true)
+               return subtract
+            ]],
+         },
+         ["test.tl"] = [[
+            require("add")
+            local x: number = add(1, 2)
+
+            assert(x == 3)
+         ]],
+      }), function()
+         local pd = io.popen(util.tl_cmd("check", "-I", "mod", "test.tl"), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         assert.match("0 errors detected", output, 1, true)
+      end)
    end)
    it("adds a directory to package.cpath", function()
       local name = util.write_tmp_file(finally, [[
