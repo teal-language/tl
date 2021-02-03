@@ -6188,7 +6188,7 @@ tl.type_check = function(ast, opts)
          t.filename = resolved.filename
          if t.x == nil and t.y == nil then
             t.x = resolved.x
-            t.y = resolved.x
+            t.y = resolved.y
          end
       end
       t.found = typetype
