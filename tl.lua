@@ -939,6 +939,7 @@ local Type = {}
 
 
 
+
 local Operator = {}
 
 
@@ -1091,6 +1092,7 @@ local Node = {}
 
 
 
+
 local function is_array_type(t)
    return t.typename == "array" or t.typename == "arrayrecord"
 end
@@ -1136,6 +1138,11 @@ local function fail(ps, i, msg)
    return math.min(#ps.tokens, i + 1)
 end
 
+local function end_at(node, tk)
+   node.yend = tk.y
+   node.xend = tk.x + #tk.tk - 1
+end
+
 local function verify_tk(ps, i, tk)
    if ps.tokens[i].tk == tk then
       return i + 1
@@ -1143,10 +1150,13 @@ local function verify_tk(ps, i, tk)
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
-local function verify_end(ps, i, istart)
+local function verify_end(ps, i, istart, node)
    if ps.tokens[i].tk == "end" then
+      node.yend = ps.tokens[i].y
+      node.xend = ps.tokens[i].x + 2
       return i + 1
    end
+   end_at(node, ps.tokens[i])
    return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. (ps.filename or "") .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
 end
 
@@ -1281,7 +1291,7 @@ local function parse_list(ps, i, list, close, sep, parse_item)
    local n = 1
    while ps.tokens[i].kind ~= "$EOF$" do
       if close[ps.tokens[i].tk] then
-         (list).yend = ps.tokens[i].y
+         end_at(list, ps.tokens[i])
          break
       end
       local item
@@ -1439,7 +1449,7 @@ local function parse_base_type(ps, i)
       end
       if ps.tokens[i].tk == "}" then
          decl.elements = t
-         decl.yend = ps.tokens[i].y
+         end_at(decl, ps.tokens[i])
          i = verify_tk(ps, i, "}")
       elseif ps.tokens[i].tk == "," then
          decl.typename = "tupletable"
@@ -1453,13 +1463,14 @@ local function parse_base_type(ps, i)
             end
             n = n + 1
          until ps.tokens[i].tk ~= ","
+         end_at(decl, ps.tokens[i])
          i = verify_tk(ps, i, "}")
       elseif ps.tokens[i].tk == ":" then
          decl.typename = "map"
          i = i + 1
          decl.keys = t
          i, decl.values = parse_type(ps, i)
-         decl.yend = ps.tokens[i].y
+         end_at(decl, ps.tokens[i])
          i = verify_tk(ps, i, "}")
       else
          return fail(ps, i, "syntax error; did you forget a '}'?")
@@ -1569,8 +1580,9 @@ local function parse_function_args_rets_body(ps, i, node)
    i, node.args = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
    i, node.body = parse_statements(ps, i)
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   end_at(node, ps.tokens[i])
+   i = verify_end(ps, i, istart, node)
+   assert(node.rets.typename == "tuple")
    return i, node
 end
 
@@ -2044,8 +2056,7 @@ local function parse_if(ps, i)
       i, subnode.elsepart = parse_statements(ps, i)
       node.elsepart = subnode
    end
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2055,8 +2066,7 @@ local function parse_while(ps, i)
    i = verify_tk(ps, i, "while")
    i, node.exp = parse_expression_and_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2075,8 +2085,7 @@ local function parse_fornum(ps, i)
       i = verify_tk(ps, i, "do")
    end
    i, node.body = parse_statements(ps, i)
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2096,8 +2105,7 @@ local function parse_forin(ps, i)
    end
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2114,9 +2122,9 @@ local function parse_repeat(ps, i)
    i = verify_tk(ps, i, "repeat")
    i, node.body = parse_statements(ps, i)
    node.body.is_repeat = true
-   node.yend = ps.tokens[i].y
    i = verify_tk(ps, i, "until")
    i, node.exp = parse_expression(ps, i)
+   end_at(node, ps.tokens[i - 1])
    return i, node
 end
 
@@ -2125,8 +2133,7 @@ local function parse_do(ps, i)
    local node = new_node(ps.tokens, i, "do")
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2227,8 +2234,7 @@ parse_enum_body = function(ps, i, def, node)
          def.enumset[unquote(item.tk)] = true
       end
    end
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2280,7 +2286,7 @@ parse_record_body = function(ps, i, def, node)
             local t
             i, t = parse_type(ps, i)
             if ps.tokens[i].tk == "}" then
-               node.yend = ps.tokens[i].y
+               end_at(node, ps.tokens[i])
                i = verify_tk(ps, i, "}")
             else
                return fail(ps, i, "expected an array declaration")
@@ -2380,8 +2386,7 @@ parse_record_body = function(ps, i, def, node)
          end
       end
    end
-   node.yend = ps.tokens[i].y
-   i = verify_end(ps, i, istart)
+   i = verify_end(ps, i, istart, node)
    return i, node
 end
 
@@ -2605,6 +2610,7 @@ parse_statements = function(ps, i, filename, toplevel)
       end
       table.insert(node, item)
    end
+   end_at(node, ps.tokens[i])
    return i, node
 end
 
@@ -4928,6 +4934,7 @@ tl.type_check = function(ast, opts)
       copy.x = t.x
       copy.y = t.y
       copy.yend = t.yend
+      copy.xend = t.xend
       copy.names = t.names
 
       for i, tf in ipairs(t) do

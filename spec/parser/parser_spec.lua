@@ -23,6 +23,8 @@ describe("parser", function()
          },
          x = 1,
          y = 1,
+         xend = 5,
+         yend = 1,
       }, strip_typeids(result.ast))
    end)
 
