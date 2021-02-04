@@ -2,6 +2,13 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("syntax errors", function()
+   it("invalid use of keyword", util.check_syntax_error([[
+      local function do
+   ]], {
+      { y = 1, msg = "syntax error, expected identifier" },
+      { y = 1, msg = "syntax error, expected '('" },
+   }))
+
    it("missing expression", util.check_syntax_error([[
       local x =
    ]], {
