@@ -2515,9 +2515,11 @@ local function parse_statement(ps, i)
       elseif ps.tokens[i + 1].tk == "function" then
          i = i + 1
          return parse_function(ps, i)
-      else
+      elseif ps.tokens[i + 1].kind == "identifier" then
          i = i + 1
          return parse_variable_declarations(ps, i, "global_declaration")
+      else
+         return parse_call_or_assignment(ps, i)
       end
    elseif ps.tokens[i].tk == "function" then
       return parse_function(ps, i)

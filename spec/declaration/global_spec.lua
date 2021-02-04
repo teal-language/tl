@@ -15,7 +15,7 @@ describe("global", function()
          print(global)
       ]])
 
-      pending("works as a variable", util.check [[
+      it("works as a variable", util.check [[
          local global = 12
          global = 13
       ]])
