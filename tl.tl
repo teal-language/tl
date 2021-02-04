@@ -2700,6 +2700,24 @@ local function visit_after<K,N,T>(ast: N, kind: K, visit: Visitor<K,N,T>, xs: {T
    return ret
 end
 
+local enum MetaMode
+   "meta"
+end
+
+local function fields_of(t: Type, meta: MetaMode): (function(): string, Type)
+   local i = 1
+   local field_order = meta and t.meta_field_order or t.field_order
+   local fields = meta and t.meta_fields or t.fields
+   return function(): string, Type
+      local name = field_order[i]
+      if not name then
+         return nil
+      end
+      i = i + 1
+      return name, fields[name]
+   end
+end
+
 local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    visit_before(ast, ast.typename, visit)
    local xs: {T} = {}
@@ -2732,12 +2750,12 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
       table.insert(xs, recurse_type(ast.elements, visit))
    end
    if ast.fields then
-      for _, child in pairs(ast.fields) do
+      for _, child in fields_of(ast) do
          table.insert(xs, recurse_type(child, visit))
       end
    end
    if ast.meta_fields then
-      for _, child in pairs(ast.meta_fields) do
+      for _, child in fields_of(ast, "meta") do
          table.insert(xs, recurse_type(child, visit))
       end
    end
@@ -4090,13 +4108,18 @@ local record Variable
    used: boolean
 end
 
+local function sorted_keys<A,B>(m: {A:B}):{A}
+   local keys = {}
+   for k, _ in pairs(m) do
+      table.insert(keys, k)
+   end
+   table.sort(keys)
+   return keys
+end
+
 local function fill_field_order(t: Type)
    if t.typename == "record" then
-      t.field_order = {}
-      for k in pairs(t.fields) do
-         table.insert(t.field_order, k)
-      end
-      table.sort(t.field_order)
+      t.field_order = sorted_keys(t.fields)
    end
 end
 
@@ -4135,11 +4158,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       return
    end
 
-   local used_list: {string} = {}
-   for name, _ in pairs(used_set) do
-      table.insert(used_list, name)
-   end
-   table.sort(used_list)
+   local used_list: {string} = sorted_keys(used_set)
 
    local compat_loaded = false
 
@@ -4740,13 +4759,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                globals[k] = v.t
             end
          end
-         local field_order: {string} = {}
-         for k, _ in pairs(globals) do
-            table.insert(field_order, k)
-         end
          return a_type {
             typename = "record",
-            field_order = field_order,
+            field_order = sorted_keys(globals),
             fields = globals,
          }, false
       end
@@ -5274,6 +5289,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    end
 
    local function check_for_unused_vars(vars: {string:Variable})
+      -- do we need a stable order for these warnings?
       for name, var in pairs(vars) do
          if not var.used then
             unused_warning(name, var)
@@ -6421,11 +6437,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
       elseif is_record_type(a) then
          if b.typename == "enum" then
-            local field_names: {string} = {}
-            for k, _ in pairs(b.enumset) do
-               table.insert(field_names, k)
-            end
-            table.sort(field_names)
+            local field_names: {string} = sorted_keys(b.enumset)
             for _, k in ipairs(field_names) do
                if not a.fields[k] then
                   return node_error(idxnode, "enum value '" .. k .. "' is not a field in %s", a)
@@ -6451,7 +6463,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if not is_a(new, old) then
             if old.typename == "map" and is_record_type(new) then
                if old.keys.typename == "string" then
-                  for _, ftype in pairs(new.fields) do
+                  for _, ftype in fields_of(new) do
                      old.values = expand_type(where, old.values, ftype)
                   end
                else
@@ -6460,14 +6472,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif is_record_type(old) and is_record_type(new) then
                old.typename = "map"
                old.keys = STRING
-               for _, ftype in pairs(old.fields) do
+               for _, ftype in fields_of(old) do
                   if not old.values then
                      old.values = ftype
                   else
                      old.values = expand_type(where, old.values, ftype)
                   end
                end
-               for _, ftype in pairs(new.fields) do
+               for _, ftype in fields_of(new) do
                   if not old.values then
                      new.values = ftype
                   else
@@ -7397,7 +7409,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             elseif is_record and is_map then
                if node.type.keys.typename == "string" then
                   node.type.typename = "map"
-                  for _, ftype in pairs(node.type.fields) do
+                  for _, ftype in fields_of(node.type) do
                      node.type.values = expand_type(node, node.type.values, ftype)
                   end
                   node.type.fields = nil
@@ -7888,7 +7900,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          ["record"] = {
             before = function(typ: Type, _children: {Type})
                begin_scope()
-               for name, typ2 in pairs(typ.fields) do
+               for name, typ2 in fields_of(typ) do
                   if typ2.typename == "typetype" then
                      typ2.typename = "nestedtype"
                      add_var(nil, name, typ2)
@@ -7897,7 +7909,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end,
             after = function(typ: Type, _children: {Type}): Type
                end_scope()
-               for _, typ2 in pairs(typ.fields) do
+               for _, typ2 in fields_of(typ) do
                   if typ2.typename == "nestedtype" then
                      typ2.typename = "typetype"
                   end
