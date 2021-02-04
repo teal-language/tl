@@ -64,6 +64,9 @@ local record tl
       filename: string
 
       tag: WarningKind
+
+      -- used temporarily for stable-sorting
+      i: number
    end
 
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
@@ -2599,11 +2602,19 @@ end
 local function clear_redundant_errors(errors: {Error})
    local redundant: {number} = {}
    local lastx, lasty = 0, 0
+   for i, err in ipairs(errors) do
+      err.i = i
+   end
    table.sort(errors, function(a: Error, b: Error): boolean
-      return ((a.filename and b.filename) and a.filename < b.filename)
-             or (a.filename == b.filename and ((a.y < b.y) or (a.y == b.y and a.x < b.x)))
+      local af = a.filename or ""
+      local bf = b.filename or ""
+      return af < bf
+             or (af == bf   and (a.y < b.y
+             or (a.y == b.y and (a.x < b.x
+             or (a.x == b.x and (a.i < b.i))))))
    end)
    for i, err in ipairs(errors) do
+      err.i = nil
       if err.x == lastx and err.y == lasty then
          table.insert(redundant, i)
       end
