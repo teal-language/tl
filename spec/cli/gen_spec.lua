@@ -75,6 +75,16 @@ describe("tl gen", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
    describe("on .tl files", function()
+      it("works on empty files", function()
+         local name = util.write_tmp_file(finally, [[]])
+         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         util.assert_line_by_line([[]], util.read_file(lua_name))
+      end)
+
       it("reports 0 errors and code 0 on success", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number

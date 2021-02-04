@@ -3,6 +3,14 @@ local util = require("spec.util")
 
 describe("tl check", function()
    describe("on .tl files", function()
+      it("works on empty files", function()
+         local name = util.write_tmp_file(finally, [[]])
+         local pd = io.popen(util.tl_cmd("check", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         assert.match("0 errors detected", output, 1, true)
+      end)
+
       it("reports 0 errors and code 0 on success", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number
