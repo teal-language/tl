@@ -143,12 +143,6 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
-local valid_commands = {
-   gen = true,
-   check = true,
-   run = true,
-   build = true,
-}
 local cmd_prefix = { string.format("LUA_PATH=%q", package.path) }
 for i = 1, 4 do
    table.insert(cmd_prefix, string.format("LUA_PATH_5_%d=%q", i, package.path))
@@ -165,7 +159,6 @@ table.insert(cmd_prefix, tl_executable)
 cmd_prefix = table.concat(cmd_prefix, " ")
 function util.tl_cmd(name, ...)
    assert(name, "no command provided")
-   assert(valid_commands[name], "not a valid command: tl " .. tostring(name))
 
    local pre_command_args = {}
    local first = ...
@@ -287,7 +280,6 @@ function util.run_mock_project(finally, t, use_folder)
    assert(type(finally) == "function")
    assert(type(t) == "table")
    assert(type(t.cmd) == "string", "tl <cmd> not given")
-   assert(valid_commands[t.cmd], "Invalid command tl " .. t.cmd)
 
    local actual_dir_name = use_folder or util.write_tmp_dir(finally, t.dir_structure)
    local expected_dir_structure
