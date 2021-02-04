@@ -65,20 +65,4 @@ describe("long comment", function()
    ]], {
       { msg = "syntax error" }
    }))
-
-   pending("export Lua", function()
-      local result = tl.process_string([=[
-         --[[
-            long comment line 1
-            long comment line 2
-         ]]
-         local foo = 1
-      ]=])
-      local lua = tl.pretty_print_ast(result.ast)
-      assert.equal([=[--[[
-            long comment line 1
-            long comment line 2
-         ]]
-         local foo = 1]=], string_trim(lua))
-   end)
 end)
