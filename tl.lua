@@ -1429,16 +1429,24 @@ local function parse_function_type(ps, i)
    return i, typ
 end
 
+local simple_type_names = {
+   "string",
+   "boolean",
+   "nil",
+   "number",
+   "any",
+   "thread",
+}
+
+local simple_types = {}
+for _, name in ipairs(simple_type_names) do
+   simple_types[name] = a_type({ typename = name })
+end
+
 local function parse_base_type(ps, i)
-   if ps.tokens[i].tk == "string" or
-      ps.tokens[i].tk == "boolean" or
-      ps.tokens[i].tk == "nil" or
-      ps.tokens[i].tk == "number" or
-      ps.tokens[i].tk == "any" or
-      ps.tokens[i].tk == "thread" then
-      local typ = new_type(ps, i, ps.tokens[i].tk)
-      typ.tk = nil
-      return i + 1, typ
+   local st = simple_types[ps.tokens[i].tk]
+   if st then
+      return i + 1, st
    elseif ps.tokens[i].tk == "table" then
       local typ = new_type(ps, i, "map")
       typ.keys = a_type({ typename = "any" })
@@ -3150,7 +3158,7 @@ function tl.pretty_print_ast(ast, mode)
          return
       end
 
-      if child.y < out.y then
+      if child.y ~= -1 and child.y < out.y then
          out.y = child.y
       end
 
@@ -3616,7 +3624,7 @@ function tl.pretty_print_ast(ast, mode)
    visit_type.cbs = {
       ["string"] = {
          after = function(typ, _children)
-            local out = { y = typ.y, h = 0 }
+            local out = { y = typ.y or -1, h = 0 }
             local r = typ.resolved or typ
             local lua_type = primitive[r.typename] or
             (r.is_userdata and "userdata") or
