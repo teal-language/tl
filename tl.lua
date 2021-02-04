@@ -7093,6 +7093,7 @@ tl.type_check = function(ast, opts)
 
                assert(var)
                add_var(var, var.tk, t, var.is_const)
+               var.type = t
 
                dismiss_unresolved(var.tk)
             end
@@ -7136,6 +7137,7 @@ tl.type_check = function(ast, opts)
                   end
                   t.inferred_len = nil
                   add_global(var, var.tk, t, var.is_const)
+                  var.type = t
 
                   dismiss_unresolved(var.tk)
                end
