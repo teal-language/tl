@@ -8276,6 +8276,7 @@ function tl.get_types(result, trenv)
             by_pos = {},
             types = {},
             symbols = mark_array({}),
+            globals = {},
          },
       }
    end
@@ -8395,6 +8396,14 @@ function tl.get_types(result, trenv)
       assert(id)
       local sym = mark_array({ s.y, s.x, s.name, id })
       table.insert(tr.symbols, sym)
+   end
+
+   local gkeys = sorted_keys(result.env.globals)
+   for _, name in ipairs(gkeys) do
+      if name:sub(1, 1) ~= "@" then
+         local var = result.env.globals[name]
+         tr.globals[name] = get_typenum(var.t)
+      end
    end
 
    return tr, trenv
