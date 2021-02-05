@@ -4270,8 +4270,10 @@ local function init_globals(lax)
    local stdlib_compat = get_stdlib_compat(lax)
 
 
+   local is_first_init = globals_typeid == nil
+
    local save_typeid = last_typeid
-   if not globals_typeid then
+   if is_first_init then
       globals_typeid = last_typeid
    else
       last_typeid = globals_typeid
@@ -4672,7 +4674,9 @@ local function init_globals(lax)
 
    globals["@is_va"] = { t = ANY }
 
-   last_typeid = save_typeid
+   if not is_first_init then
+      last_typeid = save_typeid
+   end
 
    return globals, standard_library
 end
