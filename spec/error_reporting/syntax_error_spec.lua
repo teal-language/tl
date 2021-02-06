@@ -9,6 +9,12 @@ describe("syntax errors", function()
       { y = 1, msg = "syntax error, expected '('" },
    }))
 
+   it("bad assignment", util.check_syntax_error([[
+      123 = 123
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
    it("missing expression", util.check_syntax_error([[
       local x =
    ]], {
@@ -20,7 +26,6 @@ describe("syntax errors", function()
    ]], {
       { y = 1, msg = "expected an expression" },
    }))
-
 
    it("incomplete enum", util.check_syntax_error([[
       local enum "hello"

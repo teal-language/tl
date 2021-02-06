@@ -2445,18 +2445,54 @@ parse_newtype = function(ps, i)
    return fail(ps, i, "expected a type")
 end
 
-local function parse_call_or_assignment(ps, i)
-   local asgn = new_node(ps.tokens, i, "assignment")
-
-   local tryi = i
-   asgn.vars = new_node(ps.tokens, i, "variables")
-   i = parse_trying_list(ps, i, asgn.vars, parse_expression)
-   if #asgn.vars < 1 then
-      return fail(ps, i, "syntax error")
+local parse_call_or_assignment
+do
+   local function is_lvalue(node)
+      return node.kind == "variable" or
+      (node.kind == "op" and (node.op.op == "@index" or node.op.op == "."))
    end
-   local lhs = asgn.vars[1]
 
-   if ps.tokens[i].tk == "=" then
+   local function parse_variable(ps, i)
+      local node
+      i, node = parse_expression(ps, i)
+      if not (node and is_lvalue(node)) then
+         return fail(ps, i, "expected a variable")
+      end
+      return i, node
+   end
+
+   parse_call_or_assignment = function(ps, i)
+      local exp
+      local istart = i
+      i, exp = parse_expression(ps, i)
+      if not exp then
+         return i
+      end
+
+      if exp.op and exp.op.op == "@funcall" then
+         return i, exp
+      end
+
+      if not is_lvalue(exp) then
+         return fail(ps, i, "syntax error")
+      end
+
+      local asgn = new_node(ps.tokens, istart, "assignment")
+      asgn.vars = new_node(ps.tokens, istart, "variables")
+      asgn.vars[1] = exp
+      if ps.tokens[i].tk == "," then
+         i = i + 1
+         i = parse_trying_list(ps, i, asgn.vars, parse_variable)
+         if #asgn.vars < 2 then
+            return fail(ps, i, "syntax error")
+         end
+      end
+
+      if ps.tokens[i].tk ~= "=" then
+         verify_tk(ps, i, "=")
+         return i
+      end
+
       asgn.exps = new_node(ps.tokens, i, "values")
       repeat
          i = i + 1
@@ -2466,13 +2502,6 @@ local function parse_call_or_assignment(ps, i)
       until ps.tokens[i].tk ~= ","
       return i, asgn
    end
-   if #asgn.vars > 1 then
-      return failskip(ps, i, "syntax error", parse_expression, tryi)
-   end
-   if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
-      return i, lhs
-   end
-   return fail(ps, i, "syntax error")
 end
 
 local function parse_variable_declarations(ps, i, node_name)
