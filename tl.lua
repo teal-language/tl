@@ -1394,11 +1394,17 @@ local function parse_typevar_type(ps, i)
 end
 
 local function parse_typearg_list(ps, i)
+   if ps.tokens[i + 1].tk == ">" then
+      return fail(ps, i + 1, "type argument list cannot be empty")
+   end
    local typ = new_type(ps, i, "tuple")
    return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
 end
 
 local function parse_typeval_list(ps, i)
+   if ps.tokens[i + 1].tk == ">" then
+      return fail(ps, i + 1, "type argument list cannot be empty")
+   end
    local typ = new_type(ps, i, "tuple")
    return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_type)
 end
