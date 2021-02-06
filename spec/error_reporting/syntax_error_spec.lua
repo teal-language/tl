@@ -33,6 +33,18 @@ describe("syntax errors", function()
       { y = 1, msg = "expected an expression" },
    }))
 
+   it("incomplete type definition", util.check_syntax_error([[
+      local type argh
+   ]], {
+      { y = 1, msg = "expected '='" },
+   }))
+
+   it("incomplete type definition", util.check_syntax_error([[
+      local type argh =
+   ]], {
+      { y = 1, msg = "expected a type" },
+   }))
+
    it("unclosed list reports expected token", util.check_syntax_error([[
       local t = {}
       for k,v in pairs(t)

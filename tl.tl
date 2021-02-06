@@ -2436,6 +2436,9 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
       return i, node
    else
       i, node.newtype.def = parse_type(ps, i)
+      if not node.newtype.def then
+         return i
+      end
       return i, node
    end
    return fail(ps, i, "expected a type")
