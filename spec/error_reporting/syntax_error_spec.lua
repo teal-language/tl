@@ -45,6 +45,13 @@ describe("syntax errors", function()
       { y = 1, msg = "expected a type" },
    }))
 
+   it("reports error and resyncs", util.check_syntax_error([[
+      repeat until ( type while repeat local )
+      local x = 1
+   ]], {
+      { y = 1, msg = "expected ')'" },
+   }))
+
    it("unclosed list reports expected token", util.check_syntax_error([[
       local t = {}
       for k,v in pairs(t)

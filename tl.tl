@@ -1911,6 +1911,7 @@ parse_expression_and_tk = function(ps: ParseState, i: number, tk: string): numbe
             break
          end
          if t.tk == tk then
+            fail(ps, i, "syntax error, expected '" .. tk .. "'")
             return i + n + 1, e
          end
       end
