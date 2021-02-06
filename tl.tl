@@ -1028,6 +1028,7 @@ local record Node
    tk: string
    kind: NodeKind
    semicolon: boolean
+   is_longstring: boolean
 
    yend: number
    xend: number
@@ -1592,14 +1593,14 @@ local function parse_function_value(ps: ParseState, i: number): number, Node
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local function unquote(str: string): string
+local function unquote(str: string): string, boolean
    local f = str:sub(1, 1)
    if f == '"' or f == "'" then
-      return str:sub(2, -2)
+      return str:sub(2, -2), false
    end
    f = str:match("^%[=*%[")
    local l = #f + 1
-   return str:sub(l, -l)
+   return str:sub(l, -l), true
 end
 
 local function parse_literal(ps: ParseState, i: number): number, Node
@@ -1608,11 +1609,9 @@ local function parse_literal(ps: ParseState, i: number): number, Node
    elseif ps.tokens[i].kind == "..." then
       return verify_kind(ps, i, "...")
    elseif ps.tokens[i].kind == "string" then
-      local tk = unquote(ps.tokens[i].tk)
-      local node: Node
-      i, node = verify_kind(ps, i, "string")
-      node.conststr = tk
-      return i, node
+      local node = new_node(ps.tokens, i, "string")
+      node.conststr, node.is_longstring = unquote(ps.tokens[i].tk)
+      return i + 1, node
    elseif ps.tokens[i].kind == "identifier" then
       return verify_kind(ps, i, "identifier", "variable")
    elseif ps.tokens[i].kind == "number" then
@@ -3367,6 +3366,10 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
                   table.insert(out, " = ")
                else
                   table.insert(out, "[")
+                  if node.key_parsed == "long" and node.key.is_longstring then
+                     table.insert(children[1], 1, " ")
+                     table.insert(children[1], " ")
+                  end
                   add_child(out, children[1])
                   table.insert(out, "] = ")
                end
@@ -3465,6 +3468,10 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             elseif node.op.op == "@index" then
                add_child(out, children[1], "", indent)
                table.insert(out, "[")
+               if node.e2.is_longstring then
+                  table.insert(children[3], 1, " ")
+                  table.insert(children[3], " ")
+               end
                add_child(out, children[3], "", indent)
                table.insert(out, "]")
             elseif node.op.op == "as" then
@@ -3585,8 +3592,8 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
    visit_node.cbs["identifier"] = visit_node.cbs["variable"]
-   visit_node.cbs["string"] = visit_node.cbs["variable"]
    visit_node.cbs["number"] = visit_node.cbs["variable"]
+   visit_node.cbs["string"] = visit_node.cbs["variable"]
    visit_node.cbs["nil"] = visit_node.cbs["variable"]
    visit_node.cbs["boolean"] = visit_node.cbs["variable"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]

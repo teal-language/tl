@@ -6,6 +6,9 @@ local function string_trim(s)
    return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
+local function multitrim(s)
+   return s:gsub("^%s*", ""):gsub("%s*\n%s*", "\n"):gsub("%s*$", "")
+end
 
 describe("long string", function()
    it("accepts a level 0 long string", util.check [=[
@@ -81,4 +84,30 @@ describe("long string", function()
                long string line 2
             ]=]]==], string_trim(lua))
    end)
+
+   it("can use long strings and preserve spacing on table items", function()
+      local result = tl.process_string([==[
+         local t: {string: boolean} = {
+            [ [["random_string"]] ] = true,
+         }]==])
+      local lua = tl.pretty_print_ast(result.ast)
+      assert.equal(multitrim([==[
+         local t = {
+            [ [["random_string"]] ] = true,
+         }
+      ]==]), multitrim(lua))
+   end)
+
+   it("can use long strings and preserve spacing on indices", function()
+      local result = tl.process_string([==[
+         local t: {string: boolean} = {}
+         t[ [["random_string"]] ] = true
+      ]==])
+      local lua = tl.pretty_print_ast(result.ast)
+      assert.equal(multitrim([==[
+         local t = {}
+         t[ [["random_string"]] ] = true
+      ]==]), multitrim(lua))
+   end)
+
 end)
