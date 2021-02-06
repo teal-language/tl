@@ -21,6 +21,18 @@ describe("syntax errors", function()
       { y = 1, msg = "expected an expression" },
    }))
 
+   it("incomplete expression", util.check_syntax_error([[
+      local x = -
+   ]], {
+      { y = 1, msg = "expected an expression" },
+   }))
+
+   it("incomplete expression", util.check_syntax_error([[
+      local x = (
+   ]], {
+      { y = 1, msg = "expected an expression" },
+   }))
+
    it("unclosed list reports expected token", util.check_syntax_error([[
       local t = {}
       for k,v in pairs(t)

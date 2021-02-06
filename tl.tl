@@ -1726,11 +1726,21 @@ do
       if precedences[1][ps.tokens[i].tk] ~= nil then
          local op: Operator = new_operator(ps.tokens[i], 1)
          i = i + 1
+         local prev_i = i
          i, e1 = P(ps, i)
+         if not e1 then
+            fail(ps, prev_i, "expected an expression")
+            return i
+         end
          e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
+         local prev_i = i
          i, e1 = parse_expression_and_tk(ps, i, ")")
+         if not e1 then
+            fail(ps, prev_i, "expected an expression")
+            return i
+         end
          e1 = { y = t1.y, x = t1.x, kind = "paren", e1 = e1 }
       else
          i, e1 = parse_literal(ps, i)
