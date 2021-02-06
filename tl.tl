@@ -1749,9 +1749,19 @@ do
       if not e1 then
          return i
       end
+
       while true do
          local tkop = ps.tokens[i]
          if tkop.kind == "string" or tkop.kind == "{" then
+            if not after_valid_prefixexp(ps, e1, i) then
+               if tkop.kind == "string" then
+                  fail(ps, i, "cannot call a string; wrap it in parentheses to use the string metamethod")
+               else
+                  fail(ps, i, "cannot call a literal table")
+               end
+               return i
+            end
+
             local op: Operator = new_operator(tkop, 2, "@funcall")
             local args = new_node(ps.tokens, i, "expression_list")
             local argument: Node

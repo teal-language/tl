@@ -8,6 +8,18 @@ describe("call", function()
       { msg = "syntax error, expected ')'" },
    }))
 
+   it("cannot call a string", util.check_syntax_error([[
+      x = "hello" (world)
+   ]], {
+      { msg = "cannot call this expression" },
+   }))
+
+   it("cannot call a table", util.check_syntax_error([[
+      x = {}(world)
+   ]], {
+      { msg = "cannot call this expression" },
+   }))
+
    it("fails when lhs is not a prefixexp", util.check_syntax_error([[
       print(nil("hello"))
    ]], {
