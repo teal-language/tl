@@ -7044,7 +7044,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   if existing_is_const == false and var.is_const then
                      node_error(var, "global was previously declared as not <const>: " .. var.tk)
                   end
-                  if not same_type(existing, t) then
+                  if t and not same_type(existing, t) then
                      node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
                   end
                else
