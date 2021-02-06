@@ -3714,77 +3714,9 @@ local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
 local NOMINAL_METATABLE_OF_ALPHA = a_type { typename = "nominal", names = {"metatable"}, typevals = { ALPHA } }
+local XPCALL_MSGH_FUNCTION = a_type { typename = "function", args = TUPLE { ANY }, rets = TUPLE { } }
 
 local USERDATA = ANY -- Placeholder for maybe having a userdata "primitive" type
-
-local LOAD_FUNCTION = a_type { typename = "function", args = {}, rets = TUPLE { STRING } }
-
-local OS_DATE_TABLE = a_type {
-   typename = "record",
-   fields = {
-      ["year"] = NUMBER,
-      ["month"] = NUMBER,
-      ["day"] = NUMBER,
-      ["hour"] = NUMBER,
-      ["min"] = NUMBER,
-      ["sec"] = NUMBER,
-      ["wday"] = NUMBER,
-      ["yday"] = NUMBER,
-      ["isdst"] = BOOLEAN,
-   }
-}
-
-local OS_DATE_TABLE_FORMAT = a_type { typename = "enum", enumset = { ["!*t"] = true, ["*t"] = true } }
-
-local DEBUG_GETINFO_TABLE = a_type {
-   typename = "record",
-   fields = {
-      ["name"] = STRING,
-      ["namewhat"] = STRING,
-      ["source"] = STRING,
-      ["short_src"] = STRING,
-      ["linedefined"] = NUMBER,
-      ["lastlinedefined"] = NUMBER,
-      ["what"] = STRING,
-      ["currentline"] = NUMBER,
-      ["istailcall"] = BOOLEAN,
-      ["nups"] = NUMBER,
-      ["nparams"] = NUMBER,
-      ["isvararg"] = BOOLEAN,
-      ["func"] = ANY,
-      ["activelines"] = a_type { typename = "map", keys = NUMBER, values = BOOLEAN },
-   }
-}
-
-local DEBUG_HOOK_EVENT = a_type {
-   typename = "enum",
-   enumset = {
-      ["call"] = true,
-      ["tail call"] = true,
-      ["return"] = true,
-      ["line"] = true,
-      ["count"] = true,
-   },
-}
-local DEBUG_HOOK_FUNCTION = a_type {
-   typename = "function",
-   args = TUPLE { DEBUG_HOOK_EVENT, NUMBER },
-   rets = TUPLE {},
-}
-
-local TABLE_SORT_FUNCTION = a_type { typename = "function", args = TUPLE { ALPHA, ALPHA }, rets = TUPLE { BOOLEAN } }
-
--- placeholders for when we have optional arity annotations
-local OPT_NUMBER = NUMBER
-local OPT_STRING = STRING
-local OPT_THREAD = THREAD
-local OPT_ALPHA = ALPHA
-local OPT_BETA = BETA
-local OPT_TABLE = TABLE
-local OPT_UNION = UNION
-local OPT_BOOLEAN = BOOLEAN
-local OPT_NOMINAL_FILE = NOMINAL_FILE
-local OPT_TABLE_SORT_FUNCTION = TABLE_SORT_FUNCTION
 
 local numeric_binop = {
    ["number"] = {
@@ -4349,6 +4281,75 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       last_typeid = globals_typeid
    end
 
+   local LOAD_FUNCTION = a_type { typename = "function", args = {}, rets = TUPLE { STRING } }
+
+   local OS_DATE_TABLE = a_type {
+      typename = "record",
+      fields = {
+         ["year"] = NUMBER,
+         ["month"] = NUMBER,
+         ["day"] = NUMBER,
+         ["hour"] = NUMBER,
+         ["min"] = NUMBER,
+         ["sec"] = NUMBER,
+         ["wday"] = NUMBER,
+         ["yday"] = NUMBER,
+         ["isdst"] = BOOLEAN,
+      }
+   }
+
+   local OS_DATE_TABLE_FORMAT = a_type { typename = "enum", enumset = { ["!*t"] = true, ["*t"] = true } }
+
+   local DEBUG_GETINFO_TABLE = a_type {
+      typename = "record",
+      fields = {
+         ["name"] = STRING,
+         ["namewhat"] = STRING,
+         ["source"] = STRING,
+         ["short_src"] = STRING,
+         ["linedefined"] = NUMBER,
+         ["lastlinedefined"] = NUMBER,
+         ["what"] = STRING,
+         ["currentline"] = NUMBER,
+         ["istailcall"] = BOOLEAN,
+         ["nups"] = NUMBER,
+         ["nparams"] = NUMBER,
+         ["isvararg"] = BOOLEAN,
+         ["func"] = ANY,
+         ["activelines"] = a_type { typename = "map", keys = NUMBER, values = BOOLEAN },
+      }
+   }
+
+   local DEBUG_HOOK_EVENT = a_type {
+      typename = "enum",
+      enumset = {
+         ["call"] = true,
+         ["tail call"] = true,
+         ["return"] = true,
+         ["line"] = true,
+         ["count"] = true,
+      },
+   }
+   local DEBUG_HOOK_FUNCTION = a_type {
+      typename = "function",
+      args = TUPLE { DEBUG_HOOK_EVENT, NUMBER },
+      rets = TUPLE {},
+   }
+
+   local TABLE_SORT_FUNCTION = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ALPHA, ALPHA }, rets = TUPLE { BOOLEAN } }
+
+   -- placeholders for when we have optional arity annotations
+   local OPT_NUMBER = NUMBER
+   local OPT_STRING = STRING
+   local OPT_THREAD = THREAD
+   local OPT_ALPHA = ALPHA
+   local OPT_BETA = BETA
+   local OPT_TABLE = TABLE
+   local OPT_UNION = UNION
+   local OPT_BOOLEAN = BOOLEAN
+   local OPT_NOMINAL_FILE = NOMINAL_FILE
+   local OPT_TABLE_SORT_FUNCTION = TABLE_SORT_FUNCTION
+
    local standard_library: {string:Type} = {
       ["..."] = VARARG { STRING },
       ["any"] = a_type { typename = "typetype", def = ANY },
@@ -4374,7 +4375,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
          a_type { typename = "function", args = TUPLE {}, rets = TUPLE { ALPHA, BETA } },
       } },
       ["pcall"] = a_type { typename = "function", args = VARARG { FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
-      ["xpcall"] = a_type { typename = "function", args = VARARG { FUNCTION, FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
+      ["xpcall"] = a_type { typename = "function", args = VARARG { FUNCTION, XPCALL_MSGH_FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
       ["print"] = a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE {} },
       ["rawequal"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { BOOLEAN } },
       ["rawget"] = a_type { typename = "function", args = TUPLE { TABLE, ANY }, rets = TUPLE { ANY } },
@@ -6349,7 +6350,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    end
 
    local function add_function_definition_for_recursion(node: Node)
-      local args = {}
+      local args: Type = { typename = "tuple" }
       for _, arg in ipairs(node.args) do
          table.insert(args, arg.type)
       end
@@ -6915,10 +6916,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          else
             node_error(node, "require expects one literal argument")
          end
-      elseif node.e1.tk == "pcall" then
+      elseif node.e1.tk == "pcall" or node.e1.tk == "xpcall" then
+         local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
+         if #node.e2 < base_nargs then
+            node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
+            return TUPLE { BOOLEAN }
+         end
+
          local ftype = table.remove(b, 1)
          local fe2: Node = {}
-         for i = 2, #node.e2 do
+         if node.e1.tk == "xpcall" then
+            base_nargs = 2
+            local msgh = table.remove(b, 1)
+            assert_is_a(node.e2[2], msgh, XPCALL_MSGH_FUNCTION, "message handler")
+         end
+         for i = base_nargs + 1, #node.e2 do
             table.insert(fe2, node.e2[i])
          end
          local fnode: Node = {
@@ -6929,7 +6941,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             e1 = node.e2[1],
             e2 = fe2,
          }
-         local rets = type_check_funcall(fnode, ftype, b, argdelta + 1)
+         local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
          if rets.typename ~= "tuple" then
             rets = a_type { typename = "tuple", rets }
          end

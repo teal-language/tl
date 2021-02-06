@@ -1,30 +1,41 @@
 local tl = require("tl")
 local util = require("spec.util")
 
-describe("pcall", function()
-   it("can't pcall nothing", util.check_type_error([[
-      local pok = pcall()
+describe("xpcall", function()
+   it("can't xpcall nothing", util.check_type_error([[
+      local pok = xpcall()
    ]], {
-      { msg = "given 0, expects at least 1" }
+      { msg = "given 0, expects at least 2" }
+   }))
+
+   it("can't xpcall without a message handler", util.check_type_error([[
+      local pok = xpcall(function() end)
+   ]], {
+      { msg = "given 1, expects at least 2" }
    }))
 
    it("checks the correct input arguments", util.check_type_error([[
       local function f(a: string, b: number)
       end
 
-      local pok = pcall(f, 123, "hello")
+      local function msgh(err: string) print(err) end
+
+      local pok = xpcall(f, msgh, 123, "hello")
    ]], {
-      { msg = "argument 2: got number, expected string" }
+      { msg = "argument 3: got number, expected string" }
    }))
 
-   it("pcalls through pcall", function()
+   it("xpcalls through xpcall", function()
       -- ok
       util.mock_io(finally, {
          ["foo.tl"] = [[
             local function f(s: string): number
                return 123
             end
-            local a, b, d = pcall(pcall, f, "num")
+
+            local function msgh(err: string) print(err) end
+
+            local a, b, d = xpcall(xpcall, msgh, f, msgh, "num")
 
             assert(a == true)
             assert(b == true)
@@ -38,14 +49,15 @@ describe("pcall", function()
       assert.same({}, result.unknowns)
    end)
 
-   it("pcalls through pcall through pcall", function()
+   it("xpcalls through xpcall through xpcall", function()
       -- ok
       util.mock_io(finally, {
          ["foo.tl"] = [[
             local function f(s: string): number
                return 123
             end
-            local a, b, c, d = pcall(pcall, pcall, f, "num")
+            local function msgh(err: string) print(err) end
+            local a, b, c, d = xpcall(xpcall, msgh, xpcall, msgh, f, msgh, "num")
 
             assert(a == true)
             assert(b == true)
@@ -60,14 +72,15 @@ describe("pcall", function()
       assert.same({}, result.unknowns)
    end)
 
-   it("pcalls through other magical stdlib functions", function()
+   it("xpcalls through other magical stdlib functions", function()
       -- ok
       util.mock_io(finally, {
          ["num.tl"] = [[
             return 123
          ]],
          ["foo.tl"] = [[
-            local a, b, c, d = pcall(pcall, pcall, require, "num")
+            local function msgh(err: string) print(err) end
+            local a, b, c, d = xpcall(xpcall, msgh, xpcall, msgh, require, msgh, "num")
 
             assert(a == true)
             assert(b == true)
@@ -87,10 +100,24 @@ describe("pcall", function()
          return {"hello", "world"}, true
       end
 
-      local pok, strs, yep = pcall(f, "hello", 123)
+      local function msgh(err: string) print(err) end
+      local pok, strs, yep = xpcall(f, msgh, "hello", 123)
       print(strs[1]:upper())
       local xyz: number = yep
    ]], {
       { msg = "xyz: got boolean, expected number" }
    }))
+
+   it("type checks the message handler", util.check_type_error([[
+      local function f(a: string, b: number)
+      end
+
+      local function msgh(err: string, num: number) print(err) end
+
+      local pok = xpcall(f, msgh, 123, "hello")
+   ]], {
+      { msg = "in message handler: incompatible number of arguments" },
+      { msg = "argument 3: got number, expected string" },
+   }))
+
 end)
