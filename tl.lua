@@ -4985,122 +4985,135 @@ tl.type_check = function(ast, opts)
       ["unknown"] = true,
    }
 
-   local function resolve_typevars(t, seen, where)
+   local function resolve_typevars(typ)
+      local errs
+      local seen = {}
 
-      if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
-         return t
-      end
+      local function resolve(t)
 
-      seen = seen or {}
-      if seen[t] then
-         return seen[t]
-      end
 
-      local orig_t = t
-      if t.typename == "typevar" then
-         t = find_var_type(t.typevar)
-         local rt
-         if not t then
-            rt = UNKNOWN
-         elseif t.typename == "string" then
-
-            rt = STRING
-         elseif no_nested_types[t.typename] or
-            (t.typename == "nominal" and not t.typevals) then
-            rt = t
+         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
+            return t
          end
-         if rt then
-            seen[orig_t] = rt
-            return rt
+
+         seen = seen or {}
+         if seen[t] then
+            return seen[t]
          end
-      end
 
-      local copy = {}
-      seen[orig_t] = copy
+         local orig_t = t
+         if t.typename == "typevar" then
+            t = find_var_type(t.typevar)
+            local rt
+            if not t then
+               rt = UNKNOWN
+            elseif t.typename == "string" then
 
-      copy.typename = t.typename
-      copy.filename = t.filename
-      copy.typeid = t.typeid
-      copy.x = t.x
-      copy.y = t.y
-      copy.yend = t.yend
-      copy.xend = t.xend
-      copy.names = t.names
-
-      for i, tf in ipairs(t) do
-         copy[i] = resolve_typevars(tf, seen, where)
-      end
-
-      if t.typename == "array" then
-         copy.elements = resolve_typevars(t.elements, seen, where)
-
-      elseif t.typename == "typearg" then
-         copy.typearg = t.typearg
-      elseif t.typename == "typevar" then
-         copy.typevar = t.typevar
-      elseif is_typetype(t) then
-         copy.def = resolve_typevars(t.def, seen, where)
-      elseif t.typename == "nominal" then
-         copy.typevals = resolve_typevars(t.typevals, seen, where)
-      elseif t.typename == "function" then
-         if t.typeargs then
-            copy.typeargs = {}
-            for i, tf in ipairs(t.typeargs) do
-               copy.typeargs[i] = resolve_typevars(tf, seen, where)
+               rt = STRING
+            elseif no_nested_types[t.typename] or
+               (t.typename == "nominal" and not t.typevals) then
+               rt = t
+            end
+            if rt then
+               seen[orig_t] = rt
+               return rt
             end
          end
 
-         copy.is_method = t.is_method
-         copy.args = resolve_typevars(t.args, seen, where)
-         copy.rets = resolve_typevars(t.rets, seen, where)
-      elseif t.typename == "record" or t.typename == "arrayrecord" then
-         if t.typeargs then
-            copy.typeargs = {}
-            for i, tf in ipairs(t.typeargs) do
-               copy.typeargs[i] = resolve_typevars(tf, seen, where)
+         local copy = {}
+         seen[orig_t] = copy
+
+         copy.typename = t.typename
+         copy.filename = t.filename
+         copy.typeid = t.typeid
+         copy.x = t.x
+         copy.y = t.y
+         copy.yend = t.yend
+         copy.xend = t.xend
+         copy.names = t.names
+
+         for i, tf in ipairs(t) do
+            copy[i] = resolve(tf)
+         end
+
+         if t.typename == "array" then
+            copy.elements = resolve(t.elements)
+
+         elseif t.typename == "typearg" then
+            copy.typearg = t.typearg
+         elseif t.typename == "typevar" then
+            copy.typevar = t.typevar
+         elseif is_typetype(t) then
+            copy.def = resolve(t.def)
+         elseif t.typename == "nominal" then
+            copy.typevals = resolve(t.typevals)
+         elseif t.typename == "function" then
+            if t.typeargs then
+               copy.typeargs = {}
+               for i, tf in ipairs(t.typeargs) do
+                  copy.typeargs[i] = resolve(tf)
+               end
             end
-         end
 
-         if t.elements then
-            copy.elements = resolve_typevars(t.elements, seen, where)
-         end
-
-         copy.fields = {}
-         for _, k in ipairs(t.field_order) do
-            copy.fields[k] = resolve_typevars(t.fields[k], seen, where)
-         end
-         copy.field_order = t.field_order
-
-         if t.meta_fields then
-            copy.meta_fields = {}
-            for _, k in ipairs(t.meta_field_order) do
-               copy.meta_fields[k] = resolve_typevars(t.meta_fields[k], seen, where)
+            copy.is_method = t.is_method
+            copy.args = resolve(t.args)
+            copy.rets = resolve(t.rets)
+         elseif t.typename == "record" or t.typename == "arrayrecord" then
+            if t.typeargs then
+               copy.typeargs = {}
+               for i, tf in ipairs(t.typeargs) do
+                  copy.typeargs[i] = resolve(tf)
+               end
             end
-            copy.meta_field_order = t.meta_field_order
-         end
-      elseif t.typename == "map" then
-         copy.keys = resolve_typevars(t.keys, seen, where)
-         copy.values = resolve_typevars(t.values, seen, where)
-      elseif t.typename == "union" then
-         copy.types = {}
-         for i, tf in ipairs(t.types) do
-            copy.types[i] = resolve_typevars(tf, seen, where)
+
+            if t.elements then
+               copy.elements = resolve(t.elements)
+            end
+
+            copy.fields = {}
+            for _, k in ipairs(t.field_order) do
+               copy.fields[k] = resolve(t.fields[k])
+            end
+            copy.field_order = t.field_order
+
+            if t.meta_fields then
+               copy.meta_fields = {}
+               for _, k in ipairs(t.meta_field_order) do
+                  copy.meta_fields[k] = resolve(t.meta_fields[k])
+               end
+               copy.meta_field_order = t.meta_field_order
+            end
+         elseif t.typename == "map" then
+            copy.keys = resolve(t.keys)
+            copy.values = resolve(t.values)
+         elseif t.typename == "union" then
+            copy.types = {}
+            for i, tf in ipairs(t.types) do
+               copy.types[i] = resolve(tf)
+            end
+
+            local ok, err = is_valid_union(copy)
+            if not ok then
+               errs = errs or {}
+               table.insert(errs, error_in_type(t, err, t))
+            end
+         elseif t.typename == "poly" or t.typename == "tupletable" then
+            copy.types = {}
+            for i, tf in ipairs(t.types) do
+               copy.types[i] = resolve(tf)
+            end
+         elseif t.typename == "tuple" then
+            copy.is_va = t.is_va
          end
 
-         local ok, err = is_valid_union(copy)
-         if not ok then
-            type_error(where or t, err, t)
-         end
-      elseif t.typename == "poly" or t.typename == "tupletable" then
-         copy.types = {}
-         for i, tf in ipairs(t.types) do
-            copy.types[i] = resolve_typevars(tf, seen, where)
-         end
-      elseif t.typename == "tuple" then
-         copy.is_va = t.is_va
+         return copy
       end
 
-      return copy
+      local copy = resolve(typ)
+      if errs then
+         return false, INVALID, errs
+      end
+      return true, copy
    end
 
    local function infer_var(emptytable, t, node)
@@ -5247,7 +5260,10 @@ tl.type_check = function(ast, opts)
          if find_var_type(k) then
             return comp(a, b)
          else
-            local resolved = resolve_typevars(v)
+            local ok, resolved, errs = resolve_typevars(v)
+            if not ok then
+               return false, errs
+            end
             if resolved.typename ~= "unknown" then
                resolved = resolve_typetype(resolved)
                add_var(nil, k, resolved)
@@ -5402,6 +5418,16 @@ tl.type_check = function(ast, opts)
       table.remove(st)
    end
 
+   local function resolve_typevars_at(t, where)
+      assert(where)
+      local ok, typ, errs = resolve_typevars(t)
+      if not ok then
+         assert(where.y)
+         add_errs_prefixing(errs, errors, "", where)
+      end
+      return typ
+   end
+
    local resolve_nominal
    do
       local function match_typevals(t, def)
@@ -5415,7 +5441,7 @@ tl.type_check = function(ast, opts)
             for i, tt in ipairs(t.typevals) do
                add_var(nil, def.typeargs[i].typearg, tt)
             end
-            local ret = resolve_typevars(def, nil, t)
+            local ret = resolve_typevars_at(def, t)
             end_scope()
             return ret
          elseif t.typevals then
@@ -6070,11 +6096,12 @@ tl.type_check = function(ast, opts)
                local argument = args[a]
                local farg = f.args[a] or (va and f.args[#f.args])
                if argument.typename == "emptytable" then
-                  infer_var(argument, resolve_typevars(farg), node.e2[a])
+                  local where = node.e2[a + argdelta]
+                  infer_var(argument, resolve_typevars_at(farg, where), where)
                end
             end
 
-            return resolve_typevars(f.rets)
+            return resolve_typevars_at(f.rets, node)
          end
          return nil, errs
       end
@@ -6193,7 +6220,7 @@ tl.type_check = function(ast, opts)
             end
          end
 
-         return resolve_typevars(poly.types[1].rets)
+         return resolve_typevars_at(poly.types[1].rets, node)
       end
 
       type_check_function_call = function(node, func, args, is_method, argdelta)
