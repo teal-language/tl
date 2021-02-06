@@ -1753,16 +1753,10 @@ do
       while true do
          local tkop = ps.tokens[i]
          if tkop.kind == "string" or tkop.kind == "{" then
-            if not after_valid_prefixexp(ps, e1, i) then
-               if tkop.kind == "string" then
-                  fail(ps, i, "cannot call a string; wrap it in parentheses to use the string metamethod")
-               else
-                  fail(ps, i, "cannot call a literal table")
-               end
-               return i
-            end
-
             local op: Operator = new_operator(tkop, 2, "@funcall")
+
+            local prev_i = i
+
             local args = new_node(ps.tokens, i, "expression_list")
             local argument: Node
             if tkop.kind == "string" then
@@ -1772,6 +1766,16 @@ do
             else
                i, argument = parse_table_literal(ps, i)
             end
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               if tkop.kind == "string" then
+                  fail(ps, prev_i, "cannot use a string here; if you're trying to call the previous expression, wrap it in parentheses")
+               else
+                  fail(ps, prev_i, "cannot use a table here; if you're trying to call the previous expression, wrap it in parentheses")
+               end
+               return i
+            end
+
             table.insert(args, argument)
             e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif tkop.tk == "(" then

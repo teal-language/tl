@@ -1749,10 +1749,14 @@ do
       if not e1 then
          return i
       end
+
       while true do
          local tkop = ps.tokens[i]
          if tkop.kind == "string" or tkop.kind == "{" then
             local op = new_operator(tkop, 2, "@funcall")
+
+            local prev_i = i
+
             local args = new_node(ps.tokens, i, "expression_list")
             local argument
             if tkop.kind == "string" then
@@ -1762,6 +1766,16 @@ do
             else
                i, argument = parse_table_literal(ps, i)
             end
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               if tkop.kind == "string" then
+                  fail(ps, prev_i, "cannot use a string here; if you're trying to call the previous expression, wrap it in parentheses")
+               else
+                  fail(ps, prev_i, "cannot use a table here; if you're trying to call the previous expression, wrap it in parentheses")
+               end
+               return i
+            end
+
             table.insert(args, argument)
             e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = args }
          elseif tkop.tk == "(" then
