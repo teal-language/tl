@@ -2256,7 +2256,7 @@ end
 parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
    local istart = i - 1
    def.enumset = {}
-   while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+   while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
       i, item = verify_kind(ps, i, "string", "enum_item")
       if item then

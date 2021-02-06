@@ -21,6 +21,13 @@ describe("syntax errors", function()
       { y = 1, msg = "expected an expression" },
    }))
 
+
+   it("incomplete enum", util.check_syntax_error([[
+      local enum "hello"
+   ]], {
+      { y = 1, msg = "syntax error" },
+   }))
+
    it("incomplete expression", util.check_syntax_error([[
       local x = -
    ]], {
