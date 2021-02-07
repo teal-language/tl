@@ -79,6 +79,20 @@ describe("flow analysis with ==", function()
          { msg = "cannot index something that is not a record: number | string" }
       }))
 
+      it("can combine with is", util.check [[
+         local function foo(a: number | string | function)
+            if a is string and a == 'hello' then
+               print(a:upper())
+               return
+            elseif a is string and a == 'bye' then
+               print(a:lower())
+               return
+            end
+         end
+
+         foo('hello')
+      ]])
+
       it("propagates string constants for use as enums", util.check [[
          local enum Direction
             "north"

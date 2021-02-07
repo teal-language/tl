@@ -6883,113 +6883,135 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          return unite(types)
       end
 
-      local eval_not: function(f: Fact): {string:Type}
-      local or_types: function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
-      local and_types: function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
-      local eval_fact: function(f: Fact): {string:Type}
+      local eval_not: function(f: Fact): {string:Fact}
+      local not_facts: function(fs: {string:Fact}): {string:Fact}
+      local or_facts: function(fs1: {string:Fact}, fs2: {string:Fact}): {string:Fact}
+      local and_facts: function(fs1: {string:Fact}, fs2: {string:Fact}): {string:Fact}
+      local eval_fact: function(f: Fact): {string:Fact}
 
-      eval_not = function(f: Fact): {string:Type}
-         if f.fact == "is" then
-            local typ = find_var_type(f.var, true)
-            if not typ then
-               return { [f.var] = INVALID }
-            end
-            if typ.typename == "typevar" then
-               -- nothing is known from negation on typeargs
-               return {}
-            elseif not is_a(f.typ, typ) then
-               node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
-               return { [f.var] = INVALID }
-            else
-               local sub, warn = subtract_types(typ, f.typ)
-               if warn then
-                  node_warning("branch", f.where, f.var .. ": " .. warn)
+      local function invalid_from(f: Fact): Fact
+         return Fact { fact = "is", var = f.var, typ = INVALID, where = f.where }
+      end
+
+      not_facts = function(fs: {string:Fact}): {string:Fact}
+         local ret: {string:Fact} = {}
+         for var, f in pairs(fs) do
+            if f.fact == "is" then
+               local typ = find_var_type(f.var, true)
+               if not typ then
+                  ret[var] = invalid_from(f)
+               elseif typ.typename == "typevar" then
+                  -- nothing is known from negation on typeargs
+               elseif not is_a(f.typ, typ) then
+                  node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+                  ret[var] = invalid_from(f)
+               else
+                  local sub, warn = subtract_types(typ, f.typ)
+                  if warn then
+                     node_warning("branch", f.where, f.var .. ": " .. warn)
+                  end
+                  ret[var] = Fact { fact = "is", var = var, typ = sub, where = f.where }
                end
-               return { [f.var] = sub }
+            elseif f.fact == "==" then
+               -- nothing is known from negation of equality
             end
-         elseif f.fact == "==" then
-            return {}
+         end
+         return ret
+      end
+
+      eval_not = function(f: Fact): {string:Fact}
+         if f.fact == "is" then
+            return not_facts({[f.var] = f})
          elseif f.fact == "not" then
             return eval_fact(f.f1)
-         elseif f.fact == "and" then
-            return or_types(eval_not(f.f1), eval_not(f.f2))
-         elseif f.fact == "or" then
-            return and_types(eval_not(f.f1), eval_not(f.f2))
+         else
+            return not_facts(eval_fact(f))
          end
       end
 
-      or_types = function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+      or_facts = function(fs1: {string:Fact}, fs2: {string:Fact}): {string:Fact}
          local realtypes: {string:Type} = {}
+         local ret: {string:Fact} = {}
 
-         local ret: {string:Type} = {}
-
-         for var, typ in pairs(vs1) do
+         for var, f in pairs(fs1) do
             local vt = find_var_type(var, true) or INVALID
             realtypes[var] = vt
-            if not is_a(typ, vt) then
-               return vs2
+            if not is_a(f.typ, vt) then
+               return fs2
             end
-            ret[var] = typ
+            ret[var] = f
          end
 
-         for var, typ in pairs(vs2) do
+         for var, f in pairs(fs2) do
             local vt = realtypes[var] or find_var_type(var, true) or INVALID
-            realtypes[var] = vt
-            if not is_a(typ, vt) then
-               return vs1
+            if not is_a(f.typ, vt) then
+               return fs1
             end
-            ret[var] = unite_types(typ, ret[var])
+            if ret[var] then
+               local fact: FactType = (ret[var].fact == "==" and f.fact == "==")
+                                      and "==" or "is"
+               ret[var] = Fact { fact = fact, var = var, typ = unite_types(f.typ, ret[var].typ), where = f.where }
+            else
+               ret[var] = f
+            end
          end
 
          return ret
       end
 
-      and_types = function(vs1: {string:Type}, vs2: {string:Type}): {string:Type}
+      and_facts = function(fs1: {string:Fact}, fs2: {string:Fact}): {string:Fact}
          local realtypes: {string:Type} = {}
+         local ret: {string:Fact} = {}
 
-         local ret: {string:Type} = {}
-
-         for var, typ in pairs(vs1) do
+         for var, f in pairs(fs1) do
             local vt = find_var_type(var, true) or INVALID
             realtypes[var] = vt
-            if not is_a(typ, vt) then
+            if not is_a(f.typ, vt) then
                return {}
             end
-            ret[var] = typ
+            ret[var] = f
          end
 
-         for var, typ in pairs(vs2) do
+         for var, f in pairs(fs2) do
             local vt = realtypes[var] or find_var_type(var, true) or INVALID
-            realtypes[var] = vt
-            if not is_a(typ, vt) then
+            if not is_a(f.typ, vt) then
                return {}
             end
-            ret[var] = ret[var] and intersect_types(typ, ret[var]) or typ
+            if ret[var] then
+               if f.fact == "==" then
+                  ret[var] = f
+               elseif ret[var].fact ~= "==" then
+                  -- both are "is"
+                  ret[var] = Fact { fact = "is", var = var, typ = intersect_types(f.typ, ret[var].typ), where = f.where }
+               end
+            else
+               ret[var] = f
+            end
          end
 
          return ret
       end
 
-      eval_fact = function(f: Fact): {string:Type}
+      eval_fact = function(f: Fact): {string:Fact}
          if f.fact == "is" then
             local typ = find_var_type(f.var, true)
             if not typ then
-               return { [f.var] = INVALID }
+               return { [f.var] = invalid_from(f) }
             end
             if typ.typename ~= "typevar" and not is_a(f.typ, typ) then
                node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
-               return { [f.var] = INVALID }
+               return { [f.var] = invalid_from(f) }
             else
-               return { [f.var] = f.typ }
+               return { [f.var] = f }
             end
          elseif f.fact == "==" then
-            return { [f.var] = f.typ }
+            return { [f.var] = f }
          elseif f.fact == "not" then
             return eval_not(f.f1)
          elseif f.fact == "and" then
-            return and_types(eval_fact(f.f1), eval_fact(f.f2))
+            return and_facts(eval_fact(f.f1), eval_fact(f.f2))
          elseif f.fact == "or" then
-            return or_types(eval_fact(f.f1), eval_fact(f.f2))
+            return or_facts(eval_fact(f.f1), eval_fact(f.f2))
          end
       end
 
@@ -6998,13 +7020,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             return
          end
 
-         local vars = eval_fact(known)
+         local facts = eval_fact(known)
 
-         for v, t in pairs(vars) do
-            if t.typename == "invalid" then
+         for v, f in pairs(facts) do
+            if f.typ.typename == "invalid" then
                node_error(where, "cannot resolve a type for " .. v .. " here")
             end
-            t = shallow_copy(t) -- new type object
+            local t = shallow_copy(f.typ) -- new type object
             t.inferred_at = where
             t.inferred_at_file = filename
             add_var(nil, v, t, true, true)
