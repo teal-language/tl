@@ -6771,6 +6771,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                __tostring = function(f: Fact): string
                   if f.fact == "is" then
                      return ("(%s is %s)"):format(f.var, show_type(f.typ))
+                  elseif f.fact == "==" then
+                     return ("(%s == %s)"):format(f.var, show_type(f.typ))
                   elseif f.fact == "not" then
                      return ("(not %s)"):format(tostring(f.f1))
                   elseif f.fact == "or" then
