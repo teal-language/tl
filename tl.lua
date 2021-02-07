@@ -6771,6 +6771,8 @@ tl.type_check = function(ast, opts)
                __tostring = function(f)
                   if f.fact == "is" then
                      return ("(%s is %s)"):format(f.var, show_type(f.typ))
+                  elseif f.fact == "==" then
+                     return ("(%s == %s)"):format(f.var, show_type(f.typ))
                   elseif f.fact == "not" then
                      return ("(not %s)"):format(tostring(f.f1))
                   elseif f.fact == "or" then
@@ -7587,13 +7589,14 @@ tl.type_check = function(ast, opts)
 
             for i, child in ipairs(children) do
                assert(child.typename == "table_item")
+               local uvtype = resolve_tuple(child.vtype)
                if child.kname then
                   is_record = true
                   if not node.type.fields then
                      node.type.fields = {}
                      node.type.field_order = {}
                   end
-                  node.type.fields[child.kname] = child.vtype
+                  node.type.fields[child.kname] = uvtype
                   table.insert(node.type.field_order, child.kname)
                elseif child.ktype.typename == "number" then
                   is_array = true
@@ -7613,22 +7616,22 @@ tl.type_check = function(ast, opts)
                            last_array_idx = last_array_idx + 1
                         end
                      else
-                        node.type.types[last_array_idx] = resolve_tuple(child.vtype)
+                        node.type.types[last_array_idx] = uvtype
                         last_array_idx = last_array_idx + 1
-                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                        node.type.elements = expand_type(node, node.type.elements, uvtype)
                      end
                   else
                      local n = node[i].key.constnum
 
                      if not is_positive_int(n) then
-                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                        node.type.elements = expand_type(node, node.type.elements, uvtype)
                         is_not_tuple = true
                      elseif n then
-                        node.type.types[n] = resolve_tuple(child.vtype)
+                        node.type.types[n] = uvtype
                         if n > largest_array_idx then
                            largest_array_idx = n
                         end
-                        node.type.elements = expand_type(node, node.type.elements, child.vtype)
+                        node.type.elements = expand_type(node, node.type.elements, uvtype)
                      end
                   end
 
@@ -7642,7 +7645,7 @@ tl.type_check = function(ast, opts)
                   is_map = true
                   child.ktype.tk = nil
                   node.type.keys = expand_type(node, node.type.keys, child.ktype)
-                  node.type.values = expand_type(node, node.type.values, child.vtype)
+                  node.type.values = expand_type(node, node.type.values, uvtype)
                end
             end
             if is_array and is_map then
@@ -7849,7 +7852,7 @@ tl.type_check = function(ast, opts)
       ["paren"] = {
          after = function(node, children)
             node.known = node.e1 and node.e1.known
-            node.type = resolve_unary(children[1])
+            node.type = resolve_tuple(children[1])
             return node.type
          end,
       },

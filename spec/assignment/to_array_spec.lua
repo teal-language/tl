@@ -11,6 +11,13 @@ describe("assignment to array", function()
       { y = 3, msg = "got {string | number} (from {string, number}), expected {string}" },
    }))
 
+   it("resolves arity of function returns", util.check [[
+      local function f(): number
+         return 2
+      end
+      local m: {number} = { f() }
+   ]])
+
    it("check expansion of expression inside array", util.check_type_error([[
       local function f(): string, number
          return "hello", 123
