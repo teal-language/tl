@@ -896,11 +896,15 @@ if cmd == "types" then
    local tr, trenv
    local errs = false
    for i, input_file in ipairs(args["file"]) do
-      local result = type_check_file(input_file)
-      if result and result.ast then
-         tr, trenv = tl.get_types(result, trenv)
-      end
-      if #result.warnings > 0 or #result.syntax_errors > 0 or #result.type_errors > 0 then
+      local pok, result = pcall(type_check_file, input_file)
+      if pok then
+         if result and result.ast then
+            tr, trenv = tl.get_types(result, trenv)
+         end
+         if #result.warnings > 0 or #result.syntax_errors > 0 or #result.type_errors > 0 then
+            errs = true
+         end
+      else
          errs = true
       end
       if i > 1 then
