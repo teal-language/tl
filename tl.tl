@@ -5232,7 +5232,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if scope[emptytable.assigned_to] then
             scope[emptytable.assigned_to] = {
                t = t,
-               is_const = true,
+               is_const = false,
             }
             t.inferred_at = node
             t.inferred_at_file = filename
