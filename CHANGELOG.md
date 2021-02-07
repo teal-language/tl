@@ -1,3 +1,75 @@
+# 0.11.0
+
+2021-02-07
+
+The FOSDEM 2021 edition!
+
+This new release does not include big language changes, but includes a lot of
+new stuff!
+
+This release features commits by Corey Williamson, lenscas, Patrick
+Desaulniers and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* The module return type can be inferred anywhere at the top-level,
+  not only at the outermost scope (#334)
+* Records are compared nominally and all other types are compared
+  structurally
+* Flow inference added to the `==` operator
+  * Testing for a value in an `if` test propagates it into the block,
+    which is especially useful for constraining a string into an
+    enum, for example
+* Standard library improvements
+  * `debug` library
+
+### Tooling
+
+* New experimental command: `tl types`,
+  * It produces a JSON report designed to be consumed by IDE tooling:
+    for each input file, it lists all types used in the source code by
+    line and column location, all symbols declared by scope, all types
+    and globals
+  * Also includes experimental a Teal API, which is used to implement
+    `tl types`:
+    * `tl.get_types`, which produces the above report as a record
+    * `tl.symbols_in_scope`, which given a report, a line and column,
+      reports all symbols visible at that location.
+  * This feature is still experimental because the compiler was extended
+    to perform type checking on syntactically-incorrect inputs (because
+    IDEs want to perform analysis on unfinished programs). Some incorrect
+    inputs may cause the type checker it to stumble!
+* Support for `build.tl` file in `tl build`, which allows you to run a
+  build script written in Teal before your files are compiled (for example,
+  to produce generated code)
+* `tl build` now looks for `tlconfig.lua` in parent directories, so you
+  can call it from anywhere in your project tree
+* Improved error messages and reduced the number of cascading syntax errors
+* The compat53 dependency is now optional (pcall-loaded) in generated Lua
+  code. You can make it required or disable it completely using `gen_compat`
+  in `tlconfig.lua` and `--gen-compat={required|optional|off}`
+* You can now target the Lua version of the generated code with `gen_target`
+  and `--gen-target`. Supported modes are `5.1` (for LuaJIT, Lua 5.1 and 5.2)
+  and `5.3` for (Lua 5.3 and Lua 5.4).
+* Friendly warnings on misuse of `pairs`/`ipairs`
+* Type checker now runs in the package loader
+
+### Fixes
+
+* Preserves explicit semicolons in the input, to deal correctly with
+  Lua grammar ambiguity
+* New inference engine for `is` operator
+  * Does negation correctly implementing DeMorgan's laws
+* Fixed `is` for type arguments
+* Fixed resolution of metamethod fields in nested types (#326)
+* Fixed type comparison for tuple elements
+* Fixed invariant comparison between empty tables and nominals (#332)
+* Fixed precedence of `+` relative to `..`
+* A _large_ number of parser fixes on bad input corner cases,
+  thanks to fuzz testing and user feedback, prompted by the `tl types` work!
+
 # 0.10.1
 
 2021-01-07
