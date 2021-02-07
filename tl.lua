@@ -112,6 +112,18 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -8284,7 +8296,23 @@ function tl.get_types(result, trenv)
    local tr = trenv.tr
    local typeid_to_num = trenv.typeid_to_num
 
-   local function get_typenum(t)
+   local get_typenum
+
+   local function store_function(ti, rt)
+      local args = {}
+      for _, arg in ipairs(rt.args) do
+         table.insert(args, mark_array({ get_typenum(arg), nil }))
+      end
+      ti.args = mark_array(args)
+      local rets = {}
+      for _, arg in ipairs(rt.rets) do
+         table.insert(rets, mark_array({ get_typenum(arg), nil }))
+      end
+      ti.rets = mark_array(rets)
+      ti.vararg = rt.is_va
+   end
+
+   get_typenum = function(t)
       assert(t.typeid)
 
       local n = typeid_to_num[t.typeid]
@@ -8316,19 +8344,29 @@ function tl.get_types(result, trenv)
       end
       assert(rt.typename ~= "typetype")
 
-
       if is_record_type(rt) then
+
          local r = {}
          for _, k in ipairs(rt.field_order) do
             local v = rt.fields[k]
             r[k] = get_typenum(v)
          end
          ti.fields = r
-      end
+      elseif rt.typename == "enum" then
 
-
-      if rt.typename == "enum" then
          ti.enums = mark_array(sorted_keys(rt.enumset))
+      elseif rt.typename == "function" then
+
+         store_function(ti, rt)
+      elseif rt.typename == "poly" then
+
+         local tis = {}
+         for _, pt in ipairs(rt.types) do
+            local pti = {}
+            store_function(pti, pt)
+            table.insert(tis, pti)
+         end
+         ti.types = mark_array(tis)
       end
 
       return n

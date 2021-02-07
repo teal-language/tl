@@ -81,13 +81,24 @@ local record tl
    end
 
    record TypeInfo
+      t: number
+
       str: string
       file: string
       x: number
       y: number
+      -- nominals
       ref: number
+      -- records
       fields: {string: number}
+      -- enums
       enums: {string}
+      -- functions
+      args: {{number, string}}
+      rets: {{number, string}}
+      vararg: boolean
+      -- poly
+      types: {TypeInfo}
    end
 
    record TypeReport
@@ -8285,7 +8296,23 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    local tr = trenv.tr
    local typeid_to_num = trenv.typeid_to_num
 
-   local function get_typenum(t: Type): number
+   local get_typenum: function(t: Type): number
+
+   local function store_function(ti: TypeInfo, rt: Type)
+      local args: {{number, string}} = {}
+      for _, arg in ipairs(rt.args) do
+         table.insert(args, mark_array { get_typenum(arg), nil })
+      end
+      ti.args = mark_array(args)
+      local rets: {{number, string}} = {}
+      for _, arg in ipairs(rt.rets) do
+         table.insert(rets, mark_array { get_typenum(arg), nil })
+      end
+      ti.rets = mark_array(rets)
+      ti.vararg = rt.is_va
+   end
+
+   get_typenum = function(t: Type): number
       assert(t.typeid)
       -- try by typeid
       local n = typeid_to_num[t.typeid]
@@ -8317,19 +8344,29 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
       end
       assert(rt.typename ~= "typetype")
 
-      -- store record field info
       if is_record_type(rt) then
+         -- store record field info
          local r = {}
          for _, k in ipairs(rt.field_order) do
             local v = rt.fields[k]
             r[k] = get_typenum(v)
          end
          ti.fields = r
-      end
-
-      -- store enum info
-      if rt.typename == "enum" then
+      elseif rt.typename == "enum" then
+         -- store enum info
          ti.enums = mark_array(sorted_keys(rt.enumset))
+      elseif rt.typename == "function" then
+         -- store function info
+         store_function(ti, rt)
+      elseif rt.typename == "poly" then
+         -- store poly info
+         local tis = {}
+         for _, pt in ipairs(rt.types) do
+            local pti = {}
+            store_function(pti, pt)
+            table.insert(tis, pti)
+         end
+         ti.types = mark_array(tis)
       end
 
       return n
