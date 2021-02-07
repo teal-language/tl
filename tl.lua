@@ -2413,6 +2413,9 @@ parse_record_body = function(ps, i, def, node)
             else
                return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
             end
+         else
+            fail(ps, i, "syntax error: expected ':' for an attribute or '=' for a nested type")
+            i = i + 1
          end
       end
    end

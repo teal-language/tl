@@ -477,4 +477,16 @@ describe("records", function()
    ]], {
       { msg = "duplicated 'userdata' declaration in record" },
    }))
+
+   it("untyped attributes are not accepted (#381)", util.check_syntax_error([[
+      local record kons
+         any_identifier other_sequence
+         aaa bbb
+      end
+      local k: kons = {}
+      print(k)
+   ]], {
+      { msg = "syntax error: expected ':' for an attribute" },
+      { msg = "syntax error: expected ':' for an attribute" },
+   }))
 end)
