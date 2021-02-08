@@ -101,6 +101,12 @@ local function indent(str)
    return (str:gsub("\n", "\n   "))
 end
 
+local function trim_end(str)
+   assert(type(str) == "string")
+
+   return str:match("(.-)%s*$")
+end
+
 local function batch_assertions(prefix)
    return {
       add = function(self, assert_func, ...)
@@ -223,6 +229,10 @@ function util.write_tmp_dir(finally, dir_structure)
             assert(lfs.mkdir(prefix .. name))
             traverse_dir(content, prefix .. name .. "/")
          else
+            if type(content) == "string" then
+               content = trim_end(content)
+            end
+
             local fd = io.open(prefix .. name, "w")
             fd:write(content)
             fd:close()
@@ -447,6 +457,8 @@ end
 function util.check_syntax_error(code, syntax_errors)
    assert(type(code) == "string")
    assert(type(syntax_errors) == "table")
+
+   code = trim_end(code)
 
    return function()
       local tokens = tl.lex(code)
