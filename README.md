@@ -23,6 +23,8 @@ the project's progress:
 
 ## Installing
 
+### Via LuaRocks
+
 Install Lua and LuaRocks, then run:
 
 ```
@@ -31,6 +33,13 @@ luarocks install tl
 
 This should put a `tl` command in your `$PATH` (run `eval $(luarocks path)` if
 the LuaRocks-installed binaries are not in your `$PATH`)
+
+### Binaries
+
+Alternatively, you can find pre-compiled binaries for Linux x86_64 and Windows
+x86_64 at the [releases](https://github.com/teal-language/tl/releases) page.
+The packages contain a stand-alone executable that can run Teal programs
+(without the need of a separate Lua installation) and also compile them to Lua.
 
 ## Running
 
@@ -44,6 +53,19 @@ Once `tl` is in your path, there are a few subcommands:
   stripped.
 * `tl build` will compile your project via the rules defined in `tlconfig.lua`.
 * `tl warnings` will list all warnings the compiler can generate.
+
+## Loading Teal code from Lua
+
+You can either pre-compile your `.tl` files into `.lua`, or you can add
+the `tl.lua` module into your project and activate the Teal package loader:
+
+```lua
+local tl = require("tl")
+tl.loader()
+```
+
+Once the package loader is activated, your `require()` calls can load and
+compile `.tl` files on-the-fly.
 
 ## Documentation
 
