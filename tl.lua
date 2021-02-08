@@ -843,6 +843,8 @@ do
          end
       end
 
+      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$" })
+
       return tokens, (#errs > 0) and errs
    end
 end
@@ -3014,7 +3016,6 @@ function tl.parse_program(tokens, errs, filename)
       required_modules = {},
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
-   table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    local i, node = parse_statements(ps, 1, filename, true)
    clear_redundant_errors(errs)
    return i, node, ps.required_modules
