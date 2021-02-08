@@ -1,3 +1,21 @@
+# 0.11.1
+
+2021-02-07
+
+Having great users means having great feedback! Here's a  quick bugfix release
+addressing a few issues that were reported by the community right after the
+release of Teal 0.11.0.
+
+This release features commits by Hisham Muhammad.
+
+## What's New
+
+### Fixes
+
+* Fixed inference in cases that combine `is` and `==` (#382)
+* Fixed tuple resolution in literal tables
+* Fixed incorrect `<const>` in table inference (#383)
+
 # 0.11.0
 
 2021-02-07
@@ -5,7 +23,8 @@
 The FOSDEM 2021 edition!
 
 This new release does not include big language changes, but includes a lot of
-new stuff!
+new stuff! The new `tl types` infrastructure for IDE tooling, `build.tl`
+support in `tl build`, code generation options, and tons of bugfixes.
 
 This release features commits by Corey Williamson, lenscas, Patrick
 Desaulniers and Hisham Muhammad.
