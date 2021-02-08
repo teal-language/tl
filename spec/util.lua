@@ -51,6 +51,23 @@ function util.do_in(dir, func, ...)
    return t_unpack(res)
 end
 
+local function unindent(code)
+   assert(type(code) == "string")
+
+   return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function indent(str)
+   assert(type(str) == "string")
+   return (str:gsub("\n", "\n   "))
+end
+
+local function trim_end(str)
+   assert(type(str) == "string")
+
+   return str:match("(.-)%s*$")
+end
+
 function util.mock_io(finally, filemap)
    assert(type(finally) == "function")
    assert(type(filemap) == "table")
@@ -77,9 +94,9 @@ function util.mock_io(finally, filemap)
          return {
             read = function (_, format)
                if format == "*a" then
-                  return filemap[basename]   -- Return fake file content
+                  return trim_end(filemap[basename]) -- Return fake file content
                else
-                  error("Not implemented!")  -- Implement other modes if needed
+                  error("Not implemented!") -- Implement other modes if needed
                end
             end,
             close = function () end,
@@ -88,23 +105,6 @@ function util.mock_io(finally, filemap)
          return io_open(filename, mode)
       end
    end
-end
-
-local function unindent(code)
-   assert(type(code) == "string")
-
-   return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function indent(str)
-   assert(type(str) == "string")
-   return (str:gsub("\n", "\n   "))
-end
-
-local function trim_end(str)
-   assert(type(str) == "string")
-
-   return str:match("(.-)%s*$")
 end
 
 local function batch_assertions(prefix)
