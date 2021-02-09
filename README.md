@@ -41,6 +41,13 @@ x86_64 at the [releases](https://github.com/teal-language/tl/releases) page.
 The packages contain a stand-alone executable that can run Teal programs
 (without the need of a separate Lua installation) and also compile them to Lua.
 
+### Try it from your browser
+
+You can give Teal a try directly from your browser with the [Teal
+Playground](teal-playground.netlify.app/)! It compiles Teal into Lua using
+[Fengari](https://github.com/fengari-lua/fengari), a Lua VM implemented in
+JavaScript, so everything runs on the client.
+
 ## Running
 
 Once `tl` is in your path, there are a few subcommands:
@@ -84,7 +91,7 @@ Teal language support is currently available for [Vim](https://github.com/teal-l
 ## Community
 
 * Join the chat on [Gitter](https://gitter.im/teal-language/community)!
-  * You can also join via Matrix at https://matrix.to/#/#teal-language_community:gitter.im
+  * You can also join via Matrix at [#teal-language_community:gitter.im](https://matrix.to/#/#teal-language_community:gitter.im)
 
 Teal is a project started by [Hisham Muhammad](https://hisham.hm),
 developed by a [growing number of contributors](https://github.com/teal-language/tl/graphs/contributors)
