@@ -167,7 +167,7 @@ describe("build script", function()
                "Created directory: generated_code",
                "Error in gen_code: build.tl:3: hello\nstack traceback:",
                "\t[C]: in function 'error'",
-               "\tbuild.tl:3: in " .. (util.lua_subversion <= 2 and "function" or "field") .. " 'gen_code'\n",
+               "\tbuild.tl:3: in " .. (tonumber(_VERSION:match("%.(%d)")) <= 2 and "function" or "field") .. " 'gen_code'\n",
             },
          })
       end)

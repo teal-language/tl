@@ -125,6 +125,8 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -4936,12 +4938,12 @@ tl.type_check = function(ast, opts)
    local lax = opts.lax
    local filename = opts.filename
 
-   local result = opts.result or {
-      syntax_errors = {},
-      type_errors = {},
-      unknowns = {},
-      warnings = {},
-      dependencies = {},
+   local result = {
+      syntax_errors = opts.result and opts.result.syntax_errors or {},
+      type_errors = opts.result and opts.result.type_errors or {},
+      unknowns = opts.result and opts.result.unknowns or {},
+      warnings = opts.result and opts.result.warnings or {},
+      dependencies = opts.result and opts.result.dependencies or {},
    }
 
    local st = { env.globals }

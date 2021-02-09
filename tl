@@ -157,7 +157,7 @@ local function die(...)
    os.exit(1)
 end
 
-local function report_errors(category, errors, logfn)
+local function report_errors(category, errors, fname, logfn)
    if not errors then
       return false
    end
@@ -165,7 +165,7 @@ local function report_errors(category, errors, logfn)
       logfn = logfn or log.err
       local n = #errors
       logfn("========================================")
-      logfn(n, " ", category, (n ~= 1 and "s" or ""), ":")
+      logfn(n, " ", category, (n ~= 1 and "s" or ""), ":", fname and " " .. fname or "")
       for _, err in ipairs(errors) do
          logfn(err.filename, ":", err.y, ":", err.x, ": ", err.msg or "")
       end
@@ -176,14 +176,14 @@ end
 
 local disabled_warnings = {}
 local warning_errors = {}
-local function report_warnings(result)
+local function report_warnings(fname, result)
    local res_warnings = {}
    for _, warning in ipairs(result.warnings or {}) do
       if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
          table.insert(res_warnings, warning)
       end
    end
-   return not report_errors("warning", res_warnings, log.warn)
+   return not report_errors("warning", res_warnings, fname, log.warn)
 end
 
 local function get_warning_errors(result)
@@ -199,10 +199,10 @@ local function get_warning_errors(result)
    return res_warnings
 end
 
-local function report_result(result)
-   report_warnings(result)
+local function report_result(fname, result)
+   report_warnings(fname, result)
    local errs = merge_list(result.type_errors, get_warning_errors(result))
-   local ok = not report_errors("error", errs)
+   local ok = not report_errors("error", errs, fname)
    report_errors("unknown variable", result.unknowns)
    return ok
 end
@@ -882,7 +882,7 @@ local function setup_env(filename)
       for _, mod in ipairs(tlconfig.preload_modules) do
          local modtype, found = tl.require_module(mod, lax_mode, env)
          if not found then
-            die("Unable to find module '", mod, "'")
+            die("Unable to find module '", mod, "' to preload")
          elseif not modtype or modtype.typename == "unknown" then
             die("Preloaded module '", mod, "' has no type information")
          end
@@ -917,7 +917,7 @@ local function type_check_file(file_name, env)
       exit = 1
    end
 
-   local ok = report_result(result)
+   local ok = report_result(file_name, result)
    if not ok then
       exit = 1
    end
@@ -947,7 +947,7 @@ local function type_check_and_load(filename, env)
       os.exit(1)
    end
    if filename:match("%.tl$") then
-      local ok = report_result(result)
+      local ok = report_result(filename, result)
       if not ok then
          os.exit(1)
       end
@@ -1321,7 +1321,7 @@ local record Node
       "typecheck"
       "compile"
    end
-   mark: number
+   mark: Mark
    dependents: {Node}
 end
 dag: {string:Node}
@@ -1335,11 +1335,16 @@ for input, output in pairs(files) do
       for _, mod_name in ipairs(require_calls) do
          local found, fd, tried = tl.search_module(mod_name, true)
          if found then
+            fd:close()
+
             if found:sub(1, 2) == "." .. path_separator then
                found = found:sub(3)
             end
-            modules[mod_name] = found
-            fd:close()
+            if (path_separator == "/" and found:sub(1,1) == "/")
+               or (found:match("^%a:" .. path_separator)) then
+            else
+               modules[mod_name] = found
+            end
          end
       end
       dag[input] = {
@@ -1363,8 +1368,11 @@ for file, node in pairs(dag) do
 end
 
 do -- catch circular deps
-   local acyclic_cache = {}
+   local cycle_cache = {}
    local function get_cycle(node, parents)
+      if cycle_cache[node] ~= nil then
+         return cycle_cache[node]
+      end
       parents = parents or {}
       parents[node] = true
       for _, dep in pairs(node.dependents) do
@@ -1373,11 +1381,12 @@ do -- catch circular deps
          end
          if get_cycle(dep, parents) then
             parents[dep] = true
+            cycle_cache[node] = parents
             return parents
          end
       end
       parents[node] = false
-      acyclic_cache[node] = true
+      cycle_cache[node] = false
    end
 
    local nodes_in_cycles = {}
@@ -1472,28 +1481,49 @@ table.sort(nodes_to_process, function(a, b)
 end)
 
 local env = setup_env()
+
+local write_queue = {}
+local function queue(ast, fname)
+   table.insert(write_queue, {ast, fname})
+end
+
 for i, node in ipairs(nodes_to_process) do
    local input, output = node.input, node.output
    local parsed = parse_file(input)
    if report_errors("syntax error", parsed.errs) then
       exit = 1
    else
-      local type_errors = tl.type_check(parsed.ast, {
+      local result = {
+         syntax_errors = parsed.errs,
+         warnings = {},
+         unknowns = {},
+         type_errors = {},
+         filename = input,
+      }
+
+      tl.type_check(parsed.ast, {
          filename = input,
          env = env,
+         result = result,
       })
-      if report_errors("type error", type_errors) then
-         lfs.touch(input)
-         -- We touch the file here to help in the case of a dependency changing
-         -- a type that causes an error. If we didn't do this, the next build
-         -- wouldn't type check this file but it would have a type error
+
+      local ok = report_result(input, result)
+      if ok then
+         if node.mark == "compile" then
+            queue(parsed.ast, output)
+         end
+      else
          exit = 1
-      elseif node.mark == "compile" then
-         write_out(parsed.ast, output)
       end
    end
    if i > 1 then
       collectgarbage()
+   end
+end
+
+if exit == 0 then
+   for _, result in ipairs(write_queue) do
+      write_out(result[1], result[2])
    end
 end
 
