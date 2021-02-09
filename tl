@@ -906,7 +906,7 @@ local function get_output_filename(file_name)
    end
 end
 
-local function type_check_file(file_name, env)
+local function type_check_file(file_name, env, print_message)
    local result, err = tl.process(file_name, env)
    if err then
       die(err)
@@ -922,7 +922,7 @@ local function type_check_file(file_name, env)
       exit = 1
    end
 
-   if exit == 0 and #args["file"] == 1 then
+   if print_message and exit == 0 and #args["file"] == 1 then
       local output_file = get_output_filename(file_name)
       log("========================================")
       log("Type checked ", file_name)
@@ -1014,7 +1014,7 @@ if cmd == "check" then
    turbo(true)
    local env = setup_env(args["file"][1])
    for i, input_file in ipairs(args["file"]) do
-      type_check_file(input_file, env)
+      type_check_file(input_file, env, true)
       if i > 1 then
          collectgarbage()
       end
@@ -1081,7 +1081,7 @@ if cmd == "types" then
    local tr, trenv
    local errs = false
    for i, input_file in ipairs(args["file"]) do
-      local pok, result = pcall(type_check_file, input_file)
+      local pok, result = pcall(type_check_file, input_file, false)
       if pok then
          if result and result.ast then
             tr, trenv = tl.get_types(result, trenv)
