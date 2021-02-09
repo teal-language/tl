@@ -8,17 +8,51 @@ describe("flow analysis with is", function()
          local s = x is string and x:lower()
       ]])
 
-      it("narrows type on expressions with or", util.check [[
+      it("does not narrow type on expressions with conditional 'is' and or", util.check_type_error([[
          local x: number | string
 
-         local s = x is number and tostring(x + 1) or x:lower()
+         local r = x is string and (x:sub(1,1) == "a") or (x:upper() == "k")
+      ]], {
+         { x = 62, msg = "cannot index something that is not a record: number | string"}
+      }))
+
+      it("does not narrow type on expressions with conditional 'is' and or", util.check [[
+         local x: number | string
+
+         x = "b"
+         local s = x is string and (x:sub(1,1) == "a" and x) or "somethingelse"
+         print(s:upper())
       ]])
 
       it("narrows type on expressions with not", util.check [[
          local x: number | string
 
-         local s = not x is string and tostring(x + 1) or x:lower()
+         local function ohoh(n: number): number
+            if n > 10 then
+               return n
+            else
+               return nil
+            end
+         end
+
+         local s = not x is string and ohoh(x + 1)
       ]])
+
+      it("does not narrow 'or' type on conditional expressions with not", util.check_type_error([[
+         local x: number | string
+
+         local function ohoh(n: number): number
+            if n > 10 then
+               return n
+            else
+               return nil
+            end
+         end
+
+         local s = not x is string and ohoh(x + 1) or x:upper() -- x <= 10 may fall into x:upper()
+      ]], {
+         { y = 11, x = 57, msg = "cannot index something that is not a record: number | string"}
+      }))
    end)
 
    describe("on if", function()
@@ -181,6 +215,117 @@ describe("flow analysis with is", function()
       ]], {
          { y = 6, msg = 'cannot resolve a type for t here' },
       }))
+
+      it("is combined with other tests narrows it, but prevents its negation from narrowing types (any)", util.check [[
+         local function func(x: string, y: string): string
+            return x > y and x .. "!" or x
+         end
+
+         local function f(d: any): any
+            if d is string and func(d, "a") then
+               local d = func(d)
+            elseif d is string and func(d, "b") then
+               return d .. "???"
+            else
+               return d -- d is still any here
+            end
+         end
+      ]])
+
+      it("is combined with other tests narrows it, but prevents its negation from narrowing types (union)", util.check [[
+         local function func(x: string, y: string): string
+            return x > y and x .. "!" or x
+         end
+
+         local function f(d: any): any
+            local d = d as (number | string | function)
+            if d is string and func(d, "a") then
+               local d = func(d)
+            elseif d is string and func(d, "b") then
+               return d .. "???"
+            else
+               return d
+            end
+         end
+      ]])
+
+      it("else narrows the negation of 'or' if both of its sides match 'is' purely", util.check_type_error([[
+         local a: string | number
+         local b: boolean | number | thread
+         local c: number
+
+         if (a is string and b is boolean) or b is thread then
+            local isb: boolean = b
+         else
+            local isb: boolean = b
+         end
+      ]], {
+         { y = 6, msg = "got boolean | thread (inferred at" },
+         { y = 8, msg = "got boolean | number, expected" },
+      }))
+
+      it("else narrows the negation of the pure side of 'or'", util.check_type_error([[
+         local a: string | number
+         local b: boolean | number | thread
+         local c: number
+
+         if (a == 9 and b is boolean) or b is thread then
+            local isb: boolean = b
+         else
+            local isb: boolean = b
+         end
+      ]], {
+         { y = 6, msg = "got boolean | thread (inferred at" },
+         { y = 8, msg = "got boolean | number, " },
+      }))
+
+      it("else narrows the negation of the pure side of 'or' (reverse)", util.check_type_error([[
+         local a: string | number
+         local b: boolean | number | thread
+         local c: number
+
+         if b is thread or (a == 9 and b is boolean) then
+            local isb: boolean = b
+         else
+            local isb: boolean = b
+         end
+      ]], {
+         { y = 6, msg = "got thread | boolean (inferred at" },
+         { y = 8, msg = "got boolean | number (inferred at" },
+      }))
+
+      it("else narrows the negation of the pure side of 'or' (reverse)", util.check_type_error([[
+         local a: string | number
+         local b: boolean | number | thread
+         local c: number
+
+         if b is thread or (b is boolean and a == 9) then
+            local isb: boolean = b
+         else
+            local isb: boolean = b
+         end
+      ]], {
+         { y = 6, msg = "got thread | boolean (inferred at" },
+         { y = 8, msg = "got boolean | number (inferred at" },
+      }))
+
+      it("else narrows the negation of 'or' if both of its sides match 'is' unconditionally", util.check_type_error([[
+         local a: string | number
+         local b: boolean | thread
+         local c: number
+
+         if (a is string and a == "hello" and (b is boolean and c == 2)) and c > 0 then
+            print(a:upper())
+            local isb: boolean = b
+         else
+            print(a:upper())
+            local isb: boolean = b
+         end
+      ]], {
+         { y = 9, msg = "cannot index something that is not a record" },
+         { y = 10, msg = "got boolean | thread, expected boolean" },
+      }))
+
    end)
 
    describe("on while", function()
@@ -243,7 +388,7 @@ describe("flow analysis with is", function()
          { y = 4, x = 10, msg = "cannot resolve a type for x here" },
       }))
 
-      it("can resolve on else block even if it can't on if block (#210)", util.check_warnings([[
+      it("can resolve on else block even if it can't on if block (#210)", util.check [[
          function foo(v: any)
             if not v is string then
                print("foo")
@@ -251,9 +396,7 @@ describe("flow analysis with is", function()
                print(v:upper())
             end
          end
-      ]], {
-         { y = 2, x = 22, msg = "v: type cannot be narrowed in this branch" }
-      }))
+      ]])
 
       it("attempting to use a type as a value produces sensible messages (#210)", util.check_type_error([[
          local record MyRecord
@@ -318,6 +461,36 @@ describe("flow analysis with is", function()
             { y = 3, msg = [[cannot use operator 'or' for types string and number]] },
          }))
 
+         it("literal strings are truthy, preserve 'is' inference", util.check [[
+            local x: number | string
+
+            local s = x is string and "literal" or tostring(x / 2)
+         ]])
+
+         it("literal numbers are truthy, preserve 'is' inference", util.check [[
+            local x: number | string
+
+            local n = x is number and 123 or tonumber(x:sub(1,2))
+         ]])
+
+         it("literal tables are truthy, preserve 'is' inference", util.check [[
+            local x: number | string
+
+            local record R
+               z: number
+            end
+
+            local r: R = x is number and { z = 123 } or { z = tonumber(x:sub(1,2)) }
+         ]])
+
+         it("relational operators do not preserve 'is' inference", util.check_type_error([[
+            local x: number | string
+
+            local n = x is number and x < 123 or tonumber(x:sub(1,2))
+         ]], {
+            { msg = "cannot use operator 'or' for types boolean and number" },
+            { y = 3, x = 61, msg = "cannot index something that is not a record: number | string" },
+         }))
       end)
 
       it("generates type checks for primitive types", util.gen([[

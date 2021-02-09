@@ -1050,6 +1050,7 @@ local FactType = {}
 
 
 
+
 local Fact = {}
 
 
@@ -6764,6 +6765,7 @@ tl.type_check = function(ast, opts)
    local facts_or
    local facts_not
    local apply_facts
+   local FACT_TRUTHY
    do
       setmetatable(Fact, {
          __call = function(_, f)
@@ -6773,6 +6775,8 @@ tl.type_check = function(ast, opts)
                      return ("(%s is %s)"):format(f.var, show_type(f.typ))
                   elseif f.fact == "==" then
                      return ("(%s == %s)"):format(f.var, show_type(f.typ))
+                  elseif f.fact == "truthy" then
+                     return "*"
                   elseif f.fact == "not" then
                      return ("(not %s)"):format(tostring(f.f1))
                   elseif f.fact == "or" then
@@ -6785,14 +6789,10 @@ tl.type_check = function(ast, opts)
          end,
       })
 
+      FACT_TRUTHY = Fact({ fact = "truthy" })
+
       facts_and = function(f1, f2, where)
-         if f1 and f2 then
-            return Fact({ fact = "and", f1 = f1, f2 = f2, where = where })
-         elseif f1 then
-            return f1
-         elseif f2 then
-            return f2
-         end
+         return Fact({ fact = "and", f1 = f1, f2 = f2, where = where })
       end
 
       facts_or = function(f1, f2, where)
@@ -6855,9 +6855,8 @@ tl.type_check = function(ast, opts)
          t1 = resolve_if_union(t1)
 
 
-
          if t1.typename ~= "union" then
-            return t1, "type cannot be narrowed in this branch"
+            return t1
          end
 
          t2 = resolve_if_union(t2)
@@ -6877,7 +6876,7 @@ tl.type_check = function(ast, opts)
          end
 
          if #types == 0 then
-            return INVALID, "no valid types match in this branch"
+            return INVALID
          end
 
          return unite(types)
@@ -6896,63 +6895,59 @@ tl.type_check = function(ast, opts)
       not_facts = function(fs)
          local ret = {}
          for var, f in pairs(fs) do
+            local typ = find_var_type(f.var, true)
+            local fact = "=="
+            local where = f.where
             if f.fact == "is" then
-               local typ = find_var_type(f.var, true)
                if not typ then
-                  ret[var] = invalid_from(f)
+                  typ = INVALID
                elseif typ.typename == "typevar" then
 
+                  where = nil
                elseif not is_a(f.typ, typ) then
                   node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
-                  ret[var] = invalid_from(f)
+                  typ = INVALID
                else
-                  local sub, warn = subtract_types(typ, f.typ)
-                  if warn then
-                     node_warning("branch", f.where, f.var .. ": " .. warn)
-                  end
-                  ret[var] = Fact({ fact = "is", var = var, typ = sub, where = f.where })
+                  fact = "is"
+                  typ = subtract_types(typ, f.typ)
                end
             elseif f.fact == "==" then
 
+               where = nil
             end
+            ret[var] = Fact({ fact = fact, var = var, typ = typ, where = where })
          end
          return ret
       end
 
       eval_not = function(f)
-         if f.fact == "is" then
+         if not f then
+            return {}
+         elseif f.fact == "is" then
             return not_facts({ [f.var] = f })
          elseif f.fact == "not" then
             return eval_fact(f.f1)
+         elseif f.fact == "and" and f.f2 and f.f2.fact == "truthy" then
+            return eval_not(f.f1)
+         elseif f.fact == "or" and f.f2 and f.f2.fact == "truthy" then
+            return eval_fact(f.f1)
+         elseif f.fact == "and" then
+            return or_facts(not_facts(eval_fact(f.f1)), not_facts(eval_fact(f.f2)))
+         elseif f.fact == "or" then
+            return and_facts(not_facts(eval_fact(f.f1)), not_facts(eval_fact(f.f2)))
          else
             return not_facts(eval_fact(f))
          end
       end
 
       or_facts = function(fs1, fs2)
-         local realtypes = {}
          local ret = {}
 
-         for var, f in pairs(fs1) do
-            local vt = find_var_type(var, true) or INVALID
-            realtypes[var] = vt
-            if not is_a(f.typ, vt) then
-               return fs2
-            end
-            ret[var] = f
-         end
-
          for var, f in pairs(fs2) do
-            local vt = realtypes[var] or find_var_type(var, true) or INVALID
-            if not is_a(f.typ, vt) then
-               return fs1
-            end
-            if ret[var] then
-               local fact = (ret[var].fact == "==" and f.fact == "==") and
-               "==" or "is"
-               ret[var] = Fact({ fact = fact, var = var, typ = unite_types(f.typ, ret[var].typ), where = f.where })
-            else
-               ret[var] = f
+            if fs1[var] then
+               local fact = (fs1[var].fact == "is" and f.fact == "is") and
+               "is" or "=="
+               ret[var] = Fact({ fact = fact, var = var, typ = unite_types(f.typ, fs1[var].typ), where = f.where })
             end
          end
 
@@ -6960,32 +6955,33 @@ tl.type_check = function(ast, opts)
       end
 
       and_facts = function(fs1, fs2)
-         local realtypes = {}
          local ret = {}
+         local has = {}
 
          for var, f in pairs(fs1) do
-            local vt = find_var_type(var, true) or INVALID
-            realtypes[var] = vt
-            if not is_a(f.typ, vt) then
-               return {}
+            local rt
+            local fact
+            if fs2[var] then
+               fact = (fs2[var].fact == "is" and f.fact == "is") and "is" or "=="
+               rt = intersect_types(f.typ, fs2[var].typ)
+            else
+               fact = "=="
+               rt = f.typ
             end
-            ret[var] = f
+            ret[var] = Fact({ fact = fact, var = var, typ = rt, where = f.where })
+            has[fact] = true
          end
 
          for var, f in pairs(fs2) do
-            local vt = realtypes[var] or find_var_type(var, true) or INVALID
-            if not is_a(f.typ, vt) then
-               return {}
+            if not fs1[var] then
+               ret[var] = Fact({ fact = "==", var = var, typ = f.typ, where = f.where })
+               has["=="] = true
             end
-            if ret[var] then
-               if f.fact == "==" then
-                  ret[var] = f
-               elseif ret[var].fact ~= "==" then
+         end
 
-                  ret[var] = Fact({ fact = "is", var = var, typ = intersect_types(f.typ, ret[var].typ), where = f.where })
-               end
-            else
-               ret[var] = f
+         if has["is"] and has["=="] then
+            for _, f in pairs(ret) do
+               f.fact = "=="
             end
          end
 
@@ -6993,7 +6989,9 @@ tl.type_check = function(ast, opts)
       end
 
       eval_fact = function(f)
-         if f.fact == "is" then
+         if not f then
+            return {}
+         elseif f.fact == "is" then
             local typ = find_var_type(f.var, true)
             if not typ then
                return { [f.var] = invalid_from(f) }
@@ -7007,6 +7005,12 @@ tl.type_check = function(ast, opts)
          elseif f.fact == "==" then
             return { [f.var] = f }
          elseif f.fact == "not" then
+            return eval_not(f.f1)
+         elseif f.fact == "truthy" then
+            return {}
+         elseif f.fact == "and" and f.f2 and f.f2.fact == "truthy" then
+            return eval_fact(f.f1)
+         elseif f.fact == "or" and f.f2 and f.f2.fact == "truthy" then
             return eval_not(f.f1)
          elseif f.fact == "and" then
             return and_facts(eval_fact(f.f1), eval_fact(f.f2))
@@ -7027,7 +7031,7 @@ tl.type_check = function(ast, opts)
                node_error(where, "cannot resolve a type for " .. v .. " here")
             end
             local t = shallow_copy(f.typ)
-            t.inferred_at = where
+            t.inferred_at = f.where and where
             t.inferred_at_file = filename
             add_var(nil, v, t, true, true)
          end
@@ -7351,9 +7355,9 @@ tl.type_check = function(ast, opts)
          before = function(node)
             end_scope(node)
             begin_scope(node)
-            local f = facts_not(node.parent_if.exp.known)
+            local f = facts_not(node.parent_if.exp.known, node)
             for e = 1, node.elseif_n - 1 do
-               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.known), node)
+               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.known, node), node)
             end
             apply_facts(node.exp, f)
          end,
@@ -7369,9 +7373,9 @@ tl.type_check = function(ast, opts)
          before = function(node)
             end_scope(node)
             begin_scope(node)
-            local f = facts_not(node.parent_if.exp.known)
+            local f = facts_not(node.parent_if.exp.known, node)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
-               f = facts_and(f, facts_not(elseifnode.exp.known), node)
+               f = facts_and(f, facts_not(elseifnode.exp.known, node), node)
             end
             apply_facts(node, f)
          end,
@@ -7594,6 +7598,7 @@ tl.type_check = function(ast, opts)
                x = node.x,
                typename = "emptytable",
             })
+            node.known = FACT_TRUTHY
 
             local function is_positive_int(n)
                return n and n >= 1 and math.floor(n) == n
@@ -7886,7 +7891,7 @@ tl.type_check = function(ast, opts)
             if node.op.op == "and" then
                apply_facts(node, node.e1.known)
             elseif node.op.op == "or" then
-               apply_facts(node, facts_not(node.e1.known))
+               apply_facts(node, facts_not(node.e1.known, node))
             end
          end,
          after = function(node, children)
@@ -7943,7 +7948,7 @@ tl.type_check = function(ast, opts)
             elseif node.op.op == ":" then
                node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
             elseif node.op.op == "not" then
-               node.known = facts_not(node.e1.known)
+               node.known = facts_not(node.e1.known, node)
                node.type = BOOLEAN
             elseif node.op.op == "and" then
                node.known = facts_and(node.e1.known, node.e2.known, node)
@@ -7986,14 +7991,18 @@ tl.type_check = function(ast, opts)
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
                local metamethod
-               if not node.type then
+               if node.type then
+                  if node.type.typename ~= "boolean" then
+                     node.known = FACT_TRUTHY
+                  end
+               else
                   metamethod = a.meta_fields and a.meta_fields[unop_to_metamethod[node.op.op] or ""]
                   if metamethod then
                      node.type = resolve_unary(type_check_function_call(node, metamethod, { a }, false, 0))
                   elseif lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", orig_a)
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
 
@@ -8026,7 +8035,11 @@ tl.type_check = function(ast, opts)
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local metamethod
                local meta_self = 1
-               if not node.type then
+               if node.type then
+                  if types_op == numeric_binop or node.op.op == ".." then
+                     node.known = FACT_TRUTHY
+                  end
+               else
                   metamethod = a.meta_fields and a.meta_fields[binop_to_metamethod[node.op.op] or ""]
                   if not metamethod then
                      metamethod = b.meta_fields and b.meta_fields[binop_to_metamethod[node.op.op] or ""]
@@ -8037,7 +8050,7 @@ tl.type_check = function(ast, opts)
                   elseif lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", orig_a, orig_b)
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                   end
                end
 
@@ -8135,12 +8148,23 @@ tl.type_check = function(ast, opts)
             typename = node.kind,
             tk = node.tk,
          })
+         node.known = FACT_TRUTHY
          return node.type
       end,
    }
    visit_node.cbs["number"] = visit_node.cbs["string"]
-   visit_node.cbs["nil"] = visit_node.cbs["string"]
-   visit_node.cbs["boolean"] = visit_node.cbs["string"]
+   visit_node.cbs["boolean"] = {
+      after = function(node, _children)
+         node.type = a_type({
+            y = node.y,
+            x = node.x,
+            typename = node.kind,
+            tk = node.tk,
+         })
+         return node.type
+      end,
+   }
+   visit_node.cbs["nil"] = visit_node.cbs["boolean"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
 
    visit_node.after = {
