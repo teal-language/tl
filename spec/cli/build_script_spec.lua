@@ -331,7 +331,7 @@ describe("build script", function()
          cmd_output =
 [[========================================
 1 syntax error:
-build.tl:1:2: syntax error
+build.tl:1:14: expected a function call for a method
 ]],
       })
    end)

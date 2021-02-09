@@ -1075,7 +1075,7 @@ if cmd == "types" then
    tlconfig["quiet"] = true
    tlconfig["gen_compat"] = "off"
 
-   setup_env(args["file"][1])
+   local env = setup_env(args["file"][1])
    env.keep_going = true
 
    local tr, trenv
@@ -1098,7 +1098,7 @@ if cmd == "types" then
    end
    if tr then
       if errs then
-         printerr("")
+         log.err("========================================")
       end
 
       local pos = args["position"]

@@ -1721,13 +1721,18 @@ end
 
 local function node_is_require_call(n)
    if n.e1 and n.e2 and
-      n.e1.kind == "variable" and
-      n.e1.tk == "require" and
-      n.e2.kind == "expression_list" and
-      #n.e2 == 1 and
+      n.e1.kind == "variable" and n.e1.tk == "require" and
+      n.e2.kind == "expression_list" and #n.e2 == 1 and
       n.e2[1].kind == "string" then
 
       return n.e2[1].conststr
+   elseif n.op and n.op.op == "@funcall" and
+      n.e1 and n.e1.tk == "pcall" and
+      n.e2 and #n.e2 == 2 and
+      n.e2[1].kind == "variable" and n.e2[1].tk == "require" and
+      n.e2[2].kind == "string" and n.e2[2].conststr then
+
+      return n.e2[2].conststr
    else
       return nil
    end
@@ -1868,7 +1873,6 @@ do
             end
 
             table.insert(args, argument)
-
             e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1, e2 = args }
 
             table.insert(ps.required_modules, node_is_require_call(e1))
@@ -2616,13 +2620,6 @@ do
       until ps.tokens[i].tk ~= ","
       return i, asgn
    end
-   if #asgn.vars > 1 then
-      return failskip(ps, i, "syntax error", parse_expression, tryi)
-   end
-   if lhs.op and lhs.op.op == "@funcall" and #asgn.vars == 1 then
-      return i, lhs
-   end
-   return fail(ps, i, "syntax error")
 end
 
 local function parse_variable_declarations(ps, i, node_name)
