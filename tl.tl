@@ -4691,7 +4691,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["pow"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
             ["rad"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
             ["random"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
-            ["randomseed"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE {} },
+            ["randomseed"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE {NUMBER, NUMBER} },
             ["sin"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
             ["sinh"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
             ["sqrt"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
