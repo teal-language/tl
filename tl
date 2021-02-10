@@ -858,7 +858,7 @@ end
 local function json_out(fd, x)
    local tx = type(x)
    if tx == "number" or tx == "string" then
-      fd:write(string.format("%q", x))
+      fd:write((string.format("%q", x):gsub("\\\n", "\\n")))
       return
    end
    assert(tx == "table")
