@@ -855,10 +855,23 @@ end
 --                           TYPES                                --
 --------------------------------------------------------------------
 
+local json_special_codes = "[%z\1-\31\34\92]"
+-- %z is deprecated in Lua 5.2+; switch over if it stops working
+if not ("\0"):match("%z") then
+   json_special_codes = "[\0-\31\34\92]"
+end
+
+local function json_escape(s)
+   return "\\u" .. string.format("%04x", s:byte())
+end
+
 local function json_out(fd, x)
    local tx = type(x)
-   if tx == "number" or tx == "string" then
-      fd:write((string.format("%q", x):gsub("\\\n", "\\n")))
+   if tx == "string" then
+      fd:write('"' .. x:gsub(json_special_codes, json_escape) .. '"')
+      return
+   elseif tx == "number" then
+      fd:write(tostring(x))
       return
    end
    assert(tx == "table")
