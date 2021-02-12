@@ -3260,7 +3260,9 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
          table.insert(out, ("\n"):rep(delta))
       else
          if space then
-            table.insert(out, space)
+            if space ~= "" then
+               table.insert(out, space)
+            end
             indent = nil
          end
       end
