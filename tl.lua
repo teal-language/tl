@@ -2381,7 +2381,7 @@ parse_record_body = function(ps, i, def, node)
    if ps.tokens[i].tk == "<" then
       i, def.typeargs = parse_typearg_list(ps, i)
    end
-   while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+   while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
       if ps.tokens[i].tk == "userdata" and ps.tokens[i + 1].tk ~= ":" then
          if def.is_userdata then
             fail(ps, i, "duplicated 'userdata' declaration in record")
@@ -2397,7 +2397,6 @@ parse_record_body = function(ps, i, def, node)
             local t
             i, t = parse_type(ps, i)
             if ps.tokens[i].tk == "}" then
-               end_at(node, ps.tokens[i])
                i = verify_tk(ps, i, "}")
             else
                return fail(ps, i, "expected an array declaration")
@@ -2496,7 +2495,6 @@ parse_record_body = function(ps, i, def, node)
             end
          else
             fail(ps, i, "syntax error: expected ':' for an attribute or '=' for a nested type")
-            i = i + 1
          end
       end
    end

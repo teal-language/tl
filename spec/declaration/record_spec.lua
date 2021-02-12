@@ -488,5 +488,7 @@ describe("records", function()
    ]], {
       { msg = "syntax error: expected ':' for an attribute" },
       { msg = "syntax error: expected ':' for an attribute" },
+      { msg = "syntax error: expected ':' for an attribute" },
+      { msg = "syntax error: expected ':' for an attribute" },
    }))
 end)
