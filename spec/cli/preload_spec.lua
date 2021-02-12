@@ -24,8 +24,9 @@ describe("-l --preload argument", function()
       end)
    end)
    it("reports error in stderr and code 1 when a module cannot be found", function ()
+      local name = "test.tl"
       util.do_in(util.write_tmp_dir(finally, {
-         ["test.tl"] = [[
+         [name] = [[
              print(add(10, 20))
          ]],
       }), function()
