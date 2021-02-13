@@ -4,23 +4,32 @@
 --                           SETUP                                --
 --------------------------------------------------------------------
 
+local tl = require("tl")
+
 local is_turbo_on = false
+local tl_lex = tl.lex
 local function turbo(on)
    if on then
       if jit then
          jit.off()
+         tl.lex = function(input)
+            jit.on()
+            local r1, r2 = tl_lex(input)
+            jit.off()
+            return r1, r2
+         end
       end
       collectgarbage("stop")
    else
       if jit then
          jit.on()
+         tl.lex = tl_lex
       end
       collectgarbage("restart")
    end
    is_turbo_on = on
 end
 
-local tl = require("tl")
 local argparse = require("argparse")
 local lfs = require("lfs")
 
