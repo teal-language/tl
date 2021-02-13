@@ -115,6 +115,8 @@ local record tl
       tr: TypeReport
    end
 
+
+
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env, Result, {string}): (Result, string)
    process_string: function(string, boolean, Env, Result, {string}, string): (Result, string)
@@ -5011,12 +5013,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    local lax = opts.lax
    local filename = opts.filename
 
-   local result = opts.result or {
-      syntax_errors = {},
-      type_errors = {},
-      unknowns = {},
-      warnings = {},
-      dependencies = {},
+   local result = {
+      syntax_errors = opts.result and opts.result.syntax_errors or {},
+      type_errors = opts.result and opts.result.type_errors or {},
+      unknowns = opts.result and opts.result.unknowns or {},
+      warnings = opts.result and opts.result.warnings or {},
+      dependencies = opts.result and opts.result.dependencies or {},
    }
 
    local st: {{string:Variable}} = { env.globals }
