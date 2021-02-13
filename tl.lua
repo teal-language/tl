@@ -7224,6 +7224,11 @@ tl.type_check = function(ast, opts)
 
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
+
+      ["assert"] = function(node, a, b, argdelta)
+         node.known = FACT_TRUTHY
+         return type_check_function_call(node, a, b, false, argdelta)
+      end,
    }
 
    type_check_funcall = function(node, a, b, argdelta)
@@ -8265,6 +8270,9 @@ tl.type_check = function(ast, opts)
             typename = node.kind,
             tk = node.tk,
          })
+         if node.tk == "true" then
+            node.known = FACT_TRUTHY
+         end
          return node.type
       end,
    }

@@ -53,6 +53,24 @@ describe("flow analysis with is", function()
       ]], {
          { y = 11, x = 57, msg = "cannot index something that is not a record: number | string"}
       }))
+
+      it("propagates with 'and' and 'assert' because result is known to be truthy", util.check [[
+         local record Foo
+         end
+         local makeFoo: function(string): Foo
+         local a: string | Foo
+         local _b: Foo = a is string and assert(makeFoo(a)) or a
+      ]])
+
+      it("does not propagate with 'and' and arbitrary functions because result may be nil", util.check_type_error([[
+         local record Foo
+         end
+         local makeFoo: function(string): Foo
+         local a: string | Foo
+         local _b: Foo = a is string and makeFoo(a) or a
+      ]], {
+         { msg = "cannot use operator 'or' for types Foo and string | Foo" },
+      }))
    end)
 
    describe("on if", function()
