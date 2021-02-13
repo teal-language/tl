@@ -14,7 +14,7 @@ describe("config type checking", function()
             exit = "exit",
             code = 1,
          },
-         cmd_output = "Error loading config: Expected include to be a {string}\n",
+         cmd_output = "Error loading config: Expected include to be a {string}, got string\n",
       })
    end)
    it("should error out when config.source_dir is not a string", function()
@@ -30,7 +30,7 @@ describe("config type checking", function()
             exit = "exit",
             code = 1,
          },
-         cmd_output = "Error loading config: Expected source_dir to be a string\n",
+         cmd_output = "Error loading config: Expected source_dir to be a string, got boolean\n",
       })
    end)
 end)
