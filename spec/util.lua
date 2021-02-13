@@ -101,7 +101,7 @@ local function indent(str)
    return (str:gsub("\n", "\n   "))
 end
 
-local function batch_assertions()
+local function batch_assertions(prefix)
    return {
       add = function(self, assert_func, ...)
          table.insert(self, { fn = assert_func, nargs = select("#", ...), args = {...} })
@@ -110,14 +110,14 @@ local function batch_assertions()
       assert = function(self)
          local err_batch = { }
          local passed = true
-         for _, assertion in ipairs(self) do
+         for i, assertion in ipairs(self) do
             local ok, err = pcall(assertion.fn, t_unpack(assertion.args, 1, assertion.nargs))
             if not ok then
                passed = false
-               table.insert(err_batch, indent(tostring(err)))
+               table.insert(err_batch, indent("[" .. i .. "] " .. tostring(err)))
             end
          end
-         assert(passed, "batch assertion failed:\n   " .. indent(table.concat(err_batch, "\n\n")))
+         assert(passed, "batch assertion failed: " .. (prefix or "") .. "\n   " .. indent(table.concat(err_batch, "\n\n")))
       end,
    }
 end
@@ -332,7 +332,7 @@ function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
    assert(type(want3) == "number")
 
    if _VERSION == "Lua 5.3" then
-      batch_assertions()
+      batch_assertions("popen close")
          :add(assert.same, want1, ret1)
          :add(assert.same, want2, ret2)
          :add(assert.same, want3, ret3)
