@@ -124,6 +124,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -1242,6 +1243,8 @@ local ParseState = {}
 
 
 
+
+
 local ParseTypeListMode = {}
 
 
@@ -1385,6 +1388,7 @@ local function parse_table_item(ps, i, n)
          filename = ps.filename,
          tokens = ps.tokens,
          errs = {},
+         require_calls = ps.require_calls,
       }
       i, node.key = verify_kind(try_ps, i, "identifier", "string")
       node.key.conststr = node.key.tk
@@ -2182,7 +2186,6 @@ local function parse_global_function(ps, i)
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
-   local node = fn
    local names = {}
    i, names[1] = parse_identifier(ps, i)
    while ps.tokens[i].tk == "." do
@@ -2218,7 +2221,7 @@ local function parse_global_function(ps, i)
       return orig_i + 1
    end
 
-   return i, node
+   return i, fn
 end
 
 local function parse_if(ps, i)
@@ -2889,12 +2892,13 @@ function tl.parse_program(tokens, errs, filename)
       tokens = tokens,
       errs = errs,
       filename = filename,
+      require_calls = {},
    }
    local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    table.insert(ps.tokens, { y = last.y, x = last.x + #last.tk, tk = "$EOF$", kind = "$EOF$" })
    local i, node = parse_statements(ps, 1, filename, true)
    clear_redundant_errors(errs)
-   return i, node
+   return i, node, ps.require_calls
 end
 
 
@@ -4314,6 +4318,14 @@ local function require_module(module_name, lax, env, result)
    local loaded = env.loaded
 
    if modules[module_name] then
+      if not result.dependencies[module_name] then
+
+         local found, fd = tl.search_module(module_name, true)
+         if found then
+            fd:close()
+         end
+         result.dependencies[module_name] = found
+      end
       return modules[module_name], true
    end
    modules[module_name] = UNKNOWN
@@ -4330,6 +4342,7 @@ local function require_module(module_name, lax, env, result)
 
       loaded[found] = found_result
       modules[module_name] = found_result.type
+      result.dependencies[module_name] = found
 
       return found_result.type, true
    end
@@ -4983,6 +4996,7 @@ tl.type_check = function(ast, opts)
       type_errors = {},
       unknowns = {},
       warnings = {},
+      dependencies = {},
    }
 
    local st = { env.globals }
@@ -4996,6 +5010,7 @@ tl.type_check = function(ast, opts)
    local warnings = result.warnings or {}
    local errors = result.type_errors or {}
    local unknowns = result.unknowns or {}
+
    local module_type
 
    local function find_var(name, raw)
@@ -8740,6 +8755,7 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
       syntax_errors = result and result.syntax_errors or {},
       type_errors = result and result.type_errors or {},
       unknowns = result and result.unknowns or {},
+      dependencies = result and result.dependencies or {},
    }
    preload_modules = preload_modules or {}
    filename = filename or ""
