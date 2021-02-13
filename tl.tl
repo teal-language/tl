@@ -80,6 +80,8 @@ local record tl
       i: number
    end
 
+   typecodes: {string:number}
+
    record TypeInfo
       t: number
 
@@ -87,18 +89,16 @@ local record tl
       file: string
       x: number
       y: number
-      -- nominals
-      ref: number
-      -- records
-      fields: {string: number}
-      -- enums
-      enums: {string}
-      -- functions
-      args: {{number, string}}
-      rets: {{number, string}}
-      vararg: boolean
-      -- poly
-      types: {TypeInfo}
+      ref: number -- NOMINAL
+      fields: {string: number} -- RECORD, ARRAYRECORD
+      enums: {string} -- ENUM
+      args: {{number, string}} -- FUNCTION
+      rets: {{number, string}} -- FUNCTION
+      vararg: boolean -- FUNCTION
+      types: {number} -- UNION, POLY, TUPLE
+      keys: number -- MAP
+      values: number -- MAP
+      elements: number -- ARRAY
    end
 
    record TypeReport
@@ -130,6 +130,56 @@ tl.warning_kinds = {
    ["branch"] = true,
    ["hint"] = true,
    ["debug"] = true,
+}
+
+-- Implementation rationale:
+-- * bit 31: (MSB) special ("any", "unknown", "invalid")
+--   * "any" satisfies all Lua masks
+-- * bits 30-27: if valid: other Teal types ("nominal", "poly", "union", "typevar")
+-- * bits 24-26: reserved
+-- * bits 16-19: if valid: Teal types ("array", "record", "arrayrecord", "map", "tuple", "enum") that map to a Lua type ("table", "string")
+-- * bit 15: if not valid: value is unknown
+-- * bits 8-14: reserved
+-- * bits 0-7: (LSB) Lua types, one bit for each ("nil", "number", "boolean", "string", table, "function", "userdata", "thread")
+--   * every valid value has a Lua type bit set
+tl.typecodes = {
+   -- Lua types
+   NIL                    = 0x00000001,
+   NUMBER                 = 0x00000002,
+   BOOLEAN                = 0x00000004,
+   STRING                 = 0x00000008,
+   TABLE                  = 0x00000010,
+   FUNCTION               = 0x00000020,
+   USERDATA               = 0x00000040,
+   THREAD                 = 0x00000080,
+   -- Lua type masks
+   IS_TABLE               = 0x00000008,
+   IS_STRING              = 0x00000004,
+   LUA_MASK               = 0x00000fff,
+   -- Teal types
+   ARRAY                  = 0x00010008,
+   RECORD                 = 0x00020008,
+   ARRAYRECORD            = 0x00030008,
+   MAP                    = 0x00040008,
+   TUPLE                  = 0x00080008,
+   EMPTY_TABLE            = 0x00000008,
+   ENUM                   = 0x00010004,
+   -- Teal type masks
+   IS_ARRAY               = 0x00010008,
+   IS_RECORD              = 0x00020008,
+   -- Indirect types
+   NOMINAL                = 0x10000000,
+   TYPE_VARIABLE          = 0x08000000,
+   -- Indirect type masks
+   IS_UNION               = 0x40000000,
+   IS_POLY                = 0x20000020,
+   -- Special types
+   ANY                    = 0xffffffff,
+   UNKNOWN                = 0x80008000,
+   INVALID                = 0x80000000,
+   -- Special type masks
+   IS_SPECIAL             = 0x80000000,
+   IS_VALID               = 0x00000fff,
 }
 
 local Result = tl.Result
@@ -8349,6 +8399,31 @@ end
 -- Report types
 --------------------------------------------------------------------------------
 
+local typename_to_typecode: {TypeName:number} = {
+   ["typevar"] = tl.typecodes.TYPE_VARIABLE,
+   ["typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["function"] = tl.typecodes.FUNCTION,
+   ["array"] = tl.typecodes.ARRAY,
+   ["map"] = tl.typecodes.MAP,
+   ["tupletable"] = tl.typecodes.TUPLE,
+   ["arrayrecord"] = tl.typecodes.ARRAYRECORD,
+   ["record"] = tl.typecodes.RECORD,
+   ["enum"] = tl.typecodes.ENUM,
+   ["boolean"] = tl.typecodes.BOOLEAN,
+   ["string"] = tl.typecodes.STRING,
+   ["nil"] = tl.typecodes.NIL,
+   ["thread"] = tl.typecodes.THREAD,
+   ["number"] = tl.typecodes.NUMBER,
+   ["union"] = tl.typecodes.IS_UNION,
+   ["nominal"] = tl.typecodes.NOMINAL,
+   ["emptytable"] = tl.typecodes.EMPTY_TABLE,
+   ["unknown_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
+   ["poly"] = tl.typecodes.IS_POLY,
+   ["any"] = tl.typecodes.ANY,
+   ["unknown"] = tl.typecodes.UNKNOWN,
+   ["invalid"] = tl.typecodes.INVALID,
+}
+
 function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeReportEnv
    local filename = result.filename or "?"
 
@@ -8400,7 +8475,16 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 
       -- it's a new entry: store and increment
       n = trenv.next_num
+
+      local rt = t
+      if rt.typename == "typetype" or rt.typename == "nestedtype" then
+         rt = rt.def
+      elseif rt.typename == "tuple" and #rt == 1 then
+         rt = rt[1]
+      end
+
       local ti: TypeInfo = {
+         t = assert(typename_to_typecode[rt.typename]),
          str = show_type(t, true),
          file = t.filename,
          y = t.y,
@@ -8410,10 +8494,6 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
       typeid_to_num[t.typeid] = n
       trenv.next_num = trenv.next_num + 1
 
-      local rt = t
-      if rt.typename == "typetype" then
-         rt = rt.def
-      end
       if t.found then
          ti.ref = get_typenum(t.found)
       end
@@ -8430,20 +8510,26 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
             r[k] = get_typenum(v)
          end
          ti.fields = r
+      end
+
+      if is_array_type(rt) then
+         ti.elements = get_typenum(rt.elements)
+      end
+
+      if rt.typename == "map" then
+         ti.keys = get_typenum(rt.keys)
+         ti.values = get_typenum(rt.values)
       elseif rt.typename == "enum" then
-         -- store enum info
          ti.enums = mark_array(sorted_keys(rt.enumset))
       elseif rt.typename == "function" then
-         -- store function info
          store_function(ti, rt)
-      elseif rt.typename == "poly" then
-         -- store poly info
+      elseif rt.typename == "poly" or rt.typename == "union" or rt.typename == "tupletable" then
          local tis = {}
+
          for _, pt in ipairs(rt.types) do
-            local pti = {}
-            store_function(pti, pt)
-            table.insert(tis, pti)
+            table.insert(tis, get_typenum(pt))
          end
+
          ti.types = mark_array(tis)
       end
 
@@ -8473,10 +8559,6 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
          yt = {}
          ft[y] = yt
       end
-
---      if yt[x] then
---         return
---      end
 
       yt[x] = get_typenum(typ)
    end

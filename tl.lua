@@ -132,6 +132,56 @@ tl.warning_kinds = {
    ["debug"] = true,
 }
 
+
+
+
+
+
+
+
+
+
+
+tl.typecodes = {
+
+   NIL = 0x00000001,
+   NUMBER = 0x00000002,
+   BOOLEAN = 0x00000004,
+   STRING = 0x00000008,
+   TABLE = 0x00000010,
+   FUNCTION = 0x00000020,
+   USERDATA = 0x00000040,
+   THREAD = 0x00000080,
+
+   IS_TABLE = 0x00000008,
+   IS_STRING = 0x00000004,
+   LUA_MASK = 0x00000fff,
+
+   ARRAY = 0x00010008,
+   RECORD = 0x00020008,
+   ARRAYRECORD = 0x00030008,
+   MAP = 0x00040008,
+   TUPLE = 0x00080008,
+   EMPTY_TABLE = 0x00000008,
+   ENUM = 0x00010004,
+
+   IS_ARRAY = 0x00010008,
+   IS_RECORD = 0x00020008,
+
+   NOMINAL = 0x10000000,
+   TYPE_VARIABLE = 0x08000000,
+
+   IS_UNION = 0x40000000,
+   IS_POLY = 0x20000020,
+
+   ANY = 0xffffffff,
+   UNKNOWN = 0x80008000,
+   INVALID = 0x80000000,
+
+   IS_SPECIAL = 0x80000000,
+   IS_VALID = 0x00000fff,
+}
+
 local Result = tl.Result
 local Env = tl.Env
 local Error = tl.Error
@@ -8349,6 +8399,31 @@ end
 
 
 
+local typename_to_typecode = {
+   ["typevar"] = tl.typecodes.TYPE_VARIABLE,
+   ["typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["function"] = tl.typecodes.FUNCTION,
+   ["array"] = tl.typecodes.ARRAY,
+   ["map"] = tl.typecodes.MAP,
+   ["tupletable"] = tl.typecodes.TUPLE,
+   ["arrayrecord"] = tl.typecodes.ARRAYRECORD,
+   ["record"] = tl.typecodes.RECORD,
+   ["enum"] = tl.typecodes.ENUM,
+   ["boolean"] = tl.typecodes.BOOLEAN,
+   ["string"] = tl.typecodes.STRING,
+   ["nil"] = tl.typecodes.NIL,
+   ["thread"] = tl.typecodes.THREAD,
+   ["number"] = tl.typecodes.NUMBER,
+   ["union"] = tl.typecodes.IS_UNION,
+   ["nominal"] = tl.typecodes.NOMINAL,
+   ["emptytable"] = tl.typecodes.EMPTY_TABLE,
+   ["unknown_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
+   ["poly"] = tl.typecodes.IS_POLY,
+   ["any"] = tl.typecodes.ANY,
+   ["unknown"] = tl.typecodes.UNKNOWN,
+   ["invalid"] = tl.typecodes.INVALID,
+}
+
 function tl.get_types(result, trenv)
    local filename = result.filename or "?"
 
@@ -8400,7 +8475,16 @@ function tl.get_types(result, trenv)
 
 
       n = trenv.next_num
+
+      local rt = t
+      if rt.typename == "typetype" or rt.typename == "nestedtype" then
+         rt = rt.def
+      elseif rt.typename == "tuple" and #rt == 1 then
+         rt = rt[1]
+      end
+
       local ti = {
+         t = assert(typename_to_typecode[rt.typename]),
          str = show_type(t, true),
          file = t.filename,
          y = t.y,
@@ -8410,10 +8494,6 @@ function tl.get_types(result, trenv)
       typeid_to_num[t.typeid] = n
       trenv.next_num = trenv.next_num + 1
 
-      local rt = t
-      if rt.typename == "typetype" then
-         rt = rt.def
-      end
       if t.found then
          ti.ref = get_typenum(t.found)
       end
@@ -8430,20 +8510,26 @@ function tl.get_types(result, trenv)
             r[k] = get_typenum(v)
          end
          ti.fields = r
-      elseif rt.typename == "enum" then
+      end
 
+      if is_array_type(rt) then
+         ti.elements = get_typenum(rt.elements)
+      end
+
+      if rt.typename == "map" then
+         ti.keys = get_typenum(rt.keys)
+         ti.values = get_typenum(rt.values)
+      elseif rt.typename == "enum" then
          ti.enums = mark_array(sorted_keys(rt.enumset))
       elseif rt.typename == "function" then
-
          store_function(ti, rt)
-      elseif rt.typename == "poly" then
-
+      elseif rt.typename == "poly" or rt.typename == "union" or rt.typename == "tupletable" then
          local tis = {}
+
          for _, pt in ipairs(rt.types) do
-            local pti = {}
-            store_function(pti, pt)
-            table.insert(tis, pti)
+            table.insert(tis, get_typenum(pt))
          end
+
          ti.types = mark_array(tis)
       end
 
@@ -8473,10 +8559,6 @@ function tl.get_types(result, trenv)
          yt = {}
          ft[y] = yt
       end
-
-
-
-
 
       yt[x] = get_typenum(typ)
    end
