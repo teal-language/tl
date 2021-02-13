@@ -1800,13 +1800,18 @@ end
 
 local function node_is_require_call(n)
    if n.e1 and n.e2 and
-      n.e1.kind == "variable" and
-      n.e1.tk == "require" and
-      n.e2.kind == "expression_list" and
-      #n.e2 == 1 and
+      n.e1.kind == "variable" and n.e1.tk == "require" and
+      n.e2.kind == "expression_list" and #n.e2 == 1 and
       n.e2[1].kind == "string" then
 
       return n.e2[1].conststr
+   elseif n.op and n.op.op == "@funcall" and
+      n.e1 and n.e1.tk == "pcall" and
+      n.e2 and #n.e2 == 2 and
+      n.e2[1].kind == "variable" and n.e2[1].tk == "require" and
+      n.e2[2].kind == "string" and n.e2[2].conststr then
+
+      return n.e2[2].conststr
    else
       return nil
    end
