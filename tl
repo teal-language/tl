@@ -141,16 +141,16 @@ local function validate_config(config)
          local arr_type = valid_keys[k]:match("{(.*)}")
          if arr_type then
             if type(v) ~= "table" then
-               return "Expected " .. k .. " to be a " .. valid_keys[k]
+               return "Expected " .. k .. " to be a " .. valid_keys[k] .. ", got " .. type(v)
             end
             for i, val in ipairs(v) do
                if type(val) ~= arr_type then
-                  return "Expected " .. k .. "[" .. i .. "] to be a " .. valid_keys[k]
+                  return "Expected " .. k .. "[" .. i .. "] to be a " .. valid_keys[k] .. ", got " .. type(val)
                end
             end
          else
             if type(v) ~= valid_keys[k] then
-               return "Expected " .. k .. " to be a " .. valid_keys[k]
+               return "Expected " .. k .. " to be a " .. valid_keys[k] .. ", got " .. type(v)
             end
          end
       end
