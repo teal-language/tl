@@ -7129,9 +7129,44 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
-   local function type_check_funcall(node: Node, a: Type, b: {Type}, argdelta: number): Type
-      argdelta = argdelta or 0
-      if node.e1.tk == "rawget" then
+   local type_check_funcall: function(node: Node, a: Type, b: {Type}, argdelta: number): Type
+
+   local function special_pcall_xpcall(node: Node, _a: Type, b: {Type}, argdelta: number): Type
+      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
+      if #node.e2 < base_nargs then
+         node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
+         return TUPLE { BOOLEAN }
+      end
+
+      local ftype = table.remove(b, 1)
+      local fe2: Node = {}
+      if node.e1.tk == "xpcall" then
+         base_nargs = 2
+         local msgh = table.remove(b, 1)
+         assert_is_a(node.e2[2], msgh, XPCALL_MSGH_FUNCTION, "message handler")
+      end
+      for i = base_nargs + 1, #node.e2 do
+         table.insert(fe2, node.e2[i])
+      end
+      local fnode: Node = {
+         y = node.y,
+         x = node.x,
+         kind = "op",
+         op = { op = "@funcall" },
+         e1 = node.e2[1],
+         e2 = fe2,
+      }
+      local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
+      if rets.typename ~= "tuple" then
+         rets = a_type { typename = "tuple", rets }
+      end
+      table.insert(rets, 1, BOOLEAN)
+      return rets
+   end
+
+   local special_functions: {string : function(Node,Type,{Type},number):Type } = {
+      ["rawget"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
+         -- TODO should those offsets be fixed by _argdelta?
          if #b == 2 then
             local b1 = resolve_unary(b[1])
             local b2 = resolve_unary(b[2])
@@ -7143,8 +7178,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
          else
             node_error(node, "rawget expects two arguments")
+            return UNKNOWN
          end
-      elseif node.e1.tk == "print_type" then
+      end,
+
+      ["print_type"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
+         -- TODO should those offsets be fixed by _argdelta?
          if #b == 0 then
             -- when called with no arguments, print all variables currently in scope and their types.
             print("-----------------------------------------")
@@ -7161,7 +7200,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             node_warning("debug", node.e2[1], "type is: %s", t)
             return b
          end
-      elseif node.e1.tk == "require" then
+      end,
+
+      ["require"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
          if #b == 1 then
             if node.e2[1].kind == "string" then
                local module_name = assert(node.e2[1].conststr)
@@ -7178,44 +7219,28 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          else
             node_error(node, "require expects one literal argument")
          end
-      elseif node.e1.tk == "pcall" or node.e1.tk == "xpcall" then
-         local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
-         if #node.e2 < base_nargs then
-            node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
-            return TUPLE { BOOLEAN }
-         end
+         return UNKNOWN
+      end,
 
-         local ftype = table.remove(b, 1)
-         local fe2: Node = {}
-         if node.e1.tk == "xpcall" then
-            base_nargs = 2
-            local msgh = table.remove(b, 1)
-            assert_is_a(node.e2[2], msgh, XPCALL_MSGH_FUNCTION, "message handler")
+      ["pcall"] = special_pcall_xpcall,
+      ["xpcall"] = special_pcall_xpcall,
+   }
+
+   type_check_funcall = function(node: Node, a: Type, b: {Type}, argdelta: number): Type
+      argdelta = argdelta or 0
+      if node.e1.kind == "variable" then
+         local special = special_functions[node.e1.tk]
+         if special then
+            return special(node, a, b, argdelta)
+         else
+            return type_check_function_call(node, a, b, false, argdelta)
          end
-         for i = base_nargs + 1, #node.e2 do
-            table.insert(fe2, node.e2[i])
-         end
-         local fnode: Node = {
-            y = node.y,
-            x = node.x,
-            kind = "op",
-            op = { op = "@funcall" },
-            e1 = node.e2[1],
-            e2 = fe2,
-         }
-         local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
-         if rets.typename ~= "tuple" then
-            rets = a_type { typename = "tuple", rets }
-         end
-         table.insert(rets, 1, BOOLEAN)
-         return rets
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b, 1, node.e1.e1.type)
          return type_check_function_call(node, a, b, true)
       else
          return type_check_function_call(node, a, b, false, argdelta)
       end
-      return UNKNOWN
    end
 
    -- is the i-th assignment in a local declaration of the form `x = x` ?
