@@ -888,10 +888,10 @@ local function json_out(fd, x)
       fd:write("]")
    else
       fd:write("{")
-      local c = ""
+      local c = '"'
       for k, v in pairs(x) do
-         fd:write(c, '"', k, '":')
-         c = ",\n"
+         fd:write(c, type(k) == "number" and k or k:gsub(json_special_codes, json_escape), '":')
+         c = ",\n\""
          json_out(fd, v)
       end
       fd:write("}")
