@@ -62,4 +62,30 @@ describe("or", function()
    ]], {
       { y = 8, msg = "in assignment: string is not a Dir" }
    }))
+
+   it("works with tables and {}", util.check [[
+      local type Ty = record
+         name: string
+         foo: number
+      end
+      local t: Ty = { name = "bla" }
+      local z = t or {}
+      local map: {string:number}
+      local zz = map or {}
+      local arr: {string}
+      local zzz = arr or {}
+   ]])
+
+   it("rejects non-tables and {}", util.check_type_error([[
+      local a: string
+      local z = a or {}
+      local b: number
+      local zz = b or {}
+      local c: boolean
+      local zzz = c or {}
+   ]], {
+      { msg = "cannot use operator 'or' for types string and {}" },
+      { msg = "cannot use operator 'or' for types number and {}" },
+      { msg = "cannot use operator 'or' for types boolean and {}" },
+   }))
 end)
