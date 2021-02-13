@@ -867,34 +867,37 @@ end
 
 local function json_out(fd, x)
    local tx = type(x)
-   if tx == "string" then
-      fd:write('"', x:gsub(json_special_codes, json_escape), '"')
-      return
-   elseif tx == "number" then
+   if tx == "number" then
       fd:write(x)
       return
-   end
-   assert(tx == "table")
-   if x[0] == false then -- special array marker for json dump
-      fd:write("[")
-      local l = #x
-      local colon = l < 10 and "," or ",\n"
-      for i, v in ipairs(x) do
-         json_out(fd, v)
-         if i < l then
-            fd:write(colon)
+   elseif tx == "string" then
+      fd:write('"', x:gsub(json_special_codes, json_escape), '"')
+      return
+   elseif tx == "table" then
+      if x[0] == false then -- special array marker for json dump
+         fd:write("[")
+         local l = #x
+         local colon = l < 10 and "," or ",\n"
+         for i, v in ipairs(x) do
+            json_out(fd, v)
+            if i < l then
+               fd:write(colon)
+            end
          end
+         fd:write("]")
+      else
+         fd:write("{")
+         local c = '"'
+         for k, v in pairs(x) do
+            fd:write(c, type(k) == "string" and k:gsub(json_special_codes, json_escape) or k, '":')
+            c = ",\n\""
+            json_out(fd, v)
+         end
+         fd:write("}")
       end
-      fd:write("]")
    else
-      fd:write("{")
-      local c = '"'
-      for k, v in pairs(x) do
-         fd:write(c, type(k) == "number" and k or k:gsub(json_special_codes, json_escape), '":')
-         c = ",\n\""
-         json_out(fd, v)
-      end
-      fd:write("}")
+      fd:write(tostring(x))
+      return
    end
 end
 

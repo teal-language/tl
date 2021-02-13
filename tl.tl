@@ -8462,7 +8462,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
          table.insert(rets, mark_array { get_typenum(arg), nil })
       end
       ti.rets = mark_array(rets)
-      ti.vararg = rt.is_va
+      ti.vararg = not not rt.is_va
    end
 
    get_typenum = function(t: Type): number

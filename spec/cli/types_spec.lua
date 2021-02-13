@@ -116,7 +116,7 @@ describe("tl types works like check", function()
 
             print(add("string", 20))
             print(add(10, true))
-         ]], "lua")
+         ]])
          local pd = io.popen(util.tl_cmd("types", name) .. " 2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(nil, "exit", 1, pd:close())
@@ -127,7 +127,7 @@ describe("tl types works like check", function()
       it("reports number of errors in stderr and code 1 on syntax errors", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
-         ]], "lua")
+         ]])
          local pd = io.popen(util.tl_cmd("types", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(nil, "exit", 1, pd:close())
@@ -151,5 +151,17 @@ describe("tl types works like check", function()
          assert.match("2 unknown variables:", output, 1, true)
          -- TODO check json output
       end)
+
+      it("regression test for #386", function()
+         local name = util.write_tmp_file(finally, [[
+            local type X = function(callback: function(filename: string))
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>&1 1>/dev/null", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(true, "exit", 0, pd:close())
+         assert.not_match("assertion failed", output, 1, true)
+         -- TODO check json output
+      end)
+
    end)
 end)
