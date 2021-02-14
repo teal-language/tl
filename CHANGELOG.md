@@ -1,3 +1,47 @@
+# 0.11.2
+
+2021-02-14
+
+More bugfixes! This includes some behavior fixes in the flow inference, so
+some code that wasn't accepted before may be accepted now and vice-versa, but
+the overall behavior is more correct now. Apart from this, no language changes
+other than fixes.
+
+This release features commits by Corey Williamson, JLPLabs and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Some more propagation of "truthiness" when flow-typing expressions:
+  * `assert` is now known by the compiler to be truthy when performing flow
+    propagation of type information. This means that, for example,
+    given `x` of type `A | B`, in an expression of the form
+    `x is A and assert(exp1(x)) or exp2(x)`, `x` will be known to be of
+    type `B` in `exp2(x)`.
+* `t or {}` is now only valid for table types
+* Standard library improvements
+  * `math.randomseed` accepts Lua 5.4 second argument
+
+### API
+
+* `get_types` now returns numeric type codes, and more complete type data
+  for IDE integration consumption
+* The parser collects the list of required modules, for use by later use
+  by build tooling
+* The type checker now collects the list of filenames resolved by `require`,
+  for use by build tooling
+
+### Tooling
+
+* Performance improvements for the lexer
+* Performance improvements for the JSON encoder used by `tl types`
+
+### Fixes
+
+* `tl types`: proper escaping of JSON strings
+* some parser fixes to avoid crashes on incorrect input
+
 # 0.11.1
 
 2021-02-07
