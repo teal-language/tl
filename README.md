@@ -44,7 +44,7 @@ The packages contain a stand-alone executable that can run Teal programs
 ### Try it from your browser
 
 You can give Teal a try directly from your browser with the [Teal
-Playground](teal-playground.netlify.app/)! It compiles Teal into Lua using
+Playground](https://teal-playground.netlify.app/)! It compiles Teal into Lua using
 [Fengari](https://github.com/fengari-lua/fengari), a Lua VM implemented in
 JavaScript, so everything runs on the client.
 
