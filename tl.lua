@@ -5472,7 +5472,7 @@ tl.type_check = function(ast, opts)
          end
       end
 
-      if node and valtype.typename ~= "unresolved" then
+      if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
          symbol_list_n = symbol_list_n + 1
          symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
       end
