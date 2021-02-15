@@ -14,12 +14,13 @@ run `.tl` files.
 
 ## Introduction
 
-Here are videos of talks given at FOSDEM 2019 and 2020 which discuss the
+Here are videos of talks given at FOSDEM 2019, 2020 and 2021 which discuss the
 history of Lua and types, outline the motivations behind Teal and talk about
 the project's progress:
 
 * [Minimalism versus types (2019)](https://www.youtube.com/watch?v=OPyBQRndLUk)
 * [Minimalistic typed Lua is here (2020)](https://www.youtube.com/watch?v=HfnjUCRzRKU)
+* [What's Next for Teal (2021)](https://www.youtube.com/watch?v=OqXbnaDR8QY)
 
 ## Installing
 
