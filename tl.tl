@@ -3111,11 +3111,11 @@ local function recurse_node<T>(ast: Node,
           or ast.kind == "global_declaration"
           or ast.kind == "assignment" then
       xs[1] = recurse_node(ast.vars, visit_node, visit_type)
-      if ast.exps then
-         xs[2] = recurse_node(ast.exps, visit_node, visit_type)
-      end
       if ast.decltype then
-         xs[3] = recurse_type(ast.decltype, visit_type)
+         xs[2] = recurse_type(ast.decltype, visit_type)
+      end
+      if ast.exps then
+         xs[3] = recurse_node(ast.exps, visit_node, visit_type)
       end
    elseif ast.kind == "local_type"
           or ast.kind == "global_type" then
@@ -3436,9 +3436,9 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "local")
             add_child(out, children[1], " ")
-            if children[2] then
+            if children[3] then
                table.insert(out, " =")
-               add_child(out, children[2], " ")
+               add_child(out, children[3], " ")
             end
             return out
          end,
@@ -3465,10 +3465,10 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       ["global_declaration"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if children[2] then
+            if children[3] then
                add_child(out, children[1])
                table.insert(out, " =")
-               add_child(out, children[2], " ")
+               add_child(out, children[3], " ")
             end
             return out
          end,
@@ -3478,7 +3478,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             local out: Output = { y = node.y, h = 0 }
             add_child(out, children[1])
             table.insert(out, " =")
-            add_child(out, children[2], " ")
+            add_child(out, children[3], " ")
             return out
          end,
       },
@@ -7369,7 +7369,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["local_declaration"] = {
          after = function(node: Node, children: {Type}): Type
-            local vals: {Type} = get_assignment_values(children[2], #node.vars)
+            local vals: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
@@ -7414,7 +7414,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["global_declaration"] = {
          after = function(node: Node, children: {Type}): Type
-            local vals: {Type} = get_assignment_values(children[2], #node.vars)
+            local vals: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
                local decltype = node.decltype and node.decltype[i]
                local infertype = vals and vals[i]
@@ -7459,7 +7459,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["assignment"] = {
          after = function(node: Node, children: {Type}): Type
-            local vals: {Type} = get_assignment_values(children[2], #children[1])
+            local vals: {Type} = get_assignment_values(children[3], #children[1])
             local exps = flatten_list(vals)
             for i, vartype in ipairs(children[1]) do
                local varnode = node.vars[i]
