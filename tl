@@ -237,6 +237,7 @@ local function get_args_parser()
 
    local gen_command = parser:command("gen", "Generate a Lua file for one or more Teal files.")
    gen_command:argument("file", "The Teal source file."):args("+")
+   gen_command:flag("-c --check", "Type check and fail on type errors.")
    gen_command:option("-o --output", "Write to <filename> instead.")
               :argname("<filename>")
 
@@ -1001,6 +1002,11 @@ if cmd == "gen" then
       if #res.tl_result.syntax_errors > 0 then
          exit = 1
       end
+
+      if args["check"] and #res.tl_result.type_errors > 0 then
+         exit = 1
+      end
+
       table.insert(results, res)
       if i > 1 then
          collectgarbage()
@@ -1010,6 +1016,9 @@ if cmd == "gen" then
       for i, res in ipairs(results) do
          if #res.tl_result.syntax_errors > 0 then
             report_errors("syntax error", res.tl_result.syntax_errors)
+         end
+         if args["check"] then
+            report_result(res.tl_result)
          end
       end
    else
