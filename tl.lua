@@ -4206,7 +4206,7 @@ local function show_type_base(t, short, seen)
          for _, v in ipairs(t.typeargs) do
             table.insert(typeargs, show(v))
          end
-         table.insert(out, table.concat(typeargs, ","))
+         table.insert(out, table.concat(typeargs, ", "))
          table.insert(out, ">")
       end
       table.insert(out, "(")
@@ -4219,15 +4219,15 @@ local function show_type_base(t, short, seen)
             table.insert(args, show(v))
          end
       end
-      table.insert(out, table.concat(args, ","))
+      table.insert(out, table.concat(args, ", "))
       table.insert(out, ")")
       if #t.rets > 0 then
-         table.insert(out, ":")
+         table.insert(out, ": ")
          local rets = {}
          for _, v in ipairs(t.rets) do
             table.insert(rets, show(v))
          end
-         table.insert(out, table.concat(rets, ","))
+         table.insert(out, table.concat(rets, ", "))
       end
       return table.concat(out)
    elseif t.typename == "number" or
