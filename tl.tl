@@ -6304,29 +6304,44 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local type_check_function_call: function(Node, Type, {Type}, boolean, number): Type
    do
-      local function try_match_func_args(node: Node, f: Type, args: {Type}, is_method: boolean, argdelta: number): Type, {Error}
-         local ok = true
+      local function resolve_for_call(node: Node, func: Type, args: {Type}, is_method: boolean): Type, boolean
+         -- resolve unknown in lax mode, produce a general unknown function
+         if lax and is_unknown(func) then
+            func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
+            if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
+               add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
+            end
+         end
+         -- unwrap if tuple, resolve if nominal
+         func = resolve_unary(func)
+         if func.typename ~= "function" and func.typename ~= "poly" then
+            -- resolve if prototype
+            if is_typetype(func) and func.def.typename == "record" then
+               func = func.def
+            end
+            -- resolve if metatable
+            if func.meta_fields and func.meta_fields["__call"] then
+               table.insert(args, 1, func)
+               func = func.meta_fields["__call"]
+               is_method = true
+            end
+         end
+         return func, is_method
+      end
+
+      local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: number): Type, {Error}
          local errs = {}
 
-         if is_method then
-            argdelta = -1
-         elseif not argdelta then
-            argdelta = 0
-         end
-
-         if f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
-            table.insert(errs, { y = node.y, x = node.x, msg = "invoked method as a regular function: use ':' instead of '.'", filename = filename })
-            return nil, errs
-         end
-
+         local given = #args
+         local expected = #f.args
          local va = f.args.is_va
          local nargs = va
-                       and math.max(#args, #f.args)
-                       or math.min(#args, #f.args)
+                       and math.max(given, expected)
+                       or math.min(given, expected)
 
          for a = 1, nargs do
             local argument = args[a]
-            local farg = f.args[a] or (va and f.args[#f.args])
+            local farg = f.args[a] or (va and f.args[expected])
             if argument == nil then
                if va then
                   break
@@ -6334,26 +6349,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             else
                local at = node.e2 and node.e2[a] or node
                if not arg_check(is_a, argument, farg, at, (a + argdelta), errs) then
-                  ok = false
-                  break
+                  return nil, errs
                end
             end
          end
-         if ok == true then
 
-            -- resolve inference of emptytables used as arguments
-            for a = 1, #args do
-               local argument = args[a]
-               local farg = f.args[a] or (va and f.args[#f.args])
-               if argument.typename == "emptytable" then
-                  local where = node.e2[a + argdelta]
-                  infer_var(argument, resolve_typevars_at(farg, where), where)
-               end
+         -- resolve inference of emptytables used as arguments
+         for a = 1, given do
+            local argument = args[a]
+            if argument.typename == "emptytable" then
+               local farg = f.args[a] or (va and f.args[expected])
+               local where = node.e2[a + argdelta]
+               infer_var(argument, resolve_typevars_at(farg, where), where)
             end
-
-            return resolve_typevars_at(f.rets, node)
          end
-         return nil, errs
+
+         return resolve_typevars_at(f.rets, node)
       end
 
       local function revert_typeargs(func: Type)
@@ -6366,111 +6377,97 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       end
 
-      local function remove_sorted_duplicates<T>(t: {T})
-         local prev: T = nil
-         for i = #t, 1, -1 do
-            if t[i] == prev then
-               table.remove(t, i)
-            else
-               prev = t[i]
+      local function fail_call(node: Node, func: Type, nargs: number, errs: {Error}): Type
+         if errs then
+            -- report the errors from the first match
+            for _, err in ipairs(errs) do
+               table.insert(errors, err)
             end
+         else
+            -- found no arity match to try
+            local expects: {string} = {}
+            if func.typename == "poly" then
+               for _, f in ipairs(func.types) do
+                  table.insert(expects, tostring(#f.args or 0))
+               end
+               table.sort(expects)
+               for i = #expects, 1, -1 do
+                  if expects[i] == expects[i+1] then
+                     table.remove(expects, i)
+                  end
+               end
+            else
+               table.insert(expects, tostring(#func.args or 0))
+            end
+            node_error(node, "wrong number of arguments (given " .. nargs .. ", expects " .. table.concat(expects, " or ") .. ")")
          end
+
+         local rets = func.typename == "poly"
+                      and func.types[1].rets
+                      or  func.rets
+         return resolve_typevars_at(rets, node)
       end
 
       local function check_call(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
          assert(type(func) == "table")
          assert(type(args) == "table")
 
-         if lax and is_unknown(func) then
-            func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
-            if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
-               add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-            end
+         if not (func.typename == "function" or func.typename == "poly") then
+            func, is_method = resolve_for_call(node, func, args, is_method)
          end
 
-         func = resolve_unary(func)
+         argdelta = is_method and -1 or argdelta or 0
 
-         if func.typename ~= "function" and func.typename ~= "poly" then
-            if is_typetype(func) and func.def.typename == "record" then
-               func = func.def
-            end
-            if func.meta_fields and func.meta_fields["__call"] then
-               table.insert(args, 1, func)
-               func = func.meta_fields["__call"]
-               is_method = true
-            end
+         local is_func = func.typename == "function"
+         local is_poly = func.typename == "poly"
+         if not (is_func or is_poly) then
+            return node_error(node, "not a function: %s", func)
          end
 
-         args = args or {}
-         local poly: Type = func.typename == "poly" and func or { types = { func } }
+         local passes, n = 1, 1
+         if is_poly then
+            passes, n = 3, #func.types
+         end
+
+         local given = #args
+         local tried: {number:boolean}
          local first_errs: {Error}
-         local expects: {string} = {}
-         -- try exact match first
-         local tried: {number:boolean} = {}
-         for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               if f.typename ~= "function" then
-                  if lax and is_unknown(f) then
-                     return UNKNOWN
+         for pass = 1, passes do
+            for i = 1, n do
+               if (not tried) or not tried[i] then
+                  local f = is_func and func or func.types[i]
+                  if f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
+                     return node_error(node, "invoked method as a regular function: use ':' instead of '.'")
                   end
-                  return node_error(node, "not a function: %s", f)
-               end
-               table.insert(expects, tostring(#f.args or 0))
-               if #args == (#f.args or 0) or (f.args.is_va and #args > #f.args) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
+                  local expected = #f.args
+
+                  -- simple functions:
+                  if (is_func and (given <= expected or (f.args.is_va and given > expected)))
+                  -- poly, pass 1: try exact arity matches first
+                  or (is_poly and ((pass == 1 and given == expected)
+                  -- poly, pass 2: then try adjusting with nils to missing arguments or using '...'
+                                or (pass == 2 and given < expected)
+                  -- poly, pass 3: then finally try vararg functions
+                                or (pass == 3 and f.args.is_va and given > expected)))
+                  then
+                     local matched, errs = try_match_func_args(node, f, args, argdelta)
+                     if matched then
+                        -- success!
+                        return matched
+                     end
+                     first_errs = first_errs or errs
+
+                     if is_poly then
+                        tried = tried or {}
+                        tried[i] = true
+                        revert_typeargs(f)
+                     end
                   end
-                  first_errs = first_errs or errs
-               end
-            end
-         end
-         -- now try adjusting with nils to missing arguments or using '...'
-         for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               tried[i] = true
-               if #args < (#f.args or 0) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
-                  end
-                  first_errs = first_errs or errs
-               end
-            end
-         end
-         -- now try vararg functions
-         for i, f in ipairs(poly.types) do
-            if not tried[i] then
-               if f.args.is_va and #args > (#f.args or 0) then
-                  tried[i] = true
-                  local matched, errs = try_match_func_args(node, f, args, is_method, argdelta)
-                  if matched then
-                     return matched
-                  else
-                     revert_typeargs(f)
-                  end
-                  first_errs = first_errs or errs
                end
             end
          end
 
-         if not first_errs then
-            table.sort(expects)
-            remove_sorted_duplicates(expects)
-            node_error(node, "wrong number of arguments (given " .. #args .. ", expects " .. table.concat(expects, " or ") .. ")")
-         else
-            for _, err in ipairs(first_errs) do
-               table.insert(errors, err)
-            end
-         end
-
-         return resolve_typevars_at(poly.types[1].rets, node)
+         return fail_call(node, func, given, first_errs)
       end
 
       type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
