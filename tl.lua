@@ -5809,7 +5809,7 @@ tl.type_check = function(ast, opts)
    end
 
    local is_known_table_type
-   local resolve_unary = nil
+   local resolve_tuple_and_nominal = nil
 
 
    same_type = function(t1, t2)
@@ -5820,7 +5820,7 @@ tl.type_check = function(ast, opts)
          return compare_typevars(t1, t2, same_type)
       end
 
-      if t1.typename == "emptytable" and is_known_table_type(resolve_unary(t2)) then
+      if t1.typename == "emptytable" and is_known_table_type(resolve_tuple_and_nominal(t2)) then
          return true
       end
 
@@ -6078,12 +6078,12 @@ tl.type_check = function(ast, opts)
          if same then
             return true
          end
-         local t1u = resolve_unary(t1)
-         local t2u = resolve_unary(t2)
-         if is_record_type(t1u) and is_record_type(t2u) then
+         local t1r = resolve_tuple_and_nominal(t1)
+         local t2r = resolve_tuple_and_nominal(t2)
+         if is_record_type(t1r) and is_record_type(t2r) then
             return same, err
          else
-            return is_a(t1u, t2u, for_equality)
+            return is_a(t1r, t2r, for_equality)
          end
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok
@@ -6109,9 +6109,9 @@ tl.type_check = function(ast, opts)
             end
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
-         local t1u = resolve_unary(t1)
-         local t2u = resolve_unary(t2)
-         local ok, errs = is_a(t1u, t2u, for_equality)
+         local t1r = resolve_tuple_and_nominal(t1)
+         local t2r = resolve_tuple_and_nominal(t2)
+         local ok, errs = is_a(t1r, t2r, for_equality)
          if errs and #errs == 1 then
             if errs[1].msg:match("^got ") then
 
@@ -6131,12 +6131,12 @@ tl.type_check = function(ast, opts)
             if t2.inferred_len and t2.inferred_len > #t1.types then
                return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len))
             end
-            local u, err = arraytype_from_tuple(t1.inferred_at, t1)
-            if not u then
+            local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
+            if not t1a then
                return false, err
             end
-            if not is_a(u, t2) then
-               return false, terr(t2, "got %s (from %s), expected %s", u, t1, t2)
+            if not is_a(t1a, t2) then
+               return false, terr(t2, "got %s (from %s), expected %s", t1a, t1, t2)
             end
             return true
          elseif t1.typename == "map" then
@@ -6158,12 +6158,12 @@ tl.type_check = function(ast, opts)
             if t2.inferred_len and t2.inferred_len > #t1.types then
                return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len))
             end
-            local u, err = arraytype_from_tuple(t1.inferred_at, t1)
-            if not u then
+            local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
+            if not t1a then
                return false, err
             end
-            if not is_a(u, t2) then
-               return false, terr(t2, "got %s (from %s), expected %s", u, t1, t2)
+            if not is_a(t1a, t2) then
+               return false, terr(t2, "got %s (from %s), expected %s", t1a, t1, t2)
             end
             return true
          elseif t1.typename == "record" then
@@ -6331,7 +6331,7 @@ tl.type_check = function(ast, opts)
             end
          end
 
-         func = resolve_unary(func)
+         func = resolve_tuple_and_nominal(func)
          if func.typename ~= "function" and func.typename ~= "poly" then
 
             if is_typetype(func) and func.def.typename == "record" then
@@ -6500,7 +6500,7 @@ tl.type_check = function(ast, opts)
       assert(type(tbl) == "table")
       assert(type(key) == "table")
 
-      tbl = resolve_unary(tbl)
+      tbl = resolve_tuple_and_nominal(tbl)
       local type_description = tbl.typename
       if tbl.typename == "string" or tbl.typename == "enum" then
          tbl = find_var_type("string")
@@ -6678,7 +6678,7 @@ tl.type_check = function(ast, opts)
       end_scope(node)
    end
 
-   resolve_unary = function(t)
+   resolve_tuple_and_nominal = function(t)
       t = resolve_tuple(t)
       if t.typename == "nominal" then
          return resolve_nominal(t)
@@ -6689,7 +6689,7 @@ tl.type_check = function(ast, opts)
    local function flatten_list(list)
       local exps = {}
       for i = 1, #list - 1 do
-         table.insert(exps, resolve_unary(list[i]))
+         table.insert(exps, resolve_tuple_and_nominal(list[i]))
       end
       if #list > 0 then
          local last = list[#list]
@@ -6760,8 +6760,8 @@ tl.type_check = function(ast, opts)
    local function type_check_index(node, idxnode, a, b)
       local orig_a = a
       local orig_b = b
-      a = resolve_unary(a)
-      b = resolve_unary(b)
+      a = resolve_tuple_and_nominal(a)
+      b = resolve_tuple_and_nominal(b)
 
       if a.typename == "tupletable" and is_a(b, NUMBER) then
          if idxnode.constnum then
@@ -6977,9 +6977,9 @@ tl.type_check = function(ast, opts)
       end
 
       local function resolve_if_union(t)
-         local u = resolve_unary(t)
-         if u.typename == "union" then
-            return u
+         local rt = resolve_tuple_and_nominal(t)
+         if rt.typename == "union" then
+            return rt
          end
          return t
       end
@@ -7225,8 +7225,8 @@ tl.type_check = function(ast, opts)
       ["rawget"] = function(node, _a, b, _argdelta)
 
          if #b == 2 then
-            local b1 = resolve_unary(b[1])
-            local b2 = resolve_unary(b[2])
+            local b1 = resolve_tuple_and_nominal(b[1])
+            local b2 = resolve_tuple_and_nominal(b[2])
             local knode = node.e2[2]
             if is_record_type(b1) and knode.conststr then
                return match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
@@ -7474,7 +7474,7 @@ tl.type_check = function(ast, opts)
                end
                if vartype then
                   local val = exps[i]
-                  if is_typetype(resolve_unary(vartype)) then
+                  if is_typetype(resolve_tuple_and_nominal(vartype)) then
                      node_error(varnode, "cannot reassign a type")
                   elseif val then
                      assert_is_a(varnode, val, vartype, "assignment")
@@ -7617,11 +7617,11 @@ tl.type_check = function(ast, opts)
          end,
          before_statements = function(node)
             local exp1 = node.exps[1]
-            local exp1type = resolve_unary(exp1.type)
+            local exp1type = resolve_tuple_and_nominal(exp1.type)
             if exp1type.typename == "function" then
 
                if exp1.op and exp1.op.op == "@funcall" then
-                  local t = resolve_unary(exp1.e2.type)
+                  local t = resolve_tuple_and_nominal(exp1.e2.type)
                   if exp1.e1.tk == "pairs" and is_array_type(t) then
                      node_warning("hint", exp1, "hint: applying pairs on an array: did you intend to apply ipairs?")
                   end
@@ -7702,7 +7702,7 @@ tl.type_check = function(ast, opts)
                rets = children[1]
                rets.inferred_at = node
                rets.inferred_at_file = filename
-               module_type = resolve_unary(rets)
+               module_type = resolve_tuple_and_nominal(rets)
                module_type.tk = nil
                st[2]["@return"] = { t = rets }
             end
@@ -7972,7 +7972,7 @@ tl.type_check = function(ast, opts)
                add_var(nil, "self", rtype)
             end
 
-            local rtype = resolve_unary(resolve_typetype(children[1]))
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
             end
@@ -8072,13 +8072,13 @@ tl.type_check = function(ast, opts)
 
             local orig_a = a
             local orig_b = b
-            local ua = a and resolve_unary(a)
-            local ub = b and resolve_unary(b)
-            if ua and is_typetype(ua) and ua.def.typename == "record" then
-               ua = ua.def
+            local ra = a and resolve_tuple_and_nominal(a)
+            local rb = b and resolve_tuple_and_nominal(b)
+            if ra and is_typetype(ra) and ra.def.typename == "record" then
+               ra = ra.def
             end
-            if ub and is_typetype(ub) and ub.def.typename == "record" then
-               ub = ub.def
+            if rb and is_typetype(rb) and rb.def.typename == "record" then
+               rb = rb.def
             end
             if node.op.op == "@funcall" then
                node.type = type_check_funcall(node, a, b)
@@ -8087,7 +8087,7 @@ tl.type_check = function(ast, opts)
             elseif node.op.op == "as" then
                node.type = b
             elseif node.op.op == "is" then
-               if ua.typename == "typetype" then
+               if ra.typename == "typetype" then
                   node_error(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
                   node.known = Fact({ fact = "is", var = node.e1.tk, typ = b, where = node })
@@ -8096,7 +8096,7 @@ tl.type_check = function(ast, opts)
                end
                node.type = BOOLEAN
             elseif node.op.op == "." then
-               a = ua
+               a = ra
                if a.typename == "map" then
                   if is_a(a.keys, STRING) or is_a(a.keys, ANY) then
                      node.type = a.values
@@ -8123,20 +8123,20 @@ tl.type_check = function(ast, opts)
             elseif node.op.op == "and" then
                node.known = facts_and(node.e1.known, node.e2.known, node)
                node.type = resolve_tuple(b)
-            elseif node.op.op == "or" and is_known_table_type(ua) and b.typename == "emptytable" then
+            elseif node.op.op == "or" and is_known_table_type(ra) and b.typename == "emptytable" then
                node.known = nil
                node.type = resolve_tuple(a)
-            elseif node.op.op == "or" and is_a(ub, ua) then
+            elseif node.op.op == "or" and is_a(rb, ra) then
                node.known = facts_or(node.e1.known, node.e2.known)
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and b.typename == "nil" then
                node.known = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and
-               ((ua.typename == "enum" and ub.typename == "string" and is_a(ub, ua)) or
-               (ua.typename == "string" and ub.typename == "enum" and is_a(ua, ub))) then
+               ((ra.typename == "enum" and rb.typename == "string" and is_a(rb, ra)) or
+               (ra.typename == "string" and rb.typename == "enum" and is_a(ra, rb))) then
                node.known = nil
-               node.type = (ua.typename == "enum" and ua or ub)
+               node.type = (ra.typename == "enum" and ra or rb)
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
                if is_a(b, a, true) or a.typename == "typevar" then
@@ -8153,7 +8153,7 @@ tl.type_check = function(ast, opts)
                   node_error(node, "types are not comparable for equality: %s and %s", a, b)
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
-               a = ua
+               a = ra
                if a.typename == "union" then
                   a = unite(a.types, true)
                end
@@ -8168,7 +8168,7 @@ tl.type_check = function(ast, opts)
                else
                   metamethod = a.meta_fields and a.meta_fields[unop_to_metamethod[node.op.op] or ""]
                   if metamethod then
-                     node.type = resolve_unary(type_check_function_call(node, metamethod, { a }, false, 0))
+                     node.type = resolve_tuple_and_nominal(type_check_function_call(node, metamethod, { a }, false, 0))
                   elseif lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
@@ -8191,8 +8191,8 @@ tl.type_check = function(ast, opts)
                   node.known = facts_or(node.e1.known, node.e2.known)
                end
 
-               a = ua
-               b = ub
+               a = ra
+               b = rb
 
                if a.typename == "union" then
                   a = unite(a.types, true)
@@ -8216,7 +8216,7 @@ tl.type_check = function(ast, opts)
                      meta_self = 2
                   end
                   if metamethod then
-                     node.type = resolve_unary(type_check_function_call(node, metamethod, { a, b }, false, 0))
+                     node.type = resolve_tuple_and_nominal(type_check_function_call(node, metamethod, { a, b }, false, 0))
                   elseif lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
