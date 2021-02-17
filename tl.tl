@@ -5669,10 +5669,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
    end
 
+   local function close_nested_records(t: Type)
+      for _, ft in pairs(t.fields) do
+         if is_typetype(ft) then
+            ft.closed = true
+            if is_record_type(ft.def) then
+               close_nested_records(ft.def)
+            end
+         end
+      end
+   end
+
    local function close_types(vars: {string:Variable})
       for _, var in pairs(vars) do
          if is_typetype(var.t) then
             var.t.closed = true
+            if is_record_type(var.t.def) then
+               close_nested_records(var.t.def)
+            end
          end
       end
    end
