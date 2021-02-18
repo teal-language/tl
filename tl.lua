@@ -7914,6 +7914,7 @@ tl.type_check = function(ast, opts)
                typename = "function",
                args = children[2],
                rets = rets,
+               filename = filename,
             }))
             node.type = NONE
             return node.type
@@ -7935,6 +7936,7 @@ tl.type_check = function(ast, opts)
                typename = "function",
                args = children[2],
                rets = get_rets(children[3]),
+               filename = filename,
             }))
             node.type = NONE
             return node.type
@@ -7964,6 +7966,7 @@ tl.type_check = function(ast, opts)
                   is_method = node.is_method,
                   args = children[3],
                   rets = get_rets(children[4]),
+                  filename = filename,
                })
 
                local ok = false
@@ -8014,6 +8017,7 @@ tl.type_check = function(ast, opts)
                typename = "function",
                args = children[1],
                rets = children[2],
+               filename = filename,
             })
             return node.type
          end,
