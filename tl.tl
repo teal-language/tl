@@ -1207,6 +1207,7 @@ local record Node
 
    -- newtype
    newtype: Type
+   is_alias: boolean
 
    -- expressions
    op: Operator
@@ -3803,7 +3804,9 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       ["newtype"] = {
          after = function(node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if is_record_type(node.newtype.def) then
+            if node.is_alias then
+               table.insert(out, table.concat(node.newtype.def.names, "."))
+            elseif is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
             else
                table.insert(out, "{}")
@@ -5734,6 +5737,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if not typetype then
             type_error(t, "unknown type %s", t)
          elseif is_typetype(typetype) then
+            assert(typetype.def.typename ~= "nominal")
             resolved = match_typevals(t, typetype.def)
          else
             type_error(t, table.concat(t.names, ".") .. " is not a type")
@@ -6681,8 +6685,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    resolve_tuple_and_nominal = function(t: Type): Type
       t = resolve_tuple(t)
       if t.typename == "nominal" then
-         return resolve_nominal(t)
+         t = resolve_nominal(t)
       end
+      assert(t.typename ~= "nominal")
       return t
    end
 
@@ -7313,6 +7318,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          and node.exps[i].tk == node.vars[i].tk
    end
 
+   local function resolve_nominal_typetype(typetype: Type): Type, boolean
+      if typetype.def.typename == "nominal" then
+         if typetype.def.typevals then
+            typetype.def = resolve_nominal(typetype.def)
+            typetype.def.typeargs = nil
+         else
+            local names = typetype.def.names
+            local found = find_type(names)
+            if not is_typetype(found) then
+               type_error(typetype, "%s is not a type", typetype)
+               found = a_type { typename = "bad_nominal", names = names }
+            end
+            return found, true
+         end
+      end
+      return typetype, false
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -7336,16 +7359,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["local_type"] = {
          before = function(node: Node)
-            add_var(node.var, node.var.tk, node.value.newtype, node.var.is_const)
+            node.value.type, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
+            add_var(node.var, node.var.tk, node.value.type, node.var.is_const)
          end,
          after = function(node: Node, _children: {Type}): Type
             dismiss_unresolved(node.var.tk)
             node.type = NONE
+            node.var.type = node.value.type
             return node.type
          end,
       },
       ["global_type"] = {
          before = function(node: Node)
+            node.value.newtype, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
             add_global(node.var, node.var.tk, node.value.newtype, node.var.is_const)
          end,
          after = function(node: Node, _children: {Type}): Type
@@ -7364,6 +7390,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
             dismiss_unresolved(var.tk)
             node.type = NONE
+            node.var.type = node.value.newtype
             return node.type
          end,
       },
@@ -8292,7 +8319,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["newtype"] = {
          after = function(node: Node, _children: {Type}): Type
-            node.type = node.newtype
+            node.type = node.type or node.newtype
             return node.type
          end,
       },
@@ -8401,6 +8428,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          },
          ["nominal"] = {
             after = function(typ: Type, _children: {Type}): Type
+               if typ.found then
+                  return typ
+               end
+
                local t = find_type(typ.names, true)
                if t then
                   if t.typename == "typearg" then
