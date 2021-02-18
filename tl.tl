@@ -1892,6 +1892,12 @@ do
          or prevnode.kind == "variable"
    end
 
+   -- small hack: for the sake of `tl types`, parse an invalid binary exp
+   -- as a paren to produce a unary indirection on e1 and save its location.
+   local function failstore(tkop: Token, e1: Node): Node
+      return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1 }
+   end
+
    local function P(ps: ParseState, i: number): number, Node
       if ps.tokens[i].kind == "$EOF$" then
          return i
@@ -1948,7 +1954,7 @@ do
                else
                   fail(ps, prev_i, "cannot use a table here; if you're trying to call the previous expression, wrap it in parentheses")
                end
-               return i
+               return i, failstore(tkop, e1)
             end
 
             table.insert(args, argument)
@@ -1965,7 +1971,7 @@ do
 
             if not after_valid_prefixexp(ps, e1, prev_i) then
                fail(ps, prev_i, "cannot call this expression")
-               return i
+               return i, failstore(tkop, e1)
             end
 
             e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
@@ -1982,7 +1988,7 @@ do
 
             if not after_valid_prefixexp(ps, e1, prev_i) then
                fail(ps, prev_i, "cannot index this expression")
-               return i
+               return i, failstore(tkop, e1)
             end
 
             e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = idx }
@@ -1995,22 +2001,22 @@ do
             i = i + 1
             i, key = verify_kind(ps, i, "identifier")
             if not key then
-               return i
+               return i, failstore(tkop, e1)
             end
 
             if op.op == ":" then
                if not args_starters[ps.tokens[i].kind] then
                   fail(ps, i, "expected a function call for a method")
-                  return i
+                  return i, failstore(tkop, e1)
                end
 
                if not after_valid_prefixexp(ps, e1, prev_i) then
                   fail(ps, prev_i, "cannot call a method on this expression")
-                  return i
+                  return i, failstore(tkop, e1)
                end
             end
 
-            e1 = { y = key.y, x = key.x, kind = "op", op = op, e1 = e1, e2 = key }
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif tkop.tk == "as" or tkop.tk == "is" then
             local op: Operator = new_operator(tkop, 2, tkop.tk)
 
@@ -2022,7 +2028,7 @@ do
                i, cast.casttype = parse_type(ps, i)
             end
             if not cast.casttype then
-               return i
+               return i, failstore(tkop, e1)
             end
             e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = cast, conststr = e1.conststr }
          else
@@ -6509,10 +6515,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       else
          if is_unknown(tbl) then
             if not lax then
-               node_error(node, "cannot index a value of unknown type")
+               node_error(key, "cannot index a value of unknown type")
             end
          else
-            node_error(node, "cannot index something that is not a record: %s", tbl)
+            node_error(key, "cannot index something that is not a record: %s", tbl)
          end
          return INVALID
       end
