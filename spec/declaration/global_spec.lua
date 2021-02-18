@@ -199,4 +199,53 @@ describe("global", function()
       end)
    end)
 
+   describe("with types", function()
+      it("nominal types can take type arguments", util.check [[
+         global record Foo<R>
+            item: R
+         end
+
+         global type Foo2 = Foo
+         global type Bla = Foo<number>
+
+         global x: Bla = { item = 123 }
+         global y: Foo2<number> = { item = 123 }
+      ]])
+
+      it("nested types can be resolved as aliases", util.check [[
+         global record Foo<R>
+            enum LocalEnum
+               "loc"
+            end
+
+            record Nested
+               x: {LocalEnum}
+               y: R
+            end
+
+            item: R
+         end
+
+         global type Nested = Foo.Nested
+      ]])
+
+      it("types declared as nominal types are aliases", util.check [[
+         global record Foo<R>
+            item: R
+         end
+
+         global type Foo2 = Foo
+         global type FooNumber = Foo<number>
+
+         global x: FooNumber = { item = 123 }
+         global y: Foo2<number> = { item = 123 }
+
+         global type Foo3 = Foo
+         global type Foo4 = Foo2
+
+         global zep: Foo2<string> = { item = "hello" }
+         global zip: Foo3<string> = zep
+         global zup: Foo4<string> = zip
+      ]])
+   end)
 end)

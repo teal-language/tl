@@ -123,6 +123,54 @@ describe("local", function()
          }, result.type_errors)
       end)
 
+      it("nominal types can take type arguments", util.check [[
+         local record Foo<R>
+            item: R
+         end
+
+         local type Foo2 = Foo
+         local type Bla = Foo<number>
+
+         local x: Bla = { item = 123 }
+         local y: Foo2<number> = { item = 123 }
+      ]])
+
+      it("types declared as nominal types are aliases", util.check [[
+         local record Foo<R>
+            item: R
+         end
+
+         local type Foo2 = Foo
+         local type FooNumber = Foo<number>
+
+         local x: FooNumber = { item = 123 }
+         local y: Foo2<number> = { item = 123 }
+
+         local type Foo3 = Foo
+         local type Foo4 = Foo2
+
+         local zep: Foo2<string> = { item = "hello" }
+         local zip: Foo3<string> = zep
+         local zup: Foo4<string> = zip
+      ]])
+
+      it("nested types can be resolved as aliases", util.check [[
+         local record Foo<R>
+            enum LocalEnum
+               "loc"
+            end
+
+            record Nested
+               x: {LocalEnum}
+               y: R
+            end
+
+            item: R
+         end
+
+         local type Nested = Foo.Nested
+      ]])
+
       it("'type', 'record' and 'enum' are not reserved keywords", util.check [[
          local type = type
          local record: string = "hello"
