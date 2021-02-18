@@ -4193,19 +4193,31 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       if short then
          return "record"
       else
-         local out: {string} = {}
+         local out: {string} = {"record"}
+         if t.typeargs then
+            table.insert(out, "<")
+            local typeargs = {}
+            for _, v in ipairs(t.typeargs) do
+               table.insert(typeargs, show(v))
+            end
+            table.insert(out, table.concat(typeargs, ", "))
+            table.insert(out, ">")
+         end
+         table.insert(out, " (")
          if t.elements then
             table.insert(out, "{" .. show(t.elements) .. "}")
          end
+         local fs = {}
          for _, k in ipairs(t.field_order) do
             local v = t.fields[k]
-            table.insert(out, k .. ": " .. show(v))
+            table.insert(fs, k .. ": " .. show(v))
          end
-         return "record (" .. table.concat(out, "; ") .. ")"
+         table.insert(out, table.concat(fs, "; "))
+         table.insert(out, ")")
+         return table.concat(out)
       end
    elseif t.typename == "function" then
-      local out: {string} = {}
-      table.insert(out, "function")
+      local out: {string} = {"function"}
       if t.typeargs then
          table.insert(out, "<")
          local typeargs = {}
