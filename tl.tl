@@ -972,12 +972,12 @@ local enum TypeName
    "bad_nominal"
    "emptytable"
    "table_item"
-   "unknown_emptytable_value"
+   "unresolved_emptytable_value"
    "tuple"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
-   "unknown"
-   "invalid"
+   "unknown" -- to be used in lax mode only
+   "invalid" -- producing a new value of this type (not propagating) must always produce a type error
    "unresolved"
    "none"
 end
@@ -3892,7 +3892,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
    visit_type.cbs["emptytable"] = visit_type.cbs["string"]
    visit_type.cbs["table_item"] = visit_type.cbs["string"]
-   visit_type.cbs["unknown_emptytable_value"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
    visit_type.cbs["tuple"] = visit_type.cbs["string"]
    visit_type.cbs["poly"] = visit_type.cbs["string"]
    visit_type.cbs["any"] = visit_type.cbs["string"]
@@ -4157,7 +4157,7 @@ local binop_to_metamethod: {string:string} = {
 
 local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
-       or t.typename == "unknown_emptytable_value"
+       or t.typename == "unresolved_emptytable_value"
 end
 
 local show_type: function(Type, boolean, {Type:string}): string
@@ -4397,7 +4397,7 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
       end
       return modules[module_name], true
    end
-   modules[module_name] = UNKNOWN
+   modules[module_name] = INVALID
 
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$") as boolean) then
@@ -4416,7 +4416,7 @@ local function require_module(module_name: string, lax: boolean, env: Env, resul
       return found_result.type, true
    end
 
-   return UNKNOWN, found ~= nil
+   return INVALID, found ~= nil
 end
 
 local compat_code_cache: {string:Node} = {}
@@ -5055,7 +5055,7 @@ tl.init_env = function(lax: boolean, gen_compat: boolean | CompatMode, gen_targe
       for _, name in ipairs(preload_modules) do
          local module_type = require_module(name, lax, env, { dependencies = {} })
 
-         if module_type == UNKNOWN then
+         if module_type == INVALID then
             return nil, string.format("Error: could not preload module '%s'", name)
          end
       end
@@ -5287,7 +5287,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             t = find_var_type(t.typevar)
             local rt: Type
             if not t then
-               rt = UNKNOWN
+               rt = lax and UNKNOWN or INVALID
             elseif t.typename == "string" then
                -- tk is not propagated
                rt = STRING
@@ -6351,7 +6351,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       -- some flow-based inference
       if t1.typename == "nil" then
          return
-      elseif t2.typename == "unknown_emptytable_value" then
+      elseif t2.typename == "unresolved_emptytable_value" then
          if same_type(t2.emptytable_type.keys, NUMBER) then
             infer_var(t2.emptytable_type, a_type { typename = "array", elements = t1 }, node)
          else
@@ -6685,7 +6685,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local function get_rets(rets: {Type}): Type
       if lax and (#rets == 0) then
-         return VARARG { a_type { typename = "unknown" }}
+         return VARARG { UNKNOWN }
       end
       local t: Type = rets as Type
       if not t.typename then
@@ -6837,7 +6837,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local array_type = arraytype_from_tuple(idxnode, a)
             if not array_type then
                type_error(a, "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime")
-               return UNKNOWN
+               return INVALID
             end
             return array_type.elements
          end
@@ -6854,7 +6854,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, b, a.keys)
             end
          end
-         return a_type { y = node.y, x = node.x, typename = "unknown_emptytable_value", emptytable_type = a }
+         return a_type { y = node.y, x = node.x, typename = "unresolved_emptytable_value", emptytable_type = a }
       elseif a.typename == "map" then
          if is_a(b, a.keys) then
             return a.values
@@ -7296,7 +7296,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             end
          else
             node_error(node, "rawget expects two arguments")
-            return UNKNOWN
+            return INVALID
          end
       end,
 
@@ -7327,8 +7327,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                local t, found = require_module(module_name, lax, env, result)
                if not found then
                   node_error(node, "module not found: '" .. module_name .. "'")
-               elseif not lax and is_unknown(t) then
-                  node_error(node, "no type information for required module: '" .. module_name .. "'")
+               elseif t.typename == "invalid" then
+                  if lax then
+                     t = UNKNOWN
+                  else
+                     node_error(node, "no type information for required module: '" .. module_name .. "'")
+                  end
                end
                return t
             else
@@ -7337,7 +7341,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          else
             node_error(node, "require expects one literal argument")
          end
-         return UNKNOWN
+         return INVALID
       end,
 
       ["pcall"] = special_pcall_xpcall,
@@ -7390,6 +7394,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end
       end
       return typetype, false
+   end
+
+   local function missing_initializer(node: Node, i: number, name: string): Type
+      if lax then
+         return UNKNOWN
+      else
+         if node.exps then
+            node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. name .. "'")
+         else
+            node_error(node.vars[i], "variable '" .. name .. "' has no type or initial value")
+         end
+         return INVALID
+      end
    end
 
    local visit_node: Visitor<NodeKind, Node, Type> = {}
@@ -7469,14 +7486,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                end
                local t = decltype or infertype
                if t == nil then
-                  t = a_type { typename = "unknown" }
-                  if not lax then
-                     if node.exps then
-                        node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. var.tk .. "'")
-                     else
-                        node_error(node.vars[i], "variable '" .. var.tk .. "' has no type or initial value")
-                     end
-                  end
+                  t = missing_initializer(node, i, var.tk)
                elseif t.typename == "emptytable" then
                   t.declared_at = node
                   t.assigned_to = var.tk
@@ -7529,7 +7539,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   end
                else
                   if t == nil then
-                     t = a_type { typename = "unknown" }
+                     t = missing_initializer(node, i, var.tk)
                   elseif t.typename == "emptytable" then
                      t.declared_at = node
                      t.assigned_to = var.tk
@@ -7732,7 +7742,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      if rets.is_va then
                         r = last
                      else
-                        r = UNKNOWN
+                        r = lax and UNKNOWN or INVALID
                      end
                   end
                   add_var(v, v.tk, r)
@@ -8080,7 +8090,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
                end
             else
-               if (not lax) or (rtype.typename ~= "unknown") then
+               if not (lax and rtype.typename == "unknown") then
                   node_error(node, "not a module: %s", rtype)
                end
             end
@@ -8295,6 +8305,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                      node.type = UNKNOWN
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     node.type = INVALID
                   end
                end
 
@@ -8326,18 +8337,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             if node.tk == "..." then
                local va_sentinel = find_var_type("@is_va")
                if not va_sentinel or va_sentinel.typename == "nil" then
-                  node.type = UNKNOWN
                   node_error(node, "cannot use '...' outside a vararg function")
+                  node.type = INVALID
                end
             end
 
             node.type, node.is_const = find_var_type(node.tk)
             if node.type == nil then
-               node.type = a_type { typename = "unknown" }
                if lax then
+                  node.type = UNKNOWN
                   add_unknown(node, node.tk)
                else
                   node_error(node, "unknown variable: " .. node.tk)
+                  node.type = INVALID
                end
             end
             return node.type
@@ -8347,7 +8359,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          after = function(node: Node, _children: {Type}): Type
             local t = node.decltype
             if not t then
-               t = a_type { typename = "unknown" }
+               t = UNKNOWN
             end
             if node.tk == "..." then
                t = a_type { typename = "tuple", is_va = true, t }
@@ -8545,7 +8557,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
    visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
    visit_type.cbs["emptytable"] = visit_type.cbs["string"]
    visit_type.cbs["table_item"] = visit_type.cbs["string"]
-   visit_type.cbs["unknown_emptytable_value"] = visit_type.cbs["string"]
+   visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
    visit_type.cbs["tuple"] = visit_type.cbs["string"]
    visit_type.cbs["poly"] = visit_type.cbs["string"]
    visit_type.cbs["any"] = visit_type.cbs["string"]
@@ -8589,7 +8601,7 @@ local typename_to_typecode: {TypeName:number} = {
    ["union"] = tl.typecodes.IS_UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
-   ["unknown_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
+   ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
    ["poly"] = tl.typecodes.IS_POLY,
    ["any"] = tl.typecodes.ANY,
    ["unknown"] = tl.typecodes.UNKNOWN,
