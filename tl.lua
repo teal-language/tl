@@ -5716,11 +5716,26 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function check_for_unused_vars(vars)
+   local Unused = {}
 
+
+
+
+
+
+   local function check_for_unused_vars(vars)
+      local list = {}
       for name, var in pairs(vars) do
-         if not var.used then
-            unused_warning(name, var)
+         if var.declared_at and not var.used then
+            table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+         end
+      end
+      if list[1] then
+         table.sort(list, function(a, b)
+            return a.y < a.y or (a.y == b.y and a.x < b.x)
+         end)
+         for _, u in ipairs(list) do
+            unused_warning(u.name, u.var)
          end
       end
    end
