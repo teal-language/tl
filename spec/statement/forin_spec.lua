@@ -47,8 +47,6 @@ describe("forin", function()
       ]], {
          { msg = "attempting ipairs loop" },
          { msg = "attempting ipairs loop" },
-         { msg = "argument 1: got <unknown type>" },
-         { msg = "cannot use operator '..'" },
       }))
    end)
 

@@ -392,8 +392,8 @@ describe("generic function", function()
       assert.same("string",  ast[2].exps[1].type[1].typename)
       assert.same("boolean", ast[2].exps[1].type[2].typename)
       -- unresolved
-      assert.same("unknown", ast[3].exps[1].type[1].typename)
-      assert.same("unknown", ast[3].exps[1].type[2].typename)
+      assert.same("invalid", ast[3].exps[1].type[1].typename)
+      assert.same("invalid", ast[3].exps[1].type[2].typename)
    end)
 
    it("does not produce a recursive type", util.lax_check([[

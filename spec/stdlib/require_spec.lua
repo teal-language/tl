@@ -31,7 +31,6 @@ describe("require", function()
       assert.same(0, #result.syntax_errors)
       assert.same({
          { filename = "foo.tl", y = 1, x = 33, msg = "no type information for required module: 'box'" },
-         { filename = "foo.tl", y = 3, x = 17, msg = "cannot index a value of unknown type" },
       }, result.type_errors)
       assert.same(0, #result.unknowns)
    end)
