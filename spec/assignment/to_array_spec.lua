@@ -54,4 +54,14 @@ describe("assignment to array", function()
       { y = 7, msg = "syntax error, expected one of: '}', ','" },
       { y = 10, msg = "syntax error" },
    }))
+
+   it("a tuple resolves to an array without nominals producing duplicates (#337)", util.check_warnings([[
+      local type Alias = string
+      local t = {"a", "a"} as {Alias, Alias}
+      local a, b = table.unpack(t)
+   ]], {
+      { msg = "unused variable a: Alias" },
+      { msg = "unused variable b: Alias" },
+   }))
+
 end)
