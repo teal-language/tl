@@ -118,7 +118,7 @@ describe("local", function()
 
          assert.same({}, result.syntax_errors)
          assert.same({
-            { y = 3, x = 42, filename = "main.tl", msg = "in local declaration: var: unknown field dato" },
+            { y = 3, x = 35, filename = "main.tl", msg = "in local declaration: var: unknown field dato" },
             { y = 4, x = 26, filename = "main.tl", msg = "invalid key 'dato' in record 'var' of type Boo" },
          }, result.type_errors)
       end)

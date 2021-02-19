@@ -11,7 +11,7 @@ describe("array argument", function()
          a(100)
       end
    ]], {
-      { y = 6, msg = 'argument 1: got {string | number} (from {string, number}), expected {string}' },
+      { y = 6, msg = 'expected an array: at index 2: got number, expected string' },
       { y = 7, msg = 'argument 1: got number, expected {string}' },
    }))
 
@@ -26,7 +26,9 @@ describe("array argument", function()
          {id = "yo"},
       })
    ]], {
-      { y = 5, "got {number | string}, expected {string}"}
+      { y = 5, "got {number | string}, expected {string}"},
+      { y = 7, "in array: at index 2: got {number | string}, expected {string}"},
+      { y = 8, "in array: at index 3: got {number | string}, expected {string}"},
    }))
 
 end)
