@@ -557,7 +557,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, {"love"})
+      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -588,7 +588,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, {"love"})
+      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)

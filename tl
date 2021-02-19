@@ -641,7 +641,11 @@ local function setup_env(filename)
       local gen_compat = tlconfig["gen_compat"]
       local gen_target = tlconfig["gen_target"]
 
-      env = tl.init_env(lax_mode, gen_compat, gen_target)
+      local err
+      env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig.preload_modules)
+      if not env then
+         die(err)
+      end
    end
 end
 
