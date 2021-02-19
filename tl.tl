@@ -8047,6 +8047,36 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
       },
       ["table_literal"] = {
+         before = function(node: Node)
+            if node.expected then
+               if node.expected.typename == "tupletable" then
+                  for _, child in ipairs(node) do
+                     if child.key.constnum then
+                        child.value.expected = node.expected.types[child.key.constnum]
+                     end
+                  end
+               elseif is_array_type(node.expected) then
+                  for _, child in ipairs(node) do
+                     if child.key.constnum then
+                        child.value.expected = node.expected.elements
+                     end
+                  end
+               elseif node.expected.typename == "map" then
+                  for _, child in ipairs(node) do
+                     child.key.expected = node.expected.keys
+                     child.value.expected = node.expected.values
+                  end
+               end
+
+               if is_record_type(node.expected) then
+                  for _, child in ipairs(node) do
+                     if child.key.conststr then
+                        child.value.expected = node.expected.fields[child.key.conststr]
+                     end
+                  end
+               end
+            end
+         end,
          after = function(node: Node, children: {Type}): Type
             node.known = FACT_TRUTHY
 
