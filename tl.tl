@@ -186,18 +186,18 @@ tl.typecodes = {
    IS_VALID               = 0x00000fff,
 }
 
-local Result = tl.Result
-local Env = tl.Env
-local Error = tl.Error
-local CompatMode = tl.CompatMode
-local TypeCheckOptions = tl.TypeCheckOptions
-local LoadMode = tl.LoadMode
-local LoadFunction = tl.LoadFunction
-local TargetMode = tl.TargetMode
-local TypeInfo = tl.TypeInfo
-local TypeReport = tl.TypeReport
-local TypeReportEnv = tl.TypeReportEnv
-local Symbol = tl.Symbol
+local type Result = tl.Result
+local type Env = tl.Env
+local type Error = tl.Error
+local type CompatMode = tl.CompatMode
+local type TypeCheckOptions = tl.TypeCheckOptions
+local type LoadMode = tl.LoadMode
+local type LoadFunction = tl.LoadFunction
+local type TargetMode = tl.TargetMode
+local type TypeInfo = tl.TypeInfo
+local type TypeReport = tl.TypeReport
+local type TypeReportEnv = tl.TypeReportEnv
+local type Symbol = tl.Symbol
 
 --------------------------------------------------------------------------------
 -- Lexer
