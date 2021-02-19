@@ -6022,9 +6022,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                   types_seen[t.typename] = true
                   table.insert(ts, t)
                end
-            elseif not types_seen[t.typeid] then
-               types_seen[t.typeid] = true
-               table.insert(ts, t)
+            else
+               local typeid = t.typeid
+               if t.typename == "nominal" then
+                  typeid = resolve_nominal(t).typeid
+               end
+               if not types_seen[typeid] then
+                  types_seen[typeid] = true
+                  table.insert(ts, t)
+               end
             end
          end
       end
