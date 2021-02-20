@@ -45,6 +45,7 @@ local record tl
       name: string
       typ: Type
       other: number
+      skip: boolean
    end
 
    record Result
@@ -1160,7 +1161,9 @@ local record Node
    x: number
    tk: string
    kind: NodeKind
+   symbol_list_slot: number
    semicolon: boolean
+
    is_longstring: boolean
 
    yend: number
@@ -2263,9 +2266,14 @@ local function parse_if(ps: ParseState, i: number): number, Node
    i = verify_tk(ps, i, "if")
    i, node.exp = parse_expression_and_tk(ps, i, "then")
    i, node.thenpart = parse_statements(ps, i)
+   local prevblock = node
    node.elseifs = {}
    local n = 0
    while ps.tokens[i].tk == "elseif" do
+      end_at(prevblock, ps.tokens[i - 1])
+      prevblock.thenpart.yend = prevblock.yend
+      prevblock.thenpart.xend = prevblock.xend
+
       n = n + 1
       local subnode = new_node(ps.tokens, i, "elseif")
       subnode.parent_if = node
@@ -2274,13 +2282,24 @@ local function parse_if(ps: ParseState, i: number): number, Node
       i, subnode.exp = parse_expression_and_tk(ps, i, "then")
       i, subnode.thenpart = parse_statements(ps, i)
       table.insert(node.elseifs, subnode)
+
+      subnode.yend = subnode.thenpart.yend
+      subnode.xend = subnode.thenpart.xend
+      prevblock = subnode
    end
    if ps.tokens[i].tk == "else" then
+      end_at(prevblock, ps.tokens[i - 1])
+      prevblock.thenpart.yend = prevblock.yend
+      prevblock.thenpart.xend = prevblock.xend
+
       local subnode = new_node(ps.tokens, i, "else")
       subnode.parent_if = node
       i = i + 1
       i, subnode.elsepart = parse_statements(ps, i)
       node.elsepart = subnode
+
+      subnode.yend = subnode.elsepart.yend
+      subnode.xend = subnode.elsepart.xend
    end
    i = verify_end(ps, i, istart, node)
    return i, node
@@ -5048,7 +5067,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    local symbol_list: {Symbol} = {}
    local symbol_list_n = 0
-   local symbol_list_scopes: {number} = {}
 
    local all_needs_compat = {}
 
@@ -5463,6 +5481,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       return copy as Type
    end
 
+   local function reserve_symbol_list_slot(node: Node)
+      symbol_list_n = symbol_list_n + 1
+      node.symbol_list_slot = symbol_list_n
+   end
+
    local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean): Variable
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
@@ -5491,8 +5514,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       end
 
       if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
-         symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
+         local slot: number
+         if node.symbol_list_slot then
+            slot = node.symbol_list_slot
+         else
+            symbol_list_n = symbol_list_n + 1
+            slot = symbol_list_n
+         end
+         symbol_list[slot] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
       end
 
       return scope[var]
@@ -5647,8 +5676,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
       if node then
          symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{", other = -1 }
-         table.insert(symbol_list_scopes, symbol_list_n)
+         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
       end
    end
 
@@ -5678,11 +5706,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       table.remove(st)
 
       if node then
-         symbol_list_n = symbol_list_n + 1
-         local other = assert(table.remove(symbol_list_scopes))
-         assert(symbol_list[other].name == "@{")
-         symbol_list[symbol_list_n] = { y = node.yend or node.y, x = node.xend or node.x, name = "@}", other = other}
-         symbol_list[other].other = symbol_list_n
+         if symbol_list[symbol_list_n].name == "@{" then
+            symbol_list[symbol_list_n] = nil
+            symbol_list_n = symbol_list_n - 1
+         else
+            symbol_list_n = symbol_list_n + 1
+            symbol_list[symbol_list_n] = { y = assert(node.yend), x = assert(node.xend), name = "@}" }
+         end
       end
    end
 
@@ -7368,6 +7398,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          end,
       },
       ["local_declaration"] = {
+         before = function(node: Node)
+            for _, var in ipairs(node.vars) do
+               reserve_symbol_list_slot(var)
+            end
+         end,
          after = function(node: Node, children: {Type}): Type
             local vals: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
@@ -7519,7 +7554,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["elseif"] = {
          before = function(node: Node)
-            end_scope(node)
+            end_scope(assert(node.elseif_n > 1 and node.parent_if.elseifs[node.elseif_n - 1] or node.parent_if.thenpart))
             begin_scope(node)
             local f = facts_not(node.parent_if.exp.known, node)
             for e = 1, node.elseif_n - 1 do
@@ -7537,7 +7572,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["else"] = {
          before = function(node: Node)
-            end_scope(node)
+            end_scope(assert(node.parent_if.elseifs and node.parent_if.elseifs[#node.parent_if.elseifs] or node.parent_if.thenpart))
             begin_scope(node)
             local f = facts_not(node.parent_if.exp.known, node)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
@@ -7916,6 +7951,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
       },
       ["local_function"] = {
          before = function(node: Node)
+            reserve_symbol_list_slot(node)
             begin_scope(node)
          end,
          before_statements = function(node: Node)
@@ -8673,21 +8709,55 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 
    tr.by_pos[filename][0] = nil
 
-   for _, s in ipairs(result.symbol_list) do
-      local id: number
-      if s.other then
-         if s.name == "@}" then
-            id = s.other - 1
+   -- mark unneeded scope blocks to be skipped
+   do
+      local n = 0 -- number of symbols in current scope
+      local p = 0 -- opening position of current scope block
+      local n_stack, p_stack = {}, {}
+      local level = 0
+      for i, s in ipairs(result.symbol_list) do
+         if s.typ then
+            n = n + 1
+         elseif s.name == "@{" then
+            level = level + 1
+            n_stack[level], p_stack[level] = n, p -- push current scope
+            n, p = 0, i -- begin new scope
          else
-            id = s.other
+            if n == 0 then -- nothing declared in this scope
+               result.symbol_list[p].skip = true -- skip @{
+               s.skip = true -- skip @}
+            end
+            n, p = n_stack[level], p_stack[level] -- pop previous scope
+            level = level - 1
          end
-      else
-         assert(s.typ)
-         id = get_typenum(s.typ)
       end
-      assert(id)
-      local sym = mark_array({s.y, s.x, s.name, id})
-      table.insert(tr.symbols, sym)
+   end
+
+   -- resolve scope cross references, skipping unneeded scope blocks
+   do
+      local stack = {}
+      local level = 0
+      local i = 0
+      for _, s in ipairs(result.symbol_list) do
+         if not s.skip then
+            i = i + 1
+            local id: number
+            if s.typ then
+               id = get_typenum(s.typ)
+            elseif s.name == "@{" then
+               level = level + 1
+               stack[level] = i
+               id = -1 -- will be overwritten
+            else
+               local other = stack[level]
+               level = level - 1
+               tr.symbols[other][4] = i -- overwrite id from @{
+               id = other - 1
+            end
+            local sym = mark_array({ s.y, s.x, s.name, id })
+            table.insert(tr.symbols, sym)
+         end
+      end
    end
 
    local gkeys = sorted_keys(result.env.globals)
@@ -8730,6 +8800,13 @@ function tl.symbols_in_scope(tr: TypeReport, y: number, x: number): {string:numb
    end
 
    local ret: {string:number} = {}
+
+   -- local a, b = 0, 0
+   -- for i, s in ipairs(tr.symbols) do
+   --    print("["..i.."]", (a < s[1] or (a == s[1] and b <= s[2])) and " " or "x", s[1], s[2], s[3], s[4])
+   --    a, b = s[1], s[2]
+   -- end
+   -- print()
 
    local n = find(tr.symbols, y, x)
 
