@@ -127,6 +127,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
 tl.warning_kinds = {
    ["unused"] = true,
    ["redeclaration"] = true,
@@ -1155,6 +1156,8 @@ local KeyParsed = {}
 
 
 local Node = {}
+
+
 
 
 
@@ -2263,9 +2266,14 @@ local function parse_if(ps, i)
    i = verify_tk(ps, i, "if")
    i, node.exp = parse_expression_and_tk(ps, i, "then")
    i, node.thenpart = parse_statements(ps, i)
+   local prevblock = node
    node.elseifs = {}
    local n = 0
    while ps.tokens[i].tk == "elseif" do
+      end_at(prevblock, ps.tokens[i - 1])
+      prevblock.thenpart.yend = prevblock.yend
+      prevblock.thenpart.xend = prevblock.xend
+
       n = n + 1
       local subnode = new_node(ps.tokens, i, "elseif")
       subnode.parent_if = node
@@ -2274,13 +2282,24 @@ local function parse_if(ps, i)
       i, subnode.exp = parse_expression_and_tk(ps, i, "then")
       i, subnode.thenpart = parse_statements(ps, i)
       table.insert(node.elseifs, subnode)
+
+      subnode.yend = subnode.thenpart.yend
+      subnode.xend = subnode.thenpart.xend
+      prevblock = subnode
    end
    if ps.tokens[i].tk == "else" then
+      end_at(prevblock, ps.tokens[i - 1])
+      prevblock.thenpart.yend = prevblock.yend
+      prevblock.thenpart.xend = prevblock.xend
+
       local subnode = new_node(ps.tokens, i, "else")
       subnode.parent_if = node
       i = i + 1
       i, subnode.elsepart = parse_statements(ps, i)
       node.elsepart = subnode
+
+      subnode.yend = subnode.elsepart.yend
+      subnode.xend = subnode.elsepart.xend
    end
    i = verify_end(ps, i, istart, node)
    return i, node
@@ -5053,7 +5072,6 @@ tl.type_check = function(ast, opts)
 
    local symbol_list = {}
    local symbol_list_n = 0
-   local symbol_list_scopes = {}
 
    local all_needs_compat = {}
 
@@ -5468,6 +5486,11 @@ tl.type_check = function(ast, opts)
       return copy
    end
 
+   local function reserve_symbol_list_slot(node)
+      symbol_list_n = symbol_list_n + 1
+      node.symbol_list_slot = symbol_list_n
+   end
+
    local function add_var(node, var, valtype, is_const, is_narrowing)
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
@@ -5496,8 +5519,14 @@ tl.type_check = function(ast, opts)
       end
 
       if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
-         symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
+         local slot
+         if node.symbol_list_slot then
+            slot = node.symbol_list_slot
+         else
+            symbol_list_n = symbol_list_n + 1
+            slot = symbol_list_n
+         end
+         symbol_list[slot] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
       end
 
       return scope[var]
@@ -5652,8 +5681,7 @@ tl.type_check = function(ast, opts)
 
       if node then
          symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{", other = -1 }
-         table.insert(symbol_list_scopes, symbol_list_n)
+         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
       end
    end
 
@@ -5683,11 +5711,13 @@ tl.type_check = function(ast, opts)
       table.remove(st)
 
       if node then
-         symbol_list_n = symbol_list_n + 1
-         local other = assert(table.remove(symbol_list_scopes))
-         assert(symbol_list[other].name == "@{")
-         symbol_list[symbol_list_n] = { y = node.yend or node.y, x = node.xend or node.x, name = "@}", other = other }
-         symbol_list[other].other = symbol_list_n
+         if symbol_list[symbol_list_n].name == "@{" then
+            symbol_list[symbol_list_n] = nil
+            symbol_list_n = symbol_list_n - 1
+         else
+            symbol_list_n = symbol_list_n + 1
+            symbol_list[symbol_list_n] = { y = assert(node.yend), x = assert(node.xend), name = "@}" }
+         end
       end
    end
 
@@ -7373,6 +7403,11 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["local_declaration"] = {
+         before = function(node)
+            for _, var in ipairs(node.vars) do
+               reserve_symbol_list_slot(var)
+            end
+         end,
          after = function(node, children)
             local vals = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
@@ -7524,7 +7559,7 @@ tl.type_check = function(ast, opts)
       },
       ["elseif"] = {
          before = function(node)
-            end_scope(node)
+            end_scope(assert(node.elseif_n > 1 and node.parent_if.elseifs[node.elseif_n - 1] or node.parent_if.thenpart))
             begin_scope(node)
             local f = facts_not(node.parent_if.exp.known, node)
             for e = 1, node.elseif_n - 1 do
@@ -7542,7 +7577,7 @@ tl.type_check = function(ast, opts)
       },
       ["else"] = {
          before = function(node)
-            end_scope(node)
+            end_scope(assert(node.parent_if.elseifs and node.parent_if.elseifs[#node.parent_if.elseifs] or node.parent_if.thenpart))
             begin_scope(node)
             local f = facts_not(node.parent_if.exp.known, node)
             for _, elseifnode in ipairs(node.parent_if.elseifs) do
@@ -7921,6 +7956,7 @@ tl.type_check = function(ast, opts)
       },
       ["local_function"] = {
          before = function(node)
+            reserve_symbol_list_slot(node)
             begin_scope(node)
          end,
          before_statements = function(node)
@@ -8678,21 +8714,55 @@ function tl.get_types(result, trenv)
 
    tr.by_pos[filename][0] = nil
 
-   for _, s in ipairs(result.symbol_list) do
-      local id
-      if s.other then
-         if s.name == "@}" then
-            id = s.other - 1
+
+   do
+      local n = 0
+      local p = 0
+      local n_stack, p_stack = {}, {}
+      local level = 0
+      for i, s in ipairs(result.symbol_list) do
+         if s.typ then
+            n = n + 1
+         elseif s.name == "@{" then
+            level = level + 1
+            n_stack[level], p_stack[level] = n, p
+            n, p = 0, i
          else
-            id = s.other
+            if n == 0 then
+               result.symbol_list[p].skip = true
+               s.skip = true
+            end
+            n, p = n_stack[level], p_stack[level]
+            level = level - 1
          end
-      else
-         assert(s.typ)
-         id = get_typenum(s.typ)
       end
-      assert(id)
-      local sym = mark_array({ s.y, s.x, s.name, id })
-      table.insert(tr.symbols, sym)
+   end
+
+
+   do
+      local stack = {}
+      local level = 0
+      local i = 0
+      for _, s in ipairs(result.symbol_list) do
+         if not s.skip then
+            i = i + 1
+            local id
+            if s.typ then
+               id = get_typenum(s.typ)
+            elseif s.name == "@{" then
+               level = level + 1
+               stack[level] = i
+               id = -1
+            else
+               local other = stack[level]
+               level = level - 1
+               tr.symbols[other][4] = i
+               id = other - 1
+            end
+            local sym = mark_array({ s.y, s.x, s.name, id })
+            table.insert(tr.symbols, sym)
+         end
+      end
    end
 
    local gkeys = sorted_keys(result.env.globals)
@@ -8735,6 +8805,13 @@ function tl.symbols_in_scope(tr, y, x)
    end
 
    local ret = {}
+
+
+
+
+
+
+
 
    local n = find(tr.symbols, y, x)
 
