@@ -25,6 +25,19 @@ describe("tl.gen", function()
       util.assert_line_by_line(expected_output, output)
    end)
 
+   it("deals with complex if statements in a single line", function()
+      local input = [[
+         local x = 0; if x then print("hi") elseif x < 2 then print("wat") else print("hello") end if x < 1 then x = 2 end print("hello")
+      ]]
+
+      local expected_output = [[
+         local x = 0; if x then print("hi") elseif x < 2 then print("wat") else print("hello") end; if x < 1 then x = 2 end; print("hello")
+      ]]
+
+      local output = tl.gen(input)
+      util.assert_line_by_line(expected_output, output)
+   end)
+
    it("can process tl strings", function()
       local input = [[
          local movie:string = "Star Wars: Episode"

@@ -1124,7 +1124,6 @@ local NodeKind = {}
 
 
 
-
 local FactType = {}
 
 
@@ -1156,8 +1155,6 @@ local KeyParsed = {}
 
 
 local Node = {}
-
-
 
 
 
@@ -2260,46 +2257,48 @@ local function parse_global_function(ps, i)
    return i, fn
 end
 
+local function parse_if_block(ps, i, n, node, is_else)
+   local block = new_node(ps.tokens, i, "if_block")
+   i = i + 1
+   block.if_parent = node
+   block.if_block_n = n
+   if not is_else then
+      i, block.exp = parse_expression_and_tk(ps, i, "then")
+      if not block.exp then
+         return i
+      end
+   end
+   i, block.body = parse_statements(ps, i)
+   if not block.body then
+      return i
+   end
+   end_at(block.body, ps.tokens[i - 1])
+   block.yend, block.xend = block.body.yend, block.body.xend
+   table.insert(node.if_blocks, block)
+   return i, node
+end
+
 local function parse_if(ps, i)
    local istart = i
    local node = new_node(ps.tokens, i, "if")
-   i = verify_tk(ps, i, "if")
-   i, node.exp = parse_expression_and_tk(ps, i, "then")
-   i, node.thenpart = parse_statements(ps, i)
-   local prevblock = node
-   node.elseifs = {}
-   local n = 0
+   node.if_blocks = {}
+   i, node = parse_if_block(ps, i, 1, node)
+   if not node then
+      return i
+   end
+   local n = 2
    while ps.tokens[i].tk == "elseif" do
-      end_at(prevblock, ps.tokens[i - 1])
-      prevblock.thenpart.yend = prevblock.yend
-      prevblock.thenpart.xend = prevblock.xend
-
+      i, node = parse_if_block(ps, i, n, node)
+      if not node then
+         return i
+      end
       n = n + 1
-      local subnode = new_node(ps.tokens, i, "elseif")
-      subnode.parent_if = node
-      subnode.elseif_n = n
-      i = i + 1
-      i, subnode.exp = parse_expression_and_tk(ps, i, "then")
-      i, subnode.thenpart = parse_statements(ps, i)
-      table.insert(node.elseifs, subnode)
-
-      subnode.yend = subnode.thenpart.yend
-      subnode.xend = subnode.thenpart.xend
-      prevblock = subnode
    end
    if ps.tokens[i].tk == "else" then
-      end_at(prevblock, ps.tokens[i - 1])
-      prevblock.thenpart.yend = prevblock.yend
-      prevblock.thenpart.xend = prevblock.xend
-
-      local subnode = new_node(ps.tokens, i, "else")
-      subnode.parent_if = node
-      i = i + 1
-      i, subnode.elsepart = parse_statements(ps, i)
-      node.elsepart = subnode
-
-      subnode.yend = subnode.elsepart.yend
-      subnode.xend = subnode.elsepart.xend
+      i, node = parse_if_block(ps, i, n, node, true)
+      if not node then
+         return i
+      end
    end
    i = verify_end(ps, i, istart, node)
    return i, node
@@ -3147,15 +3146,15 @@ local function recurse_node(ast,
          xs[3] = recurse_type(ast.decltype, visit_type)
       end
    elseif ast.kind == "if" then
-      xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
-      xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
-      for _, e in ipairs(ast.elseifs) do
+      for _, e in ipairs(ast.if_blocks) do
          table.insert(xs, recurse_node(e, visit_node, visit_type))
       end
-      if ast.elsepart then
-         table.insert(xs, recurse_node(ast.elsepart, visit_node, visit_type))
+   elseif ast.kind == "if_block" then
+      if ast.exp then
+         xs[1] = recurse_node(ast.exp, visit_node, visit_type)
       end
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
+      xs[2] = recurse_node(ast.body, visit_node, visit_type)
    elseif ast.kind == "while" then
       xs[1] = recurse_node(ast.exp, visit_node, visit_type)
       extra_callback("before_statements", ast, xs, visit_node, ast.kind)
@@ -3180,12 +3179,6 @@ local function recurse_node(ast,
       xs[3] = recurse_node(ast.to, visit_node, visit_type)
       xs[4] = ast.step and recurse_node(ast.step, visit_node, visit_type)
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
-   elseif ast.kind == "elseif" then
-      xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
-      xs[2] = recurse_node(ast.thenpart, visit_node, visit_type)
-   elseif ast.kind == "else" then
-      xs[1] = recurse_node(ast.elsepart, visit_node, visit_type)
    elseif ast.kind == "return" then
       xs[1] = recurse_node(ast.exps, visit_node, visit_type)
    elseif ast.kind == "do" then
@@ -3342,7 +3335,7 @@ function tl.pretty_print_ast(ast, mode)
    local save_indent = {}
 
    local function increment_indent(node)
-      local child = node.body or node.thenpart or node[1]
+      local child = node.body or node[1]
       if not child then
          return
       end
@@ -3502,18 +3495,32 @@ function tl.pretty_print_ast(ast, mode)
          end,
       },
       ["if"] = {
+         after = function(node, children)
+            local out = { y = node.y, h = 0 }
+            for i, child in ipairs(children) do
+               add_child(out, child, i > 1 and " ", child.y ~= node.y and indent)
+            end
+            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            return out
+         end,
+      },
+      ["if_block"] = {
          before = increment_indent,
          after = function(node, children)
             local out = { y = node.y, h = 0 }
-            table.insert(out, "if")
-            add_child(out, children[1], " ")
-            table.insert(out, " then")
-            add_child(out, children[2], " ")
-            decrement_indent(node, node.thenpart)
-            for i = 3, #children do
-               add_child(out, children[i], " ", indent)
+            if node.if_block_n == 1 then
+               table.insert(out, "if")
+            elseif not node.exp then
+               table.insert(out, "else")
+            else
+               table.insert(out, "elseif")
             end
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+            if node.exp then
+               add_child(out, children[1], " ")
+               table.insert(out, " then")
+            end
+            add_child(out, children[2], " ")
+            decrement_indent(node, node.body)
             return out
          end,
       },
@@ -7542,46 +7549,31 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["if"] = {
-         before_statements = function(node)
+         after = function(node, _children)
+            node.type = NONE
+            return node.type
+         end,
+      },
+      ["if_block"] = {
+         before = function(node)
             begin_scope(node)
-            apply_facts(node.exp, node.exp.known)
+            if node.if_block_n > 1 then
+               local ifnode = node.if_parent
+               local f = facts_not(ifnode.if_blocks[1].exp.known, node)
+               for e = 2, node.if_block_n - 1 do
+                  f = facts_and(f, facts_not(ifnode.if_blocks[e].exp.known, node), node)
+               end
+               apply_facts(node, f)
+            end
+         end,
+         before_statements = function(node)
+            if node.exp then
+               apply_facts(node.exp, node.exp.known)
+            end
          end,
          after = function(node, _children)
+            node.type = NONE
             end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
-      },
-      ["elseif"] = {
-         before = function(node)
-            end_scope(assert(node.elseif_n > 1 and node.parent_if.elseifs[node.elseif_n - 1] or node.parent_if.thenpart))
-            begin_scope(node)
-            local f = facts_not(node.parent_if.exp.known, node)
-            for e = 1, node.elseif_n - 1 do
-               f = facts_and(f, facts_not(node.parent_if.elseifs[e].exp.known, node), node)
-            end
-            apply_facts(node.exp, f)
-         end,
-         before_statements = function(node)
-            apply_facts(node.exp, node.exp.known)
-         end,
-         after = function(node, _children)
-            node.type = NONE
-            return node.type
-         end,
-      },
-      ["else"] = {
-         before = function(node)
-            end_scope(assert(node.parent_if.elseifs and node.parent_if.elseifs[#node.parent_if.elseifs] or node.parent_if.thenpart))
-            begin_scope(node)
-            local f = facts_not(node.parent_if.exp.known, node)
-            for _, elseifnode in ipairs(node.parent_if.elseifs) do
-               f = facts_and(f, facts_not(elseifnode.exp.known, node), node)
-            end
-            apply_facts(node, f)
-         end,
-         after = function(node, _children)
-            node.type = NONE
             return node.type
          end,
       },
