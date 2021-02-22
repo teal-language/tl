@@ -22,7 +22,7 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, {"love"})
+      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -63,26 +63,11 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", nil, nil, {"love", "hate"})
+      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love", "hate"})))
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
       assert.same({}, result.unknowns)
    end)
-   it("returns an error when a module doesn't exist", function ()
-      -- ok
-      util.mock_io(finally, {
-         ["foo.tl"] = [[
-            function love.draw()
-               love.graphics.print("<3")
-            end
-         ]],
-      })
-
-      local result, err = tl.process("foo.tl", nil, nil, {"love"})
-
-      assert.same(nil, result)
-      assert.is_not_nil(err)
-    end)
 end)

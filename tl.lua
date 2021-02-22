@@ -4364,12 +4364,7 @@ local function require_module(module_name, lax, env, result)
 
    if modules[module_name] then
       if not result.dependencies[module_name] then
-
-         local found, fd = tl.search_module(module_name, true)
-         if found then
-            fd:close()
-         end
-         result.dependencies[module_name] = found
+         result.dependencies[module_name] = env.modules[module_name].filename
       end
       return modules[module_name], true
    end
@@ -4994,7 +4989,7 @@ local function init_globals(lax)
    return globals, standard_library
 end
 
-tl.init_env = function(lax, gen_compat, gen_target)
+tl.init_env = function(lax, gen_compat, gen_target, preload_modules)
    if gen_compat == true or gen_compat == nil then
       gen_compat = "optional"
    elseif gen_compat == false then
@@ -5024,6 +5019,16 @@ tl.init_env = function(lax, gen_compat, gen_target)
    for name, var in pairs(standard_library) do
       if var.typename == "record" then
          env.modules[name] = var
+      end
+   end
+
+   if preload_modules then
+      for _, name in ipairs(preload_modules) do
+         local module_type = require_module(name, lax, env, { dependencies = {} })
+
+         if module_type == UNKNOWN then
+            return nil, string.format("Error: could not preload module '%s'", name)
+         end
       end
    end
 
@@ -8753,7 +8758,7 @@ end
 
 
 
-tl.process = function(filename, env, result, preload_modules)
+tl.process = function(filename, env, result)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -8780,7 +8785,7 @@ tl.process = function(filename, env, result, preload_modules)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   result, err = tl.process_string(input, is_lua, env, result, preload_modules, filename)
+   result, err = tl.process_string(input, is_lua, env, result, filename)
 
    if err then
       return nil, err
@@ -8789,8 +8794,7 @@ tl.process = function(filename, env, result, preload_modules)
    return result
 end
 
-function tl.process_string(input, is_lua, env, result, preload_modules,
-   filename)
+function tl.process_string(input, is_lua, env, result, filename)
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
@@ -8803,7 +8807,6 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
       unknowns = result and result.unknowns or {},
       dependencies = result and result.dependencies or {},
    }
-   preload_modules = preload_modules or {}
    filename = filename or ""
 
    local tokens, errs = tl.lex(input)
@@ -8821,15 +8824,6 @@ function tl.process_string(input, is_lua, env, result, preload_modules,
    local _, program = tl.parse_program(tokens, result.syntax_errors, filename)
    if (not env.keep_going) and #result.syntax_errors > 0 then
       return result
-   end
-
-
-   for _, name in ipairs(preload_modules) do
-      local module_type = require_module(name, is_lua, env, result)
-
-      if module_type == UNKNOWN then
-         return nil, string.format("Error: could not preload module '%s'", name)
-      end
    end
 
    local err, unknown
