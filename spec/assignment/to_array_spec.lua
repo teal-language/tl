@@ -8,7 +8,7 @@ describe("assignment to array", function()
       a = {"a", 100}
    ]], {
       { y = 2, msg = "got number, expected {string}" },
-      { y = 3, msg = "got {string | number} (from {string, number}), expected {string}" },
+      { y = 3, msg = "expected an array: at index 2: got number, expected string" },
    }))
 
    it("resolves arity of function returns", util.check [[
@@ -25,7 +25,7 @@ describe("assignment to array", function()
       local a: {string}
       a = { f() }
    ]], {
-      { y = 5, msg = "in assignment: got {string | number} (from {string, number}), expected {string}" },
+      { y = 5, msg = "expected an array: at index 2: got number, expected string" },
    }))
 
    it("accept expression", util.check [[

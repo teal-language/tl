@@ -3129,6 +3129,7 @@ local function recurse_node(ast,
    end
 
    visit_before(ast, ast.kind, visit_node)
+
    local xs = {}
    if ast.kind == "statements" or
       ast.kind == "variables" or
@@ -3626,24 +3627,6 @@ function tl.pretty_print_ast(ast, mode)
          after = function(node, _children)
             local out = { y = node.y, h = 0 }
             table.insert(out, "break")
-            return out
-         end,
-      },
-      ["elseif"] = {
-         after = function(node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "elseif")
-            add_child(out, children[1], " ")
-            table.insert(out, " then")
-            add_child(out, children[2], " ")
-            return out
-         end,
-      },
-      ["else"] = {
-         after = function(node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "else")
-            add_child(out, children[1], " ")
             return out
          end,
       },
@@ -5347,6 +5330,7 @@ tl.type_check = function(ast, opts)
             copy.def = resolve(t.def)
          elseif t.typename == "nominal" then
             copy.typevals = resolve(t.typevals)
+            copy.found = t.found
          elseif t.typename == "function" then
             if t.typeargs then
                copy.typeargs = {}
@@ -7457,21 +7441,24 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function set_expected_types_to_decltypes(node, _children)
-      if node.decltype and node.exps then
-         local ndecl = #node.decltype
+   local function set_expected_types_to_decltypes(node, children)
+      local decls = node.kind == "assignment" and children[1] or node.decltype
+      if decls and node.exps then
+         local ndecl = #decls
          local nexps = #node.exps
          for i = 1, nexps do
             local typ
-            typ = node.decltype[i]
-            if i == nexps and ndecl > nexps then
-               typ = a_type({ y = node.y, x = node.x, filename = filename, typename = "tuple", types = {} })
-               for a = i, ndecl do
-                  table.insert(typ.types, node.decltype[a])
+            typ = decls[i]
+            if typ then
+               if i == nexps and ndecl > nexps then
+                  typ = a_type({ y = node.y, x = node.x, filename = filename, typename = "tuple", types = {} })
+                  for a = i, ndecl do
+                     table.insert(typ.types, decls[a])
+                  end
                end
+               node.exps[i].expected = typ
+               node.exps[i].expected_context = { kind = node.kind, name = node.vars[i].tk }
             end
-            node.exps[i].expected = typ
-            node.exps[i].expected_context = { kind = node.kind, name = node.vars[i].tk }
          end
       end
    end
@@ -7784,6 +7771,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["assignment"] = {
+         before_expressions = set_expected_types_to_decltypes,
          after = function(node, children)
             local vals = get_assignment_values(children[3], #children[1])
             local exps = flatten_list(vals)
@@ -8151,7 +8139,14 @@ tl.type_check = function(ast, opts)
                         assert_is_a(node[i], cvtype, dt, in_context(node.expected_context, "in tuple"), "at index " .. tostring(n))
                      end
                   elseif is_array and child.ktype.typename == "number" then
-                     assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
+                     if child.vtype.typename == "tuple" and i == #children and node[i].key_parsed == "implicit" then
+
+                        for ti, tt in ipairs(child.vtype) do
+                           assert_is_a(node[i], tt, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(i + ti - 1))
+                        end
+                     else
+                        assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
+                     end
                   elseif node[i].key_parsed == "implicit" then
                      force_array = expand_type(node[i], force_array, child.ktype)
                   elseif is_map then

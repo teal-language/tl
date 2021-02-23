@@ -10,7 +10,7 @@ describe("assignment to tuple", function()
       local t: {number, number}
       t = {1, 2, 3}
    ]], {
-      { msg = "incompatible length, expected maximum length of 2, got 3", y = 2 },
+      { y = 2, msg = "unexpected index 3 in tuple {number, number}" },
    }))
    it("should allow an array literal when its length fits the tuple type", util.check([[
       local t: {number, number, string}
