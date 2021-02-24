@@ -812,12 +812,55 @@ do
       if in_token then
          if terminals[state] then
             end_token_prev(terminals[state])
+            if keywords[tokens[nt].tk] then
+               tokens[nt].kind = "keyword"
+            end
          else
             drop_token()
          end
       end
 
       return tokens, (#errs > 0) and errs
+   end
+end
+
+local function binary_search(list, item, cmp)
+   local len = #list
+   local mid
+   local s, e = 1, len
+   while s <= e do
+      mid = math.floor((s + e) / 2)
+      local val = list[mid]
+      local res = cmp(val, item)
+      if res then
+         if mid == len then
+            return mid, val
+         else
+            if not cmp(list[mid + 1], item) then
+               return mid, val
+            end
+         end
+         s = mid + 1
+      else
+         e = mid - 1
+      end
+   end
+end
+
+function tl.get_token_at(tks, y, x)
+   local _, found = binary_search(
+   tks, nil,
+   function(tk)
+      return tk.y < y or
+      (tk.y == y and tk.x <= x)
+   end)
+
+
+   if found and
+      found.y == y and
+      found.x <= x and x < found.x + #found.tk then
+
+      return found.tk
    end
 end
 
@@ -9059,31 +9102,12 @@ function tl.get_types(result, trenv)
 end
 
 function tl.symbols_in_scope(tr, y, x)
-   local function le(vy, vx, y, x)
-      return vy < y or (vy == y and vx <= x)
-   end
-
    local function find(symbols, y, x)
-      local len = #symbols
-      local s, mid, e = 1, 0, len
-      while s <= e do
-         mid = math.floor((s + e) / 2)
-         local v = symbols[mid]
-         if le(v[1], v[2], y, x) then
-            if mid == len then
-               return mid
-            else
-               local nv = symbols[mid + 1]
-               if not le(nv[1], nv[2], y, x) then
-                  return mid
-               end
-            end
-            s = mid + 1
-         else
-            e = mid - 1
-         end
+      local function le(a, b)
+         return a[1] < b[1] or
+         (a[1] == b[1] and a[2] <= b[2])
       end
-      return 0
+      return binary_search(symbols, { y, x }, le) or 0
    end
 
    local ret = {}
