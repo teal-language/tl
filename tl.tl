@@ -75,6 +75,7 @@ local record tl
       x: number
       msg: string
       filename: string
+      tk: string
 
       tag: WarningKind
 
@@ -116,6 +117,28 @@ local record tl
       tr: TypeReport
    end
 
+   enum TokenKind
+      "keyword"
+      "op"
+      "string"
+      "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";"
+      "::"
+      "..."
+      "identifier"
+      "number"
+      "$invalid_string$"
+      "$invalid_number$"
+      "$invalid$"
+      "$EOF$"
+   end
+
+   record Token
+      x: number
+      y: number
+      i: number
+      tk: string
+      kind: TokenKind
+   end
 
 
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
@@ -198,33 +221,12 @@ local TypeInfo = tl.TypeInfo
 local TypeReport = tl.TypeReport
 local TypeReportEnv = tl.TypeReportEnv
 local Symbol = tl.Symbol
+local TokenKind = tl.TokenKind
+local Token = tl.Token
 
 --------------------------------------------------------------------------------
 -- Lexer
 --------------------------------------------------------------------------------
-
-local enum TokenKind
-   "keyword"
-   "op"
-   "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";"
-   "::"
-   "..."
-   "identifier"
-   "number"
-   "$invalid_string$"
-   "$invalid_number$"
-   "$invalid$"
-   "$EOF$"
-end
-
-local record Token
-   x: number
-   y: number
-   i: number
-   tk: string
-   kind: TokenKind
-end
 
 do
    local enum LexState
@@ -1933,6 +1935,9 @@ do
 
       while true do
          local tkop = ps.tokens[i]
+         if tkop.tk and not e1.tk then
+            e1.tk = tkop.tk
+         end
          if tkop.kind == "string" or tkop.kind == "{" then
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
@@ -5143,6 +5148,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          x = where.x,
          msg = msg,
          filename = where.filename or filename,
+         tk = where.tk,
       }
    end
 
@@ -5434,6 +5440,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          msg = fmt:format(...),
          filename = filename,
          tag = tag,
+         tk = node.tk,
       })
    end
 
@@ -7309,14 +7316,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                if not found then
                   node_error(node, "module not found: '" .. module_name .. "'")
                elseif not lax and is_unknown(t) then
-                  node_error(node, "no type information for required module: '" .. module_name .. "'")
+                  node_error(node.e2[1], "no type information for required module: '" .. module_name .. "'")
                end
                return t
             else
-               node_error(node, "don't know how to resolve a dynamic require")
+               node_error(node.e2[1], "don't know how to resolve a dynamic require")
             end
          else
-            node_error(node, "require expects one literal argument")
+            node_error(node.e1, "require expects one literal argument")
          end
          return UNKNOWN
       end,

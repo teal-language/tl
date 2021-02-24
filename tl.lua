@@ -1,7 +1,30 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 
 
-local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, Token = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -198,29 +221,8 @@ local TypeInfo = tl.TypeInfo
 local TypeReport = tl.TypeReport
 local TypeReportEnv = tl.TypeReportEnv
 local Symbol = tl.Symbol
-
-
-
-
-
-local TokenKind = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local Token = {}
-
-
+local TokenKind = tl.TokenKind
+local Token = tl.Token
 
 
 
@@ -1933,6 +1935,9 @@ do
 
       while true do
          local tkop = ps.tokens[i]
+         if tkop.tk and not e1.tk then
+            e1.tk = tkop.tk
+         end
          if tkop.kind == "string" or tkop.kind == "{" then
             local op = new_operator(tkop, 2, "@funcall")
 
@@ -5143,6 +5148,7 @@ tl.type_check = function(ast, opts)
          x = where.x,
          msg = msg,
          filename = where.filename or filename,
+         tk = where.tk,
       }
    end
 
@@ -5434,6 +5440,7 @@ tl.type_check = function(ast, opts)
          msg = fmt:format(...),
          filename = filename,
          tag = tag,
+         tk = node.tk,
       })
    end
 
@@ -7309,14 +7316,14 @@ tl.type_check = function(ast, opts)
                if not found then
                   node_error(node, "module not found: '" .. module_name .. "'")
                elseif not lax and is_unknown(t) then
-                  node_error(node, "no type information for required module: '" .. module_name .. "'")
+                  node_error(node.e2[1], "no type information for required module: '" .. module_name .. "'")
                end
                return t
             else
-               node_error(node, "don't know how to resolve a dynamic require")
+               node_error(node.e2[1], "don't know how to resolve a dynamic require")
             end
          else
-            node_error(node, "require expects one literal argument")
+            node_error(node.e1, "require expects one literal argument")
          end
          return UNKNOWN
       end,
