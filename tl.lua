@@ -821,6 +821,36 @@ do
    end
 end
 
+function tl.get_token_at(tks, y, x)
+   local len = #tks
+   if len < 2 then
+      return tks[1]
+   end
+   local max_steps = math.ceil(math.log(len, 2)) + 1
+   local guess = len // 2
+   local factor = len // 4
+   for _ = 1, max_steps do
+      local tk = tks[guess]
+      local tk_x, tk_y = tk.x, tk.y
+
+      local sign = tk_y > y and -1 or
+      tk_y < y and 1 or
+      tk_x <= x and x < tk_x + #tk.tk and 0 or
+      tk_x > x and -1 or
+      1
+
+      if sign == 0 then
+         return tk
+      else
+         guess = guess + sign * factor
+      end
+
+      guess = math.min(math.max(guess, 1), len)
+      factor = math.max(factor // 2, 1)
+   end
+   return tks[guess]
+end
+
 
 
 
