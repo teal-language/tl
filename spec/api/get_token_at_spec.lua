@@ -13,4 +13,13 @@ describe("tl.get_token_at", function()
       assert(tl.get_token_at(tks, 1, 20).tk == "10")
       assert(tl.get_token_at(tks, 3, 13).tk == "global")
    end)
+   it("should return nil if there is whitespace at the location", function()
+      local tks = assert(tl.lex([[
+      local x: number
+
+      local y: number
+      ]]))
+      assert(tl.get_token_at(tks, 2, 1) == nil)
+      assert(tl.get_token_at(tks, 1, 15) == nil)
+   end)
 end)

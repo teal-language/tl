@@ -460,6 +460,9 @@ do
 
       local function end_token_prev(kind: TokenKind)
          local tk = input:sub(ti, i - 1)
+         if kind == "identifier" and keywords[tk] then
+            kind = "keyword"
+         end
          nt = nt + 1
          tokens[nt] = {
             x = tx,
@@ -825,17 +828,14 @@ end
 
 function tl.get_token_at(tks: {Token}, y: number, x: number): Token
    local len <const> = #tks
-   if len < 2 then
-      return tks[1]
-   end
    local max_steps <const> = math.ceil(math.log(len, 2)) + 1
-   local guess = len // 2
-   local factor = len // 4
+   local guess = math.floor(len / 2)
+   local factor = math.floor(len / 4)
    for _ = 1, max_steps do
       local tk <const> = tks[guess]
       local tk_x <const>, tk_y <const> = tk.x, tk.y
 
-      local sign = tk_y > y  and -1
+      local sign <const> = tk_y > y  and -1
          or tk_y < y and 1
          or tk_x <= x and x < tk_x + #tk.tk and 0
          or tk_x > x and -1
@@ -848,9 +848,8 @@ function tl.get_token_at(tks: {Token}, y: number, x: number): Token
       end
 
       guess = math.min(math.max(guess, 1), len)
-      factor = math.max(factor // 2, 1)
+      factor = math.max(math.floor(factor / 2), 1)
    end
-   return tks[guess]
 end
 
 --------------------------------------------------------------------------------

@@ -1,7 +1,30 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 
 
-local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+local tl = {TypeCheckOptions = {}, Env = {}, Token = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -198,29 +221,8 @@ local TypeInfo = tl.TypeInfo
 local TypeReport = tl.TypeReport
 local TypeReportEnv = tl.TypeReportEnv
 local Symbol = tl.Symbol
-
-
-
-
-
-local TokenKind = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local Token = {}
-
-
+local Token = tl.Token
+local TokenKind = tl.TokenKind
 
 
 
@@ -458,6 +460,9 @@ do
 
       local function end_token_prev(kind)
          local tk = input:sub(ti, i - 1)
+         if kind == "identifier" and keywords[tk] then
+            kind = "keyword"
+         end
          nt = nt + 1
          tokens[nt] = {
             x = tx,
@@ -823,12 +828,9 @@ end
 
 function tl.get_token_at(tks, y, x)
    local len = #tks
-   if len < 2 then
-      return tks[1]
-   end
    local max_steps = math.ceil(math.log(len, 2)) + 1
-   local guess = len // 2
-   local factor = len // 4
+   local guess = math.floor(len / 2)
+   local factor = math.floor(len / 4)
    for _ = 1, max_steps do
       local tk = tks[guess]
       local tk_x, tk_y = tk.x, tk.y
@@ -846,9 +848,8 @@ function tl.get_token_at(tks, y, x)
       end
 
       guess = math.min(math.max(guess, 1), len)
-      factor = math.max(factor // 2, 1)
+      factor = math.max(math.floor(factor / 2), 1)
    end
-   return tks[guess]
 end
 
 
