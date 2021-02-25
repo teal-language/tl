@@ -826,29 +826,46 @@ do
    end
 end
 
-function tl.get_token_at(tks, y, x)
-   local len = #tks
-   local max_steps = math.ceil(math.log(len, 2)) + 1
-   local guess = math.floor(len / 2)
-   local factor = math.floor(len / 4)
-   for _ = 1, max_steps do
-      local tk = tks[guess]
-      local tk_x, tk_y = tk.x, tk.y
-
-      local sign = tk_y > y and -1 or
-      tk_y < y and 1 or
-      tk_x <= x and x < tk_x + #tk.tk and 0 or
-      tk_x > x and -1 or
-      1
-
-      if sign == 0 then
-         return tk
+local function binary_search(list, item, cmp)
+   local len = #list
+   local mid
+   local s, e = 1, len
+   while s <= e do
+      mid = math.floor((s + e) / 2)
+      local val = list[mid]
+      local res = cmp(val, item)
+      if res then
+         if mid == len then
+            return mid, val
+         else
+            if not cmp(list[mid + 1], item) then
+               return mid, val
+            end
+         end
+         s = mid + 1
       else
-         guess = guess + sign * factor
+         e = mid - 1
       end
+   end
+end
 
-      guess = math.min(math.max(guess, 1), len)
-      factor = math.max(math.floor(factor / 2), 1)
+function tl.get_token_at(tks, y, x)
+   local _, found = binary_search(
+   tks, nil,
+   function(tk)
+      if tk.y == y then
+         return tk.x <= x
+      else
+         return tk.y <= y
+      end
+   end)
+
+
+   if found and
+      found.y == y and
+      found.x <= x and x < found.x + #found.tk then
+
+      return found
    end
 end
 
@@ -9090,31 +9107,31 @@ function tl.get_types(result, trenv)
 end
 
 function tl.symbols_in_scope(tr, y, x)
-   local function le(vy, vx, y, x)
-      return vy < y or (vy == y and vx <= x)
-   end
-
    local function find(symbols, y, x)
-      local len = #symbols
-      local s, mid, e = 1, 0, len
-      while s <= e do
-         mid = math.floor((s + e) / 2)
-         local v = symbols[mid]
-         if le(v[1], v[2], y, x) then
-            if mid == len then
-               return mid
-            else
-               local nv = symbols[mid + 1]
-               if not le(nv[1], nv[2], y, x) then
-                  return mid
-               end
-            end
-            s = mid + 1
-         else
-            e = mid - 1
-         end
+      local function le(a, b)
+         return a[1] < b[1] or (a[1] == b[1] and a[2] <= b[2])
       end
-      return 0
+      return binary_search(symbols, { y, x }, le) or 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
    end
 
    local ret = {}

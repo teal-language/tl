@@ -826,29 +826,46 @@ do
    end
 end
 
-function tl.get_token_at(tks: {Token}, y: number, x: number): Token
-   local len <const> = #tks
-   local max_steps <const> = math.ceil(math.log(len, 2)) + 1
-   local guess = math.floor(len / 2)
-   local factor = math.floor(len / 4)
-   for _ = 1, max_steps do
-      local tk <const> = tks[guess]
-      local tk_x <const>, tk_y <const> = tk.x, tk.y
-
-      local sign <const> = tk_y > y  and -1
-         or tk_y < y and 1
-         or tk_x <= x and x < tk_x + #tk.tk and 0
-         or tk_x > x and -1
-         or 1
-
-      if sign == 0 then
-         return tk
+local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boolean): number, T
+   local len <const> = #list
+   local mid: number
+   local s, e = 1, len
+   while s <= e do
+      mid = math.floor((s + e) / 2)
+      local val <const> = list[mid]
+      local res <const> = cmp(val, item)
+      if res then
+         if mid == len then
+            return mid, val
+         else
+            if not cmp(list[mid + 1], item) then
+               return mid, val
+            end
+         end
+         s = mid + 1
       else
-         guess = guess + sign * factor
+         e = mid - 1
       end
+   end
+end
 
-      guess = math.min(math.max(guess, 1), len)
-      factor = math.max(math.floor(factor / 2), 1)
+function tl.get_token_at(tks: {Token}, y: number, x: number): Token
+   local _, found <const> = binary_search(
+      tks, nil,
+      function(tk: Token): boolean
+         if tk.y == y then
+            return tk.x <= x
+         else
+            return tk.y <= y
+         end
+      end
+   )
+
+   if found
+      and found.y == y
+      and found.x <= x and x < found.x + #found.tk
+   then
+      return found
    end
 end
 
@@ -9090,31 +9107,11 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 end
 
 function tl.symbols_in_scope(tr: TypeReport, y: number, x: number): {string:number}
-   local function le(vy: number, vx: number, y: number, x: number): boolean
-      return vy < y or (vy == y and vx <= x)
-   end
-
    local function find(symbols: {{number, number, string, number}}, y: number, x: number): number
-      local len = #symbols
-      local s, mid, e = 1, 0, len
-      while s <= e do
-         mid = math.floor((s + e) / 2)
-         local v = symbols[mid]
-         if le(v[1], v[2], y, x) then
-            if mid == len then
-               return mid
-            else
-               local nv = symbols[mid + 1]
-               if not le(nv[1], nv[2], y, x) then
-                  return mid
-               end
-            end
-            s = mid + 1
-         else
-            e = mid - 1
-         end
+      local function le(a: {number, number}, b: {number, number}): boolean
+         return a[1] < b[1] or (a[1] == b[1] and a[2] <= b[2])
       end
-      return 0
+      return binary_search(symbols, {y, x}, le) or 0
    end
 
    local ret: {string:number} = {}
