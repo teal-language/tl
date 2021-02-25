@@ -460,9 +460,6 @@ do
 
       local function end_token_prev(kind: TokenKind)
          local tk = input:sub(ti, i - 1)
-         if kind == "identifier" and keywords[tk] then
-            kind = "keyword"
-         end
          nt = nt + 1
          tokens[nt] = {
             x = tx,
@@ -817,6 +814,9 @@ do
       if in_token then
          if terminals[state] then
             end_token_prev(terminals[state])
+            if keywords[tokens[nt].tk] then
+               tokens[nt].kind = "keyword"
+            end
          else
             drop_token()
          end
@@ -853,11 +853,8 @@ function tl.get_token_at(tks: {Token}, y: number, x: number): Token
    local _, found <const> = binary_search(
       tks, nil,
       function(tk: Token): boolean
-         if tk.y == y then
-            return tk.x <= x
-         else
-            return tk.y <= y
-         end
+         return tk.y < y
+            or (tk.y == y and tk.x <= x)
       end
    )
 
@@ -9109,7 +9106,8 @@ end
 function tl.symbols_in_scope(tr: TypeReport, y: number, x: number): {string:number}
    local function find(symbols: {{number, number, string, number}}, y: number, x: number): number
       local function le(a: {number, number}, b: {number, number}): boolean
-         return a[1] < b[1] or (a[1] == b[1] and a[2] <= b[2])
+         return a[1] < b[1]
+            or (a[1] == b[1] and a[2] <= b[2])
       end
       return binary_search(symbols, {y, x}, le) or 0
    end
