@@ -51,6 +51,23 @@ function util.do_in(dir, func, ...)
    return t_unpack(res)
 end
 
+local function unindent(code)
+   assert(type(code) == "string")
+
+   return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function indent(str)
+   assert(type(str) == "string")
+   return (str:gsub("\n", "\n   "))
+end
+
+local function trim_end(str)
+   assert(type(str) == "string")
+
+   return str:match("(.-)%s*$")
+end
+
 function util.mock_io(finally, filemap)
    assert(type(finally) == "function")
    assert(type(filemap) == "table")
@@ -77,9 +94,9 @@ function util.mock_io(finally, filemap)
          return {
             read = function (_, format)
                if format == "*a" then
-                  return filemap[basename]   -- Return fake file content
+                  return trim_end(filemap[basename]) -- Return fake file content
                else
-                  error("Not implemented!")  -- Implement other modes if needed
+                  error("Not implemented!") -- Implement other modes if needed
                end
             end,
             close = function () end,
@@ -88,17 +105,6 @@ function util.mock_io(finally, filemap)
          return io_open(filename, mode)
       end
    end
-end
-
-local function unindent(code)
-   assert(type(code) == "string")
-
-   return code:gsub("[ \t]+", " "):gsub("\n[ \t]+", "\n"):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function indent(str)
-   assert(type(str) == "string")
-   return (str:gsub("\n", "\n   "))
 end
 
 local function batch_assertions(prefix)
@@ -223,6 +229,10 @@ function util.write_tmp_dir(finally, dir_structure)
             assert(lfs.mkdir(prefix .. name))
             traverse_dir(content, prefix .. name .. "/")
          else
+            if type(content) == "string" then
+               content = trim_end(content)
+            end
+
             local fd = io.open(prefix .. name, "w")
             fd:write(content)
             fd:close()
@@ -447,6 +457,8 @@ end
 function util.check_syntax_error(code, syntax_errors)
    assert(type(code) == "string")
    assert(type(syntax_errors) == "table")
+
+   code = trim_end(code)
 
    return function()
       local tokens = tl.lex(code)
