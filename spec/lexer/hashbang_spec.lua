@@ -1,7 +1,5 @@
 local tl = require("tl")
 
-math.randomseed(os.time())
-
 local function map(f, xs)
    local rs = {}
    for i, x in ipairs(xs) do

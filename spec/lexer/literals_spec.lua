@@ -1,7 +1,5 @@
 local util = require("spec.util")
 
-math.randomseed(os.time())
-
 describe("lexer", function()
 
    local function gen_all_passes(out, prefix, parts, psign, powers)
