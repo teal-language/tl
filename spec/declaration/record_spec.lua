@@ -403,6 +403,19 @@ describe("records", function()
       ]])
    end)
 
+   it("resolves aliasing of nested records (see #400)", util.check [[
+      local record Foo
+         record Bar
+         end
+      end
+      local function func(_f: Foo.Bar) end
+
+      local tab = { Foo = Foo }
+
+      local x: tab.Foo.Bar
+      func(x)
+   ]])
+
    it("can have circular type dependencies on nested types", util.check [[
       local type R = record
          type R2 = record

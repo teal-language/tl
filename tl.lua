@@ -5195,28 +5195,26 @@ tl.type_check = function(ast, opts)
       if not typ then
          return nil
       end
+      if typ.found then
+         typ = typ.found
+      end
       for i = 2, #names do
-         local nested = typ.fields or (typ.def and typ.def.fields)
-         if nested then
-            typ = nested[names[i]]
+         local fields = typ.fields or (typ.def and typ.def.fields)
+         if fields then
+            typ = fields[names[i]]
             if typ == nil then
                return nil
             end
+            if typ.found then
+               typ = typ.found
+            end
          else
-            break
+            return nil
          end
       end
-      if typ then
-         if accept_typearg and typ.typename == "typearg" then
-            return typ
-         end
-         if is_typetype(typ) then
-            return typ
-         elseif typ.typename == "nominal" and typ.found then
-            return typ.found
-         end
+      if is_typetype(typ) or (accept_typearg and typ.typename == "typearg") then
+         return typ
       end
-      return nil
    end
 
    local function union_type(t)
