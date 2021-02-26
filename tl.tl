@@ -1145,12 +1145,11 @@ local enum NodeKind
    "do"
    "break"
    "return"
-   "values"
    "newtype"
    "argument"
    "type_identifier"
    "variable"
-   "variables"
+   "variable_list"
    "statements"
    "assignment"
    "argument_list"
@@ -2392,7 +2391,7 @@ local function parse_forin(ps: ParseState, i: number): number, Node
    local istart = i
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
-   node.vars = new_node(ps.tokens, i, "variables")
+   node.vars = new_node(ps.tokens, i, "variable_list")
    i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true }, "sep", parse_variable_name)
    i = verify_tk(ps, i, "in")
    node.exps = new_node(ps.tokens, i, "expression_list")
@@ -2715,6 +2714,23 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
    return fail(ps, i, "expected a type")
 end
 
+local function parse_assignment_expression_list(ps: ParseState, i: number, asgn: Node): number, Node
+   asgn.exps = new_node(ps.tokens, i, "expression_list")
+   repeat
+      i = i + 1
+      local val: Node
+      i, val = parse_expression(ps, i)
+      if not val then
+         if #asgn.exps == 0 then
+            asgn.exps = nil
+         end
+         return i
+      end
+      table.insert(asgn.exps, val)
+   until ps.tokens[i].tk ~= ","
+   return i, asgn
+end
+
 local parse_call_or_assignment: function(ps: ParseState, i: number): number, Node
 do
    local function is_lvalue(node: Node): boolean
@@ -2748,7 +2764,7 @@ do
       end
 
       local asgn: Node = new_node(ps.tokens, istart, "assignment")
-      asgn.vars = new_node(ps.tokens, istart, "variables")
+      asgn.vars = new_node(ps.tokens, istart, "variable_list")
       asgn.vars[1] = exp
       if ps.tokens[i].tk == "," then
          i = i + 1
@@ -2763,19 +2779,7 @@ do
          return i
       end
 
-      asgn.exps = new_node(ps.tokens, i, "values")
-      repeat
-         i = i + 1
-         local val: Node
-         i, val = parse_expression(ps, i)
-         if not val then
-            if #asgn.exps == 0 then
-               asgn.exps = nil
-            end
-            return i
-         end
-         table.insert(asgn.exps, val)
-      until ps.tokens[i].tk ~= ","
+      i, asgn = parse_assignment_expression_list(ps, i, asgn)
       return i, asgn
    end
 end
@@ -2783,7 +2787,7 @@ end
 local function parse_variable_declarations(ps: ParseState, i: number, node_name: NodeKind): number, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)
 
-   asgn.vars = new_node(ps.tokens, i, "variables")
+   asgn.vars = new_node(ps.tokens, i, "variable_list")
    i = parse_trying_list(ps, i, asgn.vars, parse_variable_name)
    if #asgn.vars == 0 then
       return fail(ps, i, "expected a local variable definition")
@@ -2806,21 +2810,7 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...", parse_function_type)
       end
 
-      asgn.exps = new_node(ps.tokens, i, "values")
-      local v = 1
-      repeat
-         i = i + 1
-         local val: Node
-         i, val = parse_expression(ps, i)
-         if not val then
-            if #asgn.exps == 0 then
-               asgn.exps = nil
-            end
-            return i
-         end
-         table.insert(asgn.exps, val)
-         v = v + 1
-      until ps.tokens[i].tk ~= ","
+      i, asgn = parse_assignment_expression_list(ps, i, asgn)
    end
    return i, asgn
 end
@@ -3175,8 +3165,7 @@ local function recurse_node<T>(ast: Node,
 
    local xs: {T} = {}
    if ast.kind == "statements"
-      or ast.kind == "variables"
-      or ast.kind == "values"
+      or ast.kind == "variable_list"
       or ast.kind == "argument_list"
       or ast.kind == "expression_list"
       or ast.kind == "table_literal" then
@@ -3673,7 +3662,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             return out
          end,
       },
-      ["variables"] = {
+      ["variable_list"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             local space: string
@@ -3942,9 +3931,8 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    visit_type.cbs["unresolved"] = visit_type.cbs["string"]
    visit_type.cbs["none"] = visit_type.cbs["string"]
 
-   visit_node.cbs["values"] = visit_node.cbs["variables"]
-   visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
-   visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
    visit_node.cbs["identifier"] = visit_node.cbs["variable"]
    visit_node.cbs["number"] = visit_node.cbs["variable"]
    visit_node.cbs["string"] = visit_node.cbs["variable"]
@@ -4556,7 +4544,7 @@ local function convert_node_to_compat_call(node: Node, mod_name: string, fn_name
    node.e1 = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, ".") }
    node.e1.e1 = { y = node.y, x = node.x, kind = "identifier", tk = mod_name }
    node.e1.e2 = { y = node.y, x = node.x, kind = "identifier", tk = fn_name }
-   node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
+   node.e2 = { y = node.y, x = node.x, kind = "expression_list" }
    node.e2[1] = e1
    node.e2[2] = e2
 end
@@ -4566,7 +4554,7 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
    node.op.arity = 2
    node.op.prec = 100
    node.e1 = { y = node.y, x = node.x, kind = "identifier", tk = "_tl_mt" }
-   node.e2 = { y = node.y, x = node.x, kind = "argument_list" }
+   node.e2 = { y = node.y, x = node.x, kind = "expression_list" }
    node.e2[1] = { y = node.y, x = node.x, kind = "string", tk = "\"" .. mt_name .. "\"" }
    node.e2[2] = { y = node.y, x = node.x, kind = "number", tk = tostring(which_self) }
    node.e2[3] = e1
@@ -8079,7 +8067,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             return node.type
          end,
       },
-      ["variables"] = {
+      ["variable_list"] = {
          after = function(node: Node, children: {Type}): Type
             node.type = TUPLE(children)
 
@@ -8669,9 +8657,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
 
    visit_node.cbs["break"] = visit_node.cbs["do"]
 
-   visit_node.cbs["values"] = visit_node.cbs["variables"]
-   visit_node.cbs["expression_list"] = visit_node.cbs["variables"]
-   visit_node.cbs["argument_list"] = visit_node.cbs["variables"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
 
    visit_node.cbs["string"] = {
       after = function(node: Node, _children: {Type}): Type
