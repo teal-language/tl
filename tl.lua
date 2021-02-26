@@ -261,6 +261,39 @@ do
 
 
 
+   local last_token_kind = {
+
+
+      ["identifier"] = "identifier",
+      ["got -"] = "op",
+
+      ["got ."] = ".",
+      ["got .."] = "op",
+      ["got ="] = "op",
+      ["got ~"] = "op",
+      ["got ["] = "[",
+      ["got 0"] = "number",
+      ["got <"] = "op",
+      ["got >"] = "op",
+      ["got /"] = "op",
+      ["got :"] = "op",
+
+      ["string single"] = "$invalid_string$",
+      ["string single got \\"] = "$invalid_string$",
+      ["string double"] = "$invalid_string$",
+      ["string double got \\"] = "$invalid_string$",
+      ["string long"] = "$invalid_string$",
+      ["string long got ]"] = "$invalid_string$",
+
+
+
+      ["number dec"] = "number",
+      ["number decfloat"] = "number",
+      ["number hex"] = "number",
+      ["number hexfloat"] = "number",
+      ["number power"] = "number",
+      ["number powersign"] = "$invalid_number$",
+   }
 
    local keywords = {
       ["and"] = true,
@@ -288,18 +321,18 @@ do
    }
 
    local lex_any_char_states = {
-      ["-"] = "maybecomment",
-      ["."] = "maybedotdot",
-      ["\""] = "dblquote_string",
-      ["'"] = "singlequote_string",
-      ["0"] = "decimal_or_hex",
-      ["<"] = "lt",
-      [">"] = "gt",
-      ["/"] = "div",
-      [":"] = "colon",
-      ["="] = "maybeequals",
-      ["~"] = "maybenotequals",
-      ["["] = "maybelongstring",
+      ["\""] = "string double",
+      ["'"] = "string single",
+      ["-"] = "got -",
+      ["."] = "got .",
+      ["0"] = "got 0",
+      ["<"] = "got <",
+      [">"] = "got >",
+      ["/"] = "got /",
+      [":"] = "got :",
+      ["="] = "got =",
+      ["~"] = "got ~",
+      ["["] = "got [",
    }
 
    for c = string.byte("a"), string.byte("z") do
@@ -311,7 +344,7 @@ do
    lex_any_char_states["_"] = "identifier"
 
    for c = string.byte("1"), string.byte("9") do
-      lex_any_char_states[string.char(c)] = "decimal_number"
+      lex_any_char_states[string.char(c)] = "number dec"
    end
 
    local lex_word = {}
@@ -534,38 +567,38 @@ do
                   table.insert(errs, tokens[#tokens])
                end
             end
-         elseif state == "maybecomment" then
+         elseif state == "got -" then
             if c == "-" then
-               state = "maybecomment2"
+               state = "got --"
             else
                end_token("op", "-")
                fwd = false
                state = "any"
             end
-         elseif state == "maybecomment2" then
+         elseif state == "got --" then
             if c == "[" then
-               state = "maybelongcomment"
+               state = "got --["
             else
                fwd = false
-               state = "comment"
+               state = "comment short"
                drop_token()
             end
-         elseif state == "maybelongcomment" then
+         elseif state == "got --[" then
             if c == "[" then
-               state = "longcomment"
+               state = "comment long"
             elseif c == "=" then
                lc_open_lvl = lc_open_lvl + 1
             else
                fwd = false
-               state = "comment"
+               state = "comment short"
                drop_token()
                lc_open_lvl = 0
             end
-         elseif state == "longcomment" then
+         elseif state == "comment long" then
             if c == "]" then
-               state = "maybelongcommentend"
+               state = "comment long got ]"
             end
-         elseif state == "maybelongcommentend" then
+         elseif state == "comment long got ]" then
             if c == "]" and lc_close_lvl == lc_open_lvl then
                drop_token()
                state = "any"
@@ -574,17 +607,17 @@ do
             elseif c == "=" then
                lc_close_lvl = lc_close_lvl + 1
             else
-               state = "longcomment"
+               state = "comment long"
                lc_close_lvl = 0
             end
-         elseif state == "dblquote_string" then
+         elseif state == "string double" then
             if c == "\\" then
-               state = "escape_dblquote_string"
+               state = "string double got \\"
             elseif c == "\"" then
                end_token_here("string")
                state = "any"
             end
-         elseif state == "escape_dblquote_string" then
+         elseif state == "string double got \\" then
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
@@ -592,15 +625,15 @@ do
                table.insert(errs, tokens[#tokens])
             end
             x = x + skip
-            state = "dblquote_string"
-         elseif state == "singlequote_string" then
+            state = "string double"
+         elseif state == "string single" then
             if c == "\\" then
-               state = "escape_singlequote_string"
+               state = "string single got \\"
             elseif c == "'" then
                end_token_here("string")
                state = "any"
             end
-         elseif state == "escape_singlequote_string" then
+         elseif state == "string single got \\" then
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
@@ -608,8 +641,8 @@ do
                table.insert(errs, tokens[#tokens])
             end
             x = x + skip
-            state = "singlequote_string"
-         elseif state == "maybeequals" then
+            state = "string single"
+         elseif state == "got =" then
             local t
             if c == "=" then
                t = "=="
@@ -619,7 +652,7 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "maybenotequals" then
+         elseif state == "got ~" then
             local t
             if c == "=" then
                t = "~="
@@ -629,7 +662,7 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "lt" then
+         elseif state == "got <" then
             local t
             if c == "=" then
                t = "<="
@@ -641,7 +674,7 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "colon" then
+         elseif state == "got :" then
             local t
             if c == ":" then
                t = "::"
@@ -651,7 +684,7 @@ do
             end
             end_token(t, t)
             state = "any"
-         elseif state == "gt" then
+         elseif state == "got >" then
             local t
             if c == "=" then
                t = ">="
@@ -663,7 +696,7 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "div" then
+         elseif state == "got /" then
             local t
             if c == "/" then
                t = "//"
@@ -673,9 +706,9 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "maybelongstring" then
+         elseif state == "got [" then
             if c == "[" then
-               state = "longstring"
+               state = "string long"
             elseif c == "=" then
                ls_open_lvl = ls_open_lvl + 1
             else
@@ -684,11 +717,11 @@ do
                state = "any"
                ls_open_lvl = 0
             end
-         elseif state == "longstring" then
+         elseif state == "string long" then
             if c == "]" then
-               state = "maybelongstringend"
+               state = "string long got ]"
             end
-         elseif state == "maybelongstringend" then
+         elseif state == "string long got ]" then
             if c == "]" then
                if ls_close_lvl == ls_open_lvl then
                   end_token_here("string")
@@ -699,20 +732,20 @@ do
             elseif c == "=" then
                ls_close_lvl = ls_close_lvl + 1
             else
-               state = "longstring"
+               state = "string long"
                ls_close_lvl = 0
             end
-         elseif state == "maybedotdot" then
+         elseif state == "got ." then
             if c == "." then
-               state = "maybedotdotdot"
+               state = "got .."
             elseif lex_decimals[c] then
-               state = "decimal_float"
+               state = "number decfloat"
             else
                end_token(".", ".")
                fwd = false
                state = "any"
             end
-         elseif state == "maybedotdotdot" then
+         elseif state == "got .." then
             if c == "." then
                end_token("...", "...")
             else
@@ -720,7 +753,7 @@ do
                fwd = false
             end
             state = "any"
-         elseif state == "comment" then
+         elseif state == "comment short" then
             if c == "\n" then
                state = "any"
             end
@@ -730,67 +763,67 @@ do
                fwd = false
                state = "any"
             end
-         elseif state == "decimal_or_hex" then
+         elseif state == "got 0" then
             if c == "x" or c == "X" then
-               state = "hex_number"
+               state = "number hex"
             elseif c == "e" or c == "E" then
-               state = "power_sign"
+               state = "number powersign"
             elseif lex_decimals[c] then
-               state = "decimal_number"
+               state = "number dec"
             elseif c == "." then
-               state = "decimal_float"
+               state = "number decfloat"
             else
                end_token_prev("number")
                fwd = false
                state = "any"
             end
-         elseif state == "hex_number" then
+         elseif state == "number hex" then
             if c == "." then
-               state = "hex_float"
+               state = "number hexfloat"
             elseif c == "p" or c == "P" then
-               state = "power_sign"
+               state = "number powersign"
             elseif not lex_hexadecimals[c] then
                end_token_prev("number")
                fwd = false
                state = "any"
             end
-         elseif state == "hex_float" then
+         elseif state == "number hexfloat" then
             if c == "p" or c == "P" then
-               state = "power_sign"
+               state = "number powersign"
             elseif not lex_hexadecimals[c] then
                end_token_prev("number")
                fwd = false
                state = "any"
             end
-         elseif state == "decimal_number" then
+         elseif state == "number dec" then
             if c == "." then
-               state = "decimal_float"
+               state = "number decfloat"
             elseif c == "e" or c == "E" then
-               state = "power_sign"
+               state = "number powersign"
             elseif not lex_decimals[c] then
                end_token_prev("number")
                fwd = false
                state = "any"
             end
-         elseif state == "decimal_float" then
+         elseif state == "number decfloat" then
             if c == "e" or c == "E" then
-               state = "power_sign"
+               state = "number powersign"
             elseif not lex_decimals[c] then
                end_token_prev("number")
                fwd = false
                state = "any"
             end
-         elseif state == "power_sign" then
+         elseif state == "number powersign" then
             if c == "-" or c == "+" then
-               state = "power"
+               state = "number power"
             elseif lex_decimals[c] then
-               state = "power"
+               state = "number power"
             else
                end_token_here("$invalid_number$")
                table.insert(errs, tokens[#tokens])
                state = "any"
             end
-         elseif state == "power" then
+         elseif state == "number power" then
             if not lex_decimals[c] then
                end_token_prev("number")
                fwd = false
@@ -799,19 +832,9 @@ do
          end
       end
 
-      local terminals = {
-         ["identifier"] = "identifier",
-         ["decimal_or_hex"] = "number",
-         ["decimal_number"] = "number",
-         ["decimal_float"] = "number",
-         ["hex_number"] = "number",
-         ["hex_float"] = "number",
-         ["power"] = "number",
-      }
-
       if in_token then
-         if terminals[state] then
-            end_token_prev(terminals[state])
+         if last_token_kind[state] then
+            end_token_prev(last_token_kind[state])
             if keywords[tokens[nt].tk] then
                tokens[nt].kind = "keyword"
             end
