@@ -18,7 +18,7 @@ describe("<", function()
          z = false
       end
    ]], {
-      { msg = "cannot use operator '<' for types number and string" }
+      { msg = "cannot use operator '<' for types integer and string" }
    }))
 
    it("fails with not gotcha", util.check_type_error([[
@@ -28,6 +28,6 @@ describe("<", function()
          print("wat")
       end
    ]], {
-      { msg = "cannot use operator '<' for types boolean and number" }
+      { msg = "cannot use operator '<' for types boolean and integer" }
    }))
 end)

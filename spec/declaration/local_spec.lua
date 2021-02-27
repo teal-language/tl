@@ -9,7 +9,7 @@ describe("local", function()
          local z: table
          z = x + y
       ]], {
-         { msg = "in assignment: got number" },
+         { msg = "in assignment: got integer" },
       }))
 
       it("basic inference sets types, pass", util.check [[
@@ -26,7 +26,7 @@ describe("local", function()
          local z: table
          z = x + y
       ]], {
-         { msg = "in assignment: got number" },
+         { msg = "in assignment: got integer" },
       }))
 
       it("basic inference sets types", util.check [[

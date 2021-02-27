@@ -5,7 +5,7 @@ describe("ipairs", function()
       for i, v in ipairs({{1}, {"a"}}) do
       end
    ]], {
-      { msg = [[expected an array: at index 2: got {string "a"}, expected {number}]] },
+      { msg = [[expected an array: at index 2: got {string "a"}, expected {integer}]] },
    }))
 
    it("should report when a tuple can't be converted to an array (variable)", util.check_type_error([[
@@ -13,7 +13,7 @@ describe("ipairs", function()
       for i, v in ipairs(my_tuple) do
       end
    ]], {
-      { msg = [[attempting ipairs loop on tuple that's not a valid array: ({{number}, {string "a"}})]] },
-      { msg = [[argument 1: unable to convert tuple {{number}, {string "a"}} to array]] },
+      { msg = [[attempting ipairs loop on tuple that's not a valid array: ({{integer}, {string "a"}})]] },
+      { msg = [[argument 1: unable to convert tuple {{integer}, {string "a"}} to array]] },
    }))
 end)
