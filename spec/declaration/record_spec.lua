@@ -512,12 +512,12 @@ describe("records", function()
              iter: function<T>({T}): iterator<T>
          end
 
-         local sum = fun.iter({ 1, 2, 3, 4 }):reduce(function(a:number,x:number): number
+         local sum = fun.iter({ 1, 2, 3, 4 }):reduce(function(a:integer,x:integer): integer
              return a + x
          end, 0)
       ]])()
 
-      assert.same("number", ast[2].exps[1].type[1].typename)
+      assert.same("integer", ast[2].exps[1].type[1].typename)
    end)
 
    it("can have circular type dependencies on nested types", util.check [[

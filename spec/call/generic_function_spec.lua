@@ -68,9 +68,9 @@ describe("generic function", function()
          return id(cvt(x))
       end
 
-      print(use_conv(122, convert_num_str) .. "!")
+      print(use_conv(122.0, convert_num_str) .. "!")
 
-      print(use_conv("123", convert_str_num) + 123)
+      print(use_conv("123", convert_str_num) + 123.0)
    ]])
 
    it("catches incorrect typevars, does not mix up multiple uses", util.check_type_error([[
@@ -88,9 +88,9 @@ describe("generic function", function()
          return cvt(tvc(cvt(x)))
       end
 
-      print(use_conv(122, convert_num_str, convert_str_num) .. "!")
+      print(use_conv(122.0, convert_num_str, convert_str_num) .. "!")
    ]], {
-      { y = 15, x = 44, msg = "argument 3: argument 1: got string, expected number" }
+      { y = 15, x = 46, msg = "argument 3: argument 1: got string, expected number" }
    }))
 
    it("will catch if resolved typevar does not match", util.check_type_error([[

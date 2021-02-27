@@ -40,11 +40,11 @@ local record tl
    end
 
    record Symbol
-      x: number
-      y: number
+      x: integer
+      y: integer
       name: string
       typ: Type
-      other: number
+      other: integer
       skip: boolean
    end
 
@@ -71,48 +71,48 @@ local record tl
    warning_kinds: {WarningKind:boolean}
 
    record Error
-      y: number
-      x: number
+      y: integer
+      x: integer
       msg: string
       filename: string
 
       tag: WarningKind
 
       -- used temporarily for stable-sorting
-      i: number
+      i: integer
    end
 
-   typecodes: {string:number}
+   typecodes: {string:integer}
 
    record TypeInfo
-      t: number
+      t: integer
 
       str: string
       file: string
-      x: number
-      y: number
-      ref: number -- NOMINAL
-      fields: {string: number} -- RECORD, ARRAYRECORD
+      x: integer
+      y: integer
+      ref: integer -- NOMINAL
+      fields: {string: integer} -- RECORD, ARRAYRECORD
       enums: {string} -- ENUM
-      args: {{number, string}} -- FUNCTION
-      rets: {{number, string}} -- FUNCTION
+      args: {{integer, string}} -- FUNCTION
+      rets: {{integer, string}} -- FUNCTION
       vararg: boolean -- FUNCTION
-      types: {number} -- UNION, POLY, TUPLE
-      keys: number -- MAP
-      values: number -- MAP
-      elements: number -- ARRAY
+      types: {integer} -- UNION, POLY, TUPLE
+      keys: integer -- MAP
+      values: integer -- MAP
+      elements: integer -- ARRAY
    end
 
    record TypeReport
-      by_pos: {string: {number: {number: number}}}
-      types: {number: TypeInfo}
-      symbols: {{number, number, string, number}}
-      globals: {string: number}
+      by_pos: {string: {integer: {integer: integer}}}
+      types: {integer: TypeInfo}
+      symbols: {{integer, integer, string, integer}}
+      globals: {string: integer}
    end
 
    record TypeReportEnv
-      typeid_to_num: {number: number}
-      next_num: number
+      typeid_to_num: {integer: integer}
+      next_num: integer
       tr: TypeReport
    end
 
@@ -222,9 +222,9 @@ local enum TokenKind
 end
 
 local record Token
-   x: number
-   y: number
-   i: number
+   x: integer
+   y: integer
+   i: integer
    tk: string
    kind: TokenKind
 end
@@ -408,7 +408,7 @@ do
       ["\n"] = true,
    }
 
-   local function lex_string_escape(input: string, i: number, c: string): number, boolean
+   local function lex_string_escape(input: string, i: integer, c: string): integer, boolean
       if escapable_characters[c] then
          return 0, true
       elseif c == "x" then
@@ -418,7 +418,7 @@ do
          )
       elseif c == "u" then
          if input:sub(i+1, i+1) == "{" then
-             local p = i + 2
+             local p: integer = i + 2
              if not lex_hexadecimals[input:sub(p, p)] then
                return 2, false
              end
@@ -431,7 +431,7 @@ do
             end
          end
       elseif lex_decimals[c] then
-         local len = lex_decimals[input:sub(i+1, i+1)]
+         local len: integer = lex_decimals[input:sub(i+1, i+1)]
                      and (lex_decimals[input:sub(i+2, i+2)] and 2 or 1)
                      or  0
          return len, tonumber(input:sub(i, i + len)) < 256
@@ -445,9 +445,9 @@ do
 
       local state: LexState = "any"
       local fwd = true
-      local y = 1
-      local x = 0
-      local i = 0
+      local y: integer = 1
+      local x: integer = 0
+      local i: integer = 0
       local lc_open_lvl = 0
       local lc_close_lvl = 0
       local ls_open_lvl = 0
@@ -455,9 +455,9 @@ do
       local errs: {Token} = {}
       local nt = 0
 
-      local tx: number
-      local ty: number
-      local ti: number
+      local tx: integer
+      local ty: integer
+      local ti: integer
       local in_token = false
 
       local function begin_token()
@@ -522,7 +522,7 @@ do
          in_token = false
       end
 
-      local len = #input
+      local len: integer = #input
       if input:sub(1,2) == "#!" then
          i = input:find("\n")
          if not i then
@@ -718,7 +718,7 @@ do
                lc_close_lvl = 0
             end
          elseif state == "string double got \\" then
-            local skip, valid = lex_string_escape(input, i, c)
+            local skip, valid: integer, boolean = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
                end_token_here("$invalid_string$")
@@ -734,7 +734,7 @@ do
                state = "any"
             end
          elseif state == "string single got \\" then
-            local skip, valid = lex_string_escape(input, i, c)
+            local skip, valid: integer, boolean = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
                end_token_here("$invalid_string$")
@@ -856,10 +856,10 @@ do
    end
 end
 
-local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boolean): number, T
-   local len <const> = #list
-   local mid: number
-   local s, e = 1, len
+local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boolean): integer, T
+   local len <const>: integer = #list
+   local mid: integer
+   local s, e: integer, integer = 1, len
    while s <= e do
       mid = math.floor((s + e) / 2)
       local val <const> = list[mid]
@@ -879,7 +879,7 @@ local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): bool
    end
 end
 
-function tl.get_token_at(tks: {Token}, y: number, x: number): string
+function tl.get_token_at(tks: {Token}, y: integer, x: integer): string
    local _, found <const> = binary_search(
       tks, nil,
       function(tk: Token): boolean
@@ -900,9 +900,9 @@ end
 -- Recursive descent parser
 --------------------------------------------------------------------------------
 
-local last_typeid = 0
+local last_typeid: integer = 0
 
-local function new_typeid(): number
+local function new_typeid(): integer
    last_typeid = last_typeid + 1
    return last_typeid
 end
@@ -950,14 +950,14 @@ local table_types: {TypeName:boolean} = {
 
 local record Type
    {Type}
-   y: number
-   x: number
+   y: integer
+   x: integer
    filename: string
    typename: TypeName
    tk: string
 
-   yend: number
-   xend: number
+   yend: integer
+   xend: integer
 
    -- Lua compatibilty
    needs_compat: boolean
@@ -988,14 +988,14 @@ local record Type
    -- array
    elements: Type
    -- tupletable/array
-   inferred_len: number
+   inferred_len: integer
 
    -- function
    is_method: boolean
    args: Type
    rets: Type
 
-   typeid: number
+   typeid: integer
 
    -- nominal
    names: {string}
@@ -1032,11 +1032,11 @@ local record Type
 end
 
 local record Operator
-   y: number
-   x: number
-   arity: number
+   y: integer
+   x: integer
+   arity: integer
    op: string
-   prec: number
+   prec: integer
 end
 
 local enum NodeKind
@@ -1122,17 +1122,17 @@ local record Node
       name: string
    end
 
-   y: number
-   x: number
+   y: integer
+   x: integer
    tk: string
    kind: NodeKind
-   symbol_list_slot: number
+   symbol_list_slot: integer
    semicolon: boolean
 
    is_longstring: boolean
 
-   yend: number
-   xend: number
+   yend: integer
+   xend: integer
 
    known: Fact
 
@@ -1162,7 +1162,7 @@ local record Node
 
    exp: Node
    if_parent: Node
-   if_block_n: number
+   if_block_n: integer
    if_blocks: {Node}
 
    -- fornum
@@ -1188,7 +1188,7 @@ local record Node
    failstore: boolean
 
    -- table literal
-   array_len: number
+   array_len: integer
 
    -- goto
    label: string
@@ -1229,18 +1229,18 @@ local enum ParseTypeListMode
    "casttype"
 end
 
-local parse_type_list: function(ParseState, number, ParseTypeListMode): number, Type
-local parse_expression: function(ParseState, number): number, Node, number
-local parse_expression_and_tk: function(ps: ParseState, i: number, tk: string): number, Node
-local parse_statements: function(ParseState, number, boolean): number, Node
-local parse_argument_list: function(ParseState, number): number, Node
-local parse_argument_type_list: function(ParseState, number): number, Type
-local parse_type: function(ParseState, number): number, Type, number
-local parse_newtype: function(ps: ParseState, i: number): number, Node
-local parse_enum_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
-local parse_record_body: function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer, Type
+local parse_expression: function(ParseState, integer): integer, Node, integer
+local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
+local parse_statements: function(ParseState, integer, boolean): integer, Node
+local parse_argument_list: function(ParseState, integer): integer, Node
+local parse_argument_type_list: function(ParseState, integer): integer, Type
+local parse_type: function(ParseState, integer): integer, Type, integer
+local parse_newtype: function(ps: ParseState, i: integer): integer, Node
+local parse_enum_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+local parse_record_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
 
-local function fail(ps: ParseState, i: number, msg: string): number
+local function fail(ps: ParseState, i: integer, msg: string): integer
    if not ps.tokens[i] then
       local eof = ps.tokens[#ps.tokens]
       table.insert(ps.errs, { filename = ps.filename, y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
@@ -1255,14 +1255,14 @@ local function end_at(node: Node, tk: Token)
    node.xend = tk.x + #tk.tk - 1
 end
 
-local function verify_tk(ps: ParseState, i: number, tk: string): number
+local function verify_tk(ps: ParseState, i: integer, tk: string): integer
    if ps.tokens[i].tk == tk then
       return i + 1
    end
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
-local function verify_end(ps: ParseState, i: number, istart: number, node: Node): number
+local function verify_end(ps: ParseState, i: integer, istart: integer, node: Node): integer
    if ps.tokens[i].tk == "end" then
       node.yend = ps.tokens[i].y
       node.xend = ps.tokens[i].x + 2
@@ -1272,7 +1272,7 @@ local function verify_end(ps: ParseState, i: number, istart: number, node: Node)
    return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. ps.filename .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
 end
 
-local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
+local function new_node(tokens: {Token}, i: integer, kind: NodeKind): Node
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
 end
@@ -1282,7 +1282,7 @@ local function a_type(t: Type): Type
    return t
 end
 
-local function new_type(ps: ParseState, i: number, typename: TypeName): Type
+local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    local token = ps.tokens[i]
    return a_type {
       typename = assert(typename),
@@ -1293,37 +1293,37 @@ local function new_type(ps: ParseState, i: number, typename: TypeName): Type
    }
 end
 
-local function verify_kind(ps: ParseState, i: number, kind: TokenKind, node_kind: NodeKind): number, Node
+local function verify_kind(ps: ParseState, i: integer, kind: TokenKind, node_kind: NodeKind): integer, Node
    if ps.tokens[i].kind == kind then
       return i + 1, new_node(ps.tokens, i, node_kind)
    end
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
-local type SkipFunction = function(ParseState, number): number
+local type SkipFunction = function(ParseState, integer): integer
 
-local function failskip(ps: ParseState, i: number, msg: string, skip_fn: SkipFunction, starti: number): number
+local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFunction, starti: integer): integer
    local err_ps: ParseState = {
       tokens = ps.tokens,
       errs = {},
       required_modules = {},
    }
-   local skip_i = skip_fn(err_ps, starti or i)
+   local skip_i: integer = skip_fn(err_ps, starti or i)
    fail(ps, starti or i, msg)
    return skip_i or (i + 1)
 end
 
-local function skip_record(ps: ParseState, i: number): number, Node
+local function skip_record(ps: ParseState, i: integer): integer, Node
    i = i + 1
    return parse_record_body(ps, i, {}, {})
 end
 
-local function skip_enum(ps: ParseState, i: number): number, Node
+local function skip_enum(ps: ParseState, i: integer): integer, Node
    i = i + 1
    return parse_enum_body(ps, i, {}, {})
 end
 
-local function parse_table_value(ps: ParseState, i: number): number, Node, number
+local function parse_table_value(ps: ParseState, i: integer): integer, Node, integer
    local next_word = ps.tokens[i].tk
    local e: Node
    if next_word == "record" then
@@ -1339,7 +1339,7 @@ local function parse_table_value(ps: ParseState, i: number): number, Node, numbe
    return i, e
 end
 
-local function parse_table_item(ps: ParseState, i: number, n: number): number, Node, number
+local function parse_table_item(ps: ParseState, i: integer, n: integer): integer, Node, integer
    local node = new_node(ps.tokens, i, "table_item")
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
@@ -1363,7 +1363,7 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
          return i, node, n
       elseif ps.tokens[i+1].tk == ":" then
          node.key_parsed = "short"
-         local orig_i = i
+         local orig_i: integer = i
          local try_ps: ParseState = {
             filename = ps.filename,
             tokens = ps.tokens,
@@ -1402,22 +1402,22 @@ local function parse_table_item(ps: ParseState, i: number, n: number): number, N
    return i, node, n + 1
 end
 
-local type ParseItem = function<T>(ParseState, number, number): number, T, number
+local type ParseItem = function<T>(ParseState, integer, integer): integer, T, integer
 
 local enum SeparatorMode
    "sep"
    "term"
 end
 
-local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
-   local n = 1
+local function parse_list<T>(ps: ParseState, i: integer, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): integer, {T}
+   local n: integer = 1
    while ps.tokens[i].kind ~= "$EOF$" do
       if close[ps.tokens[i].tk] then
          end_at(list as Node, ps.tokens[i])
          break
       end
       local item: T
-      local oldn = n
+      local oldn: integer = n
       i, item, n = parse_item(ps, i, n)
       n = n or oldn
       table.insert(list, item)
@@ -1452,26 +1452,26 @@ local function parse_list<T>(ps: ParseState, i: number, list: {T}, close: {strin
    return i, list
 end
 
-local function parse_bracket_list<T>(ps: ParseState, i: number, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): number, {T}
+local function parse_bracket_list<T>(ps: ParseState, i: integer, list: {T}, open: string, close: string, sep: SeparatorMode, parse_item: ParseItem<T>): integer, {T}
    i = verify_tk(ps, i, open)
    i = parse_list(ps, i, list, { [close] = true }, sep, parse_item)
    i = verify_tk(ps, i, close)
    return i, list
 end
 
-local function parse_table_literal(ps: ParseState, i: number): number, Node
+local function parse_table_literal(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "table_literal")
    return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_item: ParseItem<T>): number, {T}
+local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse_item: ParseItem<T>): integer, {T}
    local try_ps: ParseState = {
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
       required_modules = ps.required_modules,
    }
-   local tryi, item = parse_item(try_ps, i)
+   local tryi, item: integer, T = parse_item(try_ps, i)
    if not item then
       return i, list
    end
@@ -1490,7 +1490,7 @@ local function parse_trying_list<T>(ps: ParseState, i: number, list: {T}, parse_
    return i, list
 end
 
-local function parse_typearg_type(ps: ParseState, i: number): number, Type, number
+local function parse_typearg_type(ps: ParseState, i: integer): integer, Type, integer
    local backtick = false
    if ps.tokens[i].tk == "`" then
       i = verify_tk(ps, i, "`")
@@ -1505,7 +1505,7 @@ local function parse_typearg_type(ps: ParseState, i: number): number, Type, numb
    }
 end
 
-local function parse_typevar_type(ps: ParseState, i: number): number, Type, number
+local function parse_typevar_type(ps: ParseState, i: integer): integer, Type, integer
    i = verify_tk(ps, i, "`")
    i = verify_kind(ps, i, "identifier")
    return i, a_type {
@@ -1516,7 +1516,7 @@ local function parse_typevar_type(ps: ParseState, i: number): number, Type, numb
    }
 end
 
-local function parse_typearg_list(ps: ParseState, i: number): number, Type
+local function parse_typearg_list(ps: ParseState, i: integer): integer, Type
    if ps.tokens[i+1].tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
    end
@@ -1524,7 +1524,7 @@ local function parse_typearg_list(ps: ParseState, i: number): number, Type
    return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
 end
 
-local function parse_typeval_list(ps: ParseState, i: number): number, Type
+local function parse_typeval_list(ps: ParseState, i: integer): integer, Type
    if ps.tokens[i+1].tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
    end
@@ -1532,11 +1532,11 @@ local function parse_typeval_list(ps: ParseState, i: number): number, Type
    return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_type)
 end
 
-local function parse_return_types(ps: ParseState, i: number): number, Type
+local function parse_return_types(ps: ParseState, i: integer): integer, Type
    return parse_type_list(ps, i, "rets")
 end
 
-local function parse_function_type(ps: ParseState, i: number): number, Type
+local function parse_function_type(ps: ParseState, i: integer): integer, Type
    local typ = new_type(ps, i, "function")
    i = i + 1
    if ps.tokens[i].tk == "<" then
@@ -1572,7 +1572,7 @@ local simple_types: {string:Type} = {
    ["integer"] = INTEGER,
 }
 
-local function parse_base_type(ps: ParseState, i: number): number, Type, number
+local function parse_base_type(ps: ParseState, i: integer): integer, Type, integer
    local tk = ps.tokens[i].tk
    if ps.tokens[i].kind == "identifier" then
       local st = simple_types[tk]
@@ -1651,7 +1651,7 @@ local function parse_base_type(ps: ParseState, i: number): number, Type, number
    return fail(ps, i, "expected a type")
 end
 
-parse_type = function(ps: ParseState, i: number): number, Type, number
+parse_type = function(ps: ParseState, i: integer): integer, Type, integer
    if ps.tokens[i].tk == "(" then
       i = i + 1
       local t: Type
@@ -1661,7 +1661,7 @@ parse_type = function(ps: ParseState, i: number): number, Type, number
    end
 
    local bt: Type
-   local istart = i
+   local istart: integer = i
    i, bt = parse_base_type(ps, i)
    if not bt then
       return i
@@ -1682,7 +1682,7 @@ parse_type = function(ps: ParseState, i: number): number, Type, number
    return i, bt
 end
 
-parse_type_list = function(ps: ParseState, i: number, mode: ParseTypeListMode): number, Type
+parse_type_list = function(ps: ParseState, i: integer, mode: ParseTypeListMode): integer, Type
    local list = new_type(ps, i, "tuple")
 
    local first_token = ps.tokens[i].tk
@@ -1723,8 +1723,8 @@ parse_type_list = function(ps: ParseState, i: number, mode: ParseTypeListMode): 
    return i, list
 end
 
-local function parse_function_args_rets_body(ps: ParseState, i: number, node: Node): number, Node
-   local istart = i - 1
+local function parse_function_args_rets_body(ps: ParseState, i: integer, node: Node): integer, Node
+   local istart: integer = i - 1
    if ps.tokens[i].tk == "<" then
       i, node.typeargs = parse_typearg_list(ps, i)
    end
@@ -1737,7 +1737,7 @@ local function parse_function_args_rets_body(ps: ParseState, i: number, node: No
    return i, node
 end
 
-local function parse_function_value(ps: ParseState, i: number): number, Node
+local function parse_function_value(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "function")
    i = verify_tk(ps, i, "function")
    return parse_function_args_rets_body(ps, i, node)
@@ -1753,7 +1753,7 @@ local function unquote(str: string): string, boolean
    return str:sub(l, -l), true
 end
 
-local function parse_literal(ps: ParseState, i: number): number, Node
+local function parse_literal(ps: ParseState, i: integer): integer, Node
    local tk = ps.tokens[i].tk
    local kind = ps.tokens[i].kind
    if kind == "identifier" then
@@ -1807,10 +1807,10 @@ local function node_is_require_call(n: Node): string
    end
 end
 
-local an_operator: function(Node, number, string): Operator
+local an_operator: function(Node, integer, string): Operator
 
 do
-   local precedences: {number:{string:number}} = {
+   local precedences: {integer:{string:integer}} = {
       [1] = {
          ["not"] = 11,
          ["#"] = 11,
@@ -1853,12 +1853,12 @@ do
       [".."] = true,
    }
 
-   local function new_operator(tk: Token, arity: number, op: string): Operator
+   local function new_operator(tk: Token, arity: integer, op: string): Operator
       op = op or tk.tk
       return { y = tk.y, x = tk.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
-   an_operator = function(node: Node, arity: number, op: string): Operator
+   an_operator = function(node: Node, arity: integer, op: string): Operator
       return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
    end
 
@@ -1868,9 +1868,9 @@ do
       ["string"] = true,
    }
 
-   local E: function(ParseState, number, Node, number): number, Node
+   local E: function(ParseState, integer, Node, integer): integer, Node
 
-   local function after_valid_prefixexp(ps: ParseState, prevnode: Node, i: number): boolean
+   local function after_valid_prefixexp(ps: ParseState, prevnode: Node, i: integer): boolean
       return ps.tokens[i - 1].kind == ")" -- '(' exp ')'
          or (prevnode.kind == "op"
              and (prevnode.op.op == "@funcall"
@@ -1888,7 +1888,7 @@ do
       return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1, failstore = true }
    end
 
-   local function P(ps: ParseState, i: number): number, Node
+   local function P(ps: ParseState, i: integer): integer, Node
       if ps.tokens[i].kind == "$EOF$" then
          return i
       end
@@ -1897,7 +1897,7 @@ do
       if precedences[1][ps.tokens[i].tk] ~= nil then
          local op: Operator = new_operator(ps.tokens[i], 1)
          i = i + 1
-         local prev_i = i
+         local prev_i: integer = i
          i, e1 = P(ps, i)
          if not e1 then
             fail(ps, prev_i, "expected an expression")
@@ -1906,7 +1906,7 @@ do
          e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
-         local prev_i = i
+         local prev_i: integer = i
          i, e1 = parse_expression_and_tk(ps, i, ")")
          if not e1 then
             fail(ps, prev_i, "expected an expression")
@@ -1929,7 +1929,7 @@ do
          if tkop.tk == "." or tkop.tk == ":" then
             local op: Operator = new_operator(tkop, 2)
 
-            local prev_i = i
+            local prev_i: integer = i
 
             local key: Node
             i = i + 1
@@ -1954,7 +1954,7 @@ do
          elseif tkop.tk == "(" then
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
-            local prev_i = i
+            local prev_i: integer = i
 
             local args = new_node(ps.tokens, i, "expression_list")
             i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
@@ -1970,7 +1970,7 @@ do
          elseif tkop.tk == "[" then
             local op: Operator = new_operator(tkop, 2, "@index")
 
-            local prev_i = i
+            local prev_i: integer = i
 
             local idx: Node
             i = i + 1
@@ -1985,7 +1985,7 @@ do
          elseif tkop.kind == "string" or tkop.kind == "{" then
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
-            local prev_i = i
+            local prev_i: integer = i
 
             local args = new_node(ps.tokens, i, "expression_list")
             local argument: Node
@@ -2032,7 +2032,7 @@ do
       return i, e1
    end
 
-   E = function(ps: ParseState, i: number, lhs: Node, min_precedence: number): number, Node
+   E = function(ps: ParseState, i: integer, lhs: Node, min_precedence: integer): integer, Node
       local lookahead = ps.tokens[i].tk
       while precedences[2][lookahead] and precedences[2][lookahead] >= min_precedence do
          local t1 = ps.tokens[i]
@@ -2059,9 +2059,9 @@ do
       return i, lhs
    end
 
-   parse_expression = function(ps: ParseState, i: number): number, Node, number
+   parse_expression = function(ps: ParseState, i: integer): integer, Node, integer
       local lhs: Node
-      local istart = i
+      local istart: integer = i
       i, lhs = P(ps, i)
       if lhs then
          i, lhs = E(ps, i, lhs, 0)
@@ -2077,7 +2077,7 @@ do
    end
 end
 
-parse_expression_and_tk = function(ps: ParseState, i: number, tk: string): number, Node
+parse_expression_and_tk = function(ps: ParseState, i: integer, tk: string): integer, Node
    local e: Node
    i, e = parse_expression(ps, i)
    if not e then
@@ -2102,7 +2102,7 @@ parse_expression_and_tk = function(ps: ParseState, i: number, tk: string): numbe
    return i, e
 end
 
-local function parse_variable_name(ps: ParseState, i: number): number, Node, number
+local function parse_variable_name(ps: ParseState, i: integer): integer, Node, integer
    local is_const: boolean = false
    local node: Node
    i, node = verify_kind(ps, i, "identifier")
@@ -2128,7 +2128,7 @@ local function parse_variable_name(ps: ParseState, i: number): number, Node, num
    return i, node
 end
 
-local function parse_argument(ps: ParseState, i: number): number, Node, number
+local function parse_argument(ps: ParseState, i: integer): integer, Node, integer
    local node: Node
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
@@ -2148,7 +2148,7 @@ local function parse_argument(ps: ParseState, i: number): number, Node, number
    return i, node, 0
 end
 
-parse_argument_list = function(ps: ParseState, i: number): number, Node
+parse_argument_list = function(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "argument_list")
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
    for a, arg in ipairs(node) do
@@ -2159,7 +2159,7 @@ parse_argument_list = function(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_argument_type(ps: ParseState, i: number): number, Type, number
+local function parse_argument_type(ps: ParseState, i: integer): integer, Type, integer
    local is_va = false
    if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
       i = i + 2
@@ -2181,7 +2181,7 @@ local function parse_argument_type(ps: ParseState, i: number): number, Type, num
    return i, typ, 0
 end
 
-parse_argument_type_list = function(ps: ParseState, i: number): number, Type
+parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type
    local list = new_type(ps, i, "tuple")
    i = parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
    -- HACK: ...and then cleaning it up and setting in the right node
@@ -2192,7 +2192,7 @@ parse_argument_type_list = function(ps: ParseState, i: number): number, Type
    return i, list
 end
 
-local function parse_identifier(ps: ParseState, i: number): number, Node
+local function parse_identifier(ps: ParseState, i: integer): integer, Node
    if ps.tokens[i].kind == "identifier" then
       return i + 1, new_node(ps.tokens, i, "identifier")
    end
@@ -2200,7 +2200,7 @@ local function parse_identifier(ps: ParseState, i: number): number, Node
    return i, new_node(ps.tokens, i, "error_node")
 end
 
-local function parse_local_function(ps: ParseState, i: number): number, Node
+local function parse_local_function(ps: ParseState, i: integer): integer, Node
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
    local node = new_node(ps.tokens, i, "local_function")
@@ -2208,8 +2208,8 @@ local function parse_local_function(ps: ParseState, i: number): number, Node
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local function parse_global_function(ps: ParseState, i: number): number, Node
-   local orig_i = i
+local function parse_global_function(ps: ParseState, i: integer): integer, Node
+   local orig_i: integer = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
    local names: {Node} = {}
@@ -2250,7 +2250,7 @@ local function parse_global_function(ps: ParseState, i: number): number, Node
    return i, fn
 end
 
-local function parse_if_block(ps: ParseState, i: number, n: number, node: Node, is_else: boolean): number, Node
+local function parse_if_block(ps: ParseState, i: integer, n: integer, node: Node, is_else: boolean): integer, Node
    local block = new_node(ps.tokens, i, "if_block")
    i = i + 1
    block.if_parent = node
@@ -2271,15 +2271,15 @@ local function parse_if_block(ps: ParseState, i: number, n: number, node: Node, 
    return i, node
 end
 
-local function parse_if(ps: ParseState, i: number): number, Node
-   local istart = i
+local function parse_if(ps: ParseState, i: integer): integer, Node
+   local istart: integer = i
    local node = new_node(ps.tokens, i, "if")
    node.if_blocks = {}
    i, node = parse_if_block(ps, i, 1, node)
    if not node then
       return i
    end
-   local n = 2
+   local n: integer = 2
    while ps.tokens[i].tk == "elseif" do
       i, node = parse_if_block(ps, i, n, node)
       if not node then
@@ -2297,8 +2297,8 @@ local function parse_if(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_while(ps: ParseState, i: number): number, Node
-   local istart = i
+local function parse_while(ps: ParseState, i: integer): integer, Node
+   local istart: integer = i
    local node = new_node(ps.tokens, i, "while")
    i = verify_tk(ps, i, "while")
    i, node.exp = parse_expression_and_tk(ps, i, "do")
@@ -2307,8 +2307,8 @@ local function parse_while(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_fornum(ps: ParseState, i: number): number, Node
-   local istart = i
+local function parse_fornum(ps: ParseState, i: integer): integer, Node
+   local istart: integer = i
    local node = new_node(ps.tokens, i, "fornum")
    i = i + 1
    i, node.var = parse_identifier(ps, i)
@@ -2326,8 +2326,8 @@ local function parse_fornum(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_forin(ps: ParseState, i: number): number, Node
-   local istart = i
+local function parse_forin(ps: ParseState, i: integer): integer, Node
+   local istart: integer = i
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
    node.vars = new_node(ps.tokens, i, "variable_list")
@@ -2346,7 +2346,7 @@ local function parse_forin(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_for(ps: ParseState, i: number): number, Node
+local function parse_for(ps: ParseState, i: integer): integer, Node
    if ps.tokens[i+1].kind == "identifier" and ps.tokens[i+2].tk == "=" then
       return parse_fornum(ps, i)
    else
@@ -2354,7 +2354,7 @@ local function parse_for(ps: ParseState, i: number): number, Node
    end
 end
 
-local function parse_repeat(ps: ParseState, i: number): number, Node
+local function parse_repeat(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "repeat")
    i = verify_tk(ps, i, "repeat")
    i, node.body = parse_statements(ps, i)
@@ -2365,8 +2365,8 @@ local function parse_repeat(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_do(ps: ParseState, i: number): number, Node
-   local istart = i
+local function parse_do(ps: ParseState, i: integer): integer, Node
+   local istart: integer = i
    local node = new_node(ps.tokens, i, "do")
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
@@ -2374,13 +2374,13 @@ local function parse_do(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_break(ps: ParseState, i: number): number, Node
+local function parse_break(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "break")
    i = verify_tk(ps, i, "break")
    return i, node
 end
 
-local function parse_goto(ps: ParseState, i: number): number, Node
+local function parse_goto(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "goto")
    i = verify_tk(ps, i, "goto")
    node.label = ps.tokens[i].tk
@@ -2388,7 +2388,7 @@ local function parse_goto(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function parse_label(ps: ParseState, i: number): number, Node
+local function parse_label(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "label")
    i = verify_tk(ps, i, "::")
    node.label = ps.tokens[i].tk
@@ -2413,7 +2413,7 @@ for k, v in pairs(stop_statement_list) do
    stop_return_list[k] = v
 end
 
-local function parse_return(ps: ParseState, i: number): number, Node
+local function parse_return(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "return")
    i = verify_tk(ps, i, "return")
    node.exps = new_node(ps.tokens, i, "expression_list")
@@ -2424,7 +2424,7 @@ local function parse_return(ps: ParseState, i: number): number, Node
    return i, node
 end
 
-local function store_field_in_record(ps: ParseState, i: number, field_name: string, t: Type, fields: {string: Type}, field_order: {string}): boolean
+local function store_field_in_record(ps: ParseState, i: integer, field_name: string, t: Type, fields: {string: Type}, field_order: {string}): boolean
    if not fields[field_name] then
       fields[field_name] = t
       table.insert(field_order, field_name)
@@ -2443,9 +2443,9 @@ local function store_field_in_record(ps: ParseState, i: number, field_name: stri
    return true
 end
 
-local type ParseBody = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
+local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
 
-local function parse_nested_type(ps: ParseState, i: number, def: Type, typename: TypeName, parse_body: ParseBody): number, boolean
+local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename: TypeName, parse_body: ParseBody): integer, boolean
    i = i + 1 -- skip 'record' or 'enum'
 
    local v: Node
@@ -2457,7 +2457,7 @@ local function parse_nested_type(ps: ParseState, i: number, def: Type, typename:
    local nt: Node = new_node(ps.tokens, i, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt)
+   local iok: integer = parse_body(ps, i, rdef, nt)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -2467,8 +2467,8 @@ local function parse_nested_type(ps: ParseState, i: number, def: Type, typename:
    return i
 end
 
-parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
-   local istart = i - 1
+parse_enum_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+   local istart: integer = i - 1
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
@@ -2507,8 +2507,8 @@ local metamethod_names: {string:boolean} = {
    ["__call"] = true,
 }
 
-parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): number, Node
-   local istart = i - 1
+parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+   local istart: integer = i - 1
    def.fields = {}
    def.field_order = {}
    if ps.tokens[i].tk == "<" then
@@ -2539,7 +2539,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
          end
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
-         local iv = i
+         local iv: integer = i
          local v: Node
          i, v = verify_kind(ps, i, "identifier", "type_identifier")
          if not v then
@@ -2574,7 +2574,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
          else
             i, v = verify_kind(ps, i, "identifier", "variable")
          end
-         local iv = i
+         local iv: integer = i
          if not v then
             return fail(ps, i, "expected a variable name")
          end
@@ -2620,7 +2620,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
    return i, node
 end
 
-parse_newtype = function(ps: ParseState, i: number): number, Node
+parse_newtype = function(ps: ParseState, i: integer): integer, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
@@ -2645,7 +2645,7 @@ parse_newtype = function(ps: ParseState, i: number): number, Node
    return fail(ps, i, "expected a type")
 end
 
-local function parse_assignment_expression_list(ps: ParseState, i: number, asgn: Node): number, Node
+local function parse_assignment_expression_list(ps: ParseState, i: integer, asgn: Node): integer, Node
    asgn.exps = new_node(ps.tokens, i, "expression_list")
    repeat
       i = i + 1
@@ -2662,14 +2662,14 @@ local function parse_assignment_expression_list(ps: ParseState, i: number, asgn:
    return i, asgn
 end
 
-local parse_call_or_assignment: function(ps: ParseState, i: number): number, Node
+local parse_call_or_assignment: function(ps: ParseState, i: integer): integer, Node
 do
    local function is_lvalue(node: Node): boolean
       return node.kind == "variable"
              or (node.kind == "op" and (node.op.op == "@index" or node.op.op == "."))
    end
 
-   local function parse_variable(ps: ParseState, i: number): number, Node, number
+   local function parse_variable(ps: ParseState, i: integer): integer, Node, integer
       local node: Node
       i, node = parse_expression(ps, i)
       if not (node and is_lvalue(node)) then
@@ -2678,9 +2678,9 @@ do
       return i, node
    end
 
-   parse_call_or_assignment = function(ps: ParseState, i: number): number, Node
+   parse_call_or_assignment = function(ps: ParseState, i: integer): integer, Node
       local exp: Node
-      local istart = i
+      local istart: integer = i
       i, exp = parse_expression(ps, i)
       if not exp then
          return i
@@ -2715,7 +2715,7 @@ do
    end
 end
 
-local function parse_variable_declarations(ps: ParseState, i: number, node_name: NodeKind): number, Node
+local function parse_variable_declarations(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)
 
    asgn.vars = new_node(ps.tokens, i, "variable_list")
@@ -2746,7 +2746,7 @@ local function parse_variable_declarations(ps: ParseState, i: number, node_name:
    return i, asgn
 end
 
-local function parse_type_declaration(ps: ParseState, i: number, node_name: NodeKind): number, Node
+local function parse_type_declaration(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
    i = i + 2 -- skip `local` or `global`, and `type`
 
    local asgn: Node = new_node(ps.tokens, i, node_name)
@@ -2766,7 +2766,7 @@ local function parse_type_declaration(ps: ParseState, i: number, node_name: Node
    return i, asgn
 end
 
-local function parse_type_constructor(ps: ParseState, i: number, node_name: NodeKind, type_name: TypeName, parse_body: ParseBody): number, Node
+local function parse_type_constructor(ps: ParseState, i: integer, node_name: NodeKind, type_name: TypeName, parse_body: ParseBody): integer, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)
    local nt: Node = new_node(ps.tokens, i, "newtype")
    asgn.value = nt
@@ -2786,11 +2786,11 @@ local function parse_type_constructor(ps: ParseState, i: number, node_name: Node
    return i, asgn
 end
 
-local function skip_type_declaration(ps: ParseState, i: number): number
+local function skip_type_declaration(ps: ParseState, i: integer): integer
    return (parse_type_declaration(ps, i - 1, "local_type"))
 end
 
-local function parse_local(ps: ParseState, i: number): number, Node
+local function parse_local(ps: ParseState, i: integer): integer, Node
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
       return parse_local_function(ps, i)
@@ -2804,7 +2804,7 @@ local function parse_local(ps: ParseState, i: number): number, Node
    return parse_variable_declarations(ps, i + 1, "local_declaration")
 end
 
-local function parse_global(ps: ParseState, i: number): number, Node
+local function parse_global(ps: ParseState, i: integer): integer, Node
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
       return parse_global_function(ps, i + 1)
@@ -2820,14 +2820,14 @@ local function parse_global(ps: ParseState, i: number): number, Node
    return parse_call_or_assignment(ps, i) -- global is a soft keyword
 end
 
-local function parse_type_statement(ps: ParseState, i: number): number, Node
+local function parse_type_statement(ps: ParseState, i: integer): integer, Node
    if ps.tokens[i + 1].kind == "identifier" then
       return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    end
    return parse_call_or_assignment(ps, i)
 end
 
-local parse_statement_fns: {string : function(ParseState, number):(number, Node)} = {
+local parse_statement_fns: {string : function(ParseState, integer):(integer, Node)} = {
    ["::"] = parse_label,
    ["do"] = parse_do,
    ["if"] = parse_if,
@@ -2843,7 +2843,7 @@ local parse_statement_fns: {string : function(ParseState, number):(number, Node)
    ["function"] = parse_global_function,
 }
 
-parse_statements = function(ps: ParseState, i: number, toplevel: boolean): number, Node
+parse_statements = function(ps: ParseState, i: integer, toplevel: boolean): integer, Node
    local node = new_node(ps.tokens, i, "statements")
    local item: Node
    while true do
@@ -2882,7 +2882,7 @@ parse_statements = function(ps: ParseState, i: number, toplevel: boolean): numbe
 end
 
 local function clear_redundant_errors(errors: {Error})
-   local redundant: {number} = {}
+   local redundant: {integer} = {}
    local lastx, lasty = 0, 0
    for i, err in ipairs(errors) do
       err.i = i
@@ -2907,7 +2907,7 @@ local function clear_redundant_errors(errors: {Error})
    end
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): number, Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): integer, Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens,
@@ -2915,7 +2915,7 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): num
       filename = filename or "",
       required_modules = {},
    }
-   local i, node = parse_statements(ps, 1, true)
+   local i, node: integer, Node = parse_statements(ps, 1, true)
 
    clear_redundant_errors(errs)
    return i, node, ps.required_modules
@@ -3230,7 +3230,7 @@ end
 -- Pretty-print AST
 --------------------------------------------------------------------------------
 
-local tight_op: {number:{string:boolean}} = {
+local tight_op: {integer:{string:boolean}} = {
    [1] = {
       ["-"] = true,
       ["~"] = true,
@@ -3242,7 +3242,7 @@ local tight_op: {number:{string:boolean}} = {
    },
 }
 
-local spaced_op: {number:{string:boolean}} = {
+local spaced_op: {integer:{string:boolean}} = {
    [1] = {
       ["not"] = true,
    },
@@ -3298,7 +3298,7 @@ local primitive: {TypeName:string} = {
 }
 
 function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
-   local indent = 0
+   local indent: integer = 0
 
    local opts: PrettyPrintOpts
    if mode is PrettyPrintOpts then
@@ -3311,11 +3311,11 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
 
    local record Output
       {string}
-      y: number
-      h: number
+      y: integer
+      h: integer
    end
 
-   local save_indent: {number} = {}
+   local save_indent: {integer} = {}
 
    local function increment_indent(node: Node)
       local child = node.body or node[1]
@@ -3338,7 +3338,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       if child.y ~= node.y then
          indent = indent - 1
       else
-         indent = table.remove(save_indent)
+         indent = table.remove(save_indent) as integer
       end
    end
 
@@ -3356,7 +3356,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       end
    end
 
-   local function add_child(out: Output, child: Output, space: string, indent: number): number
+   local function add_child(out: Output, child: Output, space: string, indent: integer): integer
       if #child == 0 then
          return
       end
@@ -3366,7 +3366,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       end
 
       if child.y > out.y + out.h and opts.preserve_newlines then
-         local delta = child.y - (out.y + out.h)
+         local delta: integer = child.y - (out.y + out.h)
          out.h = out.h + delta
          table.insert(out, ("\n"):rep(delta))
       else
@@ -4455,7 +4455,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       local code: Node = compat_code_cache[name]
       if not code then
          local tokens = tl.lex(text)
-         local _: number
+         local _: integer
          _, code = tl.parse_program(tokens, {}, "@internal")
          tl.type_check(code, { filename = "<internal>", lax = false, gen_compat = "off" })
          code = code
@@ -4539,7 +4539,7 @@ local function convert_node_to_compat_call(node: Node, mod_name: string, fn_name
    node.e2[2] = e2
 end
 
-local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which_self: number, e1: Node, e2: Node)
+local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which_self: integer, e1: Node, e2: Node)
    node.op.op = "@funcall"
    node.op.arity = 2
    node.op.prec = 100
@@ -4551,7 +4551,7 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
    node.e2[4] = e2
 end
 
-local globals_typeid: number
+local globals_typeid: integer
 
 local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    local globals: {string:Variable} = {}
@@ -4560,7 +4560,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    -- ensure globals are always initialized with the same typeids
    local is_first_init = globals_typeid == nil
 
-   local save_typeid = last_typeid
+   local save_typeid: integer = last_typeid
    if is_first_init then
       globals_typeid = last_typeid
    else
@@ -4596,7 +4596,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
          ["linedefined"] = INTEGER,
          ["lastlinedefined"] = INTEGER,
          ["what"] = STRING,
-         ["currentline"] = NUMBER,
+         ["currentline"] = INTEGER,
          ["istailcall"] = BOOLEAN,
          ["nups"] = INTEGER,
          ["nparams"] = INTEGER,
@@ -5136,7 +5136,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local st: {{string:Variable}} = { env.globals }
 
    local symbol_list: {Symbol} = {}
-   local symbol_list_n = 0
+   local symbol_list_n: integer = 0
 
    local all_needs_compat = {}
 
@@ -5588,7 +5588,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
       if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
          node.type = node.type or valtype
-         local slot: number
+         local slot: integer
          if node.symbol_list_slot then
             slot = node.symbol_list_slot
          else
@@ -5630,9 +5630,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
          if resolved.typename ~= "unknown" then
             resolved = resolve_typetype(resolved)
-            if resolved.typename == "integer" then
-               resolved = NUMBER
-            end
             add_var(nil, typevar, resolved)
          end
          return true
@@ -5703,7 +5700,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return true
    end
 
-   local function arg_check(cmp: CompareTypes, a: Type, b: Type, at: Node, n: number, errs: {Error}): boolean
+   local function arg_check(cmp: CompareTypes, a: Type, b: Type, at: Node, n: integer, errs: {Error}): boolean
       local matches, match_errs = cmp(a, b)
       if not matches then
          add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", at)
@@ -5761,8 +5758,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local record Unused
-      y: number
-      x: number
+      y: integer
+      x: integer
       name: string
       var: Variable
    end
@@ -6051,7 +6048,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       local stack: {Type} = {}
 
       -- Make things like number | number resolve to number
-      local types_seen: {(number|string):boolean} = {}
+      local types_seen: {(integer|string):boolean} = {}
       -- but never add nil as a type in the union
       types_seen[NIL.typeid] = true
       types_seen["nil"] = true
@@ -6077,7 +6074,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   table.insert(ts, t)
                end
             else
-               local typeid = t.typeid
+               local typeid: integer = t.typeid
                if t.typename == "nominal" then
                   typeid = resolve_nominal(t).typeid
                end
@@ -6483,7 +6480,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
-   local type_check_function_call: function(Node, Type, {Type}, boolean, number): Type
+   local type_check_function_call: function(Node, Type, {Type}, boolean, integer): Type
    do
       local function resolve_for_call(node: Node, func: Type, args: {Type}, is_method: boolean): Type, boolean
          -- resolve unknown in lax mode, produce a general unknown function
@@ -6520,13 +6517,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
       end
 
-      local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: number): Type, {Error}
+      local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: integer): Type, {Error}
          local errs = {}
 
-         local given = #args
-         local expected = #f.args
+         local given: integer = #args
+         local expected: integer = #f.args
          local va = f.args.is_va
-         local nargs = va
+         local nargs: integer = va
                        and math.max(given, expected)
                        or math.min(given, expected)
 
@@ -6570,7 +6567,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
       end
 
-      local function fail_call(node: Node, func: Type, nargs: number, errs: {Error}): Type
+      local function fail_call(node: Node, func: Type, nargs: integer, errs: {Error}): Type
          if errs then
             -- report the errors from the first match
             for _, err in ipairs(errs) do
@@ -6600,7 +6597,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return resolve_typevars_at(f.rets, node)
       end
 
-      local function check_call(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
+      local function check_call(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type
          assert(type(func) == "table")
          assert(type(args) == "table")
 
@@ -6616,13 +6613,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             return node_error(node, "not a function: %s", func)
          end
 
-         local passes, n = 1, 1
+         local passes, n: integer, integer = 1, 1
          if is_poly then
             passes, n = 3, #func.types
          end
 
-         local given = #args
-         local tried: {number:boolean}
+         local given: integer = #args
+         local tried: {integer:boolean}
          local first_errs: {Error}
          for pass = 1, passes do
             for i = 1, n do
@@ -6662,7 +6659,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return fail_call(node, func, given, first_errs)
       end
 
-      type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: number): Type
+      type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type
          begin_scope()
          local ret = check_call(node, func, args, is_method, argdelta)
          end_scope()
@@ -6858,7 +6855,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return exps
    end
 
-   local function get_assignment_values(vals: Type, wanted: number): {Type}
+   local function get_assignment_values(vals: Type, wanted: integer): {Type}
       local ret: {Type} = {}
       if vals == nil then
          return ret
@@ -6925,7 +6922,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             then
                return node_error(idxnode, "index " .. tostring(idxnode.constnum) .. " out of range for tuple %s", a)
             end
-            return a.types[idxnode.constnum]
+            return a.types[idxnode.constnum as integer]
          else
             local array_type = arraytype_from_tuple(idxnode, a)
             if not array_type then
@@ -7346,10 +7343,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
-   local type_check_funcall: function(node: Node, a: Type, b: {Type}, argdelta: number): Type
+   local type_check_funcall: function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
 
-   local function special_pcall_xpcall(node: Node, _a: Type, b: {Type}, argdelta: number): Type
-      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
+   local function special_pcall_xpcall(node: Node, _a: Type, b: {Type}, argdelta: integer): Type
+      local base_nargs: integer = (node.e1.tk == "xpcall") and 2 or 1
       if #node.e2 < base_nargs then
          node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
          return TUPLE { BOOLEAN }
@@ -7381,8 +7378,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return rets
    end
 
-   local special_functions: {string : function(Node,Type,{Type},number):Type } = {
-      ["rawget"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
+   local special_functions: {string : function(Node,Type,{Type},integer):Type } = {
+      ["rawget"] = function(node: Node, _a: Type, b: {Type}, _argdelta: integer): Type
          -- TODO should those offsets be fixed by _argdelta?
          if #b == 2 then
             local b1 = resolve_tuple_and_nominal(b[1])
@@ -7399,7 +7396,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
       end,
 
-      ["print_type"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
+      ["print_type"] = function(node: Node, _a: Type, b: {Type}, _argdelta: integer): Type
          -- TODO should those offsets be fixed by _argdelta?
          if #b == 0 then
             -- when called with no arguments, print all variables currently in scope and their types.
@@ -7419,7 +7416,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
       end,
 
-      ["require"] = function(node: Node, _a: Type, b: {Type}, _argdelta: number): Type
+      ["require"] = function(node: Node, _a: Type, b: {Type}, _argdelta: integer): Type
          if #b ~= 1 then
             return node_error(node, "require expects one literal argument")
          end
@@ -7447,13 +7444,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
 
-      ["assert"] = function(node: Node, a: Type, b: {Type}, argdelta: number): Type
+      ["assert"] = function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
          node.known = FACT_TRUTHY
          return type_check_function_call(node, a, b, false, argdelta)
       end,
    }
 
-   type_check_funcall = function(node: Node, a: Type, b: {Type}, argdelta: number): Type
+   type_check_funcall = function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
       argdelta = argdelta or 0
       if node.e1.kind == "variable" then
          local special = special_functions[node.e1.tk]
@@ -7471,7 +7468,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    -- is the i-th assignment in a local declaration of the form `x = x` ?
-   local function is_localizing_a_variable(node: Node, i: number): boolean
+   local function is_localizing_a_variable(node: Node, i: integer): boolean
       return node.exps
          and node.exps[i]
          and node.exps[i].kind == "variable"
@@ -7496,7 +7493,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return typetype, false
    end
 
-   local function missing_initializer(node: Node, i: number, name: string): Type
+   local function missing_initializer(node: Node, i: integer, name: string): Type
       if lax then
          return UNKNOWN
       else
@@ -7580,8 +7577,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       local is_tuple = false
       local is_not_tuple = false
 
-      local last_array_idx = 1
-      local largest_array_idx = -1
+      local last_array_idx: integer = 1
+      local largest_array_idx: integer = -1
 
       local seen_keys: {(number | string):Node} = {}
 
@@ -7634,9 +7631,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   typ.elements = expand_type(node, typ.elements, uvtype)
                   is_not_tuple = true
                elseif n then
-                  typ.types[n] = uvtype
+                  typ.types[n as integer] = uvtype
                   if n > largest_array_idx then
-                     largest_array_idx = n
+                     largest_array_idx = n as integer
                   end
                   typ.elements = expand_type(node, typ.elements, uvtype)
                end
@@ -7683,7 +7680,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             local pure_array = true
 
             local last_t: Type
-            for _, current_t in pairs(typ.types as {number:Type}) do
+            for _, current_t in pairs(typ.types as {integer:Type}) do
                if last_t then
                   if not same_type(last_t, current_t) then
                      pure_array = false
@@ -8137,8 +8134,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             if node.expected then
                if node.expected.typename == "tupletable" then
                   for _, child in ipairs(node) do
-                     if child.key.constnum then
-                        child.value.expected = node.expected.types[child.key.constnum]
+                     local n = child.key.constnum
+                     if n and is_positive_int(n) then
+                        child.value.expected = node.expected.types[n as integer]
                      end
                   end
                elseif is_array_type(node.expected) then
@@ -8210,7 +8208,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                         assert_is_a(node[i], cvtype, df, "in record field", ck)
                      end
                   elseif is_tupletable and is_number_type(child.ktype) then
-                     local dt = decltype.types[n]
+                     local dt = decltype.types[n as integer]
                      if not n then
                         node_error(node[i], in_context(node.expected_context, "unknown index in tuple %s"), decltype)
                      elseif not dt then
@@ -8587,7 +8585,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local metamethod: Type
-               local meta_self = 1
+               local meta_self: integer = 1
                if node.type then
                   if types_op == numeric_binop or node.op.op == ".." then
                      node.known = FACT_TRUTHY
@@ -8932,7 +8930,7 @@ end
 -- Report types
 --------------------------------------------------------------------------------
 
-local typename_to_typecode: {TypeName:number} = {
+local typename_to_typecode: {TypeName:integer} = {
    ["typevar"] = tl.typecodes.TYPE_VARIABLE,
    ["typearg"] = tl.typecodes.TYPE_VARIABLE,
    ["function"] = tl.typecodes.FUNCTION,
@@ -8983,26 +8981,26 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    local tr = trenv.tr
    local typeid_to_num = trenv.typeid_to_num
 
-   local get_typenum: function(t: Type): number
+   local get_typenum: function(t: Type): integer
 
    local function store_function(ti: TypeInfo, rt: Type)
-      local args: {{number, string}} = {}
+      local args: {{integer, string}} = {}
       for _, arg in ipairs(rt.args) do
-         table.insert(args, mark_array { get_typenum(arg), nil })
+         table.insert(args, mark_array({ get_typenum(arg), nil } as {integer, string}))
       end
       ti.args = mark_array(args)
-      local rets: {{number, string}} = {}
+      local rets: {{integer, string}} = {}
       for _, arg in ipairs(rt.rets) do
-         table.insert(rets, mark_array { get_typenum(arg), nil })
+         table.insert(rets, mark_array({ get_typenum(arg), nil } as {integer, string}))
       end
       ti.rets = mark_array(rets)
       ti.vararg = not not rt.is_va
    end
 
-   get_typenum = function(t: Type): number
+   get_typenum = function(t: Type): integer
       assert(t.typeid)
       -- try by typeid
-      local n = typeid_to_num[t.typeid]
+      local n: integer = typeid_to_num[t.typeid]
       if n then
          return n
       end
@@ -9064,7 +9062,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
             table.insert(tis, get_typenum(pt))
          end
 
-         ti.types = mark_array(tis)
+         ti.types = mark_array(tis) as {integer}
       end
 
       return n
@@ -9079,10 +9077,10 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
       ["table_item"] = true,
    }
 
-   local ft: {number:{number:number}} = {}
+   local ft: {integer:{integer:integer}} = {}
    tr.by_pos[filename] = ft
 
-   local function store(y: number, x: number, typ: Type)
+   local function store(y: integer, x: integer, typ: Type)
       if skip[typ.typename] then
          return
       end
@@ -9139,12 +9137,12 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    -- resolve scope cross references, skipping unneeded scope blocks
    do
       local stack = {}
-      local level = 0
-      local i = 0
+      local level: integer = 0
+      local i: integer = 0
       for _, s in ipairs(result.symbol_list) do
          if not s.skip then
             i = i + 1
-            local id: number
+            local id: integer
             if s.typ then
                id = get_typenum(s.typ)
             elseif s.name == "@{" then
@@ -9152,12 +9150,12 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
                stack[level] = i
                id = -1 -- will be overwritten
             else
-               local other = stack[level]
+               local other: integer = stack[level]
                level = level - 1
                tr.symbols[other][4] = i -- overwrite id from @{
                id = other - 1
             end
-            local sym = mark_array({ s.y, s.x, s.name, id })
+            local sym = mark_array({ s.y, s.x, s.name, id } as {integer, integer, string, integer})
             table.insert(tr.symbols, sym)
          end
       end
@@ -9174,16 +9172,16 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    return tr, trenv
 end
 
-function tl.symbols_in_scope(tr: TypeReport, y: number, x: number): {string:number}
-   local function find(symbols: {{number, number, string, number}}, y: number, x: number): number
-      local function le(a: {number, number}, b: {number, number}): boolean
+function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer): {string:integer}
+   local function find(symbols: {{integer, integer, string, integer}}, y: integer, x: integer): integer
+      local function le(a: {integer, integer}, b: {integer, integer}): boolean
          return a[1] < b[1]
             or (a[1] == b[1] and a[2] <= b[2])
       end
       return binary_search(symbols, {y, x}, le) or 0
    end
 
-   local ret: {string:number} = {}
+   local ret: {string:integer} = {}
 
    -- local a, b = 0, 0
    -- for i, s in ipairs(tr.symbols) do
@@ -9252,7 +9250,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
    end
    filename = filename or ""
 
-   local syntax_errors = {}
+   local syntax_errors: {Error} = {}
    local tokens, errs = tl.lex(input)
    if errs then
       for _, err in ipairs(errs) do
