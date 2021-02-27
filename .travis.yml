@@ -19,14 +19,12 @@ before_install:
   - export PATH=$PATH:$PWD/lua_install/bin # Add directory with all installed binaries to PATH
 
 install:
-  - luarocks install busted
-  - luarocks install compat53
-  - luarocks install argparse
-  - luarocks install luafilesystem
+  - luarocks make --only-deps
 
 script:
   - luarocks lint tl-dev*rockspec
-  - make
+  - make selfbuild
+  - luarocks test
 
 branches:
   except:
