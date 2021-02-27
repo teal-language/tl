@@ -1,3 +1,62 @@
+# 0.12.0
+
+2021-02-27
+
+Time for a new release, with some significant updates to make the behavior
+of the language more smooth.
+
+Language-wise, the big change is bidirectional inference for table literals,
+meaning that the types of literal tables (that is, the ones you write with `{
+... }` in your code) now get more precise types when they are defined in
+contexts that have type declarations, such as variables with explicit types,
+or function arguments where the types are known.
+
+There have been also various improvements in the API and tooling departments,
+all aiming to produce better development experience -- do keep an eye for
+exciting things thet are in the works in this area!
+
+This release features commits by Patrick Desaulniers, Corey Williamson, and
+Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Bidirectional inference for table literals
+  * Type information propagates outside-in when a table literal is declared
+    as the rhs value of a variable declaration, assignment
+    or as a function argument.
+  * This fixed various outstanding bugs where unintuitive behavior was
+    observed.
+* `local type T1 = T2` now makes nominal `T1` an alias for nominal type `T2`,
+  and not a separate type (same applies to `global type`).
+
+### API
+
+* `preload_modules` functionality was moved from `tl.process` into `tl.init_env`,
+  so that API clients that use the lower-level operations can preload modules.
+* `tl.get_token_at` can return the token given a token list and a position.
+
+### Tooling
+
+* `tl gen` now has a `--check` flag, which makes it reject code that does not
+  typecheck and not generate the output.
+* Warnings output is now presented in a stable order.
+* `tl types` has had various improvements generating better data for editor
+  integration:
+  * The symbols list is much shorter as empty or redundant scopes are eliminated.
+  * Incomplete expressions now output type information for the fragment
+    that could be parsed.
+  * Function types look nicer in error messages and tooling.
+
+### Fixes
+
+* Unions of nominal types now reduce considering aliasing.
+* Various fixes for the behavior of `tl types`.
+  * The top level scope is now correctly closed at the end of file.
+  * Symbols list is now properly sorted.
+  * Function types point to the correct filenames.
+
 # 0.11.2
 
 2021-02-14
