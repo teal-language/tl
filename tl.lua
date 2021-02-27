@@ -7590,9 +7590,6 @@ tl.type_check = function(ast, opts)
          check_redeclared_key(nil, node[i], seen_keys, ck, n)
 
          local uvtype = resolve_tuple(child.vtype)
-         if uvtype.typename == "integer" then
-            uvtype = NUMBER
-         end
          if ck then
             is_record = true
             if not typ.fields then
@@ -7614,9 +7611,6 @@ tl.type_check = function(ast, opts)
                if i == #children and child.vtype.typename == "tuple" then
 
                   for _, c in ipairs(child.vtype) do
-                     if c.typename == "integer" then
-                        c = NUMBER
-                     end
                      typ.elements = expand_type(node, typ.elements, c)
                      typ.types[last_array_idx] = resolve_tuple(c)
                      last_array_idx = last_array_idx + 1
@@ -7782,9 +7776,6 @@ tl.type_check = function(ast, opts)
                if lax and infertype and infertype.typename == "nil" then
                   infertype = nil
                end
-               if (not decltype) and infertype and infertype.typename == "integer" then
-                  infertype = NUMBER
-               end
                if decltype and infertype then
                   assert_is_a(node.vars[i], infertype, decltype, "in local declaration", var.tk)
                end
@@ -7822,9 +7813,6 @@ tl.type_check = function(ast, opts)
                local infertype = vals and vals[i]
                if lax and infertype and infertype.typename == "nil" then
                   infertype = nil
-               end
-               if (not decltype) and infertype and infertype.typename == "integer" then
-                  infertype = NUMBER
                end
                if decltype and infertype then
                   assert_is_a(node.vars[i], infertype, decltype, "in global declaration", var.tk)

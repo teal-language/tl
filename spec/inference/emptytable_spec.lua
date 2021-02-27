@@ -72,7 +72,7 @@ describe("empty table without type annotation", function()
          return t
       end
    ]], {
-      { msg = "cannot index something that is not a record: {number} (inferred at foo.tl:5:" },
+      { msg = "cannot index something that is not a record: {integer} (inferred at foo.tl:5:" },
    }))
 
    it("inferred type is not const by default (#383)", util.check([[

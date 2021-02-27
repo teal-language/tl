@@ -502,7 +502,7 @@ describe("flow analysis with is", function()
                z: number
             end
 
-            local r: R = x is number and { z = 123 } or { z = tonumber(x:sub(1,2)) }
+            local r: R = x is number and { z = 123.0 } or { z = tonumber(x:sub(1,2)) }
          ]])
 
          it("relational operators do not preserve 'is' inference", util.check_type_error([[

@@ -79,7 +79,7 @@ describe("warnings", function()
          end
       ]], {
          { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:16)" },
-         { y = 1, msg = "unused variable a: number" },
+         { y = 1, msg = "unused variable a: integer" },
       }))
 
       it("should not report that a narrowed variable is unused", util.check_warnings([[
