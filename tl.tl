@@ -418,7 +418,7 @@ do
          )
       elseif c == "u" then
          if input:sub(i+1, i+1) == "{" then
-             local p: integer = i + 2
+             local p = i + 2
              if not lex_hexadecimals[input:sub(p, p)] then
                return 2, false
              end
@@ -431,7 +431,7 @@ do
             end
          end
       elseif lex_decimals[c] then
-         local len: integer = lex_decimals[input:sub(i+1, i+1)]
+         local len = lex_decimals[input:sub(i+1, i+1)]
                      and (lex_decimals[input:sub(i+2, i+2)] and 2 or 1)
                      or  0
          return len, tonumber(input:sub(i, i + len)) < 256
@@ -445,9 +445,9 @@ do
 
       local state: LexState = "any"
       local fwd = true
-      local y: integer = 1
-      local x: integer = 0
-      local i: integer = 0
+      local y = 1
+      local x = 0
+      local i = 0
       local lc_open_lvl = 0
       local lc_close_lvl = 0
       local ls_open_lvl = 0
@@ -522,7 +522,7 @@ do
          in_token = false
       end
 
-      local len: integer = #input
+      local len = #input
       if input:sub(1,2) == "#!" then
          i = input:find("\n")
          if not i then
@@ -718,7 +718,7 @@ do
                lc_close_lvl = 0
             end
          elseif state == "string double got \\" then
-            local skip, valid: integer, boolean = lex_string_escape(input, i, c)
+            local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
                end_token_here("$invalid_string$")
@@ -734,7 +734,7 @@ do
                state = "any"
             end
          elseif state == "string single got \\" then
-            local skip, valid: integer, boolean = lex_string_escape(input, i, c)
+            local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
                end_token_here("$invalid_string$")
@@ -857,9 +857,9 @@ do
 end
 
 local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boolean): integer, T
-   local len <const>: integer = #list
+   local len <const> = #list
    local mid: integer
-   local s, e: integer, integer = 1, len
+   local s, e = 1, len
    while s <= e do
       mid = math.floor((s + e) / 2)
       local val <const> = list[mid]
@@ -900,7 +900,7 @@ end
 -- Recursive descent parser
 --------------------------------------------------------------------------------
 
-local last_typeid: integer = 0
+local last_typeid = 0
 
 local function new_typeid(): integer
    last_typeid = last_typeid + 1
@@ -1308,7 +1308,7 @@ local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFu
       errs = {},
       required_modules = {},
    }
-   local skip_i: integer = skip_fn(err_ps, starti or i)
+   local skip_i = skip_fn(err_ps, starti or i)
    fail(ps, starti or i, msg)
    return skip_i or (i + 1)
 end
@@ -1363,7 +1363,7 @@ local function parse_table_item(ps: ParseState, i: integer, n: integer): integer
          return i, node, n
       elseif ps.tokens[i+1].tk == ":" then
          node.key_parsed = "short"
-         local orig_i: integer = i
+         local orig_i = i
          local try_ps: ParseState = {
             filename = ps.filename,
             tokens = ps.tokens,
@@ -1410,14 +1410,14 @@ local enum SeparatorMode
 end
 
 local function parse_list<T>(ps: ParseState, i: integer, list: {T}, close: {string:boolean}, sep: SeparatorMode, parse_item: ParseItem<T>): integer, {T}
-   local n: integer = 1
+   local n = 1
    while ps.tokens[i].kind ~= "$EOF$" do
       if close[ps.tokens[i].tk] then
          end_at(list as Node, ps.tokens[i])
          break
       end
       local item: T
-      local oldn: integer = n
+      local oldn = n
       i, item, n = parse_item(ps, i, n)
       n = n or oldn
       table.insert(list, item)
@@ -1661,7 +1661,7 @@ parse_type = function(ps: ParseState, i: integer): integer, Type, integer
    end
 
    local bt: Type
-   local istart: integer = i
+   local istart = i
    i, bt = parse_base_type(ps, i)
    if not bt then
       return i
@@ -1724,7 +1724,7 @@ parse_type_list = function(ps: ParseState, i: integer, mode: ParseTypeListMode):
 end
 
 local function parse_function_args_rets_body(ps: ParseState, i: integer, node: Node): integer, Node
-   local istart: integer = i - 1
+   local istart = i - 1
    if ps.tokens[i].tk == "<" then
       i, node.typeargs = parse_typearg_list(ps, i)
    end
@@ -1897,7 +1897,7 @@ do
       if precedences[1][ps.tokens[i].tk] ~= nil then
          local op: Operator = new_operator(ps.tokens[i], 1)
          i = i + 1
-         local prev_i: integer = i
+         local prev_i = i
          i, e1 = P(ps, i)
          if not e1 then
             fail(ps, prev_i, "expected an expression")
@@ -1906,7 +1906,7 @@ do
          e1 = { y = t1.y, x = t1.x, kind = "op", op = op, e1 = e1 }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
-         local prev_i: integer = i
+         local prev_i = i
          i, e1 = parse_expression_and_tk(ps, i, ")")
          if not e1 then
             fail(ps, prev_i, "expected an expression")
@@ -1929,7 +1929,7 @@ do
          if tkop.tk == "." or tkop.tk == ":" then
             local op: Operator = new_operator(tkop, 2)
 
-            local prev_i: integer = i
+            local prev_i = i
 
             local key: Node
             i = i + 1
@@ -1954,7 +1954,7 @@ do
          elseif tkop.tk == "(" then
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
-            local prev_i: integer = i
+            local prev_i = i
 
             local args = new_node(ps.tokens, i, "expression_list")
             i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
@@ -1970,7 +1970,7 @@ do
          elseif tkop.tk == "[" then
             local op: Operator = new_operator(tkop, 2, "@index")
 
-            local prev_i: integer = i
+            local prev_i = i
 
             local idx: Node
             i = i + 1
@@ -1985,7 +1985,7 @@ do
          elseif tkop.kind == "string" or tkop.kind == "{" then
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
-            local prev_i: integer = i
+            local prev_i = i
 
             local args = new_node(ps.tokens, i, "expression_list")
             local argument: Node
@@ -2061,7 +2061,7 @@ do
 
    parse_expression = function(ps: ParseState, i: integer): integer, Node, integer
       local lhs: Node
-      local istart: integer = i
+      local istart = i
       i, lhs = P(ps, i)
       if lhs then
          i, lhs = E(ps, i, lhs, 0)
@@ -2209,7 +2209,7 @@ local function parse_local_function(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_global_function(ps: ParseState, i: integer): integer, Node
-   local orig_i: integer = i
+   local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
    local names: {Node} = {}
@@ -2272,14 +2272,14 @@ local function parse_if_block(ps: ParseState, i: integer, n: integer, node: Node
 end
 
 local function parse_if(ps: ParseState, i: integer): integer, Node
-   local istart: integer = i
+   local istart = i
    local node = new_node(ps.tokens, i, "if")
    node.if_blocks = {}
    i, node = parse_if_block(ps, i, 1, node)
    if not node then
       return i
    end
-   local n: integer = 2
+   local n = 2
    while ps.tokens[i].tk == "elseif" do
       i, node = parse_if_block(ps, i, n, node)
       if not node then
@@ -2298,7 +2298,7 @@ local function parse_if(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_while(ps: ParseState, i: integer): integer, Node
-   local istart: integer = i
+   local istart = i
    local node = new_node(ps.tokens, i, "while")
    i = verify_tk(ps, i, "while")
    i, node.exp = parse_expression_and_tk(ps, i, "do")
@@ -2308,7 +2308,7 @@ local function parse_while(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_fornum(ps: ParseState, i: integer): integer, Node
-   local istart: integer = i
+   local istart = i
    local node = new_node(ps.tokens, i, "fornum")
    i = i + 1
    i, node.var = parse_identifier(ps, i)
@@ -2327,7 +2327,7 @@ local function parse_fornum(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_forin(ps: ParseState, i: integer): integer, Node
-   local istart: integer = i
+   local istart = i
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
    node.vars = new_node(ps.tokens, i, "variable_list")
@@ -2366,7 +2366,7 @@ local function parse_repeat(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_do(ps: ParseState, i: integer): integer, Node
-   local istart: integer = i
+   local istart = i
    local node = new_node(ps.tokens, i, "do")
    i = verify_tk(ps, i, "do")
    i, node.body = parse_statements(ps, i)
@@ -2457,7 +2457,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
    local nt: Node = new_node(ps.tokens, i, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok: integer = parse_body(ps, i, rdef, nt)
+   local iok = parse_body(ps, i, rdef, nt)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -2468,7 +2468,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
 end
 
 parse_enum_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
-   local istart: integer = i - 1
+   local istart = i - 1
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
@@ -2508,7 +2508,7 @@ local metamethod_names: {string:boolean} = {
 }
 
 parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
-   local istart: integer = i - 1
+   local istart = i - 1
    def.fields = {}
    def.field_order = {}
    if ps.tokens[i].tk == "<" then
@@ -2539,7 +2539,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
          end
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
-         local iv: integer = i
+         local iv = i
          local v: Node
          i, v = verify_kind(ps, i, "identifier", "type_identifier")
          if not v then
@@ -2574,7 +2574,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
          else
             i, v = verify_kind(ps, i, "identifier", "variable")
          end
-         local iv: integer = i
+         local iv = i
          if not v then
             return fail(ps, i, "expected a variable name")
          end
@@ -2680,7 +2680,7 @@ do
 
    parse_call_or_assignment = function(ps: ParseState, i: integer): integer, Node
       local exp: Node
-      local istart: integer = i
+      local istart = i
       i, exp = parse_expression(ps, i)
       if not exp then
          return i
@@ -2915,7 +2915,7 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): int
       filename = filename or "",
       required_modules = {},
    }
-   local i, node: integer, Node = parse_statements(ps, 1, true)
+   local i, node = parse_statements(ps, 1, true)
 
    clear_redundant_errors(errs)
    return i, node, ps.required_modules
@@ -3298,7 +3298,7 @@ local primitive: {TypeName:string} = {
 }
 
 function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
-   local indent: integer = 0
+   local indent = 0
 
    local opts: PrettyPrintOpts
    if mode is PrettyPrintOpts then
@@ -3338,7 +3338,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       if child.y ~= node.y then
          indent = indent - 1
       else
-         indent = table.remove(save_indent) as integer
+         indent = table.remove(save_indent)
       end
    end
 
@@ -3366,7 +3366,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       end
 
       if child.y > out.y + out.h and opts.preserve_newlines then
-         local delta: integer = child.y - (out.y + out.h)
+         local delta = child.y - (out.y + out.h)
          out.h = out.h + delta
          table.insert(out, ("\n"):rep(delta))
       else
@@ -4560,7 +4560,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    -- ensure globals are always initialized with the same typeids
    local is_first_init = globals_typeid == nil
 
-   local save_typeid: integer = last_typeid
+   local save_typeid = last_typeid
    if is_first_init then
       globals_typeid = last_typeid
    else
@@ -5136,7 +5136,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local st: {{string:Variable}} = { env.globals }
 
    local symbol_list: {Symbol} = {}
-   local symbol_list_n: integer = 0
+   local symbol_list_n = 0
 
    local all_needs_compat = {}
 
@@ -6074,7 +6074,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   table.insert(ts, t)
                end
             else
-               local typeid: integer = t.typeid
+               local typeid = t.typeid
                if t.typename == "nominal" then
                   typeid = resolve_nominal(t).typeid
                end
@@ -6520,10 +6520,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: integer): Type, {Error}
          local errs = {}
 
-         local given: integer = #args
-         local expected: integer = #f.args
+         local given = #args
+         local expected = #f.args
          local va = f.args.is_va
-         local nargs: integer = va
+         local nargs = va
                        and math.max(given, expected)
                        or math.min(given, expected)
 
@@ -6613,12 +6613,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             return node_error(node, "not a function: %s", func)
          end
 
-         local passes, n: integer, integer = 1, 1
+         local passes, n = 1, 1
          if is_poly then
             passes, n = 3, #func.types
          end
 
-         local given: integer = #args
+         local given = #args
          local tried: {integer:boolean}
          local first_errs: {Error}
          for pass = 1, passes do
@@ -7346,7 +7346,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local type_check_funcall: function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
 
    local function special_pcall_xpcall(node: Node, _a: Type, b: {Type}, argdelta: integer): Type
-      local base_nargs: integer = (node.e1.tk == "xpcall") and 2 or 1
+      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
       if #node.e2 < base_nargs then
          node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
          return TUPLE { BOOLEAN }
@@ -7577,8 +7577,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       local is_tuple = false
       local is_not_tuple = false
 
-      local last_array_idx: integer = 1
-      local largest_array_idx: integer = -1
+      local last_array_idx = 1
+      local largest_array_idx = -1
 
       local seen_keys: {(number | string):Node} = {}
 
@@ -8573,7 +8573,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local metamethod: Type
-               local meta_self: integer = 1
+               local meta_self = 1
                if node.type then
                   if types_op == numeric_binop or node.op.op == ".." then
                      node.known = FACT_TRUTHY
@@ -8974,12 +8974,12 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    local function store_function(ti: TypeInfo, rt: Type)
       local args: {{integer, string}} = {}
       for _, arg in ipairs(rt.args) do
-         table.insert(args, mark_array({ get_typenum(arg), nil } as {integer, string}))
+         table.insert(args, mark_array { get_typenum(arg), nil })
       end
       ti.args = mark_array(args)
       local rets: {{integer, string}} = {}
       for _, arg in ipairs(rt.rets) do
-         table.insert(rets, mark_array({ get_typenum(arg), nil } as {integer, string}))
+         table.insert(rets, mark_array { get_typenum(arg), nil })
       end
       ti.rets = mark_array(rets)
       ti.vararg = not not rt.is_va
@@ -8988,7 +8988,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    get_typenum = function(t: Type): integer
       assert(t.typeid)
       -- try by typeid
-      local n: integer = typeid_to_num[t.typeid]
+      local n = typeid_to_num[t.typeid]
       if n then
          return n
       end
@@ -9050,7 +9050,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
             table.insert(tis, get_typenum(pt))
          end
 
-         ti.types = mark_array(tis) as {integer}
+         ti.types = mark_array(tis)
       end
 
       return n
@@ -9125,8 +9125,8 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    -- resolve scope cross references, skipping unneeded scope blocks
    do
       local stack = {}
-      local level: integer = 0
-      local i: integer = 0
+      local level = 0
+      local i = 0
       for _, s in ipairs(result.symbol_list) do
          if not s.skip then
             i = i + 1
@@ -9138,12 +9138,12 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
                stack[level] = i
                id = -1 -- will be overwritten
             else
-               local other: integer = stack[level]
+               local other = stack[level]
                level = level - 1
                tr.symbols[other][4] = i -- overwrite id from @{
                id = other - 1
             end
-            local sym = mark_array({ s.y, s.x, s.name, id } as {integer, integer, string, integer})
+            local sym = mark_array({ s.y, s.x, s.name, id })
             table.insert(tr.symbols, sym)
          end
       end
