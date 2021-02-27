@@ -1293,6 +1293,7 @@ local record Node
    e2: Node
    constnum: number
    conststr: string
+   failstore: boolean
 
    -- table literal
    array_len: number
@@ -1974,7 +1975,7 @@ do
    -- small hack: for the sake of `tl types`, parse an invalid binary exp
    -- as a paren to produce a unary indirection on e1 and save its location.
    local function failstore(tkop: Token, e1: Node): Node
-      return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1 }
+      return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1, failstore = true }
    end
 
    local function P(ps: ParseState, i: number): number, Node
@@ -2780,7 +2781,7 @@ do
          return i
       end
 
-      if exp.op and exp.op.op == "@funcall" then
+      if (exp.op and exp.op.op == "@funcall") or exp.failstore then
          return i, exp
       end
 

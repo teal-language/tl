@@ -1,4 +1,5 @@
 local assert = require("luassert")
+local json = require("dkjson")
 local util = require("spec.util")
 
 describe("tl types works like check", function()
@@ -161,6 +162,24 @@ describe("tl types works like check", function()
          util.assert_popen_close(0, pd:close())
          assert.not_match("assertion failed", output, 1, true)
          -- TODO check json output
+      end)
+
+      it("produce values for incomplete input", function()
+         local name = util.write_tmp_file(finally, [[
+            require("os").
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>/dev/null", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(1, pd:close())
+         local types = json.decode(output)
+         assert(types.by_pos)
+         local by_pos = types.by_pos[next(types.by_pos)]
+         assert(by_pos["1"])
+         assert(by_pos["1"]["13"]) -- require
+         assert(by_pos["1"]["20"]) -- (
+         assert(by_pos["1"]["21"]) -- "os"
+         assert(by_pos["1"]["26"]) -- .
+         assert(by_pos["1"]["20"] == by_pos["1"]["26"])
       end)
    end)
 end)
