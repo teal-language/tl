@@ -34,4 +34,20 @@ describe("bidirectional inference for table literals", function()
          }
       }
    ]])
+
+   it("directed inference produces correct results for methods (regression test for #407)", util.check_type_error([[
+      local record Foo
+         enum Eno
+            "a"
+            "c"
+         end
+         bar: function(Foo, {Eno})
+      end
+
+      local f: Foo
+
+      f:bar({ "a", "b" })
+   ]], {
+      { msg = 'expected an array: at index 2: string "b" is not a member of enum' }
+   }))
 end)

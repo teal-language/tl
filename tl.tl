@@ -8399,9 +8399,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                apply_facts(node, facts_not(node.e1.known, node))
             elseif node.op.op == "@funcall" then
                if node.e1.type.typename == "function" then
+                  local argdelta = (node.e1.op and node.e1.op.op == ":") and -1 or 0
                   for i, typ in ipairs(node.e1.type.args) do
-                     if node.e2[i] then
-                        node.e2[i].expected = typ
+                     if node.e2[i + argdelta] then
+                        node.e2[i + argdelta].expected = typ
                      end
                   end
                end
