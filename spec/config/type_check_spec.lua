@@ -9,11 +9,7 @@ describe("config type checking", function()
          },
          cmd = "build",
          generated_files = {},
-         popen = {
-            status = nil,
-            exit = "exit",
-            code = 1,
-         },
+         exit_code = 1,
          cmd_output = "Error loading config: Expected include to be a {string}, got string\n",
       })
    end)
@@ -25,11 +21,7 @@ describe("config type checking", function()
          },
          cmd = "build",
          generated_files = {},
-         popen = {
-            status = nil,
-            exit = "exit",
-            code = 1,
-         },
+         exit_code = 1,
          cmd_output = "Error loading config: Expected source_dir to be a string, got boolean\n",
       })
    end)

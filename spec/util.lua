@@ -310,13 +310,10 @@ function util.run_mock_project(finally, t, use_folder)
    end)
 
    local batch = batch_assertions()
-   if t.popen then
-      batch:add(util.assert_popen_close,
-         t.popen.status,
-         t.popen.exit,
-         t.popen.code,
-         pd:close()
-      )
+   if t.exit_code then
+      batch:add(util.assert_popen_close, t.exit_code, pd:close())
+   else
+      pd:close()
    end
    if t.cmd_output then
       batch:add(assert.are.equal, t.cmd_output, actual_output)
@@ -336,16 +333,14 @@ function util.read_file(name)
    return output
 end
 
-function util.assert_popen_close(want1, want2, want3, ret1, ret2, ret3)
-   assert(want1 == nil or type(want1) == "boolean")
-   assert(type(want2) == "string")
-   assert(type(want3) == "number")
+function util.assert_popen_close(want, ret1, ret2, ret3)
+   assert(type(want) == "number")
 
-   if _VERSION == "Lua 5.3" then
+   if type(ret3) == "number" then
       batch_assertions("popen close")
-         :add(assert.same, want1, ret1)
-         :add(assert.same, want2, ret2)
-         :add(assert.same, want3, ret3)
+         :add(assert.same, want == 0 and true or nil, ret1)
+         :add(assert.same, "exit", ret2)
+         :add(assert.same, want, ret3)
          :assert()
    end
 end
