@@ -3178,6 +3178,7 @@ local function recurse_node<T>(ast: Node,
       xs[2] = recurse_node(ast.from, visit_node, visit_type)
       xs[3] = recurse_node(ast.to, visit_node, visit_type)
       xs[4] = ast.step and recurse_node(ast.step, visit_node, visit_type)
+      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
       xs[5] = recurse_node(ast.body, visit_node, visit_type)
    elseif kind == "return" then
       xs[1] = recurse_node(ast.exps, visit_node, visit_type)
@@ -6453,7 +6454,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       if t1.typename == "nil" then
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
-         if same_type(t2.emptytable_type.keys, NUMBER) then
+         if is_number_type(t2.emptytable_type.keys) then -- ideally integer only
             infer_var(t2.emptytable_type, a_type { typename = "array", elements = t1 }, node)
          else
             infer_var(t2.emptytable_type, a_type { typename = "map", keys = t2.emptytable_type.keys, values = t1 }, node)
@@ -8055,9 +8056,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          after = end_scope_and_none_type,
       },
       ["fornum"] = {
-         before = function(node: Node)
+         before_statements = function(node: Node, children: {Type})
             begin_scope(node)
-            add_var(node.var, node.var.tk, NUMBER)
+            local from_t = resolve_tuple_and_nominal(children[2])
+            local to_t = resolve_tuple_and_nominal(children[3])
+            local step_t = children[4] and resolve_tuple_and_nominal(children[4])
+            local t = (from_t.typename == "integer" and
+                       to_t.typename == "integer" and
+                       (not step_t or step_t.typename == "integer"))
+                      and INTEGER
+                      or  NUMBER
+            add_var(node.var, node.var.tk, t)
          end,
          after = end_scope_and_none_type,
       },
