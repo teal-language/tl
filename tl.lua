@@ -1306,6 +1306,7 @@ local Node = {ExpectedContext = {}, }
 
 
 
+
 local function is_array_type(t)
    return t.typename == "array" or t.typename == "arrayrecord"
 end
@@ -1974,7 +1975,7 @@ do
 
 
    local function failstore(tkop, e1)
-      return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1 }
+      return { y = tkop.y, x = tkop.x, kind = "paren", e1 = e1, failstore = true }
    end
 
    local function P(ps, i)
@@ -2780,7 +2781,7 @@ do
          return i
       end
 
-      if exp.op and exp.op.op == "@funcall" then
+      if (exp.op and exp.op.op == "@funcall") or exp.failstore then
          return i, exp
       end
 

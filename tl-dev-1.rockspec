@@ -22,6 +22,9 @@ dependencies = {
    -- --build-dir, --source-dir, etc.
    "luafilesystem",
 }
+test_dependencies = {
+   "dkjson",
+}
 build = {
    modules = {
       tl = "tl.lua",
