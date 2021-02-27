@@ -4596,7 +4596,7 @@ local function init_globals(lax)
          ["linedefined"] = INTEGER,
          ["lastlinedefined"] = INTEGER,
          ["what"] = STRING,
-         ["currentline"] = NUMBER,
+         ["currentline"] = INTEGER,
          ["istailcall"] = BOOLEAN,
          ["nups"] = INTEGER,
          ["nparams"] = INTEGER,
@@ -5630,9 +5630,6 @@ tl.type_check = function(ast, opts)
          end
          if resolved.typename ~= "unknown" then
             resolved = resolve_typetype(resolved)
-            if resolved.typename == "integer" then
-               resolved = NUMBER
-            end
             add_var(nil, typevar, resolved)
          end
          return true
@@ -8137,8 +8134,9 @@ tl.type_check = function(ast, opts)
             if node.expected then
                if node.expected.typename == "tupletable" then
                   for _, child in ipairs(node) do
-                     if child.key.constnum then
-                        child.value.expected = node.expected.types[child.key.constnum]
+                     local n = child.key.constnum
+                     if n and is_positive_int(n) then
+                        child.value.expected = node.expected.types[n]
                      end
                   end
                elseif is_array_type(node.expected) then
