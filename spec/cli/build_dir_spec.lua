@@ -58,11 +58,7 @@ describe("-b --build-dir argument", function()
          dir_structure = {},
          cmd = "build",
          generated_files = {},
-         popen = {
-            status = nil,
-            exit = "exit",
-            code = 1,
-         },
+         exit_code = 1,
          cmd_output = "Build error: tlconfig.lua not found\n"
       })
    end)

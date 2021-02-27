@@ -9,11 +9,7 @@ describe("build command", function()
             ["bar.tl"] = [[local x: string = 10]],
          },
          cmd = "build",
-         popen = {
-            status = nil,
-            exit = "exit",
-            code = 1,
-         },
+         exit_code = 1,
       })
    end)
 
@@ -23,11 +19,7 @@ describe("build command", function()
             ["tlconfig.lua"] = [[]],
          },
          cmd = "build",
-         popen = {
-            status = true,
-            exit = "exit",
-            code = 0,
-         },
+         exit_code = 0,
       })
    end)
 
@@ -41,7 +33,7 @@ describe("build command", function()
          src = {},
       }), function()
          local ph = io.popen("cd src && " .. util.tl_cmd("build"), "r")
-         util.assert_popen_close(true, "exit", 0, ph:close())
+         util.assert_popen_close(0, ph:close())
       end)
    end)
 end)

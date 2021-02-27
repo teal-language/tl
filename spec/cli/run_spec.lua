@@ -8,7 +8,7 @@ describe("tl run", function()
          local name = util.write_tmp_file(finally, [[]])
          local pd = io.popen(util.tl_cmd("run", name), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[]], output)
       end)
 
@@ -22,7 +22,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             30
          ]], output)
@@ -39,7 +39,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(nil, "exit", 1, pd:close())
+         util.assert_popen_close(1, pd:close())
          assert.match("2 errors:", output, 1, true)
       end)
 
@@ -49,7 +49,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(nil, "exit", 1, pd:close())
+         util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
       end)
 
@@ -61,7 +61,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(nil, "exit", 1, pd:close())
+         util.assert_popen_close(1, pd:close())
          assert.match("2 errors:", output, 1, true)
          assert.match("unknown variable: a", output, 1, true)
          assert.match("unknown variable: b", output, 1, true)
@@ -84,7 +84,7 @@ describe("tl run", function()
          })
          local pd = io.popen("TL_PATH='" .. dir_name .. "/?.tl' " .. util.tl_cmd("run", dir_name .. "/main.tl"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             30
          ]], output)
@@ -102,7 +102,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             30
          ]], output)
@@ -119,7 +119,7 @@ describe("tl run", function()
          ]], "lua")
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(nil, "exit", 1, pd:close())
+         util.assert_popen_close(1, pd:close())
          if _VERSION == "Lua 5.4" then
             assert.match("attempt to add a 'string' with a 'number'", output, 1, true)
          else
@@ -133,7 +133,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(nil, "exit", 1, pd:close())
+         util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
       end)
 
@@ -149,7 +149,7 @@ describe("tl run", function()
          ]], "lua")
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          assert.same("", output)
       end)
    end)
@@ -163,7 +163,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name, "hello", "world"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             -10 nil
             -9 nil
@@ -197,7 +197,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", name, "--", "--skip-compat53", "hello", "world"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             -10 nil
             -9 nil
@@ -231,7 +231,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", "--", name, "--skip-compat53", "hello", "world"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             -10 nil
             -9 nil
@@ -265,7 +265,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", "-I", ".", "--", name, "-I", ".", "hello", "world"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             -10 nil
             -9 nil
@@ -300,7 +300,7 @@ describe("tl run", function()
          ]])
          local pd = io.popen(util.tl_cmd("run", "-I", ".", "--", name, "-I", ".", "hello", "world"), "r")
          local output = pd:read("*a")
-         util.assert_popen_close(true, "exit", 0, pd:close())
+         util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
          -5 nil
          -4 nil
