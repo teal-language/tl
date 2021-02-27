@@ -19,7 +19,7 @@ describe("empty table without type annotation", function()
 
       t.foo = "bar"
    ]], {
-      { msg = "cannot index something that is not a record: {number}" },
+      { msg = "cannot index something that is not a record: {integer}" },
    }))
 
    it("first use can be a function call", util.check [[
