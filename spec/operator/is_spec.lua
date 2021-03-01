@@ -1,6 +1,18 @@
 local util = require("spec.util")
 
 describe("flow analysis with is", function()
+   it("does not crash on inexistent variables (regression test for #409)", util.check_type_error([[
+      local function f(a: b, c: string): boolean
+          if x == nil or #x == 0 then
+              return false
+          end
+      end
+   ]], {
+      { y = 1, msg = "unknown type b"},
+      { y = 2, msg = "unknown variable: x"},
+      { y = 2, msg = "cannot resolve a type for x here"},
+   }))
+
    describe("on expressions", function()
       it("narrows type on expressions with and", util.check [[
          local x: number | string

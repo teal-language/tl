@@ -7181,22 +7181,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             local typ = find_var_type(f.var, true)
             local fact: FactType = "=="
             local where = f.where
-            if f.fact == "is" then
-               if not typ then
-                  typ = INVALID
-               elseif typ.typename == "typevar" then
-                  -- nothing is known from negation on typeargs; widen back
+            if not typ then
+               typ = INVALID
+            else
+               if f.fact == "is" then
+                  if typ.typename == "typevar" then
+                     -- nothing is known from negation on typeargs; widen back
+                     where = nil
+                  elseif not is_a(f.typ, typ) then
+                     node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+                     typ = INVALID
+                  else
+                     fact = "is"
+                     typ = subtract_types(typ, f.typ)
+                  end
+               elseif f.fact == "==" then
+                  -- nothing is known from negation of equality; widen back
                   where = nil
-               elseif not is_a(f.typ, typ) then
-                  node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
-                  typ = INVALID
-               else
-                  fact = "is"
-                  typ = subtract_types(typ, f.typ)
                end
-            elseif f.fact == "==" then
-               -- nothing is known from negation of equality; widen back
-               where = nil
             end
             ret[var] = Fact { fact = fact, var = var, typ = typ, where = where }
          end
