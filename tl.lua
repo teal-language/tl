@@ -567,11 +567,101 @@ do
                   table.insert(errs, tokens[#tokens])
                end
             end
+         elseif state == "identifier" then
+            if not lex_word[c] then
+               end_token_identifier()
+               fwd = false
+               state = "any"
+            end
+         elseif state == "string double" then
+            if c == "\\" then
+               state = "string double got \\"
+            elseif c == "\"" then
+               end_token_here("string")
+               state = "any"
+            end
+         elseif state == "comment short" then
+            if c == "\n" then
+               state = "any"
+            end
+         elseif state == "got =" then
+            local t
+            if c == "=" then
+               t = "=="
+            else
+               t = "="
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got ." then
+            if c == "." then
+               state = "got .."
+            elseif lex_decimals[c] then
+               state = "number decfloat"
+            else
+               end_token(".", ".")
+               fwd = false
+               state = "any"
+            end
+         elseif state == "got :" then
+            local t
+            if c == ":" then
+               t = "::"
+            else
+               t = ":"
+               fwd = false
+            end
+            end_token(t, t)
+            state = "any"
+         elseif state == "got [" then
+            if c == "[" then
+               state = "string long"
+            elseif c == "=" then
+               ls_open_lvl = ls_open_lvl + 1
+            else
+               end_token("[", "[")
+               fwd = false
+               state = "any"
+               ls_open_lvl = 0
+            end
+         elseif state == "number dec" then
+            if lex_decimals[c] then
+
+            elseif c == "." then
+               state = "number decfloat"
+            elseif c == "e" or c == "E" then
+               state = "number powersign"
+            else
+               end_token_prev("number")
+               fwd = false
+               state = "any"
+            end
          elseif state == "got -" then
             if c == "-" then
                state = "got --"
             else
                end_token("op", "-")
+               fwd = false
+               state = "any"
+            end
+         elseif state == "got .." then
+            if c == "." then
+               end_token("...", "...")
+            else
+               end_token("op", "..")
+               fwd = false
+            end
+            state = "any"
+         elseif state == "number hex" then
+            if lex_hexadecimals[c] then
+
+            elseif c == "." then
+               state = "number hexfloat"
+            elseif c == "p" or c == "P" then
+               state = "number powersign"
+            else
+               end_token_prev("number")
                fwd = false
                state = "any"
             end
@@ -582,6 +672,20 @@ do
                fwd = false
                state = "comment short"
                drop_token()
+            end
+         elseif state == "got 0" then
+            if c == "x" or c == "X" then
+               state = "number hex"
+            elseif c == "e" or c == "E" then
+               state = "number powersign"
+            elseif lex_decimals[c] then
+               state = "number dec"
+            elseif c == "." then
+               state = "number decfloat"
+            else
+               end_token_prev("number")
+               fwd = false
+               state = "any"
             end
          elseif state == "got --[" then
             if c == "[" then
@@ -610,13 +714,6 @@ do
                state = "comment long"
                lc_close_lvl = 0
             end
-         elseif state == "string double" then
-            if c == "\\" then
-               state = "string double got \\"
-            elseif c == "\"" then
-               end_token_here("string")
-               state = "any"
-            end
          elseif state == "string double got \\" then
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
@@ -642,16 +739,6 @@ do
             end
             x = x + skip
             state = "string single"
-         elseif state == "got =" then
-            local t
-            if c == "=" then
-               t = "=="
-            else
-               t = "="
-               fwd = false
-            end
-            end_token("op", t)
-            state = "any"
          elseif state == "got ~" then
             local t
             if c == "=" then
@@ -673,16 +760,6 @@ do
                fwd = false
             end
             end_token("op", t)
-            state = "any"
-         elseif state == "got :" then
-            local t
-            if c == ":" then
-               t = "::"
-            else
-               t = ":"
-               fwd = false
-            end
-            end_token(t, t)
             state = "any"
          elseif state == "got >" then
             local t
@@ -706,17 +783,6 @@ do
             end
             end_token("op", t)
             state = "any"
-         elseif state == "got [" then
-            if c == "[" then
-               state = "string long"
-            elseif c == "=" then
-               ls_open_lvl = ls_open_lvl + 1
-            else
-               end_token("[", "[")
-               fwd = false
-               state = "any"
-               ls_open_lvl = 0
-            end
          elseif state == "string long" then
             if c == "]" then
                state = "string long got ]"
@@ -735,72 +801,10 @@ do
                state = "string long"
                ls_close_lvl = 0
             end
-         elseif state == "got ." then
-            if c == "." then
-               state = "got .."
-            elseif lex_decimals[c] then
-               state = "number decfloat"
-            else
-               end_token(".", ".")
-               fwd = false
-               state = "any"
-            end
-         elseif state == "got .." then
-            if c == "." then
-               end_token("...", "...")
-            else
-               end_token("op", "..")
-               fwd = false
-            end
-            state = "any"
-         elseif state == "comment short" then
-            if c == "\n" then
-               state = "any"
-            end
-         elseif state == "identifier" then
-            if not lex_word[c] then
-               end_token_identifier()
-               fwd = false
-               state = "any"
-            end
-         elseif state == "got 0" then
-            if c == "x" or c == "X" then
-               state = "number hex"
-            elseif c == "e" or c == "E" then
-               state = "number powersign"
-            elseif lex_decimals[c] then
-               state = "number dec"
-            elseif c == "." then
-               state = "number decfloat"
-            else
-               end_token_prev("number")
-               fwd = false
-               state = "any"
-            end
-         elseif state == "number hex" then
-            if c == "." then
-               state = "number hexfloat"
-            elseif c == "p" or c == "P" then
-               state = "number powersign"
-            elseif not lex_hexadecimals[c] then
-               end_token_prev("number")
-               fwd = false
-               state = "any"
-            end
          elseif state == "number hexfloat" then
             if c == "p" or c == "P" then
                state = "number powersign"
             elseif not lex_hexadecimals[c] then
-               end_token_prev("number")
-               fwd = false
-               state = "any"
-            end
-         elseif state == "number dec" then
-            if c == "." then
-               state = "number decfloat"
-            elseif c == "e" or c == "E" then
-               state = "number powersign"
-            elseif not lex_decimals[c] then
                end_token_prev("number")
                fwd = false
                state = "any"
