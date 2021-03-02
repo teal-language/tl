@@ -7367,7 +7367,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          else
             local names = typetype.def.names
             local found = find_type(names)
-            if not is_typetype(found) then
+            if (not found) or (not is_typetype(found)) then
                type_error(typetype, "%s is not a type", typetype)
                found = a_type { typename = "bad_nominal", names = names }
             end

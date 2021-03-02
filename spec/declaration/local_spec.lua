@@ -123,6 +123,12 @@ describe("local", function()
          }, result.type_errors)
       end)
 
+      it("catches unknown types", util.check_type_error([[
+         local type MyType = UnknownType
+      ]], {
+         { msg = "UnknownType is not a type" }
+      }))
+
       it("nominal types can take type arguments", util.check [[
          local record Foo<R>
             item: R
