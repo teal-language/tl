@@ -6300,7 +6300,7 @@ tl.type_check = function(ast, opts)
             return true
          elseif t1.typename == "map" then
             local _, errs_keys, errs_values
-            _, errs_keys = is_a(t1.keys, NUMBER)
+            _, errs_keys = is_a(t1.keys, INTEGER)
             _, errs_values = is_a(t1.values, t2.elements)
             return combine_errs(errs_keys, errs_values)
          end
@@ -6355,7 +6355,7 @@ tl.type_check = function(ast, opts)
                elements = t1.elements
             end
             local _, errs_keys, errs_values
-            _, errs_keys = is_a(NUMBER, t2.keys)
+            _, errs_keys = is_a(INTEGER, t2.keys)
             _, errs_values = is_a(elements, t2.values)
             return combine_errs(errs_keys, errs_values)
          elseif is_record_type(t1) then
@@ -6914,7 +6914,7 @@ tl.type_check = function(ast, opts)
       a = resolve_tuple_and_nominal(a)
       b = resolve_tuple_and_nominal(b)
 
-      if a.typename == "tupletable" and is_a(b, NUMBER) then
+      if a.typename == "tupletable" and is_a(b, INTEGER) then
          if idxnode.constnum then
             if idxnode.constnum > #a.types or
                idxnode.constnum < 1 or
@@ -6931,7 +6931,7 @@ tl.type_check = function(ast, opts)
             end
             return array_type.elements
          end
-      elseif is_array_type(a) and is_a(b, NUMBER) then
+      elseif is_array_type(a) and is_a(b, INTEGER) then
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
@@ -7649,7 +7649,7 @@ tl.type_check = function(ast, opts)
 
       if is_array and is_map then
          typ.typename = "map"
-         typ.keys = expand_type(node, typ.keys, NUMBER)
+         typ.keys = expand_type(node, typ.keys, INTEGER)
          typ.values = expand_type(node, typ.values, typ.elements)
          typ.elements = nil
          node_error(node, "cannot determine type of table literal")

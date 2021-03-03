@@ -116,13 +116,13 @@ describe("[]", function()
          local num: number = t[2]
       ]])
       it("produces a union when indexed with a number variable", util.check [[
-         local t: {string, number} = {"hi", 1}
-         local x: number = 1
-         local var: string | number = t[x]
+         local t: {string, integer} = {"hi", 1}
+         local x = 1
+         local var: string | integer = t[x]
       ]])
       it("errors when a union can't be produced from indexing", util.check_type_error([[
-         local t: {{string}, {number}} = {{"hey"}, {1}}
-         local x: number = 1
+         local t: {{string}, {integer}} = {{"hey"}, {1}}
+         local x = 1
          local var = t[x]
       ]], {
          { msg = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime" },
