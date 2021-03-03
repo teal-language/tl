@@ -88,4 +88,19 @@ describe("or", function()
       { msg = "cannot use operator 'or' for types number and {}" },
       { msg = "cannot use operator 'or' for types boolean and {}" },
    }))
+
+   it("does not produce new unions if not asked to", util.check_type_error([[
+      local x: number | string
+
+      local s = x is string and x .. "!" or x + 1
+   ]], {
+      { y = 3, msg = [[cannot use operator 'or' for types string and number]] },
+   }))
+
+   it("produces a union if expected context asks for one", util.check [[
+      local x: number | string
+
+      local s: number | string = x is string and x .. "!" or x + 1
+   ]])
+
 end)

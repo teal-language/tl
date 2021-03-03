@@ -4376,7 +4376,7 @@ local function add_compat_entries(program, used_set, gen_compat)
          local tokens = tl.lex(text)
          local _
          _, code = tl.parse_program(tokens, {}, "@internal")
-         tl.type_check(code, { lax = false, gen_compat = "off" })
+         tl.type_check(code, { filename = "<internal>", lax = false, gen_compat = "off" })
          code = code
          compat_code_cache[name] = code
       end
@@ -8372,6 +8372,12 @@ tl.type_check = function(ast, opts)
                (ra.typename == "string" and rb.typename == "enum" and is_a(ra, rb))) then
                node.known = nil
                node.type = (ra.typename == "enum" and ra or rb)
+            elseif node.op.op == "or" and node.expected and node.expected.typename == "union" then
+
+               node.known = facts_or(node.e1.known, node.e2.known)
+               local u = unite({ ra, rb }, true)
+               local valid, err = is_valid_union(u)
+               node.type = valid and u or node_error(node, err)
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
                if is_a(b, a, true) or a.typename == "typevar" then
@@ -8456,7 +8462,6 @@ tl.type_check = function(ast, opts)
                      node.type = UNKNOWN
                   else
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
-                     node.type = INVALID
                   end
                end
 
@@ -8489,7 +8494,6 @@ tl.type_check = function(ast, opts)
                local va_sentinel = find_var_type("@is_va")
                if not va_sentinel or va_sentinel.typename == "nil" then
                   node_error(node, "cannot use '...' outside a vararg function")
-                  node.type = INVALID
                end
             end
 
@@ -8524,7 +8528,6 @@ tl.type_check = function(ast, opts)
                   add_unknown(node, node.tk)
                else
                   node_error(node, "unknown variable: " .. node.tk)
-                  node.type = INVALID
                end
             end
             return node.type

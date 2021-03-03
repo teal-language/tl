@@ -483,14 +483,6 @@ describe("flow analysis with is", function()
             { y = 5, msg = [[cannot discriminate a union between multiple string/enum types: string | Enum]] },
          }))
 
-         it("does not produce new unions", util.check_type_error([[
-            local x: number | string
-
-            local s = x is string and x .. "!" or x + 1
-         ]], {
-            { y = 3, msg = [[cannot use operator 'or' for types string and number]] },
-         }))
-
          it("literal strings are truthy, preserve 'is' inference", util.check [[
             local x: number | string
 
