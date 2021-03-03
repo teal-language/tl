@@ -1027,6 +1027,9 @@ if cmd == "gen" then
       end
    else
       for i, res in ipairs(results) do
+         if args["check"] then
+            report_warnings(res.tl_result)
+         end
          write_out(res.tl_result, args["output"] or res.output_file)
       end
    end

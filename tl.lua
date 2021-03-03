@@ -2894,7 +2894,6 @@ function tl.parse_program(tokens, errs, filename)
       filename = filename,
       required_modules = {},
    }
-   local last = ps.tokens[#ps.tokens] or { y = 1, x = 1, tk = "" }
    local i, node = parse_statements(ps, 1, filename, true)
    clear_redundant_errors(errs)
    return i, node, ps.required_modules
