@@ -7407,6 +7407,36 @@ tl.type_check = function(ast, opts)
       return n and n >= 1 and math.floor(n) == n
    end
 
+   local context_name = {
+      ["local_declaration"] = "in local declaration",
+      ["global_declaration"] = "in global declaration",
+      ["assignment"] = "in assignment",
+   }
+
+   local function in_context(ctx, msg)
+      if not ctx then
+         return msg
+      end
+      local where = context_name[ctx.kind]
+      if where then
+         return where .. ": " .. (ctx.name and ctx.name .. ": " or "") .. msg
+      else
+         return msg
+      end
+   end
+
+   local function check_redeclared_key(ctx, where, seen_keys, ck, n)
+      local key = ck or n
+      if key then
+         local s = seen_keys[key]
+         if s then
+            node_error(where, in_context(ctx, "redeclared key " .. tostring(key) .. " (previously declared at " .. filename .. ":" .. s.y .. ":" .. s.x .. ")"))
+         else
+            seen_keys[key] = where
+         end
+      end
+   end
+
    local function infer_table_literal(node, children)
       local typ = a_type({
          filename = filename,
@@ -7425,17 +7455,24 @@ tl.type_check = function(ast, opts)
       local last_array_idx = 1
       local largest_array_idx = -1
 
+      local seen_keys = {}
+
       for i, child in ipairs(children) do
          assert(child.typename == "table_item")
+
+         local ck = child.kname
+         local n = node[i].key.constnum
+         check_redeclared_key(nil, node[i], seen_keys, ck, n)
+
          local uvtype = resolve_tuple(child.vtype)
-         if child.kname then
+         if ck then
             is_record = true
             if not typ.fields then
                typ.fields = {}
                typ.field_order = {}
             end
-            typ.fields[child.kname] = uvtype
-            table.insert(typ.field_order, child.kname)
+            typ.fields[ck] = uvtype
+            table.insert(typ.field_order, ck)
          elseif child.ktype.typename == "number" then
             is_array = true
             if not is_not_tuple then
@@ -7459,8 +7496,6 @@ tl.type_check = function(ast, opts)
                   typ.elements = expand_type(node, typ.elements, uvtype)
                end
             else
-               local n = node[i].key.constnum
-
                if not is_positive_int(n) then
                   typ.elements = expand_type(node, typ.elements, uvtype)
                   is_not_tuple = true
@@ -7543,23 +7578,6 @@ tl.type_check = function(ast, opts)
       end
 
       return typ
-   end
-
-   local context_name = {
-      ["local_declaration"] = "in local declaration",
-      ["global_declaration"] = "in global declaration",
-   }
-
-   local function in_context(ctx, msg)
-      if not ctx then
-         return msg
-      end
-      local where = context_name[ctx.kind]
-      if where then
-         return where .. ": " .. ctx.name .. ": " .. msg
-      else
-         return msg
-      end
    end
 
    local visit_node = {}
@@ -8057,11 +8075,14 @@ tl.type_check = function(ast, opts)
 
                local force_array = nil
 
+               local seen_keys = {}
+
                for i, child in ipairs(children) do
                   assert(child.typename == "table_item")
                   local cvtype = resolve_tuple(child.vtype)
                   local ck = child.kname
                   local n = node[i].key.constnum
+                  check_redeclared_key(node.expected_context, node[i], seen_keys, ck, n)
                   if is_record and ck then
                      local df = decltype.fields[ck]
                      if not df then

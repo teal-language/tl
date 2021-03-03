@@ -504,4 +504,32 @@ describe("records", function()
       { msg = "syntax error: expected ':' for an attribute" },
       { msg = "syntax error: expected ':' for an attribute" },
    }))
+
+   it("catches redeclaration of literal keys", util.check_type_error([[
+      local record Foo
+         foo: string
+         bar: boolean
+      end
+      local x: Foo = {
+         foo = "hello",
+         bar = true,
+         foo = "wat",
+      }
+   ]], {
+      { y = 8, msg = "redeclared key foo" }
+   }))
+
+   it("catches redeclaration of literal keys, bracket syntax", util.check_type_error([[
+      local record Foo
+         foo: string
+         bar: boolean
+      end
+      local x: Foo = {
+         ["foo"] = "hello",
+         ["bar"] = true,
+         ["foo"] = "wat",
+      }
+   ]], {
+      { y = 8, msg = "redeclared key foo" }
+   }))
 end)
