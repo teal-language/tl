@@ -4327,14 +4327,10 @@ local function fill_field_order(t)
    end
 end
 
-local function require_module(module_name, lax, env, result)
+local function require_module(module_name, lax, env)
    local modules = env.modules
-   local loaded = env.loaded
 
    if modules[module_name] then
-      if not result.dependencies[module_name] then
-         result.dependencies[module_name] = env.modules[module_name].filename
-      end
       return modules[module_name], true
    end
    modules[module_name] = INVALID
@@ -4342,16 +4338,14 @@ local function require_module(module_name, lax, env, result)
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$")) then
       fd:close()
-      local found_result, err = tl.process(found, env, result)
+      local found_result, err = tl.process(found, env)
       assert(found_result, err)
 
       if not found_result.type then
          found_result.type = BOOLEAN
       end
 
-      loaded[found] = found_result
-      modules[module_name] = found_result.type
-      result.dependencies[module_name] = found
+      env.modules[module_name] = found_result.type
 
       return found_result.type, true
    end
@@ -4978,8 +4972,10 @@ tl.init_env = function(lax, gen_compat, gen_target, preload_modules)
    local globals, standard_library = init_globals(lax)
 
    local env = {
+      ok = true,
       modules = {},
       loaded = {},
+      loaded_order = {},
       globals = globals,
       gen_compat = gen_compat,
       gen_target = gen_target,
@@ -4994,7 +4990,7 @@ tl.init_env = function(lax, gen_compat, gen_target, preload_modules)
 
    if preload_modules then
       for _, name in ipairs(preload_modules) do
-         local module_type = require_module(name, lax, env, { dependencies = {} })
+         local module_type = require_module(name, lax, env)
 
          if module_type == INVALID then
             return nil, string.format("Error: could not preload module '%s'", name)
@@ -5011,14 +5007,6 @@ tl.type_check = function(ast, opts)
    local lax = opts.lax
    local filename = opts.filename
 
-   local result = {
-      syntax_errors = opts.result and opts.result.syntax_errors or {},
-      type_errors = opts.result and opts.result.type_errors or {},
-      unknowns = opts.result and opts.result.unknowns or {},
-      warnings = opts.result and opts.result.warnings or {},
-      dependencies = opts.result and opts.result.dependencies or {},
-   }
-
    local st = { env.globals }
 
    local symbol_list = {}
@@ -5026,9 +5014,9 @@ tl.type_check = function(ast, opts)
 
    local all_needs_compat = {}
 
-   local warnings = result.warnings or {}
-   local errors = result.type_errors or {}
-   local unknowns = result.unknowns or {}
+   local dependencies = {}
+   local warnings = {}
+   local errors = {}
 
    local module_type
 
@@ -5393,7 +5381,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function add_unknown(node, name)
-      table.insert(unknowns, { y = node.y, x = node.x, msg = name, filename = filename })
+      node_warning("unknown", node, "unknown variable: %s", name)
    end
 
    local function redeclaration_warning(node, old_var)
@@ -7302,27 +7290,28 @@ tl.type_check = function(ast, opts)
       end,
 
       ["require"] = function(node, _a, b, _argdelta)
-         if #b == 1 then
-            if node.e2[1].kind == "string" then
-               local module_name = assert(node.e2[1].conststr)
-               local t, found = require_module(module_name, lax, env, result)
-               if not found then
-                  node_error(node, "module not found: '" .. module_name .. "'")
-               elseif t.typename == "invalid" then
-                  if lax then
-                     t = UNKNOWN
-                  else
-                     node_error(node, "no type information for required module: '" .. module_name .. "'")
-                  end
-               end
-               return t
-            else
-               node_error(node, "don't know how to resolve a dynamic require")
-            end
-         else
-            node_error(node, "require expects one literal argument")
+         if #b ~= 1 then
+            return node_error(node, "require expects one literal argument")
          end
-         return INVALID
+         if node.e2[1].kind ~= "string" then
+            return node_error(node, "don't know how to resolve a dynamic require")
+         end
+
+         local module_name = assert(node.e2[1].conststr)
+         local t, found = require_module(module_name, lax, env)
+         if not found then
+            return node_error(node, "module not found: '" .. module_name .. "'")
+         end
+
+         if t.typename == "invalid" then
+            if lax then
+               return UNKNOWN
+            end
+            return node_error(node, "no type information for required module: '" .. module_name .. "'")
+         end
+
+         dependencies[module_name] = t.filename
+         return t
       end,
 
       ["pcall"] = special_pcall_xpcall,
@@ -8788,7 +8777,21 @@ tl.type_check = function(ast, opts)
 
    add_compat_entries(ast, all_needs_compat, env.gen_compat)
 
-   return errors, unknowns, module_type, symbol_list
+   local result = {
+      ast = ast,
+      env = env,
+      type = module_type,
+      filename = filename,
+      warnings = warnings,
+      type_errors = errors,
+      symbol_list = symbol_list,
+      dependencies = dependencies,
+   }
+
+   env.loaded[filename] = result
+   table.insert(env.loaded_order, filename)
+
+   return result
 end
 
 
@@ -9076,7 +9079,7 @@ end
 
 
 
-tl.process = function(filename, env, result)
+tl.process = function(filename, env)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -9103,34 +9106,22 @@ tl.process = function(filename, env, result)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   result, err = tl.process_string(input, is_lua, env, result, filename)
-
-   if err then
-      return nil, err
-   end
-
-   return result
+   return tl.process_string(input, is_lua, env, filename)
 end
 
-function tl.process_string(input, is_lua, env, result, filename)
+function tl.process_string(input, is_lua, env, filename)
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   result = {
-      warnings = result and result.warnings or {},
-      syntax_errors = result and result.syntax_errors or {},
-      type_errors = result and result.type_errors or {},
-      unknowns = result and result.unknowns or {},
-      dependencies = result and result.dependencies or {},
-   }
    filename = filename or ""
 
+   local syntax_errors = {}
    local tokens, errs = tl.lex(input)
    if errs then
       for _, err in ipairs(errs) do
-         table.insert(result.syntax_errors, {
+         table.insert(syntax_errors, {
             y = err.y,
             x = err.x,
             msg = "invalid token '" .. err.tk .. "'",
@@ -9139,35 +9130,37 @@ function tl.process_string(input, is_lua, env, result, filename)
       end
    end
 
-   local _, program = tl.parse_program(tokens, result.syntax_errors, filename)
-   if (not env.keep_going) and #result.syntax_errors > 0 then
+   local _, program = tl.parse_program(tokens, syntax_errors, filename)
+
+   if (not env.keep_going) and #syntax_errors > 0 then
+      local result = {
+         ok = false,
+         filename = filename,
+         type_errors = {},
+         syntax_errors = syntax_errors,
+         env = env,
+      }
+      env.loaded[filename] = result
+      table.insert(env.loaded_order, filename)
       return result
    end
 
-   local err, unknown
    local opts = {
-      lax = is_lua,
       filename = filename,
-      env = env,
-      result = result,
+      lax = is_lua,
       gen_compat = env.gen_compat,
+      env = env,
    }
-   err, unknown, result.type, result.symbol_list = tl.type_check(program, opts)
+   local result = tl.type_check(program, opts)
 
-   result.filename = filename
-   result.ast = program
-   result.env = env
+   result.syntax_errors = syntax_errors
 
-   env.loaded[filename] = result
    return result
 end
 
 tl.gen = function(input, env)
    env = env or tl.init_env()
-   local result, err = tl.process_string(input, false, env)
-   if err then
-      return nil, nil
-   end
+   local result = tl.process_string(input, false, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result

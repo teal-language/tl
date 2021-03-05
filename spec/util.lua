@@ -370,6 +370,26 @@ local function batch_compare(batch, category, expected, got)
    end
 end
 
+local function combine_result(result, key)
+   local out = {}
+   for _, filename in ipairs(result.env.loaded_order) do
+      for _, item in ipairs(result.env.loaded[filename][key]) do
+         table.insert(out, item)
+      end
+   end
+   return out
+end
+
+local function filter_by(tag, warnings)
+   local out = {}
+   for _, w in ipairs(warnings) do
+      if w.tag == tag then
+         table.insert(out, w)
+      end
+   end
+   return out
+end
+
 local function check(lax, code, unknowns)
    return function()
       local tokens = tl.lex(code)
@@ -377,9 +397,11 @@ local function check(lax, code, unknowns)
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
-      local errors, unks = tl.type_check(ast, { filename = "foo.lua", lax = lax })
-      batch:add(assert.same, {}, errors)
+      local result = tl.type_check(ast, { filename = "foo.lua", lax = lax })
+      batch:add(assert.same, {}, result.type_errors)
+
       if unknowns then
+         local unks = filter_by("unknown", combine_result(result, "warnings"))
          batch_compare(batch, "unknowns", unknowns, unks)
       end
       batch:assert()
@@ -394,8 +416,10 @@ local function check_type_error(lax, code, type_errors)
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
-      local errors = tl.type_check(ast, { filename = "foo.tl", lax = lax })
-      batch_compare(batch, "type errors", type_errors, errors)
+      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      local result_type_errors = combine_result(result, "type_errors")
+
+      batch_compare(batch, "type errors", type_errors, result_type_errors)
       batch:assert()
    end
 end
@@ -484,8 +508,8 @@ local function gen(lax, code, expected)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local errors, unks = tl.type_check(ast, { filename = "foo.tl", lax = lax })
-      assert.same({}, errors)
+      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      assert.same({}, result.type_errors)
       local output_code = tl.pretty_print_ast(ast)
 
       local expected_tokens = tl.lex(expected)

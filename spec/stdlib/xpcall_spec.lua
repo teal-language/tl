@@ -46,7 +46,6 @@ describe("xpcall", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("xpcalls through xpcall through xpcall", function()
@@ -69,7 +68,6 @@ describe("xpcall", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("xpcalls through other magical stdlib functions", function()
@@ -92,7 +90,6 @@ describe("xpcall", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("returns the correct output arguments", util.check_type_error([[
