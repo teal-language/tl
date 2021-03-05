@@ -5,7 +5,7 @@ describe("-q --quiet flag", function()
    teardown(util.chdir_teardown)
    it("silences stdout when running tl check", function()
       local name = util.write_tmp_file(finally, [[
-         local x: number = 123
+         print("hello world!")
       ]])
 
       local pd = io.popen(util.tl_cmd("check", "-q", name), "r")

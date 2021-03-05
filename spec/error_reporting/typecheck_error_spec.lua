@@ -14,7 +14,7 @@ describe("typecheck errors", function()
       util.check_type_error([[
          local bar = require "bar"
       ]], {
-         { filename = "bar.tl" }
+         { filename = "./bar.tl" }
       })()
    end)
 

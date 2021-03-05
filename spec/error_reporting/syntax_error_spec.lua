@@ -198,14 +198,21 @@ describe("syntax errors", function()
       local result, err = tl.process("foo.tl")
 
       local expected = {
-         { filename = "bbb.tl", y = 5 },
-         { filename = "bbb.tl", y = 7 },
-         { filename = "ccc.tl", y = 1 },
+         ["bbb.tl"] = {
+            { filename = "bbb.tl", y = 5 },
+            { filename = "bbb.tl", y = 7 },
+         },
+         ["ccc.tl"] = {
+            { filename = "ccc.tl", y = 1 },
+         },
       }
-      assert.same(#expected, #result.syntax_errors)
-      for i, err in ipairs(result.syntax_errors) do
-         assert.match(expected[i].filename, result.syntax_errors[i].filename, 1, true)
-         assert.same(expected[i].y, result.syntax_errors[i].y)
+
+      for file, expected in pairs(expected) do
+         assert.same(#expected, #(assert(result.env.loaded["./" .. file]).syntax_errors))
+         for i, err in ipairs(result.env.loaded["./" .. file].syntax_errors) do
+            assert.match(expected[i].filename, err.filename, 1, true)
+            assert.same(expected[i].y, err.y)
+         end
       end
    end)
 end)

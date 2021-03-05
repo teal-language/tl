@@ -54,21 +54,6 @@ local function die(msg)
    os.exit(1)
 end
 
-local function merge_list(a, b)
-   local c = {}
-   if a then
-      for _, v in ipairs(a) do
-         table.insert(c, v)
-      end
-   end
-   if b then
-      for _, v in ipairs(b) do
-         table.insert(c, v)
-      end
-   end
-   return c
-end
-
 local function find_in_sequence(seq, value)
    for _, v in ipairs(seq) do
       if v == value then
@@ -127,104 +112,98 @@ end
 -- Common driver backend
 --------------------------------------------------------------------------------
 
-local env
-local exit = 0
-local disabled_warnings = {}
-local warning_errors = {}
-
 local function setup_env(tlconfig, filename)
+   local _, extension = filename:match("(.*)%.([a-z]+)$")
+   extension = extension and extension:lower()
+
+   local lax_mode
+   if extension == "tl" then
+      lax_mode = false
+   elseif extension == "lua" then
+      lax_mode = true
+   else
+      -- if we can't decide based on the file extension, default to strict mode
+      lax_mode = false
+   end
+
+   local gen_compat = tlconfig["gen_compat"]
+   local gen_target = tlconfig["gen_target"]
+
+   local env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig.preload_modules)
    if not env then
-      local _, extension = filename:match("(.*)%.([a-z]+)$")
-      extension = extension and extension:lower()
-
-      local lax_mode
-      if extension == "tl" then
-         lax_mode = false
-      elseif extension == "lua" then
-         lax_mode = true
-      else
-         -- if we can't decide based on the file extension, default to strict mode
-         lax_mode = false
-      end
-
-      local gen_compat = tlconfig["gen_compat"]
-      local gen_target = tlconfig["gen_target"]
-
-      local err
-      env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig.preload_modules)
-      if not env then
-         die(err)
-      end
+      die(err)
    end
+
+   return env
 end
 
-local function report_errors(category, errors)
-   if not errors then
-      return false
-   end
-   if #errors > 0 then
-      local n = #errors
-      printerr("========================================")
-      printerr(n .. " " .. category .. (n ~= 1 and "s" or "") .. ":")
-      for _, err in ipairs(errors) do
-         printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
-      end
-      return true
-   end
-   return false
-end
-
-local function report_warnings(tlconfig, result)
-   if tlconfig["quiet"] then
+local function filter_warnings(tlconfig, result)
+   if not result.warnings then
       return
    end
-
-   local res_warnings = {}
-   for _, warning in ipairs(result.warnings or {}) do
-      if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
-         table.insert(res_warnings, warning)
+   for i = #result.warnings, 1, -1 do
+      local w = result.warnings[i]
+      if tlconfig._disabled_warnings_set[w.tag] then
+         table.remove(result.warnings, i)
+      elseif tlconfig._warning_errors_set[w.tag] then
+         local err = table.remove(result.warnings, i)
+         table.insert(result.type_errors, err)
       end
    end
-   report_errors("warning", res_warnings)
 end
 
-local function get_warning_errors(result)
-   local res_warnings = {}
-   for _, warning in ipairs(result.warnings or {}) do
-      local tag = warning.tag
-      if warning_errors[tag]
-         and not disabled_warnings[tag]
-      then
-         table.insert(res_warnings, warning)
+local report_all_errors
+do
+   local function report_errors(category, errors)
+      if not errors then
+         return false
       end
+      if #errors > 0 then
+         local n = #errors
+         printerr("========================================")
+         printerr(n .. " " .. category .. (n ~= 1 and "s" or "") .. ":")
+         for _, err in ipairs(errors) do
+            printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
+         end
+         return true
+      end
+      return false
    end
-   return res_warnings
-end
 
-local function report_result(tlconfig, result)
-   report_warnings(tlconfig, result)
-   local errs = merge_list(result.type_errors, get_warning_errors(result))
-   local ok = not report_errors("error", errs)
-   report_errors("unknown variable", result.unknowns)
-   return ok
+   report_all_errors = function(tlconfig, env, syntax_only)
+      local any_syntax_err, any_type_err, any_warning
+      for _, name in ipairs(env.loaded_order) do
+         local result = env.loaded[name]
+
+         local syntax_err = report_errors("syntax error", result.syntax_errors)
+         if syntax_err then
+            any_syntax_err = true
+         elseif not syntax_only then
+            filter_warnings(tlconfig, result)
+            any_warning = report_errors("warning", result.warnings) or any_warning
+            any_type_err = report_errors("error", result.type_errors) or any_type_err
+         end
+      end
+      local ok = not (any_syntax_err or any_type_err)
+      return ok, any_syntax_err, any_type_err, any_warning
+   end
 end
 
 local function type_check_and_load(tlconfig, filename)
+   local env = setup_env(tlconfig, filename)
    local result, err = tl.process(filename, env)
    if err then
       die(err)
    end
-   env = result.env
 
-   local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
-   if has_syntax_errors then
+   local is_tl = filename:match("%.tl$")
+   local ok, syntax_err, type_err = report_all_errors(tlconfig, env, not is_tl)
+   if syntax_err then
       os.exit(1)
    end
-   if filename:match("%.tl$") then
-      local ok = report_result(tlconfig, result)
-      if not ok then
-         os.exit(1)
-      end
+
+   if is_tl and type_err then
+      os.exit(1)
    end
 
    local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
@@ -703,33 +682,36 @@ do
       end
       table.sort(sorted_source_file_arr, function(a, b) return a[1] < b[1] end)
 
+      if #sorted_source_file_arr == 0 then
+         os.exit(0)
+      end
+
       turbo(true)
+      local env
       for i, files in ipairs(sorted_source_file_arr) do
          local input_file, output_file = files[1], files[2]
-         setup_env(tlconfig, input_file)
+         if not env then
+            env = setup_env(tlconfig, input_file)
+         end
 
          local result, err = tl.process(input_file, env)
          if err then
             die(err)
          end
-         env = result.env
 
-         local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
-         if has_syntax_errors then
-            exit = 1
-            break
-         end
-         local ok = report_result(tlconfig, result)
-         if ok then
+         filter_warnings(tlconfig, result)
+         if #result.syntax_errors == 0 and #result.type_errors == 0 then
             write_out(tlconfig, result, output_file)
-         else
-            exit = 1
          end
+
          if i > 1 then
             collectgarbage()
          end
       end
-      os.exit(exit)
+
+      local ok = report_all_errors(tlconfig, env)
+
+      os.exit(ok and 0 or 1)
    end
 end
 
@@ -832,8 +814,6 @@ local function get_args_parser()
          :argname("<warning>")
          :count("*")
 
-   parser:option("--warning-error-all")
-
    parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
          :choices({ "off", "optional", "required" })
          :default("optional")
@@ -934,11 +914,17 @@ local function merge_config_and_args(tlconfig, args)
             tab[warning] = true
          end
       end
-      for _, warning in ipairs(merge_list(tlconfig["disable_warnings"], args["wdisable"])) do
-         enable(disabled_warnings, warning)
+      tlconfig._disabled_warnings_set = {}
+      tlconfig._warning_errors_set = {}
+      for _, list in ipairs({ tlconfig["disable_warnings"] or {}, args["wdisable"] or {} }) do
+         for _, warning in ipairs(list) do
+            enable(tlconfig._disabled_warnings_set, warning)
+         end
       end
-      for _, warning in ipairs(merge_list(tlconfig["warning_error"], args["werror"])) do
-         enable(warning_errors, warning)
+      for _, list in ipairs({ tlconfig["warning_error"] or {}, args["werror"] or {} }) do
+         for _, warning in ipairs(list) do
+            enable(tlconfig._warning_errors_set, warning)
+         end
       end
    end
 
@@ -986,28 +972,6 @@ local function get_output_filename(file_name)
    end
 end
 
-local function type_check_file(tlconfig, file_name)
-   setup_env(tlconfig, file_name)
-
-   local result, err = tl.process(file_name, env)
-   if err then
-      die(err)
-   end
-   env = result.env
-
-   local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
-   if has_syntax_errors then
-      exit = 1
-   end
-
-   local ok = report_result(tlconfig, result)
-   if not ok then
-      exit = 1
-   end
-
-   return result
-end
-
 --------------------------------------------------------------------------------
 -- Commands
 --------------------------------------------------------------------------------
@@ -1018,7 +982,7 @@ local commands = {}
 -- tl warnings
 --------------------------------------------------------------------------------
 
-commands["warnings"] = function()
+commands["warnings"] = function(tlconfig)
    local function right_pad(str, wid)
       return (" "):rep(wid - #str) .. str
    end
@@ -1034,9 +998,9 @@ commands["warnings"] = function()
    print("Compiler warnings:")
    for _, v in ipairs(w) do
       io.write(" ", right_pad(v, longest), " : ")
-      if disabled_warnings[v] then
+      if tlconfig._disabled_warnings_set[v] then
          io.write("disabled")
-      elseif warning_errors[v] then
+      elseif tlconfig._warning_errors_set[v] then
          io.write("promoted to error")
       else
          io.write("enabled")
@@ -1051,7 +1015,6 @@ end
 --------------------------------------------------------------------------------
 
 commands["run"] = function(tlconfig, args)
-   setup_env(tlconfig, args["script"][1])
    local chunk = type_check_and_load(tlconfig, args["script"][1])
 
    -- collect all non-arguments including negative arg values
@@ -1098,14 +1061,25 @@ end
 
 commands["check"] = function(tlconfig, args)
    turbo(true)
+   local env
    for i, input_file in ipairs(args["file"]) do
-      type_check_file(tlconfig, input_file)
+      if not env then
+         env = setup_env(tlconfig, input_file)
+      end
+
+      local _, err = tl.process(input_file, env)
+      if err then
+         die(err)
+      end
+
       if i > 1 then
          collectgarbage()
       end
    end
 
-   if exit == 0 and tlconfig["quiet"] == false and #args["file"] == 1 then
+   local ok = report_all_errors(tlconfig, env)
+
+   if ok and tlconfig["quiet"] == false and #args["file"] == 1 then
       local file_name = args["file"][1]
 
       local output_file = get_output_filename(file_name)
@@ -1122,7 +1096,7 @@ commands["check"] = function(tlconfig, args)
       print("       to generate " .. output_file)
    end
 
-   os.exit(exit)
+   os.exit(ok and 0 or 1)
 end
 
 --------------------------------------------------------------------------------
@@ -1138,8 +1112,12 @@ commands["gen"] = function(tlconfig, args)
    turbo(true)
    local results = {}
    local err
+   local env
    for i, input_file in ipairs(args["file"]) do
-      setup_env(tlconfig, input_file)
+      if not env then
+         env = setup_env(tlconfig, input_file)
+      end
+
       local res = {
          input_file = input_file,
          output_file = get_output_filename(input_file)
@@ -1149,15 +1127,6 @@ commands["gen"] = function(tlconfig, args)
       if err then
          die(err)
       end
-      env = res.tl_result.env
-
-      if #res.tl_result.syntax_errors > 0 then
-         exit = 1
-      end
-
-      if args["check"] and #res.tl_result.type_errors > 0 then
-         exit = 1
-      end
 
       table.insert(results, res)
       if i > 1 then
@@ -1165,24 +1134,15 @@ commands["gen"] = function(tlconfig, args)
       end
    end
 
-   if exit ~= 0 then
-      for _, res in ipairs(results) do
-         if #res.tl_result.syntax_errors > 0 then
-            report_errors("syntax error", res.tl_result.syntax_errors)
-         end
-         if args["check"] then
-            report_result(tlconfig, res.tl_result)
-         end
-      end
-   else
-      for _, res in ipairs(results) do
-         if args["check"] then
-            report_warnings(tlconfig, res.tl_result)
-         end
+   for _, res in ipairs(results) do
+      if #res.tl_result.syntax_errors == 0 then
          write_out(tlconfig, res.tl_result, args["output"] or res.output_file)
       end
    end
-   os.exit(exit)
+
+   local ok = report_all_errors(tlconfig, env, not args["check"])
+
+   os.exit(ok and 0 or 1)
 end
 
 --------------------------------------------------------------------------------
@@ -1260,29 +1220,26 @@ do
       tlconfig["quiet"] = true
       tlconfig["gen_compat"] = "off"
 
-      setup_env(tlconfig, args["file"][1])
+      local env = setup_env(tlconfig, args["file"][1])
       env.keep_going = true
 
       local tr, trenv
-      local errs = false
       for i, input_file in ipairs(args["file"]) do
-         local pok, result = pcall(type_check_file, tlconfig, input_file)
+         local pok, result = pcall(tl.process, input_file, env)
          if pok then
             if result and result.ast then
                tr, trenv = tl.get_types(result, trenv)
             end
-            if #result.warnings > 0 or #result.syntax_errors > 0 or #result.type_errors > 0 then
-               errs = true
-            end
-         else
-            errs = true
          end
          if i > 1 then
             collectgarbage()
          end
       end
+
+      local ok, _, _, w = report_all_errors(tlconfig, env)
+
       if tr then
-         if errs then
+         if w or not ok then
             printerr("")
          end
 
@@ -1297,7 +1254,7 @@ do
          end
 
       end
-      os.exit(exit)
+      os.exit(ok and 0 or 1)
    end
 end
 

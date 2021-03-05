@@ -6,7 +6,7 @@ describe("tl types works like check", function()
    describe("on .tl files", function()
       it("works on empty files", function()
          local name = util.write_tmp_file(finally, [[]])
-         local pd = io.popen(util.tl_cmd("types", name), "r")
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          -- TODO check json output
@@ -20,7 +20,7 @@ describe("tl types works like check", function()
 
             print(add(10, 20))
          ]])
-         local pd = io.popen(util.tl_cmd("types", name), "r")
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          -- TODO check json output
@@ -103,7 +103,7 @@ describe("tl types works like check", function()
 
             print(add(10, 20))
          ]], "lua")
-         local pd = io.popen(util.tl_cmd("types", name), "r")
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          -- TODO check json output
@@ -149,7 +149,8 @@ describe("tl types works like check", function()
          local pd = io.popen(util.tl_cmd("types", name) .. " 2>&1 1>/dev/null", "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
-         assert.match("2 unknown variables:", output, 1, true)
+         assert.match("unknown variable: x", output, 1, true)
+         assert.match("unknown variable: y", output, 1, true)
          -- TODO check json output
       end)
 

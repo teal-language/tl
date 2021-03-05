@@ -32,7 +32,6 @@ describe("require", function()
       assert.same({
          { filename = "foo.tl", y = 1, x = 33, msg = "no type information for required module: 'box'" },
       }, result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("exports functions", function ()
@@ -57,7 +56,6 @@ describe("require", function()
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("exports types", function ()
@@ -92,7 +90,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("local types can be exported indirectly, but not their names", function ()
@@ -128,7 +125,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("exported types resolve regardless of module name", function ()
@@ -192,7 +188,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("local types can get exported", function ()
@@ -251,7 +246,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("equality of nominal types does not depend on module names", function ()
@@ -281,7 +275,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("does not get confused by similar names", function ()
@@ -343,9 +336,8 @@ describe("require", function()
       local result, err = tl.process("foo.tl")
 
       assert.same(0, #result.syntax_errors)
-      assert.same(1, #result.type_errors)
-      assert.match("cannot use operator ..", result.type_errors[1].msg)
-      assert.same(0, #result.unknowns)
+      assert.same(1, #result.env.loaded["./box.tl"].type_errors)
+      assert.match("cannot use operator ..", result.env.loaded["./box.tl"].type_errors[1].msg)
    end)
 
    it("exports global types", function ()
@@ -378,7 +370,6 @@ describe("require", function()
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("exports scoped types", function ()
@@ -410,7 +401,6 @@ describe("require", function()
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("nested types resolve in definition files", function ()
@@ -440,7 +430,6 @@ describe("require", function()
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("nested types resolve in definition files required with different name", function ()
@@ -470,7 +459,6 @@ describe("require", function()
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same(0, #result.unknowns)
    end)
 
    it("nested types with metamethods resolve in definition files required with different names (#326)", function ()
@@ -497,7 +485,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("generic nested types resolve in definition files", function ()
@@ -528,7 +515,6 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("cannot extend a record object with unknown types outside of scope", function ()
@@ -561,7 +547,6 @@ describe("require", function()
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
-      assert.same({}, result.unknowns)
    end)
 
    it("cannot extend a record type with unknown types outside of scope", function ()
@@ -593,7 +578,6 @@ describe("require", function()
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.type_errors)
       assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
-      assert.same({}, result.unknowns)
    end)
 
    it("cannot extend a record type outside of scope", function ()
@@ -620,7 +604,6 @@ describe("require", function()
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.type_errors)
       assert.match("cannot add undeclared function 'totally_unrelated_function' outside of the scope where 'Widget' was originally declared", result.type_errors[1].msg)
-      assert.same({}, result.unknowns)
    end)
 
    it("can redeclare a function that was previously declared outside of scope", function ()
@@ -646,7 +629,6 @@ describe("require", function()
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.same(0, #result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("can extend a global defined in scope", function ()
@@ -693,7 +675,6 @@ describe("require", function()
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("can use type definitions to do dynamic dispatch on module returns (#334)", function()
@@ -728,6 +709,5 @@ describe("require", function()
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 end)

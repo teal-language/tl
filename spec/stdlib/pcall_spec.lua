@@ -17,48 +17,28 @@ describe("pcall", function()
       { msg = "argument 2: got number, expected string" }
    }))
 
-   it("pcalls through pcall", function()
-      -- ok
-      util.mock_io(finally, {
-         ["foo.tl"] = [[
-            local function f(s: string): number
-               return 123
-            end
-            local a, b, d = pcall(pcall, f, "num")
+   it("pcalls through pcall", util.check [[
+      local function f(s: string): number
+         return 123
+      end
+      local a, b, d = pcall(pcall, f, "num")
 
-            assert(a == true)
-            assert(b == true)
-            assert(d == 123)
-         ]],
-      })
-      local result, err = tl.process("foo.tl")
+      assert(a == true)
+      assert(b == true)
+      assert(d == 123)
+   ]])
 
-      assert.same({}, result.syntax_errors)
-      assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
-   end)
+   it("pcalls through pcall through pcall", util.check [[
+      local function f(s: string): number
+         return 123
+      end
+      local a, b, c, d = pcall(pcall, pcall, f, "num")
 
-   it("pcalls through pcall through pcall", function()
-      -- ok
-      util.mock_io(finally, {
-         ["foo.tl"] = [[
-            local function f(s: string): number
-               return 123
-            end
-            local a, b, c, d = pcall(pcall, pcall, f, "num")
-
-            assert(a == true)
-            assert(b == true)
-            assert(c == true)
-            assert(d == 123)
-         ]],
-      })
-      local result, err = tl.process("foo.tl")
-
-      assert.same({}, result.syntax_errors)
-      assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
-   end)
+      assert(a == true)
+      assert(b == true)
+      assert(c == true)
+      assert(d == 123)
+   ]])
 
    it("pcalls through other magical stdlib functions", function()
       -- ok
@@ -79,7 +59,6 @@ describe("pcall", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      assert.same({}, result.unknowns)
    end)
 
    it("returns the correct output arguments", util.check_type_error([[
