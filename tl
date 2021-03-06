@@ -110,6 +110,17 @@ local function prepend_to_lua_paths(directory)
    package.cpath = lib_path_str .. package.cpath
 end
 
+local function find_file_in_parent_dirs(fname)
+   for _ = 1, 20 do
+      local fd = io.open(fname, "r")
+      if fd then
+         fd:close()
+         return fname
+      end
+      fname = ".." .. PATH_SEPARATOR .. fname
+   end
+end
+
 --------------------------------------------------------------------------------
 -- Common driver backend
 --------------------------------------------------------------------------------
@@ -265,23 +276,6 @@ do
       end
    end
 
-   local function find_file_in_parent_dirs(fname)
-      local currentdir = lfs.currentdir()
-      local it = str_split(currentdir, PATH_SEPARATOR)
-      local lead = it() -- grab leading '/' or 'C:\' etc.
-      local paths = { lead .. PATH_SEPARATOR .. it() }
-      for chunk in it do
-         paths[#paths + 1] = paths[#paths] .. PATH_SEPARATOR .. chunk
-      end
-      for i = #paths, 1, -1 do
-         for file in lfs.dir(paths[i]) do
-            if file == fname then
-               return paths[i] .. PATH_SEPARATOR .. fname
-            end
-         end
-      end
-   end
-
    --remove trailing and extra path separators, substitute './' for 'current_dir/'
    local function cleanup_file_name(name)
       return (name
@@ -319,11 +313,6 @@ do
                    :argname("<directory>")
       build_command:option("-s --source-dir", "Compile all *.tl files in <directory> (and all subdirectories).")
                    :argname("<directory>")
-   end
-
-   function build.config_path(cmd)
-      return cmd == "build"
-         and find_file_in_parent_dirs("tlconfig.lua")
    end
 
    function build.tlconfig_not_found(cmd)
@@ -897,7 +886,7 @@ local function get_config(cmd)
       quiet = false
    }
 
-   local config_path = build.config_path(cmd) or "tlconfig.lua"
+   local config_path = find_file_in_parent_dirs("tlconfig.lua") or "tlconfig.lua"
 
    local conf, err = loadfile(config_path)
    if not conf then
