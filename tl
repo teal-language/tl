@@ -1,6 +1,19 @@
 #!/usr/bin/env lua
 
-local tl = require("tl")
+-- Little trick for running development versions:
+-- when tl.lua and tl are in the same folder, prefer that tl.lua
+local tl
+do
+   local script_path = debug.getinfo(2, "S").source:sub(2):match("(.*[/\\])") or "."
+   local save_package_path = package.path
+   package.path = script_path .. "/?.lua;" .. package.path
+
+   tl = require("tl")
+
+   -- but otherwise don't pollute package.path inadvertedly
+   package.path = save_package_path
+end
+
 local lfs = require("lfs")
 local argparse = require("argparse")
 
@@ -73,11 +86,6 @@ local function keys(t)
    end
    table.sort(ks)
    return ks, n
-end
-
-local function script_path()
-   local str = debug.getinfo(2, "S").source:sub(2)
-   return str:match("(.*[/\\])") or "."
 end
 
 local function prepend_to_lua_paths(directory)
@@ -1267,8 +1275,6 @@ commands["build"] = build.run
 --------------------------------------------------------------------------------
 -- Main program
 --------------------------------------------------------------------------------
-
-package.path = script_path() .. "/?.lua;" .. package.path
 
 local parser = get_args_parser()
 
