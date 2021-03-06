@@ -81,11 +81,13 @@ end
 
 local function keys(t)
    local ks = {}
+   local n = 0
    for k, _ in pairs(t) do
-      table.insert(ks, k)
+      n = n + 1
+      ks[n] = k
    end
    table.sort(ks)
-   return ks
+   return ks, n
 end
 
 local function script_path()
@@ -1198,39 +1200,58 @@ do
       return "\\u" .. string.format("%04x", s:byte())
    end
 
-   local function json_out(fd, x)
-      local tx = type(x)
-      if tx == "number" then
-         fd:write(x)
-         return
-      elseif tx == "string" then
-         fd:write('"', x:gsub(json_special_codes, json_escape), '"')
-         return
-      elseif tx == "table" then
-         if x[0] == false then -- special array marker for json dump
-            fd:write("[")
-            local l = #x
-            local colon = l < 10 and "," or ",\n"
-            for i, v in ipairs(x) do
-               json_out(fd, v)
-               if i < l then
-                  fd:write(colon)
-               end
+   local function json_out_table(fd, x)
+      if x[0] == false then -- special array marker for json dump
+         local l = #x
+         if l == 0 then
+            fd:write("[]")
+            return
+         end
+         fd:write("[")
+         local sep = l < 10 and "," or ",\n"
+         for i, v in ipairs(x) do
+            if i == l then
+               sep = "]"
             end
-            fd:write("]")
-         else
-            fd:write("{")
-            local c = '"'
-            for k, v in pairs(x) do
-               fd:write(c, type(k) == "string" and k:gsub(json_special_codes, json_escape) or k, '":')
-               c = ",\n\""
-               json_out(fd, v)
+            local tv = type(v)
+            if tv == "number" then
+               fd:write(v, sep)
+            elseif tv == "table" then
+               json_out_table(fd, v)
+               fd:write(sep)
+            elseif tv == "string" then
+               fd:write('"', v:gsub(json_special_codes, json_escape), '"', sep)
+            else
+               fd:write(tostring(v), sep)
             end
-            fd:write("}")
          end
       else
-         fd:write(tostring(x))
-         return
+         local ks, l = keys(x)
+         if l == 0 then
+            fd:write("{}")
+            return
+         end
+         fd:write("{\"")
+         local sep = ",\n\""
+         for i, k in ipairs(ks) do
+            if i == l then
+               sep = "}"
+            end
+            local v = x[k]
+            local sk = type(k) == "string" and k:gsub(json_special_codes, json_escape) or k
+            local tv = type(v)
+            if tv == "number" then
+               fd:write(sk, '":', v, sep)
+            elseif tv == "table" then
+               fd:write(sk, '":')
+               json_out_table(fd, v)
+               fd:write(sep)
+            elseif tv == "string" then
+               fd:write(sk, '":"', v:gsub(json_special_codes, json_escape), '"', sep)
+            else
+               fd:write(sk, '":', tostring(v), sep)
+            end
+         end
       end
    end
 
@@ -1270,9 +1291,9 @@ do
             local y, x = pos:match("^(%d+):?(%d*)")
             y = tonumber(y) or 1
             x = tonumber(x) or 1
-            json_out(io.stdout, tl.symbols_in_scope(tr, y, x))
+            json_out_table(io.stdout, tl.symbols_in_scope(tr, y, x))
          else
-            json_out(io.stdout, tr)
+            json_out_table(io.stdout, tr)
          end
 
       end
