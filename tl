@@ -14,7 +14,6 @@ do
    package.path = save_package_path
 end
 
-local lfs = require("lfs")
 local argparse = require("argparse")
 
 local version_string = "0.12.0+dev"
@@ -205,7 +204,7 @@ local function type_check_and_load(tlconfig, filename)
    end
 
    local is_tl = filename:match("%.tl$")
-   local ok, syntax_err, type_err = report_all_errors(tlconfig, env, not is_tl)
+   local _, syntax_err, type_err = report_all_errors(tlconfig, env, not is_tl)
    if syntax_err then
       os.exit(1)
    end
@@ -253,6 +252,8 @@ end
 
 local build = {}
 do
+   local lfs = require("lfs")
+
    local function str_split(str, delimiter)
       local idx = 0
       return function()
