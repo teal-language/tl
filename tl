@@ -108,6 +108,26 @@ end
 
 -- FIXME
 local function validate_config(config)
+   local errs = {}
+
+   local function fail(k, fmt, ...)
+      table.insert(errs, string.format("* in key \"" .. k .. "\": " .. fmt, ...))
+   end
+
+   local function check_warnings(key)
+      if config[key] then
+         local unknown = {}
+         for _, warning in ipairs(config[key]) do
+            if not tl.warning_kinds[warning] then
+               table.insert(unknown, string.format("%q", warning))
+            end
+         end
+         if #unknown > 0 then
+            print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+         end
+      end
+   end
+
    local valid_keys = {
       build_dir = "string",
       exclude = "{string}",
@@ -130,28 +150,22 @@ local function validate_config(config)
 
    for k, v in pairs(config) do
       if not valid_keys[k] then
-         print(string.format("Warning: unknown key '%s' in tlconfig.lua", k))
+         print("Warning: unknown key '" .. k .. "' in tlconfig.lua")
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
-            return "Invalid value for " .. k .. ", expected one of: " ..
-                   table.concat(keys(valid_keys[k][v]), ", ")
+            fail(k, "expected one of: %s", table.concat(keys(valid_keys[k][v]), ", "))
          end
       else
          -- TODO: could we type-check the config file using tl?
          local arr_type = valid_keys[k]:match("{(.*)}")
-         if arr_type then
-            if type(v) ~= "table" then
-               return "Expected " .. k .. " to be a " .. valid_keys[k] .. ", got " .. type(v)
-            end
+         if arr_type and type(v) == "table" then
             for i, val in ipairs(v) do
                if type(val) ~= arr_type then
-                  return "Expected " .. k .. "[" .. i .. "] to be a " .. valid_keys[k] .. ", got " .. type(val)
+                  fail(k, "expected a %s, got %s in position %d", valid_keys[k], type(val), i)
                end
             end
-         else
-            if type(v) ~= valid_keys[k] then
-               return "Expected " .. k .. " to be a " .. valid_keys[k] .. ", got " .. type(v)
-            end
+         elseif type(v) ~= valid_keys[k] then
+            fail(k, "expected a %s, got %s", valid_keys[k], type(v))
          end
       end
    end
@@ -160,31 +174,10 @@ local function validate_config(config)
       config.gen_compat = "off"
    end
 
-   if config.disable_warnings then
-      local unknown = {}
-      for _, warning in ipairs(config.disable_warnings) do
-         if not tl.warning_kinds[warning] then
-            table.insert(unknown, string.format("%q", warning))
-         end
-      end
-      if #unknown > 0 then
-         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
-      end
-   end
+   check_warnings("disable_warnings")
+   check_warnings("warning_error")
 
-   if config.warning_error then
-      local unknown = {}
-      for _, warning in ipairs(config.disable_warnings) do
-         if not tl.warning_kinds[warning] then
-            table.insert(unknown, string.format("%q", warning))
-         end
-      end
-      if #unknown > 0 then
-         print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
-      end
-   end
-
-   return nil
+   return errs
 end
 
 package.path = script_path() .. "/?.lua;" .. package.path
@@ -296,14 +289,14 @@ local function get_config()
             die("Build error: tlconfig.lua not found")
          end
       else
-         die("Error loading config: " .. err)
+         die("Error loading tlconfig.lua:\n" .. err)
       end
    end
 
    if conf then
       local ok, user_config = pcall(conf)
       if not ok then
-         die("Error loading config:" .. err)
+         die("Error loading tlconfig.lua:\n" .. err)
       end
 
       -- Merge tlconfig with the default config
@@ -314,9 +307,9 @@ local function get_config()
       end
    end
 
-   config_path = config_path:match("^(.+)" .. path_separator .. "tlconfig.lua$")
-   if cmd == "build" and config_path then
-      assert(lfs.chdir(config_path))
+   local config_dir = config_path:match("^(.+)" .. path_separator .. "tlconfig.lua$")
+   if cmd == "build" and config_dir then
+      assert(lfs.chdir(config_dir))
    end
 
    if not config.build_file then
@@ -329,10 +322,10 @@ local function get_config()
       end
    end
 
-   err = validate_config(config)
+   local errs = validate_config(config)
 
-   if err then
-      die("Error loading config: " .. err)
+   if #errs > 0 then
+      die("Error loading tlconfig.lua:\n" .. table.concat(errs, "\n"))
    end
 
    return config
@@ -341,14 +334,16 @@ end
 local tlconfig = get_config()
 
 local function merge_list(a, b)
-   a = a or {}
-   b = b or {}
    local c = {}
-   for i, v in ipairs(a) do
-      table.insert(c, v)
+   if a then
+      for _, v in ipairs(a) do
+         table.insert(c, v)
+      end
    end
-   for i, v in ipairs(b) do
-      table.insert(c, v)
+   if b then
+      for _, v in ipairs(b) do
+         table.insert(c, v)
+      end
    end
    return c
 end
@@ -404,7 +399,7 @@ end
 --                     CONFIG VALIDATION                          --
 --------------------------------------------------------------------
 
-function check_should_run_build_script()
+local function check_should_run_build_script()
    return cmd == "build" or tlconfig["run_build_script"] or args["run_build_script"]
 end
 
@@ -470,15 +465,17 @@ local exit = 0
 --------------------------------------------------------------------
 
 local function report_warnings(result)
-   if not args["quiet"] then
-      local res_warnings = {}
-      for _, warning in ipairs(result.warnings or {}) do
-         if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
-            table.insert(res_warnings, warning)
-         end
-      end
-      return not report_errors("warning", res_warnings)
+   if args["quiet"] then
+      return
    end
+
+   local res_warnings = {}
+   for _, warning in ipairs(result.warnings or {}) do
+      if not (disabled_warnings[warning.tag] or warning_errors[warning.tag]) then
+         table.insert(res_warnings, warning)
+      end
+   end
+   report_errors("warning", res_warnings)
 end
 
 local function get_warning_errors(result)
@@ -573,7 +570,6 @@ local function traverse(dirname, emptyref, is_generated, generated_ref)
       if file ~= "." and file ~= ".." then
          if lfs.attributes(path_concat(dirname, file), "mode") == "directory" then
             local p
-            local prefix = dirname
             files[file], p = traverse(path_concat(dirname, file), emptyref, is_generated, generated_ref)
             paths[files[file]] = file
             for k, v in pairs(p) do
@@ -597,29 +593,7 @@ local function traverse(dirname, emptyref, is_generated, generated_ref)
    return files, paths, emptyref
 end
 
---May not be a bad idea to have a command that cleans all the cache....
-local function delete_dir(dir)
-   for file in lfs.dir(dir) do
-      if file ~= "." and file ~= ".." then
-         local file_path = path_concat(dir, file)
-         if file ~= "." and file ~= ".." then
-            if lfs.attributes(file_path, 'mode') == 'file' then
-                  os.remove(file_path)
-            elseif lfs.attributes(file_path, 'mode') == 'directory' then
-                  delete_dir(file_path)
-            end
-         end
-      end
-   end
-   lfs.rmdir(dir)
-end
-
 local build_path
-local function cleanup_generated_files()
-   if build_path then
-      delete_dir(build_path)
-   end
-end
 
 local modules = tlconfig.preload_modules
 
@@ -1016,8 +990,9 @@ if cmd == "gen" then
          collectgarbage()
       end
    end
+
    if exit ~= 0 then
-      for i, res in ipairs(results) do
+      for _, res in ipairs(results) do
          if #res.tl_result.syntax_errors > 0 then
             report_errors("syntax error", res.tl_result.syntax_errors)
          end
@@ -1026,7 +1001,7 @@ if cmd == "gen" then
          end
       end
    else
-      for i, res in ipairs(results) do
+      for _, res in ipairs(results) do
          if args["check"] then
             report_warnings(res.tl_result)
          end
@@ -1081,7 +1056,6 @@ if internal_output then
 end
 
 -- prepare build and source dirs
-local curr_dir = lfs.currentdir()
 
 local project = {}
 -- This will probably get exposed in the api if that happens
@@ -1171,9 +1145,9 @@ if cmd == "build" then
    if tlconfig["source_dir"] then
       tlconfig["source_dir"] = cleanup_file_name(tlconfig["source_dir"])
       local project_source = project:find(tlconfig["source_dir"])
+      local meta_table = getmetatable(project_source)
       if not project_source then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' doesn't exist")
-      local meta_table = getmetatable(project_source)
       elseif meta_table and meta_table.empty == project.emptyref then
          die("Build error: source_dir '" .. tlconfig["source_dir"] .. "' is not a directory")
       end
@@ -1185,13 +1159,13 @@ if cmd == "build" then
    -- include/exclude pattern matching
    -- create matchers for each pattern
    if tlconfig["include"] then
-      for i, patt in ipairs(tlconfig["include"]) do
+      for _, patt in ipairs(tlconfig["include"]) do
          patt = cleanup_file_name(patt)
          table.insert(inc_patterns, matcher(patt))
       end
    end
    if tlconfig["exclude"] then
-      for i, patt in ipairs(tlconfig["exclude"]) do
+      for _, patt in ipairs(tlconfig["exclude"]) do
          patt = cleanup_file_name(patt)
          table.insert(exc_patterns, matcher(patt))
       end
@@ -1218,13 +1192,13 @@ if cmd == "build" then
 
    if tlconfig["files"] then
       -- TODO: check if files are not relative
-      for i, fname in ipairs(tlconfig["files"]) do
+      for _, fname in ipairs(tlconfig["files"]) do
          if not project:find(fname) then
             die("Build error: file \"" .. fname .. "\" not found")
          end
          project.source_file_map[fname] = fname:gsub("%.tl$", ".lua")
          if tlconfig["build_dir"] then
-            project.source_file_map[path] = path_concat(tlconfig["build_dir"], project.source_file_map[path])
+            project.source_file_map[fname] = path_concat(tlconfig["build_dir"], project.source_file_map[fname])
          end
          check_parent_dirs(project.source_file_map[fname])
       end
@@ -1251,7 +1225,7 @@ if cmd == "build" then
          check_parent_dirs(project.source_file_map[path])
       end
    end
-   for i, v in ipairs(dirs_to_be_mked) do
+   for _, v in ipairs(dirs_to_be_mked) do
       if not lfs.mkdir(v) then
          die("Build error: unable to mkdir \"" .. v .. "\"")
       end
