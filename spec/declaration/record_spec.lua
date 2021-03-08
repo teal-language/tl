@@ -334,6 +334,34 @@ describe("records", function()
       foo.example = { z = { x = "hello" } }
    ]])
 
+   it("can have records in arrayrecords", util.check [[
+      local record bar
+      end
+      local record foo
+         { bar }
+      end
+      local f : foo = { {  } }
+   ]])
+
+   pending("can have nested records in arrayrecords", util.check [[
+      local record foo
+         record bar
+         end
+         { bar }
+      end
+      local f : foo = { {  } }
+   ]])
+
+   pending("can have nested enums in arrayrecords", util.check [[
+      local record foo
+         enum bar
+            "baz"
+         end
+         { bar }
+      end
+      local f : foo = { "baz" }
+   ]])
+
    it("can extend generic functions", util.check [[
       local type foo = record
          type bar = function<T>(T)
