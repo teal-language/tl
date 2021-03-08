@@ -343,7 +343,7 @@ describe("records", function()
       local f : foo = { {  } }
    ]])
 
-   pending("can have nested records in arrayrecords", util.check [[
+   it("can have nested records in arrayrecords", util.check [[
       local record foo
          record bar
          end
@@ -352,7 +352,7 @@ describe("records", function()
       local f : foo = { {  } }
    ]])
 
-   pending("can have nested enums in arrayrecords", util.check [[
+   it("can have nested enums in arrayrecords", util.check [[
       local record foo
          enum bar
             "baz"
