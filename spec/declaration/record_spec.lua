@@ -444,6 +444,65 @@ describe("records", function()
       func(x)
    ]])
 
+   it("resolves nested type aliases (see #416)", util.check [[
+      local type A = number
+      local record Foo
+         type B = A
+      end
+
+      local foo: Foo.B
+      print(foo)
+   ]])
+
+   it("can use nested type aliases as types (see #416)", util.check_type_error([[
+      local record F1
+         record A
+            x: number
+         end
+         type C1 = A
+         record F2
+            type C2 = C1
+            record F3
+               type C3 = C2
+            end
+         end
+      end
+
+      -- Let's use nested type aliases as types
+
+      local foo: F1.F2.F3.C3 = {}
+      foo.x = 123          -- correctly works
+      foo.x = "hello"      -- correctly fails, with "got string, expected number"
+   ]], {
+      { y = 18, msg = 'got string "hello", expected number' },
+   }))
+
+   it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
+      local record F1
+         record A
+            x: number
+         end
+         type C1 = A
+         record F2
+            type C2 = C1
+            record F3
+               type C3 = C2
+            end
+         end
+      end
+
+      -- Let's use nested type aliases as prototypes
+
+      F1.C1.x = 2
+
+      local proto = F1.F2.F3.C3
+
+      proto.x = 2
+   ]], {
+      { y = 16, msg = "cannot use a nested type alias as a concrete value" },
+      { y = 20, msg = "cannot use a nested type alias as a concrete value" },
+   }))
+
    it("can have circular type dependencies on nested types", util.check [[
       local type R = record
          type R2 = record

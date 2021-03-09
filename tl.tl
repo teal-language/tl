@@ -966,6 +966,7 @@ local record Type
 
    -- typetype
    def: Type
+   is_alias: boolean
    closed: boolean
 
    -- map
@@ -5755,6 +5756,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
          if not typetype then
             type_error(t, "unknown type %s", t)
          elseif is_typetype(typetype) then
+            if typetype.is_alias then
+               typetype = typetype.def.found
+               assert(is_typetype(typetype))
+            end
             assert(typetype.def.typename ~= "nominal")
             resolved = match_typevals(t, typetype.def)
          else
@@ -6540,6 +6545,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
             add_unknown_dot(node, node.e1.tk .. "." .. key.tk)
          end
          return UNKNOWN
+      end
+
+      if tbl.is_alias then
+         return node_error(key, "cannot use a nested type alias as a concrete value")
       end
 
       tbl = resolve_typetype(tbl)
@@ -8658,7 +8667,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): {Error}, {Error}, T
                for name, typ2 in fields_of(typ) do
                   if typ2.typename == "typetype" then
                      typ2.typename = "nestedtype"
-                     add_var(nil, name, typ2)
+                     local resolved, is_alias = resolve_nominal_typetype(typ2)
+                     if is_alias then
+                        typ2.is_alias = true
+                        typ2.def.resolved = resolved
+                     end
+                     add_var(nil, name, resolved)
                   end
                end
             end,
