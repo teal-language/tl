@@ -32,6 +32,11 @@ describe("subtyping of any:", function()
       a = 1
    ]])
 
+   it("integer <: any", util.check [[
+      local a: any
+      a = 1
+   ]])
+
    it("boolean <: any", util.check [[
       local a: any
       a = false

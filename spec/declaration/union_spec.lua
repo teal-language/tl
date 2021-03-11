@@ -37,6 +37,21 @@ describe("union declaration", function()
       local params3: {string:P3} = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
 
+   it("can declare a union between number and integer", util.check [[
+      local t: number | integer
+      local u: number | string
+
+      local function takes_integer(i: integer)
+         print(i)
+      end
+
+      if t is integer then
+         takes_integer(t)
+      else
+         u = t
+      end
+   ]])
+
    it("cannot declare a union with an unknown type", util.check_type_error([[
       local function f(a: number | unknown_t)
       end
