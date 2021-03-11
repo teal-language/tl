@@ -212,7 +212,24 @@ describe("global", function()
          global y: Foo2<number> = { item = 123 }
       ]])
 
-      it("nested types can be resolved as aliases", util.check [[
+      it("nested types can be resolved as aliases if there are no undefined type variables", util.check [[
+         global record Foo<R>
+            enum LocalEnum
+               "loc"
+            end
+
+            record Nested
+               x: {LocalEnum}
+               y: number
+            end
+
+            item: R
+         end
+
+         global type Nested = Foo.Nested
+      ]])
+
+      it("nested types cannot be resolved as aliases if there are undefined type variables", util.check_type_error([[
          global record Foo<R>
             enum LocalEnum
                "loc"
@@ -227,7 +244,9 @@ describe("global", function()
          end
 
          global type Nested = Foo.Nested
-      ]])
+      ]], {
+         { msg = "undefined type variable R" }, -- FIXME this shows y = 8, but should be y = 14
+      }))
 
       it("types declared as nominal types are aliases", util.check [[
          global record Foo<R>

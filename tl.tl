@@ -6621,34 +6621,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       st[1][var] = { t = valtype, is_const = is_const }
    end
 
-   local check_typevars: function(node: Node, t: Type)
-
-   local function check_all_typevars(node: Node, ts: {Type})
-      if ts ~= nil then
-         for _, arg in ipairs(ts) do
-            check_typevars(node, arg)
-         end
-      end
-   end
-
-   check_typevars = function(node: Node, t: Type)
-      if t == nil then
-         return
-      end
-      if t.typename == "typevar" then
-         if not find_var_type(t.typevar) then
-            node_error(node, "unknown type variable " .. t.typevar)
-         end
-         return
-      end
-      check_typevars(node, t.elements)
-      check_typevars(node, t.keys)
-      check_typevars(node, t.values)
-      check_all_typevars(node, t.typeargs)
-      check_all_typevars(node, t.args)
-      check_all_typevars(node, t.rets)
-   end
-
    local function get_rets(rets: {Type}): Type
       if lax and (#rets == 0) then
          return VARARG { UNKNOWN }
@@ -8561,7 +8533,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             if node.tk == "..." then
                t = a_type { typename = "tuple", is_va = true, t }
             end
-            check_typevars(node, t)
             node.type = t
             add_var(node, node.tk, t).is_func_arg = true
             return node.type
@@ -8686,6 +8657,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                return typ
             end,
          },
+         ["typevar"] = {
+            after = function(typ: Type, _children: {Type}): Type
+               if not find_var_type(typ.typevar) then
+                  type_error(typ, "undefined type variable " .. typ.typevar)
+               end
+               return typ
+            end,
+         },
          ["nominal"] = {
             after = function(typ: Type, _children: {Type}): Type
                if typ.found then
@@ -8746,7 +8725,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
    visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
-   visit_type.cbs["typevar"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
    visit_type.cbs["arrayrecord"] = visit_type.cbs["record"]
