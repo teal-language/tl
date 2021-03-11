@@ -30,6 +30,11 @@ describe("subtyping of nil:", function()
       n = nil
    ]])
 
+   it("nil <: integer", util.check [[
+      local n: integer
+      n = nil
+   ]])
+
    it("nil <: boolean", util.check [[
       local b: boolean
       b = nil
