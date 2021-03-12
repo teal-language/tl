@@ -5459,6 +5459,7 @@ tl.type_check = function(ast, opts)
       end
 
       if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
+         node.type = node.type or valtype
          local slot
          if node.symbol_list_slot then
             slot = node.symbol_list_slot
@@ -8542,7 +8543,7 @@ tl.type_check = function(ast, opts)
       },
       ["identifier"] = {
          after = function(node, _children)
-            node.type = NONE
+            node.type = node.type or NONE
             return node.type
          end,
       },
