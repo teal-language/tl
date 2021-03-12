@@ -7891,6 +7891,7 @@ tl.type_check = function(ast, opts)
                      end
                   end
                   add_var(v, v.tk, r)
+                  v.type = r
                   last = r
                end
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
