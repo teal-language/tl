@@ -54,7 +54,7 @@ describe("if", function()
          print(x)
       end
    ]], {
-      { msg = "types are not comparable for equality: boolean and number" }
+      { msg = "types are not comparable for equality: boolean and integer" }
    }))
 
    it("rejects a bad expression in else if", util.check_type_error([[
@@ -65,6 +65,6 @@ describe("if", function()
          print("not " .. x)
       end
    ]], {
-      { msg = "types are not comparable for equality: boolean and number" }
+      { msg = "types are not comparable for equality: boolean and integer" }
    }))
 end)

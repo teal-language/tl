@@ -81,7 +81,7 @@ describe("return", function()
             return 123
          end
       ]], {
-         { msg = "in return value (inferred at foo.tl:2:13): got number, expected string" }
+         { msg = "in return value (inferred at foo.tl:2:13): got integer, expected string" }
       }))
    end)
 

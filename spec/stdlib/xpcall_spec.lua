@@ -22,7 +22,7 @@ describe("xpcall", function()
 
       local pok = xpcall(f, msgh, 123, "hello")
    ]], {
-      { msg = "argument 3: got number, expected string" }
+      { msg = "argument 3: got integer, expected string" }
    }))
 
    it("xpcalls through xpcall", function()
@@ -114,7 +114,7 @@ describe("xpcall", function()
       local pok = xpcall(f, msgh, 123, "hello")
    ]], {
       { msg = "in message handler: incompatible number of arguments" },
-      { msg = "argument 3: got number, expected string" },
+      { msg = "argument 3: got integer, expected string" },
    }))
 
 end)

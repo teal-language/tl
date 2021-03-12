@@ -7,8 +7,8 @@ describe("assignment to array", function()
       a = 100
       a = {"a", 100}
    ]], {
-      { y = 2, msg = "got number, expected {string}" },
-      { y = 3, msg = "expected an array: at index 2: got number, expected string" },
+      { y = 2, msg = "got integer, expected {string}" },
+      { y = 3, msg = "expected an array: at index 2: got integer, expected string" },
    }))
 
    it("resolves arity of function returns", util.check [[

@@ -41,7 +41,7 @@ describe("local", function()
             local z
             z = x + string.byte(y)
          ]], {
-            { msg = "x: got number, expected string" },
+            { msg = "x: got integer, expected string" },
             { msg = "y: got string \"a\", expected number" },
             { msg = "variable 'z' has no type" },
             { msg = "cannot use operator '+'" },

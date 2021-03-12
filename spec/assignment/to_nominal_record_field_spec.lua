@@ -22,7 +22,7 @@ describe("assignment to nominal record field", function()
       local t: Type = {}
       t.node = 123
    ]], {
-      { msg = "in assignment: got number, expected Node" }
+      { msg = "in assignment: got integer, expected Node" }
    }))
 
    it("fails with incorrect literal index", util.check_type_error([[
