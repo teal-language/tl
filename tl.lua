@@ -5698,6 +5698,12 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local end_scope_and_none_type = function(node, _children)
+      end_scope(node)
+      node.type = NONE
+      return node.type
+   end
+
    local function resolve_typevars_at(t, where)
       assert(where)
       local ok, typ, errs = resolve_typevars(t)
@@ -7581,7 +7587,6 @@ tl.type_check = function(ast, opts)
          after = function(node, _children)
             dismiss_unresolved(node.var.tk)
             node.type = NONE
-            node.var.type = node.value.type
             return node.type
          end,
       },
@@ -7606,7 +7611,6 @@ tl.type_check = function(ast, opts)
             end
             dismiss_unresolved(var.tk)
             node.type = NONE
-            node.var.type = node.value.newtype
             return node.type
          end,
       },
@@ -7646,7 +7650,6 @@ tl.type_check = function(ast, opts)
 
                assert(var)
                add_var(var, var.tk, t, var.is_const)
-               var.type = t
 
                dismiss_unresolved(var.tk)
             end
@@ -7744,12 +7747,6 @@ tl.type_check = function(ast, opts)
             return node.type
          end,
       },
-      ["do"] = {
-         after = function(node, _children)
-            node.type = NONE
-            return node.type
-         end,
-      },
       ["if"] = {
          after = function(node, _children)
             node.type = NONE
@@ -7773,11 +7770,7 @@ tl.type_check = function(ast, opts)
                apply_facts(node.exp, node.exp.known)
             end
          end,
-         after = function(node, _children)
-            node.type = NONE
-            end_scope(node)
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["while"] = {
          before = function()
@@ -7788,11 +7781,7 @@ tl.type_check = function(ast, opts)
             begin_scope(node)
             apply_facts(node.exp, node.exp.known)
          end,
-         after = function(node, _children)
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["label"] = {
          before = function(node)
@@ -7833,12 +7822,8 @@ tl.type_check = function(ast, opts)
 
             widen_all_unions()
          end,
-         after = function(node, _children)
 
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["forin"] = {
          before = function(node)
@@ -7892,7 +7877,6 @@ tl.type_check = function(ast, opts)
                      end
                   end
                   add_var(v, v.tk, r)
-                  v.type = r
                   last = r
                end
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
@@ -7907,22 +7891,14 @@ tl.type_check = function(ast, opts)
                end
             end
          end,
-         after = function(node, _children)
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["fornum"] = {
          before = function(node)
             begin_scope(node)
             add_var(node.var, node.var.tk, NUMBER)
          end,
-         after = function(node, _children)
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["return"] = {
          after = function(node, children)
@@ -8536,7 +8512,6 @@ tl.type_check = function(ast, opts)
             if node.tk == "..." then
                t = a_type({ typename = "tuple", is_va = true, t })
             end
-            node.type = t
             add_var(node, node.tk, t).is_func_arg = true
             return node.type
          end,
@@ -8561,11 +8536,6 @@ tl.type_check = function(ast, opts)
       },
    }
 
-   visit_node.cbs["break"] = visit_node.cbs["do"]
-
-   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
-   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
-
    visit_node.cbs["string"] = {
       after = function(node, _children)
          node.type = a_type({
@@ -8579,6 +8549,7 @@ tl.type_check = function(ast, opts)
       end,
    }
    visit_node.cbs["number"] = visit_node.cbs["string"]
+
    visit_node.cbs["boolean"] = {
       after = function(node, _children)
          node.type = a_type({
@@ -8594,7 +8565,12 @@ tl.type_check = function(ast, opts)
       end,
    }
    visit_node.cbs["nil"] = visit_node.cbs["boolean"]
+
+   visit_node.cbs["do"] = visit_node.cbs["if"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
+   visit_node.cbs["break"] = visit_node.cbs["if"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
    visit_node.after = {
       after = function(node, _children)

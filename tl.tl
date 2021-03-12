@@ -5698,6 +5698,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
+   local end_scope_and_none_type = function(node: Node, _children: {Type}): Type
+      end_scope(node)
+      node.type = NONE
+      return node.type
+   end
+
    local function resolve_typevars_at(t: Type, where: Node): Type
       assert(where)
       local ok, typ, errs = resolve_typevars(t)
@@ -7581,7 +7587,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          after = function(node: Node, _children: {Type}): Type
             dismiss_unresolved(node.var.tk)
             node.type = NONE
-            node.var.type = node.value.type
             return node.type
          end,
       },
@@ -7606,7 +7611,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
             dismiss_unresolved(var.tk)
             node.type = NONE
-            node.var.type = node.value.newtype
             return node.type
          end,
       },
@@ -7646,7 +7650,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
                assert(var)
                add_var(var, var.tk, t, var.is_const)
-               var.type = t
 
                dismiss_unresolved(var.tk)
             end
@@ -7744,12 +7747,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             return node.type
          end,
       },
-      ["do"] = {
-         after = function(node: Node, _children: {Type}): Type
-            node.type = NONE
-            return node.type
-         end,
-      },
       ["if"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = NONE
@@ -7773,11 +7770,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                apply_facts(node.exp, node.exp.known)
             end
          end,
-         after = function(node: Node, _children: {Type}): Type
-            node.type = NONE
-            end_scope(node)
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["while"] = {
          before = function()
@@ -7788,11 +7781,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             begin_scope(node)
             apply_facts(node.exp, node.exp.known)
          end,
-         after = function(node: Node, _children: {Type}): Type
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["label"] = {
          before = function(node: Node)
@@ -7803,7 +7792,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                node_error(node, "label '" .. node.label .. "' already defined at " .. filename )
             end
             local unresolved = st[#st]["@unresolved"]
-            node.type = a_type { y = node.y, x = node.x, typename = "none", }
+            node.type = a_type { y = node.y, x = node.x, typename = "none" }
             local var = add_var(node, label_id, node.type)
             if unresolved then
                if unresolved.t.labels[node.label] then
@@ -7833,12 +7822,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             -- widen all narrowed variables because we don't calculate a fixpoint yet
             widen_all_unions()
          end,
-         after = function(node: Node, _children: {Type}): Type
-            -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
+         after = end_scope_and_none_type,
       },
       ["forin"] = {
          before = function(node: Node)
@@ -7892,7 +7877,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                      end
                   end
                   add_var(v, v.tk, r)
-                  v.type = r
                   last = r
                end
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
@@ -7907,22 +7891,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                end
             end
          end,
-         after = function(node: Node, _children: {Type}): Type
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["fornum"] = {
          before = function(node: Node)
             begin_scope(node)
             add_var(node.var, node.var.tk, NUMBER)
          end,
-         after = function(node: Node, _children: {Type}): Type
-            end_scope(node)
-            node.type = NONE
-            return node.type
-         end,
+         after = end_scope_and_none_type,
       },
       ["return"] = {
          after = function(node: Node, children: {Type}): Type
@@ -8536,7 +8512,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             if node.tk == "..." then
                t = a_type { typename = "tuple", is_va = true, t }
             end
-            node.type = t
             add_var(node, node.tk, t).is_func_arg = true
             return node.type
          end,
@@ -8561,11 +8536,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       }
    }
 
-   visit_node.cbs["break"] = visit_node.cbs["do"]
-
-   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
-   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
-
    visit_node.cbs["string"] = {
       after = function(node: Node, _children: {Type}): Type
          node.type = a_type {
@@ -8579,6 +8549,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end,
    }
    visit_node.cbs["number"] = visit_node.cbs["string"]
+
    visit_node.cbs["boolean"] = {
       after = function(node: Node, _children: {Type}): Type
          node.type = a_type {
@@ -8594,7 +8565,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end,
    }
    visit_node.cbs["nil"] = visit_node.cbs["boolean"]
+
+   visit_node.cbs["do"] = visit_node.cbs["if"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
+   visit_node.cbs["break"] = visit_node.cbs["if"]
+   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
+   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
    visit_node.after = {
       after = function(node: Node, _children: {Type}): Type
