@@ -6627,6 +6627,9 @@ tl.type_check = function(ast, opts)
          add_unknown(node, var)
       end
       st[1][var] = { t = valtype, is_const = is_const }
+      if node then
+         node.type = node.type or valtype
+      end
    end
 
    local function get_rets(rets)
@@ -8125,7 +8128,6 @@ tl.type_check = function(ast, opts)
                rets = rets,
                filename = filename,
             }))
-            node.type = NONE
             return node.type
          end,
       },
@@ -8139,7 +8141,7 @@ tl.type_check = function(ast, opts)
          end,
          after = function(node, children)
             end_function_scope(node)
-            add_global(nil, node.name.tk, a_type({
+            add_global(node, node.name.tk, a_type({
                y = node.y,
                x = node.x,
                typename = "function",
@@ -8147,7 +8149,6 @@ tl.type_check = function(ast, opts)
                rets = get_rets(children[3]),
                filename = filename,
             }))
-            node.type = NONE
             return node.type
          end,
       },
@@ -8192,6 +8193,7 @@ tl.type_check = function(ast, opts)
                   rtype.field_order = rtype.field_order or {}
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
+                  node.name.type = fn_type
                else
                   local name = tl.pretty_print_ast(node.fn_owner, { preserve_indent = true, preserve_newlines = false })
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
@@ -8204,7 +8206,6 @@ tl.type_check = function(ast, opts)
          end,
          after = function(node, _children)
             end_function_scope(node)
-
             node.type = NONE
             return node.type
          end,
