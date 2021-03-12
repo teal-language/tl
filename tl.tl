@@ -5475,34 +5475,35 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local type CompareTypes = function(Type, Type, boolean): boolean, {Error}
 
    local function compare_and_infer_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
-      local tv1 = find_var_type(t1.typevar)
-      local tv2 = find_var_type(t2.typevar)
+      -- if both are typevars and they are the same variable, nothing to do here
       if t1.typevar == t2.typevar then
-         local has_t1 = not not tv1
-         local has_t2 = not not tv2
-         if has_t1 == has_t2 then
-            return true
-         end
+         return true
       end
-      local function cmp(k: string, v: Type, a: Type, b: Type): boolean, {Error}
-         if find_var_type(k) then
-            return comp(a, b)
+
+      -- we have one typevar to compare to or infer to the other term
+      local typevar = t2.typevar or t1.typevar
+
+      -- does the typevar currently match to a type?
+      local vt = find_var_type(typevar)
+      if vt then
+         -- If so, compare it to the other type
+         if t2.typevar then
+            return comp(t1, vt)
          else
-            local ok, resolved, errs = resolve_typevars(v)
-            if not ok then
-               return false, errs
-            end
-            if resolved.typename ~= "unknown" then
-               resolved = resolve_typetype(resolved)
-               add_var(nil, k, resolved)
-            end
-            return true
+            return comp(vt, t2)
          end
-      end
-      if t2.typename == "typevar" then
-         return cmp(t2.typevar, t1, t1, tv2)
       else
-         return cmp(t1.typevar, t2, tv1, t2)
+         -- otherwise, infer it to the other type
+         local other = t2.typevar and t1 or t2
+         local ok, resolved, errs = resolve_typevars(other)
+         if not ok then
+            return false, errs
+         end
+         if resolved.typename ~= "unknown" then
+            resolved = resolve_typetype(resolved)
+            add_var(nil, typevar, resolved)
+         end
+         return true
       end
    end
 
