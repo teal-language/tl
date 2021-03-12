@@ -5216,7 +5216,7 @@ tl.type_check = function(ast, opts)
             t = find_var_type(t.typevar)
             local rt
             if not t then
-               rt = lax and UNKNOWN or INVALID
+               rt = orig_t
             elseif t.typename == "string" then
 
                rt = STRING
@@ -6377,6 +6377,16 @@ tl.type_check = function(ast, opts)
          return func, is_method
       end
 
+      local function mark_invalid_typeargs(f)
+         if f.typeargs then
+            for _, a in ipairs(f.typeargs) do
+               if not find_var(a.typearg) then
+                  add_var(nil, a.typearg, lax and UNKNOWN or INVALID)
+               end
+            end
+         end
+      end
+
       local function try_match_func_args(node, f, args, argdelta)
          local errs = {}
 
@@ -6401,6 +6411,8 @@ tl.type_check = function(ast, opts)
                end
             end
          end
+
+         mark_invalid_typeargs(f)
 
 
          for a = 1, given do
@@ -6450,10 +6462,9 @@ tl.type_check = function(ast, opts)
             node_error(node, "wrong number of arguments (given " .. nargs .. ", expects " .. table.concat(expects, " or ") .. ")")
          end
 
-         local rets = func.typename == "poly" and
-         func.types[1].rets or
-         func.rets
-         return resolve_typevars_at(rets, node)
+         local f = func.typename == "poly" and func.types[1] or func
+         mark_invalid_typeargs(f)
+         return resolve_typevars_at(f.rets, node)
       end
 
       local function check_call(node, func, args, is_method, argdelta)
@@ -7880,6 +7891,7 @@ tl.type_check = function(ast, opts)
                      end
                   end
                   add_var(v, v.tk, r)
+                  v.type = r
                   last = r
                end
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
@@ -8124,6 +8136,7 @@ tl.type_check = function(ast, opts)
                y = node.y,
                x = node.x,
                typename = "function",
+               typeargs = node.typeargs,
                args = children[2],
                rets = rets,
                filename = filename,
@@ -8145,6 +8158,7 @@ tl.type_check = function(ast, opts)
                y = node.y,
                x = node.x,
                typename = "function",
+               typeargs = node.typeargs,
                args = children[2],
                rets = get_rets(children[3]),
                filename = filename,
@@ -8174,6 +8188,7 @@ tl.type_check = function(ast, opts)
                   x = node.x,
                   typename = "function",
                   is_method = node.is_method,
+                  typeargs = node.typeargs,
                   args = children[3],
                   rets = get_rets(children[4]),
                   filename = filename,
@@ -8225,6 +8240,7 @@ tl.type_check = function(ast, opts)
                y = node.y,
                x = node.x,
                typename = "function",
+               typeargs = node.typeargs,
                args = children[1],
                rets = children[2],
                filename = filename,

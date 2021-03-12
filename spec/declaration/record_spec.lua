@@ -503,6 +503,23 @@ describe("records", function()
       { y = 20, msg = "cannot use a nested type alias as a concrete value" },
    }))
 
+   it("can resolve generics partially (see #417)", function()
+      local _, ast = util.check([[
+         local record fun
+             record iterator<T>
+                 reduce: function<R>(iterator<T>, (function(R, T): R), R): R
+             end
+             iter: function<T>({T}): iterator<T>
+         end
+
+         local sum = fun.iter({ 1, 2, 3, 4 }):reduce(function(a:number,x:number): number
+             return a + x
+         end, 0)
+      ]])()
+
+      assert.same("number", ast[2].exps[1].type[1].typename)
+   end)
+
    it("can have circular type dependencies on nested types", util.check [[
       local type R = record
          type R2 = record
