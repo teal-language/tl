@@ -14,7 +14,7 @@ describe("pcall", function()
 
       local pok = pcall(f, 123, "hello")
    ]], {
-      { msg = "argument 2: got number, expected string" }
+      { msg = "argument 2: got integer, expected string" }
    }))
 
    it("pcalls through pcall", util.check [[

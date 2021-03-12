@@ -18,6 +18,6 @@ describe("assignment to self record field", function()
          self.foo = 12
       end
    ]], {
-      { msg = "in assignment: got number, expected string" }
+      { msg = "in assignment: got integer, expected string" }
    }))
 end)

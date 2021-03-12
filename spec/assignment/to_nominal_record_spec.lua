@@ -63,7 +63,7 @@ describe("assignment to nominal record", function()
       end
       local x: Node = 123
    ]], {
-      { msg = "in local declaration: x: got number, expected Node" }
+      { msg = "in local declaration: x: got integer, expected Node" }
    }))
 
    it("type system is nominal: fails if different records with compatible structure", util.check_type_error([[

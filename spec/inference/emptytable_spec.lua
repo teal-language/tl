@@ -58,7 +58,7 @@ describe("empty table without type annotation", function()
          return t
       end
    ]], {
-      { msg = "assigning number to a variable declared with {}" },
+      { msg = "assigning integer to a variable declared with {}" },
    }))
 
    it("preserves provenance information", util.check_type_error([[

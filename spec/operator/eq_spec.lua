@@ -55,7 +55,7 @@ describe("flow analysis with ==", function()
 
          local s = not (x == y) and tostring(x + 1)
       ]], {
-         { msg = "cannot use operator '+' for types number | string and number" }
+         { msg = "cannot use operator '+' for types number | string and integer" }
       }))
    end)
 
@@ -247,7 +247,7 @@ describe("flow analysis with ==", function()
             print(v + 1) -- ERR
          end
       ]], {
-         { msg = "cannot use operator '+' for types number | boolean" },
+         { msg = "cannot use operator '+' for types integer | boolean" },
       }))
 
       it("builds union types with == and or (parses priorities correctly)", util.check_type_error([[
@@ -256,7 +256,7 @@ describe("flow analysis with ==", function()
             print(v + 1) -- ERR
          end
       ]], {
-         { msg = "cannot use operator '+' for types number | boolean" },
+         { msg = "cannot use operator '+' for types integer | boolean" },
       }))
    end)
 
@@ -275,7 +275,7 @@ describe("flow analysis with ==", function()
             end
          end
       ]], {
-         { y = 4, msg = [[cannot use operator '<' for types number | string and number]] },
+         { y = 4, msg = [[cannot use operator '<' for types number | string and integer]] },
       }))
 
       it("resolves == on the test", util.check [[

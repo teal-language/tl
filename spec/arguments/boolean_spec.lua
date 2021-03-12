@@ -41,7 +41,7 @@ describe("boolean argument", function()
       f(function() end)
    ]], {
       { y = 12, msg = 'argument 1: got string "hello", expected boolean' },
-      { y = 13, msg = 'argument 1: got number, expected boolean' },
+      { y = 13, msg = 'argument 1: got integer, expected boolean' },
       { y = 14, msg = 'argument 1: got {}, expected boolean' },
       { y = 15, msg = 'argument 1: got R, expected boolean' },
       { y = 16, msg = 'argument 1: got function(), expected boolean' },

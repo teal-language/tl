@@ -80,6 +80,6 @@ describe("assignment to nominal arrayrecord", function()
       end
       local x: Node = 123
    ]], {
-      { msg = "in local declaration: x: got number, expected Node" }
+      { msg = "in local declaration: x: got integer, expected Node" }
    }))
 end)

@@ -230,7 +230,7 @@ describe("flow analysis with is", function()
          end
       ]], {
          { y = 3, msg = 'cannot index something that is not a record: number (inferred at foo.tl:2:15)' },
-         { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10) and number]] },
+         { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10) and integer]] },
       }))
 
       it("detects empty unions", util.check_type_error([[
@@ -389,7 +389,7 @@ describe("flow analysis with is", function()
             end
          end
       ]], {
-         { y = 4, msg = [[cannot use operator '<' for types number | string and number]] },
+         { y = 4, msg = [[cannot use operator '<' for types number | string and integer]] },
       }))
 
       it("resolves is on the test", util.check [[

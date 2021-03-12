@@ -11,8 +11,8 @@ describe("array argument", function()
          a(100)
       end
    ]], {
-      { y = 6, msg = 'expected an array: at index 2: got number, expected string' },
-      { y = 7, msg = 'argument 1: got number, expected {string}' },
+      { y = 6, msg = 'expected an array: at index 2: got integer, expected string' },
+      { y = 7, msg = 'argument 1: got integer, expected {string}' },
    }))
 
    it("constructs type of complex array correctly (#111)", util.check_type_error([[
