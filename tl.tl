@@ -6805,13 +6805,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
-            a.keys = b
+            a.keys = orig_b
             a.keys_inferred_at = assert(node)
             a.keys_inferred_at_file = filename
          else
             if not is_a(b, a.keys) then
                local inferred = " (type of keys inferred at " .. a.keys_inferred_at_file .. ":" .. a.keys_inferred_at.y .. ":" .. a.keys_inferred_at.x .. ": )"
-               return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, b, a.keys)
+               return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, orig_b, a.keys)
             end
          end
          return a_type { y = node.y, x = node.x, typename = "unresolved_emptytable_value", emptytable_type = a }

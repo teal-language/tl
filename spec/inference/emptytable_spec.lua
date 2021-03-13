@@ -80,4 +80,37 @@ describe("empty table without type annotation", function()
       negatives[1] = 1
       negatives = {}
    ]]))
+
+   it("infers table keys to their nominal types, not their resolved types", util.check([[
+      -- reduced from regression spotted by @catwell:
+      -- https://github.com/teal-language/tl/pull/406#issuecomment-797763158
+
+      local type Color = string
+
+      local record BagData
+         count: number
+         color: Color
+      end
+
+      local type DirectGraph = {Color:{BagData}}
+
+      local function parse_line(_line: string) : Color, {BagData}
+          return "teal", {} as {BagData}
+      end
+
+      local M = {}
+
+      function M.parse_input() : DirectGraph
+          local r = {}
+          local lines = {"a", "b"}
+          for _, line in ipairs(lines) do
+              local color, data = parse_line(line)
+              r[color] = data
+          end
+          return r
+      end
+
+      return M
+   ]]))
+
 end)
