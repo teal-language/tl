@@ -4,7 +4,7 @@
 -- when tl.lua and tl are in the same folder, prefer that tl.lua
 local tl
 do
-   local script_path = debug.getinfo(2, "S").source:sub(2):match("(.*[/\\])") or "."
+   local script_path = debug.getinfo(1, "S").source:match("^@?(.*[/\\])") or "."
    local save_package_path = package.path
    package.path = script_path .. "/?.lua;" .. package.path
 
