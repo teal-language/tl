@@ -5035,21 +5035,22 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function find_var_type(name, raw)
-      if name == "_G" then
+   local function simulate_g()
 
-         local globals = {}
-         for k, v in pairs(st[1]) do
-            if k:sub(1, 1) ~= "@" then
-               globals[k] = v.t
-            end
+      local globals = {}
+      for k, v in pairs(st[1]) do
+         if k:sub(1, 1) ~= "@" then
+            globals[k] = v.t
          end
-         return a_type({
-            typename = "record",
-            field_order = sorted_keys(globals),
-            fields = globals,
-         }), false
       end
+      return a_type({
+         typename = "record",
+         field_order = sorted_keys(globals),
+         fields = globals,
+      }), false
+   end
+
+   local function find_var_type(name, raw)
       local var = find_var(name, raw)
       if var then
          return var.t, var.is_const
@@ -8484,7 +8485,11 @@ tl.type_check = function(ast, opts)
                end
             end
 
-            node.type, node.is_const = find_var_type(node.tk)
+            if node.tk == "_G" then
+               node.type, node.is_const = simulate_g()
+            else
+               node.type, node.is_const = find_var_type(node.tk)
+            end
             if node.type and is_typetype(node.type) then
                node.type = a_type({
                   y = node.y,
