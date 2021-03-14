@@ -1733,33 +1733,35 @@ local function unquote(str: string): string, boolean
 end
 
 local function parse_literal(ps: ParseState, i: number): number, Node
-   if ps.tokens[i].tk == "{" then
-      return parse_table_literal(ps, i)
-   elseif ps.tokens[i].kind == "..." then
-      return verify_kind(ps, i, "...")
-   elseif ps.tokens[i].kind == "string" then
-      local node = new_node(ps.tokens, i, "string")
-      node.conststr, node.is_longstring = unquote(ps.tokens[i].tk)
-      return i + 1, node
-   elseif ps.tokens[i].kind == "identifier" then
+   local tk = ps.tokens[i].tk
+   local kind = ps.tokens[i].kind
+   if kind == "identifier" then
       return verify_kind(ps, i, "identifier", "variable")
-   elseif ps.tokens[i].kind == "number" then
-      local n = tonumber(ps.tokens[i].tk)
+   elseif kind == "string" then
+      local node = new_node(ps.tokens, i, "string")
+      node.conststr, node.is_longstring = unquote(tk)
+      return i + 1, node
+   elseif kind == "number" then
+      local n = tonumber(tk)
       local node: Node
-      i, node = verify_kind(ps, i, "number")
+      i, node = verify_kind(ps, i, kind)
       node.constnum = n
       return i, node
-   elseif ps.tokens[i].tk == "true" then
+   elseif tk == "true" then
       return verify_kind(ps, i, "keyword", "boolean")
-   elseif ps.tokens[i].tk == "false" then
+   elseif tk == "false" then
       return verify_kind(ps, i, "keyword", "boolean")
-   elseif ps.tokens[i].tk == "nil" then
+   elseif tk == "nil" then
       return verify_kind(ps, i, "keyword", "nil")
-   elseif ps.tokens[i].tk == "function" then
+   elseif tk == "function" then
       return parse_function_value(ps, i)
-   elseif ps.tokens[i].kind == "$invalid_string$" then
+   elseif tk == "{" then
+      return parse_table_literal(ps, i)
+   elseif kind == "..." then
+      return verify_kind(ps, i, "...")
+   elseif kind == "$invalid_string$" then
       return fail(ps, i, "malformed string")
-   elseif ps.tokens[i].kind == "$invalid_number$" then
+   elseif kind == "$invalid_number$" then
       return fail(ps, i, "malformed number")
    end
    return fail(ps, i, "syntax error")
