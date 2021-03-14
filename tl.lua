@@ -5133,6 +5133,7 @@ rets = TUPLE({ a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ 
             ["offset"] = a_type({ typename = "function", args = TUPLE({ STRING, NUMBER, NUMBER }), rets = TUPLE({ INTEGER }) }),
          },
       }),
+      ["_VERSION"] = STRING,
    }
 
    for _, t in pairs(standard_library) do

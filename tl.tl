@@ -1,7 +1,7 @@
 
 local VERSION = "0.12.0+dev"
 
-global _VERSION: string
+global _VERSION <const>: string
 
 local record tl
    enum LoadMode
@@ -5133,6 +5133,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["offset"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = TUPLE { INTEGER } },
          },
       },
+      ["_VERSION"] = STRING,
    }
 
    for _, t in pairs(standard_library) do
