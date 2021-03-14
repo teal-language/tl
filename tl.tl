@@ -1,8 +1,6 @@
 
 local VERSION = "0.12.0+dev"
 
-global _VERSION <const>: string
-
 local record tl
    enum LoadMode
       "b"
