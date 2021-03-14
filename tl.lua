@@ -2945,30 +2945,6 @@ local Visitor = {}
 
 
 
-local function visit_before(ast, kind, visit)
-   if visit.allow_missing_cbs and not visit.cbs then
-      return
-   end
-   assert(visit.cbs[kind], "no visitor for " .. (kind))
-   if visit.cbs[kind].before then
-      visit.cbs[kind].before(ast)
-   end
-end
-
-local function visit_after(ast, kind, visit, xs)
-   if visit.after and visit.after.before then
-      visit.after.before(ast, xs)
-   end
-   local ret
-   if visit.cbs and visit.cbs[kind].after then
-      ret = visit.cbs[kind].after(ast, xs)
-   end
-   if visit.after and visit.after.after then
-      ret = visit.after.after(ast, xs, ret)
-   end
-   return ret
-end
-
 local MetaMode = {}
 
 
@@ -2988,7 +2964,22 @@ local function fields_of(t, meta)
 end
 
 local function recurse_type(ast, visit)
-   visit_before(ast, ast.typename, visit)
+   local kind = ast.typename
+   local cbs = visit.cbs
+   local cbkind = cbs and cbs[kind]
+   do
+      if cbkind then
+         local cbkind_before = cbkind.before
+         if cbkind_before then
+            cbkind_before(ast)
+         end
+      else
+         if cbs then
+            error("internal compiler error: no visitor for " .. kind)
+         end
+      end
+   end
+
    local xs = {}
 
    if ast.typeargs then
@@ -3052,7 +3043,18 @@ local function recurse_type(ast, visit)
       table.insert(xs, recurse_type(ast.vtype, visit))
    end
 
-   return visit_after(ast, ast.typename, visit, xs)
+   local ret
+   do
+      local cbkind_after = cbkind and cbkind.after
+      if cbkind_after then
+         ret = cbkind_after(ast, xs)
+      end
+      local visit_after = visit.after
+      if visit_after then
+         ret = visit_after(ast, xs, ret)
+      end
+   end
+   return ret
 end
 
 local function recurse_typeargs(ast, visit_type)
@@ -3066,164 +3068,241 @@ end
 local function extra_callback(name,
    ast,
    xs,
-   visit_node,
-   ast_kind)
+   visit_node)
    local cbs = visit_node.cbs
    if not cbs then return end
-   local nbs = cbs[ast_kind]
+   local nbs = cbs[ast.kind]
    if not nbs then return end
    local bs = nbs[name]
    if not bs then return end
    bs(ast, xs)
 end
 
-local function recurse_node(ast,
+local no_recurse_node = {
+   ["..."] = true,
+   ["nil"] = true,
+   ["cast"] = true,
+   ["goto"] = true,
+   ["break"] = true,
+   ["label"] = true,
+   ["number"] = true,
+   ["string"] = true,
+   ["boolean"] = true,
+   ["integer"] = true,
+   ["variable"] = true,
+   ["error_node"] = true,
+   ["identifier"] = true,
+   ["type_identifier"] = true,
+}
+
+local function recurse_node(root,
    visit_node,
    visit_type)
-   if not ast then
+   if not root then
 
       return
    end
 
-   visit_before(ast, ast.kind, visit_node)
+   local recurse
 
-   local xs = {}
-   local kind = ast.kind
-   if kind == "variable" then
-
-   elseif kind == "op" then
-      xs[1] = recurse_node(ast.e1, visit_node, visit_type)
-      local p1 = ast.e1.op and ast.e1.op.prec or nil
-      if ast.op.op == ":" and ast.e1.kind == "string" then
-         p1 = -999
-      end
-      xs[2] = p1
-      if ast.op.arity == 2 then
-         extra_callback("before_e2", ast, xs, visit_node, kind)
-         if ast.op.op == "is" or ast.op.op == "as" then
-            xs[3] = recurse_type(ast.e2.casttype, visit_type)
-         else
-            xs[3] = recurse_node(ast.e2, visit_node, visit_type)
-         end
-         xs[4] = (ast.e2.op and ast.e2.op.prec)
-      end
-   elseif kind == "expression_list" then
+   local function walk_children(ast, xs)
       for i, child in ipairs(ast) do
-         xs[i] = recurse_node(child, visit_node, visit_type)
+         xs[i] = recurse(child)
       end
-   elseif kind == "identifier" or
-      kind == "string" then
+   end
 
-   elseif kind == "table_item" then
-      xs[1] = recurse_node(ast.key, visit_node, visit_type)
-      xs[2] = recurse_node(ast.value, visit_node, visit_type)
-      if ast.decltype then
-         xs[3] = recurse_type(ast.decltype, visit_type)
-      end
-   elseif kind == "variable_list" or
-      kind == "statements" or
-      kind == "argument_list" or
-      kind == "table_literal" then
-      for i, child in ipairs(ast) do
-         xs[i] = recurse_node(child, visit_node, visit_type)
-      end
-   elseif kind == "integer" or
-      kind == "number" then
-
-   elseif kind == "local_declaration" or
-      kind == "global_declaration" or
-      kind == "assignment" then
-      xs[1] = recurse_node(ast.vars, visit_node, visit_type)
+   local function walk_vars_exps(ast, xs)
+      xs[1] = recurse(ast.vars)
       if ast.decltype then
          xs[2] = recurse_type(ast.decltype, visit_type)
       end
-      extra_callback("before_expressions", ast, xs, visit_node, kind)
+      extra_callback("before_expressions", ast, xs, visit_node)
       if ast.exps then
-         xs[3] = recurse_node(ast.exps, visit_node, visit_type)
+         xs[3] = recurse(ast.exps)
       end
-   elseif kind == "local_type" or
-      kind == "global_type" then
-      xs[1] = recurse_node(ast.var, visit_node, visit_type)
-      xs[2] = recurse_node(ast.value, visit_node, visit_type)
-   elseif kind == "if" then
-      for _, e in ipairs(ast.if_blocks) do
-         table.insert(xs, recurse_node(e, visit_node, visit_type))
-      end
-   elseif kind == "if_block" then
-      if ast.exp then
-         xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      end
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[2] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "while" then
-      xs[1] = recurse_node(ast.exp, visit_node, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[2] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "repeat" then
-      xs[1] = recurse_node(ast.body, visit_node, visit_type)
-      xs[2] = recurse_node(ast.exp, visit_node, visit_type)
-   elseif kind == "function" then
-      recurse_typeargs(ast, visit_type)
-      xs[1] = recurse_node(ast.args, visit_node, visit_type)
-      xs[2] = recurse_type(ast.rets, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[3] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "forin" then
-      xs[1] = recurse_node(ast.vars, visit_node, visit_type)
-      xs[2] = recurse_node(ast.exps, visit_node, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[3] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "fornum" then
-      xs[1] = recurse_node(ast.var, visit_node, visit_type)
-      xs[2] = recurse_node(ast.from, visit_node, visit_type)
-      xs[3] = recurse_node(ast.to, visit_node, visit_type)
-      xs[4] = ast.step and recurse_node(ast.step, visit_node, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, ast.kind)
-      xs[5] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "return" then
-      xs[1] = recurse_node(ast.exps, visit_node, visit_type)
-   elseif kind == "do" then
-      xs[1] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "cast" then
-   elseif kind == "local_function" or
-      kind == "global_function" then
-      recurse_typeargs(ast, visit_type)
-      xs[1] = recurse_node(ast.name, visit_node, visit_type)
-      xs[2] = recurse_node(ast.args, visit_node, visit_type)
-      xs[3] = recurse_type(ast.rets, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[4] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "record_function" then
-      recurse_typeargs(ast, visit_type)
-      xs[1] = recurse_node(ast.fn_owner, visit_node, visit_type)
-      xs[2] = recurse_node(ast.name, visit_node, visit_type)
-      xs[3] = recurse_node(ast.args, visit_node, visit_type)
-      xs[4] = recurse_type(ast.rets, visit_type)
-      extra_callback("before_statements", ast, xs, visit_node, kind)
-      xs[5] = recurse_node(ast.body, visit_node, visit_type)
-   elseif kind == "paren" then
-      xs[1] = recurse_node(ast.e1, visit_node, visit_type)
-   elseif kind == "newtype" then
-      xs[1] = recurse_type(ast.newtype, visit_type)
-   elseif kind == "type_identifier" or
-      kind == "argument" or
-      kind == "break" or
-      kind == "goto" or
-      kind == "label" or
-      kind == "nil" or
-      kind == "..." or
-      kind == "error_node" or
-      kind == "boolean" then
-      if ast.decltype then
-         xs[1] = recurse_type(ast.decltype, visit_type)
-      end
-   else
-      if not kind then
-         error("wat: " .. tostring(ast))
-      end
-      error("unknown node kind " .. kind)
    end
-   return visit_after(ast, kind, visit_node, xs)
+
+   local function walk_var_value(ast, xs)
+      xs[1] = recurse(ast.var)
+      xs[2] = recurse(ast.value)
+   end
+
+   local function walk_named_function(ast, xs)
+      recurse_typeargs(ast, visit_type)
+      xs[1] = recurse(ast.name)
+      xs[2] = recurse(ast.args)
+      xs[3] = recurse_type(ast.rets, visit_type)
+      extra_callback("before_statements", ast, xs, visit_node)
+      xs[4] = recurse(ast.body)
+   end
+
+   local walkers = {
+      ["op"] = function(ast, xs)
+         xs[1] = recurse(ast.e1)
+         local p1 = ast.e1.op and ast.e1.op.prec or nil
+         if ast.op.op == ":" and ast.e1.kind == "string" then
+            p1 = -999
+         end
+         xs[2] = p1
+         if ast.op.arity == 2 then
+            extra_callback("before_e2", ast, xs, visit_node)
+            if ast.op.op == "is" or ast.op.op == "as" then
+               xs[3] = recurse_type(ast.e2.casttype, visit_type)
+            else
+               xs[3] = recurse(ast.e2)
+            end
+            xs[4] = (ast.e2.op and ast.e2.op.prec)
+         end
+      end,
+
+      ["statements"] = walk_children,
+      ["argument_list"] = walk_children,
+      ["table_literal"] = walk_children,
+      ["variable_list"] = walk_children,
+      ["expression_list"] = walk_children,
+
+      ["table_item"] = function(ast, xs)
+         xs[1] = recurse(ast.key)
+         xs[2] = recurse(ast.value)
+         if ast.decltype then
+            xs[3] = recurse_type(ast.decltype, visit_type)
+         end
+      end,
+
+      ["assignment"] = walk_vars_exps,
+      ["local_declaration"] = walk_vars_exps,
+      ["global_declaration"] = walk_vars_exps,
+
+      ["local_type"] = walk_var_value,
+      ["global_type"] = walk_var_value,
+
+      ["if"] = function(ast, xs)
+         for _, e in ipairs(ast.if_blocks) do
+            table.insert(xs, recurse(e))
+         end
+      end,
+
+      ["if_block"] = function(ast, xs)
+         if ast.exp then
+            xs[1] = recurse(ast.exp)
+         end
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[2] = recurse(ast.body)
+      end,
+
+      ["while"] = function(ast, xs)
+         xs[1] = recurse(ast.exp)
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[2] = recurse(ast.body)
+      end,
+
+      ["repeat"] = function(ast, xs)
+         xs[1] = recurse(ast.body)
+         xs[2] = recurse(ast.exp)
+      end,
+
+      ["function"] = function(ast, xs)
+         recurse_typeargs(ast, visit_type)
+         xs[1] = recurse(ast.args)
+         xs[2] = recurse_type(ast.rets, visit_type)
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[3] = recurse(ast.body)
+      end,
+      ["local_function"] = walk_named_function,
+      ["global_function"] = walk_named_function,
+      ["record_function"] = function(ast, xs)
+         recurse_typeargs(ast, visit_type)
+         xs[1] = recurse(ast.fn_owner)
+         xs[2] = recurse(ast.name)
+         xs[3] = recurse(ast.args)
+         xs[4] = recurse_type(ast.rets, visit_type)
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[5] = recurse(ast.body)
+      end,
+
+      ["forin"] = function(ast, xs)
+         xs[1] = recurse(ast.vars)
+         xs[2] = recurse(ast.exps)
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[3] = recurse(ast.body)
+      end,
+
+      ["fornum"] = function(ast, xs)
+         xs[1] = recurse(ast.var)
+         xs[2] = recurse(ast.from)
+         xs[3] = recurse(ast.to)
+         xs[4] = ast.step and recurse(ast.step)
+         extra_callback("before_statements", ast, xs, visit_node)
+         xs[5] = recurse(ast.body)
+      end,
+
+      ["return"] = function(ast, xs)
+         xs[1] = recurse(ast.exps)
+      end,
+
+      ["do"] = function(ast, xs)
+         xs[1] = recurse(ast.body)
+      end,
+
+      ["paren"] = function(ast, xs)
+         xs[1] = recurse(ast.e1)
+      end,
+
+      ["newtype"] = function(ast, xs)
+         xs[1] = recurse_type(ast.newtype, visit_type)
+      end,
+
+      ["argument"] = function(ast, xs)
+         if ast.decltype then
+            xs[1] = recurse_type(ast.decltype, visit_type)
+         end
+      end,
+   }
+
+   if not visit_node.allow_missing_cbs and not visit_node.cbs then
+      error("missing cbs in visit_node")
+   end
+   local visit_after = visit_node.after
+
+   recurse = function(ast)
+      local xs = {}
+      local kind = assert(ast.kind)
+
+      local cbs = visit_node.cbs
+      local cbkind = cbs and cbs[kind]
+      do
+         if cbkind then
+            if cbkind.before then
+               cbkind.before(ast)
+            end
+         else
+            if cbs then
+               error("internal compiler error: no visitor for " .. kind)
+            end
+         end
+      end
+
+      local fn = walkers[kind]
+      if fn then
+         fn(ast, xs)
+      else
+         assert(no_recurse_node[kind])
+      end
+
+      local ret
+      do
+         local cbkind_after = cbkind and cbkind.after
+         if cbkind_after then
+            ret = cbkind_after(ast, xs)
+         end
+         if visit_after then
+            ret = visit_after(ast, xs, ret)
+         end
+      end
+      return ret
+   end
+
+   return recurse(root)
 end
 
 
@@ -8734,17 +8813,15 @@ tl.type_check = function(ast, opts)
    visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
-   visit_node.after = {
-      after = function(node, _children)
-         if type(node.type) ~= "table" then
-            error(node.kind .. " did not produce a type")
-         end
-         if type(node.type.typename) ~= "string" then
-            error(node.kind .. " type does not have a typename")
-         end
-         return node.type
-      end,
-   }
+   visit_node.after = function(node, _children)
+      if type(node.type) ~= "table" then
+         error(node.kind .. " did not produce a type")
+      end
+      if type(node.type.typename) ~= "string" then
+         error(node.kind .. " type does not have a typename")
+      end
+      return node.type
+   end
 
    local visit_type = {
       cbs = {
@@ -8845,17 +8922,15 @@ tl.type_check = function(ast, opts)
             end,
          },
       },
-      after = {
-         after = function(typ, _children, ret)
-            if type(ret) ~= "table" then
-               error(typ.typename .. " did not produce a type")
-            end
-            if type(ret.typename) ~= "string" then
-               error("type node does not have a typename")
-            end
-            return ret
-         end,
-      },
+      after = function(typ, _children, ret)
+         if type(ret) ~= "table" then
+            error(typ.typename .. " did not produce a type")
+         end
+         if type(ret.typename) ~= "string" then
+            error("type node does not have a typename")
+         end
+         return ret
+      end,
    }
 
    if not opts.run_internal_compiler_checks then
@@ -9082,17 +9157,13 @@ function tl.get_types(result, trenv)
       yt[x] = get_typenum(typ)
    end
 
-   visit_node.after = {
-      ["after"] = function(node)
-         store(node.y, node.x, node.type)
-      end,
-   }
+   visit_node.after = function(node)
+      store(node.y, node.x, node.type)
+   end
 
-   visit_type.after = {
-      ["after"] = function(typ)
-         store(typ.y or 0, typ.x or 0, typ)
-      end,
-   }
+   visit_type.after = function(typ)
+      store(typ.y or 0, typ.x or 0, typ)
+   end
 
    recurse_node(result.ast, visit_node, visit_type)
 
