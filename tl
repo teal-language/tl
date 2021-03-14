@@ -16,8 +16,6 @@ end
 
 local argparse = require("argparse")
 
-local version_string = "0.12.0+dev"
-
 --------------------------------------------------------------------------------
 -- Utilities
 --------------------------------------------------------------------------------
@@ -1282,7 +1280,7 @@ local parser = get_args_parser()
 local args = parser:parse()
 
 if args["version"] then
-   print(version_string)
+   print(tl.version())
    os.exit(0)
 end
 

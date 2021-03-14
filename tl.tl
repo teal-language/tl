@@ -1,4 +1,6 @@
 
+local VERSION = "0.12.0+dev"
+
 global _VERSION: string
 
 local record tl
@@ -116,16 +118,19 @@ local record tl
       tr: TypeReport
    end
 
-
-
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env): (Result, string)
    process_string: function(string, boolean, Env, string): Result
    gen: function(string, Env): string
    type_check: function(Node, TypeCheckOptions): Result
    init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env
+   version: function(): string
 
    package_loader_env: Env
+end
+
+tl.version = function(): string
+   return VERSION
 end
 
 tl.warning_kinds = {
