@@ -1223,7 +1223,7 @@ end
 local parse_type_list: function(ParseState, number, ParseTypeListMode): number, Type
 local parse_expression: function(ParseState, number): number, Node, number
 local parse_expression_and_tk: function(ps: ParseState, i: number, tk: string): number, Node
-local parse_statements: function(ParseState, number, string, boolean): number, Node
+local parse_statements: function(ParseState, number, boolean): number, Node
 local parse_argument_list: function(ParseState, number): number, Node
 local parse_argument_type_list: function(ParseState, number): number, Type
 local parse_type: function(ParseState, number): number, Type, number
@@ -1234,10 +1234,10 @@ local parse_record_body: function(ps: ParseState, i: number, def: Type, node: No
 local function fail(ps: ParseState, i: number, msg: string): number
    if not ps.tokens[i] then
       local eof = ps.tokens[#ps.tokens]
-      table.insert(ps.errs, { y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
+      table.insert(ps.errs, { filename = ps.filename, y = eof.y, x = eof.x, msg = msg or "unexpected end of file" })
       return #ps.tokens
    end
-   table.insert(ps.errs, { y = ps.tokens[i].y, x = ps.tokens[i].x, msg = assert(msg, "syntax error, but no error message provided") })
+   table.insert(ps.errs, { filename = ps.filename, y = ps.tokens[i].y, x = ps.tokens[i].x, msg = assert(msg, "syntax error, but no error message provided") })
    return math.min(#ps.tokens, i + 1)
 end
 
@@ -1260,7 +1260,7 @@ local function verify_end(ps: ParseState, i: number, istart: number, node: Node)
       return i + 1
    end
    end_at(node, ps.tokens[i])
-   return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. (ps.filename or "") .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
+   return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. ps.filename .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
 end
 
 local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
@@ -2779,64 +2779,60 @@ local function skip_type_declaration(ps: ParseState, i: number): number
    return (parse_type_declaration(ps, i - 1, "local_type"))
 end
 
-local function parse_statement(ps: ParseState, i: number): number, Node
-   if ps.tokens[i].tk == "local" then
-      if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_declaration(ps, i, "local_type")
-      elseif ps.tokens[i+1].tk == "function" then
-         return parse_local_function(ps, i)
-      elseif ps.tokens[i+1].tk == "record" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "local_type", "record", parse_record_body)
-      elseif ps.tokens[i+1].tk == "enum" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "local_type", "enum", parse_enum_body)
-      else
-         i = i + 1
-         return parse_variable_declarations(ps, i, "local_declaration")
-      end
-   elseif ps.tokens[i].tk == "global" then
-      if ps.tokens[i+1].tk == "type" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_declaration(ps, i, "global_type")
-      elseif ps.tokens[i+1].tk == "record" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "global_type", "record", parse_record_body)
-      elseif ps.tokens[i+1].tk == "enum" and ps.tokens[i+2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "global_type", "enum", parse_enum_body)
-      elseif ps.tokens[i+1].tk == "function" then
-         i = i + 1
-         return parse_global_function(ps, i)
-      elseif ps.tokens[i+1].kind == "identifier" then
-         i = i + 1
-         return parse_variable_declarations(ps, i, "global_declaration")
-      else
-         return parse_call_or_assignment(ps, i) -- global is a soft keyword
-      end
-   elseif ps.tokens[i].tk == "function" then
-      return parse_global_function(ps, i)
-   elseif ps.tokens[i].tk == "if" then
-      return parse_if(ps, i)
-   elseif ps.tokens[i].tk == "while" then
-      return parse_while(ps, i)
-   elseif ps.tokens[i].tk == "repeat" then
-      return parse_repeat(ps, i)
-   elseif ps.tokens[i].tk == "for" then
-      return parse_for(ps, i)
-   elseif ps.tokens[i].tk == "do" then
-      return parse_do(ps, i)
-   elseif ps.tokens[i].tk == "break" then
-      return parse_break(ps, i)
-   elseif ps.tokens[i].tk == "return" then
-      return parse_return(ps, i)
-   elseif ps.tokens[i].tk == "goto" then
-      return parse_goto(ps, i)
-   elseif ps.tokens[i].tk == "::" then
-      return parse_label(ps, i)
-   elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].kind == "identifier" then
-      return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
-   else
-      return parse_call_or_assignment(ps, i)
+local function parse_local(ps: ParseState, i: number): number, Node
+   local ntk = ps.tokens[i + 1].tk
+   if ntk == "function" then
+      return parse_local_function(ps, i)
+   elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_declaration(ps, i, "local_type")
+   elseif ntk == "record" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "local_type", "record", parse_record_body)
+   elseif ntk == "enum" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "local_type", "enum", parse_enum_body)
    end
+   return parse_variable_declarations(ps, i + 1, "local_declaration")
 end
 
-parse_statements = function(ps: ParseState, i: number, filename: string, toplevel: boolean): number, Node
+local function parse_global(ps: ParseState, i: number): number, Node
+   local ntk = ps.tokens[i + 1].tk
+   if ntk == "function" then
+      return parse_global_function(ps, i + 1)
+   elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_declaration(ps, i, "global_type")
+   elseif ntk == "record" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "global_type", "record", parse_record_body)
+   elseif ntk == "enum" and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "global_type", "enum", parse_enum_body)
+   elseif ps.tokens[i+1].kind == "identifier" then
+      return parse_variable_declarations(ps, i + 1, "global_declaration")
+   end
+   return parse_call_or_assignment(ps, i) -- global is a soft keyword
+end
+
+local function parse_type_statement(ps: ParseState, i: number): number, Node
+   if ps.tokens[i + 1].kind == "identifier" then
+      return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
+   end
+   return parse_call_or_assignment(ps, i)
+end
+
+local parse_statement_fns: {string : function(ParseState, number):(number, Node)} = {
+   ["::"] = parse_label,
+   ["do"] = parse_do,
+   ["if"] = parse_if,
+   ["for"] = parse_for,
+   ["goto"] = parse_goto,
+   ["type"] = parse_type_statement,
+   ["local"] = parse_local,
+   ["while"] = parse_while,
+   ["break"] = parse_break,
+   ["global"] = parse_global,
+   ["repeat"] = parse_repeat,
+   ["return"] = parse_return,
+   ["function"] = parse_global_function,
+}
+
+parse_statements = function(ps: ParseState, i: number, toplevel: boolean): number, Node
    local node = new_node(ps.tokens, i, "statements")
    local item: Node
    while true do
@@ -2846,22 +2842,19 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
             item.semicolon = true
          end
       end
+
       if ps.tokens[i].kind == "$EOF$" then
          break
       end
       if (not toplevel) and stop_statement_list[ps.tokens[i].tk] then
          break
       end
-      local prev_i = i
-      i, item = parse_statement(ps, i)
-      assert(i > prev_i)
-      if filename then
-         for j = 1, #ps.errs do
-            if not ps.errs[j].filename then
-               ps.errs[j].filename = filename
-            end
-         end
-      end
+
+      -- local prev_i = i
+      local parse_statement_fn = parse_statement_fns[ps.tokens[i].tk] or parse_call_or_assignment
+      i, item = parse_statement_fn(ps, i)
+      -- assert(i > prev_i)
+
       if item then
          table.insert(node, item)
       elseif i > 1 then
@@ -2872,6 +2865,7 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
          end
       end
    end
+
    end_at(node, ps.tokens[i])
    return i, node
 end
@@ -2907,10 +2901,11 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): num
    local ps: ParseState = {
       tokens = tokens,
       errs = errs,
-      filename = filename,
+      filename = filename or "",
       required_modules = {},
    }
-   local i, node = parse_statements(ps, 1, filename, true)
+   local i, node = parse_statements(ps, 1, true)
+
    clear_redundant_errors(errs)
    return i, node, ps.required_modules
 end
