@@ -8240,9 +8240,10 @@ tl.type_check = function(ast, opts)
 
                if decltype.typename == "union" then
                   for _, t in ipairs(decltype.types) do
-                     t = resolve_tuple_and_nominal(t)
-                     if is_known_table_type(t) then
-                        decltype = t
+                     local rt = resolve_tuple_and_nominal(t)
+                     if is_known_table_type(rt) then
+                        node.expected = t
+                        decltype = rt
                         break
                      end
                   end

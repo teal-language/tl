@@ -113,4 +113,18 @@ describe("empty table without type annotation", function()
       return M
    ]]))
 
+   it("emptytable does not infer as a union, but rather its first table-like element", util.check [[
+      local record Foo<T>
+      end
+      local function foo<U>(x: U | Foo<U>)
+      end
+      foo({})
+
+      -- non-inferred unions are ok
+      local function foo2<U>(x: U | Foo<U>)
+      end
+      local z: number | Foo<number>
+      foo2(z)
+   ]])
+
 end)
