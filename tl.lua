@@ -1343,41 +1343,43 @@ local function parse_table_item(ps, i, n)
       i = verify_tk(ps, i, "=")
       i, node.value = parse_table_value(ps, i)
       return i, node, n
-   elseif ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == "=" then
-      node.key_parsed = "short"
-      i, node.key = verify_kind(ps, i, "identifier", "string")
-      node.key.conststr = node.key.tk
-      node.key.tk = '"' .. node.key.tk .. '"'
-      i = verify_tk(ps, i, "=")
-      i, node.value = parse_table_value(ps, i)
-      return i, node, n
-   elseif ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
-      node.key_parsed = "short"
-      local orig_i = i
-      local try_ps = {
-         filename = ps.filename,
-         tokens = ps.tokens,
-         errs = {},
-         required_modules = ps.required_modules,
-      }
-      i, node.key = verify_kind(try_ps, i, "identifier", "string")
-      node.key.conststr = node.key.tk
-      node.key.tk = '"' .. node.key.tk .. '"'
-      i = verify_tk(try_ps, i, ":")
-      i, node.decltype = parse_type(try_ps, i)
-      if node.decltype and ps.tokens[i].tk == "=" then
-         i = verify_tk(try_ps, i, "=")
-         i, node.value = parse_table_value(try_ps, i)
-         if node.value then
-            for _, e in ipairs(try_ps.errs) do
-               table.insert(ps.errs, e)
+   elseif ps.tokens[i].kind == "identifier" then
+      if ps.tokens[i + 1].tk == "=" then
+         node.key_parsed = "short"
+         i, node.key = verify_kind(ps, i, "identifier", "string")
+         node.key.conststr = node.key.tk
+         node.key.tk = '"' .. node.key.tk .. '"'
+         i = verify_tk(ps, i, "=")
+         i, node.value = parse_table_value(ps, i)
+         return i, node, n
+      elseif ps.tokens[i + 1].tk == ":" then
+         node.key_parsed = "short"
+         local orig_i = i
+         local try_ps = {
+            filename = ps.filename,
+            tokens = ps.tokens,
+            errs = {},
+            required_modules = ps.required_modules,
+         }
+         i, node.key = verify_kind(try_ps, i, "identifier", "string")
+         node.key.conststr = node.key.tk
+         node.key.tk = '"' .. node.key.tk .. '"'
+         i = verify_tk(try_ps, i, ":")
+         i, node.decltype = parse_type(try_ps, i)
+         if node.decltype and ps.tokens[i].tk == "=" then
+            i = verify_tk(try_ps, i, "=")
+            i, node.value = parse_table_value(try_ps, i)
+            if node.value then
+               for _, e in ipairs(try_ps.errs) do
+                  table.insert(ps.errs, e)
+               end
+               return i, node, n
             end
-            return i, node, n
          end
-      end
 
-      node.decltype = nil
-      i = orig_i
+         node.decltype = nil
+         i = orig_i
+      end
    end
 
    node.key = new_node(ps.tokens, i, "number")
@@ -1541,32 +1543,49 @@ local function parse_function_type(ps, i)
    return i, typ
 end
 
-local simple_type_names = {
-   "string",
-   "boolean",
-   "nil",
-   "number",
-   "any",
-   "thread",
+local NIL = a_type({ typename = "nil" })
+local ANY = a_type({ typename = "any" })
+local TABLE = a_type({ typename = "map", keys = ANY, values = ANY })
+local NUMBER = a_type({ typename = "number" })
+local STRING = a_type({ typename = "string" })
+local THREAD = a_type({ typename = "thread" })
+local BOOLEAN = a_type({ typename = "boolean" })
+
+local simple_types = {
+   ["nil"] = NIL,
+   ["any"] = ANY,
+   ["table"] = TABLE,
+   ["number"] = NUMBER,
+   ["string"] = STRING,
+   ["thread"] = THREAD,
+   ["boolean"] = BOOLEAN,
 }
 
-local simple_types = {}
-for _, name in ipairs(simple_type_names) do
-   simple_types[name] = a_type({ typename = name })
-end
-
 local function parse_base_type(ps, i)
-   local st = simple_types[ps.tokens[i].tk]
-   if st then
-      return i + 1, st
-   elseif ps.tokens[i].tk == "table" then
-      local typ = new_type(ps, i, "map")
-      typ.keys = a_type({ typename = "any" })
-      typ.values = a_type({ typename = "any" })
-      return i + 1, typ
-   elseif ps.tokens[i].tk == "function" then
-      return parse_function_type(ps, i)
-   elseif ps.tokens[i].tk == "{" then
+   local tk = ps.tokens[i].tk
+   if ps.tokens[i].kind == "identifier" then
+      local st = simple_types[tk]
+      if st then
+         return i + 1, st
+      end
+      local typ = new_type(ps, i, "nominal")
+      typ.names = { tk }
+      i = i + 1
+      while ps.tokens[i].tk == "." do
+         i = i + 1
+         if ps.tokens[i].kind == "identifier" then
+            table.insert(typ.names, ps.tokens[i].tk)
+            i = i + 1
+         else
+            return fail(ps, i, "syntax error, expected identifier")
+         end
+      end
+
+      if ps.tokens[i].tk == "<" then
+         i, typ.typevals = parse_typeval_list(ps, i)
+      end
+      return i, typ
+   elseif tk == "{" then
       i = i + 1
       local decl = new_type(ps, i, "array")
       local t
@@ -1606,26 +1625,17 @@ local function parse_base_type(ps, i)
          return fail(ps, i, "syntax error; did you forget a '}'?")
       end
       return i, decl
-   elseif ps.tokens[i].tk == "`" then
+   elseif tk == "function" then
+      return parse_function_type(ps, i)
+   elseif tk == "nil" then
+      return i + 1, simple_types["nil"]
+   elseif tk == "table" then
+      local typ = new_type(ps, i, "map")
+      typ.keys = a_type({ typename = "any" })
+      typ.values = a_type({ typename = "any" })
+      return i + 1, typ
+   elseif tk == "`" then
       return parse_typevar_type(ps, i)
-   elseif ps.tokens[i].kind == "identifier" then
-      local typ = new_type(ps, i, "nominal")
-      typ.names = { ps.tokens[i].tk }
-      i = i + 1
-      while ps.tokens[i].tk == "." do
-         i = i + 1
-         if ps.tokens[i].kind == "identifier" then
-            table.insert(typ.names, ps.tokens[i].tk)
-            i = i + 1
-         else
-            return fail(ps, i, "syntax error, expected identifier")
-         end
-      end
-
-      if ps.tokens[i].tk == "<" then
-         i, typ.typevals = parse_typeval_list(ps, i)
-      end
-      return i, typ
    end
    return fail(ps, i, "expected a type")
 end
@@ -1902,7 +1912,66 @@ do
 
       while true do
          local tkop = ps.tokens[i]
-         if tkop.kind == "string" or tkop.kind == "{" then
+         if tkop.kind == "," or tkop.kind == ")" then
+            break
+         end
+         if tkop.tk == "." or tkop.tk == ":" then
+            local op = new_operator(tkop, 2)
+
+            local prev_i = i
+
+            local key
+            i = i + 1
+            i, key = verify_kind(ps, i, "identifier")
+            if not key then
+               return i, failstore(tkop, e1)
+            end
+
+            if op.op == ":" then
+               if not args_starters[ps.tokens[i].kind] then
+                  fail(ps, i, "expected a function call for a method")
+                  return i, failstore(tkop, e1)
+               end
+
+               if not after_valid_prefixexp(ps, e1, prev_i) then
+                  fail(ps, prev_i, "cannot call a method on this expression")
+                  return i, failstore(tkop, e1)
+               end
+            end
+
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
+         elseif tkop.tk == "(" then
+            local op = new_operator(tkop, 2, "@funcall")
+
+            local prev_i = i
+
+            local args = new_node(ps.tokens, i, "expression_list")
+            i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               fail(ps, prev_i, "cannot call this expression")
+               return i, failstore(tkop, e1)
+            end
+
+            e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
+
+            table.insert(ps.required_modules, node_is_require_call(e1))
+         elseif tkop.tk == "[" then
+            local op = new_operator(tkop, 2, "@index")
+
+            local prev_i = i
+
+            local idx
+            i = i + 1
+            i, idx = parse_expression_and_tk(ps, i, "]")
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               fail(ps, prev_i, "cannot index this expression")
+               return i, failstore(tkop, e1)
+            end
+
+            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = idx }
+         elseif tkop.kind == "string" or tkop.kind == "{" then
             local op = new_operator(tkop, 2, "@funcall")
 
             local prev_i = i
@@ -1930,62 +1999,6 @@ do
             e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
 
             table.insert(ps.required_modules, node_is_require_call(e1))
-         elseif ps.tokens[i].tk == "(" then
-            local op = new_operator(ps.tokens[i], 2, "@funcall")
-
-            local prev_i = i
-
-            local args = new_node(ps.tokens, i, "expression_list")
-            i, args = parse_bracket_list(ps, i, args, "(", ")", "sep", parse_expression)
-
-            if not after_valid_prefixexp(ps, e1, prev_i) then
-               fail(ps, prev_i, "cannot call this expression")
-               return i, failstore(tkop, e1)
-            end
-
-            e1 = { y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
-
-            table.insert(ps.required_modules, node_is_require_call(e1))
-         elseif ps.tokens[i].tk == "[" then
-            local op = new_operator(ps.tokens[i], 2, "@index")
-
-            local prev_i = i
-
-            local idx
-            i = i + 1
-            i, idx = parse_expression_and_tk(ps, i, "]")
-
-            if not after_valid_prefixexp(ps, e1, prev_i) then
-               fail(ps, prev_i, "cannot index this expression")
-               return i, failstore(tkop, e1)
-            end
-
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = idx }
-         elseif tkop.tk == "." or tkop.tk == ":" then
-            local op = new_operator(tkop, 2)
-
-            local prev_i = i
-
-            local key
-            i = i + 1
-            i, key = verify_kind(ps, i, "identifier")
-            if not key then
-               return i, failstore(tkop, e1)
-            end
-
-            if op.op == ":" then
-               if not args_starters[ps.tokens[i].kind] then
-                  fail(ps, i, "expected a function call for a method")
-                  return i, failstore(tkop, e1)
-               end
-
-               if not after_valid_prefixexp(ps, e1, prev_i) then
-                  fail(ps, prev_i, "cannot call a method on this expression")
-                  return i, failstore(tkop, e1)
-               end
-            end
-
-            e1 = { y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif tkop.tk == "as" or tkop.tk == "is" then
             local op = new_operator(tkop, 2, tkop.tk)
 
@@ -3886,26 +3899,23 @@ local function UNION(t)
    return a_type({ typename = "union", types = t })
 end
 
-local ANY = a_type({ typename = "any" })
 local NONE = a_type({ typename = "none" })
-local NIL = a_type({ typename = "nil" })
-local NUMBER = a_type({ typename = "number" })
-local STRING = a_type({ typename = "string" })
-local BOOLEAN = a_type({ typename = "boolean" })
-local ARG_ALPHA = a_type({ typename = "typearg", typearg = "@a" })
-local ARG_BETA = a_type({ typename = "typearg", typearg = "@b" })
-local ALPHA = a_type({ typename = "typevar", typevar = "@a" })
-local BETA = a_type({ typename = "typevar", typevar = "@b" })
-local ARRAY_OF_STRING = a_type({ typename = "array", elements = STRING })
-local ARRAY_OF_ALPHA = a_type({ typename = "array", elements = ALPHA })
-local MAP_OF_ALPHA_TO_BETA = a_type({ typename = "map", keys = ALPHA, values = BETA })
-local TABLE = a_type({ typename = "map", keys = ANY, values = ANY })
-local FUNCTION = a_type({ typename = "function", args = VARARG({ ANY }), rets = VARARG({ ANY }) })
-local THREAD = a_type({ typename = "thread" })
 local INVALID = a_type({ typename = "invalid" })
 local UNKNOWN = a_type({ typename = "unknown" })
-local NOMINAL_FILE = a_type({ typename = "nominal", names = { "FILE" } })
+
+local ALPHA = a_type({ typename = "typevar", typevar = "@a" })
+local BETA = a_type({ typename = "typevar", typevar = "@b" })
+local ARG_ALPHA = a_type({ typename = "typearg", typearg = "@a" })
+local ARG_BETA = a_type({ typename = "typearg", typearg = "@b" })
+local ARRAY_OF_ALPHA = a_type({ typename = "array", elements = ALPHA })
+local MAP_OF_ALPHA_TO_BETA = a_type({ typename = "map", keys = ALPHA, values = BETA })
 local NOMINAL_METATABLE_OF_ALPHA = a_type({ typename = "nominal", names = { "metatable" }, typevals = { ALPHA } })
+
+local ARRAY_OF_STRING = a_type({ typename = "array", elements = STRING })
+
+local FUNCTION = a_type({ typename = "function", args = VARARG({ ANY }), rets = VARARG({ ANY }) })
+
+local NOMINAL_FILE = a_type({ typename = "nominal", names = { "FILE" } })
 local XPCALL_MSGH_FUNCTION = a_type({ typename = "function", args = TUPLE({ ANY }), rets = TUPLE({}) })
 
 local USERDATA = ANY
@@ -7894,7 +7904,6 @@ tl.type_check = function(ast, opts)
                      end
                   end
                   add_var(v, v.tk, r)
-                  v.type = r
                   last = r
                end
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
