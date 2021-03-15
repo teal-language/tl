@@ -2508,6 +2508,9 @@ local metamethod_names = {
    ["__index"] = true,
    ["__newindex"] = true,
    ["__call"] = true,
+   ["__tostring"] = true,
+   ["__pairs"] = true,
+   ["__gc"] = true,
 }
 
 parse_record_body = function(ps, i, def, node)
