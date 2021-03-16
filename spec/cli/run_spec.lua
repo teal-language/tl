@@ -89,6 +89,31 @@ describe("tl run", function()
             30
          ]], output)
       end)
+
+      describe("-l --require", function()
+         it("can require a module from the CLI like Lua", function()
+            local dir_name = util.write_tmp_dir(finally, {
+               ["add.tl"] = [[
+               global function add(a: number, b: number): number
+                  return a + b
+               end
+
+               return add
+               ]],
+               ["main.tl"] = [[
+               print(add(10, 20))
+               ]]
+            })
+            for _, flag in ipairs({ "-l add", "-ladd", "--require add" }) do
+               local pd = io.popen("TL_PATH='" .. dir_name .. "/?.tl' " .. util.tl_cmd("run " .. flag, dir_name .. "/main.tl"), "r")
+               local output = pd:read("*a")
+               util.assert_popen_close(0, pd:close())
+               util.assert_line_by_line([[
+                  30
+               ]], output)
+            end
+         end)
+      end)
    end)
 
    describe("on .lua files", function()

@@ -804,7 +804,7 @@ end
 local function get_args_parser()
    local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-   parser:option("-l --preload", "Execute the equivalent of require('modulename') before processing Teal files.")
+   parser:option("--preload", "Predefine types into the initial global environment.")
          :argname("<modulename>")
          :count("*")
 
@@ -853,6 +853,10 @@ local function get_args_parser()
 
    local run_command = parser:command("run", "Run a Teal script.")
    run_command:argument("script", "The Teal script."):args("+")
+
+   run_command:option("-l --require", "Require module for execution.")
+              :argname("<modulename>")
+              :count("*")
 
    build.arg_parser(parser)
 
@@ -1022,6 +1026,12 @@ end
 --------------------------------------------------------------------------------
 
 commands["run"] = function(tlconfig, args)
+   for _, module in ipairs(args["require"]) do
+      if not find_in_sequence(tlconfig.preload_modules, module) then
+         table.insert(tlconfig.preload_modules, module)
+      end
+   end
+
    local chunk = type_check_and_load(tlconfig, args["script"][1])
 
    -- collect all non-arguments including negative arg values
@@ -1058,6 +1068,10 @@ commands["run"] = function(tlconfig, args)
    tl.loader()
 
    assert(not is_turbo_on())
+
+   for _, module in ipairs(args["require"]) do
+      require(module)
+   end
 
    return chunk((unpack or table.unpack)(arg))
 end
