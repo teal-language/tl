@@ -5162,7 +5162,7 @@ rets = TUPLE({ a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ 
    return globals, standard_library
 end
 
-tl.init_env = function(lax, gen_compat, gen_target, preload_modules)
+tl.init_env = function(lax, gen_compat, gen_target, predefined)
    if gen_compat == true or gen_compat == nil then
       gen_compat = "optional"
    elseif gen_compat == false then
@@ -5197,12 +5197,12 @@ tl.init_env = function(lax, gen_compat, gen_target, preload_modules)
       end
    end
 
-   if preload_modules then
-      for _, name in ipairs(preload_modules) do
+   if predefined then
+      for _, name in ipairs(predefined) do
          local module_type = require_module(name, lax, env)
 
          if module_type == INVALID then
-            return nil, string.format("Error: could not preload module '%s'", name)
+            return nil, string.format("Error: could not predefine module '%s'", name)
          end
       end
    end

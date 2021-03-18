@@ -134,7 +134,12 @@ local function setup_env(tlconfig, filename)
    local gen_compat = tlconfig["gen_compat"]
    local gen_target = tlconfig["gen_target"]
 
-   local env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig.preload_modules)
+   tlconfig._init_env_modules = tlconfig._init_env_modules or {}
+   if tlconfig.global_env_def then
+      table.insert(tlconfig._init_env_modules, 1, tlconfig.global_env_def)
+   end
+
+   local env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig._init_env_modules)
    if not env then
       die(err)
    end
@@ -749,7 +754,7 @@ local function validate_config(config)
 
    local valid_keys = {
       include_dir = "{string}",
-      preload_modules = "{string}",
+      global_env_def = "string",
       quiet = "boolean",
       skip_compat53 = "boolean",
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
@@ -770,7 +775,9 @@ local function validate_config(config)
    }
 
    for k, v in pairs(config) do
-      if not valid_keys[k] then
+      if k == "preload_modules" then
+         fail(k, "this key is no longer supported. To load a definition globally into the environment, use global_env_def.")
+      elseif not valid_keys[k] then
          print("Warning: unknown key '" .. k .. "' in tlconfig.lua")
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
@@ -804,9 +811,9 @@ end
 local function get_args_parser()
    local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
-   parser:option("--preload", "Predefine types into the initial global environment.")
-         :argname("<modulename>")
-         :count("*")
+   parser:option("--global-env-def", "Predefined types from a custom global environment.")
+         :argname("<dtlfilename>")
+         :count("*") -- count("1") does not work? we verify by hand below then
 
    parser:option("-I --include-dir", "Prepend this directory to the module search path.")
          :argname("<directory>")
@@ -872,7 +879,6 @@ end
 
 local function get_config(cmd)
    local config = {
-      preload_modules = {},
       include_dir = {},
       disable_warnings = {},
       warning_error = {},
@@ -939,10 +945,11 @@ local function merge_config_and_args(tlconfig, args)
       end
    end
 
-   for _, preload_module_cli in ipairs(args["preload"]) do
-      if not find_in_sequence(tlconfig.preload_modules, preload_module_cli) then
-         table.insert(tlconfig.preload_modules, preload_module_cli)
+   if args["global_env_def"] then
+      if #args["global_env_def"] > 1 then
+         die("Error: --global-env-def can be used only once.")
       end
+      tlconfig["global_env_def"] = args["global_env_def"][1]
    end
 
    for _, include_dir_cli in ipairs(args["include_dir"]) do
@@ -1026,9 +1033,10 @@ end
 --------------------------------------------------------------------------------
 
 commands["run"] = function(tlconfig, args)
-   for _, module in ipairs(args["require"]) do
-      if not find_in_sequence(tlconfig.preload_modules, module) then
-         table.insert(tlconfig.preload_modules, module)
+   if args["require"] then
+      tlconfig._init_env_modules = {}
+      for _, module in ipairs(args["require"]) do
+         table.insert(tlconfig._init_env_modules, module)
       end
    end
 

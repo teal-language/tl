@@ -1,7 +1,7 @@
 local assert = require("luassert")
 local util = require("spec.util")
 
-describe("--preload argument", function()
+describe("--global-env-def argument", function()
    it("exports globals from a module", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
@@ -17,7 +17,7 @@ describe("--preload argument", function()
             print(add(10, 20))
          ]],
       }), function()
-         local pd = io.popen(util.tl_cmd("check", "--preload", "mod.add", "test.tl"), "r")
+         local pd = io.popen(util.tl_cmd("check", "--global-env-def", "mod.add", "test.tl"), "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          assert.match("0 errors detected", output, 1, true)
@@ -29,13 +29,13 @@ describe("--preload argument", function()
              print(add(10, 20))
          ]],
       }), function()
-         local pd = io.popen(util.tl_cmd("check", "--preload", "module_that_doesnt_exist", "test.tl") .. " 2>&1", "r")
+         local pd = io.popen(util.tl_cmd("check", "--global-env-def", "module_that_doesnt_exist", "test.tl") .. " 2>&1", "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("Error:", output, 1, true)
       end)
    end)
-   it("can be used more than once", function ()
+   it("cannot be used more than once", function ()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
@@ -45,24 +45,15 @@ describe("--preload argument", function()
 
                return add
             ]],
-            ["subtract.tl"] = [[
-               function subtract(n: number, m: number): number
-                   return n - m
-               end
-
-               return subtract
-            ]],
          },
          ["test.tl"] = [[
-             print(add(10, 20))
-             print(subtract(20, 10))
+            print(add(10, 20))
          ]],
-         src = {},
       }), function()
-         local pd = io.popen(util.tl_cmd("check", "--preload", "mod.subtract", "--preload", "mod.add", "test.tl"), "r")
+         local pd = io.popen(util.tl_cmd("check", "--global-env-def", "mod.subtract", "--global-env-def", "mod.add", "test.tl") .. " 2>&1", "r")
          local output = pd:read("*a")
-         util.assert_popen_close(0, pd:close())
-         assert.match("0 errors detected", output, 1, true)
+         util.assert_popen_close(1, pd:close())
+         assert.match("Error:", output, 1, true)
       end)
    end)
 end)
