@@ -8298,7 +8298,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                         assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
                      end
                   elseif node[i].key_parsed == "implicit" then
-                     force_array = expand_type(node[i], force_array, child.ktype)
+                     force_array = expand_type(node[i], force_array, child.vtype)
                   elseif is_map then
                      assert_is_a(node[i], child.ktype, decltype.keys, in_context(node.expected_context, "in map key"))
                      assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
