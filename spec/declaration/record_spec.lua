@@ -649,5 +649,27 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]], {
          { y = 8, msg = "redeclared key foo" }
       }))
+
+      it("can use itself in a constructor (regression test for #422)", util.check([[
+         local record Foo ]]..pick(i, "", "{number}")..[[
+         end
+
+         function Foo:new(): Foo
+            return setmetatable({} as Foo, self as metatable<Foo>)
+         end
+
+         local foo = Foo:new()
+      ]]))
+
+      it("can use itself in a constructor with dot notation (regression test for #422)", util.check([[
+         local record Foo ]]..pick(i, "", "{number}")..[[
+         end
+
+         function Foo.new(): Foo
+            return setmetatable({}, Foo) -- typing of arguments is being very permissive here, may change in the future and require a cast
+         end
+
+         local foo = Foo.new()
+      ]]))
    end)
 end

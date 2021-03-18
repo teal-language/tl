@@ -6390,7 +6390,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       elseif t2.typename == "record" then
          if is_record_type(t1) then
             return match_fields_to_record(t1, t2)
-         elseif is_typetype(t1) and t1.def.typename == "record" then
+         elseif is_typetype(t1) and is_record_type(t1.def) then -- record as prototype
             return is_a(t1.def, t2, for_equality)
          end
       elseif t2.typename == "arrayrecord" then
@@ -6415,6 +6415,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                return false, terr(t1, "array parts have incompatible element types")
             end
             return match_fields_to_record(t1, t2)
+         elseif is_typetype(t1) and is_record_type(t1.def) then -- record as prototype
+            return is_a(t1.def, t2, for_equality)
          end
       elseif t2.typename == "map" then
          if t1.typename == "map" then
