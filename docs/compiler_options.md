@@ -13,9 +13,6 @@ return {
         "folder1/",
         "folder2/"
     },
-    preload_modules = {
-        "my.other.module"
-    }
 }
 ```
 
