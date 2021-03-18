@@ -1,3 +1,128 @@
+# 0.13.0
+
+2021-03-18
+
+A long awaited feature arrives: integers!
+
+Teal now has a separate type `integer` for integers, and `number` continues to
+be the general floating-point value.
+
+The integer type works for any Lua version, but from Teal's point of view it
+has unknown precision. The actual precision depends on your Lua VM: if
+you're running on Lua 5.3 or above, you get 64-bit integers; if you're running
+Lua 5.2 or below or LuaJIT, the implementation still generates regular
+numbers, but it checks that operations declared to work on integers will only use
+values declared as integers, which is useful even if the VM does not have a native
+integer value type.
+
+See more details about the behavior below, as well as a quick guide to help you
+in the conversion process!
+
+Apart from integers, this release features your usual assortment of tooling tweaks
+and bugfixes!
+
+This release features commits by Kim Alvefur and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Integer type!
+  * `integer` is a new type of undefined precision, deferring to the Lua VM
+    * integer constants without a dot (e.g. 123) are of type integer
+    * operations preserve the integer type according to Lua 5.4 semantics
+      (e.g. `integer + integer = integer`, `integer + number = number`, etc.)
+    * `integer` is a subtype of `number`
+      * this generally means that an `integer` is accepted everywhere a `number` is expected
+      * note that this does not extend to type variables in generics,
+        which are invariant: `Foo<integer>` is not the same as `Foo<number>`
+      * if a variable is of type `integer`, then an arbitrary `number` is not accepted
+        * `local x: integer = 1.0` doesn't work, even though the floating-point number
+          has a valid integer representation
+    * variables (and type variables) are inferred as integer when initialized with integers
+      * this can happen directly (`local x = 1`) or indirectly (`local x = math.min(i, j)`)
+      * to infer an integral value as a `number`, use .0: `local x = 1.0` infers a `number`
+  * the standard library was annotated for integers
+    * it only returns integers, but it always accepts floats in arguments that
+      must be integral — this matches the behavior of the Lua standard library
+      implementation: wherever you need to pass an integral value, you can pass
+      an equivalent float with an integer representation, e.g.
+      `table.insert(t, 1.0, "hello")` — therefore, this is also valid in Teal,
+      but note that the validity of the float is not checked at compile time,
+      this is a Lua standard library API check.
+* Redeclared keys in table literals are now an error.
+* More improvements thanks to bidirectional inference:
+  * You can now make an `or` between values of two different types
+    if the context expects a union.
+
+**Quick guide for existing converting code to use integers** - I tried to be as careful
+as possible in making the transition easier, but this will undoubtedly break
+some of your code — don't worry, fixing it is easy. Any new error may fall
+into one of two categories:
+
+1. Your value is meant to be an integer, but it is being detected as a `number`
+  * if your variables are meant to be integers (indices in an array, counters,
+    line-column coordinates, etc.), most likely your code will already be using
+    them as `integer` because `local x = 0` now infers to `integer`.
+  * If you explictly declared it as `local x: number`,
+    just change it to `local x: integer`.
+  * Your functions will often feature arguments and return types declared
+    as `number` where they should now be `integer`,
+    if they take or produce integer values.
+    * This will cause, especially for return types, a line like
+      `my_integer = func()` to produce an error `got number, expected integer`;
+      `func` needs to be changed from `function func(): number`
+      to `function func(): integer`.
+  * To convert floating-point numbers to integers you can use `math` library
+    functions such as `math.floor()`.
+2. Your value is meant to be a floating-point number, but it is being detected as an `integer`
+  * if your variables are meant to be floating-point and Teal is inferring them
+    as integer because of their initialization value, the easiest thing is to
+    change them to floating-point constants, changing from `local dx = 0` to
+    `local dx = 0.0`
+  * Due to subtyping, integers generally work wherever numbers are required,
+    but if you need to convert an integer to a number in an invariant context such
+    as a type variable in a generic, you can force it with a cast (`i as number`).
+
+### API
+
+* new API function `tl.version()`, which returns the version of the compiler.
+* make unknowns a kind of warning, not a separate array
+* only ever return Result values, do not take them as inputs
+* each Result only contains errors for the given file
+  * use `env.loaded` (and `env.loaded_order`) to traverse all results
+    and get all errors
+
+### Tooling
+
+* renamed `preload_modules` (an array) to `global_env_def` (a single entry).
+  This option caused some confusion before, so we reworked the documentation
+  to better [explain its intent](https://github.com/teal-language/tl/blob/v0.13.0/docs/compiler_options.md#global-environment-definition).
+  * For example, to load global definitions for Love2D from a file `love.d.tl`,
+    use `global_env_def = "love"` in your tlconfig.lua file.
+* `tl run -l <module> <script>` (long form `--require <module>`)
+  * works like `lua -l`; type checks the module and requires it
+    prior to running the script.
+* `tl gen --check` now reports warnings
+* When processing `.lua` files, unknown variables are now a type of
+  warning, so you can enable and disable them using the usual warning
+  features from the CLI and tlconfig.lua
+* Some performance improvements in the compiler itself, thanks to some
+  profile-directed optimization (in other words, putting the most-used
+  branches first in long `if`/`elseif` chains).
+* `tl types` now produces its JSON output in a stable order
+* `tl types` now returns more information
+  * types in function names, `for` variables
+
+### Fixes
+
+* Nested type alias now work as expected
+* Fix a crash when doing flow inference on inexistant variables (#409)
+* Fix partial resolution of type arguments
+* Some fixes related to arrayrecords
+  * Nested types now work correctly with arrayrecords
+  * Fixed use of self in functions declared in arrayrecords
+
 # 0.12.0
 
 2021-02-27
