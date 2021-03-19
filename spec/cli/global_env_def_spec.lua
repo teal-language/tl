@@ -56,7 +56,7 @@ describe("--global-env-def argument", function()
          assert.match("Error:", output, 1, true)
       end)
    end)
-   pending("reads global_env_def from tlconfig.lua", function ()
+   it("reads global_env_def from tlconfig.lua", function ()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
