@@ -1,3 +1,20 @@
+# 0.13.1
+
+2021-03-19
+
+A quick bugfix release, to correct the behavior of `global_env_def`, which
+wasn't being properly loaded from tlconfig.lua. Getting a quick release out
+of the door so that people who were using `preload_modules` don't stay on
+an old version just because of that!
+
+This release features commits by Kim Alvefur.
+
+## What's New
+
+### Tooling
+
+* Fixed loading `global_env_def` from tlconfig.lua.
+
 # 0.13.0
 
 2021-03-18
