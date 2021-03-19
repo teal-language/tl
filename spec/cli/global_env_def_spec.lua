@@ -56,4 +56,32 @@ describe("--global-env-def argument", function()
          assert.match("Error:", output, 1, true)
       end)
    end)
+   pending("reads global_env_def from tlconfig.lua", function ()
+      util.do_in(util.write_tmp_dir(finally, {
+         mod = {
+            ["add.tl"] = [[
+               function add(n: number, m: number): number
+                   return n + m
+               end
+
+               return add
+            ]],
+         },
+         ["test.tl"] = [[
+            print(add(10, 20))
+         ]],
+         ["tlconfig.lua"] = [[
+         return {
+            global_env_def = "mod.add",
+         }
+         ]],
+      }), function()
+         local pd = io.popen(util.tl_cmd("check", "test.tl"), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         assert.match("0 errors detected", output, 1, true)
+      end)
+
+   end);
+
 end)
