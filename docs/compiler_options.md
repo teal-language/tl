@@ -115,7 +115,7 @@ module name that resolves to a definition file (a Teal module ending with a
 checking environment, using the `--global-env-def` flag in the CLI or the
 `global_env_def` array in tlconfig.lua. For example, if you have a file called
 `love.d.tl` containing the definitions of Love2D, you can put
-`global_dev_def = "love"` in your tlconfig.lua file, and `tl` will assume
+`global_env_def = "love"` in your tlconfig.lua file, and `tl` will assume
 that any globals declared in that file are available to other modules being
 compiled.
 
