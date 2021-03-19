@@ -948,8 +948,9 @@ local function merge_config_and_args(tlconfig, args)
    if args["global_env_def"] then
       if #args["global_env_def"] > 1 then
          die("Error: --global-env-def can be used only once.")
+      elseif args["global_env_def"][1] then
+         tlconfig["global_env_def"] = args["global_env_def"][1]
       end
-      tlconfig["global_env_def"] = args["global_env_def"][1]
    end
 
    for _, include_dir_cli in ipairs(args["include_dir"]) do
