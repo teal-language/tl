@@ -35,7 +35,7 @@ return {
 | `--run-build-script` | `run_build_script` | `boolean` | `run` `check` `gen`| Runs the build script as if `tl build` was being run
 | | `build_file_output_dir` | `string` | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
 | | `internal_compiler_output` | `string` |`run` `check` `gen` `build` | Folder to store cache files for use by the compiler
-| `--global-env-def`  | `global_env_def` | `{string}` | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See [below](#global-environment-definition) for details. |
+| `--global-env-def`  | `global_env_def` | `string` | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See [below](#global-environment-definition) for details. |
 
 ### Generated code
 
