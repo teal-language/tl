@@ -292,4 +292,34 @@ describe("record method", function()
       ]], output)
    end)
 
+   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check_type_error([[
+      function foo()
+        local self = { }
+        function self:bar(): string
+          return "bar"
+        end
+        return self
+      end
+   ]], {
+      { msg = "in return value: excess return values" }
+   }))
+
+   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[
+      local record T<A, B>
+        method: function(function(A)): T<A, B>
+      end
+
+      local t = { }
+
+      function t.new<A, B>(): T<A, B>
+        local self = { }
+        function self:method(callback: function(A)): T<A, B>
+          return self
+        end
+        return self
+      end
+
+      return t
+   ]])
+
 end)

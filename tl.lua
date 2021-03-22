@@ -8399,15 +8399,19 @@ tl.type_check = function(ast, opts)
          end,
          before_statements = function(node, children)
             add_internal_function_variables(node)
+
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+            local owner = find_record_to_extend(node.fn_owner)
+
             if node.is_method then
-               local rtype = resolve_typetype(children[1])
                children[3][1] = rtype
                add_var(nil, "self", rtype)
             end
 
-            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
+               rtype.fields = {}
+               rtype.field_order = {}
             end
             if is_record_type(rtype) then
                local fn_type = a_type({
@@ -8424,15 +8428,13 @@ tl.type_check = function(ast, opts)
                local ok = false
                if lax then
                   ok = true
-               elseif rtype.fields and rtype.fields[node.name.tk] and is_a(fn_type, rtype.fields[node.name.tk]) then
+               elseif rtype.fields[node.name.tk] and is_a(fn_type, rtype.fields[node.name.tk]) then
                   ok = true
-               elseif find_record_to_extend(node.fn_owner) == rtype then
+               elseif owner == rtype then
                   ok = true
                end
 
                if ok then
-                  rtype.fields = rtype.fields or {}
-                  rtype.field_order = rtype.field_order or {}
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
                   node.name.type = fn_type
