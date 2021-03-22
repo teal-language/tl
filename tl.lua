@@ -4370,7 +4370,7 @@ local function show_type_base(t, short, seen)
       end
       for i, v in ipairs(t.args) do
          if not t.is_method or i > 1 then
-            table.insert(args, show(v) .. (i == #t.args and t.args.is_va and "..." or ""))
+            table.insert(args, (i == #t.args and t.args.is_va and "...: " or "") .. show(v))
          end
       end
       table.insert(out, table.concat(args, ", "))

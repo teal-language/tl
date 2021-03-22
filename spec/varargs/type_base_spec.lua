@@ -8,6 +8,6 @@ describe("type base", function()
 
       f = 2
    ]], {
-      { msg = "in assignment: got integer, expected function(number, string...): string..." }
+      { msg = "in assignment: got integer, expected function(number, ...: string): string..." }
    }))
 end)
