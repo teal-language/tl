@@ -4370,7 +4370,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       end
       for i, v in ipairs(t.args) do
          if not t.is_method or i > 1 then
-            table.insert(args, show(v))
+            table.insert(args, (i == #t.args and t.args.is_va and "...: " or "") .. show(v))
          end
       end
       table.insert(out, table.concat(args, ", "))
@@ -4378,8 +4378,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       if #t.rets > 0 then
          table.insert(out, ": ")
          local rets = {}
-         for _, v in ipairs(t.rets) do
-            table.insert(rets, show(v))
+         for i, v in ipairs(t.rets) do
+            table.insert(rets, show(v) .. (i == #t.rets and t.rets.is_va and "..." or ""))
          end
          table.insert(out, table.concat(rets, ", "))
       end
