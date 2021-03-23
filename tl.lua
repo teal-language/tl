@@ -7020,7 +7020,7 @@ tl.type_check = function(ast, opts)
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
-            a.keys = orig_b
+            a.keys = resolve_tuple(orig_b)
             a.keys_inferred_at = assert(node)
             a.keys_inferred_at_file = filename
          else

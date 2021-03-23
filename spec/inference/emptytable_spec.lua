@@ -127,4 +127,13 @@ describe("empty table without type annotation", function()
       foo2(z)
    ]])
 
+   it("map keys are unary", util.check [[
+      local t = {}
+      for i = 2, 254 do
+         t[string.char(i)] = string.char(i + 1)
+      end
+
+      print(("hal"):gsub(".", t))
+   ]])
+
 end)
