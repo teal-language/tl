@@ -497,7 +497,7 @@ function util.check_warnings(code, warnings)
    return function()
       local result = tl.process_string(code)
       local batch = batch_assertions()
-      batch_compare(batch, "warnings", warnings, result.warnings)
+      batch_compare(batch, "warnings", warnings, result.warnings or {})
       batch:assert()
    end
 end

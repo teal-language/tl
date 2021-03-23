@@ -7972,11 +7972,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   else
                      node_error(varnode, "variable is not being assigned a value")
                      if #node.exps == 1 and node.exps[1].kind == "op" and node.exps[1].op.op == "@funcall" then
-                        local n = #node.exps[1].e2
-                        local msg = n == 1
-                                    and "only 1 value is returned by this function"
-                                    or ("only " .. n .. " values are returned by this function")
-                        node_warning("hint", node.exps[1], msg)
+                        local rets = node.exps[1].type
+                        if rets.typename == "tuple" then
+                           local msg = #rets == 1
+                                       and "only 1 value is returned by the function"
+                                       or ("only " .. #rets .. " values are returned by the function")
+                           node_warning("hint", varnode, msg)
+                        end
                      end
                   end
                else
