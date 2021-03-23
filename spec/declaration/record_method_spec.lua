@@ -304,6 +304,15 @@ describe("record method", function()
       { msg = "in return value: excess return values" }
    }))
 
+   it("does not fail when traversing dot on non-record", util.check_type_error([[
+      local foo: number
+      function foo.bla:bar(): string
+         return "bar"
+      end
+   ]], {
+      { msg = "cannot index something that is not a record" }
+   }))
+
    it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[
       local record T<A, B>
         method: function(function(A)): T<A, B>

@@ -7130,13 +7130,13 @@ tl.type_check = function(ast, opts)
             return nil
          end
          while exp.e2.kind == "op" and exp.e2.op.op == "." do
-            t = t.fields[exp.e2.e1.tk]
+            t = t.fields and t.fields[exp.e2.e1.tk]
             if not t then
                return nil
             end
             exp = exp.e2
          end
-         t = t.fields[exp.e2.tk]
+         t = t.fields and t.fields[exp.e2.tk]
          return t
       end
    end
