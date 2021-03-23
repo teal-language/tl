@@ -4723,7 +4723,15 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       ["any"] = a_type { typename = "typetype", def = ANY },
       ["arg"] = ARRAY_OF_STRING,
       ["assert"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA, ARG_BETA }, args = TUPLE { ALPHA, OPT_BETA }, rets = TUPLE { ALPHA } },
-      ["collectgarbage"] = a_type { typename = "function", args = TUPLE { STRING, OPT_NUMBER, OPT_NUMBER, OPT_NUMBER }, rets = TUPLE { a_type { typename = "union", types = { BOOLEAN, NUMBER } } } },
+      ["collectgarbage"] = a_type {
+         typename = "poly",
+         types = {
+            a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["collect"] = true, ["count"] = true, ["stop"] = true, ["restart"] = true, } } }, rets = TUPLE { NUMBER } },
+            a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["step"] = true, ["setpause"] = true, ["setstepmul"] = true } }, NUMBER }, rets = TUPLE { NUMBER } },
+            a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["isrunning"] = true } } }, rets = TUPLE { BOOLEAN } },
+            a_type { typename = "function", args = TUPLE { STRING, OPT_NUMBER }, rets = TUPLE { a_type { typename = "union", types = { BOOLEAN, NUMBER } } } },
+         }
+      },
       ["dofile"] = a_type { typename = "function", args = TUPLE { OPT_STRING }, rets = VARARG { ANY } },
       ["error"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER }, rets = TUPLE {} },
       ["getmetatable"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ALPHA }, rets = TUPLE { NOMINAL_METATABLE_OF_ALPHA } },
