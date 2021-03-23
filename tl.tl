@@ -6642,7 +6642,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             local argument = args[a]
             if argument.typename == "emptytable" then
                local farg = f.args[a] or (va and f.args[expected])
-               local where = node.e2[a + argdelta]
+               local where = node.e2[a + argdelta] or node.e2 -- for self, a + argdelta is 0
                infer_var(argument, resolve_typevars_at(farg, where), where)
             end
          end
