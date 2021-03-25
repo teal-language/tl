@@ -9163,7 +9163,7 @@ function tl.get_types(result, trenv)
    tr.by_pos[filename] = ft
 
    local function store(y, x, typ)
-      if skip[typ.typename] then
+      if not typ or skip[typ.typename] then
          return
       end
 

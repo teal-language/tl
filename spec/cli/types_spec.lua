@@ -92,6 +92,17 @@ describe("tl types works like check", function()
          assert.match("unknown variable: b", output, 1, true)
          -- TODO check json output
       end)
+
+      it("does not get confused by compat code when using --get-target=5.1 (#430)", function()
+         local name = util.write_tmp_file(finally, [[
+            local x: integer = 1//2
+            print(x)
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name, "--gen-target=5.1") .. "2>&1 1>/dev/null", "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         -- TODO check json output
+      end)
    end)
 
    describe("on .lua files", function()
