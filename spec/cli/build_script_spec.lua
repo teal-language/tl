@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("build.tl", function()
-   it("defaults to the generated_code folder", function()
+   it("defaults to the generated_code folder #unix", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -40,7 +40,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have the location it stores altered by setting build_file_output_dir", function()
+   it("can have the location it stores altered by setting build_file_output_dir #unix", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -79,7 +79,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have a diffrent name by setting build_file", function()
+   it("can have a diffrent name by setting build_file #unix", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -119,7 +119,7 @@ describe("build.tl", function()
          }
       })
    end)
-   it("Can have the location for cached output files changed", function()
+   it("Can have the location for cached output files changed #unix", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -220,9 +220,7 @@ describe("build.tl", function()
    end)
 
    it("It should only run the build script if it changed since last time", function()
-      local path = util.write_tmp_dir(
-         finally,
-         {
+      local path = util.write_tmp_dir(finally, {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
                build_file_output_dir = "generated_code",
@@ -237,11 +235,8 @@ describe("build.tl", function()
 
                }
             ]],
-         }
-      )
-      util.run_mock_project(
-         finally,
-         {
+      })
+      util.run_mock_project(finally, {
             cmd = "build",
             cmd_output = [[
 This text should appear only once
@@ -250,9 +245,7 @@ Wrote: build/build.lua
          },
          path
       )
-      util.run_mock_project(
-         finally,
-         {
+      util.run_mock_project(finally, {
             cmd = "build",
             cmd_output = [[
 Wrote: build/build.lua

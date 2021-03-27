@@ -1,4 +1,15 @@
-local util = {}
+local win32 = package.config:sub(1,1) == "\\"
+local util = {
+   os_sep    = win32 and "\\" or "/",
+   os_tmp    = win32 and os.getenv("TEMP") or "/tmp",
+   os_null   = win32 and "NUL" or "/dev/null",
+   os_join   = win32 and " & " or "",
+   os_set    = win32 and "set " or ""
+}
+
+function util.os_path(path)
+   return win32 and path:gsub("/", "\\\\") or path
+end
 
 if jit then
    jit.off()
@@ -9,7 +20,7 @@ local tl = require("tl")
 local assert = require("luassert")
 local lfs = require("lfs")
 local current_dir = assert(lfs.currentdir(), "unable to get current dir")
-local tl_executable = current_dir .. "/tl"
+local tl_executable = current_dir .. util.os_sep .. "tl"
 
 local t_unpack = unpack or table.unpack
 
@@ -149,9 +160,9 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
-local cmd_prefix = { string.format("LUA_PATH=%q", package.path) }
+local cmd_prefix = { string.format(util.os_set .. "LUA_PATH=%q" .. util.os_join, package.path) }
 for i = 1, 4 do
-   table.insert(cmd_prefix, string.format("LUA_PATH_5_%d=%q", i, package.path))
+   table.insert(cmd_prefix, string.format(util.os_set .. "LUA_PATH_5_%d=%q" .. util.os_join, i, package.path))
 end
 
 local first_arg = 0
@@ -185,7 +196,7 @@ function util.tl_cmd(name, ...)
 end
 
 function util.chdir_setup()
-   assert(lfs.chdir("/tmp"))
+   assert(lfs.chdir(util.os_tmp))
 end
 
 function util.chdir_teardown()
@@ -194,7 +205,7 @@ end
 
 math.randomseed(os.time())
 local function tmp_file_name()
-   return "/tmp/teal_tmp" .. math.random(99999999)
+   return util.os_tmp .. util.os_sep .. "teal_tmp" .. math.random(99999999)
 end
 function util.write_tmp_file(finally, content, ext)
    assert(type(finally) == "function")
@@ -213,6 +224,11 @@ function util.write_tmp_file(finally, content, ext)
       end
    end)
 
+   if win32 then
+      -- Normalize to unix filenames to pass assert_line_by_line
+      full_name = full_name:gsub("\\+", "/")
+   end
+
    return full_name
 end
 
@@ -220,14 +236,14 @@ function util.write_tmp_dir(finally, dir_structure)
    assert(type(finally) == "function")
    assert(type(dir_structure) == "table")
 
-   local full_name = tmp_file_name() .. "/"
+   local full_name = tmp_file_name() .. util.os_sep
    assert(lfs.mkdir(full_name))
    local function traverse_dir(dir_structure, prefix)
       prefix = prefix or full_name
       for name, content in pairs(dir_structure) do
          if type(content) == "table" then
             assert(lfs.mkdir(prefix .. name))
-            traverse_dir(content, prefix .. name .. "/")
+            traverse_dir(content, prefix .. name .. util.os_sep)
          else
             if type(content) == "string" then
                content = trim_end(content)
@@ -261,8 +277,8 @@ function util.get_dir_structure(dir_name)
    local dir_structure = {}
    for fname in lfs.dir(dir_name) do
       if fname ~= ".." and fname ~= "." then
-         if lfs.attributes(dir_name .. "/" .. fname, "mode") == "directory" then
-            dir_structure[fname] = util.get_dir_structure(dir_name .. "/" .. fname)
+         if lfs.attributes(dir_name .. util.os_sep .. fname, "mode") == "directory" then
+            dir_structure[fname] = util.get_dir_structure(dir_name .. util.os_sep .. fname)
          else
             dir_structure[fname] = true
          end
@@ -316,7 +332,7 @@ function util.run_mock_project(finally, t, use_folder)
       pd:close()
    end
    if t.cmd_output then
-      batch:add(assert.are.equal, t.cmd_output, actual_output)
+      batch:add(assert.are.equal, t.cmd_output, actual_output:gsub("\\", "/"))
    end
    if expected_dir_structure then
       batch:add(assert.are.same, expected_dir_structure, actual_dir_structure, "Actual directory structure is not as expected")

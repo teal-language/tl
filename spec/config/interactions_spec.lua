@@ -7,7 +7,7 @@ describe("config option interactions", function()
             dir_structure = {
                ["tlconfig.lua"] = [[return {
                   include = {
-                     "**/*",
+                     ]] .. util.os_path('"**/*"') .. [[,
                   },
                   exclude = {
                      "*",
@@ -40,7 +40,7 @@ describe("config option interactions", function()
          util.run_mock_project(finally, {
             dir_structure = {
                ["tlconfig.lua"] = [[return {
-                  source_dir = "foo/bar",
+                  source_dir = ]] .. util.os_path('"foo/bar"') .. [[,
                   build_dir = "foo",
                }]],
                foo = {
@@ -90,7 +90,7 @@ describe("config option interactions", function()
                ["tlconfig.lua"] = [[return {
                   source_dir = "src",
                   include = {
-                     "**/*"
+                     ]] .. util.os_path('"**/*"') .. [[
                   },
                }]],
                ["src"] = {
@@ -127,10 +127,10 @@ describe("config option interactions", function()
                ["tlconfig.lua"] = [[return {
                   source_dir = ".",
                   include = {
-                     "foo/*.tl",
+                     ]] .. util.os_path('"foo/*.tl"') .. [[,
                   },
                   exclude = {
-                     "foo/a*.tl",
+                     ]] .. util.os_path('"foo/a*.tl"') .. [[,
                   },
                }]],
                foo = {
