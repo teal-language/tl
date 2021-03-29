@@ -367,8 +367,9 @@ do
          local mode = lfs.attributes(internal_output, "mode")
          if not mode then
             local parts = ""
+            local prefix = PATH_SEPARATOR == "\\" and "" or "/"
             for v in string.gmatch(internal_output, "[^/]+") do
-               parts = parts .. "/" .. v
+               parts = parts .. prefix .. v
                mode = lfs.attributes(parts, "mode")
                if mode == nil then
                   local res, message = lfs.mkdir(parts)

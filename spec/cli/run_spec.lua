@@ -37,7 +37,7 @@ describe("tl run", function()
             print(add("string", 20))
             print(add(10, true))
          ]])
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("2 errors:", output, 1, true)
@@ -47,7 +47,7 @@ describe("tl run", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
          ]])
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
@@ -59,7 +59,7 @@ describe("tl run", function()
                return a + b
             end
          ]])
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("2 errors:", output, 1, true)
@@ -82,8 +82,11 @@ describe("tl run", function()
             print(add(10, 20))
             ]]
          })
-         local pd = io.popen("TL_PATH='" .. dir_name .. "/?.tl' " .. util.tl_cmd("run", dir_name .. "/main.tl"), "r")
-         local output = pd:read("*a")
+         local pd, output
+         util.do_in(dir_name, function()
+            pd = io.popen(util.tl_cmd("run", "main.tl"), "r")
+            output = pd:read("*a")
+         end)
          util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
             30
@@ -105,8 +108,11 @@ describe("tl run", function()
                ]]
             })
             for _, flag in ipairs({ "-l add", "-ladd", "--require add" }) do
-               local pd = io.popen("TL_PATH='" .. dir_name .. "/?.tl' " .. util.tl_cmd("run " .. flag, dir_name .. "/main.tl"), "r")
-               local output = pd:read("*a")
+               local pd, output
+               util.do_in(dir_name, function()
+                  pd = io.popen(util.tl_cmd("run " .. flag, "main.tl"), "r")
+                  output = pd:read("*a")
+               end)
                util.assert_popen_close(0, pd:close())
                util.assert_line_by_line([[
                   30
@@ -142,7 +148,7 @@ describe("tl run", function()
             print(add("string", 20))
             print(add(10, true))
          ]], "lua")
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          if _VERSION == "Lua 5.4" then
@@ -156,7 +162,7 @@ describe("tl run", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
          ]])
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
@@ -172,7 +178,7 @@ describe("tl run", function()
                return x + y
             end
          ]], "lua")
-         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          assert.same("", output)

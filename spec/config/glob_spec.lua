@@ -71,7 +71,7 @@ describe("globs", function()
       it("should match directories in the middle of a path", function()
          util.run_mock_project(finally, {
             dir_structure = {
-               ["tlconfig.lua"] = [[return { include = { "foo/*/baz.tl" } }]],
+               ["tlconfig.lua"] = [[return { include = { ]] .. util.os_path('"foo/*/baz.tl"') .. [[ } }]],
                ["foo"] = {
                   ["bar"] = {
                      ["foo.tl"] = [[print "a"]],
@@ -104,7 +104,7 @@ describe("globs", function()
       it("should match the current directory", function()
          util.run_mock_project(finally, {
             dir_structure = {
-               ["tlconfig.lua"] = [[return { include = { "**/*" } }]],
+               ["tlconfig.lua"] = [[return { include = { ]] .. util.os_path('"**/*"') .. [[ } }]],
                ["foo.tl"] = [[print "a"]],
                ["bar.tl"] = [[print "b"]],
                ["baz.tl"] = [[print "c"]],
@@ -120,7 +120,7 @@ describe("globs", function()
       it("should match any subdirectory", function()
          util.run_mock_project(finally, {
             dir_structure = {
-               ["tlconfig.lua"] = [[return { include = { "**/*" } }]],
+               ["tlconfig.lua"] = [[return { include = { ]] .. util.os_path('"**/*"') .. [[ } }]],
                ["foo"] = {
                   ["foo.tl"] = [[print "a"]],
                   ["bar.tl"] = [[print "b"]],
@@ -156,7 +156,7 @@ describe("globs", function()
       it("should not get the order of directories confused", function()
          util.run_mock_project(finally, {
             dir_structure = {
-               ["tlconfig.lua"] = [[return { include = { "foo/**/bar/**/baz/a.tl" } }]],
+               ["tlconfig.lua"] = [[return { include = { ]] .. util.os_path('"foo/**/bar/**/baz/a.tl"') .. [[ } }]],
                ["foo"] = {
                   ["bar"] = {
                      ["baz"] = {
@@ -196,7 +196,7 @@ describe("globs", function()
       it("should work together", function()
          util.run_mock_project(finally, {
             dir_structure = {
-               ["tlconfig.lua"] = [[return { include = { "**/foo/*/bar/**/*" } }]],
+               ["tlconfig.lua"] = [[return { include = { ]] .. util.os_path('"**/foo/*/bar/**/*"') .. [[ } }]],
                ["foo"] = {
                   ["a"] = {
                      ["bar"] = {

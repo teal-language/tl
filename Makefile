@@ -1,3 +1,9 @@
+ifeq ($(OS), Windows_NT)
+	BUSTED = busted.bat --suppress-pending --exclude-tags=unix
+else
+	BUSTED = busted --suppress-pending
+endif
+
 all: selfbuild suite
 
 selfbuild:
@@ -7,10 +13,10 @@ selfbuild:
 	diff tl.lua.1 tl.lua.2
 
 suite:
-	busted -v $(TESTFLAGS)
+	${BUSTED} -v $(TESTFLAGS)
 
 cov:
 	rm -f luacov.stats.out luacov.report.out
-	busted -c
+	${BUSTED} -c
 	luacov tl.lua
 	cat luacov.report.out

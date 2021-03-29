@@ -20,7 +20,7 @@ More keys are planned in the future, which is why the file returns a table rathe
 
 ## Output location
 
-The teal files get stored in a unique folder in `/tmp`, this folder will get cleaned up after the compiling succeeded. The generated teal files will get compiled to lua as normal and will be part of the build output.
+The teal files get stored in a temporary directory cleaned up after compilation (`/tmp` on Unix, `%TEMP%` on Windows). The generated teal files will get compiled to lua as normal and will be part of the build output.
 
 You can configure where the lua files will be saved by setting `build_file_output_dir` in `tlconfig.lua`. This uses the directory set by `build_dir` as a base. The default value is `generated_code`.
 

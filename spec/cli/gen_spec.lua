@@ -68,7 +68,7 @@ local c = 100
 ]]
 
 local function tl_to_lua(name)
-   return (name:gsub("%.tl$", ".lua"):gsub("^/tmp/", ""))
+   return (name:gsub("%.tl$", ".lua"):gsub("^" .. util.os_tmp .. util.os_sep, ""))
 end
 
 describe("tl gen", function()
@@ -116,7 +116,7 @@ describe("tl gen", function()
             print(add("string", 20))
             print(add(10, true))
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          assert.same("", output)
@@ -135,7 +135,7 @@ describe("tl gen", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
@@ -147,7 +147,7 @@ describe("tl gen", function()
                return a + b
             end
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>/dev/null", "r")
+         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          assert.same("", output)

@@ -10,7 +10,7 @@ describe("-o --output", function()
          },
          generated_files = { "foo.lua" },
          cmd = "gen",
-         args = { "bar/foo.tl" },
+         args = { util.os_path("bar/foo.tl") },
          exit_code = 0,
       })
    end)
@@ -19,7 +19,7 @@ describe("-o --output", function()
          dir_structure = {a={b={c={["foo.tl"] = [[print 'hey']]}}}},
          generated_files = { "foo.lua" },
          cmd = "gen",
-         args = { "a/b/c/foo.tl" },
+         args = { util.os_path("a/b/c/foo.tl") },
          exit_code = 0,
       })
    end)

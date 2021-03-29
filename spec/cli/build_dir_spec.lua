@@ -27,7 +27,7 @@ describe("-b --build-dir argument", function()
          dir_structure = {
             ["tlconfig.lua"] = [[return {
                build_dir = "build",
-               include = {"**/*.tl"}
+               include = {]] .. util.os_path('"**/*.tl"') .. [[}
             }]],
             ["foo.tl"] = [[print "foo"]],
             ["bar.tl"] = [[print "bar"]],
