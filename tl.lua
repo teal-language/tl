@@ -4735,7 +4735,7 @@ local function init_globals(lax)
          },
       }),
       ["dofile"] = a_type({ typename = "function", args = TUPLE({ OPT_STRING }), rets = VARARG({ ANY }) }),
-      ["error"] = a_type({ typename = "function", args = TUPLE({ STRING, NUMBER }), rets = TUPLE({}) }),
+      ["error"] = a_type({ typename = "function", args = TUPLE({ ANY, NUMBER }), rets = TUPLE({}) }),
       ["getmetatable"] = a_type({ typename = "function", typeargs = TUPLE({ ARG_ALPHA }), args = TUPLE({ ALPHA }), rets = TUPLE({ NOMINAL_METATABLE_OF_ALPHA }) }),
       ["ipairs"] = a_type({ typename = "function", typeargs = TUPLE({ ARG_ALPHA }), args = TUPLE({ ARRAY_OF_ALPHA }), rets = TUPLE({
          a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ INTEGER, ALPHA }) }),
