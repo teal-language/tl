@@ -403,7 +403,7 @@ do
    end
 
    local lex_any_char_kinds = {}
-   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", "#", "`", ";" }
+   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", "#", ";" }
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
@@ -1515,28 +1515,12 @@ local function parse_trying_list(ps, i, list, parse_item)
 end
 
 local function parse_typearg_type(ps, i)
-   local backtick = false
-   if ps.tokens[i].tk == "`" then
-      i = verify_tk(ps, i, "`")
-      backtick = true
-   end
    i = verify_kind(ps, i, "identifier")
    return i, a_type({
       y = ps.tokens[i - 2].y,
       x = ps.tokens[i - 2].x,
       typename = "typearg",
-      typearg = (backtick and "`" or "") .. ps.tokens[i - 1].tk,
-   })
-end
-
-local function parse_typevar_type(ps, i)
-   i = verify_tk(ps, i, "`")
-   i = verify_kind(ps, i, "identifier")
-   return i, a_type({
-      y = ps.tokens[i - 2].y,
-      x = ps.tokens[i - 2].x,
-      typename = "typevar",
-      typevar = "`" .. ps.tokens[i - 1].tk,
+      typearg = ps.tokens[i - 1].tk,
    })
 end
 
@@ -1669,8 +1653,6 @@ local function parse_base_type(ps, i)
       typ.keys = a_type({ typename = "any" })
       typ.values = a_type({ typename = "any" })
       return i + 1, typ
-   elseif tk == "`" then
-      return parse_typevar_type(ps, i)
    end
    return fail(ps, i, "expected a type")
 end
