@@ -33,7 +33,9 @@ luarocks install tl
 ```
 
 This should put a `tl` command in your `$PATH` (run `eval $(luarocks path)` if
-the LuaRocks-installed binaries are not in your `$PATH`)
+the LuaRocks-installed binaries are not in your `$PATH`).
+
+Teal works with Lua 5.1-5.4, including LuaJIT.
 
 ### Binaries
 
