@@ -4677,16 +4677,19 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       last_typeid = globals_typeid
    end
 
-   local function a_gfunction(n: integer, f: function(...: Type): Type): Type
+   local function a_gfunction(tvs: integer | {boolean}, f: function(...: Type): Type): Type
+      local n = tvs is {boolean} and #tvs or tvs
+
       local typevars = {}
       local typeargs = {}
       local c = string.byte("A") - 1
       fresh_typevar_ctr = fresh_typevar_ctr + 1
       for i = 1, n do
          local name = string.char(c + i) .. "@" .. fresh_typevar_ctr
-         typevars[i] = a_type { typename = "typevar", typevar = name }
-         typeargs[i] = a_type { typename = "typearg", typearg = name }
+         typevars[i] = a_type { typename = (tvs is {boolean} and tvs[i] and "typevar_va") or "typevar", typevar = name }
+         typeargs[i] = a_type { typename = (tvs is {boolean} and tvs[i] and "typearg_va") or "typearg", typearg = name }
       end
+
       local t = f(table.unpack(typevars))
       t.typename = "function"
       t.typeargs = typeargs
@@ -4816,8 +4819,14 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       ["pairs"] = a_gfunction(2, function(a: Type, b: Type): Type return { args = TUPLE { a_type { typename = "map", keys = a, values = b } }, rets = TUPLE {
          a_type { typename = "function", args = TUPLE {}, rets = TUPLE { a, b } },
       } } end),
-      ["pcall"] = a_type { typename = "function", args = VARARG { FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
-      ["xpcall"] = a_type { typename = "function", args = VARARG { FUNCTION, XPCALL_MSGH_FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
+      ["pcall"] = a_gfunction({true, true}, function(a_va: Type, b_va: Type): Type return {
+         args = VARARG { a_type { typename = "function", args = TUPLE { a_va }, rets = TUPLE { b_va } }, a_va },
+         rets = VARARG { BOOLEAN, b_va }
+      } end),
+      ["xpcall"] = a_gfunction({true, true}, function(a_va: Type, b_va: Type): Type return {
+         args = VARARG { a_type { typename = "function", args = TUPLE { a_va }, rets = TUPLE { b_va } }, XPCALL_MSGH_FUNCTION, a_va },
+         rets = VARARG { BOOLEAN, b_va }
+      } end),
       ["print"] = a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE {} },
       ["rawequal"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { BOOLEAN } },
       ["rawget"] = a_type { typename = "function", args = TUPLE { TABLE, ANY }, rets = TUPLE { ANY } },
@@ -7640,39 +7649,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
    local type_check_funcall: function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
 
-   local function special_pcall_xpcall(node: Node, _a: Type, b: {Type}, argdelta: integer): Type
-      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
-      if #node.e2 < base_nargs then
-         node_error(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
-         return TUPLE { BOOLEAN }
-      end
-
-      local ftype = table.remove(b, 1)
-      local fe2: Node = {}
-      if node.e1.tk == "xpcall" then
-         base_nargs = 2
-         local msgh = table.remove(b, 1)
-         assert_is_a(node.e2[2], msgh, XPCALL_MSGH_FUNCTION, "in message handler")
-      end
-      for i = base_nargs + 1, #node.e2 do
-         table.insert(fe2, node.e2[i])
-      end
-      local fnode: Node = {
-         y = node.y,
-         x = node.x,
-         kind = "op",
-         op = { op = "@funcall" },
-         e1 = node.e2[1],
-         e2 = fe2,
-      }
-      local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
-      if rets.typename ~= "tuple" then
-         rets = a_type { typename = "tuple", rets }
-      end
-      table.insert(rets, 1, BOOLEAN)
-      return rets
-   end
-
    local special_functions: {string : function(Node,Type,{Type},integer):Type } = {
       ["rawget"] = function(node: Node, _a: Type, b: {Type}, _argdelta: integer): Type
          -- TODO should those offsets be fixed by _argdelta?
@@ -7735,9 +7711,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          dependencies[module_name] = t.filename
          return t
       end,
-
-      ["pcall"] = special_pcall_xpcall,
-      ["xpcall"] = special_pcall_xpcall,
 
       ["assert"] = function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
          node.known = FACT_TRUTHY
