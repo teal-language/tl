@@ -12,7 +12,7 @@ part. :)
 
 The data in your program has types: Lua is a high-level language, so each
 piece of data stored in the memory of the Lua virtual machine has a type:
-integer, number, string, function, boolean, userdata, thread, nil or table.
+number, string, function, boolean, userdata, thread, nil or table.
 
 Your program is basically a series of manipulations of data of various types.
 The program is correct when it does what it is supposed to do, and that will
@@ -134,10 +134,13 @@ These are the basic types in Teal:
 * `any`
 * `nil`
 * `boolean`
-* `integer` (sub-type of number)
+* `integer`
 * `number`
 * `string`
 * `thread` (coroutine)
+
+Note: An `integer` is a sub-type of number; it is of undefined precision,
+deferring to the Lua VM.
 
 You can also declare more types using type constructors. This is the summary
 list with a few examples of each; we'll discuss them in more detail below:
@@ -880,51 +883,6 @@ local function do_something(p: MyPoint)
    -- ...
 end
 ```
-## Integers and numbers
-
-The integer sub-type was added with release 0.13.0. It is of undefined
-precision, deferring to the Lua VM.
-
-* integer constants without a dot (e.g. 123) are of type integer
-* operations preserve the integer type according to Lua 5.4 semantics (e.g.
-  `integer + integer = integer`, `integer + number = number`, etc.)
-* `integer` is a subtype of `number`
-   * this generally means that an `integer` is accepted everywhere a `number` is
-     expected
-   * note that this does not extend to type variables in generics, which are
-     invariant: `Foo<integer>` is not the same as `Foo<number>`
-   * if a variable is of type `integer`, then an arbitrary `number` is not
-     accepted
-     * `local x: integer = 1.0` doesn't work, even though the floating-point
-       number has a valid integer representation
-* variables (and type variables) are inferred as integer when initialized with
-  integers
-  * this can happen directly (`local x = 1`) or indirectly (`local x =
-    math.min(i, j)`)
-  * to infer an integral value as a `number`, use .0: `local x = 1.0` infers a
-    `number`
-
-### Integers and the standard library
-
-The standard library was annotated for integers.
-
-* it returns integers and numbers as it makes sense. Recall that integers are
-  numbers in Lua and will be reported as such when using the function `type()`.
-  Using `math.type()` will report "integer".
- 
-* For example:
-  * `local x = math.random(1,6)` returns an integer; using the "is" operator we
-    see:
-     * `x is integer    -- true`
-     * `x is number     -- true` 
-  * `math.sin(x)` returns a number
-
-* it always accepts floats in arguments that must be integral — this matches the
-  behavior of the Lua standard library implementation: wherever you need to pass
-  an integral value, you can pass an equivalent float with an integer
-  representation, e.g.  `table.insert(t, 1.0, "hello")` — therefore, this is
-  also valid in Teal, but note that the validity of the float is not checked at
-  compile time, this is a Lua standard library API check.
 
 ## The Teal Standard Library and Lua compatibility
 
