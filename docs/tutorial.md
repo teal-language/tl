@@ -134,15 +134,19 @@ These are the basic types in Teal:
 * `any`
 * `nil`
 * `boolean`
+* `integer`
 * `number`
 * `string`
 * `thread` (coroutine)
+
+Note: An `integer` is a sub-type of number; it is of undefined precision,
+deferring to the Lua VM.
 
 You can also declare more types using type constructors. This is the summary
 list with a few examples of each; we'll discuss them in more detail below:
 
 * arrays - `{number}`, `{{number}}`
-* tuples - `{number, number, string}`
+* tuples - `{number, integer, string}`
 * maps - `{string:boolean}`
 * functions - `function(number, string): {number}, string`
 
@@ -297,7 +301,7 @@ Another common usage of tables in Lua are tuples: tables containing an ordered s
 of elements of known types assigned to its integer keys.
 
 ```
--- Tuples of type {string, number} containing names and ages
+-- Tuples of type {string, integer} containing names and ages
 local p1 = { "Anna", 15 }
 local p2 = { "Bob", 37 }
 local p3 = { "Chris", 65 }
@@ -308,7 +312,8 @@ inferred, and trying to go out of range will produce an error.
 
 ```
 local age_of_p1: number = p1[2] -- no type errors here
-local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2: number}
+local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2:
+integer}
 ```
 
 When indexing with a `number` variable, Teal will do its best by making a
@@ -330,7 +335,7 @@ elements than they expect (as long as their length is explicitly annotated and n
 inferred).
 
 ```
-local p4: {string, number} = { "Delilah", 32, false } -- error! expected maximum length of 2, got 3
+local p4: {string, integer} = { "Delilah", 32, false } -- error! expected maximum length of 2, got 3
 ```
 
 One thing to keep in mind when using tuples versus arrays is type inference,
