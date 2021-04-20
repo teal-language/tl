@@ -5035,7 +5035,13 @@ rets = TUPLE({ a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ 
             ["remove"] = a_type({ typename = "function", args = TUPLE({ STRING }), rets = TUPLE({ BOOLEAN, STRING }) }),
             ["rename"] = a_type({ typename = "function", args = TUPLE({ STRING, STRING }), rets = TUPLE({ BOOLEAN, STRING }) }),
             ["setlocale"] = a_type({ typename = "function", args = TUPLE({ STRING, OPT_STRING }), rets = TUPLE({ STRING }) }),
-            ["time"] = a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ INTEGER }) }),
+            ["time"] = a_type({
+               typename = "poly",
+               types = {
+                  a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ INTEGER }) }),
+                  a_type({ typename = "function", args = TUPLE({ OS_DATE_TABLE }), rets = TUPLE({ INTEGER }) }),
+               },
+            }),
             ["tmpname"] = a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ STRING }) }),
          },
       }),
