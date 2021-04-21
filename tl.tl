@@ -5614,6 +5614,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
+   local function check_if_redeclaration(new_name: string, at: Node)
+      local old <const> = find_var(new_name, true)
+      if old then
+         redeclaration_warning(at, old)
+      end
+   end
+
    local function unused_warning(name: string, var: Variable)
       local prefix <const> = name:sub(1,1)
       if var.declared_at
@@ -5652,7 +5659,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       node.symbol_list_slot = symbol_list_n
    end
 
-   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean): Variable
+   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean, dont_check_redeclaration): Variable
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
       end
@@ -5669,6 +5676,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          old_var.is_narrowed = true
          old_var.t = valtype
       else
+         if not dont_check_redeclaration
+            and node
+            and not is_narrowing
+            and var ~= "self"
+            and var ~= "..."
+            and var:sub(1, 1) ~= "@"
+         then
+            check_if_redeclaration(var, node)
+         end
          scope[var] = { t = valtype, is_const = is_const, is_narrowed = is_narrowing, declared_at = node }
          if old_var then
             -- the old var is removed from the scope and won't be checked when it closes,
@@ -7883,15 +7899,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                end
                t.inferred_len = nil
 
-               do
-                  local old_var <const> = find_var(var.tk, true)
-                  if old_var and not is_localizing_a_variable(node, i) then
-                     redeclaration_warning(var, old_var)
-                  end
-               end
-
                assert(var)
-               add_var(var, var.tk, t, var.is_const)
+               add_var(var, var.tk, t, var.is_const, is_localizing_a_variable(node, i))
 
                dismiss_unresolved(var.tk)
             end
