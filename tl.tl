@@ -2154,8 +2154,8 @@ end
 parse_argument_list = function(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "argument_list")
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
-   for a, arg in ipairs(node) do
-      if arg.tk == "..." and a ~= #node then
+   for a, fnarg in ipairs(node) do
+      if fnarg.tk == "..." and a ~= #node then
          fail(ps, i, "'...' can only be last argument")
       end
    end
@@ -3438,7 +3438,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       end
    end
 
-   local function add_child(out: Output, child: Output, space: string, indent: integer): integer
+   local function add_child(out: Output, child: Output, space: string, current_indent: integer): integer
       if #child == 0 then
          return
       end
@@ -3456,11 +3456,11 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
             if space ~= "" then
                table.insert(out, space)
             end
-            indent = nil
+            current_indent = nil
          end
       end
-      if indent and opts.preserve_indent then
-         table.insert(out, ("   "):rep(indent))
+      if current_indent and opts.preserve_indent then
+         table.insert(out, ("   "):rep(current_indent))
       end
       table.insert(out, child as string)
       out.h = out.h + child.h
@@ -4278,8 +4278,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    end
    seen[t] = "..."
 
-   local function show(t: Type): string
-      return show_type(t, short, seen)
+   local function show(typ: Type): string
+      return show_type(typ, short, seen)
    end
 
    if t.typename == "nominal" then
@@ -5905,9 +5905,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          local upper = st[#st - 1]["@unresolved"]
          if upper then
             for name, nodes in pairs(unresolved.t.labels) do
-               for _, node in ipairs(nodes) do
+               for _, n in ipairs(nodes) do
                   upper.t.labels[name] = upper.t.labels[name] or {}
-                  table.insert(upper.t.labels[name], node)
+                  table.insert(upper.t.labels[name], n)
                end
             end
             for name, types in pairs(unresolved.t.nominals) do
@@ -6670,9 +6670,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
       local function revert_typeargs(func: Type)
          if func.typeargs then
-            for _, arg in ipairs(func.typeargs) do
-               if st[#st][arg.typearg] then
-                  st[#st][arg.typearg] = nil
+            for _, fnarg in ipairs(func.typeargs) do
+               if st[#st][fnarg.typearg] then
+                  st[#st][fnarg.typearg] = nil
                end
             end
          end
@@ -6904,8 +6904,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
    local function add_function_definition_for_recursion(node: Node)
       local args: Type = a_type { typename = "tuple" }
-      for _, arg in ipairs(node.args) do
-         table.insert(args, arg.type)
+      for _, fnarg in ipairs(node.args) do
+         table.insert(args, fnarg.type)
       end
 
       add_var(nil, node.name.tk, a_type {
@@ -7167,8 +7167,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local FACT_TRUTHY: Fact
    do
       setmetatable(Fact, {
-         __call = function(_: Fact, f: Fact): Fact
-            return setmetatable(f, {
+         __call = function(_: Fact, fact: Fact): Fact
+            return setmetatable(fact, {
                __tostring = function(f: Fact): string
                   if f.fact == "is" then
                      return ("(%s is %s)"):format(f.var, show_type(f.typ))
@@ -7512,8 +7512,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          if #b == 0 then
             -- when called with no arguments, print all variables currently in scope and their types.
             print("-----------------------------------------")
-            for i, s in ipairs(st) do
-               for s, v in pairs(s) do
+            for i, scope in ipairs(st) do
+               for s, v in pairs(scope) do
                   print(("%2d %-14s %-11s %s"):format(i, s, v.t.typename, show_type(v.t):sub(1, 50)))
                end
             end
@@ -9078,13 +9078,13 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 
    local function store_function(ti: TypeInfo, rt: Type)
       local args: {{integer, string}} = {}
-      for _, arg in ipairs(rt.args) do
-         table.insert(args, mark_array { get_typenum(arg), nil })
+      for _, fnarg in ipairs(rt.args) do
+         table.insert(args, mark_array { get_typenum(fnarg), nil })
       end
       ti.args = mark_array(args)
       local rets: {{integer, string}} = {}
-      for _, arg in ipairs(rt.rets) do
-         table.insert(rets, mark_array { get_typenum(arg), nil })
+      for _, fnarg in ipairs(rt.rets) do
+         table.insert(rets, mark_array { get_typenum(fnarg), nil })
       end
       ti.rets = mark_array(rets)
       ti.vararg = not not rt.is_va
@@ -9262,12 +9262,12 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 end
 
 function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer): {string:integer}
-   local function find(symbols: {{integer, integer, string, integer}}, y: integer, x: integer): integer
+   local function find(symbols: {{integer, integer, string, integer}}, at_y: integer, at_x: integer): integer
       local function le(a: {integer, integer}, b: {integer, integer}): boolean
          return a[1] < b[1]
             or (a[1] == b[1] and a[2] <= b[2])
       end
-      return binary_search(symbols, {y, x}, le) or 0
+      return binary_search(symbols, {at_y, at_x}, le) or 0
    end
 
    local ret: {string:integer} = {}
