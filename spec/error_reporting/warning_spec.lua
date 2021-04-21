@@ -93,6 +93,26 @@ describe("warnings", function()
          end
          foo()
       ]], { }))
+
+      it("reports when implicitly declared variables redeclare a local (for loop)", util.check_warnings([[
+         local i = 1
+         for i = 1, 10 do
+            print(i)
+         end
+      ]], {
+         { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:16)" },
+         { y = 1, msg = "unused variable i: integer" },
+      }))
+
+      it("reports when implicitly declared variables redeclare a local (function arg)", util.check_warnings([[
+         local i = 1
+         local function _foo(i: integer)
+            print(i)
+         end
+      ]], {
+         { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:16)" },
+         { y = 1, msg = "unused variable i: integer" },
+      }))
    end)
 
    describe("on goto labels", function()
