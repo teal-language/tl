@@ -4039,16 +4039,6 @@ local NONE = a_type { typename = "none" }
 local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
 
-local ALPHA = a_type { typename = "typevar", typevar = "`a" }
-local BETA = a_type { typename = "typevar", typevar = "`b" }
-local ARG_ALPHA = a_type { typename = "typearg", typearg = "`a" }
-local ARG_BETA = a_type { typename = "typearg", typearg = "`b" }
-local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
-local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
-local NOMINAL_METATABLE_OF_ALPHA = a_type { typename = "nominal", names = {"metatable"}, typevals = { ALPHA } }
-
-local ARRAY_OF_STRING = a_type { typename = "array", elements = STRING }
-
 local FUNCTION = a_type { typename = "function", args = VARARG { ANY }, rets = VARARG { ANY } }
 
 local NOMINAL_FILE = a_type { typename = "nominal", names = {"FILE"} }
@@ -4671,6 +4661,7 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
 end
 
 local globals_typeid: integer
+local fresh_typevar_ctr = 1
 
 local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    local globals: {string:Variable} = {}
@@ -4684,6 +4675,28 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       globals_typeid = last_typeid
    else
       last_typeid = globals_typeid
+   end
+
+   local function a_gfunction(n: integer, f: function(...: Type): Type): Type
+      local typevars = {}
+      local typeargs = {}
+      local c = string.byte("A") - 1
+      fresh_typevar_ctr = fresh_typevar_ctr + 1
+      for i = 1, n do
+         local name = string.char(c + i) .. "@" .. fresh_typevar_ctr
+         typevars[i] = a_type { typename = "typevar", typevar = name }
+         typeargs[i] = a_type { typename = "typearg", typearg = name }
+      end
+      local t = f(table.unpack(typevars))
+      t.typename = "function"
+      t.typeargs = typeargs
+      return a_type(t)
+   end
+
+   local function a_grecord(n: integer, f: function(...: Type): Type): Type
+      local t = a_gfunction(n, f)
+      t.typename = "record"
+      return t
    end
 
    local LOAD_FUNCTION = a_type { typename = "function", args = {}, rets = TUPLE { STRING } }
@@ -4741,52 +4754,68 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       rets = TUPLE {},
    }
 
-   local TABLE_SORT_FUNCTION = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ALPHA, ALPHA }, rets = TUPLE { BOOLEAN } }
+   local TABLE_SORT_FUNCTION = a_gfunction(1, function(a: Type):Type return { args = TUPLE { a, a }, rets = TUPLE { BOOLEAN } } end)
+
+   local metatable_nominals = {}
+
+   local function METATABLE(a: Type): Type
+      local t = a_type { typename = "nominal", names = {"metatable"}, typevals = { a } }
+      table.insert(metatable_nominals, t)
+      return t
+   end
+
+   local function ARRAY(t: Type): Type
+      return a_type {
+         typename = "array",
+         elements = t,
+      }
+   end
+
+   local function MAP(k: Type, v: Type): Type
+      return a_type {
+         typename = "map",
+         keys = k,
+         values = v,
+      }
+   end
 
    -- placeholders for when we have optional arity annotations
-   local OPT_NUMBER = NUMBER
-   local OPT_STRING = STRING
-   local OPT_THREAD = THREAD
-   local OPT_ALPHA = ALPHA
-   local OPT_BETA = BETA
-   local OPT_TABLE = TABLE
-   local OPT_UNION = UNION
-   local OPT_BOOLEAN = BOOLEAN
-   local OPT_NOMINAL_FILE = NOMINAL_FILE
-   local OPT_TABLE_SORT_FUNCTION = TABLE_SORT_FUNCTION
+   local function OPT(x: Type): Type
+      return x
+   end
 
    local standard_library: {string:Type} = {
       ["..."] = VARARG { STRING },
       ["any"] = a_type { typename = "typetype", def = ANY },
-      ["arg"] = ARRAY_OF_STRING,
-      ["assert"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA, ARG_BETA }, args = TUPLE { ALPHA, OPT_BETA }, rets = TUPLE { ALPHA } },
+      ["arg"] = ARRAY(STRING),
+      ["assert"] = a_gfunction(2, function(a: Type, b: Type): Type return { args = TUPLE { a, OPT(b) }, rets = TUPLE { a } } end),
       ["collectgarbage"] = a_type {
          typename = "poly",
          types = {
             a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["collect"] = true, ["count"] = true, ["stop"] = true, ["restart"] = true, } } }, rets = TUPLE { NUMBER } },
             a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["step"] = true, ["setpause"] = true, ["setstepmul"] = true } }, NUMBER }, rets = TUPLE { NUMBER } },
             a_type { typename = "function", args = TUPLE { a_type { typename = "enum", enumset = { ["isrunning"] = true } } }, rets = TUPLE { BOOLEAN } },
-            a_type { typename = "function", args = TUPLE { STRING, OPT_NUMBER }, rets = TUPLE { a_type { typename = "union", types = { BOOLEAN, NUMBER } } } },
+            a_type { typename = "function", args = TUPLE { STRING, OPT(NUMBER) }, rets = TUPLE { a_type { typename = "union", types = { BOOLEAN, NUMBER } } } },
          }
       },
-      ["dofile"] = a_type { typename = "function", args = TUPLE { OPT_STRING }, rets = VARARG { ANY } },
+      ["dofile"] = a_type { typename = "function", args = TUPLE { OPT(STRING) }, rets = VARARG { ANY } },
       ["error"] = a_type { typename = "function", args = TUPLE { ANY, NUMBER }, rets = TUPLE {} },
-      ["getmetatable"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ALPHA }, rets = TUPLE { NOMINAL_METATABLE_OF_ALPHA } },
-      ["ipairs"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA }, rets = TUPLE {
-         a_type { typename = "function", args = TUPLE {}, rets = TUPLE { INTEGER, ALPHA } },
-      } },
-      ["load"] = a_type { typename = "function", args = TUPLE { UNION { STRING, LOAD_FUNCTION }, OPT_STRING, OPT_STRING, OPT_TABLE }, rets = TUPLE { FUNCTION, STRING } },
-      ["loadfile"] = a_type { typename = "function", args = TUPLE { OPT_STRING, OPT_STRING, OPT_TABLE }, rets = TUPLE { FUNCTION, STRING } },
+      ["getmetatable"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { a }, rets = TUPLE { METATABLE(a) } } end),
+      ["ipairs"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a) }, rets = TUPLE {
+         a_type { typename = "function", args = TUPLE {}, rets = TUPLE { INTEGER, a } },
+      } } end),
+      ["load"] = a_type { typename = "function", args = TUPLE { UNION { STRING, LOAD_FUNCTION }, OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = TUPLE { FUNCTION, STRING } },
+      ["loadfile"] = a_type { typename = "function", args = TUPLE { OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = TUPLE { FUNCTION, STRING } },
       ["next"] = a_type {
          typename = "poly",
          types = {
-            a_type { typeargs = TUPLE { ARG_ALPHA, ARG_BETA }, typename = "function", args = TUPLE { MAP_OF_ALPHA_TO_BETA, OPT_ALPHA }, rets = TUPLE { ALPHA, BETA } },
-            a_type { typeargs = TUPLE { ARG_ALPHA }, typename = "function", args = TUPLE { ARRAY_OF_ALPHA, OPT_ALPHA }, rets = TUPLE { INTEGER, ALPHA } },
+            a_gfunction(2, function(a: Type, b: Type): Type return { args = TUPLE { MAP(a, b), OPT(a) }, rets = TUPLE { a, b } } end),
+            a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), OPT(a) }, rets = TUPLE { INTEGER, a } } end),
          },
       },
-      ["pairs"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA, ARG_BETA }, args = TUPLE { a_type { typename = "map", keys = ALPHA, values = BETA } }, rets = TUPLE {
-         a_type { typename = "function", args = TUPLE {}, rets = TUPLE { ALPHA, BETA } },
-      } },
+      ["pairs"] = a_gfunction(2, function(a: Type, b: Type): Type return { args = TUPLE { a_type { typename = "map", keys = a, values = b } }, rets = TUPLE {
+         a_type { typename = "function", args = TUPLE {}, rets = TUPLE { a, b } },
+      } } end),
       ["pcall"] = a_type { typename = "function", args = VARARG { FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
       ["xpcall"] = a_type { typename = "function", args = VARARG { FUNCTION, XPCALL_MSGH_FUNCTION, ANY }, rets = TUPLE { BOOLEAN, ANY } },
       ["print"] = a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE {} },
@@ -4796,8 +4825,8 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       ["rawset"] = a_type {
          typename = "poly",
          types = {
-            a_type { typeargs = TUPLE { ARG_ALPHA, ARG_BETA }, typename = "function", args = TUPLE { MAP_OF_ALPHA_TO_BETA, ALPHA, BETA }, rets = TUPLE {} },
-            a_type { typeargs = TUPLE { ARG_ALPHA }, typename = "function", args = TUPLE { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = TUPLE {} },
+            a_gfunction(2, function(a: Type, b: Type): Type return { args = TUPLE { MAP(a, b), a, b }, rets = TUPLE {} } end),
+            a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), NUMBER, a }, rets = TUPLE {} } end),
             a_type { typename = "function", args = TUPLE { TABLE, ANY, ANY }, rets = TUPLE {} },
          }
       },
@@ -4805,12 +4834,12 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       ["select"] = a_type {
          typename = "poly",
          types = {
-            a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = VARARG { NUMBER, ALPHA }, rets = TUPLE { ALPHA } },
+            a_gfunction(1, function(a: Type): Type return { args = VARARG { NUMBER, a }, rets = TUPLE { a } } end),
             a_type { typename = "function", args = VARARG { NUMBER, ANY }, rets = TUPLE { ANY } },
             a_type { typename = "function", args = VARARG { STRING, ANY }, rets = TUPLE { INTEGER } },
          }
       },
-      ["setmetatable"] = a_type { typeargs = TUPLE { ARG_ALPHA }, typename = "function", args = TUPLE { ALPHA, NOMINAL_METATABLE_OF_ALPHA }, rets = TUPLE { ALPHA } },
+      ["setmetatable"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { a, METATABLE(a) }, rets = TUPLE { a } } end),
       ["tonumber"] = a_type {
          typename = "poly",
          types = {
@@ -4832,8 +4861,8 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                   a_type { typename = "function", args = TUPLE {}, rets = VARARG { STRING } },
                } },
                ["read"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, UNION { STRING, NUMBER } }, rets = TUPLE { STRING, STRING } },
-               ["seek"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, OPT_STRING, OPT_NUMBER }, rets = TUPLE { INTEGER, STRING } },
-               ["setvbuf"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, STRING, OPT_NUMBER }, rets = TUPLE {} },
+               ["seek"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, OPT(STRING), OPT(NUMBER) }, rets = TUPLE { INTEGER, STRING } },
+               ["setvbuf"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, STRING, OPT(NUMBER) }, rets = TUPLE {} },
                ["write"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, STRING }, rets = TUPLE { NOMINAL_FILE, STRING } },
                -- TODO complete...
             },
@@ -4841,21 +4870,21 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       },
       ["metatable"] = a_type {
          typename = "typetype",
-         def = a_type {
-            typename = "record",
-            typeargs = TUPLE { ARG_ALPHA },
+         def = a_grecord(1, function(a: Type): Type return {
             fields = {
-               ["__call"] = a_type { typename = "function", args = VARARG { ALPHA, ANY }, rets = VARARG { ANY } },
-               ["__gc"] = a_type { typename = "function", args = TUPLE { ALPHA }, rets = TUPLE {} },
+               ["__call"] = a_type { typename = "function", args = VARARG { a, ANY }, rets = VARARG { ANY } },
+               ["__gc"] = a_type { typename = "function", args = TUPLE { a }, rets = TUPLE {} },
                ["__index"] = ANY, -- FIXME: function | table | anything with an __index metamethod
-               ["__len"] = a_type { typename = "function", args = TUPLE { ALPHA }, rets = TUPLE { ANY } },
+               ["__len"] = a_type { typename = "function", args = TUPLE { a }, rets = TUPLE { ANY } },
                ["__mode"] = a_type { typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true, } },
                ["__newindex"] = ANY, -- FIXME: function | table | anything with a __newindex metamethod
-               ["__pairs"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA, ARG_BETA },
-                  args = TUPLE { a_type { typename = "map", keys = ALPHA, values = BETA } },
-                  rets = TUPLE { a_type { typename = "function", args = TUPLE {}, rets = TUPLE { ALPHA, BETA } } }
-               },
-               ["__tostring"] = a_type { typename = "function", args = TUPLE { ALPHA }, rets = TUPLE { STRING } },
+               ["__pairs"] = a_gfunction(2, function(k: Type, v: Type): Type
+                  return {
+                     args = TUPLE { a },
+                     rets = TUPLE { a_type { typename = "function", args = TUPLE {}, rets = TUPLE { k, v } } }
+                  }
+               end),
+               ["__tostring"] = a_type { typename = "function", args = TUPLE { a }, rets = TUPLE { STRING } },
                ["__name"] = STRING,
                ["__add"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { ANY } },
                ["__sub"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { ANY } },
@@ -4876,7 +4905,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                ["__lt"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { BOOLEAN } },
                ["__le"] = a_type { typename = "function", args = TUPLE { ANY, ANY }, rets = TUPLE { BOOLEAN } },
             },
-         },
+         } end),
       },
       ["coroutine"] = a_type {
          typename = "record",
@@ -4908,7 +4937,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             },
 
             ["debug"] = a_type { typename = "function", args = TUPLE {}, rets = TUPLE {} },
-            ["gethook"] = a_type { typename = "function", args = TUPLE { OPT_THREAD }, rets = TUPLE { DEBUG_HOOK_FUNCTION, INTEGER } },
+            ["gethook"] = a_type { typename = "function", args = TUPLE { OPT(THREAD) }, rets = TUPLE { DEBUG_HOOK_FUNCTION, INTEGER } },
             ["getlocal"] = a_type {
                typename = "poly",
                types = {
@@ -4916,7 +4945,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                   a_type { typename = "function", args = TUPLE { FUNCTION, NUMBER }, rets = TUPLE {} },
                },
             },
-            ["getmetatable"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ALPHA }, rets = TUPLE { NOMINAL_METATABLE_OF_ALPHA } },
+            ["getmetatable"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { a }, rets = TUPLE { METATABLE(a) } } end),
             ["getregistry"] = a_type { typename = "function", args = TUPLE {}, rets = TUPLE { TABLE } },
             ["getupvalue"] = a_type { typename = "function", args = TUPLE { FUNCTION, NUMBER }, rets = TUPLE { ANY } },
             ["getuservalue"] = a_type { typename = "function", args = TUPLE { USERDATA, NUMBER }, rets = TUPLE { ANY } },
@@ -4934,7 +4963,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                   a_type { typename = "function", args = TUPLE { NUMBER, NUMBER, ANY }, rets = TUPLE { STRING } },
                }
             },
-            ["setmetatable"] = a_type { typeargs = TUPLE { ARG_ALPHA }, typename = "function", args = TUPLE { ALPHA, NOMINAL_METATABLE_OF_ALPHA }, rets = TUPLE { ALPHA } },
+            ["setmetatable"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { a, METATABLE(a) }, rets = TUPLE { a } } end),
             ["setupvalue"] = a_type { typename = "function", args = TUPLE { FUNCTION, NUMBER, ANY }, rets = TUPLE { STRING } },
             ["setuservalue"] = a_type { typename = "function", args = TUPLE { USERDATA, ANY, NUMBER }, rets = TUPLE { USERDATA } },
             ["traceback"] = a_type {
@@ -4959,14 +4988,14 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       ["io"] = a_type {
          typename = "record",
          fields = {
-            ["close"] = a_type { typename = "function", args = TUPLE { OPT_NOMINAL_FILE }, rets = TUPLE { BOOLEAN, STRING } },
+            ["close"] = a_type { typename = "function", args = TUPLE { OPT(NOMINAL_FILE) }, rets = TUPLE { BOOLEAN, STRING } },
             ["flush"] = a_type { typename = "function", args = TUPLE {}, rets = TUPLE {} },
-            ["input"] = a_type { typename = "function", args = TUPLE { OPT_UNION { STRING, NOMINAL_FILE } }, rets = TUPLE { NOMINAL_FILE } },
-            ["lines"] = a_type { typename = "function", args = VARARG { OPT_STRING, a_type { typename = "union", types = { STRING, NUMBER } } }, rets = TUPLE {
+            ["input"] = a_type { typename = "function", args = TUPLE { OPT(UNION { STRING, NOMINAL_FILE }) }, rets = TUPLE { NOMINAL_FILE } },
+            ["lines"] = a_type { typename = "function", args = VARARG { OPT(STRING), a_type { typename = "union", types = { STRING, NUMBER } } }, rets = TUPLE {
                a_type { typename = "function", args = TUPLE {}, rets = VARARG { STRING } },
             } },
             ["open"] = a_type { typename = "function", args = TUPLE { STRING, STRING }, rets = TUPLE { NOMINAL_FILE, STRING } },
-            ["output"] = a_type { typename = "function", args = TUPLE { OPT_UNION { STRING, NOMINAL_FILE } }, rets = TUPLE { NOMINAL_FILE } },
+            ["output"] = a_type { typename = "function", args = TUPLE { OPT(UNION { STRING, NOMINAL_FILE }) }, rets = TUPLE { NOMINAL_FILE } },
             ["popen"] = a_type { typename = "function", args = TUPLE { STRING, STRING }, rets = TUPLE { NOMINAL_FILE, STRING } },
             ["read"] = a_type { typename = "function", args = TUPLE { UNION { STRING, NUMBER } }, rets = TUPLE { STRING, STRING } },
             ["stderr"] = NOMINAL_FILE,
@@ -4989,7 +5018,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             },
             ["acos"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
             ["asin"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
-            ["atan"] = a_type { typename = "function", args = TUPLE { NUMBER, OPT_NUMBER }, rets = TUPLE { NUMBER } },
+            ["atan"] = a_type { typename = "function", args = TUPLE { NUMBER, OPT(NUMBER) }, rets = TUPLE { NUMBER } },
             ["atan2"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
             ["ceil"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { INTEGER } },
             ["cos"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
@@ -5013,7 +5042,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                typename = "poly",
                types = {
                   a_type { typename = "function", args = VARARG { INTEGER }, rets = TUPLE { INTEGER } },
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = VARARG { ALPHA }, rets = TUPLE { ALPHA } },
+                  a_gfunction(1, function(a: Type): Type return { args = VARARG { a }, rets = TUPLE { a } } end),
                   a_type { typename = "function", args = VARARG { a_type { typename = "union", types = { NUMBER, INTEGER } } }, rets = TUPLE { NUMBER } },
                   a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE { ANY } },
                }
@@ -5023,7 +5052,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                typename = "poly",
                types = {
                   a_type { typename = "function", args = VARARG { INTEGER }, rets = TUPLE { INTEGER } },
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = VARARG { ALPHA }, rets = TUPLE { ALPHA } },
+                  a_gfunction(1, function(a: Type): Type return { args = VARARG { a }, rets = TUPLE { a } } end),
                   a_type { typename = "function", args = VARARG { a_type { typename = "union", types = { NUMBER, INTEGER } } }, rets = TUPLE { NUMBER } },
                   a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE { ANY } },
                }
@@ -5060,7 +5089,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                types = {
                   a_type { typename = "function", args = TUPLE {}, rets = TUPLE { STRING } },
                   a_type { typename = "function", args = TUPLE { OS_DATE_TABLE_FORMAT, NUMBER }, rets = TUPLE { OS_DATE_TABLE } },
-                  a_type { typename = "function", args = TUPLE { OPT_STRING, OPT_NUMBER }, rets = TUPLE { STRING } },
+                  a_type { typename = "function", args = TUPLE { OPT(STRING), OPT(NUMBER) }, rets = TUPLE { STRING } },
                }
             },
             ["difftime"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
@@ -5069,14 +5098,8 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["getenv"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { STRING } },
             ["remove"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { BOOLEAN, STRING } },
             ["rename"] = a_type { typename = "function", args = TUPLE { STRING, STRING}, rets = TUPLE { BOOLEAN, STRING } },
-            ["setlocale"] = a_type { typename = "function", args = TUPLE { STRING, OPT_STRING}, rets = TUPLE { STRING } },
-            ["time"] = a_type {
-               typename = "poly",
-               types = {
-                  a_type { typename = "function", args = TUPLE {}, rets = TUPLE { INTEGER } },
-                  a_type { typename = "function", args = TUPLE {OS_DATE_TABLE}, rets = TUPLE { INTEGER } },
-               }
-            },
+            ["setlocale"] = a_type { typename = "function", args = TUPLE { STRING, OPT(STRING) }, rets = TUPLE { STRING } },
+            ["time"] = a_type { typename = "function", args = TUPLE { OPT(OS_DATE_TABLE) }, rets = TUPLE { INTEGER } },
             ["tmpname"] = a_type { typename = "function", args = TUPLE {}, rets = TUPLE { STRING } },
          },
       },
@@ -5101,7 +5124,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                typename = "array",
                elements = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { ANY } }
             },
-            ["searchpath"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT_STRING, OPT_STRING }, rets = TUPLE { STRING, STRING } },
+            ["searchpath"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT(STRING), OPT(STRING) }, rets = TUPLE { STRING, STRING } },
          },
       },
       ["string"] = a_type {
@@ -5110,13 +5133,13 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["byte"] = a_type {
                typename = "poly",
                types = {
-                  a_type { typename = "function", args = TUPLE { STRING, OPT_NUMBER }, rets = TUPLE { INTEGER } },
+                  a_type { typename = "function", args = TUPLE { STRING, OPT(NUMBER) }, rets = TUPLE { INTEGER } },
                   a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = VARARG { INTEGER } },
                },
             },
             ["char"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = TUPLE { STRING } },
-            ["dump"] = a_type({ typename = "function", args = TUPLE { FUNCTION, OPT_BOOLEAN }, rets = TUPLE { STRING } }),
-            ["find"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT_NUMBER, OPT_BOOLEAN }, rets = VARARG { INTEGER, INTEGER, STRING } },
+            ["dump"] = a_type({ typename = "function", args = TUPLE { FUNCTION, OPT(BOOLEAN) }, rets = TUPLE { STRING } }),
+            ["find"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT(NUMBER), OPT(BOOLEAN) }, rets = VARARG { INTEGER, INTEGER, STRING } },
             ["format"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = TUPLE { STRING } },
             ["gmatch"] = a_type { typename = "function", args = TUPLE { STRING, STRING }, rets = TUPLE {
                a_type { typename = "function", args = TUPLE {}, rets = VARARG { STRING } },
@@ -5141,32 +5164,32 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["rep"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER }, rets = TUPLE { STRING } },
             ["reverse"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { STRING } },
             ["sub"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = TUPLE { STRING } },
-            ["unpack"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT_NUMBER }, rets = VARARG { ANY } },
+            ["unpack"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT(NUMBER) }, rets = VARARG { ANY } },
             ["upper"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { STRING } },
          },
       },
       ["table"] = a_type {
          typename = "record",
          fields = {
-            ["concat"] = a_type { typename = "function", args = TUPLE { ARRAY_OF_STRING, OPT_STRING, OPT_NUMBER, OPT_NUMBER }, rets = TUPLE { STRING } },
+            ["concat"] = a_type { typename = "function", args = TUPLE { ARRAY(STRING), OPT(STRING), OPT(NUMBER), OPT(NUMBER) }, rets = TUPLE { STRING } },
             ["insert"] = a_type {
                typename = "poly",
                types = {
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, NUMBER, ALPHA }, rets = TUPLE {} },
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, ALPHA }, rets = TUPLE {} },
+                  a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), NUMBER, a }, rets = TUPLE {} } end),
+                  a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), a }, rets = TUPLE {} } end),
                }
             },
             ["move"] = a_type {
                typename = "poly",
                types = {
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER }, rets = TUPLE { ARRAY_OF_ALPHA } },
-                  a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, NUMBER, NUMBER, NUMBER, ARRAY_OF_ALPHA }, rets = TUPLE { ARRAY_OF_ALPHA } },
+                  a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), NUMBER, NUMBER, NUMBER }, rets = TUPLE { ARRAY(a) } }end ),
+                  a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), NUMBER, NUMBER, NUMBER, ARRAY(a) }, rets = TUPLE { ARRAY(a) } } end),
                }
             },
             ["pack"] = a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE { TABLE } },
-            ["remove"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, OPT_NUMBER }, rets = TUPLE { ALPHA } },
-            ["sort"] = a_type { typename = "function", typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, OPT_TABLE_SORT_FUNCTION }, rets = TUPLE {} },
-            ["unpack"] = a_type { typename = "function", needs_compat = true, typeargs = TUPLE { ARG_ALPHA }, args = TUPLE { ARRAY_OF_ALPHA, NUMBER, NUMBER }, rets = VARARG { ALPHA } },
+            ["remove"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), OPT(NUMBER) }, rets = TUPLE { a } } end),
+            ["sort"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { ARRAY(a), OPT(TABLE_SORT_FUNCTION) }, rets = TUPLE {} } end),
+            ["unpack"] = a_gfunction(1, function(a: Type): Type return { needs_compat = true, args = TUPLE { ARRAY(a), NUMBER, NUMBER }, rets = VARARG { a } } end),
          },
       },
       ["utf8"] = a_type {
@@ -5174,7 +5197,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
          fields = {
             ["char"] = a_type { typename = "function", args = VARARG { NUMBER }, rets = TUPLE { STRING } },
             ["charpattern"] = STRING,
-            ["codepoint"] = a_type { typename = "function", args = TUPLE { STRING, OPT_NUMBER, OPT_NUMBER }, rets = VARARG { INTEGER } },
+            ["codepoint"] = a_type { typename = "function", args = TUPLE { STRING, OPT(NUMBER), OPT(NUMBER) }, rets = VARARG { INTEGER } },
             ["codes"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE {
                a_type { typename = "function", args = TUPLE {}, rets = TUPLE { NUMBER, STRING } },
             }, },
@@ -5195,7 +5218,9 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    fill_field_order(DEBUG_GETINFO_TABLE)
 
    NOMINAL_FILE.found = standard_library["FILE"]
-   NOMINAL_METATABLE_OF_ALPHA.found = standard_library["metatable"]
+   for _, m in ipairs(metatable_nominals) do
+      m.found = standard_library["metatable"]
+   end
 
    for name, typ in pairs(standard_library) do
       globals[name] = { t = typ, needs_compat = stdlib_compat[name], is_const = true }
@@ -5320,8 +5345,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
    local type TypevarCallback = function(Type): Type, Type
    local resolve_typevars: function (typ: Type, fn: TypevarCallback): boolean, Type, {Error}
-
-   local fresh_typevar_ctr = 1
 
    local function fresh_typevar(t: Type): Type, Type
       local rt = shallow_copy(t)
