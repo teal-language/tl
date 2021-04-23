@@ -4303,8 +4303,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       end
    elseif t.typename == "tuple" then
       local out: {string} = {}
-      for _, v in ipairs(t) do
-         table.insert(out, show(v))
+      for i, v in ipairs(t) do
+         table.insert(out, show(v) .. (i == #t and t.is_va and "..." or ""))
       end
       return "(" .. table.concat(out, ", ") .. ")"
    elseif t.typename == "tupletable" then
