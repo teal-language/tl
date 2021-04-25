@@ -480,6 +480,8 @@ do
         else
           -- not applicable 
         end
+        print("JRP: debug strip_under(): kind = ", kind)
+        print("JRP: debug strip_under(): res/tk = ", res, tk)
         return res
       end  -- JRP added helper
 
@@ -506,6 +508,10 @@ do
             tk = tk,
             kind = keywords[tk] and "keyword" or "identifier"
          }
+         print("JRP: debug end_token_identifier(): kind = ", 
+               tokens[nt].kind)
+         print("JRP: debug end_token_identifier(): tk = ",
+               tokens[nt].tk)
          in_token = false
       end
 
@@ -619,7 +625,8 @@ do
          elseif state == "got ." then
             if c == "." then
                state = "got .."
-            elseif lex_decimals[c] then
+            elseif lex_decimals[c] and state == "number dec" then --JRP: added
+                                                                  --  "and..."
                state = "number decfloat"
             else
                end_token(".", ".")
