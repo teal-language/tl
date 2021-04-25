@@ -369,6 +369,7 @@ do
    for c = string.byte("0"), string.byte("9") do
       lex_decimals[string.char(c)] = true
    end
+   lex_decimals["_"] = true
 
    local lex_hexadecimals = {}
    for c = string.byte("0"), string.byte("9") do
@@ -380,6 +381,7 @@ do
    for c = string.byte("A"), string.byte("F") do
       lex_hexadecimals[string.char(c)] = true
    end
+   lex_hexadecimals["_"] = true
 
    local lex_any_char_kinds = {}
    local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", "#", "`", ";" }
@@ -470,7 +472,19 @@ do
          in_token = true
       end
 
+
+      local function strip_under(kind, tk)
+         local res = tk
+         if kind == "integer" or kind == "number" then
+            res = tk:gsub("_", "")
+         else
+
+         end
+         return res
+      end
+
       local function end_token(kind, tk)
+         tk = strip_under(kind, tk)
          nt = nt + 1
          tokens[nt] = {
             x = tx,
@@ -497,6 +511,7 @@ do
 
       local function end_token_prev(kind)
          local tk = input:sub(ti, i - 1)
+         tk = strip_under(kind, tk)
          nt = nt + 1
          tokens[nt] = {
             x = tx,
@@ -510,6 +525,7 @@ do
 
       local function end_token_here(kind)
          local tk = input:sub(ti, i)
+         tk = strip_under(kind, tk)
          nt = nt + 1
          tokens[nt] = {
             x = tx,
