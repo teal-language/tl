@@ -733,8 +733,11 @@ end
 --------------------------------------------------------------------------------
 
 local function validate_config(config)
-   local errs = {}
+   local errs, warnings = {}, {}
 
+   local function warning(k, fmt, ...)
+      table.insert(warnings, string.format("* in key \"" .. k .. "\": " .. fmt, ...))
+   end
    local function fail(k, fmt, ...)
       table.insert(errs, string.format("* in key \"" .. k .. "\": " .. fmt, ...))
    end
@@ -748,7 +751,7 @@ local function validate_config(config)
             end
          end
          if #unknown > 0 then
-            print("Unknown warning" .. (#unknown > 1 and "s" or "") .. " in config: " .. table.concat(unknown, ", "))
+            warning(key, "Unknown warning%s in config: %s", #unknown > 1 and "s" or "", table.concat(unknown, ", "))
          end
       end
    end
@@ -779,7 +782,7 @@ local function validate_config(config)
       if k == "preload_modules" then
          fail(k, "this key is no longer supported. To load a definition globally into the environment, use global_env_def.")
       elseif not valid_keys[k] then
-         print("Warning: unknown key '" .. k .. "' in tlconfig.lua")
+         warning(k, "unknown config key '" .. k .. "'")
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
             fail(k, "expected one of: %s", table.concat(keys(valid_keys[k][v]), ", "))
@@ -806,7 +809,7 @@ local function validate_config(config)
    check_warnings("disable_warnings")
    check_warnings("warning_error")
 
-   return errs
+   return errs, warnings
 end
 
 local function get_args_parser()
@@ -913,13 +916,13 @@ local function get_config(cmd)
 
    build.config_dir(cmd, config_path, config)
 
-   local errs = validate_config(config)
+   local errs, warnings = validate_config(config)
 
    if #errs > 0 then
       die("Error loading tlconfig.lua:\n" .. table.concat(errs, "\n"))
    end
 
-   return config
+   return config, warnings
 end
 
 local function merge_config_and_args(tlconfig, args)
@@ -1316,9 +1319,13 @@ if not cmd then
    os.exit(1)
 end
 
-local tlconfig = get_config(cmd)
-
+local tlconfig, cfg_warnings = get_config(cmd)
 merge_config_and_args(tlconfig, args)
+if not args["quiet"] then
+   for _, v in ipairs(cfg_warnings) do
+      printerr(v)
+   end
+end
 
 build.run_build_script(tlconfig)
 
