@@ -3,6 +3,16 @@ local util = require("spec.util")
 describe("-q --quiet flag", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
+   it("silences warnings from tlconfig.lua", function()
+      util.run_mock_project(finally, {
+         dir_structure = {
+            ["tlconfig.lua"] = [[return { foo = "hello" }]],
+         },
+         cmd = "check",
+         args = { "--quiet", "tlconfig.lua" },
+         cmd_output = [[]],
+      })
+   end)
    it("silences stdout when running tl check", function()
       local name = util.write_tmp_file(finally, [[
          print("hello world!")
