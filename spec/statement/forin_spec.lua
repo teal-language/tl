@@ -89,7 +89,7 @@ describe("forin", function()
       end
    ]])
 
-   it("with a callable record interator", util.check [[
+   it("with a callable record iterator", util.check [[
       local record R
          incr: integer
          metamethod __call: function(): integer
@@ -110,7 +110,8 @@ describe("forin", function()
       end
    ]])
 
-   it("catches wrong call to a wrongly declared callable record interator", util.check_type_error([[
+   --[=[ -- TODO: check forin iterator arguments
+   it("catches wrong call to a wrongly declared callable record iterator", util.check_type_error([[
       local record R
          metamethod __call: function(): integer
       end
@@ -129,8 +130,7 @@ describe("forin", function()
      { msg = "argument 2: type parameter <@a>: got integer, expected R" }
    }))
 
-   --[=[ -- TODO: check forin iterator arguments
-   it("catches wrong call to a wrongly declared callable record interator", util.check_type_error([[
+   it("catches wrong call to a wrongly declared callable record iterator", util.check_type_error([[
       local record R
          incr: integer
          metamethod __call: function(integer): integer

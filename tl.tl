@@ -4041,10 +4041,10 @@ local NONE = a_type { typename = "none" }
 local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
 
-local ALPHA = a_type { typename = "typevar", typevar = "@a" }
-local BETA = a_type { typename = "typevar", typevar = "@b" }
-local ARG_ALPHA = a_type { typename = "typearg", typearg = "@a" }
-local ARG_BETA = a_type { typename = "typearg", typearg = "@b" }
+local ALPHA = a_type { typename = "typevar", typevar = "`a" }
+local BETA = a_type { typename = "typevar", typevar = "`b" }
+local ARG_ALPHA = a_type { typename = "typearg", typearg = "`a" }
+local ARG_BETA = a_type { typename = "typearg", typearg = "`b" }
 local ARRAY_OF_ALPHA = a_type { typename = "array", elements = ALPHA }
 local MAP_OF_ALPHA_TO_BETA = a_type { typename = "map", keys = ALPHA, values = BETA }
 local NOMINAL_METATABLE_OF_ALPHA = a_type { typename = "nominal", names = {"metatable"}, typevals = { ALPHA } }
@@ -4439,9 +4439,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
                 (t.tk and " " .. t.tk or "")
       end
    elseif t.typename == "typevar" then
-      return t.typevar
+      return (t.typevar:gsub("@.*", ""))
    elseif t.typename == "typearg" then
-      return t.typearg
+      return (t.typearg:gsub("@.*", ""))
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -5337,10 +5337,33 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       }, nil
    end
 
+   local type TypevarCallback = function(Type): Type, Type
+   local resolve_typevars: function (typ: Type, fn: TypevarCallback): boolean, Type, {Error}
+
+   local fresh_typevar_ctr = 1
+
+   local function fresh_typevar(t: Type): Type, Type
+      local rt = a_type {
+         typename = "typevar",
+         typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+      }
+      return t, rt
+   end
+
    local function find_var_type(name: string, raw: boolean): Type, Attribute
       local var = find_var(name, raw)
       if var then
-         return var.t, var.attribute
+         local t = var.t
+         if t.typeargs then
+            fresh_typevar_ctr = fresh_typevar_ctr + 1
+            for _, ta in ipairs(t.typeargs) do
+               ta.typearg = (ta.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+            end
+            local ok: boolean
+            ok, t = resolve_typevars(t, fresh_typevar)
+            assert(ok, "Internal Compiler Error: error creating fresh type variables")
+         end
+         return t, var.attribute
       end
    end
 
@@ -5484,9 +5507,27 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["unknown"] = true,
    }
 
-   local function resolve_typevars(typ: Type): boolean, Type, {Error}
+   local function default_resolve_typevars_callback(t: Type): Type, Type
+      local orig_t = t
+      t = find_var_type(t.typevar)
+      local rt: Type
+      if not t then
+         rt = orig_t
+      elseif t.typename == "string" then
+         -- tk is not propagated
+         rt = STRING
+      elseif no_nested_types[t.typename]
+             or (t.typename == "nominal" and not t.typevals) then
+         rt = t
+      end
+      return t, rt
+   end
+
+   resolve_typevars = function(typ: Type, fn: TypevarCallback): boolean, Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
+
+      fn = fn or default_resolve_typevars_callback
 
       local function resolve(t: Type): Type
 
@@ -5502,17 +5543,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          local orig_t = t
          if t.typename == "typevar" then
-            t = find_var_type(t.typevar)
             local rt: Type
-            if not t then
-               rt = orig_t
-            elseif t.typename == "string" then
-               -- tk is not propagated
-               rt = STRING
-            elseif no_nested_types[t.typename]
-                   or (t.typename == "nominal" and not t.typevals) then
-               rt = t
-            end
+            t, rt = fn(t)
             if rt then
                seen[orig_t] = rt
                return rt
