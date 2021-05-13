@@ -1,6 +1,8 @@
 
 local VERSION = "0.13.1+dev"
 
+local type CompareTypes = function(Type, Type, boolean): boolean, {Error}
+
 local record tl
    enum LoadMode
       "b"
@@ -125,6 +127,8 @@ local record tl
    version: function(): string
 
    package_loader_env: Env
+
+   _unit_test_tuple_comparison: function(t1: Type, t2: Type, key: string, cmp: CompareTypes, argdelta: integer, at: Node): boolean, {Error}
 end
 
 tl.version = function(): string
@@ -935,7 +939,9 @@ local enum TypeName
    "typetype"
    "nestedtype"
    "typevar"
+   "typevar_va"
    "typearg"
+   "typearg_va"
    "function"
    "array"
    "map"
@@ -1337,14 +1343,14 @@ local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFu
    return skip_i or (i + 1)
 end
 
-local function skip_record(ps: ParseState, i: integer): integer, Node
+local function skip_record(ps: ParseState, i: integer): integer
    i = i + 1
-   return parse_record_body(ps, i, {}, {})
+   return (parse_record_body(ps, i, {}, {}))
 end
 
-local function skip_enum(ps: ParseState, i: integer): integer, Node
+local function skip_enum(ps: ParseState, i: integer): integer
    i = i + 1
-   return parse_enum_body(ps, i, {}, {})
+   return (parse_enum_body(ps, i, {}, {}))
 end
 
 local function parse_table_value(ps: ParseState, i: integer): integer, Node, integer
@@ -1515,12 +1521,19 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
 end
 
 local function parse_typearg_type(ps: ParseState, i: integer): integer, Type, integer
+   local tok = ps.tokens[i]
    i = verify_kind(ps, i, "identifier")
+   local is_va = false
+   if ps.tokens[i].tk == "..." then
+      is_va = true
+      i = i + 1
+   end
    return i, a_type {
-      y = ps.tokens[i - 2].y,
-      x = ps.tokens[i - 2].x,
-      typename = "typearg",
-      typearg = ps.tokens[i-1].tk,
+      y = tok.y,
+      x = tok.x,
+      typename = is_va and "typearg_va" or "typearg",
+      is_va = is_va,
+      typearg = tok.tk,
    }
 end
 
@@ -1529,7 +1542,16 @@ local function parse_typearg_list(ps: ParseState, i: integer): integer, Type
       return fail(ps, i+1, "type argument list cannot be empty")
    end
    local typ = new_type(ps, i, "tuple")
-   return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
+   i = parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
+   local is_va = false
+   for _, t in ipairs(typ) do
+      if t.typename == "typearg_va" then
+         is_va = true
+      elseif is_va == true then
+         fail(ps, i-1, "non-variadic type argument cannot follow variadic argument")
+      end
+   end
+   return i, typ
 end
 
 local function parse_typeval_list(ps: ParseState, i: integer): integer, Type
@@ -2156,13 +2178,7 @@ end
 
 parse_argument_list = function(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "argument_list")
-   i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
-   for a, fnarg in ipairs(node) do
-      if fnarg.tk == "..." and a ~= #node then
-         fail(ps, i, "'...' can only be last argument")
-      end
-   end
-   return i, node
+   return parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
 end
 
 local function parse_argument_type(ps: ParseState, i: integer): integer, Type, integer
@@ -2516,6 +2532,10 @@ local metamethod_names: {string:boolean} = {
    ["__gc"] = true,
 }
 
+local function skip_type(ps: ParseState, i: integer): integer
+   return (parse_type(ps, i))
+end
+
 parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
    local istart = i - 1
    def.fields = {}
@@ -2533,7 +2553,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
          i = i + 1
       elseif ps.tokens[i].tk == "{" then
          if def.typename == "arrayrecord" then
-            i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
+            i = failskip(ps, i, "duplicated declaration of array element type in record", skip_type)
          else
             i = i + 1
             local t: Type
@@ -2724,6 +2744,10 @@ do
    end
 end
 
+local function skip_function_type(ps: ParseState, i: integer): integer
+   return (parse_function_type(ps, i))
+end
+
 local function parse_variable_declarations(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
    local asgn: Node = new_node(ps.tokens, i, node_name)
 
@@ -2747,7 +2771,7 @@ local function parse_variable_declarations(ps: ParseState, i: integer, node_name
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " enum " .. asgn.vars[1].tk .. "'", skip_enum)
       elseif next_word == "functiontype" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...", parse_function_type)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...", skip_function_type)
       end
 
       i, asgn = parse_assignment_expression_list(ps, i, asgn)
@@ -2897,6 +2921,11 @@ local function clear_redundant_errors(errors: {Error})
       err.i = i
    end
    table.sort(errors, function(a: Error, b: Error): boolean
+      a.y = a.y or 0
+      a.x = a.x or 0
+      b.y = b.y or 0
+      b.x = b.x or 0
+
       local af = a.filename or ""
       local bf = b.filename or ""
       return af < bf
@@ -3933,7 +3962,9 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    }
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
    visit_type.cbs["typevar"] = visit_type.cbs["string"]
+   visit_type.cbs["typevar_va"] = visit_type.cbs["string"]
    visit_type.cbs["typearg"] = visit_type.cbs["string"]
+   visit_type.cbs["typearg_va"] = visit_type.cbs["string"]
    visit_type.cbs["function"] = visit_type.cbs["string"]
    visit_type.cbs["thread"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
@@ -4288,6 +4319,16 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return show_type(typ, short, seen)
    end
 
+   local function show_typeargs(typ: Type, out: {string})
+      table.insert(out, "<")
+      local typeargs = {}
+      for _, v in ipairs(typ.typeargs) do
+         table.insert(typeargs, show(v) .. (v.typename == "typearg_va" and "..." or ""))
+      end
+      table.insert(out, table.concat(typeargs, ", "))
+      table.insert(out, ">")
+   end
+
    if t.typename == "nominal" then
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
@@ -4339,13 +4380,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       else
          local out: {string} = {"record"}
          if t.typeargs then
-            table.insert(out, "<")
-            local typeargs = {}
-            for _, v in ipairs(t.typeargs) do
-               table.insert(typeargs, show(v))
-            end
-            table.insert(out, table.concat(typeargs, ", "))
-            table.insert(out, ">")
+            show_typeargs(t, out)
          end
          table.insert(out, " (")
          if t.elements then
@@ -4363,13 +4398,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t.typename == "function" then
       local out: {string} = {"function"}
       if t.typeargs then
-         table.insert(out, "<")
-         local typeargs = {}
-         for _, v in ipairs(t.typeargs) do
-            table.insert(typeargs, show(v))
-         end
-         table.insert(out, table.concat(typeargs, ", "))
-         table.insert(out, ">")
+         show_typeargs(t, out)
       end
       table.insert(out, "(")
       local args = {}
@@ -4404,9 +4433,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          return t.typename ..
                 (t.tk and " " .. t.tk or "")
       end
-   elseif t.typename == "typevar" then
+   elseif t.typename == "typevar" or t.typename == "typevar_va" then
       return (t.typevar:gsub("@.*", ""))
-   elseif t.typename == "typearg" then
+   elseif t.typename == "typearg" or t.typename == "typearg_va" then
       return (t.typearg:gsub("@.*", ""))
    elseif is_unknown(t) then
       return "<unknown type>"
@@ -5097,10 +5126,10 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                types = {
                   a_type { typename = "function", args = TUPLE { STRING, STRING, STRING, NUMBER }, rets = TUPLE { STRING, INTEGER } },
                   a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "map", keys = STRING, values = STRING }, NUMBER }, rets = TUPLE { STRING, INTEGER } },
-                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { STRING } } }, rets = TUPLE { STRING, INTEGER } },
-                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { NUMBER } } }, rets = TUPLE { STRING, INTEGER } },
-                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { BOOLEAN } } }, rets = TUPLE { STRING, INTEGER } },
-                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE {} } }, rets = TUPLE { STRING, INTEGER } },
+                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { STRING } }, NUMBER }, rets = TUPLE { STRING, INTEGER } },
+                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { NUMBER } }, NUMBER }, rets = TUPLE { STRING, INTEGER } },
+                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { BOOLEAN } }, NUMBER }, rets = TUPLE { STRING, INTEGER } },
+                  a_type { typename = "function", args = TUPLE { STRING, STRING, a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE {} }, NUMBER }, rets = TUPLE { STRING, INTEGER } },
                   -- FIXME any other modes
                }
             },
@@ -5349,10 +5378,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
-   local function find_type(names: {string}, accept_typearg: boolean): Type
+   -- context variable to allow use of variadic type arguments
+   -- only within function signatures
+   local allow_typearg_va = 0
+
+   local enum FindTypeError
+      "unknown"
+      "bad"
+      "variadic"
+   end
+
+   local function find_type(names: {string}, accept_typearg: boolean): Type, string, FindTypeError
       local typ = find_var_type(names[1])
       if not typ then
-         return nil
+         return nil, "unknown type %s", "unknown"
       end
       if typ.found then
          typ = typ.found
@@ -5362,18 +5401,38 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          if fields then
             typ = fields[names[i]]
             if typ == nil then
-               return nil
+               return nil, "unknown type %s", "unknown"
             end
             if typ.found then
                typ = typ.found
             end
          else
-            return nil
+            return nil, "unknown type %s", "unknown"
          end
       end
-      if is_typetype(typ) or (accept_typearg and typ.typename == "typearg") then
+      if is_typetype(typ) then
          return typ
       end
+      if accept_typearg then
+         if typ.typename == "typearg" then
+            return typ
+         end
+         if typ.typename == "typearg_va" then
+            if allow_typearg_va > 0 then
+               return typ
+            else
+               return nil, "variadic type variables can only be used in function signatures", "variadic"
+            end
+         end
+      end
+      return nil, "%s is not a type", "bad"
+   end
+
+   local function find_type_for_nominal(t: Type): Type, string, FindTypeError
+      if t.found then
+         return t.found
+      end
+      return find_type(t.names)
    end
 
    local function union_type(t: Type): string
@@ -5382,7 +5441,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       elseif t.typename == "tuple" then
          return union_type(t[1])
       elseif t.typename == "nominal" then
-         local typetype = t.found or find_type(t.names)
+         local typetype = find_type_for_nominal(t)
          if not typetype then
             return "table" -- invalid type, will report error elsewhere
          end
@@ -5513,16 +5572,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          copy.xend = t.xend
          copy.names = t.names -- which types have this, exactly?
 
-         for i, tf in ipairs(t) do
-            copy[i] = resolve(tf)
-         end
-
          if t.typename == "array" then
             copy.elements = resolve(t.elements)
             -- inferred_len is not propagated
-         elseif t.typename == "typearg" then
+         elseif t.typename == "typearg" or t.typename == "typearg_va" then
             copy.typearg = t.typearg
-         elseif t.typename == "typevar" then
+         elseif t.typename == "typevar" or t.typename == "typevar_va" then
             copy.typevar = t.typevar
          elseif is_typetype(t) then
             copy.def = resolve(t.def)
@@ -5586,6 +5641,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
          elseif t.typename == "tuple" then
             copy.is_va = t.is_va
+         end
+
+         for i, tf in ipairs(t) do
+            if tf.typename == "typevar_va" then
+               local vtf, rtf = fn(tf)
+               tf = rtf or vtf
+               if tf.typename == "tuple" then
+                  for j, tj in ipairs(tf) do
+                     copy[i + j - 1] = resolve(tj)
+                  end
+                  copy.is_va = tf.is_va
+               else
+                  copy[i] = tf
+               end
+            else
+               copy[i] = resolve(tf)
+            end
          end
 
          return copy
@@ -5752,8 +5824,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return scope[var]
    end
 
-   local type CompareTypes = function(Type, Type, boolean): boolean, {Error}
-
    local function compare_and_infer_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
       -- if both are typevars and they are the same variable, nothing to do here
       if t1.typevar == t2.typevar then
@@ -5847,15 +5917,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local function match_fields_to_map(t1: Type, t2: Type): boolean, {Error}
       if not match_record_fields(t1, function(_: string): Type return t2.values end) then
          return false, { error_in_type(t1, "record is not a valid map; not all fields have the same type") }
-      end
-      return true
-   end
-
-   local function arg_check(cmp: CompareTypes, a: Type, b: Type, at: Node, n: integer, errs: {Error}): boolean
-      local matches, match_errs = cmp(a, b)
-      if not matches then
-         add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", at)
-         return false
       end
       return true
    end
@@ -6027,18 +6088,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
 
          local resolved: Type
 
-         local typetype = t.found or find_type(t.names)
+         local typetype, err = find_type_for_nominal(t)
          if not typetype then
-            type_error(t, "unknown type %s", t)
-         elseif is_typetype(typetype) then
+            type_error(t, err, t)
+         else
             if typetype.is_alias then
                typetype = typetype.def.found
                assert(is_typetype(typetype))
             end
             assert(typetype.def.typename ~= "nominal")
             resolved = match_typevals(t, typetype.def)
-         else
-            type_error(t, table.concat(t.names, ".") .. " is not a type")
          end
 
          if not resolved then
@@ -6063,16 +6122,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       if t1.found and t2.found then
          same_names = t1.found.typeid == t2.found.typeid
       else
-         local ft1 = t1.found or find_type(t1.names)
-         local ft2 = t2.found or find_type(t2.names)
+         local ft1, err1 = find_type_for_nominal(t1)
+         local ft2, err2 = find_type_for_nominal(t2)
          if ft1 and ft2 then
             same_names = ft1.typeid == ft2.typeid
          else
             if not ft1 then
-               type_error(t1, "unknown type %s", t1)
+               type_error(t1, err1, t1)
             end
             if not ft2 then
-               type_error(t2, "unknown type %s", t2)
+               type_error(t2, err2, t2)
             end
             return false, {} -- errors were already produced
          end
@@ -6110,6 +6169,72 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
+   local function resolve_rest(typevar: string, src: Type, from: integer): boolean
+      local rest = a_type { typename = "tuple", is_va = src.is_va }
+      for i = from, #src do
+         table.insert(rest, src[i])
+      end
+      add_var(nil, typevar, rest)
+      return true
+   end
+
+   local function tuple_comparison(t1: Type, t2: Type, key: string, cmp: CompareTypes, argdelta: integer, at: Node): boolean, {Error}
+      local all_errs: {Error}
+
+      local function traverse(i: integer, ta: Type, ia: integer, tb: Type, ib: integer): boolean
+         local a = ta[ia]
+         local b = tb[ib]
+
+         if not a and not b then
+            return (all_errs == nil)
+         end
+
+         if a and a.typename == "typevar_va" then
+            local resolved = find_var_type(a.typevar)
+            if resolved then
+               return traverse(i, resolved, 1, tb, ib)
+            else
+               return resolve_rest(a.typevar, tb, ib)
+            end
+         end
+
+         if b and b.typename == "typevar_va" then
+            local resolved = find_var_type(b.typevar)
+            if resolved then
+               return traverse(i, ta, ia, resolved, 1)
+            else
+               return resolve_rest(b.typevar, ta, ia)
+            end
+         end
+
+         if b and not a then
+            if tb.is_va then
+               return (all_errs == nil)
+            elseif ta.is_va and ta[ia - 1] then
+               ia = ia - 1
+               a = ta[ia]
+            else
+               all_errs = terr(t1, "incompatible number of " .. key .. "s: got " .. #t1 .. " %s, expected " .. #t2 .. " %s", t1, t2)
+               return false
+            end
+         end
+
+         if a and not b then
+            return (all_errs == nil)
+         end
+
+         local _, errs = cmp(a, b)
+         if errs then
+            all_errs = all_errs or {}
+            add_errs_prefixing(errs, all_errs, key .. " " .. i + argdelta .. ": ", at and at[i])
+         end
+
+         return traverse(i + 1, ta, ia + 1, tb, ib + 1)
+      end
+
+      return traverse(1, t1, 1, t2, 1), all_errs
+   end
+
    local is_known_table_type: function(t: Type): boolean
    local resolve_tuple_and_nominal: function(t: Type): Type = nil
 
@@ -6118,7 +6243,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
-      if t1.typename == "typevar" or t2.typename == "typevar" then
+      if t1.typename == "typevar" or t2.typename == "typevar" or t1.typename == "typevar_va" or t2.typename == "typevar_va" then
          return compare_and_infer_typevars(t1, t2, same_type)
       end
 
@@ -6164,21 +6289,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return match_fields_to_record(t1, t2, same_type)
             and match_fields_to_record(t2, t1, same_type)
       elseif t1.typename == "function" then
-         if #t1.args ~= #t2.args then
-            return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
+         local args_ok, args_errs = tuple_comparison(t2.args, t1.args, "argument", same_type, 0, t1 as Node) -- FIXME argdelta?
+         local rets_ok, rets_errs = tuple_comparison(t1.rets, t2.rets, "return", same_type, 0, t1 as Node)
+         if args_ok and rets_ok then
+            return true
+         else
+            local all_errs = {}
+            add_errs_prefixing(args_errs, all_errs, "", t1 as Node)
+            add_errs_prefixing(rets_errs, all_errs, "", t1 as Node)
+            return any_errors(all_errs)
          end
-         if #t1.rets ~= #t2.rets then
-            return false, terr(t1, "different number of return values: got " .. #t1.args .. ", expected " .. #t2.args)
-         end
-         local all_errs = {}
-         for i = 1, #t1.args do
-            arg_check(same_type, t1.args[i], t2.args[i], t1 as Node, i, all_errs)
-         end
-         for i = 1, #t1.rets do
-            local _, errs = same_type(t1.rets[i], t2.rets[i])
-            add_errs_prefixing(errs, all_errs, "return " .. i, t1 as Node)
-         end
-         return any_errors(all_errs)
       elseif t1.typename == "arrayrecord" then
          local ok, errs = same_type(t1.elements, t2.elements)
          if not ok then
@@ -6302,6 +6422,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return arr_type
    end
 
+   local function adjust_tuple_size_with_nils(args: Type, expected: integer): Type
+      if #args >= expected then
+         return args
+      end
+      args = shallow_copy(args)
+      for _ = #args + 1, expected do
+         table.insert(args, NIL)
+      end
+      return args
+   end
+
    -- subtyping comparison
    is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
       assert(type(t1) == "table")
@@ -6331,7 +6462,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          }
       end
 
-      if t1.typename == "typevar" or t2.typename == "typevar" then
+      if t1.typename == "typevar" or t2.typename == "typevar" or t1.typename == "typevar_va" or t2.typename == "typevar_va" then
          return compare_and_infer_typevars(t1, t2, is_a)
       end
 
@@ -6557,31 +6688,26 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             return true
          end
       elseif t1.typename == "function" and t2.typename == "function" then
-         local all_errs = {}
-         if (not t2.args.is_va) and #t1.args > #t2.args then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
-         else
-            for i = (t1.is_method and 2 or 1), #t1.args do
-               arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
-            end
+         local t1args = adjust_tuple_size_with_nils(t1.args, #t2.args)
+         local t2args = t2.args
+         local argdelta = 0
+         if t1.is_method then
+            t1args = (t1args ~= t1.args) and t1args or shallow_copy(t1.args) -- copy if needed
+            t2args = shallow_copy(t2args)
+            table.remove(t1args, 1)
+            table.remove(t2args, 1)
+            argdelta = 1
          end
-         local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
-         if #t1.rets < #t2.rets and not diff_by_va then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of returns: got " .. #t1.rets .. " %s, expected " .. #t2.rets .. " %s", t1.rets, t2.rets))
-         else
-            local nrets = #t2.rets
-            if diff_by_va then
-               nrets = nrets - 1
-            end
-            for i = 1, nrets do
-               local _, errs = is_a(t1.rets[i], t2.rets[i])
-               add_errs_prefixing(errs, all_errs, "return " .. i .. ": ")
-            end
-         end
-         if #all_errs == 0 then
+
+         local args_ok, args_errs = tuple_comparison(t1args, t2args, "argument", is_a, argdelta, t1 as Node)
+         local rets_ok, rets_errs = tuple_comparison(t1.rets, t2.rets, "return", is_a, 0, t1 as Node)
+         if args_ok and rets_ok then
             return true
          else
-            return false, all_errs
+            local all_errs = {}
+            add_errs_prefixing(args_errs, all_errs, "", t1 as Node)
+            add_errs_prefixing(rets_errs, all_errs, "", t1 as Node)
+            return any_errors(all_errs)
          end
       elseif lax and ((not for_equality) and t2.typename == "boolean") then
          -- in .lua files, all values can be used in a boolean context (but not in == or ~=)
@@ -6671,28 +6797,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
 
       local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: integer): Type, {Error}
-         local errs = {}
-
          local given = #args
          local expected = #f.args
          local va = f.args.is_va
-         local nargs = va
-                       and math.max(given, expected)
-                       or math.min(given, expected)
 
-         for a = 1, nargs do
-            local argument = args[a]
-            local farg = f.args[a] or (va and f.args[expected])
-            if argument == nil then
-               if va then
-                  break
-               end
-            else
-               local at = node.e2 and node.e2[a] or node
-               if not arg_check(is_a, argument, farg, at, (a + argdelta), errs) then
-                  return nil, errs
-               end
-            end
+         args = adjust_tuple_size_with_nils(args, expected);
+         local args_t = args as Type
+         args_t.typename = "tuple"
+         args_t.y = node.e2 and node.e2.y
+         args_t.x = node.e2 and node.e2.x
+
+         local args_ok, args_errs = tuple_comparison(args, f.args, "argument", is_a, argdelta, node.e2)
+         if not args_ok then
+            return nil, args_errs
          end
 
          mark_invalid_typeargs(f)
@@ -6742,11 +6859,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             else
                table.insert(expects, tostring(#func.args or 0))
             end
+--print("FAIL CALL FOR ", show_type(func))
             node_error(node, "wrong number of arguments (given " .. nargs .. ", expects " .. table.concat(expects, " or ") .. ")")
          end
 
          local f = func.typename == "poly" and func.types[1] or func
          mark_invalid_typeargs(f)
+         -- FIXME what about the resolution of typevar_va values done by tuple_comparison?
          return resolve_typevars_at(f.rets, node)
       end
 
@@ -7634,11 +7753,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             typetype.def = resolve_nominal(typetype.def)
             typetype.def.typeargs = nil
          else
-            local names = typetype.def.names
-            local found = find_type(names)
-            if (not found) or (not is_typetype(found)) then
-               type_error(typetype, "%s is not a type", typetype)
-               found = a_type { typename = "bad_nominal", names = names }
+            local found, err = find_type_for_nominal(typetype.def)
+            if not found then
+               type_error(typetype, err, typetype.def)
+               found = a_type { typename = "bad_nominal", names = typetype.def.names }
             end
             return found, true
          end
@@ -7856,6 +7974,43 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
 
       return typ
+   end
+
+   local function check_function_varargs(argnodes: {Node}, fn: Type)
+      local n = #fn.args
+      for i = 1, n do
+         if i < n then
+            if argnodes and argnodes[i].tk == "..." then
+               node_error(argnodes[i], "'...' can only be the last argument")
+            end
+            if fn.args[i].typename == "typevar_va" then
+               local where = argnodes and argnodes[i] or (fn.args[i] as Node)
+               node_error(where, "variadic type variables can only be the last argument")
+            end
+         else -- i == n
+            if fn.args[i].typename == "typevar_va" then
+               fn.args.is_va = true
+               if argnodes
+                  and argnodes[i].tk ~= "..." then
+                  node_error(argnodes[i], "variadic type variables can only be called '...'")
+               end
+            end
+         end
+      end
+
+      n = #fn.rets
+      for i = 1, n do
+         if i < n then
+            if fn.rets[i].typename == "typevar_va" then
+               local where = fn.rets[i] as Node
+               node_error(where, "variadic type variables can only be the last return type")
+            end
+         else -- i == n
+            if fn.rets[i].typename == "typevar_va" then
+               fn.rets.is_va = true
+            end
+         end
+      end
    end
 
    local visit_node: Visitor<NodeKind, Node, Type> = {}
@@ -8417,8 +8572,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          before = function(node: Node)
             reserve_symbol_list_slot(node)
             begin_scope(node)
+            allow_typearg_va = allow_typearg_va + 1
          end,
          before_statements = function(node: Node)
+            allow_typearg_va = allow_typearg_va - 1
             add_internal_function_variables(node)
             add_function_definition_for_recursion(node)
          end,
@@ -8435,14 +8592,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                rets = rets,
                filename = filename,
             })
+            check_function_varargs(node.args, node.type)
             return node.type
          end,
       },
       ["global_function"] = {
          before = function(node: Node)
             begin_scope(node)
+            allow_typearg_va = allow_typearg_va + 1
          end,
          before_statements = function(node: Node)
+            allow_typearg_va = allow_typearg_va - 1
             add_internal_function_variables(node)
             add_function_definition_for_recursion(node)
          end,
@@ -8457,14 +8617,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                rets = get_rets(children[3]),
                filename = filename,
             })
+            check_function_varargs(node.args, node.type)
             return node.type
          end,
       },
       ["record_function"] = {
          before = function(node: Node)
             begin_scope(node)
+            allow_typearg_va = allow_typearg_va + 1
          end,
          before_statements = function(node: Node, children: {Type})
+            allow_typearg_va = allow_typearg_va - 1
             add_internal_function_variables(node)
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
@@ -8517,6 +8680,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end,
          after = function(node: Node, _children: {Type}): Type
             end_function_scope(node)
+            if node.name.type.typename == "function" then
+               check_function_varargs(node.args, node.name.type)
+            end
             node.type = NONE
             return node.type
          end,
@@ -8524,8 +8690,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       ["function"] = {
          before = function(node: Node)
             begin_scope(node)
+            allow_typearg_va = allow_typearg_va + 1
          end,
          before_statements = function(node: Node)
+            allow_typearg_va = allow_typearg_va - 1
             add_internal_function_variables(node)
          end,
          after = function(node: Node, children: {Type}): Type
@@ -8541,6 +8709,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                rets = children[2],
                filename = filename,
             }
+            check_function_varargs(node.args, node.type)
             return node.type
          end,
       },
@@ -8909,8 +9078,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          ["function"] = {
             before = function(_typ: Type, _children: {Type})
                begin_scope()
+               allow_typearg_va = allow_typearg_va + 1
             end,
             after = function(typ: Type, _children: {Type}): Type
+               check_function_varargs(nil, typ)
+               allow_typearg_va = allow_typearg_va - 1
                end_scope()
                return typ
             end,
@@ -8945,7 +9117,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                add_var(nil, typ.typearg, a_type {
                   y = typ.y,
                   x = typ.x,
-                  typename = "typearg",
+                  typename = typ.typename,
                   typearg = typ.typearg,
                })
                return typ
@@ -8965,17 +9137,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   return typ
                end
 
-               local t = find_type(typ.names, true)
+               local t, err, errcode = find_type(typ.names, true)
                if t then
+                  -- convert nominal into a typevar or typevar_va
                   if t.typename == "typearg" then
-                     -- convert nominal into a typevar
                      typ.names = nil
                      typ.typename = "typevar"
+                     typ.typevar = t.typearg
+                  elseif t.typename == "typearg_va" then
+                     typ.names = nil
+                     typ.typename = "typevar_va"
                      typ.typevar = t.typearg
                   else
                      typ.found = t
                   end
-               else
+               elseif errcode == "unknown" then
                   local name = typ.names[1]
                   local unresolved = find_var_type("@unresolved")
                   if not unresolved then
@@ -8984,6 +9160,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   end
                   unresolved.nominals[name] = unresolved.nominals[name] or {}
                   table.insert(unresolved.nominals[name], typ)
+               else
+                  type_error(typ, err, typ)
                end
                return typ
             end,
@@ -9037,6 +9215,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    visit_type.cbs["invalid"] = visit_type.cbs["string"]
    visit_type.cbs["unresolved"] = visit_type.cbs["string"]
    visit_type.cbs["none"] = visit_type.cbs["string"]
+   visit_type.cbs["typevar_va"] = visit_type.cbs["typevar"]
+   visit_type.cbs["typearg_va"] = visit_type.cbs["typearg"]
 
    assert(ast.kind == "statements")
    recurse_node(ast, visit_node, visit_type)
@@ -9071,7 +9251,9 @@ end
 
 local typename_to_typecode: {TypeName:integer} = {
    ["typevar"] = tl.typecodes.TYPE_VARIABLE,
+   ["typevar_va"] = tl.typecodes.TYPE_VARIABLE,
    ["typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["typearg_va"] = tl.typecodes.TYPE_VARIABLE,
    ["function"] = tl.typecodes.FUNCTION,
    ["array"] = tl.typecodes.ARRAY,
    ["map"] = tl.typecodes.MAP,
@@ -9313,7 +9495,7 @@ function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer): {string:in
          return a[1] < b[1]
             or (a[1] == b[1] and a[2] <= b[2])
       end
-      return binary_search(symbols, {at_y, at_x}, le) or 0
+      return binary_search(symbols as {{integer, integer}}, {at_y, at_x}, le) or 0
    end
 
    local ret: {string:integer} = {}

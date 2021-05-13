@@ -101,7 +101,8 @@ precedence, see below.
 
 *  retlist ::= ‘(’ [typelist] [‘...’] ‘)’ | typelist [‘...’]
 
-*  typeargs ::= ‘<’ Name {‘,’ Name } ‘>’
+*  typeargs ::= ‘<’ Name {‘,’ Name } {‘,’ Name [‘...’] } ‘>’ |
+*      ‘<’ Name ‘...’ {‘,’ Name ‘...’ } ‘>’ |
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
