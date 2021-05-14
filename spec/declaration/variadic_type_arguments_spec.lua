@@ -147,4 +147,53 @@ describe("variadic type arguments", function()
    ]], {
       { y = 7, msg = "assignment in declaration did not produce an initial value for variable 'wat'" }
    }))
+
+   it("can propagate values, without name shadowing", util.check [[
+      local record X
+        type future  = function<A...>(function(A))
+        await: function<A...>(future<A>): A
+        async: function<A...,R...>(function(A): R): (function(A): future<R>)
+      end
+
+      local foo = X.async(function(): string,string
+        return 'a','b'
+      end)
+
+      local _ = X.async(function(): string
+        local f = foo()  -- as X.future<string,string>
+        local b, c = X.await(f)    -- as string,string
+        return b..c
+      end)
+
+      return X
+   ]])
+
+   it("can propagate values, handling name shadowing", util.check [[
+      local record A
+        type future  = function<A...>(function(A))
+        await: function<A...>(future<A>): A
+        async: function<A...,R...>(function(A): R): (function(A): future<R>)
+      end
+
+      local foo = A.async(function(): string,string
+        return 'a','b'
+      end)
+
+      local _ = A.async(function(): string
+        local f = foo()  -- as X.future<string,string>
+        local b, c = A.await(f)    -- as string,string
+        return b..c
+      end)
+
+      return A
+   ]])
+
+   it("does not loop when resolving a type variable against itself", util.check [[
+      local record Foo
+         call: function<Rets...>(Foo, function(): Rets): Rets
+         end
+      Foo.call = function<Rets...>(f: Foo, func: function(): Rets): Rets
+      end
+   ]])
+
 end)

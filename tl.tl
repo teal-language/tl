@@ -963,6 +963,7 @@ local enum TypeName
    "unresolved_emptytable_value"
    "tuple"
    "typearg_list"
+   "unresolved_typearg"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
    "unknown" -- to be used in lax mode only
@@ -5374,6 +5375,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    local function find_var_type(name: string, raw: boolean): Type, boolean
       local var = find_var(name, raw)
       if var then
+         if var.t.typename == "unresolved_typearg" then
+            return nil
+         end
          local t = var.t
          if t.typeargs then
             fresh_typevar_ctr = fresh_typevar_ctr + 1
@@ -5815,7 +5819,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       node.symbol_list_slot = symbol_list_n
    end
 
-   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean, dont_check_redeclaration): Variable
+   local function add_var(node: Node, var: string, valtype: Type, is_const: boolean, is_narrowing: boolean, dont_check_redeclaration: boolean): Variable
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
       end
@@ -6108,8 +6112,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
 
             begin_scope()
-            for i, tt in ipairs(t.typevals) do
-               add_var(nil, def.typeargs[i].typearg, tt)
+            for i = 1, nt do
+               add_var(nil, def.typeargs[i].typearg, t.typevals[i])
+            end
+            if nv > 0 then
+               -- FIXME multiple typeargs
+               local tup = a_type { typename = "tuple" }
+               for i = nt + 1, #t.typevals do
+                  table.insert(tup, t.typevals[i])
+               end
+               assert(def.typeargs[#def.typeargs].typename == "typearg_va")
+               add_var(nil, def.typeargs[#def.typeargs].typearg, tup)
             end
             local ret = resolve_typevars_at(def, t as Node)
             end_scope()
@@ -6236,19 +6249,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             return (all_errs == nil)
          end
 
-         if a and a.typename == "typevar_va" then
-            local resolved = find_var_type(a.typevar)
-            if resolved then
-               return traverse(i, resolved, 1, tb, ib)
+         local tva = a and a.typename == "typevar_va"
+         local tvb = b and b.typename == "typevar_va"
+         local rva = tva and find_var_type(a.typevar)
+         local rvb = tvb and find_var_type(b.typevar)
+
+         if tva and tvb then
+            -- skip
+         elseif tva then
+            if rva then
+               return traverse(i, rva, 1, tb, ib)
             else
                return resolve_rest(a.typevar, tb, ib)
             end
-         end
-
-         if b and b.typename == "typevar_va" then
-            local resolved = find_var_type(b.typevar)
-            if resolved then
-               return traverse(i, ta, ia, resolved, 1)
+         elseif tvb then
+            if rvb then
+               return traverse(i, ta, ia, rvb, 1)
             else
                return resolve_rest(b.typevar, ta, ia)
             end
@@ -6836,7 +6852,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
-               if not find_var(a.typearg) then
+               if not find_var_type(a.typearg) then
                   add_var(nil, a.typearg, lax and UNKNOWN or INVALID)
                end
             end
@@ -6853,6 +6869,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          args_t.typename = "tuple"
          args_t.y = node.e2 and node.e2.y
          args_t.x = node.e2 and node.e2.x
+
+         if f.typeargs then
+            for _, t in ipairs(f.typeargs) do
+               add_var(nil, t.typearg, { typename = "unresolved_typearg" })
+            end
+         end
 
          local args_ok, args_errs = tuple_comparison(args, f.args, "argument", is_a, argdelta, node.e2)
          if not args_ok then
