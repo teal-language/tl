@@ -17,6 +17,40 @@ describe("variadic type arguments", function()
       { y = 1, msg = "variadic type variables can only be the last argument" }
    }))
 
+   describe("arity", function()
+      it("non-variadic entries are arity checked alongside variadic", util.check_type_error([[
+         local record R<A, B, C...>
+         end
+
+         local r: R<number> = {}
+      ]], {
+         { y = 4, msg = "mismatch in number of type arguments" }
+      }))
+
+      it("non-variadic entries are arity checked without variadic", util.check_type_error([[
+         local record R<A, B>
+         end
+
+         local r: R<number> = {}
+      ]], {
+         { y = 4, msg = "mismatch in number of type arguments" }
+      }))
+
+      it("variadic entries can match to empty alongside non-variadic", util.check [[
+         local record R<A, B, C...>
+         end
+
+         local r: R<number, string> = {}
+      ]])
+
+      it("variadic entries can match to empty without non-variadic", util.check [[
+         local record R<C...>
+         end
+
+         local r: R<> = {}
+      ]])
+   end)
+
    for _, scope in ipairs({"local", "global"}) do
       it("must be last argument in a " .. scope .. " function", util.check_type_error([[
          ]] .. scope .. [[ function my_pcall<A..., B...>(f: function(A):(B), args: A, x: number): boolean, B

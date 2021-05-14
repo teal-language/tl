@@ -1,17 +1,21 @@
 local util = require("spec.util")
 
 describe("generic function", function()
-   it("argument list cannot be empty on declaration", util.check_syntax_error([[
-      local type ParseItem = function<>(number): T
-   ]], {
-      { msg = "type argument list cannot be empty" }
-   }))
+   it("argument list can be empty on declaration", util.check [[
+      local type ParseItem = function<>(number): number
 
-   it("argument list cannot be empty on instance", util.check_syntax_error([[
-      local x: T<> = true
-   ]], {
-      { msg = "type argument list cannot be empty" }
-   }))
+      local x: ParseItem = function(i: number): number
+         return i
+      end
+   ]])
+
+   it("argument list can be empty on instance", util.check [[
+      local type ParseItem = function<>(number): number
+
+      local x: ParseItem<> = function(i: number): number
+         return i
+      end
+   ]])
 
    it("can declare a generic function type", util.check [[
       local type ParseItem = function<T>(number): T

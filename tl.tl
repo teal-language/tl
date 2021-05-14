@@ -962,6 +962,7 @@ local enum TypeName
    "table_item"
    "unresolved_emptytable_value"
    "tuple"
+   "typearg_list"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
    "unknown" -- to be used in lax mode only
@@ -1008,7 +1009,7 @@ local record Type
    values: Type
 
    -- records
-   typeargs: {Type}
+   typeargs: Type
    fields: {string: Type}
    field_order: {string}
    meta_fields: {string: Type}
@@ -1052,6 +1053,10 @@ local record Type
    inferred_at: Node
    inferred_at_file: string
    emptytable_type: Type
+
+   -- typearg_list
+   n_typearg: integer
+   n_typearg_va: integer
 
    -- enum
    enumset: {string:boolean}
@@ -1538,26 +1543,24 @@ local function parse_typearg_type(ps: ParseState, i: integer): integer, Type, in
 end
 
 local function parse_typearg_list(ps: ParseState, i: integer): integer, Type
-   if ps.tokens[i+1].tk == ">" then
-      return fail(ps, i+1, "type argument list cannot be empty")
-   end
-   local typ = new_type(ps, i, "tuple")
+   local typ = new_type(ps, i, "typearg_list")
    i = parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_typearg_type)
-   local is_va = false
+   typ.n_typearg = 0
+   typ.n_typearg_va = 0
    for _, t in ipairs(typ) do
       if t.typename == "typearg_va" then
-         is_va = true
-      elseif is_va == true then
-         fail(ps, i-1, "non-variadic type argument cannot follow variadic argument")
+         typ.n_typearg_va = typ.n_typearg_va + 1
+      else
+         typ.n_typearg = typ.n_typearg + 1
+         if typ.n_typearg_va > 0 then
+            fail(ps, i-1, "non-variadic type argument cannot follow variadic argument")
+         end
       end
    end
    return i, typ
 end
 
 local function parse_typeval_list(ps: ParseState, i: integer): integer, Type
-   if ps.tokens[i+1].tk == ">" then
-      return fail(ps, i+1, "type argument list cannot be empty")
-   end
    local typ = new_type(ps, i, "tuple")
    return parse_bracket_list(ps, i, typ, "<", ">", "sep", parse_type)
 end
@@ -3984,6 +3987,7 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
    visit_type.cbs["table_item"] = visit_type.cbs["string"]
    visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
    visit_type.cbs["tuple"] = visit_type.cbs["string"]
+   visit_type.cbs["typearg_list"] = visit_type.cbs["string"]
    visit_type.cbs["poly"] = visit_type.cbs["string"]
    visit_type.cbs["any"] = visit_type.cbs["string"]
    visit_type.cbs["unknown"] = visit_type.cbs["string"]
@@ -4681,13 +4685,19 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       local n = tvs is {boolean} and #tvs or tvs
 
       local typevars = {}
-      local typeargs = {}
+      local typeargs = a_type { typename = "typearg_list",  n_typearg = 0, n_typearg_va = 0 }
       local c = string.byte("A") - 1
       fresh_typevar_ctr = fresh_typevar_ctr + 1
       for i = 1, n do
          local name = string.char(c + i) .. "@" .. fresh_typevar_ctr
-         typevars[i] = a_type { typename = (tvs is {boolean} and tvs[i] and "typevar_va") or "typevar", typevar = name }
-         typeargs[i] = a_type { typename = (tvs is {boolean} and tvs[i] and "typearg_va") or "typearg", typearg = name }
+         local va = tvs is {boolean} and tvs[i]
+         typevars[i] = a_type { typename = va and "typevar_va" or "typevar", typevar = name }
+         typeargs[i] = a_type { typename = va and "typearg_va" or "typearg", typearg = name }
+         if va then
+            typeargs.n_typearg_va = typeargs.n_typearg_va + 1
+         else
+            typeargs.n_typearg = typeargs.n_typearg + 1
+         end
       end
 
       local t = f(table.unpack(typevars))
@@ -6090,7 +6100,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    do
       local function match_typevals(t: Type, def: Type): Type
          if t.typevals and def.typeargs then
-            if #t.typevals ~= #def.typeargs then
+            local nt = def.typeargs.n_typearg
+            local nv = def.typeargs.n_typearg_va
+            if ((nt > #t.typevals) or (#t.typevals > nt and nv == 0)) then
                type_error(t, "mismatch in number of type arguments")
                return nil
             end
@@ -6106,8 +6118,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             type_error(t, "spurious type arguments")
             return nil
          elseif def.typeargs then
-            type_error(t, "missing type arguments in %s", def)
-            return nil
+            if def.typeargs.n_typearg > 0 then
+               type_error(t, "missing type arguments in %s", def)
+               return nil
+            end
+            -- FIXME resolve typevars_va as empty tuple?
          else
             return def
          end
@@ -9205,6 +9220,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    visit_type.cbs["table_item"] = visit_type.cbs["string"]
    visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
    visit_type.cbs["tuple"] = visit_type.cbs["string"]
+   visit_type.cbs["typearg_list"] = visit_type.cbs["string"]
    visit_type.cbs["poly"] = visit_type.cbs["string"]
    visit_type.cbs["any"] = visit_type.cbs["string"]
    visit_type.cbs["unknown"] = visit_type.cbs["string"]
@@ -9391,6 +9407,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    local skip: {TypeName: boolean} = {
       ["none"] = true,
       ["tuple"] = true,
+      ["typearg_list"] = true,
       ["table_item"] = true,
    }
 
