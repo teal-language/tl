@@ -205,6 +205,27 @@ local type TypeReportEnv = tl.TypeReportEnv
 local type Symbol = tl.Symbol
 
 --------------------------------------------------------------------------------
+-- Compiler debugging
+--------------------------------------------------------------------------------
+
+if os.getenv("TL_DEBUG") then
+   local max <const> = assert(tonumber(os.getenv("TL_DEBUG")), "TL_DEBUG was defined, but not a number")
+   local count = 0
+   debug.sethook(function(event: debug.HookEvent)
+      if event == "call" or event == "tail call" or event == "return" then
+         local info <const> = debug.getinfo(2)
+         io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
+         io.stderr:flush()
+      else
+         count = count + 100
+         if count > max then
+            error("Too many instructions")
+         end
+      end
+   end, "cr", 100)
+end
+
+--------------------------------------------------------------------------------
 -- Lexer
 --------------------------------------------------------------------------------
 
