@@ -8094,6 +8094,10 @@ tl.type_check = function(ast, opts)
          before_statements = function(node)
             local exp1 = node.exps[1]
             local exp1type = resolve_tuple_and_nominal(exp1.type)
+            if exp1type.typename == "record" and exp1type.meta_fields and exp1type.meta_fields["__call"] then
+               exp1type = exp1type.meta_fields["__call"]
+            end
+
             if exp1type.typename == "function" then
 
                if exp1.op and exp1.op.op == "@funcall" then

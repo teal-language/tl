@@ -89,6 +89,26 @@ describe("forin", function()
       end
    ]])
 
+   it("with a callable record interator", util.check [[
+      local record R
+         metamethod __call: function(): integer
+      end
+
+      function foo(): R
+         local x = 1
+         return setmetatable({}, {
+            __call = function(): integer
+               x = x + 1
+               return x < 4 and x or nil
+            end
+         })
+      end
+
+      for i in foo() do
+         print(i + 1)
+      end
+   ]])
+
    it("catches when too many values are passed", util.check_type_error([[
       local function it(): function(): string
          return nil
