@@ -9448,7 +9448,7 @@ function tl.loader()
    end
 end
 
-tl.load = function(input: string, chunkname: string, mode: LoadMode, env: {any:any}): LoadFunction, string
+tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:any}): LoadFunction, string
    local tokens = tl.lex(input)
    local errs: {Error} = {}
    local _, program = tl.parse_program(tokens, errs, chunkname)
@@ -9456,7 +9456,11 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, env: {any:a
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
    local code = tl.pretty_print_ast(program, true)
-   return load(code, chunkname, mode, env)
+   if select("#", ...) == 4 then
+      return load(code, chunkname, mode, ...)
+   else
+      return load(code, chunkname, mode, ...)
+   end
 end
 
 return tl
