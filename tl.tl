@@ -6600,33 +6600,33 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
+   local function resolve_for_call(node: Node, func: Type, args: {Type}, is_method: boolean): Type, boolean
+      -- resolve unknown in lax mode, produce a general unknown function
+      if lax and is_unknown(func) then
+         func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
+         if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
+            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
+         end
+      end
+      -- unwrap if tuple, resolve if nominal
+      func = resolve_tuple_and_nominal(func)
+      if func.typename ~= "function" and func.typename ~= "poly" then
+         -- resolve if prototype
+         if is_typetype(func) and func.def.typename == "record" then
+            func = func.def
+         end
+         -- resolve if metatable
+         if func.meta_fields and func.meta_fields["__call"] then
+            table.insert(args, 1, func)
+            func = func.meta_fields["__call"]
+            is_method = true
+         end
+      end
+      return func, is_method
+   end
+
    local type_check_function_call: function(Node, Type, {Type}, boolean, integer): Type
    do
-      local function resolve_for_call(node: Node, func: Type, args: {Type}, is_method: boolean): Type, boolean
-         -- resolve unknown in lax mode, produce a general unknown function
-         if lax and is_unknown(func) then
-            func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
-            if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
-               add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-            end
-         end
-         -- unwrap if tuple, resolve if nominal
-         func = resolve_tuple_and_nominal(func)
-         if func.typename ~= "function" and func.typename ~= "poly" then
-            -- resolve if prototype
-            if is_typetype(func) and func.def.typename == "record" then
-               func = func.def
-            end
-            -- resolve if metatable
-            if func.meta_fields and func.meta_fields["__call"] then
-               table.insert(args, 1, func)
-               func = func.meta_fields["__call"]
-               is_method = true
-            end
-         end
-         return func, is_method
-      end
-
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
@@ -8093,10 +8093,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end,
          before_statements = function(node: Node)
             local exp1 = node.exps[1]
-            local exp1type = resolve_tuple_and_nominal(exp1.type)
-            if exp1type.typename == "record" and exp1type.meta_fields and exp1type.meta_fields["__call"] then
-               exp1type = exp1type.meta_fields["__call"]
-            end
+            local args = {node.exps[2] and node.exps[2].type,
+                          node.exps[3] and node.exps[3].type}
+            local exp1type = resolve_for_call(exp1, exp1.type, args)
 
             if exp1type.typename == "function" then
                -- check common errors:
@@ -8131,6 +8130,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   end
                end
 
+               -- TODO: check that exp1's arguments match with (optional self, explicit iterator, state)
                local last: Type
                local rets = exp1type.rets
                for i, v in ipairs(node.vars) do
