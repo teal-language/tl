@@ -6600,33 +6600,33 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local type_check_function_call
-   do
-      local function resolve_for_call(node, func, args, is_method)
+   local function resolve_for_call(node, func, args, is_method)
 
-         if lax and is_unknown(func) then
-            func = a_type({ typename = "function", args = VARARG({ UNKNOWN }), rets = VARARG({ UNKNOWN }) })
-            if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
-               add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-            end
+      if lax and is_unknown(func) then
+         func = a_type({ typename = "function", args = VARARG({ UNKNOWN }), rets = VARARG({ UNKNOWN }) })
+         if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
+            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
          end
-
-         func = resolve_tuple_and_nominal(func)
-         if func.typename ~= "function" and func.typename ~= "poly" then
-
-            if is_typetype(func) and func.def.typename == "record" then
-               func = func.def
-            end
-
-            if func.meta_fields and func.meta_fields["__call"] then
-               table.insert(args, 1, func)
-               func = func.meta_fields["__call"]
-               is_method = true
-            end
-         end
-         return func, is_method
       end
 
+      func = resolve_tuple_and_nominal(func)
+      if func.typename ~= "function" and func.typename ~= "poly" then
+
+         if is_typetype(func) and func.def.typename == "record" then
+            func = func.def
+         end
+
+         if func.meta_fields and func.meta_fields["__call"] then
+            table.insert(args, 1, func)
+            func = func.meta_fields["__call"]
+            is_method = true
+         end
+      end
+      return func, is_method
+   end
+
+   local type_check_function_call
+   do
       local function mark_invalid_typeargs(f)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
@@ -8093,10 +8093,9 @@ tl.type_check = function(ast, opts)
          end,
          before_statements = function(node)
             local exp1 = node.exps[1]
-            local exp1type = resolve_tuple_and_nominal(exp1.type)
-            if exp1type.typename == "record" and exp1type.meta_fields and exp1type.meta_fields["__call"] then
-               exp1type = exp1type.meta_fields["__call"]
-            end
+            local args = { node.exps[2] and node.exps[2].type,
+node.exps[3] and node.exps[3].type, }
+            local exp1type = resolve_for_call(exp1, exp1.type, args)
 
             if exp1type.typename == "function" then
 
@@ -8130,6 +8129,7 @@ tl.type_check = function(ast, opts)
                      end
                   end
                end
+
 
                local last
                local rets = exp1type.rets

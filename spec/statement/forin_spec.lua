@@ -91,23 +91,61 @@ describe("forin", function()
 
    it("with a callable record interator", util.check [[
       local record R
+         incr: integer
          metamethod __call: function(): integer
       end
 
-      function foo(): R
-         local x = 1
-         return setmetatable({}, {
-            __call = function(): integer
-               x = x + 1
+      function foo(incr: integer): R
+         local x = 0
+         return setmetatable({incr=incr} as R, {
+            __call = function(self: R): integer
+               x = x + self.incr
                return x < 4 and x or nil
             end
          })
       end
 
-      for i in foo() do
-         print(i + 1)
+      for i in foo(1) do
+         print(i + 0)
       end
    ]])
+
+   it("catches wrong call to a wrongly declared callable record interator", util.check_type_error([[
+      local record R
+         metamethod __call: function(): integer
+      end
+
+      function foo(): R
+         return setmetatable({} as R, {
+            __call = function(wrong_self: integer): integer
+               return nil
+            end
+         })
+      end
+
+      for i in foo() do
+      end
+   ]], {
+     { msg = "argument 2: type parameter <@a>: got integer, expected R" }
+   }))
+
+   --[=[ -- TODO: check forin iterator arguments
+   it("catches wrong call to a wrongly declared callable record interator", util.check_type_error([[
+      local record R
+         incr: integer
+         metamethod __call: function(integer): integer
+      end
+
+      function foo(): R
+         return nil
+      end
+
+      for i in foo() do
+      end
+   ]], {
+     { msg = "argument 2: type parameter <@a>: got integer, expected R" }
+   }))
+   ]=]
 
    it("catches when too many values are passed", util.check_type_error([[
       local function it(): function(): string
