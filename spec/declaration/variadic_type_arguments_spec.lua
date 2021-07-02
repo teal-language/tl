@@ -196,4 +196,29 @@ describe("variadic type arguments", function()
       end
    ]])
 
+   it("resolves propagated type variables", function()
+      local _, ast = util.check([[
+         local record Frame<T...> end
+         local async: function<Ret..., Args...>(fn: (function(...: Args): Ret), ...: Args): Frame<Ret>
+         local await: function<Ret...>(frame: Frame<Ret>): Ret
+
+         local x, y = await(async(function(): string, number end))
+         print(x, y)
+      ]])()
+
+      assert.same("string", ast[5].e2[1].type.typename)
+      assert.same("number", ast[5].e2[2].type.typename)
+   end)
+
+   it("catches errors in returned resolved types", util.check_type_error([[
+      local record Frame<T...> end
+      local async: function<Ret..., Args...>(fn: (function(...: Args): Ret), ...: Args): Frame<Ret>
+      local await: function<Ret...>(frame: Frame<Ret>): Ret
+
+      local x, y: thread, table = await(async(function(): string, number end))
+   ]], {
+      { y = 5, msg = "in local declaration: x: got string, expected thread" },
+      { y = 5, msg = "in local declaration: y: got number, expected {<any type> : <any type>}" },
+   }))
+
 end)

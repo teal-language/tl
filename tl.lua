@@ -6177,6 +6177,44 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function compare_typevals(where, t1v, t2v)
+      if t1v == nil and t2v == nil then
+         return true
+      end
+      if t1v == nil or t2v == nil then
+         return false, { error_in_type(where, "mismatch in number of type variables") }
+      end
+      local all_errs
+      if #t1v ~= #t2v then
+         if t2v[1].typename == "typevar_va" then
+            local found = find_type({ t2v[1].typevar })
+            if found then
+               assert(found.typename == "tuple")
+               t2v = found
+            else
+               add_var(nil, t2v[1].typevar, t1v)
+               return true
+            end
+         end
+      end
+      if #t1v == #t2v then
+         for i = 1, #t1v do
+            local _, errs = same_type(t1v[i], t2v[i])
+            if errs then
+               all_errs = all_errs or {}
+               add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t2v[i]) .. ">: ", where)
+            end
+         end
+      else
+         return false, { error_in_type(where, "mismatch in number of type variables: %s is not %s", t1v, t2v) }
+      end
+      if not all_errs or #all_errs == 0 then
+         return true
+      else
+         return false, all_errs
+      end
+   end
+
    local function are_same_nominals(t1, t2)
       local same_names
       if t1.found and t2.found then
@@ -6198,20 +6236,7 @@ tl.type_check = function(ast, opts)
       end
 
       if same_names then
-         if t1.typevals == nil and t2.typevals == nil then
-            return true
-         elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
-            local all_errs = {}
-            for i = 1, #t1.typevals do
-               local _, errs = same_type(t1.typevals[i], t2.typevals[i])
-               add_errs_prefixing(errs, all_errs, "type parameter <" .. show_type(t2.typevals[i]) .. ">: ", t1)
-            end
-            if #all_errs == 0 then
-               return true
-            else
-               return false, all_errs
-            end
-         end
+         return compare_typevals(t1, t1.typevals, t2.typevals)
       else
          local t1name = show_type(t1)
          local t2name = show_type(t2)
