@@ -8148,7 +8148,7 @@ node.exps[3] and node.exps[3].type, }
                if (not lax) and (not rets.is_va and #node.vars > #rets) then
                   local nrets = #rets
                   local at = node.vars[nrets + 1]
-                  local n_values = nrets == 1 and "1 value" or tostring(nrets) .. " value%s"
+                  local n_values = nrets == 1 and "1 value" or tostring(nrets) .. " values"
                   node_error(at, "too many variables for this iterator; it produces " .. n_values)
                end
             else
