@@ -952,62 +952,36 @@ loader is installed by calling tl.loader().
 
 You can also create declaration files to annotate the types of third-party Lua
 modules, including C Lua modules. To do so, create a file with the .d.tl
-extension and require it as normal, i.e. `require("minetest")`.
+extension and require it as normal, i.e. `local lfs = require("lfs")`.
 
 Types defined in this module will will be used as a source of type information 
 checking with `tl check`, even though the real Lua module will be loaded
 instead when requiring the module from Lua or `tl run`.
 
-If the third party library is "globally available", i.e. you do not explicitly
+If the third party library is "globally available" in your execution environment, i.e., if you do not explicitly
 `require` it, you can inject the types without affecting your generated code
 with a `tlconfig.lua`:
 
-```lua
+```
 return {
-    preload_modules = {
-        "minetest" -- Execute the equivalent of require('minetest') before type-checking the tl script(s)
-    }
+   global_env_def = "love"
 }
 ```
 
 #### Visibility
 
-It should be noted that local references in type definition files (or any files
-containing types for that matter) are not available in the requiring module.
-
-This means that constructs like:
-
-```lua
-local MyPointType = record
-    x :number
-    y :number
-end
-
-local MyCompositeType = record
-    center: MyPointType
-end
-
-return {
-    MyPointType = MyPointType,
-    MyCompositeType = MyCompositeType,
-}
-```
-
-will give errors when accessing `MyCompositeType::center`, as `MyPointType` is not
-visible.
-
 There are two ways to define these types:
 
 ##### Composite Types
 
-```lua
+```
 local MyCompositeType = record
-    MyPointType = record
-        x :number
-        y :number
-    end
+   MyPointType = record
+      x: number
+      y: number
+   end
 
-    center :MyPointType
+   center: MyPointType
     -- insert more stuff here
 end
 
@@ -1019,17 +993,14 @@ This will mean that references to `MyPointType` must be qualified (or locally de
 
 ##### Global Types
 
-While perhaps discouraged in general, for types that are provided as part of the
-execution environment it may be more hygeinic to declare them as global.
-
-```lua
+```
 global MyPointType = record
-    x :number
-    y :number
+   x: number
+   y: number
 end
 
 global MyCompositeType = record
-    center: MyPointType
+   center: MyPointType
 end
 ```
 
