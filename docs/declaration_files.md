@@ -16,7 +16,7 @@ There are two ways to define these types:
 
 ```
 local record MyCompositeType
-   MyPointType = record
+   record MyPointType
       x: number
       y: number
    end
@@ -34,12 +34,12 @@ This will mean that references to `MyPointType` must be qualified (or locally de
 ### Global Types
 
 ```
-global MyPointType = record
+global record MyPointType
    x: number
    y: number
 end
 
-global MyCompositeType = record
+global record MyCompositeType
    center: MyPointType
 end
 ```
