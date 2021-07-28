@@ -952,5 +952,5 @@ loader is installed by calling tl.loader().
 #### Type definitions for third party libraries
 
 You can also create declaration files to annotate the types of third-party Lua
-modules, including C Lua modules. For more information, see the [declaration files](docs/declaration_files.md) page.
+modules, including C Lua modules. For more information, see the [declaration files](declaration_files.md) page.
 

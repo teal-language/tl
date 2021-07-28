@@ -58,5 +58,5 @@ return {
 }
 ```
 
-You can find more information about global environment definition in the [compiler options](docs/compiler_options.md#global-environment-definition) page.
+You can find more information about global environment definition in the [compiler options](compiler_options.md#global-environment-definition) page.
 
