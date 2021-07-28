@@ -947,61 +947,10 @@ Note that even though adding type annotations to .lua files makes it invalid
 Lua, you can still do so and load them from the Lua VM once the Teal package
 loader is installed by calling tl.loader().
 
+### Further reading
 
-### Type definitions for third party libraries
+#### Type definitions for third party libraries
 
 You can also create declaration files to annotate the types of third-party Lua
-modules, including C Lua modules. To do so, create a file with the .d.tl
-extension and require it as normal, i.e. `local lfs = require("lfs")`.
+modules, including C Lua modules. For more information, see the [declaration files](docs/declaration_files.md) page.
 
-Types defined in this module will will be used as a source of type information 
-checking with `tl check`, even though the real Lua module will be loaded
-instead when requiring the module from Lua or `tl run`.
-
-If the third party library is "globally available" in your execution environment, i.e., if you do not explicitly
-`require` it, you can inject the types without affecting your generated code
-with a `tlconfig.lua`:
-
-```
-return {
-   global_env_def = "love"
-}
-```
-
-#### Visibility
-
-There are two ways to define these types:
-
-##### Composite Types
-
-```
-local MyCompositeType = record
-   MyPointType = record
-      x: number
-      y: number
-   end
-
-   center: MyPointType
-    -- insert more stuff here
-end
-
-return MyCompositeType
-```
-
-This will mean that references to `MyPointType` must be qualified (or locally declared) as
-`MyCompositeType.MyPointType`.
-
-##### Global Types
-
-```
-global MyPointType = record
-   x: number
-   y: number
-end
-
-global MyCompositeType = record
-   center: MyPointType
-end
-```
-
-These can now be used unqualified in any file that requires them.
