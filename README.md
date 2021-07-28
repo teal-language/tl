@@ -64,6 +64,9 @@ Once `tl` is in your path, there are a few subcommands:
 * `tl build` will compile your project via the rules defined in `tlconfig.lua`.
 * `tl warnings` will list all warnings the compiler can generate.
 
+`tl` also supports some [compiler options](docs/compiler_options.md).
+These can either be specified on the command line or inside a tlconfig.lua file at the root of your project.
+
 ## Loading Teal code from Lua
 
 You can either pre-compile your `.tl` files into `.lua`, or you can add
@@ -83,9 +86,11 @@ You can learn more about programming with Teal in the [tutorial](docs/tutorial.m
 
 ## Type definitions
 
-We have a collaborative repository for type definitions of Lua libraries
-at https://github.com/teal-language/teal-types — check it out and make your
-contribution!
+`tl` supports [declaration files](docs/declaration_files.md), which can be used to annotate the types
+of third-party Lua libraries.
+
+We have a collaborative repository for declaration files at
+https://github.com/teal-language/teal-types — check it out and make your contribution!
 
 ## Text editor support
 
