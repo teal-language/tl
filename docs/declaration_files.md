@@ -48,11 +48,20 @@ These can now be used unqualified in any file that requires them.
 
 #### Global environment definition
 
-If the third party library is "globally available" in your execution environment,
-i.e., if you do not need to explicitly `require` it in your code, you can tell the compiler
-to predefine it into its own type checking environment.
+Some customized Lua environments predefine some values into the Lua VM
+space as global variables. An example of an environment
+which presents this behavior is [LÖVE](https://love2d.org),
+which predefines a `love` global table containing its API. This global is
+just "there", and code written for that environment assumes it is available,
+even if you don't load it with `require`.
 
-For instance, assuming you have the following declaration file, called `love-example.d.tl`:
+To make the Teal compiler aware of such globals, you can define them
+inside a declaration file, and tell the compiler to load the declaration module into its own type
+checking environment, using the `--global-env-def` flag in the CLI or the
+`global_env_def` string in `tlconfig.lua`.
+
+For example, if you have a file called `love-example.d.tl` containing the
+definitions for LÖVE:
 
 ```
 -- love-example.d.tl
@@ -64,7 +73,9 @@ global record love
 end
 ```
 
-You can predefine the `love` module by creating a `tlconfig.lua` file at the root of your project:
+You can put `global_env_def = "love-example"` in a `tlconfig.lua` file at
+the root of your project, and `tl` will now assume that any globals declared
+in `love-example.d.tl` are available to other modules being compiled:
 
 ```
 -- tlconfig.lua
@@ -74,8 +85,7 @@ return {
 }
 ```
 
-This makes the compiler aware of the `love` global record.
-You may then freely refer to this variable in your code:
+Example usage:
 
 ```
 -- main.tl
@@ -83,4 +93,14 @@ You may then freely refer to this variable in your code:
 love.graphics.print("hello!", 0, 0)
 ```
 
-You can find more information about global environment definition in the [compiler options](compiler_options.md#global-environment-definition) page.
+```
+$ tl check main.tl
+========================================
+Type checked main.tl
+0 errors detected
+```
+
+Note that when using `tl gen`, this option does not generate code for the
+global environment module, and when using `tl run` it does not execute the
+module either. This option is only meant to make the compiler aware of any
+global definitions that were already loaded into a customized Lua VM.
