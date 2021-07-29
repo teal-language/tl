@@ -35,7 +35,7 @@ return {
 | `--run-build-script` | `run_build_script` | `boolean` | `run` `check` `gen`| Runs the build script as if `tl build` was being run
 | | `build_file_output_dir` | `string` | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
 | | `internal_compiler_output` | `string` |`run` `check` `gen` `build` | Folder to store cache files for use by the compiler
-| `--global-env-def`  | `global_env_def` | `string` | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See [below](#global-environment-definition) for details. |
+| `--global-env-def`  | `global_env_def` | `string` | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
 
 ### Generated code
 
@@ -102,27 +102,11 @@ flag (and `--gen-compat` CLI option):
 
 ### Global environment definition
 
-Some customized Lua environments predefine some values into the Lua VM
-space as global variables. An example of an environment
-which presents this behavior is <a href="https://love2d.org">Love2D</a>,
-which predefines a `love` global table containing its API. This global is
-just "there", and code written for that environment assumes it is available,
-even if you don't load it with `require`.
+To make the Teal compiler aware of global variables in your execution environment,
+you may pass a declaration module to the compiler using the `--global-env-def` flag
+in the CLI or the `global_env_def` string in `tlconfig.lua`.
 
-To make the Teal compiler aware of such predefined globals, you can specify a
-module name that resolves to a definition file (a Teal module ending with a
-`.d.tl` extension), and tell the compiler to predefine it into its own type
-checking environment, using the `--global-env-def` flag in the CLI or the
-`global_env_def` string in tlconfig.lua. For example, if you have a file called
-`love.d.tl` containing the definitions of Love2D, you can put
-`global_env_def = "love"` in your tlconfig.lua file, and `tl` will assume
-that any globals declared in that file are available to other modules being
-compiled.
-
-Not that when using `tl gen`, this option does not generate code for the
-global environment module, and when using `tl run` it does not execute the
-module either. This option is only meant to make the compiler aware of any
-global definitions that were already loaded into a customized Lua VM.
+For more information, see the [declaration files](declaration_files.md#global-environment-definition) page.
 
 ### Include/Exclude patterns
 
