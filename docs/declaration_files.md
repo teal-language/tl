@@ -104,3 +104,10 @@ Note that when using `tl gen`, this option does not generate code for the
 global environment module, and when using `tl run` it does not execute the
 module either. This option is only meant to make the compiler aware of any
 global definitions that were already loaded into a customized Lua VM.
+
+## Reusing existing declaration files (and contributing new ones!)
+
+The [Teal Types](https://github.com/teal-language/teal-types) repo contains
+declaration files for some commonly-used Lua libraries.
+
+Feel free to check it out and make your contribution!
