@@ -9463,11 +9463,7 @@ tl.load = function(input, chunkname, mode, ...)
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
    local code = tl.pretty_print_ast(program, true)
-   if select("#", ...) == 4 then
-      return load(code, chunkname, mode, ...)
-   else
-      return load(code, chunkname, mode, ...)
-   end
+   return load(code, chunkname, mode, ...)
 end
 
 return tl
