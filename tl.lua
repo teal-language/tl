@@ -8462,18 +8462,18 @@ node.exps[3] and node.exps[3].type, }
                   filename = filename,
                })
 
-               local ok = false
-               if lax then
+               local ok = true
+               if rtype.fields[node.name.tk] and is_a(fn_type, rtype.fields[node.name.tk]) then
                   ok = true
-               elseif rtype.fields[node.name.tk] and is_a(fn_type, rtype.fields[node.name.tk]) then
+               elseif lax or owner == rtype then
+                  rtype.fields[node.name.tk] = fn_type
+                  table.insert(rtype.field_order, node.name.tk)
                   ok = true
-               elseif owner == rtype then
-                  ok = true
+               else
+                  ok = false
                end
 
                if ok then
-                  rtype.fields[node.name.tk] = fn_type
-                  table.insert(rtype.field_order, node.name.tk)
                   node.name.type = fn_type
                else
                   local name = tl.pretty_print_ast(node.fn_owner, { preserve_indent = true, preserve_newlines = false })
