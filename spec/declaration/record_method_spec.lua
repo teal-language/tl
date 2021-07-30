@@ -331,4 +331,24 @@ describe("record method", function()
       return t
    ]])
 
+   it("does not fail when declaring methods a record where they were already declared (regression test for #463)", util.check [[
+      local record Tank
+          left: function(Tank)
+          right: function(Tank)
+      end
+
+      function Tank:left() end
+      function Tank:right() end
+
+      local function foo(direction: string): boolean
+          local playerTank: Tank
+          local enum E
+              "left"
+              "right"
+          end
+          playerTank[direction as E](playerTank)
+          return false
+      end
+   ]])
+
 end)
