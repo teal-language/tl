@@ -5513,17 +5513,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
 
             copy.fields = {}
-            for _, k in ipairs(t.field_order) do
+            copy.field_order = {}
+            for i, k in ipairs(t.field_order) do
+               copy.field_order[i] = k
                copy.fields[k] = resolve(t.fields[k])
             end
-            copy.field_order = t.field_order
 
             if t.meta_fields then
                copy.meta_fields = {}
-               for _, k in ipairs(t.meta_field_order) do
+               copy.meta_field_order = {}
+               for i, k in ipairs(t.meta_field_order) do
+                  copy.meta_field_order[i] = k
                   copy.meta_fields[k] = resolve(t.meta_fields[k])
                end
-               copy.meta_field_order = t.meta_field_order
             end
          elseif t.typename == "map" then
             copy.keys = resolve(t.keys)
