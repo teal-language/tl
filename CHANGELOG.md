@@ -1,3 +1,54 @@
+# 0.13.2
+
+2021-07-30
+
+A long while since the last release! This one contains a bunch of fixes,
+but no significant language changes. Trying to keep the language stable for
+a while so that we better understand what's needed and what the priorities
+should be, as more people use it.
+
+This release features commits by Corey Williamson, Patrick Desaulniers,
+Enrique García Cota, Francisco Castro, Jason Dogariu, @factubsio
+@JLPLabs, @sovietKitsune, @DragonDePlatino and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Generic `for` now accepts records that implement a `__call` metamethod
+* Allows `#` to be used on tuple tables
+* Metamethods for `__tostring`, `__pairs`, `__gc` can be declared
+* Standard library definition improvements:
+  * `collectgarbage` has smarter arguments
+  * `error`: first argument can be anything
+  * `os.time`: accepts a table as input
+  * `table.concat` accepts numbers in the array argument
+
+### API
+
+* `tl.load` now behaves more like Lua's `load`, using the default
+  environment if the fourth argument is not given.
+
+### Tooling
+
+* Report warning for excess lvalues correctly
+* `tl` finds `?/init.lua` in its `include_dir` entries as well
+* Updates to make test suite run on Windows
+* `tl --quiet` silences configuration warnings
+* Documentation: various fixes and improvements
+  * New guide on `.d.tl` declaration files
+
+### Fixes
+
+* Fixes for compat code when using `--gen-target=5.1`
+* Various crash fixes for record method declarations:
+  * Fixed crash when inferring type for self
+  * Fixed crash when declaring methods on an untyped self
+  * Fixed crash when redeclaring a method already declared
+    in the record definition
+* Fixed a crash when traversing a `.` on something that's not a record
+* Error messages now report `...` in variadic function types
+
 # 0.13.1
 
 2021-03-19
@@ -208,7 +259,7 @@ some code that wasn't accepted before may be accepted now and vice-versa, but
 the overall behavior is more correct now. Apart from this, no language changes
 other than fixes.
 
-This release features commits by Corey Williamson, JLPLabs and Hisham Muhammad.
+This release features commits by Corey Williamson, @JLPLabs and Hisham Muhammad.
 
 ## What's New
 
