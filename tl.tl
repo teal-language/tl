@@ -1,5 +1,5 @@
 
-local VERSION = "0.13.2"
+local VERSION = "0.13.2+dev"
 
 local record tl
    enum LoadMode
