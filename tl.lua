@@ -5886,6 +5886,9 @@ tl.type_check = function(ast, opts)
 
 
    local function check_for_unused_vars(vars)
+      if not next(vars) then
+         return
+      end
       local list = {}
       for name, var in pairs(vars) do
          if var.declared_at and not var.used then
@@ -6824,13 +6827,12 @@ tl.type_check = function(ast, opts)
          end
       else
          if is_unknown(tbl) then
-            if not lax then
-               node_error(key, "cannot index a value of unknown type")
+            if lax then
+               return INVALID
             end
-         else
-            node_error(key, "cannot index something that is not a record: %s", tbl)
+            return node_error(key, "cannot index a value of unknown type")
          end
-         return INVALID
+         return node_error(key, "cannot index something that is not a record: %s", tbl)
       end
 
       if lax then
@@ -7514,8 +7516,7 @@ tl.type_check = function(ast, opts)
                return type_check_index(node, knode, b1, b2)
             end
          else
-            node_error(node, "rawget expects two arguments")
-            return INVALID
+            return node_error(node, "rawget expects two arguments")
          end
       end,
 
@@ -7621,11 +7622,10 @@ tl.type_check = function(ast, opts)
          return UNKNOWN
       else
          if node.exps then
-            node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. name .. "'")
+            return node_error(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. name .. "'")
          else
-            node_error(node.vars[i], "variable '" .. name .. "' has no type or initial value")
+            return node_error(node.vars[i], "variable '" .. name .. "' has no type or initial value")
          end
-         return INVALID
       end
    end
 
@@ -8644,7 +8644,7 @@ node.exps[3] and node.exps[3].type, }
                elseif lax and (is_unknown(a) or is_unknown(b)) then
                   node.type = UNKNOWN
                else
-                  node_error(node, "types are not comparable for equality: %s and %s", a, b)
+                  return node_error(node, "types are not comparable for equality: %s and %s", a, b)
                end
             elseif node.op.arity == 1 and unop_types[node.op.op] then
                a = ra
@@ -8666,7 +8666,7 @@ node.exps[3] and node.exps[3].type, }
                   elseif lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
+                     return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
 
@@ -8714,7 +8714,7 @@ node.exps[3] and node.exps[3].type, }
                   elseif lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
-                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                   end
                end
 
@@ -8746,7 +8746,7 @@ node.exps[3] and node.exps[3].type, }
             if node.tk == "..." then
                local va_sentinel = find_var_type("@is_va")
                if not va_sentinel or va_sentinel.typename == "nil" then
-                  node_error(node, "cannot use '...' outside a vararg function")
+                  return node_error(node, "cannot use '...' outside a vararg function")
                end
             end
 
@@ -8770,7 +8770,7 @@ node.exps[3] and node.exps[3].type, }
                if lax then
                   add_unknown(node, node.tk)
                else
-                  node_error(node, "unknown variable: " .. node.tk)
+                  return node_error(node, "unknown variable: " .. node.tk)
                end
             end
             return node.type
@@ -8784,7 +8784,7 @@ node.exps[3] and node.exps[3].type, }
                   node.type = UNKNOWN
                   add_unknown(node, node.tk)
                else
-                  node_error(node, "unknown variable: " .. node.tk)
+                  return node_error(node, "unknown variable: " .. node.tk)
                end
             end
             return node.type
