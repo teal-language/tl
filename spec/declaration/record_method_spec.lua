@@ -351,4 +351,11 @@ describe("record method", function()
       end
    ]])
 
+   it("catches method on unknown variable (regression test for #470)", util.check_type_error([[
+      function bla.dosomething()
+      end
+   ]], {
+      { msg = "unknown variable: bla" }
+   }))
+
 end)

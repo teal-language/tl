@@ -7147,6 +7147,10 @@ tl.type_check = function(ast, opts)
    local function find_record_to_extend(exp)
       if exp.kind == "type_identifier" then
          local t = find_var_type(exp.tk)
+         if not t then
+            return t
+         end
+
 
          if t.def then
             if not t.def.closed and not t.closed then
