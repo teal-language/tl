@@ -183,7 +183,7 @@ describe("tl gen", function()
          local lua_name = tl_to_lua(name)
          assert.match("Wrote: " .. lua_name, output, 1, true)
          util.assert_line_by_line([[
-            local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if p then bit32 = m end end
+            local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if not p then p, m = pcall(require, 'bit'); end; if p then bit32 = m end end
             local x = math.floor(2 / 3)
             local y = bit32.lshift(2, 3)
          ]], util.read_file(lua_name))

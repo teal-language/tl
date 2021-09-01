@@ -4565,7 +4565,7 @@ local function add_compat_entries(program, used_set, gen_compat)
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
+         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if not p then p, m = " .. req("bit") .. "; end; if p then bit32 = m end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
       else

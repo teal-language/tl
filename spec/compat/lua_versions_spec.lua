@@ -25,7 +25,7 @@ describe("Lua version compatibility", function()
          local c = 0xcafebabe
          local x = 2 & (c >> ~4 | 0xff)
       ]], [[
-         local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if p then bit32 = m end end
+         local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if not p then p, m = pcall(require, 'bit'); end if p then bit32 = m end end
 
          local c = 0xcafebabe
          local x = bit32.band(2, (bit32.bor(bit32.rshift(c, bit32.bnot(4)), 0xff)))
