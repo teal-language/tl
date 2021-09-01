@@ -190,7 +190,10 @@ function util.tl_cmd(name, ...)
       name
    }
    for i = (has_pre_commands and 2) or 1 , select("#", ...) do
-      table.insert(cmd, string.format("%q", select(i, ...)))
+      local a = select(i, ...)
+      if a then
+         table.insert(cmd, string.format("%q", a))
+      end
    end
    return table.concat(cmd, " ") .. " "
 end

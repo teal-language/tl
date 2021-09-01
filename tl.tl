@@ -8599,6 +8599,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             elseif node.op.op == "as" then
                node.type = b
             elseif node.op.op == "is" then
+               if rb.typename == "integer" then
+                  all_needs_compat["math"] = true
+               end
                if ra.typename == "typetype" then
                   node_error(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
