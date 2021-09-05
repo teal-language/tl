@@ -987,6 +987,8 @@ local record Type
    meta_fields: {string: Type}
    meta_field_order: {string}
    is_userdata: boolean
+   embeds: {Type}
+   embeds_resolved: boolean
 
    -- array
    elements: Type
@@ -2563,6 +2565,16 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
          i = parse_nested_type(ps, i, def, "record", parse_record_body)
       elseif ps.tokens[i].tk == "enum" and ps.tokens[i+1].tk ~= ":" then
          i = parse_nested_type(ps, i, def, "enum", parse_enum_body)
+      elseif ps.tokens[i].tk == "embed" and ps.tokens[i+1].tk ~= ":" then
+         local t: Type
+         i, t = parse_type(ps, i + 1)
+         if not t then
+            return fail(ps, i, "expected a type")
+         end
+         if not def.embeds then
+            def.embeds = {}
+         end
+         table.insert(def.embeds, t)
       else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
@@ -3022,6 +3034,11 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    end
    if ast.meta_fields then
       for _, child in fields_of(ast, "meta") do
+         table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.embeds then
+      for _, child in ipairs(ast.embeds) do
          table.insert(xs, recurse_type(child, visit))
       end
    end
@@ -4349,6 +4366,13 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          if t.elements then
             table.insert(out, "{" .. show(t.elements) .. "}")
          end
+         if t.embeds then
+            local es = {}
+            for _, k in ipairs(t.embeds) do
+               table.insert(es, show(k))
+            end
+            table.insert(out, "(embed " .. table.concat(es, ", ") .. ")")
+         end
          local fs = {}
          for _, k in ipairs(t.field_order) do
             local v = t.fields[k]
@@ -5508,6 +5532,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                end
             end
 
+            if t.embeds then
+               copy.embeds = {}
+               for i, tf in ipairs(t.embeds) do
+                  copy.embeds[i] = resolve(tf)
+               end
+            end
+
             if t.elements then
                copy.elements = resolve(t.elements)
             end
@@ -5966,6 +5997,74 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       return typ
    end
 
+   local function are_disjoint(rec1: Type, rec2: Type): boolean, {string:boolean}
+      local disjoint = true
+      local shared_fields: {string:boolean} = {}
+      for field, t in pairs(rec1.fields) do
+         if rec2.fields[field] and rec2.fields[field] ~= t then
+            shared_fields[field] = true
+            disjoint = false
+         end
+      end
+      for field, t in pairs(rec2.fields) do
+         if rec1.fields[field] and rec1.fields[field] ~= t then
+            shared_fields[field] = true
+            disjoint = false
+         end
+      end
+      return disjoint, shared_fields
+   end
+
+   local function can_embed(t1: Type, t2: Type): boolean, string
+      assert(is_record_type(t1), "Only records can have embeds")
+      if is_record_type(t2) then
+         local compat, fields = are_disjoint(t1, t2)
+         if compat then
+            return compat
+         else
+            local str: {string} = {}
+            for f in pairs(fields) do
+               table.insert(str, f)
+            end
+            return nil, "records share fields: " .. table.concat(str, ", ")
+         end
+      end
+      return false, t2.typename .. " can't be embedded"
+   end
+
+   local resolve_tuple_and_nominal: function(t: Type): Type = nil
+
+   local function resolve_embeds(t: Type): Type
+      if not t.embeds or t.embeds_resolved then
+         return t
+      end
+      t.embeds_resolved = true
+      for i = 1, #t.embeds do
+         local e = resolve_tuple_and_nominal(t.embeds[i])
+         local compat, reason = can_embed(t, e)
+         if not compat then
+            type_error(t, "Invalid embedding: " .. reason)
+         end
+         if e.is_userdata then
+            t.is_userdata = true
+         end
+         if t.elements == nil and e.elements ~= nil then
+            t.elements = e.elements
+            t.typename = "arrayrecord"
+         end
+         if t.elements and e.elements and not same_type(t.elements, e.elements) then
+            type_error(t, "Can not do embedding between arrayrecords with different element types")
+         end
+         t.embeds[i] = e
+         if e.fields then
+            for fname, f in pairs(e.fields) do
+               t.fields[fname] = f
+            end
+         end
+      end
+      return t
+   end
+
    local resolve_nominal: function(t: Type): Type
    do
       local function match_typevals(t: Type, def: Type): Type
@@ -6031,7 +6130,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
+   local function is_embedded(t1: Type, t2: Type, eq: boolean): boolean
+      t2 = resolve_tuple_and_nominal(t2)
+      t1 = resolve_tuple_and_nominal(t1)
+      local embeds = t1.embeds
+      if embeds and #embeds > 0 then
+         for i = 1, #embeds do
+            if is_a(embeds[i], t2, eq) then
+               return true
+            end
+         end
+      end
+      return false
+   end
+
    local function are_same_nominals(t1: Type, t2: Type): boolean, {Error}
+      if is_embedded(t1, t2, false) then
+         return true
+      end
+
       local same_names: boolean
       if t1.found and t2.found then
          same_names = t1.found.typeid == t2.found.typeid
@@ -6084,7 +6201,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local is_known_table_type: function(t: Type): boolean
-   local resolve_tuple_and_nominal: function(t: Type): Type = nil
 
    -- invariant type comparison
    same_type = function(t1: Type, t2: Type): boolean, {Error}
@@ -6102,6 +6218,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       if t1.typename ~= t2.typename then
          return false, terr(t1, "got %s, expected %s", t1, t2)
       end
+
+      if is_embedded(t1, t2, false) then
+         return true
+      end
+
       if t1.typename == "array" then
          return same_type(t1.elements, t2.elements)
       elseif t1.typename == "tupletable" then
@@ -6354,6 +6475,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
+      elseif is_embedded(t1, t2, for_equality) then
+         return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
          local same, err = are_same_nominals(t1, t2)
          if same then
@@ -6959,6 +7082,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          t = resolve_nominal(t)
       end
       assert(t.typename ~= "nominal")
+      t = resolve_embeds(t)
       return t
    end
 

@@ -673,3 +673,91 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
    end)
 end
+
+describe("embedding", function()
+   it("embed is not a reserved word", util.check [[
+      local record A
+         embed: number
+      end
+   ]])
+   it("should make members of a record available to another", util.check [[
+      local record A
+         userdata
+         a_value: number
+      end
+      local record B
+         embed A
+         b_value: number
+      end
+      local record C
+         embed B
+         c_value: string
+      end
+      local b: B = {}
+      local c: C = {}
+      print(b.a_value, c.a_value + c.b_value, c.c_value)
+      local function f(a: A, b: B) end
+      f(b, b)
+      f(c, c)
+      local a: A = b
+      a = c
+   ]])
+   it("should allow for generics", util.check [[
+      local record A<T>
+         property_of_a: T
+      end
+      local record B<T>
+         embed A<T>
+         property_of_b: T
+      end
+      local record C<T>
+         embed B<T>
+         property_of_c: string
+      end
+      local b: B<number> = {}
+      local c: C<number> = {}
+      print(b.property_of_a + 1, c.property_of_b + c.property_of_a, c.property_of_c)
+      local function f(a: A<number>, b: B<number>) end
+      f(b, b)
+      f(c, c)
+      local a: A<number> = b
+      a = c
+   ]])
+   it("embed multiple records", util.check [[
+      local record A
+         x: number
+      end
+      local record B
+         y: string
+      end
+      local record C
+         embed A
+         embed B
+         z: boolean
+      end
+      local c: C = { x = 1, y = "hello", z = true }
+      print(c.x, c.y, c.z)
+      local function f(a: A, b: B, c: C) end
+      f(c, c, c)
+   ]])
+   it("share the same element type with embeded arrayrecord", util.check [[
+      local record A
+         { string }
+         x: number
+      end
+      local record B
+         embed A
+         y: string
+      end
+      local record C
+         embed B
+         z: boolean
+      end
+      local c: C = { x = 1, y = "hello", z = true }
+      local str: string = c[1]
+      print(c.x, c.y, c.z)
+      local strs: {string} = c
+      local b: B = c
+      strs = b
+   ]])
+end)
