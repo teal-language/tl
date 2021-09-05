@@ -761,3 +761,52 @@ describe("embedding", function()
       strs = b
    ]])
 end)
+
+describe("const field", function()
+   it("const is not a reserved word", util.check [[
+      local record A
+         const: boolean
+      end
+   ]])
+   it("cannot assign to a const field", util.check_type_error([[
+      local record A
+         const ["a field"]: string
+         const x: number
+      end
+      local record B
+         embed A
+         b: A
+      end
+      local r: B = {b = {["a field"] = "abc"}}
+      r.b[ [=[a field]=] ] = 456
+      r.x = 123
+   ]], {
+      { y = 10, msg = "cannot assign to const field \"a field\"" },
+      { y = 10, msg = "in assignment: got integer, expected string" },
+      { y = 11, msg = "cannot assign to const field \"x\"" }
+   }))
+   it("should work for generics", util.check_type_error([[
+      local record A<T>
+         const a: T
+      end
+      local record B<T>
+         embed A<T>
+         const b: T
+      end
+      local b: B<number> = { a = 1, b = 2 }
+      print(b.a, b.b)
+      b.a, b.b = 2, "3"
+   ]], {
+      { y = 10, msg = "cannot assign to const field \"a\"" },
+      { y = 10, msg = "cannot assign to const field \"b\"" },
+      { y = 10, msg = "in assignment: got string \"3\", expected number" }
+   }))
+   it("it is OK to modify const field with rawset", util.check [[
+      local record R
+         const x: boolean
+      end
+      local r: R = { x = true }
+      rawset(r, "x", false)
+   ]])
+end)
+

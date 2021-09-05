@@ -989,6 +989,7 @@ local record Type
    is_userdata: boolean
    embeds: {Type}
    embeds_resolved: boolean
+   readonlys: {string: boolean}
 
    -- array
    elements: Type
@@ -2582,6 +2583,12 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
             i = i + 1
          end
 
+         local is_const = false
+         if ps.tokens[i].tk == "const" and ps.tokens[i+1].tk ~= ":" then
+            is_const = true
+            i = i + 1
+         end
+
          local v: Node
          if ps.tokens[i].tk == "[" then
             i, v = parse_literal(ps, i+1)
@@ -2618,6 +2625,12 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
                if not metamethod_names[field_name] then
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
+            end
+            if is_const then
+               if not def.readonlys then
+                  def.readonlys = {}
+               end
+               def.readonlys[field_name] = true
             end
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
@@ -5558,6 +5571,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   copy.meta_fields[k] = resolve(t.meta_fields[k])
                end
             end
+
+            copy.readonlys = t.readonlys
          elseif t.typename == "map" then
             copy.keys = resolve(t.keys)
             copy.values = resolve(t.values)
@@ -6016,7 +6031,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local function can_embed(t1: Type, t2: Type): boolean, string
-      assert(is_record_type(t1), "Only records can have embeds")
+      assert(is_record_type(t1), "only records can have embeds")
       if is_record_type(t2) then
          local compat, fields = are_disjoint(t1, t2)
          if compat then
@@ -6043,7 +6058,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          local e = resolve_tuple_and_nominal(t.embeds[i])
          local compat, reason = can_embed(t, e)
          if not compat then
-            type_error(t, "Invalid embedding: " .. reason)
+            type_error(t, "invalid embedding: " .. reason)
          end
          if e.is_userdata then
             t.is_userdata = true
@@ -6059,6 +6074,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          if e.fields then
             for fname, f in pairs(e.fields) do
                t.fields[fname] = f
+            end
+         end
+         if e.readonlys then
+            if not t.readonlys then
+               t.readonlys = {}
+            end
+            for k, v in pairs(e.readonlys) do
+               t.readonlys[k] = v
             end
          end
       end
@@ -8115,6 +8138,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   if is_typetype(resolve_tuple_and_nominal(vartype)) then
                      node_error(varnode, "cannot reassign a type")
                   elseif val then
+                     if varnode.kind == "op" and (varnode.op.op == "." or varnode.op.op == "@index") then
+                        local t = resolve_tuple_and_nominal(varnode.e1.type)
+                        if t.typename == "record" and t.readonlys then
+                           local key = varnode.e2.conststr or varnode.e2.tk
+                           if t.readonlys[key] then
+                              node_error(varnode, "cannot assign to const field \"" .. key .. '"')
+                           end
+                        end
+                     end
                      assert_is_a(varnode, val, vartype, "in assignment")
                      if varnode.kind == "variable" and vartype.typename == "union" then
                         -- narrow union
