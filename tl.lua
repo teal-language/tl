@@ -6074,6 +6074,7 @@ tl.type_check = function(ast, opts)
          if e.fields then
             for fname, f in pairs(e.fields) do
                t.fields[fname] = f
+               table.insert(t.field_order, fname)
             end
          end
          if e.readonlys then
