@@ -671,5 +671,30 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
          local foo = Foo.new()
       ]]))
+
+      it("creation of userdata records should be disallowed (#460)", util.check_type_error([[
+         local record Foo ]]..pick(i, "", "{number}")..[[
+            userdata
+            a: number
+         end
+         local foo: Foo = {}
+         foo = { a = 1 }
+         local function f(foo: Foo) end
+         f({})
+         f({ a = 2 })
+         local bar: Foo
+         foo = bar
+         f(bar)
+      ]], {
+         { y = 5, msg = "in local declaration: foo: got {}, expected Foo" },
+         select(i,
+            { y = 6, msg = "in assignment: userdata record doesn't match: record (a: number)" },
+            { y = 6, msg = "in assignment: userdata record doesn't match: record ({number}a: number)" }),
+         { y = 8, msg = "argument 1: got {}, expected Foo" },
+         select(i,
+            { y = 9, msg = "argument 1: userdata record doesn't match: record (a: number)" },
+            { y = 9, msg = "argument 1: userdata record doesn't match: record ({number}a: number)" }),
+         nil
+      }))
    end)
 end

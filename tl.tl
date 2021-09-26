@@ -5805,6 +5805,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local function match_fields_to_record(t1: Type, t2: Type, cmp: CompareTypes): boolean, {Error}
+      if t1.is_userdata ~= t2.is_userdata then
+         return false, { error_in_type(t1, "userdata record doesn't match: %s", t2) }
+      end
       local ok, fielderrs = match_record_fields(t1, function(k: string): Type return t2.fields[k] end, cmp)
       if not ok then
          local errs = {}
@@ -6095,7 +6098,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return compare_and_infer_typevars(t1, t2, same_type)
       end
 
-      if t1.typename == "emptytable" and is_known_table_type(resolve_tuple_and_nominal(t2)) then
+      if t1.typename == "emptytable" and is_known_table_type(resolve_tuple_and_nominal(t2)) and not t2.is_userdata then
          return true
       end
 
@@ -6403,7 +6406,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
          end
          return ok, errs
-      elseif t1.typename == "emptytable" and is_known_table_type(t2) then
+      elseif t1.typename == "emptytable" and is_known_table_type(t2) and not t2.is_userdata then
          return true
       elseif t2.typename == "array" then
          if is_array_type(t1) then
@@ -6584,7 +6587,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          end
          return true
       elseif t2.typename == "emptytable" then
-         if is_known_table_type(t1) then
+         if is_known_table_type(t1) and not t1.is_userdata then
             infer_var(t2, shallow_copy(t1), node)
          elseif t1.typename ~= "emptytable" then
             node_error(node, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
@@ -8295,7 +8298,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   end
                end
 
-               if not is_known_table_type(decltype) then
+               if not is_known_table_type(decltype) or decltype.is_userdata then
                   node.type = infer_table_literal(node, children)
                   return node.type
                end
@@ -8618,7 +8621,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             elseif node.op.op == "and" then
                node.known = facts_and(node.e1.known, node.e2.known, node)
                node.type = resolve_tuple(b)
-            elseif node.op.op == "or" and is_known_table_type(ra) and b.typename == "emptytable" then
+            elseif node.op.op == "or" and is_known_table_type(ra) and b.typename == "emptytable" and not ra.is_userdata then
                node.known = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or" and is_a(rb, ra) then
