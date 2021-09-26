@@ -760,6 +760,24 @@ describe("embedding", function()
       local b: B = c
       strs = b
    ]])
+   it("subrecords should not be equal", util.check_type_error([[
+      local record A
+      end
+      local record B
+         embed A
+      end
+      local record C
+         embed A
+      end
+      local a: A
+      local b: B
+      local c: C
+      a = b
+      a = c
+      b = c
+   ]], {
+      { y = 14, msg = "in assignment: C is not a B" }
+   }))
 end)
 
 describe("const field", function()

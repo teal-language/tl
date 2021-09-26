@@ -6154,14 +6154,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       end
    end
 
-   local function is_embedded(t1: Type, t2: Type, eq: boolean): boolean
+   local function is_embedded(t1: Type, t2: Type): boolean
       t2 = resolve_tuple_and_nominal(t2)
       t1 = resolve_tuple_and_nominal(t1)
       local embeds = t1.embeds
       if embeds and #embeds > 0 then
          for i = 1, #embeds do
-            if is_a(embeds[i], t2, eq) then
+            if embeds[i].typeid == t2.typeid then
                return true
+            elseif embeds[i].embeds then
+               return is_embedded(embeds[i], t2)
             end
          end
       end
@@ -6169,7 +6171,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local function are_same_nominals(t1: Type, t2: Type): boolean, {Error}
-      if is_embedded(t1, t2, false) then
+      if is_embedded(t1, t2) then
          return true
       end
 
@@ -6243,7 +6245,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          return false, terr(t1, "got %s, expected %s", t1, t2)
       end
 
-      if is_embedded(t1, t2, false) then
+      if is_embedded(t1, t2) then
          return true
       end
 
@@ -6499,7 +6501,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
             end
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
-      elseif is_embedded(t1, t2, for_equality) then
+      elseif is_embedded(t1, t2) then
          return true
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
          local same, err = are_same_nominals(t1, t2)
