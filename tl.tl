@@ -6408,6 +6408,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       elseif t2.typename == "array" then
          if is_array_type(t1) then
             if is_a(t1.elements, t2.elements) then
+               local t1e = resolve_tuple_and_nominal(t1.elements)
+               local t2e = resolve_tuple_and_nominal(t2.elements)
+               if t2e.typename == "enum" and t1e.typename == "string" and #t1.types > 1 then
+                  for i = 2, #t1.types do
+                     local t = t1.types[i]
+                     if not is_a(t, t2e) then
+                        return false, terr(t, "%s is not a member of %s", t, t2e)
+                     end
+                  end
+               end
                return true
             end
          elseif t1.typename == "tupletable" then

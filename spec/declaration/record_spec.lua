@@ -129,6 +129,22 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          { msg = "attempt to redeclare field 'print' (only functions can be overloaded)" }
       }))
 
+      it("enum check in overloaded function", util.check_type_error([[
+         local enum E
+            "a"
+            "b"
+            "c"
+         end
+         local type R = record ]]..pick(i, "", "{number}")..[[
+            f: function(enums: {E})
+            f: function(tuple: {string, number})
+         end
+         local r: R
+         r.f({"a", "b", "x"})
+      ]], {
+         { y = 11, msg = "argument 1: string \"x\" is not a member of E" }
+      }))
+
       it("can report an error on unknown types in polymorphic definitions", util.check_type_error([[
          -- this reports an error
          local type R = record ]]..pick(i, "", "{R}")..[[
