@@ -16,4 +16,10 @@ describe("math", function()
       ]])
    end)
 
+   describe("huge", function()
+      it("is an integer", util.check [[
+         local x: integer = math.huge
+      ]])
+   end)
+
 end)

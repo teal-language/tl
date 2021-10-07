@@ -4974,7 +4974,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                }
             },
             ["frexp"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER, NUMBER } },
-            ["huge"] = NUMBER,
+            ["huge"] = INTEGER,
             ["ldexp"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
             ["log"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },
             ["log10"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { NUMBER } },
