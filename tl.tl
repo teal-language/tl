@@ -4568,6 +4568,10 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
+      elseif name == "math.maxinteger" then
+         load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
+      elseif name == "math.mininteger" then
+         load_code(name, "local _tl_math_mininteger = math.mininteger or -math.pow(2,53) - 1")
       else
          if not compat_loaded then
             load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
@@ -4987,7 +4991,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                   a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE { ANY } },
                }
             },
-            ["maxinteger"] = INTEGER,
+            ["maxinteger"] = a_type { typename = "integer", needs_compat = true },
             ["min"] = a_type {
                typename = "poly",
                types = {
@@ -4997,7 +5001,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                   a_type { typename = "function", args = VARARG { ANY }, rets = TUPLE { ANY } },
                }
             },
-            ["mininteger"] = INTEGER,
+            ["mininteger"] = a_type { typename = "integer", needs_compat = true },
             ["modf"] = a_type { typename = "function", args = TUPLE { NUMBER }, rets = TUPLE { INTEGER, NUMBER } },
             ["pi"] = NUMBER,
             ["pow"] = a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { NUMBER } },

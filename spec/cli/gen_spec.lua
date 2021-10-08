@@ -212,8 +212,16 @@ describe("tl gen", function()
       local t = {1, 2, 3, 4}
       print(table.unpack(t))
       local n = 42
+      local maxi = math.maxinteger
+      local mini = math.mininteger
       if n is integer then
          print("hello")
+      end
+      if maxi is integer then
+         print("maxi")
+      end
+      if mini is integer then
+         print("mini")
       end
    ]]
 
@@ -222,28 +230,52 @@ describe("tl gen", function()
       local t = { 1, 2, 3, 4 }
       print(table.unpack(t))
       local n = 42
+      local maxi = math.maxinteger
+      local mini = math.mininteger
       if math.type(n) == "integer" then
          print("hello")
+      end
+      if math.type(maxi) == "integer" then
+         print("maxi")
+      end
+      if math.type(mini) == "integer" then
+         print("mini")
       end
    ]]
 
    local output_code_with_optional_compat = [[
-      local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+      local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local _tl_math_mininteger = math.mininteger or -math.pow(2, 53) - 1; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
       local t = { 1, 2, 3, 4 }
       print(_tl_table_unpack(t))
       local n = 42
+      local maxi = _tl_math_maxinteger
+      local mini = _tl_math_mininteger
       if math.type(n) == "integer" then
          print("hello")
+      end
+      if math.type(maxi) == "integer" then
+         print("maxi")
+      end
+      if math.type(mini) == "integer" then
+         print("mini")
       end
    ]]
 
    local output_code_with_required_compat = [[
-      local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+      local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local _tl_math_mininteger = math.mininteger or -math.pow(2, 53) - 1; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
       local t = { 1, 2, 3, 4 }
       print(_tl_table_unpack(t))
       local n = 42
+      local maxi = _tl_math_maxinteger
+      local mini = _tl_math_mininteger
       if math.type(n) == "integer" then
          print("hello")
+      end
+      if math.type(maxi) == "integer" then
+         print("maxi")
+      end
+      if math.type(mini) == "integer" then
+         print("mini")
       end
    ]]
 
