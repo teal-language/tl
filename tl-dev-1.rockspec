@@ -2,7 +2,7 @@ rockspec_format = "3.0"
 package = "tl"
 version = "dev-1"
 source = {
-   url = "git://github.com/teal-language/tl"
+   url = "git+https://github.com/teal-language/tl"
 }
 description = {
    summary = "Teal, a typed dialect of Lua",
