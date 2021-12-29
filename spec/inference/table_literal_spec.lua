@@ -50,4 +50,19 @@ describe("bidirectional inference for table literals", function()
    ]], {
       { msg = 'expected an array: at index 2: string "b" is not a member of enum' }
    }))
+
+   it("resolves nominals across nested generics (regression test for #499)", util.check_type_error([[
+      local record Tree<X>
+        {Tree<X>}
+        item: X
+      end
+
+      local t: Tree<number> = {
+        item = 1,
+        { item = 2 },
+        { item = "wtf", { item = 4 } },
+      }
+   ]], {
+      { msg = 'in record field: item: got string "wtf", expected number' }
+   }))
 end)

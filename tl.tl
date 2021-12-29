@@ -8261,30 +8261,31 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
       ["table_literal"] = {
          before = function(node: Node)
             if node.expected then
-               if node.expected.typename == "tupletable" then
+               local decltype = resolve_tuple_and_nominal(node.expected)
+               if decltype.typename == "tupletable" then
                   for _, child in ipairs(node) do
                      local n = child.key.constnum
                      if n and is_positive_int(n) then
-                        child.value.expected = node.expected.types[n as integer]
+                        child.value.expected = decltype.types[n as integer]
                      end
                   end
-               elseif is_array_type(node.expected) then
+               elseif is_array_type(decltype) then
                   for _, child in ipairs(node) do
                      if child.key.constnum then
-                        child.value.expected = node.expected.elements
+                        child.value.expected = decltype.elements
                      end
                   end
-               elseif node.expected.typename == "map" then
+               elseif decltype.typename == "map" then
                   for _, child in ipairs(node) do
-                     child.key.expected = node.expected.keys
-                     child.value.expected = node.expected.values
+                     child.key.expected = decltype.keys
+                     child.value.expected = decltype.values
                   end
                end
 
-               if is_record_type(node.expected) then
+               if is_record_type(decltype) then
                   for _, child in ipairs(node) do
                      if child.key.conststr then
-                        child.value.expected = node.expected.fields[child.key.conststr]
+                        child.value.expected = decltype.fields[child.key.conststr]
                      end
                   end
                end
