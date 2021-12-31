@@ -6150,6 +6150,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          if #t1.rets ~= #t2.rets then
             return false, terr(t1, "different number of return values: got " .. #t1.args .. ", expected " .. #t2.args)
          end
+         if t1.is_method ~= t2.is_method then
+            return false, terr(t1, "method and non-method are not the same type")
+         end
          local all_errs = {}
          for i = 1, #t1.args do
             arg_check(same_type, t1.args[i], t2.args[i], t1 as Node, i, all_errs)
@@ -6553,8 +6556,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
          if (not t2.args.is_va) and #t1.args > #t2.args then
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
          else
-            for i = (t1.is_method and 2 or 1), #t1.args do
-               arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
+            local f1 = t1.is_method and 2 or 1
+            local f2 = t2.is_method and 2 or 1
+            for i = f1, #t1.args do
+               arg_check(is_a, t1.args[i], t2.args[f2] or ANY, nil, i, all_errs)
+               f2 = f2 + 1
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va

@@ -358,4 +358,26 @@ describe("record method", function()
       { msg = "unknown variable: bla" }
    }))
 
+   it("doesn't hang when comparing method and non-method (regression test for #501)", util.check_type_error([[
+      local record Point
+      end
+
+      function Point:new(x: number, y: number): Point
+      end
+
+      function Point:move(dx: number, dy: number)
+      end
+
+      local record Rect
+        move: function(Rect, number, number)
+      end
+
+      function Rect:new(top_left: Point, right_bottom: Point): Rect
+        top_left.new(self)
+        return self
+      end
+   ]], {
+      { msg = "invoked method as a regular function" }
+   }))
+
 end)
