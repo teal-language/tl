@@ -903,6 +903,7 @@ local function get_config(cmd)
    if conf then
       local ok, user_config = pcall(conf)
       if not ok then
+         err = user_config
          die("Error loading tlconfig.lua:\n" .. err)
       end
 
