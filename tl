@@ -216,7 +216,7 @@ local function type_check_and_load(tlconfig, filename)
       os.exit(1)
    end
 
-   local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast), "@" .. filename)
+   local chunk; chunk, err = (loadstring or load)(tl.pretty_print_ast(result.ast, tlconfig.gen_target), "@" .. filename)
    if err then
       die("Internal Compiler Error: Teal generator produced invalid Lua. " ..
           "Please report a bug at https://github.com/teal-language/tl\n\n" .. tostring(err))
@@ -237,7 +237,7 @@ local function write_out(tlconfig, result, output_file)
    end
 
    local _
-   _, err = ofd:write(tl.pretty_print_ast(result.ast) .. "\n")
+   _, err = ofd:write(tl.pretty_print_ast(result.ast, tlconfig.gen_target) .. "\n")
    if err then
       die("error writing " .. output_file .. ": " .. err)
    end
@@ -762,7 +762,7 @@ local function validate_config(config)
       quiet = "boolean",
       skip_compat53 = "boolean",
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
-      gen_target = { ["5.1"] = true, ["5.3"] = true },
+      gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
 
@@ -838,7 +838,7 @@ local function get_args_parser()
          :defmode("a")
 
    parser:option("--gen-target", "Minimum targeted Lua version for generated code.")
-         :choices({ "5.1", "5.3" })
+         :choices({ "5.1", "5.3", "5.4" })
 
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
          :hidden(true)
