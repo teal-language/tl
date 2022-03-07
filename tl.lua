@@ -5275,7 +5275,15 @@ end
 
 tl.type_check = function(ast, opts)
    opts = opts or {}
-   local env = opts.env or tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
+   local env = opts.env
+   if not env then
+
+      local err
+      env, err = tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
+      if err then
+         return nil, err
+      end
+   end
    local lax = opts.lax
    local filename = opts.filename
 
@@ -6659,6 +6667,9 @@ tl.type_check = function(ast, opts)
    end
 
    local function type_is_closable(t)
+      if t.typename == "invalid" then
+         return false
+      end
       t = resolve_nominal(t)
       return t.meta_fields and t.meta_fields["__close"] ~= nil
    end
@@ -7998,7 +8009,7 @@ tl.type_check = function(ast, opts)
 
 
 
-                  node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type " .. show_type(t))
+                  node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
                end
 
                assert(var)
@@ -9496,7 +9507,8 @@ function tl.process_string(input, is_lua, env, filename)
 end
 
 tl.gen = function(input, env)
-   env = env or tl.init_env()
+
+   env = env or assert(tl.init_env())
    local result = tl.process_string(input, false, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
