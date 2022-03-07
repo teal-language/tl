@@ -424,14 +424,18 @@ local function filter_by(tag, warnings)
    return out
 end
 
-local function check(lax, code, unknowns)
+local function check(lax, code, unknowns, gen_target)
    return function()
       local tokens = tl.lex(code)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
-      local result = tl.type_check(ast, { filename = "foo.lua", lax = lax })
+      local gen_compat
+      if gen_target == "5.4" then
+         gen_compat = "off"
+      end
+      local result = tl.type_check(ast, { filename = "foo.lua", lax = lax, gen_target = gen_target, gen_compat = gen_compat })
       batch:add(assert.same, {}, result.type_errors)
 
       if unknowns then
@@ -443,14 +447,18 @@ local function check(lax, code, unknowns)
    end
 end
 
-local function check_type_error(lax, code, type_errors)
+local function check_type_error(lax, code, type_errors, gen_target)
    return function()
       local tokens = tl.lex(code)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
-      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      local gen_compat
+      if gen_target == "5.4" then
+         gen_compat = "off"
+      end
+      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target, gen_compat = gen_compat })
       local result_type_errors = combine_result(result, "type_errors")
 
       batch_compare(batch, "type errors", type_errors, result_type_errors)
@@ -458,10 +466,11 @@ local function check_type_error(lax, code, type_errors)
    end
 end
 
-function util.check(code)
+function util.check(code, gen_target)
    assert(type(code) == "string")
+   assert(gen_target == nil or type(gen_target) == "string")
 
-   return check(false, code)
+   return check(false, code, nil, gen_target)
 end
 
 function util.lax_check(code, unknowns)
@@ -479,11 +488,11 @@ function util.strict_and_lax_check(code, unknowns)
       and check(false, code, unknowns)
 end
 
-function util.check_type_error(code, type_errors)
+function util.check_type_error(code, type_errors, gen_target)
    assert(type(code) == "string")
    assert(type(type_errors) == "table")
 
-   return check_type_error(false, code, type_errors)
+   return check_type_error(false, code, type_errors, gen_target)
 end
 
 function util.strict_check_type_error(code, type_errors, unknowns)
