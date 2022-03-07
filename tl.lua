@@ -128,6 +128,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
 tl.version = function()
    return VERSION
 end
@@ -3392,6 +3393,7 @@ local primitive = {
 }
 
 function tl.pretty_print_ast(ast, gen_target, mode)
+   local err
    local indent = 0
 
    local opts
@@ -3531,10 +3533,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
                add_string(out, var.tk)
                if var.attribute then
                   if gen_target ~= "5.4" and var.attribute == "close" then
-
-
-
-                     error("attempt to emit a <close> attribute for a non 5.4 target", 2)
+                     err = "attempt to emit a <close> attribute for a non 5.4 target"
                   end
 
                   if gen_target == "5.4" then
@@ -3996,6 +3995,10 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    visit_node.cbs["type_identifier"] = visit_node.cbs["variable"]
 
    local out = recurse_node(ast, visit_node, visit_type)
+   if err then
+      return nil, err
+   end
+
    local code
    if opts.preserve_newlines then
       code = { y = 1, h = 0 }
@@ -9500,7 +9503,9 @@ tl.gen = function(input, env)
       return nil, result
    end
 
-   return tl.pretty_print_ast(result.ast, env.gen_target), result
+   local code
+   code, result.gen_error = tl.pretty_print_ast(result.ast, env.gen_target)
+   return code, result
 end
 
 local function tl_package_loader(module_name)
@@ -9528,7 +9533,9 @@ local function tl_package_loader(module_name)
          run_internal_compiler_checks = false,
       })
 
-      local code = tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true)
+
+
+      local code = assert(tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function()
@@ -9569,7 +9576,10 @@ tl.load = function(input, chunkname, mode, ...)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
-   local code = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
+   local code, err = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
+   if not code then
+      return nil, err
+   end
    return load(code, chunkname, mode, ...)
 end
 

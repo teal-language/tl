@@ -189,14 +189,20 @@ describe("local", function()
    describe("annotation", function()
       it("fails with unknown annotations", util.check_syntax_error([[
          local x <blergh> = 1
-         local x <close> = 1 -- not supported (yet?) by Teal
       ]], {
          { msg = "unknown variable annotation: blergh" },
-         { msg = "unknown variable annotation: close" },
       }))
 
-      it("accepts known annotations", util.check [[
+      it("accepts <const> annotation", util.check [[
          local x <const> = 1
+      ]])
+
+      pending("accepts <close> annotation for 5.4 target", util.check [[
+         local x <close> = io.open("foobar", "r")
+      ]])
+
+      pending("rejects <close> annotation for non 5.4 target", util.check [[
+         local x <close> = io.open("foobar", "r")
       ]])
    end)
 end)

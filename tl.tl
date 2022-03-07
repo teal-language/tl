@@ -55,6 +55,7 @@ local record tl
       type: Type
       syntax_errors: {Error}
       type_errors: {Error}
+      gen_error: string
       warnings: {Error}
       symbol_list: {Symbol}
       env: Env
@@ -3391,7 +3392,8 @@ local primitive: {TypeName:string} = {
    ["thread"] = "thread",
 }
 
-function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | PrettyPrintOpts): string
+function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | PrettyPrintOpts): string, string
+   local err: string
    local indent = 0
 
    local opts: PrettyPrintOpts
@@ -3531,10 +3533,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
                add_string(out, var.tk)
                if var.attribute then
                   if gen_target ~= "5.4" and var.attribute == "close" then
-                     -- TODO(euclidianAce): I consider this error somewhat appropriate as it is a misuse of the api
-                     -- (also it's a little hard to propagate the error to return nil, err),
-                     -- but it would be better to return a usual error
-                     error("attempt to emit a <close> attribute for a non 5.4 target", 2)
+                     err = "attempt to emit a <close> attribute for a non 5.4 target"
                   end
 
                   if gen_target == "5.4" then
@@ -3996,6 +3995,10 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
    visit_node.cbs["type_identifier"] = visit_node.cbs["variable"]
 
    local out = recurse_node(ast, visit_node, visit_type)
+   if err then
+      return nil, err
+   end
+
    local code: Output
    if opts.preserve_newlines then
       code = { y = 1, h = 0 }
@@ -9500,7 +9503,9 @@ tl.gen = function(input: string, env: Env): string, Result
       return nil, result
    end
 
-   return tl.pretty_print_ast(result.ast, env.gen_target), result
+   local code: string
+   code, result.gen_error = tl.pretty_print_ast(result.ast, env.gen_target)
+   return code, result
 end
 
 local function tl_package_loader(module_name: string): any
@@ -9528,7 +9533,9 @@ local function tl_package_loader(module_name: string): any
          run_internal_compiler_checks = false,
       })
 
-      local code = tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true)
+      -- TODO: should this be a hard error? this seems analogous to
+      -- finding a lua file with a syntax error in it
+      local code = assert(tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(): any
@@ -9569,7 +9576,10 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:a
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
-   local code = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
+   local code, err = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
+   if not code then
+      return nil, err
+   end
    return load(code, chunkname, mode, ...)
 end
 
