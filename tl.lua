@@ -6670,8 +6670,22 @@ tl.type_check = function(ast, opts)
       if t.typename == "invalid" then
          return false
       end
+      if same_type(t, NIL) then
+         return true
+      end
       t = resolve_nominal(t)
       return t.meta_fields and t.meta_fields["__close"] ~= nil
+   end
+
+   local definitely_not_closable_exprs = {
+      ["string"] = true,
+      ["number"] = true,
+      ["integer"] = true,
+      ["boolean"] = true,
+      ["table_literal"] = true,
+   }
+   local function expr_is_definitely_not_closable(e)
+      return definitely_not_closable_exprs[e.kind]
    end
 
    local unknown_dots = {}
@@ -8005,11 +8019,12 @@ tl.type_check = function(ast, opts)
                end
                t.inferred_len = nil
 
-               if var.attribute == "close" and not type_is_closable(t) then
-
-
-
-                  node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
+               if var.attribute == "close" then
+                  if not type_is_closable(t) then
+                     node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
+                  elseif node.exps and node.exps[i] and expr_is_definitely_not_closable(node.exps[i]) then
+                     node_error(var, "to-be-closed variable " .. var.tk .. " assigned a non-closable value")
+                  end
                end
 
                assert(var)
