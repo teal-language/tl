@@ -217,6 +217,24 @@ describe("local", function()
          ]], {
             { msg = "only one <close>" }
          }))
+
+         it("rejects values that are valid for the type, but not closable", check_type54([[
+            local record Foo
+               metamethod __close: function(Foo, any)
+            end
+            local x <close>: Foo = {} -- valid type as records aren't inherently tied to their metatables
+                                      -- invalid <close> as table literal has no metatable
+            global make_foo: function(): Foo
+            local y <close> = make_foo() -- valid type, unable to prove value can't be <close>, so allow it
+
+            print(x, y)
+         ]], {
+            { y = 4, msg = "assigned a non-closable value" }
+         }))
+
+         it("allows nil to be closed", check54 [[
+            local x <close>: nil
+         ]])
       end)
    end)
 end)
