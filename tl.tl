@@ -123,7 +123,7 @@ local record tl
    process_string: function(string, boolean, Env, string): Result
    gen: function(string, Env): string
    type_check: function(Node, TypeCheckOptions): Result
-   init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env
+   init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env, string
    version: function(): string
 
    package_loader_env: Env
@@ -5273,9 +5273,17 @@ tl.init_env = function(lax: boolean, gen_compat: boolean | CompatMode, gen_targe
    return env
 end
 
-tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
+tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    opts = opts or {}
-   local env = opts.env or tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
+   local env = opts.env
+   if not env then
+      -- TODO: should this be in the Result?
+      local err: string
+      env, err = tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
+      if err then
+         return nil, err
+      end
+   end
    local lax = opts.lax
    local filename = opts.filename
 
@@ -6659,6 +6667,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
    end
 
    local function type_is_closable(t: Type): boolean
+      if t.typename == "invalid" then
+         return false
+      end
       t = resolve_nominal(t)
       return t.meta_fields and t.meta_fields["__close"] ~= nil
    end
@@ -7998,7 +8009,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result
                   -- TODO: <close> should be stricter about what initializers
                   -- are allowed as any non-closable value will cause an immediate
                   -- runtime error
-                  node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type " .. show_type(t))
+                  node_error(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
                end
 
                assert(var)
@@ -9496,7 +9507,8 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
 end
 
 tl.gen = function(input: string, env: Env): string, Result
-   env = env or tl.init_env()
+   -- TODO: error propagation
+   env = env or assert(tl.init_env())
    local result = tl.process_string(input, false, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
