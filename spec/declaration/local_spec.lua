@@ -197,12 +197,26 @@ describe("local", function()
          local x <const> = 1
       ]])
 
-      pending("accepts <close> annotation for 5.4 target", util.check [[
-         local x <close> = io.open("foobar", "r")
-      ]])
+      describe("<close>", function()
+         local function check54(code) return util.check(code, "5.4") end
+         local function check_type54(code, errs) return util.check_type_error(code, errs, "5.4") end
+         it("accepted for 5.4 target", check54 [[
+            local x <close> = io.open("foobar", "r")
+         ]])
 
-      pending("rejects <close> annotation for non 5.4 target", util.check [[
-         local x <close> = io.open("foobar", "r")
-      ]])
+         for _, t in ipairs{"5.1", "5.3"} do
+            it("rejected for non 5.4 target (" .. t .. ")", util.check_type_error([[
+               local x <close> = io.open("foobar", "r")
+            ]], {
+               { msg = "only valid for Lua 5.4" }
+            }, t))
+         end
+
+         it("rejects multiple in a single declaration", check_type54([[
+            local x <close>, y <close> = io.open("foobar", "r"), io.open("baz", "r")
+         ]], {
+            { msg = "only one <close>" }
+         }))
+      end)
    end)
 end)
