@@ -22,6 +22,9 @@ the project's progress:
 * [Minimalistic typed Lua is here (2020)](https://www.youtube.com/watch?v=HfnjUCRzRKU)
 * [What's Next for Teal (2021)](https://www.youtube.com/watch?v=OqXbnaDR8QY)
 
+Check also the [tutorial](docs/tutorial.md) to get started with an overview of
+the language.
+
 ## Installing
 
 ### Via LuaRocks
@@ -82,7 +85,8 @@ compile `.tl` files on-the-fly.
 
 ## Documentation
 
-You can learn more about programming with Teal in the [tutorial](docs/tutorial.md).
+You can learn more about programming and using Teal in the [docs/](docs/)
+folder. The [tutorial](docs/tutorial.md) is a great place to start!
 
 ## Type definitions
 
