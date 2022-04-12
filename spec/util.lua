@@ -19,8 +19,8 @@ collectgarbage("stop")
 local tl = require("tl")
 local assert = require("luassert")
 local lfs = require("lfs")
-local current_dir = assert(lfs.currentdir(), "unable to get current dir")
-local tl_executable = current_dir .. util.os_sep .. "tl"
+local initial_dir = assert(lfs.currentdir(), "unable to get current dir")
+local tl_executable = initial_dir .. util.os_sep .. "tl"
 
 local t_unpack = unpack or table.unpack
 
@@ -198,12 +198,27 @@ function util.tl_cmd(name, ...)
    return table.concat(cmd, " ") .. " "
 end
 
+function util.lua_cmd(...)
+   assert(select("#", ...) > 0, "no command provided")
+
+   local add_package_path = [[
+      package.path = package.path .. ";]] .. initial_dir .. [[/?.lua"
+   ]]
+
+   local cmd = { util.lua_interpreter, "-e", add_package_path, ... }
+   for i = 2, #cmd do
+      cmd[i] = string.format("%q", cmd[i])
+   end
+
+   return table.concat(cmd, " ") .. " "
+end
+
 function util.chdir_setup()
    assert(lfs.chdir(util.os_tmp))
 end
 
 function util.chdir_teardown()
-   assert(lfs.chdir(current_dir))
+   assert(lfs.chdir(initial_dir))
 end
 
 math.randomseed(os.time())

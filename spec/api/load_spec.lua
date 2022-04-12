@@ -14,7 +14,6 @@ describe("tl.load", function()
       local lua_code = [[
          -- test.lua
          local tl = require('tl')
-         tl.loader()
 
          local program, err = tl.load('local a: string = "hey"; return a')
          return program()

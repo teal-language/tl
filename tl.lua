@@ -9466,7 +9466,7 @@ local function tl_package_loader(module_name)
       })
 
       local code = tl.pretty_print_ast(program, true)
-      local chunk, err = load(code, module_name, "t")
+      local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function()
             local ret = chunk()
