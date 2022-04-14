@@ -122,7 +122,7 @@ local record tl
    process: function(string, Env): (Result, string)
    process_string: function(string, boolean, Env, string): Result
    gen: function(string, Env): string
-   type_check: function(Node, TypeCheckOptions): Result
+   type_check: function(Node, TypeCheckOptions): Result, string
    init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env, string
    version: function(): string
 
@@ -5277,7 +5277,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    opts = opts or {}
    local env = opts.env
    if not env then
-      -- TODO: should this be in the Result?
       local err: string
       env, err = tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
       if err then
@@ -9522,8 +9521,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
 end
 
 tl.gen = function(input: string, env: Env): string, Result
-   -- TODO: error propagation
-   env = env or assert(tl.init_env())
+   env = env or assert(tl.init_env(), "Default environment initialization failed")
    local result = tl.process_string(input, false, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
