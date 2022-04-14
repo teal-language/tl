@@ -5277,7 +5277,6 @@ tl.type_check = function(ast, opts)
    opts = opts or {}
    local env = opts.env
    if not env then
-
       local err
       env, err = tl.init_env(opts.lax, opts.gen_compat, opts.gen_target)
       if err then
@@ -9522,8 +9521,7 @@ function tl.process_string(input, is_lua, env, filename)
 end
 
 tl.gen = function(input, env)
-
-   env = env or assert(tl.init_env())
+   env = env or assert(tl.init_env(), "Default environment initialization failed")
    local result = tl.process_string(input, false, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
