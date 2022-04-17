@@ -6,6 +6,9 @@ local record tl
       "b"
       "t"
       "bt"
+      "cb"
+      "ct"
+      "cbt"
    end
    type LoadFunction = function(...:any): any...
 
@@ -127,6 +130,7 @@ local record tl
    version: function(): string
 
    package_loader_env: Env
+   load_envs: { {any:any} : Env }
 end
 
 tl.version = function(): string
@@ -9594,6 +9598,22 @@ function tl.target_from_lua_version(str: string): TargetMode
    end
 end
 
+local function env_for(lax: boolean, env_tbl: {any:any}): Env
+   if not env_tbl then
+      if not tl.package_loader_env then
+         tl.package_loader_env = tl.init_env(lax)
+      end
+      return tl.package_loader_env
+   end
+
+   if not tl.load_envs then
+      tl.load_envs = setmetatable({}, { __mode = "k" })
+   end
+
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.init_env(lax)
+   return tl.load_envs[env_tbl]
+end
+
 tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:any}): LoadFunction, string
    local tokens = tl.lex(input)
    local errs: {Error} = {}
@@ -9601,10 +9621,36 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:a
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
+
+   local lax = chunkname and not not chunkname:match("lua$")
+   if not tl.package_loader_env then
+      tl.package_loader_env = tl.init_env(lax)
+   end
+
+   local result = tl.type_check(program, {
+      lax = lax,
+      filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\""),
+      env = env_for(lax, ...),
+      run_internal_compiler_checks = false,
+   })
+
+   if mode and mode:match("c") then
+      if #result.type_errors > 0 then
+         local errout = {}
+         for _, err in ipairs(result.type_errors) do
+            table.insert(errout, err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
+         end
+         return nil, table.concat(errout, "\n")
+      end
+
+      mode = mode:gsub("c", "") as LoadMode
+   end
+
    local code, err = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
    if not code then
       return nil, err
    end
+
    return load(code, chunkname, mode, ...)
 end
 

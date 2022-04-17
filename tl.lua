@@ -129,6 +129,10 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
+
+
+
 tl.version = function()
    return VERSION
 end
@@ -9594,6 +9598,22 @@ function tl.target_from_lua_version(str)
    end
 end
 
+local function env_for(lax, env_tbl)
+   if not env_tbl then
+      if not tl.package_loader_env then
+         tl.package_loader_env = tl.init_env(lax)
+      end
+      return tl.package_loader_env
+   end
+
+   if not tl.load_envs then
+      tl.load_envs = setmetatable({}, { __mode = "k" })
+   end
+
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.init_env(lax)
+   return tl.load_envs[env_tbl]
+end
+
 tl.load = function(input, chunkname, mode, ...)
    local tokens = tl.lex(input)
    local errs = {}
@@ -9601,10 +9621,36 @@ tl.load = function(input, chunkname, mode, ...)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
+
+   local lax = chunkname and not not chunkname:match("lua$")
+   if not tl.package_loader_env then
+      tl.package_loader_env = tl.init_env(lax)
+   end
+
+   local result = tl.type_check(program, {
+      lax = lax,
+      filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\""),
+      env = env_for(lax, ...),
+      run_internal_compiler_checks = false,
+   })
+
+   if mode and mode:match("c") then
+      if #result.type_errors > 0 then
+         local errout = {}
+         for _, err in ipairs(result.type_errors) do
+            table.insert(errout, err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
+         end
+         return nil, table.concat(errout, "\n")
+      end
+
+      mode = mode:gsub("c", "")
+   end
+
    local code, err = tl.pretty_print_ast(program, tl.target_from_lua_version(_VERSION), true)
    if not code then
       return nil, err
    end
+
    return load(code, chunkname, mode, ...)
 end
 
