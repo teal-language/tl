@@ -961,6 +961,7 @@ local enum TypeName
    "emptytable"
    "table_item"
    "unresolved_emptytable_value"
+   "unresolved_typearg"
    "tuple"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
@@ -5376,6 +5377,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local var = find_var(name, raw)
       if var then
          local t = var.t
+         if t.typename == "unresolved_typearg" then
+            return nil
+         end
          if t.typeargs then
             fresh_typevar_ctr = fresh_typevar_ctr + 1
             for _, ta in ipairs(t.typeargs) do
@@ -5780,7 +5784,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       node.symbol_list_slot = symbol_list_n
    end
 
-   local function add_var(node: Node, var: string, valtype: Type, attribute: Attribute, is_narrowing: boolean, dont_check_redeclaration): Variable
+   local function add_var(node: Node, var: string, valtype: Type, attribute: Attribute, is_narrowing: boolean, dont_check_redeclaration: boolean): Variable
       if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
          add_unknown(node, var)
       end
@@ -6785,7 +6789,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
-               if not find_var(a.typearg) then
+               if not find_var_type(a.typearg) then
                   add_var(nil, a.typearg, lax and UNKNOWN or INVALID)
                end
             end
@@ -6801,6 +6805,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local nargs = va
                        and math.max(given, expected)
                        or math.min(given, expected)
+
+         if f.typeargs then
+            for _, t in ipairs(f.typeargs) do
+               add_var(nil, t.typearg, { typename = "unresolved_typearg" })
+            end
+         end
 
          for a = 1, nargs do
             local argument = args[a]

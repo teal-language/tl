@@ -970,6 +970,7 @@ local TypeName = {}
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -5376,6 +5377,9 @@ tl.type_check = function(ast, opts)
       local var = find_var(name, raw)
       if var then
          local t = var.t
+         if t.typename == "unresolved_typearg" then
+            return nil
+         end
          if t.typeargs then
             fresh_typevar_ctr = fresh_typevar_ctr + 1
             for _, ta in ipairs(t.typeargs) do
@@ -6785,7 +6789,7 @@ tl.type_check = function(ast, opts)
       local function mark_invalid_typeargs(f)
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
-               if not find_var(a.typearg) then
+               if not find_var_type(a.typearg) then
                   add_var(nil, a.typearg, lax and UNKNOWN or INVALID)
                end
             end
@@ -6801,6 +6805,12 @@ tl.type_check = function(ast, opts)
          local nargs = va and
          math.max(given, expected) or
          math.min(given, expected)
+
+         if f.typeargs then
+            for _, t in ipairs(f.typeargs) do
+               add_var(nil, t.typearg, { typename = "unresolved_typearg" })
+            end
+         end
 
          for a = 1, nargs do
             local argument = args[a]
