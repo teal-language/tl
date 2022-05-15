@@ -1,14 +1,15 @@
 local tl = require("tl")
 
 local function strip_typeids(t)
+   local copy = {}
    for k,v in pairs(t) do
       if type(v) == "table" then
-         strip_typeids(v)
-      elseif k == "typeid" then
-         t[k] = nil
+         copy[k] = strip_typeids(v)
+      elseif k ~= "typeid" then
+         copy[k] = v
       end
    end
-   return t
+   return copy
 end
 
 describe("parser", function()
