@@ -380,4 +380,37 @@ describe("record method", function()
       { msg = "invoked method as a regular function" }
    }))
 
+   it("catches inconsistent declarations, allows consistent ones (regression test for #517)", util.check_type_error([[
+      local record Rec
+          record Plugin
+              start: function(self: Rec.Plugin, config: any)
+              stop: function(self: Rec.Plugin)
+          end
+      end
+
+      local b : Rec.Plugin = {}
+
+      -- works
+      function b:start(config: any)
+      end
+
+      -- fails
+      function b:start(config: any, n: number)
+      end
+
+      -- works
+      function b.start(self: Rec.Plugin, config: any)
+      end
+
+      -- works
+      function b:stop()
+      end
+
+      -- works
+      function b.stop(self: Rec.Plugin)
+      end
+   ]], {
+      { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin" }
+   }))
+
 end)

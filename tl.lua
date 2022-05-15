@@ -6603,11 +6603,8 @@ tl.type_check = function(ast, opts)
          if (not t2.args.is_va) and #t1.args > #t2.args then
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
          else
-            local f1 = t1.is_method and 2 or 1
-            local f2 = t2.is_method and 2 or 1
-            for i = f1, #t1.args do
-               arg_check(is_a, t1.args[i], t2.args[f2] or ANY, nil, i, all_errs)
-               f2 = f2 + 1
+            for i = ((t1.is_method or t2.is_method) and 2 or 1), #t1.args do
+               arg_check(is_a, t1.args[i], t2.args[i] or ANY, nil, i, all_errs)
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
@@ -8601,7 +8598,11 @@ node.exps[3] and node.exps[3].type, }
                   node.name.type = fn_type
                else
                   local name = tl.pretty_print_ast(node.fn_owner, opts.gen_target, { preserve_indent = true, preserve_newlines = false })
-                  node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
+                  if rtype.fields[node.name.tk] then
+                     node_error(node, "type signature of '" .. node.name.tk .. "' does not match its declaration in " .. show_type(node.fn_owner.type))
+                  else
+                     node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
+                  end
                end
             else
                if not (lax and rtype.typename == "unknown") then
