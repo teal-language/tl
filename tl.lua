@@ -4691,7 +4691,7 @@ local function init_globals(lax)
 
    local save_typeid = last_typeid
    if is_first_init then
-      globals_typeid = last_typeid
+      globals_typeid = new_typeid()
    else
       last_typeid = globals_typeid
    end
@@ -5326,11 +5326,12 @@ tl.type_check = function(ast, opts)
             globals[k] = v.t
          end
       end
-      return a_type({
+      return {
+         typeid = globals_typeid,
          typename = "record",
          field_order = sorted_keys(globals),
          fields = globals,
-      }), nil
+      }, nil
    end
 
    local function find_var_type(name, raw)

@@ -4691,7 +4691,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
 
    local save_typeid = last_typeid
    if is_first_init then
-      globals_typeid = last_typeid
+      globals_typeid = new_typeid()
    else
       last_typeid = globals_typeid
    end
@@ -5326,7 +5326,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             globals[k] = v.t
          end
       end
-      return a_type {
+      return {
+         typeid = globals_typeid,
          typename = "record",
          field_order = sorted_keys(globals),
          fields = globals,
