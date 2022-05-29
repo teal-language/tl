@@ -9634,16 +9634,8 @@ local function tl_package_loader(module_name: string): any
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
       local code = assert(tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true))
+      local chunk, err = load(code, "@" .. found_filename, "t")
 
-      -- Lua 5.1 doesn't have the load function, so if Lua 5.1 is in use, use loadstring instead.
-      local err = ""
-      local chunk = function() end
-      if _VERSION == "Lua 5.1" then
-      	chunk = loadstring(code)
-      	err = "5.1 error"
-      else
-         chunk, err = load(code, "@" .. found_filename, "t")
-      end
       if chunk then
          return function(): any
             local ret = chunk()
