@@ -2162,7 +2162,7 @@ local function parse_argument(ps: ParseState, i: integer): integer, Node, intege
       i, decltype = parse_type(ps, i)
 
       if node then
-         i, node.decltype = i, decltype
+         node.decltype = decltype
       end
    end
    return i, node, 0
