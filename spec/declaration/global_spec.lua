@@ -200,6 +200,40 @@ describe("global", function()
    end)
 
    describe("with types", function()
+      it("can be forward-declared to resolve circular type dependencies", function()
+         util.mock_io(finally, {
+            ["person.tl"] = [[
+               local person = {}
+
+               global type Building
+
+               global type Person
+                  residence: Building
+               end
+
+               return person
+            ]],
+            ["building.tl"] = [[
+               local building = {}
+
+               global type Person
+
+               global type Building
+                  owner: Person
+               end
+
+               return building
+            ]],
+         })
+         util.check [[
+            local person = require("person")
+            local building = require("building")
+            local b: Building = {}
+            local p: Person = { residence = b }
+            b.owner = p
+         ]]
+      end)
+
       it("nominal types can take type arguments", util.check [[
          global record Foo<R>
             item: R

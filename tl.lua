@@ -1062,6 +1062,7 @@ local Type = {}
 
 
 
+
 local Operator = {}
 
 
@@ -2778,6 +2779,11 @@ local function parse_type_declaration(ps, i, node_name)
    if not asgn.var then
       return fail(ps, i, "expected a type name")
    end
+
+   if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
+      return i, asgn
+   end
+
    i = verify_tk(ps, i, "=")
    i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
@@ -3198,7 +3204,12 @@ local function recurse_node(root,
       ["global_declaration"] = walk_vars_exps,
 
       ["local_type"] = walk_var_value,
-      ["global_type"] = walk_var_value,
+      ["global_type"] = function(ast, xs)
+         xs[1] = recurse(ast.var)
+         if ast.value then
+            xs[2] = recurse(ast.value)
+         end
+      end,
 
       ["if"] = function(ast, xs)
          for _, e in ipairs(ast.if_blocks) do
@@ -3569,9 +3580,11 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       ["global_type"] = {
          after = function(node, children)
             local out = { y = node.y, h = 0 }
-            add_child(out, children[1], " ")
-            table.insert(out, " =")
-            add_child(out, children[2], " ")
+            if children[2] then
+               add_child(out, children[1], " ")
+               table.insert(out, " =")
+               add_child(out, children[2], " ")
+            end
             return out
          end,
       },
@@ -6021,6 +6034,24 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local WhichScope = {}
+
+
+
+   local function get_unresolved(node, where)
+      local unresolved
+      if where == "top_scope" then
+         unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
+      else
+         unresolved = find_var_type("@unresolved")
+      end
+      if not unresolved then
+         unresolved = { typename = "unresolved", labels = {}, nominals = {}, global_types = {} }
+         add_var(node, "@unresolved", unresolved)
+      end
+      return unresolved
+   end
+
    local function begin_scope(node)
       table.insert(st, {})
 
@@ -6046,6 +6077,9 @@ tl.type_check = function(ast, opts)
                   upper.t.nominals[name] = upper.t.nominals[name] or {}
                   table.insert(upper.t.nominals[name], typ)
                end
+            end
+            for name, _ in pairs(unresolved.t.global_types) do
+               upper.t.global_types[name] = true
             end
          else
             st[#st - 1]["@unresolved"] = unresolved
@@ -6147,6 +6181,18 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function are_same_unresolved_global_type(t1, t2)
+      if #t1.names == 1 and #t2.names == 1 and
+         t1.names[1] == t2.names[1] then
+
+         local unresolved = get_unresolved(nil, "any_scope")
+         if unresolved.global_types[t1.names[1]] then
+            return true
+         end
+      end
+      return false
+   end
+
    local function are_same_nominals(t1, t2)
       local same_names
       if t1.found and t2.found then
@@ -6157,6 +6203,10 @@ tl.type_check = function(ast, opts)
          if ft1 and ft2 then
             same_names = ft1.typeid == ft2.typeid
          else
+            if are_same_unresolved_global_type(t1, t2) then
+               return true
+            end
+
             if not ft1 then
                type_error(t1, "unknown type %s", t1)
             end
@@ -7097,11 +7147,13 @@ tl.type_check = function(ast, opts)
                node_error(node, "no visible label '" .. name .. "' for goto")
             end
          end
-         for _, types in pairs(unresolved.t.nominals) do
-            for _, typ in ipairs(types) do
-               assert(typ.x)
-               assert(typ.y)
-               type_error(typ, "unknown type %s", typ)
+         for name, types in pairs(unresolved.t.nominals) do
+            if not unresolved.t.global_types[name] then
+               for _, typ in ipairs(types) do
+                  assert(typ.x)
+                  assert(typ.y)
+                  type_error(typ, "unknown type %s", typ)
+               end
             end
          end
       end
@@ -8025,25 +8077,36 @@ tl.type_check = function(ast, opts)
       },
       ["global_type"] = {
          before = function(node)
-            node.value.newtype, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
-            add_global(node.var, node.var.tk, node.value.newtype, node.var.attribute ~= nil)
-         end,
-         after = function(node, _children)
-            local existing, existing_is_const = find_global(node.var.tk)
             local var = node.var
-            if existing then
-               local is_const = var.attribute == "const"
-               if existing_is_const == true and not is_const then
-                  node_error(var, "global was previously declared as <const>: " .. var.tk)
+            local unresolved = get_unresolved(node, "any_scope")
+            local existing, existing_is_const = find_global(var.tk)
+            if node.value then
+               node.value.newtype, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
+
+               if existing then
+                  local is_const = var.attribute == "const"
+                  if existing_is_const == true and not is_const then
+                     node_error(var, "global was previously declared as <const>: " .. var.tk)
+                  end
+                  if existing_is_const == false and is_const then
+                     node_error(var, "global was previously declared as not <const>: " .. var.tk)
+                  end
+                  if not same_type(existing, node.value.newtype) then
+                     node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
+                  end
+               elseif unresolved.global_types[var.tk] then
+                  unresolved.global_types[var.tk] = nil
                end
-               if existing_is_const == false and is_const then
-                  node_error(var, "global was previously declared as not <const>: " .. var.tk)
-               end
-               if not same_type(existing, node.value.newtype) then
-                  node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
+
+               add_global(var, var.tk, node.value.newtype, var.attribute ~= nil)
+            else
+               if not existing then
+                  unresolved.global_types[var.tk] = true
                end
             end
-            dismiss_unresolved(var.tk)
+         end,
+         after = function(node, _children)
+            dismiss_unresolved(node.var.tk)
             node.type = NONE
             return node.type
          end,
@@ -8258,11 +8321,7 @@ tl.type_check = function(ast, opts)
       ["goto"] = {
          after = function(node, _children)
             if not find_var_type("::" .. node.label .. "::") then
-               local unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
-               if not unresolved then
-                  unresolved = { typename = "unresolved", labels = {}, nominals = {} }
-                  add_var(node, "@unresolved", unresolved)
-               end
+               local unresolved = get_unresolved(node, "top_scope")
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
                table.insert(unresolved.labels[node.label], node)
             end
@@ -9143,11 +9202,7 @@ node.exps[3] and node.exps[3].type, }
                   end
                else
                   local name = typ.names[1]
-                  local unresolved = find_var_type("@unresolved")
-                  if not unresolved then
-                     unresolved = { typename = "unresolved", labels = {}, nominals = {} }
-                     add_var(nil, "@unresolved", unresolved)
-                  end
+                  local unresolved = get_unresolved(nil, "any_scope")
                   unresolved.nominals[name] = unresolved.nominals[name] or {}
                   table.insert(unresolved.nominals[name], typ)
                end
