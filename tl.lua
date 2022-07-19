@@ -9139,6 +9139,9 @@ node.exps[3] and node.exps[3].type, }
                      typ.typename = "typevar"
                      typ.typevar = t.typearg
                   else
+                     if t.is_alias then
+                        t = t.def.resolved
+                     end
                      typ.found = t
                   end
                else

@@ -483,6 +483,19 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          print(foo)
       ]]))
 
+      it("resolves nested type aliases to other aliases (see #527)", util.check([[
+         local record M
+            type Type1 = number
+            type Type2 = Type1
+         end
+
+         local function map<E>(arr: {E}): {E: number}
+         end
+
+         local arr: {M.Type2} = {}
+         local var: {M.Type2: number} = map(arr)
+      ]]))
+
       it("can use nested type aliases as types (see #416)", util.check_type_error([[
          local record F1 ]]..pick(i, "", "{F1}")..[[
             record A ]]..pick(i, "", "{A}")..[[

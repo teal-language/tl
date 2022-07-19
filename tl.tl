@@ -9139,6 +9139,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      typ.typename = "typevar"
                      typ.typevar = t.typearg
                   else
+                     if t.is_alias then
+                        t = t.def.resolved
+                     end
                      typ.found = t
                   end
                else
