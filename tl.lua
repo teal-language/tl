@@ -9314,7 +9314,7 @@ function tl.get_types(result, trenv)
       n = trenv.next_num
 
       local rt = t
-      if rt.typename == "typetype" or rt.typename == "nestedtype" then
+      if is_typetype(rt) then
          rt = rt.def
       elseif rt.typename == "tuple" and #rt == 1 then
          rt = rt[1]
@@ -9337,7 +9337,7 @@ function tl.get_types(result, trenv)
       if t.resolved then
          rt = t
       end
-      assert(rt.typename ~= "typetype")
+      assert(not is_typetype(rt))
 
       if is_record_type(rt) then
 
