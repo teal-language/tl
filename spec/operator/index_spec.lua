@@ -66,6 +66,7 @@ describe("[]", function()
          { msg = "invalid key 'bar' in record 'x'" },
       }))
    end)
+
    describe("on strings", function()
       it("works with relevant stdlib string functions", util.check [[
          local s: string
@@ -86,6 +87,7 @@ describe("[]", function()
          s:upper()
       ]])
    end)
+
    describe("on enums", function()
       it("works with relevant stdlib string functions", util.check [[
          local type foo = enum
@@ -109,6 +111,7 @@ describe("[]", function()
          s:upper()
       ]])
    end)
+
    describe("on tuples", function()
       it("results in the correct type for integer literals", util.check [[
          local t: {string, number} = {"hi", 1}
@@ -126,6 +129,60 @@ describe("[]", function()
          local var = t[x]
       ]], {
          { msg = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime" },
+      }))
+   end)
+
+   describe("on maps", function()
+      it("checks index keys nominally, not structurally (regression test for #533)", util.check_type_error([[
+         local type IndexType = record
+            x: number
+         end
+         local type WrongType = record
+         end
+         local type MapType = {IndexType: number}
+
+         local wrong_var: WrongType = {}
+         local index_var: IndexType = {}
+         local map: MapType = {[index_var] = 42}
+
+         print(map[wrong_var])
+      ]], {
+         { msg = "wrong index type: got WrongType, expected IndexType" },
+      }))
+
+      it("checks index keys nominally for inferred empty tables", util.check_type_error([[
+         local type IndexType = record
+            x: number
+         end
+         local type WrongType = record
+         end
+
+         local wrong_var: WrongType = {}
+         local index_var: IndexType = {}
+         local map = {}
+         map[index_var] = 42
+         map[wrong_var] = 43
+      ]], {
+         { msg = "wrong index type: got WrongType, expected IndexType" },
+      }))
+
+      it("checks index keys nominally for inferred empty tables", util.check_type_error([[
+         local type IndexType = record
+            x: number
+         end
+         local type WrongType = record
+         end
+
+         local wrong_var: WrongType = {}
+         local index_var: IndexType = {}
+
+         function f<T, U>(a: T, b: U)
+         end
+
+         local map = {}
+         f(map[index_var], map[wrong_var])
+      ]], {
+         { msg = "inconsistent index type: got WrongType, expected IndexType" },
       }))
    end)
 end)

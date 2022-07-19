@@ -7223,17 +7223,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             a.keys_inferred_at = assert(node)
             a.keys_inferred_at_file = filename
          else
-            if not is_a(b, a.keys) then
+            if not is_a(orig_b, a.keys) then
                local inferred = " (type of keys inferred at " .. a.keys_inferred_at_file .. ":" .. a.keys_inferred_at.y .. ":" .. a.keys_inferred_at.x .. ": )"
-               return node_error(idxnode, "inconsistent index type: %s, expected %s" .. inferred, orig_b, a.keys)
+               return node_error(idxnode, "inconsistent index type: got %s, expected %s" .. inferred, orig_b, a.keys)
             end
          end
          return a_type { y = node.y, x = node.x, typename = "unresolved_emptytable_value", emptytable_type = a }
       elseif a.typename == "map" then
-         if is_a(b, a.keys) then
+         if is_a(orig_b, a.keys) then
             return a.values
          else
-            return node_error(idxnode, "wrong index type: %s, expected %s", orig_b, a.keys)
+            return node_error(idxnode, "wrong index type: got %s, expected %s", orig_b, a.keys)
          end
       elseif node.e2.kind == "string" or node.e2.kind == "enum_item" then
          return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
