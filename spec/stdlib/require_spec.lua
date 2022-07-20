@@ -313,7 +313,7 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.type_errors)
-      assert.match("Point (defined in foo.tl:3) is not a Point (defined in ./point.tl:1)", result.type_errors[1].msg, 1, true)
+      assert.match("Point (defined in foo.tl:3) is not a Point (defined in point.tl:1)", result.type_errors[1].msg, 1, true)
    end)
 
    it("catches errors in exported functions", function ()
@@ -336,8 +336,8 @@ describe("require", function()
       local result, err = tl.process("foo.tl")
 
       assert.same(0, #result.syntax_errors)
-      assert.same(1, #result.env.loaded["./box.tl"].type_errors)
-      assert.match("cannot use operator ..", result.env.loaded["./box.tl"].type_errors[1].msg)
+      assert.same(1, #result.env.loaded["box.tl"].type_errors)
+      assert.match("cannot use operator ..", result.env.loaded["box.tl"].type_errors[1].msg)
    end)
 
    it("exports global types", function ()

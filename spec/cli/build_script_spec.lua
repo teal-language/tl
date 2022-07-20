@@ -282,7 +282,7 @@ Wrote: build/build.lua
          cmd_output =
 [[========================================
 1 syntax error:
-./build.tl:8:17: syntax error
+build.tl:8:17: syntax error
 ]]
       })
    end)

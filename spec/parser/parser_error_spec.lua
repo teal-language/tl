@@ -31,6 +31,6 @@ describe("parser errors", function()
          local bar = require "bar"
       ]]
       local result = tl.process_string(code, true, nil, "foo.tl")
-      assert.is_not_nil(string.match(result.env.loaded["./bar.tl"].syntax_errors[1].filename, "bar.tl$"), "errors should contain .filename property")
+      assert.is_not_nil(string.match(result.env.loaded["bar.tl"].syntax_errors[1].filename, "bar.tl$"), "errors should contain .filename property")
    end)
 end)

@@ -208,8 +208,8 @@ describe("syntax errors", function()
       }
 
       for file, expected in pairs(expected) do
-         assert.same(#expected, #(assert(result.env.loaded["./" .. file]).syntax_errors))
-         for i, err in ipairs(result.env.loaded["./" .. file].syntax_errors) do
+         assert.same(#expected, #(assert(result.env.loaded[file]).syntax_errors))
+         for i, err in ipairs(result.env.loaded[file].syntax_errors) do
             assert.match(expected[i].filename, err.filename, 1, true)
             assert.same(expected[i].y, err.y)
          end

@@ -133,6 +133,8 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
+
 tl.version = function()
    return VERSION
 end
@@ -229,6 +231,51 @@ if os.getenv("TL_DEBUG") then
          end
       end
    end, "cr", 100)
+end
+
+
+
+
+
+function tl.canonicalize_path(filename, sep)
+   if not filename then
+      return nil
+   end
+
+   sep = sep or package.config:sub(1, 1)
+   if sep ~= "/" then
+      filename = filename:gsub(sep, "/")
+   end
+
+   filename = filename:gsub("/*$", ""):gsub("/+", "/")
+   local pieces = {}
+   local drive = ""
+   if sep == "\\" and filename:match("^.:") then
+      drive, filename = filename:match("^(.:)(.*)$")
+   end
+   local root = ""
+   if filename:sub(1, 1) == "/" then
+      root = "/"
+   end
+   for piece in filename:gmatch("[^/]+") do
+      if piece == ".." then
+         local prev = pieces[#pieces]
+         if not prev or prev == ".." then
+            table.insert(pieces, "..")
+         elseif prev ~= "" then
+            table.remove(pieces)
+         end
+      elseif piece ~= "." then
+         table.insert(pieces, piece)
+      end
+   end
+   filename = (drive .. root .. table.concat(pieces, "/")):gsub("/*$", "")
+
+   if sep ~= "/" then
+      filename = filename:gsub("/", sep)
+   end
+
+   return filename
 end
 
 
@@ -2938,6 +2985,8 @@ local function clear_redundant_errors(errors)
 end
 
 function tl.parse_program(tokens, errs, filename)
+   filename = tl.canonicalize_path(filename)
+
    errs = errs or {}
    local ps = {
       tokens = tokens,
@@ -4499,19 +4548,18 @@ function tl.search_module(module_name, search_dtl)
    local path = os.getenv("TL_PATH") or package.path
    if search_dtl then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
-      if found then
-         return found, fd
-      end
    end
-   found, fd, tried = search_for(module_name, ".tl", path, tried)
+   if not found then
+      found, fd, tried = search_for(module_name, ".tl", path, tried)
+   end
+   if not found then
+      found, fd, tried = search_for(module_name, ".lua", path, tried)
+   end
    if found then
-      return found, fd
+      return tl.canonicalize_path(found), fd
+   else
+      return nil, nil, tried
    end
-   found, fd, tried = search_for(module_name, ".lua", path, tried)
-   if found then
-      return found, fd
-   end
-   return nil, nil, tried
 end
 
 local Variable = {}
@@ -9579,6 +9627,8 @@ end
 
 
 tl.process = function(filename, env)
+   filename = tl.canonicalize_path(filename)
+
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -9609,6 +9659,7 @@ tl.process = function(filename, env)
 end
 
 function tl.process_string(input, is_lua, env, filename)
+   filename = tl.canonicalize_path(filename)
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then

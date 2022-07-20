@@ -27,7 +27,7 @@ describe("tl.loader", function()
          end)
          util.assert_popen_close(0, pd:close())
          util.assert_line_by_line([[
-            @.]] .. util.os_sep .. [[file1.tl
+            @file1.tl
          ]], output)
       end)
    end)

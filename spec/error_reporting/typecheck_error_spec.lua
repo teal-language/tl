@@ -14,7 +14,7 @@ describe("typecheck errors", function()
       util.check_type_error([[
          local bar = require "bar"
       ]], {
-         { filename = "./bar.tl" }
+         { filename = "bar.tl" }
       })()
    end)
 
@@ -31,7 +31,7 @@ describe("typecheck errors", function()
       util.lax_check([[
          local bar = require "bar"
       ]], {
-         { msg = "b", filename = "./bar.lua" }
+         { msg = "b", filename = "bar.lua" }
       })()
    end)
 
@@ -106,7 +106,7 @@ describe("typecheck errors", function()
 
          aaa.myfunc(b)
       ]], {
-         { msg = "argument 1: Thing (defined in ./bbb.tl:4) is not a Thing (defined in ./aaa.tl:1)" }
+         { msg = "argument 1: Thing (defined in bbb.tl:4) is not a Thing (defined in aaa.tl:1)" }
       })()
    end)
 
@@ -149,7 +149,7 @@ describe("typecheck errors", function()
 
          aaa.myfunc(b)
       ]], {
-         { msg = "argument 1: Thing (defined in ./bbb.tl:1) is not a Thing (defined in ./aaa.tl:1)" }
+         { msg = "argument 1: Thing (defined in bbb.tl:1) is not a Thing (defined in aaa.tl:1)" }
       })()
    end)
 
