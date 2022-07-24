@@ -38,7 +38,7 @@ precedence, see below.
 *      ‘global’ ‘function’ Name funcbody |
 *      ‘global’ ‘record’ Name recordbody |
 *      ‘global’ ‘enum’ Name enumbody |
-*      ‘global’ ‘type’ Name ‘=’ newtype
+*      ‘global’ ‘type’ Name [‘=’ newtype]
 
    attnamelist ::=  Name [attrib] {‘,’ Name [attrib]}
 

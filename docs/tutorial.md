@@ -884,6 +884,46 @@ local function do_something(p: MyPoint)
 end
 ```
 
+If you have circular type dependencies that span multiple files, you can
+forward-declare a global type by specifying its name but not its implementation:
+
+```
+-- person.tl
+local person = {}
+
+global type Building
+
+global type Person
+   residence: Building
+end
+
+return person
+```
+
+```
+-- building.tl
+local building = {}
+
+global type Person
+
+global type Building
+   owner: Person
+end
+
+return building
+```
+
+```
+-- main.tl
+local person = require("person")
+local building = require("building")
+
+local b: Building = {}
+local p: Person = { residence = b }
+
+b.owner = p
+```
+
 ## The Teal Standard Library and Lua compatibility
 
 tl supports a fair subset of the Lua 5.3 standard library (even in other Lua
