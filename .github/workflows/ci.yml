@@ -1,0 +1,35 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  Test:
+    strategy:
+      matrix:
+        lua-version: ["5.4", "5.3", "5.2", "5.1", "luajit"]
+        os: ["ubuntu-latest"]
+        include:
+        - os: "macos-latest"
+          lua-version: "5.4"
+        - os: "windows-latest"
+          lua-version: "luajit"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@master
+
+    - uses: leafo/gh-actions-lua@master
+      with:
+        luaVersion: ${{ matrix.lua-version }}
+
+    - uses: hishamhm/gh-actions-luarocks@master
+
+    - name: Build
+      run: |
+        luarocks make --only-deps
+
+    - name: Test
+      run: |
+        luarocks lint tl-dev*rockspec
+        make selfbuild
+        luarocks test
