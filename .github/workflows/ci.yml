@@ -30,6 +30,6 @@ jobs:
 
     - name: Test
       run: |
-        luarocks lint tl-dev*rockspec
+        luarocks lint tl-dev-1.rockspec
         make selfbuild
         luarocks test
