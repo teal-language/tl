@@ -26,6 +26,18 @@ local t_unpack = unpack or table.unpack
 
 util.tl_executable = tl_executable
 
+local function remove_dir(name)
+   if lfs.attributes(name, "mode") == "directory" then
+      for d in lfs.dir(name) do
+         if d ~= "." and d ~= ".." then
+            remove_dir(name .. util.os_sep .. d)
+         end
+      end
+   else
+      os.remove(name)
+   end
+end
+
 --------------------------------------------------------------------------------
 -- 'finally' queue - each Busted test can trigger only one 'finally' callback.
 -- We build a queue of callbacks to run and nest them into one main 'finally'
@@ -201,9 +213,7 @@ end
 function util.lua_cmd(...)
    assert(select("#", ...) > 0, "no command provided")
 
-   local add_package_path = [[
-      package.path = package.path .. ";]] .. initial_dir .. [[/?.lua"
-   ]]
+   local add_package_path = [[package.path = package.path .. ";]] .. initial_dir .. [[/?.lua"]]
 
    local cmd = { util.lua_interpreter, "-e", add_package_path, ... }
    for i = 2, #cmd do
@@ -275,17 +285,8 @@ function util.write_tmp_dir(finally, dir_structure)
    end
    traverse_dir(dir_structure)
    on_finally(finally, function()
-      os.execute("rm -r " .. full_name)
-      -- local function rm_dir(dir_structure, prefix)
-      --    prefix = prefix or full_name
-      --    for name, content in pairs(dir_structure) do
-      --       if type(content) == "table" then
-      --          rm_dir(prefix .. name .. "/")
-      --       end
-      --       os.remove(prefix .. name)
-      --    end
-      -- end
-      -- rm_dir(dir_structure)
+      remove_dir(full_name)
+      --os.execute("rm -r " .. full_name)
    end)
    return full_name
 end
