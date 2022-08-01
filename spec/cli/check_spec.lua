@@ -146,4 +146,25 @@ describe("tl check", function()
          assert.match("unknown variable: y", output, 1, true)
       end)
    end)
+
+   it("can check the global env def file (#518)", function()
+      local dir_name = util.write_tmp_dir(finally, {
+         ["somefile.d.tl"] = [[
+            local type Foobar = number
+            local MyLocalNumber: number
+            local MyLocalFoobar: Foobar
+            global MyGlobalNumber: number
+            global MyGlobalFoobar: Foobar
+         ]],
+      })
+      local pd, output
+      util.do_in(dir_name, function()
+         pd = io.popen(util.tl_cmd("check", "--global-env-def", "somefile", "somefile.d.tl") .. " 2>&1 1>" .. util.os_null, "r")
+         output = pd:read("*a")
+      end)
+      util.assert_popen_close(0, pd:close())
+      assert.match("2 warnings:", output, 1, true)
+      assert.match("somefile.d.tl:3:19: unused variable MyLocalFoobar: Foobar", output, 1, true)
+      assert.match("somefile.d.tl:2:19: unused variable MyLocalNumber: number", output, 1, true)
+   end)
 end)
