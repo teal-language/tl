@@ -508,7 +508,7 @@ do
          end
       end
       if internal_output then
-         table.insert(exc_patterns, matcher(path_concat(tlconfig["internal_compiler_output"], "**/*.*")))
+         table.insert(exc_patterns, matcher(path_concat(tlconfig["internal_compiler_output"], "**" .. PATH_SEPARATOR .. "*.*")))
       end
 
       -- prepare build and source dirs
@@ -542,7 +542,7 @@ do
                      include = false
                   end
                   if build_path and meta_table.generated and meta_table.generated == self.generatedref then
-                     coroutine.yield(build_path .. "/" .. path, true)
+                     coroutine.yield(build_path .. PATH_SEPARATOR .. path, true)
                   else
 
                      -- TODO: print out patterns that include/exclude paths to help

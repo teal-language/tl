@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("build.tl", function()
-   it("defaults to the generated_code folder #unix", function()
+   it("defaults to the generated_code folder", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -40,7 +40,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have the location it stores altered by setting build_file_output_dir #unix", function()
+   it("can have the location it stores altered by setting build_file_output_dir", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -79,7 +79,7 @@ describe("build.tl", function()
          },
       })
    end)
-   it("can have a diffrent name by setting build_file #unix", function()
+   it("can have a diffrent name by setting build_file", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
@@ -119,7 +119,7 @@ describe("build.tl", function()
          }
       })
    end)
-   it("Can have the location for cached output files changed #unix", function()
+   it("Can have the location for cached output files changed", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return {
