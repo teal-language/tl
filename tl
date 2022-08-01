@@ -1094,6 +1094,82 @@ end
 -- tl check
 --------------------------------------------------------------------------------
 
+local function split_drive(filename)
+   if PATH_SEPARATOR == "\\" then
+      local d, r = filename:match("^(.:)(.*)$")
+      if d then
+         return d, r
+      end
+   end
+   return "", filename
+end
+
+local cd_cache
+local function cd()
+   if cd_cache then
+      return cd_cache
+   end
+   local wd = os.getenv("PWD")
+   if not wd then
+      local pd = io.popen("cd", "r")
+      wd = pd:read("*l")
+      pd:close()
+   end
+   cd_cache = wd
+   return wd
+end
+
+local function normalize(filename)
+   local drive = ""
+
+   if PATH_SEPARATOR == "\\" then
+      filename = filename:gsub("\\", "/")
+      drive, filename = split_drive(filename)
+   end
+
+   if filename:sub(1, 1) ~= "/" then
+      filename = cd() .. "/" .. filename
+      drive, filename = split_drive(filename)
+   end
+
+   local root = ""
+   if filename:sub(1, 1) == "/" then
+      root = "/"
+   end
+
+   local pieces = {}
+   for piece in filename:gmatch("[^/]+") do
+      if piece == ".." then
+         local prev = pieces[#pieces]
+         if not prev or prev == ".." then
+            table.insert(pieces, "..")
+         elseif prev ~= "" then
+            table.remove(pieces)
+         end
+      elseif piece ~= "." then
+         table.insert(pieces, piece)
+      end
+   end
+
+   filename = (drive .. root .. table.concat(pieces, "/")):gsub("/*$", "")
+
+   if PATH_SEPARATOR == "\\" then
+      filename = filename:gsub("/", "\\")
+   end
+
+   return filename
+end
+
+local function already_loaded(env, input_file)
+   input_file = normalize(input_file)
+   for file, _ in pairs(env.loaded) do
+      if normalize(file) == input_file then
+         return true
+      end
+   end
+   return false
+end
+
 commands["check"] = function(tlconfig, args)
    turbo(true)
    local env
@@ -1101,10 +1177,11 @@ commands["check"] = function(tlconfig, args)
       if not env then
          env = setup_env(tlconfig, input_file)
       end
-
-      local _, err = tl.process(input_file, env)
-      if err then
-         die(err)
+      if not already_loaded(env, input_file) then
+         local _, err = tl.process(input_file, env)
+         if err then
+            die(err)
+         end
       end
 
       if i > 1 then
