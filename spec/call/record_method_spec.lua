@@ -41,7 +41,7 @@ describe("record method call", function()
          end
          return "what"
       end
-      function foo()
+      local function foo()
          r:f(r:f("hello"))
       end
    ]])

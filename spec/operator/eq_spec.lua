@@ -198,7 +198,7 @@ describe("flow analysis with ==", function()
          local type UnionAorB = A | B
          local b: B = {}
 
-         function head(n: UnionAorB): UnionAorB
+         local function head(n: UnionAorB): UnionAorB
            if n == b then
              return n.h
            end
@@ -279,7 +279,7 @@ describe("flow analysis with ==", function()
       }))
 
       it("resolves == on the test", util.check [[
-         function process(ts: {number | string})
+         local function process(ts: {number | string})
             local t: number | string
             t = ts[1]
             local i = 1

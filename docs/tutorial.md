@@ -680,7 +680,7 @@ You can declare functions that generate iterators which can be used in
 This is an example [taken the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
 
 ```
-function allwords(): (function(): string)
+local function allwords(): (function(): string)
    local line = io.read()
    local pos = 1
    return function(): string
@@ -711,7 +711,7 @@ in both function declarations.
 Just like in Lua, some functions in Teal may receive a variable amount of arguments. Variadic functions can be declared by specifying `...` as the last argument of the function:
 
 ```
-function test(...: number)
+local function test(...: number)
    print(...)
 end
 
@@ -721,7 +721,7 @@ test(1, 2, 3)
 In case your function returns a variable amount of values, you may also declare variadic return types by using the `type...` syntax:
 
 ```
-function test(...: number): number...
+local function test(...: number): number...
    return ...
 end
 
@@ -854,9 +854,15 @@ declaration and/or assignment:
 
 ```
 global n: number
+
 global m: {string:boolean} = {}
+
 global hi = function(): string
    return "hi"
+end
+
+global function my_function()
+   print("I am a global function")
 end
 ```
 

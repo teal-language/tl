@@ -141,7 +141,7 @@ describe("flow analysis with is", function()
          end
          local type UnionAorB = A | B
 
-         function head(n: UnionAorB): UnionAorB
+         local function head(n: UnionAorB): UnionAorB
            if n is B then
              return n.h
            else
@@ -393,7 +393,7 @@ describe("flow analysis with is", function()
       }))
 
       it("resolves is on the test", util.check [[
-         function process(ts: {number | string})
+         local function process(ts: {number | string})
             local t: number | string
             t = ts[1]
             local i = 1
@@ -419,7 +419,7 @@ describe("flow analysis with is", function()
       }))
 
       it("can resolve on else block even if it can't on if block (#210)", util.check [[
-         function foo(v: any)
+         local function foo(v: any)
             if not v is string then
                print("foo")
             else
@@ -516,7 +516,7 @@ describe("flow analysis with is", function()
       end)
 
       it("generates type checks for primitive types", util.gen([[
-         function process(ts: {number | string | boolean})
+         local function process(ts: {number | string | boolean})
             local t: number | string | boolean
             t = ts[1]
             if t is number then
@@ -526,7 +526,7 @@ describe("flow analysis with is", function()
             end
          end
       ]], [[
-         function process(ts)
+         local function process(ts)
             local t
             t = ts[1]
             if type(t) == "number" do
@@ -541,7 +541,7 @@ describe("flow analysis with is", function()
          local type U = record
             userdata
          end
-         function process(ts: {number | {string} | boolean | U})
+         global function process(ts: {number | {string} | boolean | U})
             local t: number | {string} | boolean | U
             t = ts[1]
             if t is number then

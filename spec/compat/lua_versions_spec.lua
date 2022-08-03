@@ -4,14 +4,14 @@ local util = require("spec.util")
 describe("Lua version compatibility", function()
    if _VERSION == "Lua 5.1" or _VERSION == "Lua 5.2" then
       it("generates compat code for // operator", util.gen([[
-         function hello(n: number): number
+         local function hello(n: number): number
             return 9
          end
 
          local x = 124 // 3
          local x = hello(12) // hello(hello(12) // 12)
       ]], [[
-         function hello(n)
+         local function hello(n)
             return 9
          end
 

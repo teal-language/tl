@@ -6,11 +6,9 @@ describe("--global-env-def argument", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
-               function add(n: number, m: number): number
+               global function add(n: number, m: number): number
                    return n + m
                end
-
-               return add
             ]],
          },
          ["test.tl"] = [[
@@ -39,11 +37,9 @@ describe("--global-env-def argument", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
-               function add(n: number, m: number): number
+               global function add(n: number, m: number): number
                    return n + m
                end
-
-               return add
             ]],
          },
          ["test.tl"] = [[
@@ -60,11 +56,9 @@ describe("--global-env-def argument", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
-               function add(n: number, m: number): number
+               global function add(n: number, m: number): number
                    return n + m
                end
-
-               return add
             ]],
          },
          ["test.tl"] = [[
