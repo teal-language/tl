@@ -2468,6 +2468,7 @@ local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Nod
 
 local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename: TypeName, parse_body: ParseBody): integer, boolean
    i = i + 1 -- skip 'record' or 'enum'
+   local iv = i
 
    local v: Node
    i, v = verify_kind(ps, i, "identifier", "type_identifier")
@@ -2484,7 +2485,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
       nt.newtype.def = rdef
    end
 
-   store_field_in_record(ps, i, v.tk, nt.newtype, def.fields, def.field_order)
+   store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
    return i
 end
 

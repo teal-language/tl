@@ -2468,6 +2468,7 @@ local ParseBody = {}
 
 local function parse_nested_type(ps, i, def, typename, parse_body)
    i = i + 1
+   local iv = i
 
    local v
    i, v = verify_kind(ps, i, "identifier", "type_identifier")
@@ -2484,7 +2485,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
       nt.newtype.def = rdef
    end
 
-   store_field_in_record(ps, i, v.tk, nt.newtype, def.fields, def.field_order)
+   store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
    return i
 end
 

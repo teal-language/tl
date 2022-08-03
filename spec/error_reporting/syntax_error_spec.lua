@@ -158,6 +158,24 @@ describe("syntax errors", function()
       { y = 15, msg = "syntax error, expected 'end' to close construct started at :5:22:" },
    }))
 
+   it("reports correct location of redeclaration (#542)", util.check_syntax_error([[
+      local record Outer
+          record Path
+              text: string
+          end
+
+          record Path
+              text: string
+          end
+
+          record Other
+              field: integer
+          end
+      end
+   ]], {
+      { y = 6, msg = "attempt to redeclare field 'Path'" },
+   }))
+
    it("type missing local or global", util.check_syntax_error([[
       type foo = record
          x: number
