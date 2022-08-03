@@ -92,7 +92,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             foo: R
          end
 
-         function id(r: R): R
+         local function id(r: R): R
             return r
          end
       ]]))
@@ -115,7 +115,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             graphics: love_graphics
          end
 
-         function main()
+         global function main()
             love.graphics.print("Hello world", 100, 100)
          end
       ]]))
@@ -152,7 +152,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             u: function(): string
          end
 
-         function f(r: R): R
+         local function f(r: R): R
             return r
          end
       ]], {
@@ -166,7 +166,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             u: function(): UnknownType
          end
 
-         function f(r: R): R
+         local function f(r: R): R
             return r
          end
       ]], {
@@ -579,7 +579,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             foo: R
          end
 
-         function id(r: R): R
+         local function id(r: R): R
             return r
          end
       ]]))
@@ -601,7 +601,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             foo: R
          end
 
-         function id(r: R): R
+         local function id(r: R): R
             return r
          end
       ]], {

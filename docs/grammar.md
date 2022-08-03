@@ -48,7 +48,7 @@ precedence, see below.
 
    label ::= ‘::’ Name ‘::’
 
-   funcname ::= Name {‘.’ Name} [‘:’ Name]
++  funcname ::= Name {‘.’ Name} ‘:’ Name | Name {‘.’ Name} ‘.’ Name
 
    varlist ::= var {‘,’ var}
 

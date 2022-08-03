@@ -6,25 +6,28 @@ describe("-I --include-dir argument", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
             ["add.tl"] = [[
-               function add(n: number, m: number): number
+               local function add(n: number, m: number): number
                    return n + m
                end
 
                return add
             ]],
             ["subtract.tl"] = [[
-               function subtract(n: number, m: number): number
+               global function subtract(n: number, m: number): number
                    return n - m
                end
-
-               return subtract
             ]],
          },
          ["test.tl"] = [[
-            require("add")
+            local add = require("add")
             local x: number = add(1, 2)
 
             assert(x == 3)
+
+            require("subtract")
+            local y: number = subtract(100, 90)
+
+            assert(y == 10)
          ]],
       }), function()
          local pd = io.popen(util.tl_cmd("check", "-I", "mod", "test.tl"), "r")

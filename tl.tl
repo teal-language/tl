@@ -1190,6 +1190,7 @@ local record Node
    args: Node
    rets: Type
    body: Node
+   implicit_global_function: boolean
 
    name: Node
 
@@ -2229,7 +2230,12 @@ local function parse_local_function(ps: ParseState, i: integer): integer, Node
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local function parse_global_function(ps: ParseState, i: integer): integer, Node
+local enum FunctionType
+   "global"
+   "record"
+end
+
+local function parse_function(ps: ParseState, i: integer, ft: FunctionType): integer, Node
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i, "global_function")
@@ -2266,6 +2272,12 @@ local function parse_global_function(ps: ParseState, i: integer): integer, Node
 
    if not fn.name then
       return orig_i + 1
+   end
+
+   if fn.kind == "record_function" and ft == "global" then
+      fail(ps, orig_i, "record functions cannot be annotated as 'global'")
+   elseif fn.kind == "global_function" and ft == "record" then
+      fn.implicit_global_function = true
    end
 
    return i, fn
@@ -2838,7 +2850,7 @@ end
 local function parse_global(ps: ParseState, i: integer): integer, Node
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
-      return parse_global_function(ps, i + 1)
+      return parse_function(ps, i + 1, "global")
    elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
       return parse_type_declaration(ps, i, "global_type")
    elseif ntk == "record" and ps.tokens[i+2].kind == "identifier" then
@@ -2858,6 +2870,10 @@ local function parse_type_statement(ps: ParseState, i: integer): integer, Node
    return parse_call_or_assignment(ps, i)
 end
 
+local function parse_record_function(ps: ParseState, i: integer): integer, Node
+   return parse_function(ps, i, "record")
+end
+
 local parse_statement_fns: {string : function(ParseState, integer):(integer, Node)} = {
    ["::"] = parse_label,
    ["do"] = parse_do,
@@ -2871,7 +2887,7 @@ local parse_statement_fns: {string : function(ParseState, integer):(integer, Nod
    ["global"] = parse_global,
    ["repeat"] = parse_repeat,
    ["return"] = parse_return,
-   ["function"] = parse_global_function,
+   ["function"] = parse_record_function,
 }
 
 parse_statements = function(ps: ParseState, i: integer, toplevel: boolean): integer, Node
@@ -8711,6 +8727,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["global_function"] = {
          before = function(node: Node)
             begin_scope(node)
+            if (not lax) and node.implicit_global_function then
+               node_error(node, "functions need an explicit 'local' or 'global' annotation")
+            end
          end,
          before_statements = function(node: Node)
             add_internal_function_variables(node)

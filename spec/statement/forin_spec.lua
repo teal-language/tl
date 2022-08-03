@@ -59,7 +59,7 @@ describe("forin", function()
 
          local r: Rec = {}
 
-         function foo(init: Rec)
+         local function foo(init: Rec)
             for k, v in pairs(init) do
                r[k] = v
             end
@@ -95,7 +95,7 @@ describe("forin", function()
          metamethod __call: function(): integer
       end
 
-      function foo(incr: integer): R
+      local function foo(incr: integer): R
          local x = 0
          return setmetatable({incr=incr} as R, {
             __call = function(self: R): integer
@@ -116,7 +116,7 @@ describe("forin", function()
          metamethod __call: function(): integer
       end
 
-      function foo(): R
+      local function foo(): R
          return setmetatable({} as R, {
             __call = function(wrong_self: integer): integer
                return nil
@@ -136,7 +136,7 @@ describe("forin", function()
          metamethod __call: function(integer): integer
       end
 
-      function foo(): R
+      local function foo(): R
          return nil
       end
 
@@ -211,7 +211,7 @@ describe("forin", function()
       ]])
 
       it("accepts nested unresolved values", util.lax_check([[
-         function fun(xss)
+         local function fun(xss)
            for _, xs in pairs(xss) do
              for _, x in pairs(xs) do
                for _, u in ipairs({}) do

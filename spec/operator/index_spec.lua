@@ -183,7 +183,7 @@ describe("[]", function()
          local wrong_var: WrongType = {}
          local index_var: IndexType = {}
 
-         function f<T, U>(a: T, b: U)
+         local function f<T, U>(a: T, b: U)
          end
 
          local map = {}

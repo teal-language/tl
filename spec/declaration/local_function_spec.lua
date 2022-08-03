@@ -167,7 +167,7 @@ describe("local function", function()
 
          local normal: number
 
-         function new(normal: string): Name
+         local function new(normal: string): Name
             return {
                normal = normal:upper()
             }

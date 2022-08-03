@@ -55,7 +55,7 @@ describe("return", function()
          end
          local type unionAorB = A | B
 
-         function head(n: unionAorB): unionAorB
+         local function head(n: unionAorB): unionAorB
            if n is B then
              return n.h  --  10
            else

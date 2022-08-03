@@ -50,17 +50,40 @@ describe("global function", function()
       }))
    end)
 
-   for _, decl in ipairs({ "function", "global function" }) do
-      describe("'" .. decl .. "'", function()
-         it("declaration", util.check([[
-            ]] .. decl .. [[ f(a: number, b: string): boolean
+   it("a bare 'function' can only be used in lax mode", util.check_type_error([[
+      function f()
+         print("I am a bare function")
+      end
+   ]], {
+      { y = 1, msg = "functions need an explicit 'local' or 'global' annotation" },
+   }))
+
+   local modes = {
+      {
+         fn = "function",
+         check = function(code) return util.lax_check(code, {}) end,
+         check_type_error = util.lax_check_type_error,
+         check_syntax_error = util.check_syntax_error,
+      },
+      {
+         fn = "global function",
+         check = util.check,
+         check_type_error = util.check_type_error,
+         check_syntax_error = util.check_syntax_error,
+      },
+   }
+
+   for _, mode in ipairs(modes) do
+      describe("'" .. mode.fn .. "'", function()
+         it("declaration", mode.check([[
+            ]] .. mode.fn .. [[ f(a: number, b: string): boolean
                return #b == a
             end
             local ok = f(3, "abc")
          ]]))
 
-         it("declaration with type variables", util.check([[
-            ]] .. decl .. [[ f<a, b>(a1: a, a2: a, b1: b, b2: b): b
+         it("declaration with type variables", mode.check([[
+            ]] .. mode.fn .. [[ f<a, b>(a1: a, a2: a, b1: b, b2: b): b
                if a1 == a2 then
                   return b1
                else
@@ -70,39 +93,39 @@ describe("global function", function()
             local ok = f(10, 20, "hello", "world")
          ]]))
 
-         it("declaration with nil as return", util.check([[
-            ]] .. decl .. [[ f(a: number, b: string): nil
-               return
-            end
-            local ok = f(3, "abc")
-         ]]))
-
-         it("declaration with no return", util.check([[
-            ]] .. decl .. [[ f(a: number, b: string): ()
+         it("declaration with nil as return", mode.check([[
+            ]] .. mode.fn .. [[ f(a: number, b: string): nil
                return
             end
             f(3, "abc")
          ]]))
 
-         it("declaration with no return cannot be used in assignment", util.check_type_error([[
-            ]] .. decl .. [[ f(a: number, b: string): ()
+         it("declaration with no return", mode.check([[
+            ]] .. mode.fn .. [[ f(a: number, b: string): ()
                return
             end
-            local x = f(3, "abc")
-         ]], {
-            { msg = "assignment in declaration did not produce an initial value for variable 'x'" }
-         }))
+            f(3, "abc")
+         ]]))
 
-         it("declaration with return nil can be used in assignment", util.check([[
-            ]] .. decl .. [[ f(a: number, b: string): nil
+         it("declaration with no return cannot be used in assignment", mode.check_type_error([[
+            ]] .. mode.fn .. [[ f(a: number, b: string): ()
                return
             end
             local x = f(3, "abc")
+         ]], mode.fn == "global function"
+             and {{ msg = "assignment in declaration did not produce an initial value for variable 'x'" }}
+             or  {}))
+
+         it("declaration with return nil can be used in assignment", mode.check([[
+            ]] .. mode.fn .. [[ f(a: number, b: string): nil
+               return
+            end
+            local x: nil = f(3, "abc")
          ]]))
 
          describe("with function arguments", function()
-            it("has ambiguity without parentheses in function type return", util.check_syntax_error([[
-               ]] .. decl .. [[ map<a, b>(f: function(a):b, xs: {a}): {b}
+            it("has ambiguity without parentheses in function type return", mode.check_syntax_error([[
+               ]] .. mode.fn .. [[ map<a, b>(f: function(a):b, xs: {a}): {b}
                   local r = {}
                   for i, x in ipairs(xs) do
                      r[i] = f(x)
@@ -115,14 +138,14 @@ describe("global function", function()
 
                print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
             ]], {
-               { y = 1, x = 47 + #decl, msg = "syntax error" },
+               { y = 1, x = 47 + #mode.fn, msg = "syntax error" },
                { y = 1 },
                { y = 1 },
                { y = 1 },
             }))
 
-            it("has no ambiguity with parentheses in function type return", util.check([[
-               ]] .. decl .. [[ map<a,b>(f: function(a):(b), xs: {a}): {b}
+            it("has no ambiguity with parentheses in function type return", mode.check([[
+               ]] .. mode.fn .. [[ map<a,b>(f: function(a):(b), xs: {a}): {b}
                   local r = {}
                   for i, x in ipairs(xs) do
                      r[i] = f(x)

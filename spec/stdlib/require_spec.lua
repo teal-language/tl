@@ -81,7 +81,7 @@ describe("require", function()
          ["foo.tl"] = [[
             local point = require "point"
 
-            function bla(p: point.Point)
+            global function bla(p: point.Point)
                print(p.x, p.y)
             end
          ]],
@@ -176,7 +176,7 @@ describe("require", function()
             local bar = require "bar"
             local bla1 = require "bla"
 
-            function use_point(p: pnt.Point)
+            global function use_point(p: pnt.Point)
                print(p.x, p.y)
                print(bla1.func().xx)
             end
@@ -231,7 +231,7 @@ describe("require", function()
             local pnt = require "point"
             local bar = require "bar"
 
-            function use_point(p: pnt.Point)
+            global function use_point(p: pnt.Point)
                print(p.x, p.y)
             end
 
@@ -419,7 +419,7 @@ describe("require", function()
          ["main.tl"] = [[
             local someds = require("someds")
 
-            function main()
+            global function main()
                local b:someds.Callback = function(event: someds.Event)
                end
                someds.subscribe(b)
@@ -448,7 +448,7 @@ describe("require", function()
          ["main.tl"] = [[
             local som = require("someds")
 
-            function main()
+            global function main()
                local b:som.Callback = function(event: som.Event)
                end
                som.subscribe(b)
@@ -504,7 +504,7 @@ describe("require", function()
          ["main.tl"] = [[
             local someds = require("someds")
 
-            function main()
+            global function main()
                local b:someds.Callback = function(event: someds.Event<string>)
                end
                someds.subscribe(b)
@@ -661,7 +661,7 @@ describe("require", function()
                 lu.assertIsTrue(100 == 200)
             end
 
-            function main(args: any)
+            global function main(args: any)
                 local runner = lu.LuaUnit.new()
                 runner:setOutputType("tap")
                 local code = runner:runSuite(args)
