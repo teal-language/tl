@@ -50,17 +50,21 @@ describe("or", function()
       local y: Dir = "right" or v
    ]])
 
-   it("invalid string or enum matches string", util.check_type_error([[
-      local type Dir = enum
-         "left"
-         "right"
+   it("enum constants flow on both sides (#487)", util.check_type_error([[
+      local enum State
+           "enabled"
+           "disabled"
       end
 
-      local v: Dir = "left"
-      local x = v or "don't know"
-      v = x
+      local state: State
+
+      local enabled: boolean
+      state = enabled and "eNnabled" or "disabled"
+      state = enabled and "enabled" or "disSabled"
+
    ]], {
-      { y = 8, msg = "in assignment: string is not a Dir" }
+      { y = 9, x = 27, msg = "in assignment: string is not a State" },
+      { y = 10, x = 40, msg = "in assignment: string is not a State" },
    }))
 
    it("works with tables and {}", util.check [[

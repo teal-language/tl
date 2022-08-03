@@ -8875,13 +8875,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             elseif node.op.op == "and" then
                node.known = facts_and(node.e1.known, node.e2.known, node)
                node.type = resolve_tuple(b)
-            elseif node.op.op == "or" and is_lua_table_type(ra) and b.typename == "emptytable" then
+            elseif node.op.op == "or" and b.typename == "nil" then
                node.known = nil
                node.type = resolve_tuple(a)
-            elseif node.op.op == "or" and is_a(rb, ra) then
-               node.known = facts_or(node.e1.known, node.e2.known)
-               node.type = resolve_tuple(a)
-            elseif node.op.op == "or" and b.typename == "nil" then
+            elseif node.op.op == "or" and is_lua_table_type(ra) and b.typename == "emptytable" then
                node.known = nil
                node.type = resolve_tuple(a)
             elseif node.op.op == "or"
@@ -8895,6 +8892,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                local u = unite({ra, rb}, true)
                local valid, err = is_valid_union(u)
                node.type = valid and u or node_error(node, err)
+            elseif node.op.op == "or" and is_a(rb, ra) then
+               node.known = facts_or(node.e1.known, node.e2.known)
+               if node.expected then
+                  local a_is = is_a(ra, node.expected)
+                  local b_is = is_a(rb, node.expected)
+                  if a_is and b_is then
+                     node.type = node.expected
+                  elseif a_is then
+                     node.type = resolve_tuple(b)
+                  else
+                     node.type = resolve_tuple(a)
+                  end
+               else
+                  node.type = resolve_tuple(a)
+               end
+               node.type.tk = nil
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
                if is_a(b, a, true) or a.typename == "typevar" then
