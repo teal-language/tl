@@ -6389,22 +6389,23 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function combine_errs(...)
-      local errs
-      for i = 1, select("#", ...) do
-         local e = select(i, ...)
-         if e then
-            errs = errs or {}
-            for _, err in ipairs(e) do
-               table.insert(errs, err)
-            end
+   local function add_map_errors(errs, ctx, ctx_errs)
+      if ctx_errs then
+         for _, err in ipairs(ctx_errs) do
+            err.msg = ctx .. err.msg
+            table.insert(errs, err)
          end
       end
-      if not errs then
+   end
+
+   local function combine_map_errs(key_errs, value_errs)
+      if not key_errs and not value_errs then
          return true
-      else
-         return false, errs
       end
+      local errs = {}
+      add_map_errors(errs, "in map key: ", key_errs)
+      add_map_errors(errs, "in map value: ", value_errs)
+      return false, errs
    end
 
    local known_table_types = {
@@ -6607,7 +6608,7 @@ tl.type_check = function(ast, opts)
             local _, errs_keys, errs_values
             _, errs_keys = is_a(t1.keys, INTEGER)
             _, errs_values = is_a(t1.values, t2.elements)
-            return combine_errs(errs_keys, errs_values)
+            return combine_map_errs(errs_keys, errs_values)
          end
       elseif t2.typename == "record" then
          if is_record_type(t1) then
@@ -6649,7 +6650,7 @@ tl.type_check = function(ast, opts)
             if t2.values.typename ~= "any" then
                _, errs_values = same_type(t1.values, t2.values)
             end
-            return combine_errs(errs_keys, errs_values)
+            return combine_map_errs(errs_keys, errs_values)
          elseif t1.typename == "array" or t1.typename == "tupletable" then
             local elements
             if t1.typename == "tupletable" then
@@ -6664,7 +6665,7 @@ tl.type_check = function(ast, opts)
             local _, errs_keys, errs_values
             _, errs_keys = is_a(INTEGER, t2.keys)
             _, errs_values = is_a(elements, t2.values)
-            return combine_errs(errs_keys, errs_values)
+            return combine_map_errs(errs_keys, errs_values)
          elseif is_record_type(t1) then
             if not is_a(t2.keys, STRING) then
                return false, terr(t1, "can't match a record to a map with non-string keys")
