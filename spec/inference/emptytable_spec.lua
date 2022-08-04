@@ -19,7 +19,7 @@ describe("empty table without type annotation", function()
 
       t.foo = "bar"
    ]], {
-      { msg = "cannot index something that is not a record: {integer}" },
+      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:3:11)]] },
    }))
 
    it("first use can be a function call", util.check [[
@@ -72,7 +72,7 @@ describe("empty table without type annotation", function()
          return t
       end
    ]], {
-      { msg = "cannot index something that is not a record: {integer} (inferred at foo.tl:5:" },
+      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:5:13)]] },
    }))
 
    it("inferred type is not const by default (#383)", util.check([[

@@ -310,7 +310,7 @@ describe("record method", function()
          return "bar"
       end
    ]], {
-      { msg = "cannot index something that is not a record" }
+      { msg = "cannot index key 'bla' in type number" }
    }))
 
    it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[

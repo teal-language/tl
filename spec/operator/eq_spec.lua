@@ -46,7 +46,7 @@ describe("flow analysis with ==", function()
 
          local s = x == n and tostring(x + 1) or x:lower()
       ]], {
-         { msg = "cannot index something that is not a record: number | string" }
+         { msg = [[cannot index key 'lower' in union 'x' of type number | string]] }
       }))
 
       it("does not narrow type on expressions with not", util.check_type_error([[
@@ -76,7 +76,7 @@ describe("flow analysis with ==", function()
             print(t:upper())
          end
       ]], {
-         { msg = "cannot index something that is not a record: number | string" }
+         { msg = [[cannot index key 'upper' in union 't' of type number | string]] }
       }))
 
       it("can combine with is", util.check [[
@@ -177,7 +177,7 @@ describe("flow analysis with ==", function()
             print(t + 1)
          end
       ]], {
-         { msg = "cannot index something that is not a record: number | string" }
+         { msg = [[cannot index key 'upper' in union 't' of type number | string]] }
       }))
 
       it("resolves with elseif", util.check [[
@@ -238,7 +238,7 @@ describe("flow analysis with ==", function()
             print(v:upper()) -- v is number | string | {boolean}
          end
       ]], {
-         { msg = "cannot index something that is not a record: number | string | {boolean}" }
+         { msg = [[cannot index key 'upper' in union 'v' of type number | string | {boolean}]] }
       }))
 
       it("builds union types with == and or", util.check_type_error([[

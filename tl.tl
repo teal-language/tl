@@ -5413,10 +5413,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local showt = {}
          for i = 1, n do
             local t = select(i, ...)
-            if t.typename == "invalid" then
-               return nil
+            if t then
+               if t.typename == "invalid" then
+                  return nil
+               end
+               showt[i] = show_type(t)
             end
-            showt[i] = show_type(t)
          end
          msg = msg:format(table.unpack(showt))
       end
@@ -7001,63 +7003,61 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function match_record_key(node: Node, tbl: Type, key: Node, orig_tbl: Type): Type
+   local function match_record_key(tbl: Type, rec: Node, key: string): Type, string
       assert(type(tbl) == "table")
-      assert(type(key) == "table")
+      assert(type(rec) == "table")
+      assert(type(key) == "string")
 
       tbl = resolve_tuple_and_nominal(tbl)
-      local type_description = tbl.typename
       if tbl.typename == "string" or tbl.typename == "enum" then
          tbl = find_var_type("string") -- simulate string metatable
       end
 
-      if lax and (is_unknown(tbl) or tbl.typename == "typevar") then
-         if node.e1.kind == "variable" and node.op.op ~= "@funcall" then
-            add_unknown_dot(node, node.e1.tk .. "." .. key.tk)
-         end
-         return UNKNOWN
-      end
-
       if tbl.is_alias then
-         return node_error(key, "cannot use a nested type alias as a concrete value")
+         return nil, "cannot use a nested type alias as a concrete value"
       end
 
       tbl = resolve_typetype(tbl)
 
-      if tbl.typename == "emptytable" then
-      elseif is_record_type(tbl) then
+      if is_record_type(tbl) then
          assert(tbl.fields, "record has no fields!?")
 
-         if key.kind == "string" or key.kind == "identifier" then -- "identifier" is a plain atom (e.g 'insert' in 'table.insert')
-            if tbl.fields[key.tk] then
-               return tbl.fields[key.tk]
-            end
+         if tbl.fields[key] then
+            return tbl.fields[key]
          end
-      else
-         if is_unknown(tbl) then
-            if lax then
-               return INVALID
-            end
-            return node_error(key, "cannot index a value of unknown type")
+
+         if rec.kind == "variable" then
+            return nil, "invalid key '" .. key .. "' in record '" .. rec.tk .. "' of type %s"
+         else
+            return nil, "invalid key '" .. key .. "' in type %s"
          end
-         return node_error(key, "cannot index something that is not a record: %s", tbl)
+      elseif tbl.typename == "emptytable" or is_unknown(tbl) then
+         if lax then
+            return INVALID
+         end
+         return nil, "cannot index a value of unknown type"
       end
 
-      if lax then
-         if node.e1.kind == "variable" and node.op.op ~= "@funcall" then
-            add_unknown_dot(node, node.e1.tk .. "." .. key.tk)
+      if rec.kind == "variable" then
+         return nil, "cannot index key '" .. key .. "' in " .. tbl.typename .. " '" .. rec.tk .. "' of type %s"
+      else
+         return nil, "cannot index key '" .. key .. "' in type %s"
+      end
+   end
+
+   local function type_check_record_key(rec: Node, key: Node, a: Type, orig_a: Type): Type
+      if lax and (is_unknown(a) or a.typename == "typevar") then
+         if rec.kind == "variable" then
+            add_unknown_dot(rec, rec.tk .. "." .. key.tk)
          end
          return UNKNOWN
       end
 
-      local description: string
-      if node.e1.kind == "variable" then
-         description = type_description .. " '" .. node.e1.tk .. "' of type " .. show_type(resolve_tuple(orig_tbl))
-      else
-         description = "type " .. show_type(resolve_tuple(orig_tbl))
+      local t, e = match_record_key(a, rec, key.conststr or key.tk)
+      if t then
+         return t
       end
-
-      return node_error(key, "invalid key '" .. key.tk .. "' in " .. description)
+      return node_error(key, e, a == INVALID and a or resolve_tuple(orig_a))
    end
 
    local function widen_in_scope(scope: {string:Variable}, var: string): boolean
@@ -7272,70 +7272,86 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function type_check_index(node: Node, idxnode: Node, a: Type, b: Type): Type
+   local function type_check_index(anode: Node, bnode: Node, a: Type, b: Type): Type
       local orig_a = a
       local orig_b = b
       a = resolve_tuple_and_nominal(a)
       b = resolve_tuple_and_nominal(b)
 
+      if lax and is_unknown(a) then
+         return UNKNOWN
+      end
+
+      local errm: string
+      local erra: Type
+      local errb: Type
+
       if a.typename == "tupletable" and is_a(b, INTEGER) then
-         if idxnode.constnum then
-            if idxnode.constnum > #a.types
-               or idxnode.constnum < 1
-               or idxnode.constnum ~= math.floor(idxnode.constnum)
-            then
-               return node_error(idxnode, "index " .. tostring(idxnode.constnum) .. " out of range for tuple %s", a)
+         if bnode.constnum then
+            if bnode.constnum >= 1 and bnode.constnum <= #a.types and bnode.constnum == math.floor(bnode.constnum) then
+               return a.types[bnode.constnum as integer]
             end
-            return a.types[idxnode.constnum as integer]
+
+            errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", a
          else
-            local array_type = arraytype_from_tuple(idxnode, a)
-            if not array_type then
-               type_error(a, "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime")
-               return INVALID
+            local array_type = arraytype_from_tuple(bnode, a)
+            if array_type then
+               return array_type.elements
             end
-            return array_type.elements
+
+            errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
          end
       elseif is_array_type(a) and is_a(b, INTEGER) then
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
             a.keys = resolve_tuple(orig_b)
-            a.keys_inferred_at = assert(node)
+            a.keys_inferred_at = assert(anode)
             a.keys_inferred_at_file = filename
-         else
-            if not is_a(orig_b, a.keys) then
-               local inferred = " (type of keys inferred at " .. a.keys_inferred_at_file .. ":" .. a.keys_inferred_at.y .. ":" .. a.keys_inferred_at.x .. ": )"
-               return node_error(idxnode, "inconsistent index type: got %s, expected %s" .. inferred, orig_b, a.keys)
-            end
          end
-         return a_type { y = node.y, x = node.x, typename = "unresolved_emptytable_value", emptytable_type = a }
+
+         if is_a(orig_b, a.keys) then
+            return a_type { y = anode.y, x = anode.x, typename = "unresolved_emptytable_value", emptytable_type = a }
+         end
+
+         errm, erra, errb = "inconsistent index type: got %s, expected %s (type of keys inferred at "
+                            .. a.keys_inferred_at_file .. ":"
+                            .. a.keys_inferred_at.y .. ":"
+                            .. a.keys_inferred_at.x .. ": )", orig_b, a.keys
       elseif a.typename == "map" then
          if is_a(orig_b, a.keys) then
             return a.values
-         else
-            return node_error(idxnode, "wrong index type: got %s, expected %s", orig_b, a.keys)
          end
-      elseif node.e2.kind == "string" or node.e2.kind == "enum_item" then
-         return match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = assert(node.e2.conststr) }, orig_a)
+
+         errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
+      elseif bnode.kind == "string" or bnode.kind == "enum_item" then
+         local t, e = match_record_key(a, anode, bnode.conststr)
+         if t then
+            return t
+         end
+
+         errm, erra = e, orig_a
       elseif is_record_type(a) then
          if b.typename == "enum" then
             local field_names: {string} = sorted_keys(b.enumset)
             for _, k in ipairs(field_names) do
                if not a.fields[k] then
-                  return node_error(idxnode, "enum value '" .. k .. "' is not a field in %s", a)
+                  errm, erra = "enum value '" .. k .. "' is not a field in %s", a
+                  break
                end
             end
-            return match_all_record_field_names(idxnode, a, field_names,
-                      "cannot index, not all enum values map to record fields of the same type")
+            if not errm then
+               return match_all_record_field_names(bnode, a, field_names,
+                         "cannot index, not all enum values map to record fields of the same type")
+            end
          elseif is_a(b, STRING) then
-            return node_error(idxnode, "cannot index object of type %s with a string, consider using an enum", orig_a)
+            errm, erra = "cannot index object of type %s with a string, consider using an enum", orig_a
          end
-      end
-      if lax and is_unknown(a) then
-         return UNKNOWN
       else
-         return node_error(idxnode, "cannot index object of type %s with %s", orig_a, orig_b)
+         errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
       end
+
+      return node_error(bnode, errm, erra, errb)
    end
 
    expand_type = function(where: Node, old: Type, new: Type): Type
@@ -7750,14 +7766,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["rawget"] = function(node: Node, _a: Type, b: {Type}, _argdelta: integer): Type
          -- TODO should those offsets be fixed by _argdelta?
          if #b == 2 then
-            local b1 = resolve_tuple_and_nominal(b[1])
-            local b2 = resolve_tuple_and_nominal(b[2])
-            local knode = node.e2[2]
-            if is_record_type(b1) and knode.conststr then
-               return match_record_key(node, b1, { y = knode.y, x = knode.x, kind = "string", tk = assert(knode.conststr) }, b1)
-            else
-               return type_check_index(node, knode, b1, b2)
-            end
+            return type_check_index(node.e2[1], node.e2[2], b[1], b[2])
          else
             return node_error(node, "rawget expects two arguments")
          end
@@ -8864,7 +8873,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)
                   end
                else
-                  node.type = match_record_key(node, a, { y = node.e2.y, x = node.e2.x, kind = "string", tk = node.e2.tk }, orig_a)
+                  node.type = type_check_record_key(node.e1, node.e2, a, orig_a)
+
                   if node.type.needs_compat and opts.gen_compat ~= "off" then
                      -- only apply to a literal use, not a propagated type
                      if node.e1.kind == "variable" and node.e2.kind == "identifier" then
@@ -8883,7 +8893,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                node.type = type_check_funcall(node, a, b)
             elseif node.op.op == "@index" then
-               node.type = type_check_index(node, node.e2, a, b)
+               node.type = type_check_index(node.e1, node.e2, a, b)
             elseif node.op.op == "as" then
                node.type = b
             elseif node.op.op == "is" then
@@ -8899,7 +8909,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                node.type = BOOLEAN
             elseif node.op.op == ":" then
-               node.type = match_record_key(node, node.e1.type, node.e2, orig_a)
+               node.type = type_check_record_key(node.e1, node.e2, a, orig_a)
             elseif node.op.op == "not" then
                node.known = facts_not(node, node.e1.known)
                node.type = BOOLEAN
