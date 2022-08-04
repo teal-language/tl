@@ -7347,6 +7347,8 @@ tl.type_check = function(ast, opts)
             end
          elseif is_a(b, STRING) then
             errm, erra = "cannot index object of type %s with a string, consider using an enum", orig_a
+         else
+            errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
          end
       else
          errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b

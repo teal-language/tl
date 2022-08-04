@@ -7,6 +7,13 @@ describe("[]", function()
          print(x["foo"])
       ]])
 
+      it("fails if indexing by a bad type", util.check_type_error([[
+         local x = { foo = 123 }
+         print(x[true])
+      ]], {
+         { msg = "cannot index object of type record (foo: integer) with boolean" },
+      }))
+
       it("fails even if record is homogenous", util.check_type_error([[
          local x = { foo = 12, bar = 24 }
          local y = "baz"
