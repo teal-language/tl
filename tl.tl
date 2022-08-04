@@ -7243,6 +7243,35 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+   local function check_metamethod(node: Node, op: string, a: Type, b: Type): Type, integer
+      local method_name: string
+      local where_args: {Node}
+      local args: {Type}
+      local meta_on_operator = 1
+      if a and b then
+         method_name = binop_to_metamethod[op]
+         where_args = { node.e1, node.e2 }
+         args = { a, b }
+      else
+         method_name = unop_to_metamethod[op]
+         where_args = { node.e1 }
+         args = { a }
+      end
+
+      local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
+      if (not metamethod) and b then
+         metamethod = b.meta_fields and b.meta_fields[method_name or ""]
+         meta_on_operator = 2
+      end
+      if metamethod then
+         return resolve_tuple_and_nominal((type_check_function_call(node, where_args, metamethod, args, false, 0))), meta_on_operator
+      elseif lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
+         return UNKNOWN, nil
+      else
+         return nil, nil
+      end
+   end
+
    local function type_check_index(node: Node, idxnode: Node, a: Type, b: Type): Type
       local orig_a = a
       local orig_b = b
@@ -8933,24 +8962,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
-               local metamethod: Type
-               if node.type then
-                  if node.type.typename ~= "boolean" then
-                     node.known = FACT_TRUTHY
-                  end
-               else
-                  metamethod = a.meta_fields and a.meta_fields[unop_to_metamethod[node.op.op] or ""]
-                  if metamethod then
-                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, node.e2, metamethod, {a}, false, 0)))
-                  elseif lax and is_unknown(a) then
-                     node.type = UNKNOWN
-                  else
+               local meta_on_operator: integer
+               if not node.type then
+                  node.type, meta_on_operator = check_metamethod(node, node.op.op, a)
+                  if not node.type then
                      return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
 
+               if node.type.typename ~= "boolean" and not is_unknown(node.type) then
+                  node.known = FACT_TRUTHY
+               end
+
                if node.op.op == "~" and env.gen_target == "5.1" then
-                  if metamethod then
+                  if meta_on_operator then
                      all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
                   else
@@ -8976,39 +9001,30 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local types_op = binop_types[node.op.op]
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
-               local metamethod: Type
-               local meta_self = 1
-               if node.type then
-                  if types_op == numeric_binop or node.op.op == ".." then
-                     node.known = FACT_TRUTHY
-                  end
-               else
-                  metamethod = a.meta_fields and a.meta_fields[binop_to_metamethod[node.op.op] or ""]
-                  if not metamethod then
-                     metamethod = b.meta_fields and b.meta_fields[binop_to_metamethod[node.op.op] or ""]
-                     meta_self = 2
-                  end
-                  if metamethod then
-                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, node.e2, metamethod, {a, b}, false, 0)))
-                  elseif lax and (is_unknown(a) or is_unknown(b)) then
-                     node.type = UNKNOWN
-                  else
+               local meta_on_operator: integer
+               if not node.type then
+                  node.type, meta_on_operator = check_metamethod(node, node.op.op, a, b)
+                  if not node.type then
                      return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                   end
                end
 
+               if types_op == numeric_binop or node.op.op == ".." then
+                  node.known = FACT_TRUTHY
+               end
+
                if node.op.op == "//" and env.gen_target == "5.1" then
-                  if metamethod then
+                  if meta_on_operator then
                      all_needs_compat["mt"] = true
-                     convert_node_to_compat_mt_call(node, "__idiv", meta_self, node.e1, node.e2)
+                     convert_node_to_compat_mt_call(node, "__idiv", meta_on_operator, node.e1, node.e2)
                   else
                      local div: Node = { y = node.y, x = node.x, kind = "op", op = an_operator(node, 2, "/"), e1 = node.e1, e2 = node.e2 }
                      convert_node_to_compat_call(node, "math", "floor", div)
                   end
                elseif bit_operators[node.op.op] and env.gen_target == "5.1" then
-                  if metamethod then
+                  if meta_on_operator then
                      all_needs_compat["mt"] = true
-                     convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_self, node.e1, node.e2)
+                     convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_on_operator, node.e1, node.e2)
                   else
                      all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
