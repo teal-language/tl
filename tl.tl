@@ -5884,21 +5884,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function add_errs_prefixing(src: {Error}, dst: {Error}, prefix: string, node: Node)
+   local function add_errs_prefixing(src: {Error}, dst: {Error}, prefix: string, where: Node)
       if not src then
          return
       end
       for _, err in ipairs(src) do
          err.msg = prefix .. err.msg
 
-         -- node.y may be nil because of `typ as Node` casts and not all types have .y set
-         if node and node.y and (
+         -- where.y may be nil because of `typ as Node` casts and not all types have .y set
+         if where and where.y and (
             (err.filename ~= filename)
             or (not err.y)
-            or (node.y > err.y or (node.y == err.y and node.x > err.x))
+            or (where.y > err.y or (where.y == err.y and where.x > err.x))
          ) then
-            err.y = node.y
-            err.x = node.x
+            err.y = where.y
+            err.x = where.x
             err.filename = filename
          end
 
@@ -5951,10 +5951,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local function arg_check(cmp: CompareTypes, a: Type, b: Type, at: Node, n: integer, errs: {Error}): boolean
+   local function arg_check(cmp: CompareTypes, a: Type, b: Type, where: Node, n: integer, errs: {Error}): boolean
       local matches, match_errs = cmp(a, b)
       if not matches then
-         add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", at)
+         add_errs_prefixing(match_errs, errs, "argument " .. n .. ": ", where)
          return false
       end
       return true
@@ -6811,13 +6811,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function resolve_for_call(node: Node, func: Type, args: {Type}, is_method: boolean): Type, boolean
+   local function resolve_for_call(func: Type, args: {Type}, is_method: boolean): Type, boolean
       -- resolve unknown in lax mode, produce a general unknown function
       if lax and is_unknown(func) then
          func = a_type { typename = "function", args = VARARG { UNKNOWN }, rets = VARARG { UNKNOWN } }
-         if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
-            add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
-         end
       end
       -- unwrap if tuple, resolve if nominal
       func = resolve_tuple_and_nominal(func)
@@ -6836,7 +6833,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return func, is_method
    end
 
-   local type_check_function_call: function(Node, Type, {Type}, boolean, integer): Type, Type
+   local type_check_function_call: function(Node, {Node}, Type, {Type}, boolean, integer): Type, Type
    do
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
@@ -6848,7 +6845,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function try_match_func_args(node: Node, f: Type, args: {Type}, argdelta: integer): Type, {Error}
+      local function try_match_func_args(where: Node, where_args: {Node}, f: Type, args: {Type}, argdelta: integer): Type, {Error}
          local errs = {}
 
          local given = #args
@@ -6872,8 +6869,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   break
                end
             else
-               local at = node.e2 and node.e2[a] or node
-               if not arg_check(is_a, argument, farg, at, (a + argdelta), errs) then
+               local where_arg = where_args and where_args[a] or where
+               if not arg_check(is_a, argument, farg, where_arg, (a + argdelta), errs) then
                   return nil, errs
                end
             end
@@ -6886,12 +6883,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local argument = args[a]
             if argument.typename == "emptytable" then
                local farg = f.args[a] or (va and f.args[expected])
-               local where = node.e2[a + argdelta] or node.e2 -- for self, a + argdelta is 0
-               infer_var(argument, resolve_typevars_at(farg, where), where)
+               local where_arg = where_args[a + argdelta] or where_args -- for self, a + argdelta is 0
+               infer_var(argument, resolve_typevars_at(farg, where_arg), where_arg)
             end
          end
 
-         return resolve_typevars_at(f.rets, node)
+         return resolve_typevars_at(f.rets, where)
       end
 
       local function revert_typeargs(func: Type)
@@ -6934,12 +6931,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolve_typevars_at(f.rets, node)
       end
 
-      local function check_call(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
+      local function check_call(where: Node, where_args: {Node}, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
          assert(type(func) == "table")
          assert(type(args) == "table")
 
          if not (func.typename == "function" or func.typename == "poly") then
-            func, is_method = resolve_for_call(node, func, args, is_method)
+            func, is_method = resolve_for_call(func, args, is_method)
          end
 
          argdelta = is_method and -1 or argdelta or 0
@@ -6947,7 +6944,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local is_func = func.typename == "function"
          local is_poly = func.typename == "poly"
          if not (is_func or is_poly) then
-            return node_error(node, "not a function: %s", func)
+            return node_error(where, "not a function: %s", func)
          end
 
          local passes, n = 1, 1
@@ -6963,7 +6960,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if (not tried) or not tried[i] then
                   local f = is_func and func or func.types[i]
                   if f.is_method and not is_method and not (args[1] and is_a(args[1], f.args[1])) then
-                     return node_error(node, "invoked method as a regular function: use ':' instead of '.'")
+                     return node_error(where, "invoked method as a regular function: use ':' instead of '.'")
                   end
                   local expected = #f.args
 
@@ -6976,7 +6973,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   -- poly, pass 3: then finally try vararg functions
                                 or (pass == 3 and f.args.is_va and given > expected)))
                   then
-                     local matched, errs = try_match_func_args(node, f, args, argdelta)
+                     local matched, errs = try_match_func_args(where, where_args, f, args, argdelta)
                      if matched then
                         -- success!
                         return matched, f
@@ -6993,12 +6990,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         return fail_call(node, func, given, first_errs)
+         return fail_call(where, func, given, first_errs)
       end
 
-      type_check_function_call = function(node: Node, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
+      type_check_function_call = function(where: Node, where_args: {Node}, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
          begin_scope()
-         local ret, f = check_call(node, func, args, is_method, argdelta)
+         local ret, f = check_call(where, where_args, func, args, is_method, argdelta)
          end_scope()
          return ret, f
       end
@@ -7787,7 +7784,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       ["assert"] = function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
          node.known = FACT_TRUTHY
-         return (type_check_function_call(node, a, b, false, argdelta))
+         return (type_check_function_call(node, node.e2, a, b, false, argdelta))
       end,
    }
 
@@ -7798,13 +7795,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if special then
             return special(node, a, b, argdelta)
          else
-            return (type_check_function_call(node, a, b, false, argdelta))
+            return (type_check_function_call(node, node.e2, a, b, false, argdelta))
          end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b, 1, node.e1.e1.type)
-         return (type_check_function_call(node, a, b, true))
+         return (type_check_function_call(node, node.e2, a, b, true))
       else
-         return (type_check_function_call(node, a, b, false, argdelta))
+         return (type_check_function_call(node, node.e2, a, b, false, argdelta))
       end
    end
 
@@ -8347,10 +8344,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local exp1 = node.exps[1]
             local args = {node.exps[2] and node.exps[2].type,
                           node.exps[3] and node.exps[3].type}
-            local exp1type = resolve_for_call(exp1, exp1.type, args)
+            local exp1type = resolve_for_call(exp1.type, args)
 
             if exp1type.typename == "poly" then
-               local _, matched = type_check_function_call(node, exp1type, args, false, 0)
+               local _, matched = type_check_function_call(exp1, {node.exps[2], node.exps[3]}, exp1type, args, false, 0)
                if matched then
                   exp1type = matched
                end
@@ -8850,6 +8847,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
             elseif node.op.op == "@funcall" then
+               if lax and is_unknown(a) then
+                  if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
+                     add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
+                  end
+               end
                node.type = type_check_funcall(node, a, b)
             elseif node.op.op == "@index" then
                node.type = type_check_index(node, node.e2, a, b)
@@ -8939,7 +8941,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                else
                   metamethod = a.meta_fields and a.meta_fields[unop_to_metamethod[node.op.op] or ""]
                   if metamethod then
-                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, metamethod, {a}, false, 0)))
+                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, node.e2, metamethod, {a}, false, 0)))
                   elseif lax and is_unknown(a) then
                      node.type = UNKNOWN
                   else
@@ -8987,7 +8989,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      meta_self = 2
                   end
                   if metamethod then
-                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, metamethod, {a, b}, false, 0)))
+                     node.type = resolve_tuple_and_nominal((type_check_function_call(node, node.e2, metamethod, {a, b}, false, 0)))
                   elseif lax and (is_unknown(a) or is_unknown(b)) then
                      node.type = UNKNOWN
                   else
