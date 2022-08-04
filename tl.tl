@@ -4306,6 +4306,7 @@ local binop_to_metamethod: {string:string} = {
    ["=="] = "__eq",
    ["<"] = "__lt",
    ["<="] = "__le",
+   ["@index"] = "__index",
 }
 
 local function is_unknown(t: Type): boolean
@@ -7259,7 +7260,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
-      if (not metamethod) and b then
+      if (not metamethod) and b and op ~= "@index" then
          metamethod = b.meta_fields and b.meta_fields[method_name or ""]
          meta_on_operator = 2
       end
@@ -7275,7 +7276,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function type_check_index(anode: Node, bnode: Node, a: Type, b: Type): Type
       local orig_a = a
       local orig_b = b
-      a = resolve_tuple_and_nominal(a)
+      a = resolve_typetype(resolve_tuple_and_nominal(a))
       b = resolve_tuple_and_nominal(b)
 
       if lax and is_unknown(a) then
@@ -7349,6 +7350,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       else
          errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
+      end
+
+      local meta_t = check_metamethod(anode, "@index", a, orig_b)
+      if meta_t then
+         return meta_t
       end
 
       return node_error(bnode, errm, erra, errb)
