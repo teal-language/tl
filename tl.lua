@@ -5372,7 +5372,7 @@ tl.type_check = function(ast, opts)
             if not raw then
                scope[name].used = true
             end
-            return scope[name]
+            return scope[name], i
          end
       end
    end
@@ -7116,6 +7116,11 @@ tl.type_check = function(ast, opts)
    local function add_global(node, var, valtype, is_const)
       if lax and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
+      end
+      local v, scope = find_var(var)
+      if v and scope > 1 then
+         node_error(node, "cannot define a global when a local with the same name is in scope")
+         return
       end
       st[1][var] = { t = valtype, attribute = is_const and "const" or nil }
       if node then

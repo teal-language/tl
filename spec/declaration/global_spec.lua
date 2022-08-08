@@ -301,4 +301,35 @@ describe("global", function()
          global zup: Foo4<string> = zip
       ]])
    end)
+
+   describe("shadowing", function()
+      it("cannot define a global variable when a local variable with the same name is in scope", util.check_type_error([[
+         global function test()
+            local boo: string = "1"
+            global boo: number = 1
+         end
+
+         local function test2()
+            local boo2: string = "1"
+            global boo2: number = 1
+         end
+      ]], {
+         { y = 3, msg = "cannot define a global when a local with the same name is in scope" },
+         { y = 8, msg = "cannot define a global when a local with the same name is in scope" },
+      }))
+
+      it("#only cannot define a global variable when a local function with the same name is in scope", util.check_type_error([[
+         local function test()
+         end
+
+         local function f()
+            global test: number = 1
+         end
+
+         global test: number = 1
+      ]], {
+         { y = 5, msg = "cannot define a global when a local with the same name is in scope" },
+         { y = 8, msg = "cannot define a global when a local with the same name is in scope" },
+      }))
+   end)
 end)

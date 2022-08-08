@@ -161,4 +161,28 @@ describe("global function", function()
          end)
       end)
    end
+
+   describe("shadowing", function()
+      it("cannot define a global function when a local function with the same name is in scope", util.check_type_error([[
+         local function test()
+            local boo: string = "1"
+         end
+
+         global function test()
+            local boo: string = "1"
+         end
+      ]], {
+         { y = 5, msg = "cannot define a global when a local with the same name is in scope" },
+      }))
+
+      it("cannot define a global function when a local variable with the same name is in scope", util.check_type_error([[
+         local test: integer
+
+         global function test()
+            local boo: string = "1"
+         end
+      ]], {
+         { y = 3, msg = "cannot define a global when a local with the same name is in scope" },
+      }))
+   end)
 end)
