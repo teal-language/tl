@@ -93,7 +93,7 @@ describe("global", function()
       }))
 
       it("fails if removing const", util.check_type_error([[
-         global string
+         global string: number
       ]], {
          { msg = "global was previously declared as <const>" },
       }))

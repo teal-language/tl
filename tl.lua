@@ -5372,7 +5372,7 @@ tl.type_check = function(ast, opts)
             if not raw then
                scope[name].used = true
             end
-            return scope[name], i
+            return scope[name], i, var_is_const(scope[name])
          end
       end
    end
@@ -5719,13 +5719,6 @@ tl.type_check = function(ast, opts)
             t.inferred_at = node
             t.inferred_at_file = filename
          end
-      end
-   end
-
-   local function find_global(name)
-      local scope = st[1]
-      if scope[name] then
-         return scope[name].t, var_is_const(scope[name])
       end
    end
 
@@ -7113,19 +7106,42 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function add_global(node, var, valtype, is_const)
+   local function add_global(node, var, valtype, is_assigning)
       if lax and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
       end
-      local v, scope = find_var(var)
-      if v and scope > 1 then
+
+      local existing, scope, existing_is_const = find_var(var)
+      if existing and scope > 1 then
          node_error(node, "cannot define a global when a local with the same name is in scope")
-         return
+         return false
       end
+
+      local is_const = node.attribute == "const"
+
+      if existing then
+         if is_assigning and existing_is_const then
+            node_error(node, "cannot reassign to <const> global: " .. var)
+         end
+         if existing_is_const == true and not is_const then
+            node_error(node, "global was previously declared as <const>: " .. var)
+         end
+         if existing_is_const == false and is_const then
+            node_error(node, "global was previously declared as not <const>: " .. var)
+         end
+         if valtype and not same_type(existing.t, valtype) then
+            node_error(node, "cannot redeclare global with a different type: previous type of " .. var .. " is %s", existing.t)
+         end
+         return false
+      end
+
       st[1][var] = { t = valtype, attribute = is_const and "const" or nil }
+
       if node then
          node.type = node.type or valtype
       end
+
+      return true
    end
 
    local function get_rets(rets)
@@ -8145,28 +8161,15 @@ tl.type_check = function(ast, opts)
          before = function(node)
             local var = node.var
             local unresolved = get_unresolved("any_scope", node)
-            local existing, existing_is_const = find_global(var.tk)
             if node.value then
                node.value.newtype, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
 
-               if existing then
-                  local is_const = var.attribute == "const"
-                  if existing_is_const == true and not is_const then
-                     node_error(var, "global was previously declared as <const>: " .. var.tk)
-                  end
-                  if existing_is_const == false and is_const then
-                     node_error(var, "global was previously declared as not <const>: " .. var.tk)
-                  end
-                  if not same_type(existing, node.value.newtype) then
-                     node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
-                  end
-               elseif unresolved.global_types[var.tk] then
+               local added = add_global(var, var.tk, node.value.newtype)
+               if added and unresolved.global_types[var.tk] then
                   unresolved.global_types[var.tk] = nil
                end
-
-               add_global(var, var.tk, node.value.newtype, var.attribute ~= nil)
             else
-               if not existing then
+               if not st[1][var.tk] then
                   unresolved.global_types[var.tk] = true
                end
             end
@@ -8250,34 +8253,19 @@ tl.type_check = function(ast, opts)
                   node_error(var, "globals may not be <close>")
                end
                local t = decltype or infertype
-               local existing, existing_is_const = find_global(var.tk)
-               if existing then
-                  local is_const = var.attribute == "const"
-                  if infertype and existing_is_const then
-                     node_error(var, "cannot reassign to <const> global: " .. var.tk)
-                  end
-                  if existing_is_const == true and not is_const then
-                     node_error(var, "global was previously declared as <const>: " .. var.tk)
-                  end
-                  if existing_is_const == false and is_const then
-                     node_error(var, "global was previously declared as not <const>: " .. var.tk)
-                  end
-                  if t and not same_type(existing, t) then
-                     node_error(var, "cannot redeclare global with a different type: previous type of " .. var.tk .. " is %s", existing)
-                  end
-               else
-                  if t == nil then
-                     t = missing_initializer(node, i, var.tk)
-                  elseif t.typename == "emptytable" then
-                     t.declared_at = node
-                     t.assigned_to = var.tk
-                  end
-                  t.inferred_len = nil
-                  add_global(var, var.tk, t, var.attribute ~= nil)
-                  var.type = t
 
-                  dismiss_unresolved(var.tk)
+               if t == nil then
+                  t = missing_initializer(node, i, var.tk)
+               elseif t.typename == "emptytable" then
+                  t.declared_at = node
+                  t.assigned_to = var.tk
                end
+               t.inferred_len = nil
+
+               add_global(var, var.tk, t, infertype ~= nil)
+               var.type = t
+
+               dismiss_unresolved(var.tk)
             end
             node.type = NONE
             return node.type
