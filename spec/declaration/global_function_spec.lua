@@ -184,5 +184,16 @@ describe("global function", function()
       ]], {
          { y = 3, msg = "cannot define a global when a local with the same name is in scope" },
       }))
+
+      it("cannot be annotated as 'global'", util.check_syntax_error([[
+         local tbl = {}
+
+         -- this function is stored in a table field, not in a global variable
+         global function tbl.say(something: string)
+           print(something)
+         end
+      ]], {
+         { y = 4, msg = "record functions cannot be annotated as 'global'" },
+      }))
    end)
 end)
