@@ -5922,11 +5922,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local type TypeGetter = function(string): Type
 
-   local function match_record_fields(t1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
+   local function match_record_fields(rec1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
       cmp = cmp or is_a
       local fielderrs: {Error} = {}
-      for _, k in ipairs(t1.field_order) do
-         local f = t1.fields[k]
+      for _, k in ipairs(rec1.field_order) do
+         local f = rec1.fields[k]
          local t2k = t2(k)
          if t2k == nil then
             if not lax then
@@ -5943,22 +5943,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local function match_fields_to_record(t1: Type, t2: Type, cmp: CompareTypes): boolean, {Error}
-      if t1.is_userdata ~= t2.is_userdata then
-         return false, { error_in_type(t1, "userdata record doesn't match: %s", t2) }
+   local function match_fields_to_record(rec1: Type, rec2: Type, cmp: CompareTypes): boolean, {Error}
+      if rec1.is_userdata ~= rec2.is_userdata then
+         return false, { error_in_type(rec1, "userdata record doesn't match: %s", rec2) }
       end
-      local ok, fielderrs = match_record_fields(t1, function(k: string): Type return t2.fields[k] end, cmp)
+      local ok, fielderrs = match_record_fields(rec1, function(k: string): Type return rec2.fields[k] end, cmp)
       if not ok then
          local errs = {}
-         add_errs_prefixing(nil, errs, fielderrs, show_type(t1) .. " is not a " .. show_type(t2) .. ": ")
+         add_errs_prefixing(nil, errs, fielderrs, show_type(rec1) .. " is not a " .. show_type(rec2) .. ": ")
          return false, errs
       end
       return true
    end
 
-   local function match_fields_to_map(t1: Type, t2: Type): boolean, {Error}
-      if not match_record_fields(t1, function(_: string): Type return t2.values end) then
-         return false, { error_in_type(t1, "record is not a valid map; not all fields have the same type") }
+   local function match_fields_to_map(rec1: Type, map: Type): boolean, {Error}
+      if not match_record_fields(rec1, function(_: string): Type return map.values end) then
+         return false, { error_in_type(rec1, "record is not a valid map; not all fields have the same type") }
       end
       return true
    end
