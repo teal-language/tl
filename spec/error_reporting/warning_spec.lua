@@ -170,4 +170,50 @@ describe("warnings", function()
          { y = 1, msg = "unused type Foo: type number" }
       }))
    end)
+
+   describe("on return", function()
+      it("should report when discarding returns via expressions with 'and'", util.check_warnings([[
+         local function may_fail(chance: number): boolean, string
+            if math.random() >= chance then
+               return true
+            else
+               return fail, "unlucky this time!"
+            end
+         end
+
+         local function try_twice(c1: number, c2: number): boolean, string
+            return may_fail(c1)
+               and may_fail(c2)
+         end
+
+         local ok, err = try_twice(0.9, 0.5)
+         if not ok then
+            print(err)
+         end
+      ]], {
+         { y = 11, msg = "additional return values are being discarded due to 'and' expression; suggest parentheses if intentional" }
+      }))
+
+      it("should report when discarding returns via expressions with 'or'", util.check_warnings([[
+         local function may_fail(chance: number): boolean, string
+            if math.random() >= chance then
+               return true
+            else
+               return fail, "unlucky this time!"
+            end
+         end
+
+         local function try_twice(c1: number, c2: number): boolean, string
+            return may_fail(c1)
+                or may_fail(c2)
+         end
+
+         local ok, err = try_twice(0.5, 0.9)
+         if not ok then
+            print(err)
+         end
+      ]], {
+         { y = 11, msg = "additional return values are being discarded due to 'or' expression; suggest parentheses if intentional" }
+      }))
+   end)
 end)

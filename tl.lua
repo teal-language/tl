@@ -8527,6 +8527,14 @@ node.exps[3] and node.exps[3].type, }
                node_error(node, "in " .. what .. ": excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
             end
 
+            if nrets > 1 and
+               #node.exps == 1 and
+               node.exps[1].kind == "op" and
+               (node.exps[1].op.op == "and" or node.exps[1].op.op == "or") and
+               #node.exps[1].e2.type > 1 then
+               node_warning("hint", node.exps[1].e2, "additional return values are being discarded due to '" .. node.exps[1].op.op .. "' expression; suggest parentheses if intentional")
+            end
+
             for i = 1, #children[1] do
                local expected = rets[i] or vatype
                if expected then
