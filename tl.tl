@@ -6488,11 +6488,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return false -- an error has been generated elsewhere
       end
 
-      -- ∀ t, nil <: t
-      if t1.typename == "nil" then -- TODO nilable
-         return true
-      end
-
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
@@ -6508,20 +6503,49 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return compare_and_infer_typevars(t1, t2, is_a)
       end
 
+      -- ∀ t, nil <: t
+      if t1.typename == "nil" then -- TODO nilable
+         return true
+      end
+
       -- ∀ t, t <: any
       if t2.typename == "any" then
          return true
 
-      -- ∀ t in t1, t <: t2
-      -- ──────────────────   -- a union type t1 is a t2
-      --   t1 union <: t2     -- if all of t1's types satisfy t2
+
       elseif t1.typename == "union" then
-         for _, t in ipairs(t1.types) do
-            if not is_a(t, t2, for_equality) then
-               return false, terr(t1, "got %s, expected %s", t1, t2)
+
+         -- ∀ t in t1, ∃ u in t2 t <: u
+         -- ───────────────────────────   -- a union t1 is a union t2
+         --     t1 union <: t2 union      -- if all of t1's types can be satisfied in t2
+         if t2.typename == "union" then
+            for _, t in ipairs(t1.types) do
+               local ok = false
+               begin_scope()
+               for _, u in ipairs(t2.types) do
+                  if is_a(t, u, for_equality) then
+                     ok = true
+                     break
+                  end
+               end
+               end_scope() -- don't preserve inferences
+               if not ok then
+                  return false, terr(t1, "got %s, expected %s", t1, t2)
+               end
             end
+            return true
+
+         -- ∀ t in t1, t <: t2
+         -- ──────────────────   -- a union type t1 is a t2
+         --   t1 union <: t2     -- if all of t1's types satisfy t2
+         else
+            for _, t in ipairs(t1.types) do
+               if not is_a(t, t2, for_equality) then
+                  return false, terr(t1, "got %s, expected %s", t1, t2)
+               end
+            end
+            return true
          end
-         return true
 
       -- ∃ t in t2, t1 <: t
       -- ──────────────────   -- a value of type t1 is a member of union type t2

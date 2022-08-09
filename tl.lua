@@ -6488,11 +6488,6 @@ tl.type_check = function(ast, opts)
          return false
       end
 
-
-      if t1.typename == "nil" then
-         return true
-      end
-
       if t2.typename ~= "tuple" then
          t1 = resolve_tuple(t1)
       end
@@ -6509,19 +6504,48 @@ tl.type_check = function(ast, opts)
       end
 
 
+      if t1.typename == "nil" then
+         return true
+      end
+
+
       if t2.typename == "any" then
          return true
 
 
-
-
       elseif t1.typename == "union" then
-         for _, t in ipairs(t1.types) do
-            if not is_a(t, t2, for_equality) then
-               return false, terr(t1, "got %s, expected %s", t1, t2)
+
+
+
+
+         if t2.typename == "union" then
+            for _, t in ipairs(t1.types) do
+               local ok = false
+               begin_scope()
+               for _, u in ipairs(t2.types) do
+                  if is_a(t, u, for_equality) then
+                     ok = true
+                     break
+                  end
+               end
+               end_scope()
+               if not ok then
+                  return false, terr(t1, "got %s, expected %s", t1, t2)
+               end
             end
+            return true
+
+
+
+
+         else
+            for _, t in ipairs(t1.types) do
+               if not is_a(t, t2, for_equality) then
+                  return false, terr(t1, "got %s, expected %s", t1, t2)
+               end
+            end
+            return true
          end
-         return true
 
 
 
