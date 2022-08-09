@@ -11,10 +11,9 @@ describe("or", function()
       local m2: {string:Ty} = m1 or { foo = t }
    ]])
 
-   it("record or record: need to be same type", util.check_type_error([[
+   it("record or record: need to be compatible", util.check_type_error([[
       local record R1
-         x: string
-         y: string
+         x: number
       end
       local record R2
          x: string

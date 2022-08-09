@@ -313,9 +313,29 @@ describe("record method", function()
       { msg = "cannot index key 'bla' in type number" }
    }))
 
-   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[
+   it("catches a bad number of arguments in method", util.check_type_error([[
       local record T<A, B>
         method: function(function(A)): T<A, B>
+      end
+
+      local t = { }
+
+      function t.new<A, B>(): T<A, B>
+        local self = { }
+        function self:method(callback: function(A)): T<A, B>
+          return self
+        end
+        return self
+      end
+
+      return t
+   ]], {
+      { msg = "incompatible number of arguments" },
+   }))
+
+   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[
+      local record T<A, B>
+        method: function(T<A, B>, function(A)): T<A, B>
       end
 
       local t = { }

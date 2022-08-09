@@ -5918,23 +5918,30 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+   local same_type: function(t1: Type, t2: Type): boolean, {Error}
    local is_a: function(Type, Type, boolean): boolean, {Error}
 
    local type TypeGetter = function(string): Type
 
-   local function match_record_fields(rec1: Type, t2: TypeGetter, cmp: CompareTypes): boolean, {Error}
-      cmp = cmp or is_a
+   local function match_record_fields(rec1: Type, t2: TypeGetter, invariant: boolean): boolean, {Error}
       local fielderrs: {Error} = {}
       for _, k in ipairs(rec1.field_order) do
          local f = rec1.fields[k]
          local t2k = t2(k)
          if t2k == nil then
-            if not lax then
+            if (not lax) and invariant then
                table.insert(fielderrs, error_in_type(f, "unknown field " .. k))
             end
          else
-            local __, errs = cmp(f, t2k)
-            add_errs_prefixing(nil, errs, fielderrs, "record field doesn't match: " .. k .. ": ")
+            local ok, errs: boolean, {Error}
+            if invariant then
+               ok, errs = same_type(f, t2k)
+            else
+               ok, errs = is_a(f, t2k)
+            end
+            if not ok then
+               add_errs_prefixing(nil, errs, fielderrs, "record field doesn't match: " .. k .. ": ")
+            end
          end
       end
       if #fielderrs > 0 then
@@ -5943,14 +5950,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local function match_fields_to_record(rec1: Type, rec2: Type, cmp: CompareTypes): boolean, {Error}
+   local function match_fields_to_record(rec1: Type, rec2: Type, invariant: boolean): boolean, {Error}
       if rec1.is_userdata ~= rec2.is_userdata then
          return false, { error_in_type(rec1, "userdata record doesn't match: %s", rec2) }
       end
-      local ok, fielderrs = match_record_fields(rec1, function(k: string): Type return rec2.fields[k] end, cmp)
+      local ok, fielderrs = match_record_fields(rec1, function(k: string): Type return rec2.fields[k] end, invariant)
       if not ok then
          local errs = {}
-         add_errs_prefixing(nil, errs, fielderrs, show_type(rec1) .. " is not a " .. show_type(rec2) .. ": ")
+         add_errs_prefixing(nil, fielderrs, errs, show_type(rec1) .. " is not a " .. show_type(rec2) .. ": ")
          return false, errs
       end
       return true
@@ -5971,8 +5978,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
       return true
    end
-
-   local same_type: function(t1: Type, t2: Type): boolean, {Error}
 
    local function has_all_types_of(t1s: {Type}, t2s: {Type}, cmp: CompareTypes): boolean
       for _, t1 in ipairs(t1s) do
@@ -6265,6 +6270,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local is_lua_table_type: function(t: Type): boolean
    local resolve_tuple_and_nominal: function(t: Type): Type = nil
 
+   local function invariant_match_fields_to_record(t1: Type, t2: Type): boolean, {Error}
+      local ok, errs = match_fields_to_record(t1, t2, true)
+      if not ok then
+         return ok, errs
+      end
+      ok, errs = match_fields_to_record(t2, t1, true)
+      if not ok then
+         return ok, errs
+      end
+      return true
+   end
+
    -- invariant type comparison
    same_type = function(t1: Type, t2: Type): boolean, {Error}
       assert(type(t1) == "table")
@@ -6313,8 +6330,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t1.typename == "nominal" then
          return are_same_nominals(t1, t2)
       elseif t1.typename == "record" then
-         return match_fields_to_record(t1, t2, same_type)
-            and match_fields_to_record(t2, t1, same_type)
+         return invariant_match_fields_to_record(t1, t2)
       elseif t1.typename == "function" then
          if #t1.args ~= #t2.args then
             return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
@@ -6339,8 +6355,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if not ok then
             return ok, errs
          end
-         return match_fields_to_record(t1, t2, same_type)
-            and match_fields_to_record(t2, t1, same_type)
+         return invariant_match_fields_to_record(t1, t2)
       end
       return true
    end
