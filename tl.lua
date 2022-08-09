@@ -6044,7 +6044,7 @@ tl.type_check = function(ast, opts)
       end
       if list[1] then
          table.sort(list, function(a, b)
-            return a.y < a.y or (a.y == b.y and a.x < b.x)
+            return a.y < b.y or (a.y == b.y and a.x < b.x)
          end)
          for _, u in ipairs(list) do
             unused_warning(u.name, u.var)
