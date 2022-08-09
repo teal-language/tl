@@ -1,3 +1,99 @@
+# 0.14.0
+
+2022-08-09
+
+It's been a year! It was good to let the language sit for a while and
+see what kind of feedback we get from real world usage. This has also been
+an opportunity to get bug reports and fixes in, to help further stabilize
+the compiler.
+
+This release features commits by Li Jin, Enrique García Cota, Patrick
+Desaulniers, Mark Tulley, Corey Williamson, @Koeng101 and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Global functions now require `global function`, you can no longer
+  declare them with a bare `function`; this makes it more consistent
+  with other global variables. (#500)
+* Forward references for global types:
+  * `global type Name` can be used to forward-declare a type and
+    use it, for example, in record fields, even if it is declared
+    in another file. (#534)
+* Polymorphic functions (as declared in record methods) can be used
+  as iterators for a generic `for`. (#525)
+* You can no longer define a global with the same name as a local which
+  is already in scope. (#545)
+* Initial support for the `__index` metamethod: you can declare it
+  as a function. (#541)
+* Dropped support for the old backtick syntax for type variables.
+* Type checker checks validity of Lua 5.4 `<close>` annotations:
+  * the output target must be set to "5.4"
+  * there can be only one `<close>` variable per declaration (to ensure
+    correct order of `__close` metamethods being called)
+  * the type of the variable is closable
+  * globals can't be `<close>`
+  * `<close>` variables can't be assigned to
+* Standard library improvements:
+  * `math.maxinteger` and `max.mininteger` are always available
+    (in any Lua version, with or without lua-compat-5.3 installed)
+
+### Code generation
+
+* Local types are now elided from generated code if they are never
+  used in a concrete value context: if you declare a `local type T`
+  such as a function alias, it no longer produces a `local T = {}`
+  in the Lua output.
+
+### API
+
+* `tl.pretty_print_ast` now takes a `TargetMode` argument to specify
+  flavor of Lua to produce in output:
+  * new `TargetMode` for outputting Lua 5.4-specific code including
+    `<const>` and `<close>` annotations.
+* `tl.load` now always runs the type checker, which is needed to produce
+  type information required to output correct code in some cases.
+  The default behavior, however, remains backwards compatible and
+  allows code to run in the presence of type checking errors.
+  You can override this behavior and make `tl.load` return `nil, err`
+  in case of type checking errors by using a "c" prefix in the mode flag
+  (e.g. "ct", "cb", "cbt").
+* `tl.type_check` returns two values.
+
+### Tooling
+
+* Project CI now runs on GitHub Actions
+* Windows portability improvements
+  * Windows and Mac now get tested regularly in the GitHub Actions CI!
+* New hint warning when the value of a function with multiple return values
+  is being returned as part of an expression, causing the additional returns
+  to be lost.
+* Improved error messages for map errors.
+* `tl check` avoids re-checking files already loaded in the environment:
+  this allows you to check your `global_env_def` module without getting
+  redeclaration errors.
+* Build script for stand-alone binary is now included in the repository.
+
+### Fixes
+
+* Fixed resolution of type variables to avoid clashes when nested uses
+  of generic functions used the same type variable name. (#442)
+* Map index keys are checked nominally, not structurally. (#533)
+* Fixed flow checking of enums in `or`. (#487)
+* Properly return type errors for fields when comparing records. (#456)
+* Fixed a stack overflow when comparing unions with type variables. (#507)
+* Fixed a stack overflow in record comparisons. (#501)
+* It now reports the location of a redeclared record correctly. (#542)
+* Fixed resolution of nested type aliases (#527) and nested nominals (#499).
+* Fixed check of inconsistent record function declarations. (#517)
+* `tl.loader` reports correct filename in debug information. (#508)
+* Fixed error message when `tlconfig.lua` contains errors.
+* Tables can't be assigned to record types declared to be `userdata`. (#460)
+* Fix check of arrays of enums in overloaded record functions.
+* Fixed crash when attempting to declare a record method on an
+  unknown variable. (#470)
+
 # 0.13.2
 
 2021-07-30
