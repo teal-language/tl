@@ -197,18 +197,18 @@ tl.typecodes = {
    IS_VALID = 0x00000fff,
 }
 
-local Result = tl.Result
-local Env = tl.Env
-local Error = tl.Error
-local CompatMode = tl.CompatMode
-local TypeCheckOptions = tl.TypeCheckOptions
-local LoadMode = tl.LoadMode
-local LoadFunction = tl.LoadFunction
-local TargetMode = tl.TargetMode
-local TypeInfo = tl.TypeInfo
-local TypeReport = tl.TypeReport
-local TypeReportEnv = tl.TypeReportEnv
-local Symbol = tl.Symbol
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -235,7 +235,6 @@ end
 
 
 
-local TokenKind = {}
 
 
 
@@ -251,7 +250,8 @@ local TokenKind = {}
 
 
 
-local Token = {}
+
+
 
 
 
@@ -260,7 +260,7 @@ local Token = {}
 
 
 do
-   local LexState = {}
+
 
 
 
@@ -937,7 +937,7 @@ local function new_typeid()
    return last_typeid
 end
 
-local TypeName = {}
+
 
 
 
@@ -979,7 +979,6 @@ local table_types = {
    ["emptytable"] = true,
 }
 
-local Type = {}
 
 
 
@@ -1063,7 +1062,6 @@ local Type = {}
 
 
 
-local Operator = {}
 
 
 
@@ -1071,7 +1069,6 @@ local Operator = {}
 
 
 
-local NodeKind = {}
 
 
 
@@ -1116,7 +1113,10 @@ local NodeKind = {}
 
 
 
-local FactType = {}
+
+
+
+
 
 
 
@@ -1140,13 +1140,13 @@ local Fact = {}
 
 
 
-local KeyParsed = {}
 
 
 
 
 
-local Attribute = {}
+
+
 
 
 
@@ -1156,7 +1156,8 @@ local is_attribute = {
    ["close"] = true,
 }
 
-local Node = {ExpectedContext = {}, }
+
+
 
 
 
@@ -1258,7 +1259,6 @@ local function is_typetype(t)
    return t.typename == "typetype" or t.typename == "nestedtype"
 end
 
-local ParseState = {}
 
 
 
@@ -1266,7 +1266,8 @@ local ParseState = {}
 
 
 
-local ParseTypeListMode = {}
+
+
 
 
 
@@ -1343,7 +1344,7 @@ local function verify_kind(ps, i, kind, node_kind)
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
-local SkipFunction = {}
+
 
 local function failskip(ps, i, msg, skip_fn, starti)
    local err_ps = {
@@ -1445,9 +1446,9 @@ local function parse_table_item(ps, i, n)
    return i, node, n + 1
 end
 
-local ParseItem = {}
 
-local SeparatorMode = {}
+
+
 
 
 
@@ -2230,7 +2231,7 @@ local function parse_local_function(ps, i)
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local FunctionType = {}
+
 
 
 
@@ -2476,7 +2477,7 @@ local function store_field_in_record(ps, i, field_name, t, fields, field_order)
    return true
 end
 
-local ParseBody = {}
+
 
 local function parse_nested_type(ps, i, def, typename, parse_body)
    i = i + 1
@@ -2972,7 +2973,6 @@ end
 
 
 
-local VisitorCallbacks = {}
 
 
 
@@ -2980,19 +2980,20 @@ local VisitorCallbacks = {}
 
 
 
-local VisitorExtraCallback = {}
 
 
 
 
 
-local Visitor = {}
 
 
 
 
 
-local MetaMode = {}
+
+
+
+
 
 
 
@@ -3402,7 +3403,7 @@ local spaced_op = {
    },
 }
 
-local PrettyPrintOpts = {}
+
 
 
 
@@ -3441,7 +3442,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       opts = default_pretty_print_ast_opts
    end
 
-   local Output = {}
+
 
 
 
@@ -3587,10 +3588,12 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       ["local_type"] = {
          after = function(node, children)
             local out = { y = node.y, h = 0 }
-            table.insert(out, "local")
-            add_child(out, children[1], " ")
-            table.insert(out, " =")
-            add_child(out, children[2], " ")
+            if not node.var.elide_type then
+               table.insert(out, "local")
+               add_child(out, children[1], " ")
+               table.insert(out, " =")
+               add_child(out, children[2], " ")
+            end
             return out
          end,
       },
@@ -3598,7 +3601,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
          after = function(node, children)
             local out = { y = node.y, h = 0 }
             if children[2] then
-               add_child(out, children[1], " ")
+               add_child(out, children[1])
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
@@ -4532,7 +4535,8 @@ function tl.search_module(module_name, search_dtl)
    return nil, nil, tried
 end
 
-local Variable = {}
+
+
 
 
 
@@ -5362,15 +5366,23 @@ tl.type_check = function(ast, opts)
 
    local module_type
 
-   local function find_var(name, raw)
+
+
+
+
+
+
+   local function find_var(name, use)
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
             if i == 1 and scope[name].needs_compat then
                all_needs_compat[name] = true
             end
-            if not raw then
+            if (not use) or (use == "use") then
                scope[name].used = true
+            elseif use == "use_type" then
+               scope[name].used_as_type = true
             end
             return scope[name], i, var_is_const(scope[name])
          end
@@ -5393,7 +5405,7 @@ tl.type_check = function(ast, opts)
       }, nil
    end
 
-   local TypevarCallback = {}
+
    local resolve_typevars
 
    local function fresh_typevar(t)
@@ -5404,8 +5416,8 @@ tl.type_check = function(ast, opts)
       return t, rt
    end
 
-   local function find_var_type(name, raw)
-      local var = find_var(name, raw)
+   local function find_var_type(name, use)
+      local var = find_var(name, use)
       if var then
          local t = var.t
          if t.typename == "unresolved_typearg" then
@@ -5459,7 +5471,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function find_type(names, accept_typearg)
-      local typ = find_var_type(names[1])
+      local typ = find_var_type(names[1], "use_type")
       if not typ then
          return nil
       end
@@ -5766,7 +5778,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function check_if_redeclaration(new_name, at)
-      local old = find_var(new_name, true)
+      local old = find_var(new_name, "check_only")
       if old then
          redeclaration_warning(at, old)
       end
@@ -5861,7 +5873,7 @@ tl.type_check = function(ast, opts)
       return scope[var]
    end
 
-   local CompareTypes = {}
+
 
    local function compare_and_infer_typevars(t1, t2, comp)
 
@@ -5921,7 +5933,7 @@ tl.type_check = function(ast, opts)
    local same_type
    local is_a
 
-   local TypeGetter = {}
+
 
    local function match_record_fields(rec1, t2, invariant)
       local fielderrs = {}
@@ -6025,7 +6037,7 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local Unused = {}
+
 
 
 
@@ -6039,7 +6051,11 @@ tl.type_check = function(ast, opts)
       local list = {}
       for name, var in pairs(vars) do
          if var.declared_at and not var.used then
-            table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+            if var.used_as_type then
+               var.declared_at.elide_type = true
+            else
+               table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+            end
          end
       end
       if list[1] then
@@ -6052,7 +6068,7 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local WhichScope = {}
+
 
 
 
@@ -7651,7 +7667,7 @@ tl.type_check = function(ast, opts)
       not_facts = function(fs)
          local ret = {}
          for var, f in pairs(fs) do
-            local typ = find_var_type(f.var, true)
+            local typ = find_var_type(f.var, "check_only")
             local fact = "=="
             local where = f.where
             if not typ then
@@ -7750,7 +7766,7 @@ tl.type_check = function(ast, opts)
          if not f then
             return {}
          elseif f.fact == "is" then
-            local typ = find_var_type(f.var, true)
+            local typ = find_var_type(f.var, "check_only")
             if not typ then
                return { [f.var] = invalid_from(f) }
             end

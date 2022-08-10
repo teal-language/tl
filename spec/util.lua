@@ -546,13 +546,13 @@ function util.check_warnings(code, warnings)
    end
 end
 
-local function gen(lax, code, expected)
+local function gen(lax, code, expected, gen_target)
    return function()
       local tokens = tl.lex(code)
       local syntax_errors = {}
       local _, ast = tl.parse_program(tokens, syntax_errors)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax })
+      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target })
       assert.same({}, result.type_errors)
       local output_code = tl.pretty_print_ast(ast)
 
@@ -564,11 +564,11 @@ local function gen(lax, code, expected)
    end
 end
 
-function util.gen(code, expected)
+function util.gen(code, expected, gen_target)
    assert(type(code) == "string")
    assert(type(expected) == "string")
 
-   return gen(false, code, expected)
+   return gen(false, code, expected, gen_target)
 end
 
 return util

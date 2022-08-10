@@ -1221,6 +1221,7 @@ local record Node
    -- newtype
    newtype: Type
    is_alias: boolean
+   elide_type: boolean
 
    -- expressions
    op: Operator
@@ -3587,10 +3588,12 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
       ["local_type"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "local")
-            add_child(out, children[1], " ")
-            table.insert(out, " =")
-            add_child(out, children[2], " ")
+            if not node.var.elide_type then
+               table.insert(out, "local")
+               add_child(out, children[1], " ")
+               table.insert(out, " =")
+               add_child(out, children[2], " ")
+            end
             return out
          end,
       },
@@ -3598,7 +3601,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if children[2] then
-               add_child(out, children[1], " ")
+               add_child(out, children[1])
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
@@ -4541,6 +4544,7 @@ local record Variable
    declared_at: Node
    is_func_arg: boolean
    used: boolean
+   used_as_type: boolean
 end
 
 local function var_is_const(v: Variable): boolean
@@ -5362,15 +5366,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local module_type: Type
 
-   local function find_var(name: string, raw: boolean): Variable, integer, boolean
+   local enum VarUse
+      "use"
+      "use_type"
+      "check_only"
+   end
+
+   local function find_var(name: string, use: VarUse): Variable, integer, boolean
       for i = #st, 1, -1 do
          local scope = st[i]
          if scope[name] then
             if i == 1 and scope[name].needs_compat then
                all_needs_compat[name] = true
             end
-            if not raw then
+            if (not use) or (use == "use") then
                scope[name].used = true
+            elseif use == "use_type" then
+               scope[name].used_as_type = true
             end
             return scope[name], i, var_is_const(scope[name])
          end
@@ -5404,8 +5416,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t, rt
    end
 
-   local function find_var_type(name: string, raw: boolean): Type, Attribute
-      local var = find_var(name, raw)
+   local function find_var_type(name: string, use: VarUse): Type, Attribute
+      local var = find_var(name, use)
       if var then
          local t = var.t
          if t.typename == "unresolved_typearg" then
@@ -5459,7 +5471,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function find_type(names: {string}, accept_typearg: boolean): Type
-      local typ = find_var_type(names[1])
+      local typ = find_var_type(names[1], "use_type")
       if not typ then
          return nil
       end
@@ -5766,7 +5778,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function check_if_redeclaration(new_name: string, at: Node)
-      local old <const> = find_var(new_name, true)
+      local old <const> = find_var(new_name, "check_only")
       if old then
          redeclaration_warning(at, old)
       end
@@ -6039,7 +6051,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local list: {Unused} = {}
       for name, var in pairs(vars) do
          if var.declared_at and not var.used then
-            table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+            if var.used_as_type then
+               var.declared_at.elide_type = true
+            else
+               table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+            end
          end
       end
       if list[1] then
@@ -7651,7 +7667,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       not_facts = function(fs: {string:Fact}): {string:Fact}
          local ret: {string:Fact} = {}
          for var, f in pairs(fs) do
-            local typ = find_var_type(f.var, true)
+            local typ = find_var_type(f.var, "check_only")
             local fact: FactType = "=="
             local where = f.where
             if not typ then
@@ -7750,7 +7766,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if not f then
             return {}
          elseif f.fact == "is" then
-            local typ = find_var_type(f.var, true)
+            local typ = find_var_type(f.var, "check_only")
             if not typ then
                return { [f.var] = invalid_from(f) }
             end

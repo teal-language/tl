@@ -553,7 +553,7 @@ describe("flow analysis with is", function()
             end
          end
       ]], [[
-         local U = {}
+
 
 
          function process(ts)
