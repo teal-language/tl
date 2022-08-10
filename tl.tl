@@ -4545,6 +4545,7 @@ local record Variable
    is_func_arg: boolean
    used: boolean
    used_as_type: boolean
+   aliasing: Variable
 end
 
 local function var_is_const(v: Variable): boolean
@@ -6056,6 +6057,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             else
                table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
             end
+         elseif var.used and is_typetype(var.t) and var.aliasing then
+            var.aliasing.used = true
+            var.aliasing.declared_at.elide_type = false
          end
       end
       if list[1] then
@@ -7161,7 +7165,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function add_global(node: Node, var: string, valtype: Type, is_assigning: boolean): boolean
+   local function add_global(node: Node, var: string, valtype: Type, is_assigning: boolean): Variable
       if lax and is_unknown(valtype) and (var ~= "self" and var ~= "...") then
          add_unknown(node, var)
       end
@@ -7169,7 +7173,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local existing, scope, existing_is_const = find_var(var)
       if existing and scope > 1 then
          node_error(node, "cannot define a global when a local with the same name is in scope")
-         return false
+         return nil
       end
 
       local is_const = node.attribute == "const"
@@ -7187,7 +7191,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if valtype and not same_type(existing.t, valtype) then
             node_error(node, "cannot redeclare global with a different type: previous type of " .. var .. " is %s", existing.t)
          end
-         return false
+         return nil
       end
 
       st[1][var] = { t = valtype, attribute = is_const and "const" or nil }
@@ -7196,7 +7200,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          node.type = node.type or valtype
       end
 
-      return true
+      return st[1][var]
    end
 
    local function get_rets(rets: {Type}): Type
@@ -7951,22 +7955,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          and node.exps[i].tk == node.vars[i].tk
    end
 
-   local function resolve_nominal_typetype(typetype: Type): Type, boolean
+   local function resolve_nominal_typetype(typetype: Type): Type, Variable
       if typetype.def.typename == "nominal" then
+         local names = typetype.def.names
+         local aliasing = find_var(names[1], "use_type")
+         local resolved = typetype
          if typetype.def.typevals then
             typetype.def = resolve_nominal(typetype.def)
             typetype.def.typeargs = nil
          else
-            local names = typetype.def.names
-            local found = find_type(names)
-            if (not found) or (not is_typetype(found)) then
+            resolved = find_type(names)
+            if (not resolved) or (not is_typetype(resolved)) then
                type_error(typetype, "%s is not a type", typetype)
-               found = a_type { typename = "bad_nominal", names = names }
+               resolved = a_type { typename = "bad_nominal", names = names }
             end
-            return found, true
          end
+         return resolved, aliasing
       end
-      return typetype, false
+      return typetype, nil
    end
 
    local function missing_initializer(node: Node, i: integer, name: string): Type
@@ -8203,8 +8209,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["local_type"] = {
          before = function(node: Node)
-            node.value.type, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
-            add_var(node.var, node.var.tk, node.value.type, node.var.attribute)
+            local name = node.var.tk
+            local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+            local var = add_var(node.var, name, resolved, node.var.attribute)
+            node.value.type = resolved
+            if aliasing then
+               var.aliasing = aliasing
+               node.value.is_alias = true
+            end
          end,
          after = function(node: Node, _children: {Type}): Type
             dismiss_unresolved(node.var.tk)
@@ -8214,18 +8226,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["global_type"] = {
          before = function(node: Node)
-            local var = node.var
+            local name = node.var.tk
             local unresolved = get_unresolved("any_scope", node)
             if node.value then
-               node.value.newtype, node.value.is_alias = resolve_nominal_typetype(node.value.newtype)
+               local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+               local added = add_global(node.var, name, resolved)
+               node.value.newtype = resolved
+               if aliasing then
+                  added.aliasing = aliasing
+                  node.value.is_alias = true
+               end
 
-               local added = add_global(var, var.tk, node.value.newtype)
-               if added and unresolved.global_types[var.tk] then
-                  unresolved.global_types[var.tk] = nil
+               if added and unresolved.global_types[name] then
+                  unresolved.global_types[name] = nil
                end
             else
-               if not st[1][var.tk] then
-                  unresolved.global_types[var.tk] = true
+               if not st[1][name] then
+                  unresolved.global_types[name] = true
                end
             end
          end,
