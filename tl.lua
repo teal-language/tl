@@ -1534,16 +1534,6 @@ local function parse_trying_list(ps, i, list, parse_item)
    return i, list
 end
 
-local function parse_typearg(ps, i)
-   i = verify_kind(ps, i, "identifier")
-   return i, a_type({
-      y = ps.tokens[i - 2].y,
-      x = ps.tokens[i - 2].x,
-      typename = "typearg",
-      typearg = ps.tokens[i - 1].tk,
-   })
-end
-
 local function parse_anglebracket_list(ps, i, parse_item)
    if ps.tokens[i + 1].tk == ">" then
       return fail(ps, i + 1, "type argument list cannot be empty")
@@ -1560,6 +1550,16 @@ local function parse_anglebracket_list(ps, i, parse_item)
       return fail(ps, i, "syntax error, expected '>'")
    end
    return i, typ
+end
+
+local function parse_typearg(ps, i)
+   i = verify_kind(ps, i, "identifier")
+   return i, a_type({
+      y = ps.tokens[i - 2].y,
+      x = ps.tokens[i - 2].x,
+      typename = "typearg",
+      typearg = ps.tokens[i - 1].tk,
+   })
 end
 
 local function parse_return_types(ps, i)
@@ -9033,8 +9033,13 @@ node.exps[3] and node.exps[3].type, }
 
                node.known = facts_or(node, node.e1.known, node.e2.known)
                local u = unite({ ra, rb }, true)
-               local valid, err = is_valid_union(u)
-               node.type = valid and u or node_error(node, err)
+               if u.typename == "union" then
+                  local valid, err = is_valid_union(u)
+                  if not valid then
+                     u = node_error(node, err)
+                  end
+               end
+               node.type = u
             elseif node.op.op == "or" and is_a(rb, ra) then
                node.known = facts_or(node, node.e1.known, node.e2.known)
                if node.expected then

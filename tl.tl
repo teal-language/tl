@@ -9033,8 +9033,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                -- must be checked after string/enum above
                node.known = facts_or(node, node.e1.known, node.e2.known)
                local u = unite({ra, rb}, true)
-               local valid, err = is_valid_union(u)
-               node.type = valid and u or node_error(node, err)
+               if u.typename == "union" then
+                  local valid, err = is_valid_union(u)
+                  if not valid then
+                     u = node_error(node, err)
+                  end
+               end
+               node.type = u
             elseif node.op.op == "or" and is_a(rb, ra) then
                node.known = facts_or(node, node.e1.known, node.e2.known)
                if node.expected then

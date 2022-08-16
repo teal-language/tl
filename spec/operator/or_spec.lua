@@ -106,4 +106,8 @@ describe("or", function()
       local s: number | string = x is string and x .. "!" or x + 1
    ]])
 
+   it("does not produce a union if expected but both sides are the same type (regression test for #551)", util.check [[
+      local x: string | number = "hello" or "world"
+   ]])
+
 end)
