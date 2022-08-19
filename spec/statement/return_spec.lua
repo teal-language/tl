@@ -63,6 +63,20 @@ describe("return", function()
            end
          end
       ]])
+
+      it("flow expected type into return expressions (regression test for #553)", util.check [[
+         local enum Type
+            "add"
+            "change"
+            "delete"
+         end
+
+         local function foo(a: integer, b: integer): Type
+            return a == 0 and "delete" or
+                   b == 0 and "add"    or
+                              "change"
+         end
+      ]])
    end)
 
    describe("module is inferred", function()

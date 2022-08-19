@@ -8560,6 +8560,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          after = end_scope_and_none_type,
       },
       ["return"] = {
+         before = function(node: Node)
+            local rets = find_var_type("@return")
+            if rets then
+               for i, exp in ipairs(node.exps) do
+                  exp.expected = rets[i]
+               end
+            end
+         end,
          after = function(node: Node, children: {Type}): Type
             local rets = find_var_type("@return")
             if not rets then
@@ -8919,6 +8927,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       },
       ["paren"] = {
+         before = function(node: Node)
+            node.e1.expected = node.expected
+         end,
          after = function(node: Node, children: {Type}): Type
             node.known = node.e1 and node.e1.known
             node.type = resolve_tuple(children[1])
@@ -8926,8 +8937,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["op"] = {
-         before = function()
+         before = function(node: Node)
             begin_scope()
+            if node.expected then
+               if node.op.op == "and" then
+                  node.e2.expected = node.expected
+               elseif node.op.op == "or" then
+                  node.e1.expected = node.expected
+                  node.e2.expected = node.expected
+               end
+            end
          end,
          before_e2 = function(node: Node)
             if node.op.op == "and" then
@@ -9235,31 +9254,35 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       }
    }
 
+   local function after_literal(node: Node): Type
+      node.type = a_type {
+         y = node.y,
+         x = node.x,
+         typename = node.kind as TypeName,
+         tk = node.tk,
+      }
+      node.known = FACT_TRUTHY
+      return node.type
+   end
+
    visit_node.cbs["string"] = {
       after = function(node: Node, _children: {Type}): Type
-         node.type = a_type {
-            y = node.y,
-            x = node.x,
-            typename = node.kind as TypeName,
-            tk = node.tk,
-         }
-         node.known = FACT_TRUTHY
+         after_literal(node)
+         if node.expected then
+            if node.expected.typename == "enum" and is_a(node.type, node.expected) then
+               node.type = node.expected
+            end
+         end
          return node.type
       end,
    }
-   visit_node.cbs["number"] = visit_node.cbs["string"]
-   visit_node.cbs["integer"] = visit_node.cbs["string"]
+   visit_node.cbs["number"] = { after = after_literal }
+   visit_node.cbs["integer"] = { after = after_literal }
+
    visit_node.cbs["boolean"] = {
       after = function(node: Node, _children: {Type}): Type
-         node.type = a_type {
-            y = node.y,
-            x = node.x,
-            typename = node.kind as TypeName,
-            tk = node.tk,
-         }
-         if node.tk == "true" then
-            node.known = FACT_TRUTHY
-         end
+         after_literal(node)
+         node.known = (node.tk == "true") and FACT_TRUTHY or nil
          return node.type
       end,
    }
