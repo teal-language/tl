@@ -5508,7 +5508,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t.typename == "nominal" then
          local typetype = t.found or find_type(t.names)
          if not typetype then
-            return "table" -- invalid type, will report error elsewhere
+            return "invalid"
          end
          return union_type(typetype)
       elseif t.typename == "record" then
@@ -5556,9 +5556,27 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if ut == "string" then
                has_primitive_string_type = true
             end
+         elseif ut == "invalid" then
+            return false, nil -- error message comes from invalid type
          end
       end
       return true
+   end
+
+   local function validate_union(where: Node, u: Type, store_errs: boolean, errs: {Error}): Type, {Error}
+      local valid, err = is_valid_union(u)
+      if err then
+         if store_errs then
+            errs = errs or {}
+         else
+            errs = errors
+         end
+         table.insert(errs, error_in_type(where as Type, err, u))
+      end
+      if not valid then
+         u = INVALID
+      end
+      return u, store_errs and errs
    end
 
    local function resolve_typetype(t: Type): Type
@@ -5610,7 +5628,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return t
          end
 
-         seen = seen or {}
          if seen[t] then
             return seen[t]
          end
@@ -5700,11 +5717,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                copy.types[i] = resolve(tf)
             end
 
-            local ok, err = is_valid_union(copy)
-            if not ok then
-               errs = errs or {}
-               table.insert(errs, error_in_type(t, err, t))
-            end
+            copy, errs = validate_union(t as Node, copy, true, errs)
          elseif t.typename == "poly" or t.typename == "tupletable" then
             copy.types = {}
             for i, tf in ipairs(t.types) do
@@ -6193,6 +6206,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local typetype = t.found or find_type(t.names)
          if not typetype then
             type_error(t, "unknown type %s", t)
+            return INVALID
          elseif is_typetype(typetype) then
             if typetype.is_alias then
                typetype = typetype.def.found
@@ -6427,6 +6441,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             end
          end
+      end
+
+      if types_seen[INVALID.typeid] then
+         return INVALID
       end
 
       if #ts == 1 then
@@ -8033,14 +8051,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function check_redeclared_key(where: Node, ctx: Node.ExpectedContext, seen_keys: {(string | number):Node}, ck: string, n: number)
+   local function check_redeclared_key(node: Node, ctx: Node.ExpectedContext, seen_keys: {(string | number):Node}, ck: string, n: number)
       local key: string | number = ck or n
       if key then
          local s = seen_keys[key]
          if s then
-            node_error(where, in_context(ctx, "redeclared key " .. tostring(key) .. " (previously declared at " .. filename .. ":" .. s.y .. ":" .. s.x .. ")"))
+            node_error(node, in_context(ctx, "redeclared key " .. tostring(key) .. " (previously declared at " .. filename .. ":" .. s.y .. ":" .. s.x .. ")"))
          else
-            seen_keys[key] = where
+            seen_keys[key] = node
          end
       end
    end
@@ -9053,10 +9071,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.known = facts_or(node, node.e1.known, node.e2.known)
                local u = unite({ra, rb}, true)
                if u.typename == "union" then
-                  local valid, err = is_valid_union(u)
-                  if not valid then
-                     u = node_error(node, err)
-                  end
+                  u = validate_union(node, u)
                end
                node.type = u
             elseif node.op.op == "or" and is_a(rb, ra) then
@@ -9222,8 +9237,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["argument"] = {
-         after = function(node: Node, _children: {Type}): Type
-            local t = node.decltype
+         after = function(node: Node, children: {Type}): Type
+            local t = children[1]
             if not t then
                t = UNKNOWN
             end
@@ -9394,11 +9409,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          },
          ["union"] = {
             after = function(typ: Type, _children: {Type}): Type
-               local valid, err = is_valid_union(typ)
-               if not valid then
-                  type_error(typ, err, typ)
-               end
-               return typ
+               return (validate_union(typ as Node, typ))
             end
          },
       },
