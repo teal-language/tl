@@ -8962,7 +8962,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.e2.expected = node.expected
                elseif node.op.op == "or" then
                   node.e1.expected = node.expected
-                  node.e2.expected = node.expected
+                  if not (node.e2.kind == "table_literal" and #node.e2 == 0) then
+                     node.e2.expected = node.expected
+                  end
                end
             end
          end,

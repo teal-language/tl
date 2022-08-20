@@ -136,4 +136,18 @@ describe("empty table without type annotation", function()
       print(("hal"):gsub(".", t))
    ]])
 
+   it("does not get confused by flow-types in 'exp or {}' (regression test for #554)", util.check [[
+      local function ivalues<Value>(t: {any:Value}): function(): Value
+         local i = 0
+         return function(): Value
+            i = i + 1
+            return t[i]
+         end
+      end
+
+      local list: {string}
+      for x in ivalues(list or {}) do
+         print(x)
+      end
+   ]])
 end)
