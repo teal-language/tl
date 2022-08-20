@@ -33,6 +33,7 @@ local function remove_dir(name)
             remove_dir(name .. util.os_sep .. d)
          end
       end
+      lfs.rmdir(name)
    else
       os.remove(name)
    end
