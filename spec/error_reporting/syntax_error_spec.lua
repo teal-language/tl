@@ -155,6 +155,7 @@ describe("syntax errors", function()
          bar()
       end
    ]], {
+      { y = 7, x = 13, msg = "syntax error hint: construct starting here is not aligned with its 'end' at :10:10:" },
       { y = 15, msg = "syntax error, expected 'end' to close construct started at :5:22:" },
    }))
 

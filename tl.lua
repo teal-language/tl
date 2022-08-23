@@ -1273,6 +1273,7 @@ end
 
 
 
+
 local parse_type_list
 local parse_expression
 local parse_expression_and_tk
@@ -1308,11 +1309,21 @@ end
 
 local function verify_end(ps, i, istart, node)
    if ps.tokens[i].tk == "end" then
-      node.yend = ps.tokens[i].y
-      node.xend = ps.tokens[i].x + 2
+      local endy, endx = ps.tokens[i].y, ps.tokens[i].x
+      node.yend = endy
+      node.xend = endx + 2
+      if node.kind ~= "function" and endy ~= node.y and endx ~= node.x then
+         if not ps.end_alignment_hint then
+            ps.end_alignment_hint = { filename = ps.filename, y = node.y, x = node.x, msg = "syntax error hint: construct starting here is not aligned with its 'end' at " .. ps.filename .. ":" .. endy .. ":" .. endx .. ":" }
+         end
+      end
       return i + 1
    end
    end_at(node, ps.tokens[i])
+   if ps.end_alignment_hint then
+      table.insert(ps.errs, ps.end_alignment_hint)
+      ps.end_alignment_hint = nil
+   end
    return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. ps.filename .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
 end
 
@@ -1348,6 +1359,7 @@ end
 
 local function failskip(ps, i, msg, skip_fn, starti)
    local err_ps = {
+      filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
       required_modules = {},
@@ -1359,12 +1371,12 @@ end
 
 local function skip_record(ps, i)
    i = i + 1
-   return parse_record_body(ps, i, {}, {})
+   return parse_record_body(ps, i, {}, { kind = "function" })
 end
 
 local function skip_enum(ps, i)
    i = i + 1
-   return parse_enum_body(ps, i, {}, {})
+   return parse_enum_body(ps, i, {}, { kind = "function" })
 end
 
 local function parse_table_value(ps, i)
@@ -2228,7 +2240,7 @@ end
 local function parse_local_function(ps, i)
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
-   local node = new_node(ps.tokens, i, "local_function")
+   local node = new_node(ps.tokens, i - 2, "local_function")
    i, node.name = parse_identifier(ps, i)
    return parse_function_args_rets_body(ps, i, node)
 end
@@ -2241,7 +2253,7 @@ end
 local function parse_function(ps, i, ft)
    local orig_i = i
    i = verify_tk(ps, i, "function")
-   local fn = new_node(ps.tokens, i, "global_function")
+   local fn = new_node(ps.tokens, i - 1, "global_function")
    local names = {}
    i, names[1] = parse_identifier(ps, i)
    while ps.tokens[i].tk == "." do
@@ -2491,7 +2503,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
       return fail(ps, i, "expected a variable name")
    end
 
-   local nt = new_node(ps.tokens, i, "newtype")
+   local nt = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
    local iok = parse_body(ps, i, rdef, nt)
@@ -2916,7 +2928,6 @@ parse_statements = function(ps, i, toplevel)
          break
       end
 
-
       local fn = parse_statement_fns[tk]
       if not fn then
          local skip = needs_local_or_global[tk]
@@ -2927,9 +2938,7 @@ parse_statements = function(ps, i, toplevel)
          end
       end
 
-
       i, item = fn(ps, i)
-
 
       if item then
          table.insert(node, item)
