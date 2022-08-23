@@ -2866,13 +2866,6 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
    return parse_call_or_assignment(ps, i) -- global is a soft keyword
 end
 
-local function parse_type_statement(ps: ParseState, i: integer): integer, Node
-   if ps.tokens[i + 1].kind == "identifier" then
-      return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
-   end
-   return parse_call_or_assignment(ps, i)
-end
-
 local function parse_record_function(ps: ParseState, i: integer): integer, Node
    return parse_function(ps, i, "record")
 end
@@ -2883,7 +2876,6 @@ local parse_statement_fns: {string : function(ParseState, integer):(integer, Nod
    ["if"] = parse_if,
    ["for"] = parse_for,
    ["goto"] = parse_goto,
-   ["type"] = parse_type_statement,
    ["local"] = parse_local,
    ["while"] = parse_while,
    ["break"] = parse_break,
@@ -2891,6 +2883,18 @@ local parse_statement_fns: {string : function(ParseState, integer):(integer, Nod
    ["repeat"] = parse_repeat,
    ["return"] = parse_return,
    ["function"] = parse_record_function,
+}
+
+local needs_local_or_global: {string : function(ParseState, integer):(integer, Node)} = {
+   ["type"] = function(ps: ParseState, i: integer): integer, Node
+      return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
+   end,
+   ["record"] = function(ps: ParseState, i: integer): integer, Node
+      return failskip(ps, i, "records need to be declared with 'local record' or 'global record'", skip_record)
+   end,
+   ["enum"] = function(ps: ParseState, i: integer): integer, Node
+      return failskip(ps, i, "enums need to be declared with 'local enum' or 'global enum'", skip_enum)
+   end,
 }
 
 parse_statements = function(ps: ParseState, i: integer, toplevel: boolean): integer, Node
@@ -2907,14 +2911,22 @@ parse_statements = function(ps: ParseState, i: integer, toplevel: boolean): inte
       if ps.tokens[i].kind == "$EOF$" then
          break
       end
-      if (not toplevel) and stop_statement_list[ps.tokens[i].tk] then
+      local tk = ps.tokens[i].tk
+      if (not toplevel) and stop_statement_list[tk] then
          break
       end
 
-      -- local prev_i = i
-      local parse_statement_fn = parse_statement_fns[ps.tokens[i].tk] or parse_call_or_assignment
-      i, item = parse_statement_fn(ps, i)
-      -- assert(i > prev_i)
+      local fn = parse_statement_fns[tk]
+      if not fn then
+         local skip = needs_local_or_global[tk]
+         if skip and ps.tokens[i + 1].kind == "identifier" then
+            fn = skip
+         else
+            fn = parse_call_or_assignment
+         end
+      end
+
+      i, item = fn(ps, i)
 
       if item then
          table.insert(node, item)
