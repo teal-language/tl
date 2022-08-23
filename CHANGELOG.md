@@ -1,6 +1,38 @@
+# 0.14.1
+
+2022-08-23
+
+And a week after 0.14.0, here's 0.14.1, with bugfixes to a few regressions
+identified by users. This is essentially a bugfix release, with a few
+improvements triggered via regressions or confusing error messages.
+
+This release features commits by Hisham Muhammad.
+
+## What's New
+
+### Fixes
+
+* Improved error reporting on declarations with missing `local`/`global`
+* Ensured `exp or {}` with empty tables continues to work as it used to
+  in 0.13.x, skipped more advanced flow-typing as simply returning the
+  type of the left-hand side `exp`.
+* Improved propagation of invalid types in unions
+  * Avoids weird messages such as `got X | Y, expected X | Y`
+    when "Y" is invalid in the scope, but was valid on declaration
+    of a function argument, for example.
+* Fix missing bidirectional flow of expected types in `return` expressions
+  and expand it on string constants. (#553)
+  * This is almost a feature as flow-checking was made smarter for
+    string constants, but it takes the shape of a regression test because
+    `return` expression checks were incomplete and caused some correct
+    code to pass type checking before which stopped passing on 0.14.0
+    when some checks were extended. We further extend them here to make
+    more valid code pass.
+* Fixes a crash when resolving a "flattened" union. (#551)
+
 # 0.14.0
 
-2022-08-09
+2022-08-16
 
 It's been a year! It was good to let the language sit for a while and
 see what kind of feedback we get from real world usage. This has also been
