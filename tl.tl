@@ -1357,16 +1357,20 @@ end
 
 local type SkipFunction = function(ParseState, integer): integer
 
-local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFunction, starti: integer): integer
+local function skip(ps: ParseState, i: integer, skip_fn: SkipFunction): integer
    local err_ps: ParseState = {
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
       required_modules = {},
    }
-   local skip_i = skip_fn(err_ps, starti or i)
-   fail(ps, starti or i, msg)
-   return skip_i or (i + 1)
+   return skip_fn(err_ps, i)
+end
+
+local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFunction, starti: integer): integer
+   local skip_i = skip(ps, starti or i, skip_fn)
+   fail(ps, i, msg)
+   return skip_i
 end
 
 local function skip_record(ps: ParseState, i: integer): integer, Node
@@ -1491,10 +1495,17 @@ local function parse_list<T>(ps: ParseState, i: integer, list: {T}, close: {stri
             table.insert(options, "'" .. k .. "'")
          end
          table.sort(options)
-         table.insert(options, "','")
-         local expected = "syntax error, expected one of: " .. table.concat(options, ", ")
-         fail(ps, i, expected)
          local first = options[1]:sub(2, -2)
+         local msg: string
+         -- heuristic for parenthesized lists
+         if first == ")" and ps.tokens[i].tk == "=" then
+            msg = "syntax error, cannot perform an assignment here (did you mean '=='?)"
+            i = failskip(ps, i, msg, parse_expression, i + 1)
+         else
+            table.insert(options, "','")
+            msg = "syntax error, expected one of: " .. table.concat(options, ", ")
+            fail(ps, i, msg)
+         end
          -- heuristic for error recovery to avoid a cascade of errors:
          -- * if we're parsing a bracketed list, assume the missing token is a separator;
          -- * otherwise, if we have a line break, insert expected terminator token.
@@ -1973,6 +1984,13 @@ do
 
             local key: Node
             i = i + 1
+            if ps.tokens[i].kind ~= "identifier" then
+               local skipped = skip(ps, i, parse_type)
+               if skipped > i + 1 then
+                  fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
+                  return skipped, failstore(tkop, e1)
+               end
+            end
             i, key = verify_kind(ps, i, "identifier")
             if not key then
                return i, failstore(tkop, e1)
@@ -1980,7 +1998,11 @@ do
 
             if op.op == ":" then
                if not args_starters[ps.tokens[i].kind] then
-                  fail(ps, i, "expected a function call for a method")
+                  if ps.tokens[i].tk == "=" then
+                     fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
+                  else
+                     fail(ps, i, "expected a function call for a method")
+                  end
                   return i, failstore(tkop, e1)
                end
 
@@ -2126,6 +2148,11 @@ parse_expression_and_tk = function(ps: ParseState, i: integer, tk: string): inte
    if ps.tokens[i].tk == tk then
       i = i + 1
    else
+      local msg = "syntax error, expected '" .. tk .. "'"
+      if ps.tokens[i].tk == "=" then
+         msg = "syntax error, cannot perform an assignment here (did you mean '=='?)"
+      end
+
       -- try to resync the parser for a bit
       for n = 0, 19 do
          local t = ps.tokens[i + n]
@@ -2133,11 +2160,11 @@ parse_expression_and_tk = function(ps: ParseState, i: integer, tk: string): inte
             break
          end
          if t.tk == tk then
-            fail(ps, i, "syntax error, expected '" .. tk .. "'")
+            fail(ps, i, msg)
             return i + n + 1, e
          end
       end
-      i = fail(ps, i, "syntax error, expected '" .. tk .. "'")
+      i = fail(ps, i, msg)
    end
    return i, e
 end
@@ -2930,9 +2957,9 @@ parse_statements = function(ps: ParseState, i: integer, toplevel: boolean): inte
 
       local fn = parse_statement_fns[tk]
       if not fn then
-         local skip = needs_local_or_global[tk]
-         if skip and ps.tokens[i + 1].kind == "identifier" then
-            fn = skip
+         local skip_fn = needs_local_or_global[tk]
+         if skip_fn and ps.tokens[i + 1].kind == "identifier" then
+            fn = skip_fn
          else
             fn = parse_call_or_assignment
          end
@@ -9651,7 +9678,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    local visit_node: Visitor<NodeKind, Node, nil> = { allow_missing_cbs = true }
    local visit_type: Visitor<TypeName, Type, nil> = { allow_missing_cbs = true }
 
-   local skip: {TypeName: boolean} = {
+   local skip_types: {TypeName: boolean} = {
       ["none"] = true,
       ["tuple"] = true,
       ["table_item"] = true,
@@ -9661,7 +9688,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
    tr.by_pos[filename] = ft
 
    local function store(y: integer, x: integer, typ: Type)
-      if not typ or skip[typ.typename] then
+      if not typ or skip_types[typ.typename] then
          return
       end
 
