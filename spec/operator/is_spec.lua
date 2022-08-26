@@ -356,6 +356,27 @@ describe("flow analysis with is", function()
          { y = 10, msg = "got boolean | thread, expected boolean" },
       }))
 
+      it("gen cleaner checking codes for nil", util.gen([[
+         local record R
+            f: function()
+         end
+         local function get(): R | nil
+         end
+         local r = get()
+         if not r is nil then
+            r.f()
+         end
+      ]], [[
+
+
+
+local function get()
+end
+local r = get()
+if not (r == nil) then
+   r.f()
+end]]))
+
    end)
 
    describe("on while", function()
