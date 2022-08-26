@@ -3960,6 +3960,9 @@ function tl.pretty_print_ast(ast, gen_target, mode)
                   table.insert(out, "math.type(")
                   add_child(out, children[1], "", indent)
                   table.insert(out, ") == \"integer\"")
+               elseif node.e2.casttype.typename == "nil" then
+                  add_child(out, children[1], "", indent)
+                  table.insert(out, " == nil")
                else
                   table.insert(out, "type(")
                   add_child(out, children[1], "", indent)
