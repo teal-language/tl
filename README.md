@@ -2,7 +2,7 @@
 Teal
 ====
 [![Build Status](https://github.com/teal-language/tl/actions/workflows/ci.yml/badge.svg)](https://github.com/teal-language/tl/actions/workflows/ci.yml)
-[![Join the chat at https://gitter.im/dotnet/coreclr](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/teal-language/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Join the chat at https://gitter.im/teal-language/community](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/teal-language/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 This is the repository of **tl**, the compiler for Teal, a typed dialect of Lua.
 
