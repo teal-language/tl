@@ -46,12 +46,10 @@ describe("assignment to maps", function()
    ]])
 
    it("does not accept an array-like key in a map", util.check_type_error([[
-      local function f(x: {string:any}): number
-         return #x
+      local function f(x: {string:any})
       end
 
-      local x = f({"string value", pi=math.pi})
-      print(x)
+      f({"string value", pi=math.pi})
    ]], {
       { msg = "argument 1: in map key: got integer, expected string" }
    }))
