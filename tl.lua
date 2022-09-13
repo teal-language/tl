@@ -9179,6 +9179,13 @@ node.exps[3] and node.exps[3].type, }
                      return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
+               if a.typename == "map" then
+                  if a.keys.typename == "number" or a.keys.typename == "integer" then
+                     node_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
+                  else
+                     return node_error(node, "using the '#' operator on this map will always return 0")
+                  end
+               end
 
                if node.type.typename ~= "boolean" and not is_unknown(node.type) then
                   node.known = FACT_TRUTHY
