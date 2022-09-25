@@ -113,6 +113,34 @@ describe("warnings", function()
          { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:16)" },
          { y = 1, msg = "unused variable i: integer" },
       }))
+
+
+      it("reports redefined local functions", util.check_warnings([[
+         local function a() end
+         a()
+         local function a() end
+         a()
+      ]], {
+         { y = 3, msg = "redeclaration of function 'a' (originally declared at 1:10)" },
+      }))
+
+      it("reports local functions redefined as variables", util.check_warnings([[
+         local function a() end
+         a()
+         local a = 3
+         print(a)
+      ]], {
+         { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:10)" },
+      }))
+
+      it("reports local variables redefined as functions", util.check_warnings([[
+         local a = 3
+         print(a)
+         local function a() end
+         a()
+      ]], {
+         { y = 3, msg = "redeclaration of function 'a' (originally declared at 1:16)" },
+      }))
    end)
 
    describe("on goto labels", function()
