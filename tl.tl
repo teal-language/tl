@@ -1191,6 +1191,7 @@ local record Node
    rets: Type
    body: Node
    implicit_global_function: boolean
+   is_predeclared_local_function: boolean
 
    name: Node
 
@@ -8894,8 +8895,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["global_function"] = {
          before = function(node: Node)
             begin_scope(node)
-            if (not lax) and node.implicit_global_function then
-               node_error(node, "functions need an explicit 'local' or 'global' annotation")
+            if node.implicit_global_function then
+               local typ = find_var_type(node.name.tk)
+               if typ then
+                  if typ.typename == "function" then
+                     node.is_predeclared_local_function = true
+                  elseif not lax then
+                     node_error(node, "cannot declare function: type of " .. node.name.tk .. " is %s", typ)
+                  end
+               elseif not lax then
+                  node_error(node, "functions need an explicit 'local' or 'global' annotation")
+               end
             end
          end,
          before_statements = function(node: Node)
@@ -8904,6 +8914,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          after = function(node: Node, children: {Type}): Type
             end_function_scope(node)
+            if node.is_predeclared_local_function then
+               return node.type
+            end
             add_global(node, node.name.tk, a_type {
                y = node.y,
                x = node.x,

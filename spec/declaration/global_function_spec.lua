@@ -58,6 +58,13 @@ describe("global function", function()
       { y = 1, msg = "functions need an explicit 'local' or 'global' annotation" },
    }))
 
+   it("a function can be pre-declared", util.check [[
+      local f: function()
+      function f()
+         print("I am a bare function")
+      end
+   ]])
+
    local modes = {
       {
          fn = "function",
