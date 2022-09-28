@@ -5841,10 +5841,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function redeclaration_warning(node: Node, old_var: Variable)
       if node.tk:sub(1, 1) == "_" then return end
+
+      local var_kind = "variable"
+      local var_name = node.tk
+      if node.kind == "local_function" then
+         var_kind = "function"
+         var_name = node.name.tk
+      end
+
+      local short_error = "redeclaration of " .. var_kind .. " '%s'"
       if old_var.declared_at then
-         node_warning("redeclaration", node, "redeclaration of variable '%s' (originally declared at %d:%d)", node.tk, old_var.declared_at.y, old_var.declared_at.x)
+         node_warning("redeclaration", node, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
       else
-         node_warning("redeclaration", node, "redeclaration of variable '%s'", node.tk)
+         node_warning("redeclaration", node, short_error, var_name)
       end
    end
 
