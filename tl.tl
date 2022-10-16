@@ -7415,6 +7415,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             t = f
          else
             if not same_type(f, t) then
+               errmsg = errmsg .. string.format(" (types of fields '%s' and '%s' do not match)", field_names[1], k)
                t = nil
                break
             end
