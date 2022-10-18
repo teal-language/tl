@@ -36,5 +36,25 @@ describe("tl.process", function()
          assert(foo_result, foo_err)
          assert(bar_result, bar_err)
       end)
+      it("should strip BOM from files", function()
+
+         local bom = "\xEF\xBB\xBF"
+         local current_dir = lfs.currentdir()
+         local dir_name = util.write_tmp_dir(finally, {
+            ["main.tl"] = bom .. [[
+               return "working"
+            ]],
+         })
+         local expected_lua_code = [[
+            return "working"
+         ]]
+
+         assert(lfs.chdir(dir_name))
+         local result, err = tl.process("main.tl")
+         assert(lfs.chdir(current_dir))
+         assert.same({}, result.syntax_errors)
+         local pretty_result_string = tl.pretty_print_ast(result.ast)
+         util.assert_line_by_line(expected_lua_code, pretty_result_string)
+      end)
    end)
 end)
