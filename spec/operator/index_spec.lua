@@ -50,7 +50,7 @@ describe("[]", function()
          local e: Keys = "foo"
          local n: number = x[e]
       ]], {
-         { msg = "cannot index, not all enum values map to record fields of the same type" },
+         { msg = "cannot index, not all enum values map to record fields of the same type (types of fields 'bar' and 'foo' do not match)" },
       }))
 
       it("fail if key is enum and not all keys are covered", util.check_type_error([[
