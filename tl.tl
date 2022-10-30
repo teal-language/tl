@@ -4433,7 +4433,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
-      return table.concat(out, " and ")
+      return "polymorphic function (with types " .. table.concat(out, " and ") .. ")"
    elseif t.typename == "union" then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
