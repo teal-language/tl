@@ -4548,6 +4548,9 @@ end
 
 show_type = function(t, short, seen)
    seen = seen or {}
+   if seen[t] then
+      return seen[t]
+   end
    local ret = show_type_base(t, short, seen)
    if t.inferred_at then
       ret = ret .. inferred_msg(t)
