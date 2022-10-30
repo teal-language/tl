@@ -430,7 +430,7 @@ describe("record method", function()
       function b.stop(self: Rec.Plugin)
       end
    ]], {
-      { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin" }
+      { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin: incompatible number of arguments: " }
    }))
 
 end)
