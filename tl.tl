@@ -1208,6 +1208,7 @@ local record Node
    if_parent: Node
    if_block_n: integer
    if_blocks: {Node}
+   block_returns: boolean
 
    -- fornum
    var: Node
@@ -8277,6 +8278,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return typ
    end
 
+   local function infer_negation_of_if_blocks(where: Node, ifnode: Node, n: integer)
+      local f = facts_not(where, ifnode.if_blocks[1].exp.known)
+      for e = 2, n do
+         local b = ifnode.if_blocks[e]
+         if b.exp then
+            f = facts_and(where, f, facts_not(where, b.exp.known))
+         end
+      end
+      apply_facts(where, f)
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -8476,12 +8488,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node_error(varnode, "unknown variable")
                end
             end
+
             node.type = NONE
             return node.type
          end,
       },
       ["if"] = {
          after = function(node: Node, _children: {Type}): Type
+            local all_return = true
+            for _, b in ipairs(node.if_blocks) do
+               if not b.block_returns then
+                  all_return = false
+                  break
+               end
+            end
+            if all_return then
+               node.block_returns = true
+               infer_negation_of_if_blocks(node, node, #node.if_blocks)
+            end
+
             node.type = NONE
             return node.type
          end,
@@ -8490,12 +8515,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          before = function(node: Node)
             begin_scope(node)
             if node.if_block_n > 1 then
-               local ifnode = node.if_parent
-               local f = facts_not(node, ifnode.if_blocks[1].exp.known)
-               for e = 2, node.if_block_n - 1 do
-                  f = facts_and(node, f, facts_not(node, ifnode.if_blocks[e].exp.known))
-               end
-               apply_facts(node, f)
+               infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
             end
          end,
          before_statements = function(node: Node)
@@ -8503,7 +8523,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                apply_facts(node.exp, node.exp.known)
             end
          end,
-         after = end_scope_and_none_type,
+         after = function(node: Node, _children: {Type}): Type
+            end_scope(node)
+
+            if #node.body > 0 and node.body[#node.body].block_returns then
+               node.block_returns = true
+            end
+
+            node.type = NONE
+            return node.type
+         end
       },
       ["while"] = {
          before = function()
@@ -8658,6 +8687,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end,
          after = function(node: Node, children: {Type}): Type
+            node.block_returns = true
             local rets = find_var_type("@return")
             if not rets then
                -- if at the toplevel
@@ -9365,6 +9395,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       }
    }
 
+   visit_node.cbs["break"] = {
+      after = function(node: Node, _children: {Type}): Type
+         node.type = NONE
+         return node.type
+      end,
+   }
+   visit_node.cbs["do"] = visit_node.cbs["break"]
+
    local function after_literal(node: Node): Type
       node.type = a_type {
          y = node.y,
@@ -9399,9 +9437,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    }
    visit_node.cbs["nil"] = visit_node.cbs["boolean"]
 
-   visit_node.cbs["do"] = visit_node.cbs["if"]
    visit_node.cbs["..."] = visit_node.cbs["variable"]
-   visit_node.cbs["break"] = visit_node.cbs["if"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
