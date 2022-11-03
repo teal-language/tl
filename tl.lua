@@ -5585,7 +5585,6 @@ tl.type_check = function(ast, opts)
    local function is_valid_union(typ)
 
 
-      local n_table_types = 0
       local n_function_types = 0
       local n_userdata_types = 0
       local n_string_enum = 0
@@ -5596,11 +5595,6 @@ tl.type_check = function(ast, opts)
             n_userdata_types = n_userdata_types + 1
             if n_userdata_types > 1 then
                return false, "cannot discriminate a union between multiple userdata types: %s"
-            end
-         elseif ut == "table" then
-            n_table_types = n_table_types + 1
-            if n_table_types > 1 then
-               return false, "cannot discriminate a union between multiple table types: %s"
             end
          elseif ut == "function" then
             n_function_types = n_function_types + 1
@@ -6712,6 +6706,10 @@ tl.type_check = function(ast, opts)
          end
       elseif t1.typename == "integer" and t2.typename == "number" then
          return true
+      elseif t1.typename == "boolean" and t2.typename == "nominal" and t2.tk == "Is" then
+
+
+         return true
       elseif t1.typename == "string" and t2.typename == "enum" then
          local ok = t1.tk and t2.enumset[unquote(t1.tk)]
          if ok then
@@ -7190,6 +7188,28 @@ tl.type_check = function(ast, opts)
          else
             return nil, "invalid key '" .. key .. "' in type %s"
          end
+
+      elseif tbl.typename == "union" then
+         assert(tbl.types[1], "Union has no members")
+         local field
+         for _, t in ipairs(tbl.types) do
+
+            t = resolve_tuple_and_nominal(t)
+            t = resolve_typetype(t)
+
+
+            if not is_record_type(t) then
+               return nil, "cannot index key '" .. key .. "' in '" .. t.tk .. "' from union %s (not a record)"
+            end
+            assert(t.fields, "record has no fields!?")
+
+            if not t.fields[key] then
+               return nil, "invalid key '" .. key .. "' in type '" .. t.tk .. "' from union %s"
+            else
+               field = t.fields[key]
+            end
+         end
+         return field
       elseif tbl.typename == "emptytable" or is_unknown(tbl) then
          if lax then
             return INVALID
@@ -9114,6 +9134,27 @@ node.exps[3] and node.exps[3].type, }
                   end
                end
             elseif node.op.op == "@funcall" then
+
+
+               local is_is_function = a.typename == "function" and a.rets[1] and a.rets[1].tk == "Is"
+               local is_method = node.e1.op and node.e1.op.op == ":"
+               local first_arg = node.e2[1]
+               if is_is_function and (first_arg or is_method) then
+                  local refined_var
+
+
+                  if is_method then
+                     refined_var = node.e1.e1.tk
+                  else
+                     refined_var = first_arg.tk
+                  end
+                  node.known = Fact({
+                     fact = "is",
+                     var = refined_var,
+                     typ = a.rets[1].typevals[1],
+                     where = node,
+                  })
+               end
                if lax and is_unknown(a) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
                      add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
