@@ -6995,7 +6995,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return func, is_method
    end
 
-   local type_check_function_call: function(Node, {Node}, Type, {Type}, boolean, integer): Type, Type
+   local type_check_function_call: function(Node, {Node}, Type, {Type}, Node, boolean, integer): Type
    do
       local function mark_invalid_typeargs(f: Type)
          if f.typeargs then
@@ -7155,11 +7155,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return fail_call(where, func, given, first_errs)
       end
 
-      type_check_function_call = function(where: Node, where_args: {Node}, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
+      type_check_function_call = function(where: Node, where_args: {Node}, func: Type, args: {Type}, e1: Node, is_method: boolean, argdelta: integer): Type
          begin_scope()
          local ret, f = check_call(where, where_args, func, args, is_method, argdelta)
          end_scope()
-         return ret, f
+         if e1 then
+            e1.type = f
+         end
+         return ret
       end
    end
 
@@ -7453,7 +7456,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          meta_on_operator = 2
       end
       if metamethod then
-         return resolve_tuple_and_nominal((type_check_function_call(node, where_args, metamethod, args, false, 0))), meta_on_operator
+         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, false, 0)), meta_on_operator
       elseif lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
          return UNKNOWN, nil
       else
@@ -8018,7 +8021,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       ["assert"] = function(node: Node, a: Type, b: {Type}, argdelta: integer): Type
          node.known = FACT_TRUTHY
-         return (type_check_function_call(node, node.e2, a, b, false, argdelta))
+         return type_check_function_call(node, node.e2, a, b, node, false, argdelta)
       end,
    }
 
@@ -8029,13 +8032,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if special then
             return special(node, a, b, argdelta)
          else
-            return (type_check_function_call(node, node.e2, a, b, false, argdelta))
+            return type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta)
          end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b, 1, node.e1.e1.type)
-         return (type_check_function_call(node, node.e2, a, b, true))
+         return (type_check_function_call(node, node.e2, a, b, node.e1, true))
       else
-         return (type_check_function_call(node, node.e2, a, b, false, argdelta))
+         return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
       end
    end
 
@@ -8594,10 +8597,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local exp1type = resolve_for_call(exp1.type, args)
 
             if exp1type.typename == "poly" then
-               local _, matched = type_check_function_call(exp1, {node.exps[2], node.exps[3]}, exp1type, args, false, 0)
-               if matched then
-                  exp1type = matched
-               end
+               type_check_function_call(exp1, {node.exps[2], node.exps[3]}, exp1type, args, exp1, false, 0)
+               exp1type = exp1.type or exp1type
             end
 
             if exp1type.typename == "function" then
