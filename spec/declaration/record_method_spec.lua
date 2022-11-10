@@ -330,7 +330,8 @@ describe("record method", function()
 
       return t
    ]], {
-      { msg = "incompatible number of arguments" },
+      { y = 10, msg = "incompatible number of arguments" },
+      { y = 12, msg = "incompatible number of arguments" },
    }))
 
    it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[

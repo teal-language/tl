@@ -5797,15 +5797,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true, copy
    end
 
-   local function infer_var(emptytable: Type, t: Type, node: Node)
+   local function infer_emptytable(where: Node, emptytable: Type, fresh_t: Type)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
       local nst = is_global and 1 or #st
       for i = nst, 1, -1 do
          local scope = st[i]
          if scope[emptytable.assigned_to] then
-            scope[emptytable.assigned_to] = { t = t }
-            t.inferred_at = node
-            t.inferred_at_file = filename
+            scope[emptytable.assigned_to] = { t = fresh_t }
+            fresh_t.inferred_at = where
+            fresh_t.inferred_at_file = filename
          end
       end
    end
@@ -5934,6 +5934,27 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return copy as Type
    end
 
+   local function infer_at(where: Node, t: Type): Type
+      local ret = shallow_copy(t)
+      ret.inferred_at = where
+      ret.inferred_at_file = filename
+      return ret
+   end
+
+   local function drop_constant_value(t: Type): Type
+      if not t.tk then
+         return t
+      end
+      local ret = shallow_copy(t)
+      ret.tk = nil
+      return ret
+   end
+
+   local function fresh_table_type(where: Node, t: Type): Type
+      local ret = resolve_typevars_at(where, t)
+      return (ret ~= t) and ret or shallow_copy(t)
+   end
+
    local function reserve_symbol_list_slot(node: Node)
       symbol_list_n = symbol_list_n + 1
       node.symbol_list_slot = symbol_list_n
@@ -5946,8 +5967,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local scope <const> = st[#st]
       local old_var <const> = scope[var]
       if not attribute then
-         valtype = shallow_copy(valtype)
-         valtype.tk = nil
+         valtype = drop_constant_value(valtype)
       end
       if old_var and is_narrowing then
          if not old_var.is_narrowed then
@@ -6921,14 +6941,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
          if is_number_type(t2.emptytable_type.keys) then -- ideally integer only
-            infer_var(t2.emptytable_type, a_type { typename = "array", elements = t1 }, node)
+            infer_emptytable(node, t2.emptytable_type, a_type { typename = "array", elements = t1 })
          else
-            infer_var(t2.emptytable_type, a_type { typename = "map", keys = t2.emptytable_type.keys, values = t1 }, node)
+            infer_emptytable(node, t2.emptytable_type, a_type { typename = "map", keys = t2.emptytable_type.keys, values = t1 })
          end
          return true
       elseif t2.typename == "emptytable" then
          if is_lua_table_type(t1) then
-            infer_var(t2, shallow_copy(t1), node)
+            infer_emptytable(node, t2, fresh_table_type(node, t1))
          elseif t1.typename ~= "emptytable" then
             node_error(node, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
          end
@@ -7046,7 +7066,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if argument.typename == "emptytable" then
                local farg = f.args[a] or (va and f.args[expected])
                local where_arg = where_args[a + argdelta] or where_args -- for self, a + argdelta is 0
-               infer_var(argument, resolve_typevars_at(where_arg, farg), where_arg)
+               infer_emptytable(where_arg, argument, fresh_table_type(where_arg, farg))
             end
          end
 
@@ -7906,9 +7926,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if f.typ.typename == "invalid" then
                node_error(where, "cannot resolve a type for " .. v .. " here")
             end
-            local t = shallow_copy(f.typ) -- new type object
-            t.inferred_at = f.where and where
-            t.inferred_at_file = filename
+            local t = infer_at(f.where and where, f.typ)
             add_var(nil, v, t, "const", true)
          end
       end
@@ -8036,9 +8054,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b, 1, node.e1.e1.type)
-         return (type_check_function_call(node, node.e2, a, b, node.e1, true))
+         return type_check_function_call(node, node.e2, a, b, node.e1, true)
       else
-         return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
+         return type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta)
       end
    end
 
@@ -8692,9 +8710,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local rets = find_var_type("@return")
             if not rets then
                -- if at the toplevel
-               rets = children[1]
-               rets.inferred_at = node
-               rets.inferred_at_file = filename
+               rets = infer_at(node, children[1])
                module_type = resolve_tuple_and_nominal(rets)
                module_type.tk = nil
                st[2]["@return"] = { t = rets }
