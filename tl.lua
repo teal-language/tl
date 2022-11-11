@@ -6120,10 +6120,10 @@ tl.type_check = function(ast, opts)
       return true
    end
 
-   local function arg_check(where, cmp, a, b, n, errs)
+   local function arg_check(where, cmp, a, b, n, errs, ctx)
       local matches, match_errs = cmp(a, b)
       if not matches then
-         add_errs_prefixing(where, match_errs, errs, "argument " .. n .. ": ")
+         add_errs_prefixing(where, match_errs, errs, (ctx or "argument") .. " " .. n .. ": ")
          return false
       end
       return true
@@ -7050,53 +7050,89 @@ tl.type_check = function(ast, opts)
          end
       end
 
-      local function try_match_func_args(where, where_args, f, args, argdelta)
-         local errs = {}
+      local function infer_emptytables(where, wheres, xs, ys, delta)
+         assert(xs.typename == "tuple")
+         assert(ys.typename == "tuple")
 
-         local given = #args
-         local expected = #f.args
-         local va = f.args.is_va
-         local nargs = va and
-         math.max(given, expected) or
-         math.min(given, expected)
+         local n_xs = #xs
+         local n_ys = #ys
 
-         if f.typeargs then
-            for _, t in ipairs(f.typeargs) do
-               add_var(nil, t.typearg, { typename = "unresolved_typearg" })
+         for i = 1, n_xs do
+            local x = xs[i]
+            if x.typename == "emptytable" or x.typename == "unresolved_emptytable_value" then
+               local y = ys[i] or (ys.is_va and ys[n_ys])
+               local w = wheres and wheres[i + delta] or where
+               local inferred_y = infer_at(w, y)
+               infer_emptytable(x, inferred_y)
+               xs[i] = inferred_y
             end
          end
-
-         for a = 1, nargs do
-            local argument = args[a]
-            local farg = f.args[a] or (va and f.args[expected])
-            if argument == nil then
-               if va then
-                  break
-               end
-            else
-               local where_arg = where_args and where_args[a] or where
-               if not arg_check(where_arg, is_a, argument, farg, (a + argdelta), errs) then
-                  return nil, errs
-               end
-            end
-         end
-
-         mark_invalid_typeargs(f)
-
-
-         for a = 1, given do
-            local argument = args[a]
-            if argument.typename == "emptytable" then
-               local farg = f.args[a] or (va and f.args[expected])
-               local where_arg = where_args[a + argdelta] or where_args
-               infer_emptytable(argument, infer_at(where_arg, farg))
-            end
-         end
-
-         return resolve_typevars_at(where, f.rets)
       end
 
-      local function revert_typeargs(func)
+      local check_args_rets
+      do
+
+         local function check_func_type_list(where, wheres, xs, ys, delta, mode)
+            assert(xs.typename == "tuple", xs.typename)
+            assert(ys.typename == "tuple", ys.typename)
+
+            local errs = {}
+            local n_xs = #xs
+            local n_ys = #ys
+
+            for i = 1, math.max(n_xs, n_ys) do
+               local pos = i + delta
+               local x = xs[i] or (xs.is_va and xs[n_xs]) or NIL
+               local y = ys[i] or (ys.is_va and ys[n_ys])
+               if y then
+                  local w = wheres and wheres[pos] or where
+                  if not arg_check(w, is_a, x, y, pos, errs, mode) then
+                     return nil, errs
+                  end
+               end
+            end
+
+            return true
+         end
+
+         check_args_rets = function(where, where_args, f, args, rets, argdelta)
+            local ok, errs
+
+            ok, errs = check_func_type_list(where, where_args, args, f.args, argdelta, "argument")
+            if not ok then
+               return nil, errs
+            end
+
+            if rets then
+               rets = infer_at(where, rets)
+               infer_emptytables(where, nil, rets, f.rets, 0)
+
+               ok, errs = check_func_type_list(where, nil, f.rets, rets, 0, "return")
+               if not ok then
+                  return nil, {}
+               end
+            end
+
+
+
+
+            infer_emptytables(where, where_args, args, f.args, argdelta)
+
+            mark_invalid_typeargs(f)
+
+            return resolve_typevars_at(where, f.rets)
+         end
+      end
+
+      local function push_typeargs(func)
+         if func.typeargs then
+            for _, fnarg in ipairs(func.typeargs) do
+               add_var(nil, fnarg.typearg, { typename = "unresolved_typearg" })
+            end
+         end
+      end
+
+      local function pop_typeargs(func)
          if func.typeargs then
             for _, fnarg in ipairs(func.typeargs) do
                if st[#st][fnarg.typearg] then
@@ -7178,17 +7214,24 @@ tl.type_check = function(ast, opts)
 
                      (pass == 3 and f.args.is_va and given > expected))) then
 
-                     local matched, errs = try_match_func_args(where, where_args, f, args, argdelta)
+                     push_typeargs(f)
+
+                     local matched, errs = check_args_rets(where, where_args, f, args, where.expected, argdelta)
                      if matched then
 
                         return matched, f
                      end
                      first_errs = first_errs or errs
 
+                     if where.expected then
+
+                        infer_emptytables(where, where_args, f.rets, f.rets, argdelta)
+                     end
+
                      if is_poly then
                         tried = tried or {}
                         tried[i] = true
-                        revert_typeargs(f)
+                        pop_typeargs(f)
                      end
                   end
                end
@@ -9153,7 +9196,6 @@ tl.type_check = function(ast, opts)
                      end
                   end
                end
-               apply_facts(node, facts_not(node, node.e1.known))
             elseif node.op.op == "@index" then
                if node.e1.type.typename == "map" then
                   node.e2.expected = node.e1.type.keys

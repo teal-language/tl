@@ -46,7 +46,6 @@ describe("forin", function()
          end
       ]], {
          { msg = "attempting ipairs loop" },
-         { msg = "attempting ipairs loop" },
       }))
    end)
 
