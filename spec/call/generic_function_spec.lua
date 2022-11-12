@@ -180,7 +180,7 @@ describe("generic function", function()
    }))
 
    it("will accept if typevar is bound at a higher level", util.check [[
-      local function fun<T>()
+      local function fun<T>(another: T)
          local function parse_list<T>(list: {T}): T
             return list[1]
          end

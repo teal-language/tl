@@ -5693,6 +5693,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    resolve_typevars = function(typ: Type, fn: TypevarCallback): boolean, Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
+      local resolved: {string:boolean} = {}
 
       fn = fn or default_resolve_typevars_callback
 
@@ -5711,6 +5712,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if t.typename == "typevar" then
             local rt: Type
             t, rt = fn(t)
+            if t then
+               resolved[orig_t.typevar] = true
+            end
             if rt then
                seen[orig_t] = rt
                return rt
@@ -5808,6 +5812,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local copy = resolve(typ)
       if errs then
          return false, INVALID, errs
+      end
+      if copy.typeargs then
+         for i = #copy.typeargs, 1, -1 do
+            if resolved[copy.typeargs[i].typearg] then
+               table.remove(copy.typeargs, i)
+            end
+         end
+         if not copy.typeargs[1] then
+            copy.typeargs = nil
+         end
       end
       return true, copy
    end
@@ -7340,8 +7354,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function add_internal_function_variables(node: Node)
       add_var(nil, "@is_va", node.args.type.is_va and ANY or NIL)
-
       add_var(nil, "@return", node.rets or a_type { typename = "tuple" })
+
+      if node.typeargs then
+         for _, t in ipairs(node.typeargs) do
+            local v = find_var(t.typearg, "check_only")
+            if not v or not v.used_as_type then
+               type_error(t, "type argument '%s' is not used in function signature", t)
+            end
+         end
+      end
    end
 
    local function add_function_definition_for_recursion(node: Node)
@@ -8087,7 +8109,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local resolved = typetype
          if typetype.def.typevals then
             typetype.def = resolve_nominal(typetype.def)
-            typetype.def.typeargs = nil
          else
             resolved = find_type(names)
             if (not resolved) or (not is_typetype(resolved)) then

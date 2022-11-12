@@ -21,6 +21,14 @@ describe("local function", function()
          local ok = f(3, "abc")
       ]])
 
+      it("cannot have unused type variables", util.check_type_error([[
+         local function f<Z>(a: number, b: string): ()
+            return
+         end
+      ]], {
+         { msg = "type argument 'Z' is not used in function signature" }
+      }))
+
       it("can take names in arguments but names are ignored", util.check [[
          local f: function(x: number, y: string): boolean
 

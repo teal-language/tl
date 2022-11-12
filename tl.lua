@@ -5693,6 +5693,7 @@ tl.type_check = function(ast, opts)
    resolve_typevars = function(typ, fn)
       local errs
       local seen = {}
+      local resolved = {}
 
       fn = fn or default_resolve_typevars_callback
 
@@ -5711,6 +5712,9 @@ tl.type_check = function(ast, opts)
          if t.typename == "typevar" then
             local rt
             t, rt = fn(t)
+            if t then
+               resolved[orig_t.typevar] = true
+            end
             if rt then
                seen[orig_t] = rt
                return rt
@@ -5808,6 +5812,16 @@ tl.type_check = function(ast, opts)
       local copy = resolve(typ)
       if errs then
          return false, INVALID, errs
+      end
+      if copy.typeargs then
+         for i = #copy.typeargs, 1, -1 do
+            if resolved[copy.typeargs[i].typearg] then
+               table.remove(copy.typeargs, i)
+            end
+         end
+         if not copy.typeargs[1] then
+            copy.typeargs = nil
+         end
       end
       return true, copy
    end
@@ -7340,8 +7354,16 @@ tl.type_check = function(ast, opts)
 
    local function add_internal_function_variables(node)
       add_var(nil, "@is_va", node.args.type.is_va and ANY or NIL)
-
       add_var(nil, "@return", node.rets or a_type({ typename = "tuple" }))
+
+      if node.typeargs then
+         for _, t in ipairs(node.typeargs) do
+            local v = find_var(t.typearg, "check_only")
+            if not v or not v.used_as_type then
+               type_error(t, "type argument '%s' is not used in function signature", t)
+            end
+         end
+      end
    end
 
    local function add_function_definition_for_recursion(node)
@@ -8087,7 +8109,6 @@ tl.type_check = function(ast, opts)
          local resolved = typetype
          if typetype.def.typevals then
             typetype.def = resolve_nominal(typetype.def)
-            typetype.def.typeargs = nil
          else
             resolved = find_type(names)
             if (not resolved) or (not is_typetype(resolved)) then
