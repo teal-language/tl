@@ -1559,7 +1559,7 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
    return i, list
 end
 
-local function parse_anglebracket_list<T>(ps: ParseState, i: integer, parse_item: ParseItem<Type>): integer, {Type}
+local function parse_anglebracket_list(ps: ParseState, i: integer, parse_item: ParseItem<Type>): integer, {Type}
    if ps.tokens[i+1].tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
    end
