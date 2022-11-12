@@ -5797,15 +5797,13 @@ tl.type_check = function(ast, opts)
       return true, copy
    end
 
-   local function infer_emptytable(where, emptytable, fresh_t)
+   local function infer_emptytable(emptytable, fresh_t)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
       local nst = is_global and 1 or #st
       for i = nst, 1, -1 do
          local scope = st[i]
          if scope[emptytable.assigned_to] then
             scope[emptytable.assigned_to] = { t = fresh_t }
-            fresh_t.inferred_at = where
-            fresh_t.inferred_at_file = filename
          end
       end
    end
@@ -5935,7 +5933,8 @@ tl.type_check = function(ast, opts)
    end
 
    local function infer_at(where, t)
-      local ret = shallow_copy(t)
+      local ret = resolve_typevars_at(where, t)
+      ret = (ret ~= t) and ret or shallow_copy(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename
       return ret
@@ -5948,11 +5947,6 @@ tl.type_check = function(ast, opts)
       local ret = shallow_copy(t)
       ret.tk = nil
       return ret
-   end
-
-   local function fresh_table_type(where, t)
-      local ret = resolve_typevars_at(where, t)
-      return (ret ~= t) and ret or shallow_copy(t)
    end
 
    local function reserve_symbol_list_slot(node)
@@ -6941,14 +6935,14 @@ tl.type_check = function(ast, opts)
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
          if is_number_type(t2.emptytable_type.keys) then
-            infer_emptytable(node, t2.emptytable_type, a_type({ typename = "array", elements = t1 }))
+            infer_emptytable(t2.emptytable_type, infer_at(node, a_type({ typename = "array", elements = t1 })))
          else
-            infer_emptytable(node, t2.emptytable_type, a_type({ typename = "map", keys = t2.emptytable_type.keys, values = t1 }))
+            infer_emptytable(t2.emptytable_type, infer_at(node, a_type({ typename = "map", keys = t2.emptytable_type.keys, values = t1 })))
          end
          return true
       elseif t2.typename == "emptytable" then
          if is_lua_table_type(t1) then
-            infer_emptytable(node, t2, fresh_table_type(node, t1))
+            infer_emptytable(t2, infer_at(node, t1))
          elseif t1.typename ~= "emptytable" then
             node_error(node, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
          end
@@ -7066,7 +7060,7 @@ tl.type_check = function(ast, opts)
             if argument.typename == "emptytable" then
                local farg = f.args[a] or (va and f.args[expected])
                local where_arg = where_args[a + argdelta] or where_args
-               infer_emptytable(where_arg, argument, fresh_table_type(where_arg, farg))
+               infer_emptytable(argument, infer_at(where_arg, farg))
             end
          end
 
@@ -7926,7 +7920,10 @@ tl.type_check = function(ast, opts)
             if f.typ.typename == "invalid" then
                node_error(where, "cannot resolve a type for " .. v .. " here")
             end
-            local t = infer_at(f.where and where, f.typ)
+            local t = infer_at(where, f.typ)
+            if not f.where then
+               t.inferred_at = nil
+            end
             add_var(nil, v, t, "const", true)
          end
       end
