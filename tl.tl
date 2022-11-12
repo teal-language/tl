@@ -1241,6 +1241,9 @@ local record Node
 
    casttype: Type
 
+   -- variable
+   is_lvalue: boolean
+
    type: Type
    decltype: Type
 end
@@ -2747,8 +2750,10 @@ end
 local parse_call_or_assignment: function(ps: ParseState, i: integer): integer, Node
 do
    local function is_lvalue(node: Node): boolean
-      return node.kind == "variable"
-             or (node.kind == "op" and (node.op.op == "@index" or node.op.op == "."))
+      node.is_lvalue = node.kind == "variable"
+                       or (node.kind == "op"
+                           and (node.op.op == "@index" or node.op.op == "."))
+      return node.is_lvalue
    end
 
    local function parse_variable(ps: ParseState, i: integer): integer, Node, integer
@@ -5431,23 +5436,33 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local enum VarUse
       "use"
+      "lvalue"
       "use_type"
       "check_only"
    end
 
    local function find_var(name: string, use: VarUse): Variable, integer, boolean
+
       for i = #st, 1, -1 do
          local scope = st[i]
-         if scope[name] then
-            if i == 1 and scope[name].needs_compat then
-               all_needs_compat[name] = true
+         local var = scope[name]
+         if var then
+            if use == "lvalue" and var.is_narrowed then
+               if var.narrowed_from then
+                  var.used = true
+                  return { t = var.narrowed_from, attribute = var.attribute }, i, var_is_const(var)
+               end
+            else
+               if i == 1 and var.needs_compat then
+                  all_needs_compat[name] = true
+               end
+               if use == "use_type" then
+                  var.used_as_type = true
+               elseif use ~= "check_only" then
+                  var.used = true
+               end
+               return var, i, var_is_const(var)
             end
-            if (not use) or (use == "use") then
-               scope[name].used = true
-            elseif use == "use_type" then
-               scope[name].used_as_type = true
-            end
-            return scope[name], i, var_is_const(scope[name])
          end
       end
    end
@@ -8818,9 +8833,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                         break
                      end
                   end
-                  if decltype.typename == "union" then
-                     node_error(node, "unexpected table literal, expected: %s", decltype)
-                  end
                end
 
                if not is_lua_table_type(decltype) then
@@ -9335,11 +9347,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   return node_error(node, "cannot use '...' outside a vararg function")
                end
             end
-
             if node.tk == "_G" then
                node.type, node.attribute = simulate_g()
             else
-               node.type, node.attribute = find_var_type(node.tk)
+               local use: VarUse = node.is_lvalue and "lvalue" or "use"
+               node.type, node.attribute = find_var_type(node.tk, use)
             end
             if node.type and is_typetype(node.type) then
                node.type = a_type {
