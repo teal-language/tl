@@ -7199,6 +7199,10 @@ tl.type_check = function(ast, opts)
       end
 
       type_check_function_call = function(where, where_args, func, args, e1, is_method, argdelta)
+         if where.expected and where.expected.typename ~= "tuple" then
+            where.expected = a_type({ typename = "tuple", where.expected })
+         end
+
          begin_scope()
          local ret, f = check_call(where, where_args, func, args, is_method, argdelta)
          end_scope()
@@ -7494,11 +7498,11 @@ tl.type_check = function(ast, opts)
       if a and b then
          method_name = binop_to_metamethod[op]
          where_args = { node.e1, node.e2 }
-         args = { a, b }
+         args = { typename = "tuple", a, b }
       else
          method_name = unop_to_metamethod[op]
          where_args = { node.e1 }
-         args = { a }
+         args = { typename = "tuple", a }
       end
 
       local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
@@ -8145,7 +8149,7 @@ tl.type_check = function(ast, opts)
                if i == nexps and ndecl > nexps then
                   typ = a_type({ y = node.y, x = node.x, filename = filename, typename = "tuple", types = {} })
                   for a = i, ndecl do
-                     table.insert(typ.types, decls[a])
+                     table.insert(typ, decls[a])
                   end
                end
                node.exps[i].expected = typ
@@ -8643,8 +8647,11 @@ tl.type_check = function(ast, opts)
          end,
          before_statements = function(node)
             local exp1 = node.exps[1]
-            local args = { node.exps[2] and node.exps[2].type,
-node.exps[3] and node.exps[3].type, }
+            local args = {
+               typename = "tuple",
+               node.exps[2] and node.exps[2].type,
+               node.exps[3] and node.exps[3].type,
+            }
             local exp1type = resolve_for_call(exp1.type, args)
 
             if exp1type.typename == "poly" then
