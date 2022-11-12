@@ -462,5 +462,16 @@ describe("generic function", function()
       print(pok2)
       print(msg)
    ]])
+
+   it("nested uses of generic record functions using the same names for type variables don't cause conflicts (#560)", util.check [[
+      local M = {}
+
+      function M.array_slice<T>(t: {T}, begin: integer, ed: integer): {T}
+      end
+
+      function M.array_prefix<T>(t: {T}, n: integer): {T}
+          return M.array_slice(t, 1, n+1)
+      end
+   ]])
 end)
 

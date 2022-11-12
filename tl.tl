@@ -5494,6 +5494,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t, rt
    end
 
+   local function ensure_fresh_typeargs(t: Type): Type
+      if not t.typeargs then
+         return t
+      end
+
+      fresh_typevar_ctr = fresh_typevar_ctr + 1
+      for _, ta in ipairs(t.typeargs) do
+         ta.typearg = (ta.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+      end
+      local ok: boolean
+      ok, t = resolve_typevars(t, fresh_typevar)
+      assert(ok, "Internal Compiler Error: error creating fresh type variables")
+      return t
+   end
+
    local function find_var_type(name: string, use: VarUse): Type, Attribute
       local var = find_var(name, use)
       if var then
@@ -5501,15 +5516,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if t.typename == "unresolved_typearg" then
             return nil
          end
-         if t.typeargs then
-            fresh_typevar_ctr = fresh_typevar_ctr + 1
-            for _, ta in ipairs(t.typeargs) do
-               ta.typearg = (ta.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
-            end
-            local ok: boolean
-            ok, t = resolve_typevars(t, fresh_typevar)
-            assert(ok, "Internal Compiler Error: error creating fresh type variables")
-         end
+         t = ensure_fresh_typeargs(t)
          return t, var.attribute
       end
    end
@@ -5563,6 +5570,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if typ == nil then
                return nil
             end
+            typ = ensure_fresh_typeargs(typ)
             if typ.found then
                typ = typ.found
             end
@@ -9011,7 +9019,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end_function_scope(node)
             local rets = get_rets(children[3])
 
-            add_var(node, node.name.tk, a_type {
+            add_var(node, node.name.tk, ensure_fresh_typeargs(a_type {
                y = node.y,
                x = node.x,
                typename = "function",
@@ -9019,7 +9027,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                args = children[2],
                rets = rets,
                filename = filename,
-            })
+            }))
             return node.type
          end,
       },
@@ -9048,7 +9056,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if node.is_predeclared_local_function then
                return node.type
             end
-            add_global(node, node.name.tk, a_type {
+            add_global(node, node.name.tk, ensure_fresh_typeargs(a_type {
                y = node.y,
                x = node.x,
                typename = "function",
@@ -9056,7 +9064,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                args = children[2],
                rets = get_rets(children[3]),
                filename = filename,
-            })
+            }))
             return node.type
          end,
       },
@@ -9081,7 +9089,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                rtype.field_order = {}
             end
             if is_record_type(rtype) then
-               local fn_type = a_type {
+               local fn_type = ensure_fresh_typeargs(a_type {
                   y = node.y,
                   x = node.x,
                   typename = "function",
@@ -9090,7 +9098,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   args = children[3],
                   rets = get_rets(children[4]),
                   filename = filename,
-               }
+               })
 
                local rfieldtype = rtype.fields[node.name.tk]
                local ok = false
@@ -9140,7 +9148,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end_function_scope(node)
             -- children[1] args
             -- children[2] body
-            node.type = a_type {
+            node.type = ensure_fresh_typeargs(a_type {
                y = node.y,
                x = node.x,
                typename = "function",
@@ -9148,7 +9156,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                args = children[1],
                rets = children[2],
                filename = filename,
-            }
+            })
             return node.type
          end,
       },
