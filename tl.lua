@@ -5894,6 +5894,38 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function add_errs_prefixing(where, src, dst, prefix)
+      if not src then
+         return
+      end
+      for _, err in ipairs(src) do
+         err.msg = prefix .. err.msg
+
+
+         if where and where.y and (
+            (err.filename ~= filename) or
+            (not err.y) or
+            (where.y > err.y or (where.y == err.y and where.x > err.x))) then
+
+            err.y = where.y
+            err.x = where.x
+            err.filename = filename
+         end
+
+         table.insert(dst, err)
+      end
+   end
+
+   local function resolve_typevars_at(where, t)
+      assert(where)
+      local ok, typ, errs = resolve_typevars(t)
+      if not ok then
+         assert(where.y)
+         add_errs_prefixing(where, errs, errors, "")
+      end
+      return typ
+   end
+
    local function shallow_copy(t)
       local copy = {}
       for k, v in pairs(t) do
@@ -5990,28 +6022,6 @@ tl.type_check = function(ast, opts)
             add_var(nil, typevar, resolved)
          end
          return true
-      end
-   end
-
-   local function add_errs_prefixing(where, src, dst, prefix)
-      if not src then
-         return
-      end
-      for _, err in ipairs(src) do
-         err.msg = prefix .. err.msg
-
-
-         if where and where.y and (
-            (err.filename ~= filename) or
-            (not err.y) or
-            (where.y > err.y or (where.y == err.y and where.x > err.x))) then
-
-            err.y = where.y
-            err.x = where.x
-            err.filename = filename
-         end
-
-         table.insert(dst, err)
       end
    end
 
@@ -6226,16 +6236,6 @@ tl.type_check = function(ast, opts)
       end_scope(node)
       node.type = NONE
       return node.type
-   end
-
-   local function resolve_typevars_at(where, t)
-      assert(where)
-      local ok, typ, errs = resolve_typevars(t)
-      if not ok then
-         assert(where.y)
-         add_errs_prefixing(where, errs, errors, "")
-      end
-      return typ
    end
 
    local resolve_nominal

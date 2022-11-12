@@ -5894,6 +5894,38 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+   local function add_errs_prefixing(where: Node, src: {Error}, dst: {Error}, prefix: string)
+      if not src then
+         return
+      end
+      for _, err in ipairs(src) do
+         err.msg = prefix .. err.msg
+
+         -- where.y may be nil because of `typ as Node` casts and not all types have .y set
+         if where and where.y and (
+            (err.filename ~= filename)
+            or (not err.y)
+            or (where.y > err.y or (where.y == err.y and where.x > err.x))
+         ) then
+            err.y = where.y
+            err.x = where.x
+            err.filename = filename
+         end
+
+         table.insert(dst, err)
+      end
+   end
+
+   local function resolve_typevars_at(where: Node, t: Type): Type
+      assert(where)
+      local ok, typ, errs = resolve_typevars(t)
+      if not ok then
+         assert(where.y)
+         add_errs_prefixing(where, errs, errors, "")
+      end
+      return typ
+   end
+
    local function shallow_copy(t: Type): Type
       local copy = {}
       for k, v in pairs(t as {any:any}) do
@@ -5990,28 +6022,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             add_var(nil, typevar, resolved)
          end
          return true
-      end
-   end
-
-   local function add_errs_prefixing(where: Node, src: {Error}, dst: {Error}, prefix: string)
-      if not src then
-         return
-      end
-      for _, err in ipairs(src) do
-         err.msg = prefix .. err.msg
-
-         -- where.y may be nil because of `typ as Node` casts and not all types have .y set
-         if where and where.y and (
-            (err.filename ~= filename)
-            or (not err.y)
-            or (where.y > err.y or (where.y == err.y and where.x > err.x))
-         ) then
-            err.y = where.y
-            err.x = where.x
-            err.filename = filename
-         end
-
-         table.insert(dst, err)
       end
    end
 
@@ -6226,16 +6236,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end_scope(node)
       node.type = NONE
       return node.type
-   end
-
-   local function resolve_typevars_at(where: Node, t: Type): Type
-      assert(where)
-      local ok, typ, errs = resolve_typevars(t)
-      if not ok then
-         assert(where.y)
-         add_errs_prefixing(where, errs, errors, "")
-      end
-      return typ
    end
 
    local resolve_nominal: function(t: Type): Type
