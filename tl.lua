@@ -4931,8 +4931,8 @@ local function init_globals(lax)
       ["pairs"] = a_gfunction(2, function(a, b) return { args = TUPLE({ a_type({ typename = "map", keys = a, values = b }) }), rets = TUPLE({
    a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ a, b }) }),
 }), } end),
-      ["pcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, ANY }), rets = TUPLE({ BOOLEAN, ANY }) }),
-      ["xpcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, XPCALL_MSGH_FUNCTION, ANY }), rets = TUPLE({ BOOLEAN, ANY }) }),
+      ["pcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, ANY }), rets = VARARG({ BOOLEAN, ANY }) }),
+      ["xpcall"] = a_type({ typename = "function", args = VARARG({ FUNCTION, XPCALL_MSGH_FUNCTION, ANY }), rets = VARARG({ BOOLEAN, ANY }) }),
       ["print"] = a_type({ typename = "function", args = VARARG({ ANY }), rets = TUPLE({}) }),
       ["rawequal"] = a_type({ typename = "function", args = TUPLE({ ANY, ANY }), rets = TUPLE({ BOOLEAN }) }),
       ["rawget"] = a_type({ typename = "function", args = TUPLE({ TABLE, ANY }), rets = TUPLE({ ANY }) }),
