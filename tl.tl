@@ -214,21 +214,37 @@ local type Symbol = tl.Symbol
 -- Compiler debugging
 --------------------------------------------------------------------------------
 
-if os.getenv("TL_DEBUG") then
-   local max <const> = assert(tonumber(os.getenv("TL_DEBUG")), "TL_DEBUG was defined, but not a number")
-   local count = 0
-   debug.sethook(function(event: debug.HookEvent)
-      if event == "call" or event == "tail call" or event == "return" then
-         local info <const> = debug.getinfo(2)
-         io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
-         io.stderr:flush()
-      else
-         count = count + 100
-         if count > max then
-            error("Too many instructions")
+local TL_DEBUG = os.getenv("TL_DEBUG")
+
+if TL_DEBUG then
+   local max <const> = assert(tonumber(TL_DEBUG), "TL_DEBUG was defined, but not a number")
+   if max > 1 then
+      local count = 0
+      local skip: string = nil
+      debug.sethook(function(event: debug.HookEvent)
+         if event == "call" or event == "tail call" or event == "return" then
+            local info <const> = debug.getinfo(2)
+
+            if skip then
+               if info.name == skip and event == "return" then
+                  skip = nil
+               end
+               return
+            elseif (info.name or "?"):match("^tl_debug_") and event == "call" then
+               skip = info.name
+               return
+            end
+
+            io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
+            io.stderr:flush()
+         else
+            count = count + 100
+            if count > max then
+               error("Too many instructions")
+            end
          end
-      end
-   end, "cr", 100)
+      end, "cr", 100)
+   end
 end
 
 --------------------------------------------------------------------------------
@@ -3071,8 +3087,72 @@ local function fields_of(t: Type, meta: MetaMode): (function(): string, Type)
    end
 end
 
+local show_type: function(Type, boolean, {Type:string}): string
+
+local tl_debug_indent = 0
+local record DebugEntry
+   mark: string
+   y: integer
+   x: integer
+   msg: string
+end
+local tl_debug_entry: DebugEntry = nil
+local tl_debug_y = 1
+
+local function tl_debug_loc(y: integer, x: integer): string
+   return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
+end
+
+local function tl_debug_indent_push(mark: string, y: integer, x: integer, fmt: string, ...: any)
+   if tl_debug_entry then
+      if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
+         io.stderr:write("\n")
+         tl_debug_y = tl_debug_entry.y
+      end
+      io.stderr:write(("   "):rep(tl_debug_indent) .. tl_debug_entry.mark .. " " ..
+                      tl_debug_loc(tl_debug_entry.y, tl_debug_entry.x) .. " " ..
+                      tl_debug_entry.msg .. "\n")
+      io.stderr:flush()
+      tl_debug_entry = nil
+      tl_debug_indent = tl_debug_indent + 1
+   end
+   tl_debug_entry = {
+      mark = mark,
+      y = y,
+      x = x,
+      msg = fmt:format(...)
+   }
+end
+
+local function tl_debug_indent_pop(mark: string, single: string, y: integer, x: integer, fmt: string, ...: any)
+   if tl_debug_entry then
+      local msg = tl_debug_entry.msg
+      if fmt then
+         msg = fmt:format(...)
+      end
+      if y and (y > tl_debug_y) then
+         io.stderr:write("\n")
+         tl_debug_y = y
+      end
+      io.stderr:write(("   "):rep(tl_debug_indent) .. single .. " " .. tl_debug_loc(y, x) .. " " .. msg .. "\n")
+      io.stderr:flush()
+      tl_debug_entry = nil
+   else
+      tl_debug_indent = tl_debug_indent - 1
+      if fmt then
+         io.stderr:write(("   "):rep(tl_debug_indent) .. mark .. " " .. fmt:format(...) .. "\n")
+         io.stderr:flush()
+      end
+   end
+end
+
 local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    local kind = ast.typename
+
+   if TL_DEBUG then
+      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+   end
+
    local cbs = visit.cbs
    local cbkind = cbs and cbs[kind]
    do -- before
@@ -3162,6 +3242,11 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
          ret = visit_after(ast, xs, ret)
       end
    end
+
+   if TL_DEBUG then
+      tl_debug_indent_pop("---", "---", ast.y, ast.x)
+   end
+
    return ret
 end
 
@@ -3395,6 +3480,11 @@ local function recurse_node<T>(root: Node,
          end
       end
 
+      if TL_DEBUG then
+         local k = kind == "op" and "op " .. ast.op.op or kind
+         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", k)
+      end
+
       local fn = walkers[kind]
       if fn then
          fn(ast, xs)
@@ -3412,6 +3502,12 @@ local function recurse_node<T>(root: Node,
             ret = visit_after(ast, xs, ret)
          end
       end
+
+      if TL_DEBUG then
+         local k = kind == "op" and "op " .. ast.op.op or kind
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s] = %s", k, ast.type and show_type(ast.type))
+      end
+
       return ret
    end
 
@@ -4395,8 +4491,6 @@ local function is_unknown(t: Type): boolean
    return t.typename == "unknown"
        or t.typename == "unresolved_emptytable_value"
 end
-
-local show_type: function(Type, boolean, {Type:string}): string
 
 local function show_type_base(t: Type, short: boolean, seen: {Type:string}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist

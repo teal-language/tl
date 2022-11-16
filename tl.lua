@@ -214,21 +214,37 @@ tl.typecodes = {
 
 
 
-if os.getenv("TL_DEBUG") then
-   local max = assert(tonumber(os.getenv("TL_DEBUG")), "TL_DEBUG was defined, but not a number")
-   local count = 0
-   debug.sethook(function(event)
-      if event == "call" or event == "tail call" or event == "return" then
-         local info = debug.getinfo(2)
-         io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
-         io.stderr:flush()
-      else
-         count = count + 100
-         if count > max then
-            error("Too many instructions")
+local TL_DEBUG = os.getenv("TL_DEBUG")
+
+if TL_DEBUG then
+   local max = assert(tonumber(TL_DEBUG), "TL_DEBUG was defined, but not a number")
+   if max > 1 then
+      local count = 0
+      local skip = nil
+      debug.sethook(function(event)
+         if event == "call" or event == "tail call" or event == "return" then
+            local info = debug.getinfo(2)
+
+            if skip then
+               if info.name == skip and event == "return" then
+                  skip = nil
+               end
+               return
+            elseif (info.name or "?"):match("^tl_debug_") and event == "call" then
+               skip = info.name
+               return
+            end
+
+            io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
+            io.stderr:flush()
+         else
+            count = count + 100
+            if count > max then
+               error("Too many instructions")
+            end
          end
-      end
-   end, "cr", 100)
+      end, "cr", 100)
+   end
 end
 
 
@@ -3071,8 +3087,72 @@ local function fields_of(t, meta)
    end
 end
 
+local show_type
+
+local tl_debug_indent = 0
+
+
+
+
+
+
+local tl_debug_entry = nil
+local tl_debug_y = 1
+
+local function tl_debug_loc(y, x)
+   return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
+end
+
+local function tl_debug_indent_push(mark, y, x, fmt, ...)
+   if tl_debug_entry then
+      if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
+         io.stderr:write("\n")
+         tl_debug_y = tl_debug_entry.y
+      end
+      io.stderr:write(("   "):rep(tl_debug_indent) .. tl_debug_entry.mark .. " " ..
+      tl_debug_loc(tl_debug_entry.y, tl_debug_entry.x) .. " " ..
+      tl_debug_entry.msg .. "\n")
+      io.stderr:flush()
+      tl_debug_entry = nil
+      tl_debug_indent = tl_debug_indent + 1
+   end
+   tl_debug_entry = {
+      mark = mark,
+      y = y,
+      x = x,
+      msg = fmt:format(...),
+   }
+end
+
+local function tl_debug_indent_pop(mark, single, y, x, fmt, ...)
+   if tl_debug_entry then
+      local msg = tl_debug_entry.msg
+      if fmt then
+         msg = fmt:format(...)
+      end
+      if y and (y > tl_debug_y) then
+         io.stderr:write("\n")
+         tl_debug_y = y
+      end
+      io.stderr:write(("   "):rep(tl_debug_indent) .. single .. " " .. tl_debug_loc(y, x) .. " " .. msg .. "\n")
+      io.stderr:flush()
+      tl_debug_entry = nil
+   else
+      tl_debug_indent = tl_debug_indent - 1
+      if fmt then
+         io.stderr:write(("   "):rep(tl_debug_indent) .. mark .. " " .. fmt:format(...) .. "\n")
+         io.stderr:flush()
+      end
+   end
+end
+
 local function recurse_type(ast, visit)
    local kind = ast.typename
+
+   if TL_DEBUG then
+      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+   end
+
    local cbs = visit.cbs
    local cbkind = cbs and cbs[kind]
    do
@@ -3162,6 +3242,11 @@ local function recurse_type(ast, visit)
          ret = visit_after(ast, xs, ret)
       end
    end
+
+   if TL_DEBUG then
+      tl_debug_indent_pop("---", "---", ast.y, ast.x)
+   end
+
    return ret
 end
 
@@ -3395,6 +3480,11 @@ local function recurse_node(root,
          end
       end
 
+      if TL_DEBUG then
+         local k = kind == "op" and "op " .. ast.op.op or kind
+         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", k)
+      end
+
       local fn = walkers[kind]
       if fn then
          fn(ast, xs)
@@ -3412,6 +3502,12 @@ local function recurse_node(root,
             ret = visit_after(ast, xs, ret)
          end
       end
+
+      if TL_DEBUG then
+         local k = kind == "op" and "op " .. ast.op.op or kind
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s] = %s", k, ast.type and show_type(ast.type))
+      end
+
       return ret
    end
 
@@ -4395,8 +4491,6 @@ local function is_unknown(t)
    return t.typename == "unknown" or
    t.typename == "unresolved_emptytable_value"
 end
-
-local show_type
 
 local function show_type_base(t, short, seen)
 
