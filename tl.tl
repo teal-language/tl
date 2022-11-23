@@ -5732,6 +5732,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local copy: Type = {}
          seen[orig_t] = copy
 
+         copy.is_userdata = t.is_userdata
          copy.typename = t.typename
          copy.filename = t.filename
          copy.typeid = t.typeid
