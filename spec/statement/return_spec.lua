@@ -120,6 +120,39 @@ describe("return", function()
          assert.same({}, result.syntax_errors)
          assert.same({}, result.type_errors)
       end)
+
+      it("when exporting type alias", function ()
+         util.mock_io(finally, {
+            ["mod.tl"] = [[
+               local record R
+                  n: number
+               end
+               local record Mod
+                  type T = R
+               end
+               local inst: Mod
+               return inst
+            ]],
+            ["merged.tl"] = [[
+               local mod = require("mod")
+               return {
+                  mod = mod
+               }
+            ]],
+            ["foo.tl"] = [[
+               local merged = require("merged")
+               local t: merged.mod.T
+               print(t.n)
+            ]],
+         })
+
+         local tl = require("tl")
+         local result, err = tl.process("foo.tl", assert(tl.init_env()))
+
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
    end)
 
 end)
