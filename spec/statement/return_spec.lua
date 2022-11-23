@@ -98,6 +98,29 @@ describe("return", function()
          { msg = "in return value (inferred at foo.tl:2:13): got integer, expected string" }
       }))
 
+      it("when exporting userdata record", function ()
+         util.mock_io(finally, {
+            ["mod.tl"] = [[
+               local record R
+                  userdata
+               end
+               local r: R
+               return r
+            ]],
+            ["foo.tl"] = [[
+               local r = require("mod")
+               return r
+            ]],
+         })
+
+         local tl = require("tl")
+         local result, err = tl.process("foo.tl", assert(tl.init_env()))
+
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+
       it("when exporting type alias", function ()
          util.mock_io(finally, {
             ["mod.tl"] = [[
