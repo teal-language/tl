@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>TEAL-LUA Playground</title>
+<link rel="stylesheet" href="style.css" media="all">
+</head>
+<body>
+<div id="main">
+  <div class="editor-container">
+    <ul class="editor-header">
+      <li><span><span id="grammar-validation" class="validation"></span></span></li>
+      <li><span><a href="https://github.com/teal-language/tl">Teal</a> Source Code</span></li>
+      <li class="editor-options">
+        <ul class="editor-header-options">
+          <li class="option"><label>Examples</label>
+            <select id="opt-samples" onchange="load_sample(this)">
+              <option>choose</option>
+              <option>basic</option>
+              <option>enums</option>
+              <option>generics</option>
+              <option>maps</option>
+              <option>records</option>
+              <option>metamethods</option>
+              <option>Teal</option>
+            </select>
+          </li>
+        </ul>
+      </li>
+    </ul>
+    <pre id="grammar-editor" class="editor-area">{{syntax}}</pre>
+    <div id="grammar-info" class="editor-info"></div>
+  </div>
+  <div class="editor-container">
+    <ul class="editor-header">
+      <li><span><span id="code-validation" class="validation"></span></span></li>
+      <li><span>Generated <a href="https://lua.org/">Lua</a> Code</span></li>
+      <li class="editor-options">
+        <ul class="editor-header-options">
+          <li class="option"><label class="parse"><input id="syncScroll" type="checkbox"> Sync scroll  </label></li>
+          <li class="option"><button id="runCmd" class="parse">Run</button></li>
+        </ul>
+      </li>
+    </ul>
+    <pre id="code-editor" class="editor-area">{{source}}</pre>
+    <div id="code-info" class="editor-info"></div>
+  </div>
+</div>
+<div id="overlay"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="index.js"></script>
+<script src="teal-lua-playground.js"></script>
+</body>
+</html>

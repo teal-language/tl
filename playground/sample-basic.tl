@@ -1,0 +1,1 @@
+local message:string = "hello world!"
