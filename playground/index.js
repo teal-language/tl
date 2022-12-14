@@ -30,8 +30,7 @@ $('#auto-refresh').prop('checked', localStorage.getItem('autoRefresh') === 'true
 $('#runCmd').prop('disabled', $('#auto-refresh').prop('checked'));
 
 function load_sample(self) {
-  //let base_url = "https://raw.githubusercontent.com/mingodad/CG-SQL-Lua-playground/main/"
-  let base_url = "/"
+  let base_url = "https://raw.githubusercontent.com/mingodad/tl/dad-playground/playground/"
   switch(self.options[self.selectedIndex].value) {
     case "Teal":
       $.get(base_url + "../tl.tl", function( data ) {
