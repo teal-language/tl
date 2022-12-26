@@ -130,6 +130,20 @@ describe("metamethod __index", function()
       f(Rec)
    ]])
 
+   it("can simulate reading a map using __index", util.check [[
+      local record R
+         metamethod __index: function(R, string): number
+         foo: string
+         bar: boolean
+      end
+
+      local r: R = {}
+      r.foo = "hello"
+      r.bar = true
+      print(123 + r["wat"] + r["yep"]) -- these get resolved by __index
+      print(123 + r.wat + r.hello) -- these get resolved by __index too
+   ]])
+
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
    -- metamethod definition inside Rec.
