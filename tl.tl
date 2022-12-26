@@ -4620,9 +4620,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
                 (t.tk and " " .. t.tk or "")
       end
    elseif t.typename == "typevar" then
-      return (t.typevar:gsub("@.*", ""))
+      return TL_DEBUG and t.typevar or (t.typevar:gsub("@.*", ""))
    elseif t.typename == "typearg" then
-      return (t.typearg:gsub("@.*", ""))
+      return TL_DEBUG and t.typearg or (t.typearg:gsub("@.*", ""))
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
