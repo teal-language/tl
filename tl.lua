@@ -3075,8 +3075,16 @@ end
 
 local function fields_of(t, meta)
    local i = 1
-   local field_order = meta and t.meta_field_order or t.field_order
-   local fields = meta and t.meta_fields or t.fields
+   local field_order, fields
+   if meta then
+      field_order, fields = t.meta_field_order, t.meta_fields
+   else
+      field_order, fields = t.field_order, t.fields
+   end
+   if not fields then
+      return function()
+      end
+   end
    return function()
       local name = field_order[i]
       if not name then
