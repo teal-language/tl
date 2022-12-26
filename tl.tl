@@ -8493,6 +8493,33 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       apply_facts(where, f)
    end
 
+   local function determine_declaration_type(name: string, node: Node, infertypes: {Type}, i: integer): Type, boolean
+      local decltype = node.decltype and node.decltype[i]
+      if decltype and resolve_tuple_and_nominal(decltype) == INVALID then
+         decltype = INVALID
+      end
+
+      local infertype = infertypes and infertypes[i]
+      if lax and infertype and infertype.typename == "nil" then
+         infertype = nil
+      end
+
+      if decltype and infertype then
+         assert_is_a(node.vars[i], infertype, decltype, context_name[node.kind], name)
+      end
+
+      local t = decltype or infertype
+      if t == nil then
+         t = missing_initializer(node, i, name)
+      elseif t.typename == "emptytable" then
+         t.declared_at = node
+         t.assigned_to = name
+      end
+      t.inferred_len = nil
+
+      return t, infertype ~= nil
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -8568,7 +8595,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          before_expressions = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
             local encountered_close = false
-            local vals: {Type} = get_assignment_values(children[3], #node.vars)
+            local infertypes: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
                if var.attribute == "close" then
                   if opts.gen_target == "5.4" then
@@ -8581,22 +8608,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      node_error(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(opts.gen_target) .. ")")
                   end
                end
-               local decltype = node.decltype and node.decltype[i]
-               local infertype = vals and vals[i]
-               if lax and infertype and infertype.typename == "nil" then
-                  infertype = nil
-               end
-               if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, "in local declaration", var.tk)
-               end
-               local t = decltype or infertype
-               if t == nil then
-                  t = missing_initializer(node, i, var.tk)
-               elseif t.typename == "emptytable" then
-                  t.declared_at = node
-                  t.assigned_to = var.tk
-               end
-               t.inferred_len = nil
+
+               local t = determine_declaration_type(var.tk, node, infertypes, i)
 
                if var.attribute == "close" then
                   if not type_is_closable(t) then
@@ -8618,30 +8631,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["global_declaration"] = {
          before_expressions = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
-            local vals: {Type} = get_assignment_values(children[3], #node.vars)
+            local infertypes: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
-               local decltype = node.decltype and node.decltype[i]
-               local infertype = vals and vals[i]
-               if lax and infertype and infertype.typename == "nil" then
-                  infertype = nil
-               end
-               if decltype and infertype then
-                  assert_is_a(node.vars[i], infertype, decltype, "in global declaration", var.tk)
-               end
+               local t, is_inferred = determine_declaration_type(var.tk, node, infertypes, i)
+
                if var.attribute == "close" then
                   node_error(var, "globals may not be <close>")
                end
-               local t = decltype or infertype
 
-               if t == nil then
-                  t = missing_initializer(node, i, var.tk)
-               elseif t.typename == "emptytable" then
-                  t.declared_at = node
-                  t.assigned_to = var.tk
-               end
-               t.inferred_len = nil
-
-               add_global(var, var.tk, t, infertype ~= nil)
+               add_global(var, var.tk, t, is_inferred)
                var.type = t
 
                dismiss_unresolved(var.tk)
@@ -8653,8 +8651,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["assignment"] = {
          before_expressions = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
-            local vals: {Type} = get_assignment_values(children[3], #children[1])
-            local exps = flatten_list(vals)
+            local valtypes: {Type} = get_assignment_values(children[3], #children[1])
+            local exps = flatten_list(valtypes)
             for i, vartype in ipairs(children[1]) do
                local varnode = node.vars[i]
                local attr = varnode.attribute
