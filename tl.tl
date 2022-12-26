@@ -5577,15 +5577,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       }, nil
    end
 
-   local type TypevarCallback = function(Type): Type, Type
-   local resolve_typevars: function (typ: Type, fn: TypevarCallback): boolean, Type, {Error}
+   local type TypevarCallback = function(Type): Type, Type, boolean
+   local type TypeargCallback = function(Type): Type
+   local resolve_typevars: function (typ: Type, fn_var: TypevarCallback, fn_arg: TypeargCallback): boolean, Type, {Error}
 
-   local function fresh_typevar(t: Type): Type, Type
+   local function fresh_typevar(t: Type): Type, Type, boolean
       local rt = a_type {
          typename = "typevar",
          typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
       }
-      return t, rt
+      return t, rt, false
+   end
+
+   local function fresh_typearg(t: Type): Type
+      return a_type {
+         typename = "typearg",
+         typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+      }
    end
 
    local function ensure_fresh_typeargs(t: Type): Type
@@ -5594,11 +5602,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       fresh_typevar_ctr = fresh_typevar_ctr + 1
-      for _, ta in ipairs(t.typeargs) do
-         ta.typearg = (ta.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
-      end
       local ok: boolean
-      ok, t = resolve_typevars(t, fresh_typevar)
+      ok, t = resolve_typevars(t, fresh_typevar, fresh_typearg)
       assert(ok, "Internal Compiler Error: error creating fresh type variables")
       return t
    end
@@ -5776,7 +5781,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["unknown"] = true,
    }
 
-   local function default_resolve_typevars_callback(t: Type): Type, Type
+   local function default_resolve_typevars_callback(t: Type): Type, Type, boolean
       local orig_t = t
       t = find_var_type(t.typevar)
       local rt: Type
@@ -5789,15 +5794,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
              or (t.typename == "nominal" and not t.typevals) then
          rt = t
       end
-      return t, rt
+      return t, rt, t ~= nil
    end
 
-   resolve_typevars = function(typ: Type, fn: TypevarCallback): boolean, Type, {Error}
+   resolve_typevars = function(typ: Type, fn_var: TypevarCallback, fn_arg: TypeargCallback): boolean, Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
       local resolved: {string:boolean} = {}
 
-      fn = fn or default_resolve_typevars_callback
+      fn_var = fn_var or default_resolve_typevars_callback
 
       local function resolve(t: Type): Type
 
@@ -5813,8 +5818,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local orig_t = t
          if t.typename == "typevar" then
             local rt: Type
-            t, rt = fn(t)
-            if t then
+            local has_resolved: boolean
+            t, rt, has_resolved = fn_var(t)
+            if has_resolved then
                resolved[orig_t.typevar] = true
             end
             if rt then
@@ -5844,7 +5850,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             copy.elements = resolve(t.elements)
             -- inferred_len is not propagated
          elseif t.typename == "typearg" then
-            copy.typearg = t.typearg
+            if fn_arg then
+               copy = fn_arg(t)
+            else
+               copy.typearg = t.typearg
+            end
          elseif t.typename == "typevar" then
             copy.typevar = t.typevar
          elseif is_typetype(t) then
@@ -9665,7 +9675,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end,
             after = function(typ: Type, _children: {Type}): Type
                end_scope()
-               return typ
+               return ensure_fresh_typeargs(typ)
             end,
          },
          ["record"] = {

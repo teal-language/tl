@@ -5578,6 +5578,7 @@ tl.type_check = function(ast, opts)
    end
 
 
+
    local resolve_typevars
 
    local function fresh_typevar(t)
@@ -5585,7 +5586,14 @@ tl.type_check = function(ast, opts)
          typename = "typevar",
          typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
       })
-      return t, rt
+      return t, rt, false
+   end
+
+   local function fresh_typearg(t)
+      return a_type({
+         typename = "typearg",
+         typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+      })
    end
 
    local function ensure_fresh_typeargs(t)
@@ -5594,11 +5602,8 @@ tl.type_check = function(ast, opts)
       end
 
       fresh_typevar_ctr = fresh_typevar_ctr + 1
-      for _, ta in ipairs(t.typeargs) do
-         ta.typearg = (ta.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
-      end
       local ok
-      ok, t = resolve_typevars(t, fresh_typevar)
+      ok, t = resolve_typevars(t, fresh_typevar, fresh_typearg)
       assert(ok, "Internal Compiler Error: error creating fresh type variables")
       return t
    end
@@ -5789,15 +5794,15 @@ tl.type_check = function(ast, opts)
          (t.typename == "nominal" and not t.typevals) then
          rt = t
       end
-      return t, rt
+      return t, rt, t ~= nil
    end
 
-   resolve_typevars = function(typ, fn)
+   resolve_typevars = function(typ, fn_var, fn_arg)
       local errs
       local seen = {}
       local resolved = {}
 
-      fn = fn or default_resolve_typevars_callback
+      fn_var = fn_var or default_resolve_typevars_callback
 
       local function resolve(t)
 
@@ -5813,8 +5818,9 @@ tl.type_check = function(ast, opts)
          local orig_t = t
          if t.typename == "typevar" then
             local rt
-            t, rt = fn(t)
-            if t then
+            local has_resolved
+            t, rt, has_resolved = fn_var(t)
+            if has_resolved then
                resolved[orig_t.typevar] = true
             end
             if rt then
@@ -5844,7 +5850,11 @@ tl.type_check = function(ast, opts)
             copy.elements = resolve(t.elements)
 
          elseif t.typename == "typearg" then
-            copy.typearg = t.typearg
+            if fn_arg then
+               copy = fn_arg(t)
+            else
+               copy.typearg = t.typearg
+            end
          elseif t.typename == "typevar" then
             copy.typevar = t.typevar
          elseif is_typetype(t) then
@@ -9665,7 +9675,7 @@ tl.type_check = function(ast, opts)
             end,
             after = function(typ, _children)
                end_scope()
-               return typ
+               return ensure_fresh_typeargs(typ)
             end,
          },
          ["record"] = {
