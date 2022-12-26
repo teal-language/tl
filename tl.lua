@@ -9324,7 +9324,13 @@ tl.type_check = function(ast, opts)
             if node.op.op == "." then
                a = ra
                if a.typename == "map" then
-                  if is_a(a.keys, STRING) or is_a(a.keys, ANY) then
+                  local ak = resolve_tuple_and_nominal(a.keys)
+                  if ak.typename == "enum" then
+                     assert(node.e2.kind == "identifier")
+                     if not ak.enumset[node.e2.tk] then
+                        node_error(node.e2, "key is not an enum value: " .. node.e2.tk)
+                     end
+                  elseif is_a(ak, STRING) or is_a(ak, ANY) then
                      node.type = a.values
                   else
                      node_error(node, "cannot use . index, expects keys of type %s", a.keys)

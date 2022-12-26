@@ -30,4 +30,41 @@ describe(".", function()
          print(x.foo)
       ]])
    end)
+
+   describe("on maps with enum keys", function()
+      it("ok", util.check [[
+         global record R
+             record StrategyType
+                 -- ...
+             end
+             enum StrategyName
+                "BestEffort"
+                "Precise"
+             end
+             Strategy: {StrategyName:StrategyType}
+             fn: function(name: string, n: number, strategy: R.StrategyType): nil
+         end
+
+         R.fn("hello", 1000, R.Strategy.Precise)
+         R.fn("hello", 1000, R.Strategy.BestEffort)
+      ]])
+
+      it("fail", util.check_type_error([[
+         global record R
+             record StrategyType
+                 -- ...
+             end
+             enum StrategyName
+                "BestEffort"
+                "Precise"
+             end
+             Strategy: {StrategyName:StrategyType}
+             fn: function(name: string, n: number, strategy: R.StrategyType): nil
+         end
+
+         R.fn("hello", 1000, R.Strategy.Invalid)
+      ]], {
+         { y = 13, x = 41, msg = "key is not an enum value: Invalid" }
+      }))
+   end)
 end)
