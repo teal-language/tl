@@ -4634,7 +4634,7 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "none" then
       return ""
    elseif is_typetype(t) then
-      return "type " .. show(t.def)
+      return "type " .. show(t.def) .. (t.is_alias and " (alias)" or "")
    elseif t.typename == "bad_nominal" then
       return table.concat(t.names, ".") .. " (an unknown type)"
    else
