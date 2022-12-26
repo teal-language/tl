@@ -64,7 +64,7 @@ describe(".", function()
 
          R.fn("hello", 1000, R.Strategy.Invalid)
       ]], {
-         { y = 13, x = 41, msg = "key is not an enum value: Invalid" }
+         { y = 13, x = 41, msg = "wrong index type: got string \"Invalid\", expected StrategyName" }
       }))
    end)
 end)

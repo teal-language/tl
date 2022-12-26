@@ -7365,6 +7365,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       assert(type(key) == "string")
 
       tbl = resolve_tuple_and_nominal(tbl)
+
       if tbl.typename == "string" or tbl.typename == "enum" then
          tbl = find_var_type("string") -- simulate string metatable
       end
@@ -7399,21 +7400,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       else
          return nil, "cannot index key '" .. key .. "' in type %s"
       end
-   end
-
-   local function type_check_record_key(rec: Node, key: Node, a: Type, orig_a: Type): Type
-      if lax and (is_unknown(a) or a.typename == "typevar") then
-         if rec.kind == "variable" then
-            add_unknown_dot(rec, rec.tk .. "." .. key.tk)
-         end
-         return UNKNOWN
-      end
-
-      local t, e = match_record_key(a, rec, key.conststr or key.tk)
-      if t then
-         return t
-      end
-      return node_error(key, e, a == INVALID and a or resolve_tuple(orig_a))
    end
 
    local function widen_in_scope(scope: {string:Variable}, var: string): boolean
@@ -7718,7 +7704,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
       elseif bnode.kind == "string" or bnode.kind == "enum_item" then
-         local t, e = match_record_key(a, anode, bnode.conststr)
+         local t, e = match_record_key(orig_a, anode, bnode.conststr)
          if t then
             return t
          end
@@ -9319,40 +9305,39 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if rb and is_typetype(rb) and rb.def.typename == "record" then
                rb = rb.def
             end
-            if node.op.op == "." then
-               a = ra
-               if a.typename == "map" then
-                  local ak = resolve_tuple_and_nominal(a.keys)
-                  if ak.typename == "enum" then
-                     assert(node.e2.kind == "identifier")
-                     if not ak.enumset[node.e2.tk] then
-                        node_error(node.e2, "key is not an enum value: " .. node.e2.tk)
-                     end
-                  elseif is_a(ak, STRING) or is_a(ak, ANY) then
-                     node.type = a.values
-                  else
-                     node_error(node, "cannot use . index, expects keys of type %s", a.keys)
-                  end
-               else
-                  node.type = type_check_record_key(node.e1, node.e2, a, orig_a)
-
-                  if node.type.needs_compat and opts.gen_compat ~= "off" then
-                     -- only apply to a literal use, not a propagated type
-                     if node.e1.kind == "variable" and node.e2.kind == "identifier" then
-                        local key = node.e1.tk .. "." .. node.e2.tk
-                        node.kind = "variable"
-                        node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
-                        all_needs_compat[key] = true
-                     end
-                  end
-               end
-            elseif node.op.op == "@funcall" then
+            if node.op.op == "@funcall" then
                if lax and is_unknown(a) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
                      add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                   end
                end
                node.type = type_check_funcall(node, a, b)
+            elseif node.op.op == "." then
+               assert(node.e2.kind == "identifier")
+               local bnode: Node = {
+                  y = node.e2.y,
+                  x = node.e2.x,
+                  tk = node.e2.tk,
+                  kind = "string",
+                  conststr = node.e2.tk,
+               }
+               local btype = a_type {
+                  y = node.e2.y,
+                  x = node.e2.x,
+                  tk = '"' ..node.e2.tk .. '"',
+                  typename = "string",
+               }
+               node.type = type_check_index(node.e1, bnode, orig_a, btype)
+
+               if node.type.needs_compat and opts.gen_compat ~= "off" then
+                  -- only apply to a literal use, not a propagated type
+                  if node.e1.kind == "variable" and node.e2.kind == "identifier" then
+                     local key = node.e1.tk .. "." .. node.e2.tk
+                     node.kind = "variable"
+                     node.tk = "_tl_" .. node.e1.tk .. "_" .. node.e2.tk
+                     all_needs_compat[key] = true
+                  end
+               end
             elseif node.op.op == "@index" then
                node.type = type_check_index(node.e1, node.e2, a, b)
             elseif node.op.op == "as" then
@@ -9370,7 +9355,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                node.type = BOOLEAN
             elseif node.op.op == ":" then
-               node.type = type_check_record_key(node.e1, node.e2, a, orig_a)
+               if lax and (is_unknown(a) or a.typename == "typevar") then
+                  if node.e1.kind == "variable" then
+                     add_unknown_dot(node.e1, node.e1.tk .. "." .. node.e2.tk)
+                  end
+                  node.type = UNKNOWN
+               else
+                  local t, e = match_record_key(a, node.e1, node.e2.conststr or node.e2.tk)
+                  if not t then
+                     node.type = INVALID
+                     return node_error(node.e2, e, a == INVALID and a or resolve_tuple(orig_a))
+                  end
+                  node.type = t
+               end
             elseif node.op.op == "not" then
                node.known = facts_not(node, node.e1.known)
                node.type = BOOLEAN
