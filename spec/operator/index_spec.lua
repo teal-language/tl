@@ -191,5 +191,40 @@ describe("[]", function()
       ]], {
          { msg = "inconsistent index type: got WrongType, expected IndexType" },
       }))
+
+      it("accepts valid enum keys", util.check [[
+         global record R
+             record StrategyType
+                 -- ...
+             end
+             enum StrategyName
+                "BestEffort"
+                "Precise"
+             end
+             Strategy: {StrategyName:StrategyType}
+             fn: function(name: string, n: number, strategy: R.StrategyType): nil
+         end
+
+         R.fn("hello", 1000, R.Strategy["Precise"])
+         R.fn("hello", 1000, R.Strategy["BestEffort"])
+      ]])
+
+      it("catches invalid enum keys", util.check_type_error([[
+         global record R
+             record StrategyType
+                 -- ...
+             end
+             enum StrategyName
+                "BestEffort"
+                "Precise"
+             end
+             Strategy: {StrategyName:StrategyType}
+             fn: function(name: string, n: number, strategy: R.StrategyType): nil
+         end
+
+         R.fn("hello", 1000, R.Strategy["Invalid"])
+      ]], {
+         { y = 13, x = 41, msg = "wrong index type: got string \"Invalid\", expected StrategyName" }
+      }))
    end)
 end)
