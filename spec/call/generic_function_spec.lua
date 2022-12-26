@@ -473,5 +473,18 @@ describe("generic function", function()
           return M.array_slice(t, 1, n+1)
       end
    ]])
+
+   it("doesn't leak type variables in function returns (regression test for #582)", util.check [[
+      local record Container
+         try_resolve: function<T>(Container):T
+      end
+
+      function Container:resolve<T>():T
+         return self:try_resolve()
+      end
+
+      local _foo: integer = Container:resolve()
+      local _bar: string = Container:resolve()
+   ]])
 end)
 

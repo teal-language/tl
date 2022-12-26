@@ -7351,6 +7351,7 @@ tl.type_check = function(ast, opts)
 
          begin_scope()
          local ret, f = check_call(where, where_args, func, args, is_method, argdelta)
+         ret = resolve_typevars_at(where, ret)
          end_scope()
          if e1 then
             e1.type = f
