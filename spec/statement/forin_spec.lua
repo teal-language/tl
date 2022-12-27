@@ -46,6 +46,8 @@ describe("forin", function()
          end
       ]], {
          { msg = "attempting ipairs loop" },
+         { y = 3, msg = "argument 1: got A (unresolved generic), expected {A}" },
+         { y = 4, msg = "cannot use operator '..' for types string \"value: \" and A (unresolved generic)" },
       }))
    end)
 

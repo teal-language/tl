@@ -13,10 +13,10 @@ describe("local function", function()
       ]])
 
       it("can have type variables", util.check [[
-         local f: function<a, b, c>(a, b): c
+         local f: function<a, b>(a, b): a
 
-         f = function(a: number, b: string): boolean
-            return #b == a
+         f = function(a: number, b: string): number
+            return a + #b
          end
          local ok = f(3, "abc")
       ]])

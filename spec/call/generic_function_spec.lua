@@ -379,22 +379,59 @@ describe("generic function", function()
       { msg = "argument 2" }
    }))
 
-   it("does not leak an unresolved generic type", function()
-      local _, ast = util.check([[
-         local function mypairs<a, b>(map: {a:b}): (a, b)
-         end
+   it("does not leak an unresolved generic type", util.check_type_error([[
+      local function mypairs<a, b>(map: {a:b}): (a, b)
+      end
 
-         local _, resolved   = mypairs({["hello"] = true})
-         local _, unresolved = mypairs({})
-      ]])()
+      local _, resolved   = mypairs({["hello"] = true})
+      local _, unresolved = mypairs({})
+   ]], {
+      { y = 5, x = 13, msg = "cannot infer declaration type; an explicit type annotation is necessary" },
+      { y = 5, x = 16, msg = "cannot infer declaration type; an explicit type annotation is necessary" },
+   }))
 
-      -- resolved
-      assert.same("string",  ast[2].exps[1].type[1].typename)
-      assert.same("boolean", ast[2].exps[1].type[2].typename)
-      -- unresolved
-      assert.same("invalid", ast[3].exps[1].type[1].typename)
-      assert.same("invalid", ast[3].exps[1].type[2].typename)
-   end)
+   it("reports when an annotation is needed", util.check_type_error([[
+      local record Container
+         try_resolve: function<T>(Container):T
+      end
+
+      function Container:resolve<T>():T
+         local t = self:try_resolve()
+         return t
+      end
+   ]], {
+      { y = 6, msg = "cannot infer declaration type; an explicit type annotation is necessary" },
+   }))
+
+   it("works when an annotation is given", util.check [[
+      local record Container
+         try_resolve: function<T>(Container):T
+      end
+
+      function Container:resolve<T>():T
+         local t: T = self:try_resolve()
+         return t
+      end
+   ]])
+
+   it("works when inference is possible from context", util.check [[
+      local record Container
+         try_resolve: function<T>(Container):T
+      end
+
+      function Container:resolve<T>():T
+         return self:try_resolve()
+      end
+   ]])
+
+   it("does not leak an unresolved generic type", util.check_type_error([[
+      local function f<a, b>(x: {a:b}): (a, b)
+      end
+
+      print(f({}) + 1)
+   ]], {
+      { y = 4, x = 19, msg = "cannot use operator '+' for types a (unresolved generic) and integer" },
+   }))
 
    it("does not produce a recursive type", util.lax_check([[
       local function mypairs<a, b>(map: {a:b}): (a, b)

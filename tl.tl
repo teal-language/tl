@@ -978,6 +978,7 @@ local enum TypeName
    "table_item"
    "unresolved_emptytable_value"
    "unresolved_typearg"
+   "unresolvable_typearg"
    "tuple"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
@@ -4631,6 +4632,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return TL_DEBUG and t.typevar or (t.typevar:gsub("@.*", ""))
    elseif t.typename == "typearg" then
       return TL_DEBUG and t.typearg or (t.typearg:gsub("@.*", ""))
+   elseif t.typename == "unresolvable_typearg" then
+      return (TL_DEBUG and t.typearg or (t.typearg:gsub("@.*", ""))) .. " (unresolved generic)"
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -5863,6 +5866,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             else
                copy.typearg = t.typearg
             end
+         elseif t.typename == "unresolvable_typearg" then
+            copy.typearg = t.typearg
          elseif t.typename == "typevar" then
             copy.typevar = t.typevar
          elseif is_typetype(t) then
@@ -7165,7 +7170,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
                if not find_var_type(a.typearg) then
-                  add_var(nil, a.typearg, lax and UNKNOWN or INVALID)
+                  add_var(nil, a.typearg, lax and UNKNOWN or { typename = "unresolvable_typearg", typearg = a.typearg })
                end
             end
          end
@@ -8499,18 +8504,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function determine_declaration_type(name: string, node: Node, infertypes: {Type}, i: integer): Type, boolean
-      local decltype = node.decltype and node.decltype[i]
-      if decltype and resolve_tuple_and_nominal(decltype) == INVALID then
-         decltype = INVALID
-      end
-
       local infertype = infertypes and infertypes[i]
       if lax and infertype and infertype.typename == "nil" then
          infertype = nil
       end
 
-      if decltype and infertype then
-         assert_is_a(node.vars[i], infertype, decltype, context_name[node.kind], name)
+      local decltype = node.decltype and node.decltype[i]
+      if decltype then
+         if resolve_tuple_and_nominal(decltype) == INVALID then
+            decltype = INVALID
+         end
+
+         if infertype then
+            assert_is_a(node.vars[i], infertype, decltype, context_name[node.kind], name)
+         end
+      else
+         if infertype and infertype.typename == "unresolvable_typearg" then
+            node_error(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
+            infertype = INVALID
+         end
       end
 
       local t = decltype or infertype
@@ -9701,12 +9713,34 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
             end,
-            after = function(typ: Type, _children: {Type}): Type
+            after = function(typ: Type, children: {Type}): Type
                end_scope()
-               for _, typ2 in fields_of(typ) do
-                  if typ2.typename == "nestedtype" then
-                     typ2.typename = "typetype"
+               local i = 1
+               if typ.typeargs then
+                  for _, _ in ipairs(typ.typeargs) do
+                     typ.typeargs[i] = children[i]
+                     i = i + 1
                   end
+               end
+               if typ.elements then
+                  typ.elements = children[i]
+                  i = i + 1
+               end
+               for name, _ in fields_of(typ) do
+                  local ftype = children[i]
+                  if ftype.typename == "nestedtype" then
+                     ftype.typename = "typetype"
+                  end
+                  typ.fields[name] = ftype
+                  i = i + 1
+               end
+               for name, _ in fields_of(typ, "meta") do
+                  local ftype = children[i]
+                  if ftype.typename == "nestedtype" then
+                     ftype.typename = "typetype"
+                  end
+                  typ.meta_fields[name] = ftype
+                  i = i + 1
                end
                return typ
             end,

@@ -12,10 +12,10 @@ describe("global function", function()
       ]])
 
       it("can have type variables", util.check [[
-         global f: function<a, b, c>(a, b): c
+         global f: function<a, b>(a, b): a
 
-         f = function(a: number, b: string): boolean
-            return #b == a
+         f = function(a: number, b: string): number
+            return a + #b
          end
          local ok = f(3, "abc")
       ]])
