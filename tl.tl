@@ -7244,7 +7244,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             infer_emptytables(where, where_args, args, f.args, argdelta)
 
-            mark_invalid_typeargs(f)
+            if not rets then
+               mark_invalid_typeargs(f)
+            end
 
             return resolve_typevars_at(where, f.rets)
          end

@@ -523,5 +523,17 @@ describe("generic function", function()
       local _foo: integer = Container:resolve()
       local _bar: string = Container:resolve()
    ]])
+
+   it("should resolve union with typearg in return value", util.check [[
+      local record A
+         f: function()
+      end
+
+      local create_by_name: function<T>(name: string): T | nil
+      local a: A | nil = create_by_name("A")
+      if not a is nil then
+         a.f()
+      end
+   ]])
 end)
 
