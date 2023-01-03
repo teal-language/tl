@@ -275,6 +275,7 @@ end
 
 
 
+
 do
 
 
@@ -334,6 +335,8 @@ do
       ["string long"] = "$ERR invalid_string$",
       ["string long got ]"] = "$ERR invalid_string$",
 
+      ["comment long"] = "$ERR unfinished_comment$",
+      ["comment long got ]"] = "$ERR unfinished_comment$",
       ["number dec"] = "integer",
       ["number decfloat"] = "number",
       ["number hex"] = "integer",
@@ -573,6 +576,8 @@ do
             msg = "malformed string"
          elseif t.kind == "$ERR invalid_number$" then
             msg = "malformed number"
+         elseif t.kind == "$ERR unfinished_comment$" then
+            msg = "unfinished long comment"
          else
             msg = "invalid token '" .. t.tk .. "'"
          end
