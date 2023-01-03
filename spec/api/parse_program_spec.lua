@@ -11,7 +11,7 @@ describe("tl.parse_program", function()
       ]]
 
       local tks = assert(tl.lex(tl_code))
-      local _, _, reqs = tl.parse_program(tks)
+      local _, reqs = tl.parse_program(tks)
       assert.are.same({ "foo", "foo.bar", "baz" }, reqs)
    end)
 end)

@@ -32,9 +32,9 @@ do
       if on then
          if jit then
             jit.off()
-            tl.lex = function(input)
+            tl.lex = function(input, filename)
                jit.on()
-               local r1, r2 = tl_lex(input)
+               local r1, r2 = tl_lex(input, filename)
                jit.off()
                return r1, r2
             end

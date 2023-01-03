@@ -155,8 +155,8 @@ describe("syntax errors", function()
          bar()
       end
    ]], {
-      { y = 7, x = 13, msg = "syntax error hint: construct starting here is not aligned with its 'end' at :10:10:" },
-      { y = 15, msg = "syntax error, expected 'end' to close construct started at :5:22:" },
+      { y = 7, x = 13, msg = "syntax error hint: construct starting here is not aligned with its 'end' at foo.tl:10:10:" },
+      { y = 15, msg = "syntax error, expected 'end' to close construct started at foo.tl:5:22:" },
    }))
 
    it("reports correct location of redeclaration (#542)", util.check_syntax_error([[

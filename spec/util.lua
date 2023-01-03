@@ -428,9 +428,7 @@ end
 
 local function check(lax, code, unknowns, gen_target)
    return function()
-      local tokens = tl.lex(code)
-      local syntax_errors = {}
-      local _, ast = tl.parse_program(tokens, syntax_errors)
+      local ast, syntax_errors = tl.parse(code, "foo.lua")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local gen_compat
@@ -451,9 +449,7 @@ end
 
 local function check_type_error(lax, code, type_errors, gen_target)
    return function()
-      local tokens = tl.lex(code)
-      local syntax_errors = {}
-      local _, ast = tl.parse_program(tokens, syntax_errors)
+      local ast, syntax_errors = tl.parse(code, "foo.tl")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local gen_compat
@@ -525,9 +521,7 @@ function util.check_syntax_error(code, syntax_errors)
    code = trim_end(code)
 
    return function()
-      local tokens = tl.lex(code)
-      local errors = {}
-      local _, ast = tl.parse_program(tokens, errors)
+      local ast, errors = tl.parse(code, "foo.tl")
       local batch = batch_assertions()
       batch_compare(batch, "syntax errors", syntax_errors, errors)
       batch:assert()
@@ -549,16 +543,13 @@ end
 
 local function gen(lax, code, expected, gen_target)
    return function()
-      local tokens = tl.lex(code)
-      local syntax_errors = {}
-      local _, ast = tl.parse_program(tokens, syntax_errors)
+      local ast, syntax_errors = tl.parse(code, "foo.tl")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local result = tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target })
       assert.same({}, result.type_errors)
       local output_code = tl.pretty_print_ast(ast)
 
-      local expected_tokens = tl.lex(expected)
-      local _, expected_ast = tl.parse_program(expected_tokens, {})
+      local expected_ast = tl.parse(expected, "foo.tl")
       local expected_code = tl.pretty_print_ast(expected_ast)
 
       assert.same(expected_code, output_code)

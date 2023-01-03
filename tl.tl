@@ -261,9 +261,9 @@ local enum TokenKind
    "identifier"
    "number"
    "integer"
-   "$invalid_string$"
-   "$invalid_number$"
-   "$invalid$"
+   "$ERR invalid_string$"
+   "$ERR invalid_number$"
+   "$ERR invalid$"
    "$EOF$"
 end
 
@@ -327,12 +327,12 @@ do
       ["got /"] = "op",
       ["got :"] = "op",
       -- ["got --["]: drop comment
-      ["string single"] = "$invalid_string$",
-      ["string single got \\"] = "$invalid_string$",
-      ["string double"] = "$invalid_string$",
-      ["string double got \\"] = "$invalid_string$",
-      ["string long"] = "$invalid_string$",
-      ["string long got ]"] = "$invalid_string$",
+      ["string single"] = "$ERR invalid_string$",
+      ["string single got \\"] = "$ERR invalid_string$",
+      ["string double"] = "$ERR invalid_string$",
+      ["string double got \\"] = "$ERR invalid_string$",
+      ["string long"] = "$ERR invalid_string$",
+      ["string long got ]"] = "$ERR invalid_string$",
       -- ["comment short"]: drop comment
       -- ["comment long"]: drop comment
       -- ["comment long got ]"]: drop comment
@@ -341,7 +341,7 @@ do
       ["number hex"] = "integer",
       ["number hexfloat"] = "number",
       ["number power"] = "number",
-      ["number powersign"] = "$invalid_number$",
+      ["number powersign"] = "$ERR invalid_number$",
    }
 
    local keywords: {string:boolean} = {
@@ -486,7 +486,7 @@ do
       end
    end
 
-   function tl.lex(input: string): {Token}, {Token}
+   function tl.lex(input: string, filename: string): {Token}, {Error}
       local tokens: {Token} = {}
 
       local state: LexState = "any"
@@ -498,7 +498,7 @@ do
       local lc_close_lvl = 0
       local ls_open_lvl = 0
       local ls_close_lvl = 0
-      local errs: {Token} = {}
+      local errs: {Error} = {}
       local nt = 0
 
       local tx: integer
@@ -568,6 +568,24 @@ do
          in_token = false
       end
 
+      local function add_syntax_error()
+         local t = tokens[nt]
+         local msg: string
+         if t.kind == "$ERR invalid_string$" then
+            msg = "malformed string"
+         elseif t.kind == "$ERR invalid_number$" then
+            msg = "malformed number"
+         else
+            msg = "invalid token '" .. t.tk .. "'"
+         end
+         table.insert(errs, {
+            filename = filename,
+            y = t.y,
+            x = t.x,
+            msg = msg,
+         })
+      end
+
       local len = #input
       if input:sub(1,2) == "#!" then
          i = input:find("\n")
@@ -612,8 +630,8 @@ do
                   end_token(k, c)
                elseif not lex_space[c] then
                   begin_token()
-                  end_token_here("$invalid$")
-                  table.insert(errs, tokens[#tokens])
+                  end_token_here("$ERR invalid$")
+                  add_syntax_error()
                end
             end
          elseif state == "identifier" then
@@ -767,8 +785,8 @@ do
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
-               end_token_here("$invalid_string$")
-               table.insert(errs, tokens[#tokens])
+               end_token_here("$ERR invalid_string$")
+               add_syntax_error()
             end
             x = x + skip
             state = "string double"
@@ -783,8 +801,8 @@ do
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
-               end_token_here("$invalid_string$")
-               table.insert(errs, tokens[#tokens])
+               end_token_here("$ERR invalid_string$")
+               add_syntax_error()
             end
             x = x + skip
             state = "string single"
@@ -872,9 +890,9 @@ do
             elseif lex_decimals[c] then
                state = "number power"
             else
-               end_token_here("$invalid_number$")
-               table.insert(errs, tokens[#tokens])
-               state = "any" -- FIXME report malformed number
+               end_token_here("$ERR invalid_number$")
+               add_syntax_error()
+               state = "any"
             end
          elseif state == "number power" then
             if not lex_decimals[c] then
@@ -888,7 +906,9 @@ do
       if in_token then
          if last_token_kind[state] then
             end_token_prev(last_token_kind[state])
-            if keywords[tokens[nt].tk] then
+            if last_token_kind[state]:sub(1, 4) == "$ERR" then
+               add_syntax_error()
+            elseif keywords[tokens[nt].tk] then
                tokens[nt].kind = "keyword"
             end
          else
@@ -898,7 +918,7 @@ do
 
       table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$" })
 
-      return tokens, (#errs > 0) and errs
+      return tokens, errs
    end
 end
 
@@ -1853,9 +1873,9 @@ local function parse_literal(ps: ParseState, i: integer): integer, Node
       return parse_table_literal(ps, i)
    elseif kind == "..." then
       return verify_kind(ps, i, "...")
-   elseif kind == "$invalid_string$" then
+   elseif kind == "$ERR invalid_string$" then
       return fail(ps, i, "malformed string")
-   elseif kind == "$invalid_number$" then
+   elseif kind == "$ERR invalid_number$" then
       return fail(ps, i, "malformed number")
    end
    return fail(ps, i, "syntax error")
@@ -3032,7 +3052,7 @@ local function clear_redundant_errors(errors: {Error})
    end
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): integer, Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens,
@@ -3040,10 +3060,16 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): int
       filename = filename or "",
       required_modules = {},
    }
-   local i, node = parse_statements(ps, 1, true)
+   local _, node = parse_statements(ps, 1, true)
 
    clear_redundant_errors(errs)
-   return i, node, ps.required_modules
+   return node, ps.required_modules
+end
+
+function tl.parse(input: string, filename: string): Node, {Error}, {string}
+   local tokens, errs = tl.lex(input, filename)
+   local node, required_modules = tl.parse_program(tokens, errs, filename)
+   return node, errs, required_modules
 end
 
 --------------------------------------------------------------------------------
@@ -4779,11 +4805,8 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         local tokens = tl.lex(text)
-         local _: integer
-         _, code = tl.parse_program(tokens, {}, "@internal")
+         code = tl.parse(text, "@internal")
          tl.type_check(code, { filename = "<internal>", lax = false, gen_compat = "off" })
-         code = code
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
@@ -10194,20 +10217,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
    end
    filename = filename or ""
 
-   local syntax_errors: {Error} = {}
-   local tokens, errs = tl.lex(input)
-   if errs then
-      for _, err in ipairs(errs) do
-         table.insert(syntax_errors, {
-            y = err.y,
-            x = err.x,
-            msg = "invalid token '" .. err.tk .. "'",
-            filename = filename,
-         })
-      end
-   end
-
-   local _, program = tl.parse_program(tokens, syntax_errors, filename)
+   local program, syntax_errors = tl.parse(input, filename)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
@@ -10257,8 +10267,7 @@ local function tl_package_loader(module_name: string): any
          return table.concat(tried, "\n\t")
       end
       fd:close()
-      local errs: {Error} = {}
-      local _, program = tl.parse_program(tl.lex(input), errs, module_name)
+      local program, errs = tl.parse(input, found_filename)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
@@ -10327,9 +10336,7 @@ local function env_for(lax: boolean, env_tbl: {any:any}): Env
 end
 
 tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:any}): LoadFunction, string
-   local tokens = tl.lex(input)
-   local errs: {Error} = {}
-   local _, program = tl.parse_program(tokens, errs, chunkname)
+   local program, errs = tl.parse(input, chunkname)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
