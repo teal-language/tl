@@ -215,10 +215,13 @@ local type Symbol = tl.Symbol
 --------------------------------------------------------------------------------
 
 local TL_DEBUG = os.getenv("TL_DEBUG")
+local TL_DEBUG_MAXLINE = math.maxinteger
 
 if TL_DEBUG then
    local max <const> = assert(tonumber(TL_DEBUG), "TL_DEBUG was defined, but not a number")
-   if max > 1 then
+   if max < 0 then
+      TL_DEBUG_MAXLINE = math.tointeger(-max)
+   elseif max > 1 then
       local count = 0
       local skip: string = nil
       debug.sethook(function(event: debug.HookEvent)
@@ -3519,6 +3522,9 @@ local function recurse_node<T>(root: Node,
       end
 
       if TL_DEBUG then
+         if ast.y > TL_DEBUG_MAXLINE then
+            error("Halting execution at input line " .. ast.y)
+         end
          local k = kind == "op" and "op " .. ast.op.op or kind
          tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", k)
       end
