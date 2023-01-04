@@ -67,9 +67,8 @@ describe("long comment", function()
       { y = 7, msg = "syntax error" },
    }))
 
-   it("catches unfinished long comment", util.check_syntax_error([[
-      print --[[ unfinished long comment
-   ]], {
+   it("catches unfinished long comment", util.check_syntax_error(
+      "print --[[ unfinished long comment\n", {
       { y = 1, msg = "unfinished long comment" },
    }))
 end)
