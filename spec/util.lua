@@ -363,7 +363,7 @@ end
 function util.read_file(name)
    assert(type(name) == "string")
 
-   local fd = assert(io.open(name, "r"))
+   local fd = assert(io.open(name, "rb"))
    local output = fd:read("*a")
    fd:close()
    return output
