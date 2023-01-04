@@ -148,4 +148,18 @@ describe("metamethod __call", function()
    ]], {
       { y = 7, msg = "in assignment: argument 2: got string, expected number" }
    }))
+
+   it("can resolve a __call type that uses a type alias (regression test for #605)", util.check [[
+      local record Callable
+         type Call_Type = function(self: Callable): boolean
+         metamethod __call: Call_Type
+      end
+
+      local function f(): boolean
+         local callable = {} as Callable
+         return callable()
+      end
+
+      f()
+   ]])
 end)

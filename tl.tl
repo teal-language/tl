@@ -7184,6 +7184,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if func.meta_fields and func.meta_fields["__call"] then
             table.insert(args, 1, func)
             func = func.meta_fields["__call"]
+            func = resolve_tuple_and_nominal(func)
             is_method = true
          end
       end
