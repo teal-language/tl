@@ -106,6 +106,16 @@ describe("tl gen", function()
          ]], util.read_file(lua_name))
       end)
 
+      it("handles Unix newlines on every OS", function()
+         local name = util.write_tmp_file(finally, "print'1'--comment\nprint'2'\nprint'3'\n")
+         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         local lua_name = tl_to_lua(name)
+         assert.match("Wrote: " .. lua_name, output, 1, true)
+         assert.same("print('1')\nprint('2')\nprint('3')\n", util.read_file(lua_name))
+      end)
+
       it("ignores type errors", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number
