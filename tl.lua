@@ -5621,15 +5621,13 @@ tl.type_check = function(ast, opts)
    end
 
 
-
    local resolve_typevars
 
    local function fresh_typevar(t)
-      local rt = a_type({
+      return a_type({
          typename = "typevar",
          typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
       })
-      return t, rt, false
    end
 
    local function fresh_typearg(t)
@@ -5825,19 +5823,14 @@ tl.type_check = function(ast, opts)
    }
 
    local function default_resolve_typevars_callback(t)
-      local orig_t = t
-      t = find_var_type(t.typevar)
-      local rt
-      if not t then
-         rt = orig_t
-      elseif t.typename == "string" then
+      local rt = find_var_type(t.typevar)
+      if not rt then
+         return nil
+      elseif rt.typename == "string" then
 
-         rt = STRING
-      elseif no_nested_types[t.typename] or
-         (t.typename == "nominal" and not t.typevals) then
-         rt = t
+         return STRING
       end
-      return t, rt, t ~= nil
+      return rt
    end
 
    resolve_typevars = function(typ, fn_var, fn_arg)
@@ -5847,28 +5840,29 @@ tl.type_check = function(ast, opts)
 
       fn_var = fn_var or default_resolve_typevars_callback
 
-      local function resolve(t)
+      local function resolve(t, all_same)
+         local same = true
 
 
          if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
-            return t
+            return t, all_same
          end
 
          if seen[t] then
-            return seen[t]
+            return seen[t], all_same
          end
 
          local orig_t = t
          if t.typename == "typevar" then
-            local rt
-            local has_resolved
-            t, rt, has_resolved = fn_var(t)
-            if has_resolved then
-               resolved[orig_t.typevar] = true
-            end
+            local rt = fn_var(t)
             if rt then
-               seen[orig_t] = rt
-               return rt
+               resolved[orig_t.typevar] = true
+               if no_nested_types[rt.typename] or (rt.typename == "nominal" and not rt.typevals) then
+                  seen[orig_t] = rt
+                  return rt, false
+               end
+               same = false
+               t = rt
             end
          end
 
@@ -5878,7 +5872,6 @@ tl.type_check = function(ast, opts)
          copy.is_userdata = t.is_userdata
          copy.typename = t.typename
          copy.filename = t.filename
-         copy.typeid = t.typeid
          copy.x = t.x
          copy.y = t.y
          copy.yend = t.yend
@@ -5886,11 +5879,11 @@ tl.type_check = function(ast, opts)
          copy.names = t.names
 
          for i, tf in ipairs(t) do
-            copy[i] = resolve(tf)
+            copy[i], same = resolve(tf, same)
          end
 
          if t.typename == "array" then
-            copy.elements = resolve(t.elements)
+            copy.elements, same = resolve(t.elements, same)
 
          elseif t.typename == "typearg" then
             if fn_arg then
@@ -5903,38 +5896,38 @@ tl.type_check = function(ast, opts)
          elseif t.typename == "typevar" then
             copy.typevar = t.typevar
          elseif is_typetype(t) then
-            copy.def = resolve(t.def)
+            copy.def, same = resolve(t.def, same)
          elseif t.typename == "nominal" then
-            copy.typevals = resolve(t.typevals)
+            copy.typevals, same = resolve(t.typevals, same)
             copy.found = t.found
          elseif t.typename == "function" then
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i] = resolve(tf)
+                  copy.typeargs[i], same = resolve(tf, same)
                end
             end
 
             copy.is_method = t.is_method
-            copy.args = resolve(t.args)
-            copy.rets = resolve(t.rets)
+            copy.args, same = resolve(t.args, same)
+            copy.rets, same = resolve(t.rets, same)
          elseif t.typename == "record" or t.typename == "arrayrecord" then
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i] = resolve(tf)
+                  copy.typeargs[i], same = resolve(tf, same)
                end
             end
 
             if t.elements then
-               copy.elements = resolve(t.elements)
+               copy.elements, same = resolve(t.elements, same)
             end
 
             copy.fields = {}
             copy.field_order = {}
             for i, k in ipairs(t.field_order) do
                copy.field_order[i] = k
-               copy.fields[k] = resolve(t.fields[k])
+               copy.fields[k], same = resolve(t.fields[k], same)
             end
 
             if t.meta_fields then
@@ -5942,36 +5935,37 @@ tl.type_check = function(ast, opts)
                copy.meta_field_order = {}
                for i, k in ipairs(t.meta_field_order) do
                   copy.meta_field_order[i] = k
-                  copy.meta_fields[k] = resolve(t.meta_fields[k])
+                  copy.meta_fields[k], same = resolve(t.meta_fields[k], same)
                end
             end
          elseif t.typename == "map" then
-            copy.keys = resolve(t.keys)
-            copy.values = resolve(t.values)
+            copy.keys, same = resolve(t.keys, same)
+            copy.values, same = resolve(t.values, same)
          elseif t.typename == "union" then
             copy.types = {}
             for i, tf in ipairs(t.types) do
-               copy.types[i] = resolve(tf)
+               copy.types[i], same = resolve(tf, same)
             end
 
             copy, errs = validate_union(t, copy, true, errs)
          elseif t.typename == "poly" or t.typename == "tupletable" then
             copy.types = {}
             for i, tf in ipairs(t.types) do
-               copy.types[i] = resolve(tf)
+               copy.types[i], same = resolve(tf, same)
             end
          elseif t.typename == "tuple" then
             copy.is_va = t.is_va
          end
 
-         return copy
+         copy.typeid = same and orig_t.typeid or new_typeid()
+         return copy, same and all_same
       end
 
-      local copy = resolve(typ)
+      local copy, same = resolve(typ, true)
       if errs then
          return false, INVALID, errs
       end
-      if copy.typeargs then
+      if copy.typeargs and not same then
          for i = #copy.typeargs, 1, -1 do
             if resolved[copy.typeargs[i].typearg] then
                table.remove(copy.typeargs, i)
@@ -6597,6 +6591,14 @@ tl.type_check = function(ast, opts)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
+      if t1.typeid == t2.typeid then
+         if TL_DEBUG then
+            local st1, st2 = show_type_base(t1, false, {}), show_type_base(t2, false, {})
+            assert(st1 == st2, st1 .. " ~= " .. st2)
+         end
+         return true
+      end
+
       if t1.typename == "typevar" or t2.typename == "typevar" then
          return compare_and_infer_typevars(t1, t2, same_type)
       end
@@ -6795,6 +6797,14 @@ tl.type_check = function(ast, opts)
       assert(type(t2) == "table")
 
       if lax and (is_unknown(t1) or is_unknown(t2)) then
+         return true
+      end
+
+      if t1.typeid == t2.typeid then
+         if TL_DEBUG then
+            local st1, st2 = show_type_base(t1, false, {}), show_type_base(t2, false, {})
+            assert(st1 == st2, st1 .. " ~= " .. st2)
+         end
          return true
       end
 
