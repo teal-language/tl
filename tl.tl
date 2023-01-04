@@ -4704,7 +4704,7 @@ local function search_for(module_name: string, suffix: string, path: string, tri
       local slash_name = module_name:gsub("%.", "/")
       local filename = entry:gsub("?", slash_name)
       local tl_filename = filename:gsub("%.lua$", suffix)
-      local fd = io.open(tl_filename, "r")
+      local fd = io.open(tl_filename, "rb")
       if fd then
          return tl_filename, fd, tried
       end
@@ -10187,7 +10187,7 @@ tl.process = function(filename: string, env: Env): Result, string
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   local fd, err = io.open(filename, "r")
+   local fd, err = io.open(filename, "rb")
    if not fd then
       return nil, "could not open " .. filename .. ": " .. err
    end

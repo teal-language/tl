@@ -104,7 +104,7 @@ end
 
 local function find_file_in_parent_dirs(fname)
    for _ = 1, 20 do
-      local fd = io.open(fname, "r")
+      local fd = io.open(fname, "rb")
       if fd then
          fd:close()
          return fname
@@ -230,7 +230,7 @@ local function write_out(tlconfig, result, output_file)
       return
    end
 
-   local ofd, err = io.open(output_file, "w")
+   local ofd, err = io.open(output_file, "wb")
 
    if not ofd then
       die("cannot write " .. output_file .. ": " .. err)
@@ -417,7 +417,7 @@ do
                   die("Something has gone wrong while executing the " ..
                       "\"gen_code\" part of the build file. Error : ".. tostring(message))
                end
-               local file = io.open(time_keeper_path, "w")
+               local file = io.open(time_keeper_path, "wb")
                file:write(last_edit_time)
                file:flush()
                file:close()
@@ -1111,7 +1111,7 @@ local function cd()
    end
    local wd = os.getenv("PWD")
    if not wd then
-      local pd = io.popen("cd", "r")
+      local pd = io.popen("cd", "rb")
       wd = pd:read("*l")
       pd:close()
    end

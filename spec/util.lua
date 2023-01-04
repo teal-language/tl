@@ -242,7 +242,7 @@ function util.write_tmp_file(finally, content, ext)
 
    local full_name = tmp_file_name() .. "." .. (ext or "tl")
 
-   local fd = assert(io.open(full_name, "w"))
+   local fd = assert(io.open(full_name, "wb"))
    fd:write(content)
    fd:close()
 
@@ -278,7 +278,7 @@ function util.write_tmp_dir(finally, dir_structure)
                content = trim_end(content)
             end
 
-            local fd = io.open(prefix .. name, "w")
+            local fd = io.open(prefix .. name, "wb")
             fd:write(content)
             fd:close()
          end
