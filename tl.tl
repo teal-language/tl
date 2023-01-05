@@ -6768,7 +6768,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local expand_type: function(where: Node, old: Type, new: Type): Type
    local function arraytype_from_tuple(where: Node, tupletype: Type): Type, {Error}
       -- first just try a basic union
-      local element_type = unite(tupletype.types)
+      local element_type = unite(tupletype.types, true)
       local valid = element_type.typename ~= "union" and true or is_valid_union(element_type)
       if valid then
          return a_type {
@@ -6843,19 +6843,27 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          -- ───────────────────────────   -- a union t1 is a union t2
          --     t1 union <: t2 union      -- if all of t1's types can be satisfied in t2
          if t2.typename == "union" then
+            local used = {}
             for _, t in ipairs(t1.types) do
                local ok = false
                begin_scope()
                for _, u in ipairs(t2.types) do
-                  if is_a(t, u, for_equality) then
-                     ok = true
-                     break
+                  if not used[u] then
+                     if is_a(t, u, for_equality) then
+                        used[u] = t
+                        ok = true
+                        break
+                     end
                   end
                end
-               end_scope() -- don't preserve inferences
+               end_scope() -- don't preserve failed inferences
                if not ok then
                   return false, terr(t1, "got %s, expected %s", t1, t2)
                end
+            end
+            -- preserve all valid inferences
+            for u, t in pairs(used) do
+               is_a(t, u, for_equality)
             end
             return true
 

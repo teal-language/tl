@@ -105,4 +105,18 @@ describe("subtyping of union:", function()
       local b = Rec:new(10)
    ]])
 
+   it("a potentially more idiomatic rendition of the code from #507", util.check [[
+      local record Rec<T>
+        value: T | string
+        new: function<T>(T): Rec<T>
+      end
+
+      function Rec.new<T>(v: T): Rec<T>
+        return setmetatable({value = v} as Rec<T>, {__index = Rec})
+      end
+
+      local a = Rec.new(nil)
+      local b = Rec.new(10)
+   ]])
+
 end)
