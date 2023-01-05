@@ -121,7 +121,7 @@ describe("return", function()
          assert.same({}, result.type_errors)
       end)
 
-      it("when exporting type alias", function ()
+      it("when exporting type alias (regression test for #586)", function ()
          util.mock_io(finally, {
             ["mod.tl"] = [[
                local record R
