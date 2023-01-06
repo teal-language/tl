@@ -104,9 +104,9 @@ function util.mock_io(finally, filemap)
          table.insert(ps, p)
       end
 
-      -- try to find suffixes in filemap, from shortest to longest
+      -- try to find suffixes in filemap, from longest to shortest
       local basename
-      for i = #ps, 1, -1 do
+      for i = 1, #ps do
          basename = table.concat(ps, "/", i)
          if filemap[basename] then
             break
@@ -549,7 +549,8 @@ local function gen(lax, code, expected, gen_target)
       assert.same({}, result.type_errors)
       local output_code = tl.pretty_print_ast(ast)
 
-      local expected_ast = tl.parse(expected, "foo.tl")
+      local expected_ast, expected_errors = tl.parse(expected, "foo.tl")
+      assert.same({}, expected_errors, "Code was not expected to have syntax errors")
       local expected_code = tl.pretty_print_ast(expected_ast)
 
       assert.same(expected_code, output_code)

@@ -27,6 +27,7 @@ local record tl
    record TypeCheckOptions
       lax: boolean
       filename: string
+      module_name: string
       gen_compat: CompatMode
       gen_target: TargetMode
       env: Env
@@ -122,8 +123,8 @@ local record tl
    end
 
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
-   process: function(string, Env): (Result, string)
-   process_string: function(string, boolean, Env, string): Result
+   process: function(string, Env, string, FILE): (Result, string)
+   process_string: function(string, boolean, Env, string, string): Result
    gen: function(string, Env): string
    type_check: function(Node, TypeCheckOptions): Result, string
    init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env, string
@@ -1005,6 +1006,7 @@ local enum TypeName
    "unresolved_emptytable_value"
    "unresolved_typearg"
    "unresolvable_typearg"
+   "circular_require"
    "tuple"
    "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
    "any"
@@ -2890,6 +2892,16 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
    end
 
    i = verify_tk(ps, i, "=")
+
+   if ps.tokens[i].kind == "identifier" and ps.tokens[i].tk == "require" then
+      local istart = i
+      i, asgn.value = parse_call_or_assignment(ps, i)
+      if asgn.value and not node_is_require_call(asgn.value) then
+         fail(ps, istart, "require() for type declarations must have a literal argument")
+      end
+      return i, asgn
+   end
+
    i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
       return i
@@ -4277,6 +4289,7 @@ end
 local NONE = a_type { typename = "none" }
 local INVALID = a_type { typename = "invalid" }
 local UNKNOWN = a_type { typename = "unknown" }
+local CIRCULAR_REQUIRE = a_type { typename = "circular_require" }
 
 local FUNCTION = a_type { typename = "function", args = VARARG { ANY }, rets = VARARG { ANY } }
 
@@ -4684,7 +4697,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t.typename == "bad_nominal" then
       return table.concat(t.names, ".") .. " (an unknown type)"
    else
-      return tostring(t)
+      return "<" .. t.typename .. " " .. tostring(t) .. ">"
    end
 end
 
@@ -4717,6 +4730,26 @@ local function search_for(module_name: string, suffix: string, path: string, tri
       table.insert(tried, "no file '" .. tl_filename .. "'")
    end
    return nil, nil, tried
+end
+
+local function filename_to_module_name(filename: string): string
+   local path = os.getenv("TL_PATH") or package.path
+   for entry in path:gmatch("[^;]+") do
+      entry = entry:gsub("%.", "%%.")
+      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
+      local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
+      local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
+
+      for _, pat in ipairs({ tl_pat, d_tl_pat, lua_pat }) do
+         local cap = filename:match(pat)
+         if cap then
+            return (cap:gsub("[/\\]", "."))
+         end
+      end
+   end
+
+   -- fallback:
+   return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
 end
 
 function tl.search_module(module_name: string, search_dtl: boolean): string, FILE, {string}
@@ -4774,26 +4807,19 @@ local function fill_field_order(t: Type)
 end
 
 local function require_module(module_name: string, lax: boolean, env: Env): Type, boolean
-   local modules = env.modules
-
-   if modules[module_name] then
-      return modules[module_name], true
+   local mod = env.modules[module_name]
+   if mod then
+      return mod, true
    end
-   modules[module_name] = INVALID
 
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$") as boolean) then
-      fd:close()
-      local found_result, err: Result, string = tl.process(found, env)
+      local found_result, err: Result, string = tl.process(found, env, module_name, fd)
       assert(found_result, err)
 
-      if not found_result.type then
-         found_result.type = BOOLEAN
-      end
-
-      env.modules[module_name] = found_result.type
-
       return found_result.type, true
+   elseif fd then
+      fd:close()
    end
 
    return INVALID, found ~= nil
@@ -5555,6 +5581,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return nil, err
       end
    end
+
+   if opts.module_name then
+      env.modules[opts.module_name] = a_type { typename = "typetype", def = CIRCULAR_REQUIRE }
+   end
+
    local lax = opts.lax
    local filename = opts.filename
 
@@ -6476,6 +6507,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                typetype = typetype.def.found
                assert(is_typetype(typetype))
             end
+
+            if typetype.def.typename == "circular_require" then
+               -- return, but do not store resolution
+               return typetype.def
+            end
+
             if typetype.def.typename == "nominal" then
                typetype = typetype.def.found
                assert(is_typetype(typetype))
@@ -8592,6 +8629,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t, infertype ~= nil
    end
 
+   local function get_type_declaration(node: Node): Type, Variable
+      if node.value.kind == "op" and node.value.op.op == "@funcall" then
+         return special_functions["require"](node.value, find_var_type("require"), { STRING }, 0)
+      else
+         return resolve_nominal_typetype(node.value.newtype)
+      end
+   end
+
    local visit_node: Visitor<NodeKind, Node, Type> = {}
 
    visit_node.cbs = {
@@ -8616,7 +8661,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["local_type"] = {
          before = function(node: Node)
             local name = node.var.tk
-            local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+            local resolved, aliasing = get_type_declaration(node)
             local var = add_var(node.var, name, resolved, node.var.attribute)
             node.value.type = resolved
             if aliasing then
@@ -8635,7 +8680,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local name = node.var.tk
             local unresolved = get_unresolved("any_scope", node)
             if node.value then
-               local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+               local resolved, aliasing = get_type_declaration(node)
                local added = add_global(node.var, name, resolved)
                node.value.newtype = resolved
                if aliasing then
@@ -9385,12 +9430,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local orig_b = b
             local ra = a and resolve_tuple_and_nominal(a)
             local rb = b and resolve_tuple_and_nominal(b)
-            if ra and is_typetype(ra) and ra.def.typename == "record" then
+
+            if ra.typename == "circular_require" or (ra.def and ra.def.typename == "circular_require") then
+               node_error(node, "cannot dereference a type from a circular require")
+               node.type = INVALID
+               return node.type
+            end
+
+            if is_typetype(ra) and ra.def.typename == "record" then
                ra = ra.def
             end
             if rb and is_typetype(rb) and rb.def.typename == "record" then
                rb = rb.def
             end
+
             if node.op.op == "@funcall" then
                if lax and is_unknown(a) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
@@ -9836,7 +9889,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      if t.is_alias then
                         t = t.def.resolved
                      end
-                     typ.found = t
+                     if not (t.def and t.def.typename == "circular_require") then
+                        typ.found = t
+                     end
                   end
                else
                   local name = typ.names[1]
@@ -9906,7 +9961,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local result = {
       ast = ast,
       env = env,
-      type = module_type,
+      type = module_type or BOOLEAN,
       filename = filename,
       warnings = warnings,
       type_errors = errors,
@@ -9916,6 +9971,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    env.loaded[filename] = result
    table.insert(env.loaded_order, filename)
+
+   if opts.module_name then
+      env.modules[opts.module_name] = result.type
+   end
 
    return result
 end
@@ -10211,16 +10270,21 @@ local function read_full_file(fd: FILE): string, string
    return content, err
 end
 
-tl.process = function(filename: string, env: Env): Result, string
+tl.process = function(filename: string, env: Env, module_name: string, fd: FILE): Result, string
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   local fd, err = io.open(filename, "rb")
+
+   local input, err: string, string
+
    if not fd then
-      return nil, "could not open " .. filename .. ": " .. err
+      fd, err = io.open(filename, "rb")
+      if not fd then
+         return nil, "could not open " .. filename .. ": " .. err
+      end
    end
 
-   local input: string; input, err = read_full_file(fd)
+   input, err = read_full_file(fd)
    fd:close()
    if not input then
       return nil, "could not read " .. filename .. ": " .. err
@@ -10238,10 +10302,13 @@ tl.process = function(filename: string, env: Env): Result, string
       is_lua = input:match("^#![^\n]*lua[^\n]*\n") as boolean
    end
 
-   return tl.process_string(input, is_lua, env, filename)
+   return tl.process_string(input, is_lua, env, filename, module_name)
 end
 
-function tl.process_string(input: string, is_lua: boolean, env: Env, filename: string): Result
+function tl.process_string(input: string, is_lua: boolean, env: Env, filename: string, module_name: string): Result
+   if filename and not module_name then
+      module_name = filename_to_module_name(filename)
+   end
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
@@ -10255,6 +10322,8 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
       local result = {
          ok = false,
          filename = filename,
+         module_name = module_name,
+         type = BOOLEAN,
          type_errors = {},
          syntax_errors = syntax_errors,
          env = env,
@@ -10266,6 +10335,7 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename: s
 
    local opts: TypeCheckOptions = {
       filename = filename,
+      module_name = module_name,
       lax = is_lua,
       gen_compat = env.gen_compat,
       gen_target = env.gen_target,
@@ -10304,20 +10374,24 @@ local function tl_package_loader(module_name: string): any
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
       local lax = not not found_filename:match("lua$")
-      if not tl.package_loader_env then
+
+      local env = tl.package_loader_env
+      if not env then
          tl.package_loader_env = tl.init_env(lax)
+         env = tl.package_loader_env
       end
 
       tl.type_check(program, {
          lax = lax,
          filename = found_filename,
-         env = tl.package_loader_env,
+         module_name = module_name,
+         env = env,
          run_internal_compiler_checks = false,
       })
 
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
-      local code = assert(tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true))
+      local code = assert(tl.pretty_print_ast(program, env.gen_target, true))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(): any
