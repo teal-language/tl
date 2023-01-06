@@ -133,6 +133,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
 tl.version = function()
    return VERSION
 end
@@ -978,6 +979,7 @@ local function new_typeid()
    last_typeid = last_typeid + 1
    return last_typeid
 end
+
 
 
 
@@ -2890,6 +2892,16 @@ local function parse_type_declaration(ps, i, node_name)
    end
 
    i = verify_tk(ps, i, "=")
+
+   if ps.tokens[i].kind == "identifier" and ps.tokens[i].tk == "require" then
+      local istart = i
+      i, asgn.value = parse_call_or_assignment(ps, i)
+      if asgn.value and not node_is_require_call(asgn.value) then
+         fail(ps, istart, "require() for type declarations must have a literal argument")
+      end
+      return i, asgn
+   end
+
    i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
       return i
@@ -4277,6 +4289,7 @@ end
 local NONE = a_type({ typename = "none" })
 local INVALID = a_type({ typename = "invalid" })
 local UNKNOWN = a_type({ typename = "unknown" })
+local CIRCULAR_REQUIRE = a_type({ typename = "circular_require" })
 
 local FUNCTION = a_type({ typename = "function", args = VARARG({ ANY }), rets = VARARG({ ANY }) })
 
@@ -4684,7 +4697,7 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "bad_nominal" then
       return table.concat(t.names, ".") .. " (an unknown type)"
    else
-      return tostring(t)
+      return "<" .. t.typename .. " " .. tostring(t) .. ">"
    end
 end
 
@@ -4717,6 +4730,26 @@ local function search_for(module_name, suffix, path, tried)
       table.insert(tried, "no file '" .. tl_filename .. "'")
    end
    return nil, nil, tried
+end
+
+local function filename_to_module_name(filename)
+   local path = os.getenv("TL_PATH") or package.path
+   for entry in path:gmatch("[^;]+") do
+      entry = entry:gsub("%.", "%%.")
+      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
+      local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
+      local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
+
+      for _, pat in ipairs({ tl_pat, d_tl_pat, lua_pat }) do
+         local cap = filename:match(pat)
+         if cap then
+            return (cap:gsub("[/\\]", "."))
+         end
+      end
+   end
+
+
+   return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
 end
 
 function tl.search_module(module_name, search_dtl)
@@ -4774,26 +4807,19 @@ local function fill_field_order(t)
 end
 
 local function require_module(module_name, lax, env)
-   local modules = env.modules
-
-   if modules[module_name] then
-      return modules[module_name], true
+   local mod = env.modules[module_name]
+   if mod then
+      return mod, true
    end
-   modules[module_name] = INVALID
 
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$")) then
-      fd:close()
-      local found_result, err = tl.process(found, env)
+      local found_result, err = tl.process(found, env, module_name, fd)
       assert(found_result, err)
 
-      if not found_result.type then
-         found_result.type = BOOLEAN
-      end
-
-      env.modules[module_name] = found_result.type
-
       return found_result.type, true
+   elseif fd then
+      fd:close()
    end
 
    return INVALID, found ~= nil
@@ -5555,6 +5581,11 @@ tl.type_check = function(ast, opts)
          return nil, err
       end
    end
+
+   if opts.module_name then
+      env.modules[opts.module_name] = a_type({ typename = "typetype", def = CIRCULAR_REQUIRE })
+   end
+
    local lax = opts.lax
    local filename = opts.filename
 
@@ -6476,6 +6507,12 @@ tl.type_check = function(ast, opts)
                typetype = typetype.def.found
                assert(is_typetype(typetype))
             end
+
+            if typetype.def.typename == "circular_require" then
+
+               return typetype.def
+            end
+
             if typetype.def.typename == "nominal" then
                typetype = typetype.def.found
                assert(is_typetype(typetype))
@@ -8592,6 +8629,14 @@ tl.type_check = function(ast, opts)
       return t, infertype ~= nil
    end
 
+   local function get_type_declaration(node)
+      if node.value.kind == "op" and node.value.op.op == "@funcall" then
+         return special_functions["require"](node.value, find_var_type("require"), { STRING }, 0)
+      else
+         return resolve_nominal_typetype(node.value.newtype)
+      end
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -8616,7 +8661,7 @@ tl.type_check = function(ast, opts)
       ["local_type"] = {
          before = function(node)
             local name = node.var.tk
-            local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+            local resolved, aliasing = get_type_declaration(node)
             local var = add_var(node.var, name, resolved, node.var.attribute)
             node.value.type = resolved
             if aliasing then
@@ -8635,7 +8680,7 @@ tl.type_check = function(ast, opts)
             local name = node.var.tk
             local unresolved = get_unresolved("any_scope", node)
             if node.value then
-               local resolved, aliasing = resolve_nominal_typetype(node.value.newtype)
+               local resolved, aliasing = get_type_declaration(node)
                local added = add_global(node.var, name, resolved)
                node.value.newtype = resolved
                if aliasing then
@@ -9385,12 +9430,20 @@ tl.type_check = function(ast, opts)
             local orig_b = b
             local ra = a and resolve_tuple_and_nominal(a)
             local rb = b and resolve_tuple_and_nominal(b)
-            if ra and is_typetype(ra) and ra.def.typename == "record" then
+
+            if ra.typename == "circular_require" or (ra.def and ra.def.typename == "circular_require") then
+               node_error(node, "cannot dereference a type from a circular require")
+               node.type = INVALID
+               return node.type
+            end
+
+            if is_typetype(ra) and ra.def.typename == "record" then
                ra = ra.def
             end
             if rb and is_typetype(rb) and rb.def.typename == "record" then
                rb = rb.def
             end
+
             if node.op.op == "@funcall" then
                if lax and is_unknown(a) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
@@ -9836,7 +9889,9 @@ tl.type_check = function(ast, opts)
                      if t.is_alias then
                         t = t.def.resolved
                      end
-                     typ.found = t
+                     if not (t.def and t.def.typename == "circular_require") then
+                        typ.found = t
+                     end
                   end
                else
                   local name = typ.names[1]
@@ -9906,7 +9961,7 @@ tl.type_check = function(ast, opts)
    local result = {
       ast = ast,
       env = env,
-      type = module_type,
+      type = module_type or BOOLEAN,
       filename = filename,
       warnings = warnings,
       type_errors = errors,
@@ -9916,6 +9971,10 @@ tl.type_check = function(ast, opts)
 
    env.loaded[filename] = result
    table.insert(env.loaded_order, filename)
+
+   if opts.module_name then
+      env.modules[opts.module_name] = result.type
+   end
 
    return result
 end
@@ -10211,16 +10270,21 @@ local function read_full_file(fd)
    return content, err
 end
 
-tl.process = function(filename, env)
+tl.process = function(filename, env, module_name, fd)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   local fd, err = io.open(filename, "rb")
+
+   local input, err
+
    if not fd then
-      return nil, "could not open " .. filename .. ": " .. err
+      fd, err = io.open(filename, "rb")
+      if not fd then
+         return nil, "could not open " .. filename .. ": " .. err
+      end
    end
 
-   local input; input, err = read_full_file(fd)
+   input, err = read_full_file(fd)
    fd:close()
    if not input then
       return nil, "could not read " .. filename .. ": " .. err
@@ -10238,10 +10302,13 @@ tl.process = function(filename, env)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   return tl.process_string(input, is_lua, env, filename)
+   return tl.process_string(input, is_lua, env, filename, module_name)
 end
 
-function tl.process_string(input, is_lua, env, filename)
+function tl.process_string(input, is_lua, env, filename, module_name)
+   if filename and not module_name then
+      module_name = filename_to_module_name(filename)
+   end
 
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
@@ -10255,6 +10322,8 @@ function tl.process_string(input, is_lua, env, filename)
       local result = {
          ok = false,
          filename = filename,
+         module_name = module_name,
+         type = BOOLEAN,
          type_errors = {},
          syntax_errors = syntax_errors,
          env = env,
@@ -10266,6 +10335,7 @@ function tl.process_string(input, is_lua, env, filename)
 
    local opts = {
       filename = filename,
+      module_name = module_name,
       lax = is_lua,
       gen_compat = env.gen_compat,
       gen_target = env.gen_target,
@@ -10304,20 +10374,24 @@ local function tl_package_loader(module_name)
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
       local lax = not not found_filename:match("lua$")
-      if not tl.package_loader_env then
+
+      local env = tl.package_loader_env
+      if not env then
          tl.package_loader_env = tl.init_env(lax)
+         env = tl.package_loader_env
       end
 
       tl.type_check(program, {
          lax = lax,
          filename = found_filename,
-         env = tl.package_loader_env,
+         module_name = module_name,
+         env = env,
          run_internal_compiler_checks = false,
       })
 
 
 
-      local code = assert(tl.pretty_print_ast(program, tl.package_loader_env.gen_target, true))
+      local code = assert(tl.pretty_print_ast(program, env.gen_target, true))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function()

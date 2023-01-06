@@ -550,7 +550,7 @@ end]]))
          local function process(ts)
             local t
             t = ts[1]
-            if type(t) == "number" do
+            if type(t) == "number" then
                print(t + 1)
             elseif type(t) == "string" or type(t) == "boolean" then
                print(t)
@@ -580,7 +580,7 @@ end]]))
          function process(ts)
             local t
             t = ts[1]
-            if type(t) == "number" do
+            if type(t) == "number" then
                print(t + 1)
             elseif type(t) == "table" or type(t) == "boolean" then
                print(t)

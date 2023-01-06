@@ -300,6 +300,46 @@ describe("global", function()
          global zip: Foo3<string> = zep
          global zup: Foo4<string> = zip
       ]])
+
+      it("global type can require a module", function ()
+         util.mock_io(finally, {
+            ["class.tl"] = [[
+               local record Class
+                 data: number
+               end
+               return Class
+            ]],
+            ["main.tl"] = [[
+               global type Class = require("class")
+               local obj: Class = { data = 2 }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("local type can require a module and type is usable", function ()
+         util.mock_io(finally, {
+            ["class.tl"] = [[
+               local record Class
+                 data: number
+               end
+               return Class
+            ]],
+            ["main.tl"] = [[
+               global type Class = require("class")
+               local obj: Class = { invalid = 2 }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 2, x = 37, filename = "main.tl", msg = "in local declaration: obj: unknown field invalid" },
+         }, result.type_errors)
+      end)
    end)
 
    describe("shadowing", function()
@@ -318,7 +358,7 @@ describe("global", function()
          { y = 8, msg = "cannot define a global when a local with the same name is in scope" },
       }))
 
-      it("#only cannot define a global variable when a local function with the same name is in scope", util.check_type_error([[
+      it("cannot define a global variable when a local function with the same name is in scope", util.check_type_error([[
          local function test()
          end
 

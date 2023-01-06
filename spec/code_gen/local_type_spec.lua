@@ -193,4 +193,50 @@ describe("local type code generation", function()
       end
    ]]))
 
+   it("elides local type require used only as type", function()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local record Foo
+               x: number
+            end
+
+            return Foo
+         ]]
+      })
+      util.gen([[
+         local type Foo = require("foo")
+
+         local d: Foo = { x = 2 }
+      ]], [[
+
+
+         local d = { x = 2 }
+      ]])
+   end)
+
+   it("does not elide local type require used as a variable", function()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local record Foo
+               x: number
+            end
+
+            return Foo
+         ]]
+      })
+      util.gen([[
+         local type Foo = require("Foo")
+
+         local d: Foo = { x = 2 }
+
+         print(Foo)
+      ]], [[
+         local Foo = require("Foo")
+
+         local d = { x = 2 }
+
+         print(Foo)
+      ]])
+   end)
+
 end)

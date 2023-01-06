@@ -184,6 +184,72 @@ describe("local", function()
          print(record)
          print(enum + 123)
       ]])
+
+      it("local type can require a module", function ()
+         util.mock_io(finally, {
+            ["class.tl"] = [[
+               local record Class
+                 data: number
+               end
+               return Class
+            ]],
+            ["main.tl"] = [[
+               local type Class = require("class")
+               local obj: Class = { data = 2 }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("local type can require a module and type is usable", function ()
+         util.mock_io(finally, {
+            ["class.tl"] = [[
+               local record Class
+                 data: number
+               end
+               return Class
+            ]],
+            ["main.tl"] = [[
+               local type Class = require("class")
+               local obj: Class = { invalid = 2 }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 2, x = 37, filename = "main.tl", msg = "in local declaration: obj: unknown field invalid" },
+         }, result.type_errors)
+      end)
+
+      it("local type can require a module and its globals are visible", function ()
+         util.mock_io(finally, {
+            ["class.tl"] = [[
+               global record Glob
+                 hello: number
+               end
+
+               local record Class
+                 data: number
+               end
+               return Class
+            ]],
+            ["main.tl"] = [[
+               local type Class = require("class")
+               local obj: Glob = { hello = 2 }
+               local obj2: Glob = { invalid = 2 }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 3, x = 37, filename = "main.tl", msg = "in local declaration: obj2: unknown field invalid" },
+         }, result.type_errors)
+      end)
    end)
 
    describe("annotation", function()

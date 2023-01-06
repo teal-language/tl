@@ -336,6 +336,7 @@ describe("require", function()
       local result, err = tl.process("foo.tl")
 
       assert.same(0, #result.syntax_errors)
+      assert.same(0, #result.env.loaded["foo.tl"].type_errors)
       assert.same(1, #result.env.loaded["./box.tl"].type_errors)
       assert.match("cannot use operator ..", result.env.loaded["./box.tl"].type_errors[1].msg)
    end)
@@ -709,5 +710,264 @@ describe("require", function()
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
+   end)
+
+   describe("circular requires", function()
+      it("can be made using type-requires in order", function ()
+         util.mock_io(finally, {
+            ["main.tl"] = [[
+               -- Process Person first, then House.
+
+               local type Person = require("person")
+               local type House = require("house")
+
+               -- Both types can be used in full here:
+
+               local h: House = {}
+               local p: Person = { residence = h }
+
+               h.owner = p
+            ]],
+            ["person.tl"] = [[
+               -- Since Person is processed first, this is not a circular require
+               -- and the full type will be available for use below.
+               local type House = require("house")
+
+               local record Person
+                  residence: House
+               end
+
+               print(House.owner)
+
+               print(Person.residence.owner)
+
+               return Person
+            ]],
+            ["house.tl"] = [[
+               -- This is a circular require because House is required by Person:
+               -- this will not fail and this module can only refer to the type Person,
+               -- but it cannot use its contents.
+               local type Person = require("person")
+
+               local record House
+                  owner: Person
+               end
+
+               return House
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same(0, #result.syntax_errors)
+         assert.same(0, #result.env.loaded["main.tl"].type_errors)
+         assert.same(0, #result.env.loaded["./house.tl"].type_errors)
+         assert.same(0, #result.env.loaded["./person.tl"].type_errors)
+      end)
+
+      it("will report errors if circular requires are out-of-order", function ()
+         util.mock_io(finally, {
+            ["main.tl"] = [[
+               -- Processing in reverse will cause a clash:
+               local type House = require("house")
+               local type Person = require("person")
+
+               -- Both types can be used in full here:
+
+               local h: House = {}
+               local p: Person = { residence = h }
+
+               h.owner = p
+            ]],
+            ["house.tl"] = [[
+               -- This is processed first, and will cause no issues.
+               local type Person = require("person")
+
+               local record House
+                  owner: Person
+               end
+
+               return House
+            ]],
+            ["person.tl"] = [[
+               -- However, this is a circular require because Person was required by House.
+               -- this module can only refer to the type House, but it cause errors
+               -- when trying to use its contents, since they're not fully defined yet.
+               local type House = require("house")
+
+               local record Person
+                  residence: House
+               end
+
+               print(House.owner)
+
+               print(Person.residence.owner)
+
+               return Person
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same(0, #result.syntax_errors)
+         assert.same(0, #result.env.loaded["main.tl"].type_errors)
+         assert.same(0, #result.env.loaded["./house.tl"].type_errors)
+         assert.same(2, #result.env.loaded["./person.tl"].type_errors)
+         assert.same({
+            { filename = "./person.tl", y = 10, x = 27, msg = "cannot dereference a type from a circular require" },
+            { filename = "./person.tl", y = 12, x = 38, msg = "cannot dereference a type from a circular require" },
+         }, result.env.loaded["./person.tl"].type_errors)
+      end)
+
+      it("can avoid ordering issues by separating circular declarations from implementations", function ()
+         util.mock_io(finally, {
+            ["main.tl"] = [[
+               local type Person = require("person")
+               local type House = require("house")
+
+               -- Both types can be used in full here:
+
+               local h: House = {}
+               local p: Person = { residence = h }
+
+               h.owner = p
+            ]],
+            ["types/house.tl"] = [[
+               -- This declares House, and needs the Person type.
+               local type Person = require("types.person")
+
+               local record House
+                  owner: Person
+                  set_owner: function(House, Person)
+               end
+
+               return House
+            ]],
+            ["house.tl"] = [[
+               -- This implements House, and needs the Person type.
+               -- the order here doesn't matter.
+               local type House = require("types.house")
+               local type Person = require("types.person")
+
+               -- Both types can be used in full here:
+
+               function House:set_owner(p: Person)
+                  self.owner = p
+                  p.residence = self
+               end
+
+               return House
+            ]],
+            ["types/person.tl"] = [[
+               -- This declares Person, and needs the House type.
+               local type House = require("types.house")
+
+               local record Person
+                  residence: House
+                  set_residence: function(Person, House)
+               end
+
+               return Person
+            ]],
+            ["person.tl"] = [[
+               -- This implements Person, and needs the House type.
+               -- the order here doesn't matter.
+               local type House = require("types.house")
+               local type Person = require("types.person")
+
+               -- Both types can be used in full here:
+
+               function Person:set_residence(h: House)
+                  self.residence = h
+                  h.owner = self
+               end
+
+               return Person
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.env.loaded["main.tl"].type_errors)
+         assert.same({}, result.env.loaded["./house.tl"].type_errors)
+         assert.same({}, result.env.loaded["./person.tl"].type_errors)
+         assert.same({}, result.env.loaded["./types/house.tl"].type_errors)
+         assert.same({}, result.env.loaded["./types/person.tl"].type_errors)
+      end)
+
+      it("by separating circular declarations from implementations, require order doesn't matter", function ()
+         util.mock_io(finally, {
+            ["main.tl"] = [[
+               -- flipped to show that order doesn't matter:
+               local type House = require("house")
+               local type Person = require("person")
+
+               -- Both types can be used in full here:
+
+               local h: House = {}
+               local p: Person = { residence = h }
+
+               h.owner = p
+            ]],
+            ["types/house.tl"] = [[
+               -- This declares House, and needs the Person type.
+               local type Person = require("types.person")
+
+               local record House
+                  owner: Person
+                  set_owner: function(House, Person)
+               end
+
+               return House
+            ]],
+            ["house.tl"] = [[
+               -- This implements House, and needs the Person type.
+               -- the order here doesn't matter.
+               local type Person = require("types.person")
+               local type House = require("types.house")
+
+               -- Both types can be used in full here:
+
+               function House:set_owner(p: Person)
+                  self.owner = p
+                  p.residence = self
+               end
+
+               return House
+            ]],
+            ["types/person.tl"] = [[
+               -- This declares Person, and needs the House type.
+               local type House = require("types.house")
+
+               local record Person
+                  residence: House
+                  set_residence: function(Person, House)
+               end
+
+               return Person
+            ]],
+            ["person.tl"] = [[
+               -- This implements Person, and needs the House type.
+               -- the order here doesn't matter.
+               local type House = require("types.house")
+               local type Person = require("types.person")
+
+               -- Both types can be used in full here:
+
+               function Person:set_residence(h: House)
+                  self.residence = h
+                  h.owner = self
+               end
+
+               return Person
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.env.loaded["main.tl"].type_errors)
+         assert.same({}, result.env.loaded["./house.tl"].type_errors)
+         assert.same({}, result.env.loaded["./person.tl"].type_errors)
+         assert.same({}, result.env.loaded["./types/house.tl"].type_errors)
+         assert.same({}, result.env.loaded["./types/person.tl"].type_errors)
+      end)
    end)
 end)
