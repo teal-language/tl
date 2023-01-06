@@ -517,6 +517,8 @@ local record http
 
    get: function(string): Response
 end
+
+return http
 ```
 
 You can then refer to nested types with the normal dot notation, and use
@@ -899,7 +901,7 @@ local person = {}
 
 global type Building
 
-global type Person
+global record Person
    residence: Building
 end
 
@@ -912,7 +914,7 @@ local building = {}
 
 global type Person
 
-global type Building
+global record Building
    owner: Person
 end
 
