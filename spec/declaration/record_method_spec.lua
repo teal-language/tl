@@ -434,4 +434,15 @@ describe("record method", function()
       { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin: incompatible number of arguments: " }
    }))
 
+   it("does not cause conflicts with type variables (regression test for #610)", util.check [[
+      local MyObj = {}
+
+      function MyObj.do_something<T>(array: {T}): {T}
+         return array
+      end
+
+      function MyObj.test_fails<T>(array: {T}): {T}
+         return MyObj.do_something(array)
+      end
+   ]])
 end)
