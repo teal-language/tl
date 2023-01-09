@@ -176,6 +176,17 @@ describe("tl types works like check", function()
          -- TODO check json output
       end)
 
+      it("regression test for #611", function()
+         local name = util.write_tmp_file(finally, [[
+            local type vec3 = r
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>&1 1>" .. util.os_null, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(1, pd:close())
+         assert.not_match("assertion failed", output, 1, true)
+         -- TODO check json output
+      end)
+
       it("produce values for incomplete input", function()
          local name = util.write_tmp_file(finally, [[
             require("os").

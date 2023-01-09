@@ -10188,9 +10188,11 @@ end
 -- Report types
 --------------------------------------------------------------------------------
 
-local typename_to_typecode: {TypeName:integer} = {
+local typename_to_typecode <total>: {TypeName:integer} = {
    ["typevar"] = tl.typecodes.TYPE_VARIABLE,
    ["typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["unresolved_typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["unresolvable_typearg"] = tl.typecodes.TYPE_VARIABLE,
    ["function"] = tl.typecodes.FUNCTION,
    ["array"] = tl.typecodes.ARRAY,
    ["map"] = tl.typecodes.MAP,
@@ -10206,12 +10208,30 @@ local typename_to_typecode: {TypeName:integer} = {
    ["integer"] = tl.typecodes.INTEGER,
    ["union"] = tl.typecodes.IS_UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
+   ["bad_nominal"] = tl.typecodes.NOMINAL,
+   ["circular_require"] = tl.typecodes.NOMINAL,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
    ["poly"] = tl.typecodes.IS_POLY,
    ["any"] = tl.typecodes.ANY,
    ["unknown"] = tl.typecodes.UNKNOWN,
    ["invalid"] = tl.typecodes.INVALID,
+   -- types that should be skipped or not present:
+   ["none"] = tl.typecodes.UNKNOWN,
+   ["tuple"] = tl.typecodes.UNKNOWN,
+   ["table_item"] = tl.typecodes.UNKNOWN,
+   ["unresolved"] = tl.typecodes.UNKNOWN,
+   ["typetype"] = tl.typecodes.UNKNOWN,
+   ["nestedtype"] = tl.typecodes.UNKNOWN,
+}
+
+local skip_types: {TypeName: boolean} = {
+   ["none"] = true,
+   ["tuple"] = true,
+   ["table_item"] = true,
+   ["unresolved"] = true,
+   ["typetype"] = true,
+   ["nestedtype"] = true,
 }
 
 function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeReportEnv
@@ -10328,12 +10348,6 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
 
    local visit_node: Visitor<NodeKind, Node, nil> = { allow_missing_cbs = true }
    local visit_type: Visitor<TypeName, Type, nil> = { allow_missing_cbs = true }
-
-   local skip_types: {TypeName: boolean} = {
-      ["none"] = true,
-      ["tuple"] = true,
-      ["table_item"] = true,
-   }
 
    local ft: {integer:{integer:integer}} = {}
    tr.by_pos[filename] = ft
