@@ -10191,6 +10191,8 @@ end
 local typename_to_typecode = {
    ["typevar"] = tl.typecodes.TYPE_VARIABLE,
    ["typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["unresolved_typearg"] = tl.typecodes.TYPE_VARIABLE,
+   ["unresolvable_typearg"] = tl.typecodes.TYPE_VARIABLE,
    ["function"] = tl.typecodes.FUNCTION,
    ["array"] = tl.typecodes.ARRAY,
    ["map"] = tl.typecodes.MAP,
@@ -10206,12 +10208,30 @@ local typename_to_typecode = {
    ["integer"] = tl.typecodes.INTEGER,
    ["union"] = tl.typecodes.IS_UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
+   ["bad_nominal"] = tl.typecodes.NOMINAL,
+   ["circular_require"] = tl.typecodes.NOMINAL,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
    ["poly"] = tl.typecodes.IS_POLY,
    ["any"] = tl.typecodes.ANY,
    ["unknown"] = tl.typecodes.UNKNOWN,
    ["invalid"] = tl.typecodes.INVALID,
+
+   ["none"] = tl.typecodes.UNKNOWN,
+   ["tuple"] = tl.typecodes.UNKNOWN,
+   ["table_item"] = tl.typecodes.UNKNOWN,
+   ["unresolved"] = tl.typecodes.UNKNOWN,
+   ["typetype"] = tl.typecodes.UNKNOWN,
+   ["nestedtype"] = tl.typecodes.UNKNOWN,
+}
+
+local skip_types = {
+   ["none"] = true,
+   ["tuple"] = true,
+   ["table_item"] = true,
+   ["unresolved"] = true,
+   ["typetype"] = true,
+   ["nestedtype"] = true,
 }
 
 function tl.get_types(result, trenv)
@@ -10328,12 +10348,6 @@ function tl.get_types(result, trenv)
 
    local visit_node = { allow_missing_cbs = true }
    local visit_type = { allow_missing_cbs = true }
-
-   local skip_types = {
-      ["none"] = true,
-      ["tuple"] = true,
-      ["table_item"] = true,
-   }
 
    local ft = {}
    tr.by_pos[filename] = ft
