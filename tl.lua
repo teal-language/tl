@@ -1171,7 +1171,10 @@ local table_types = {
 
 
 
+
+
 local Fact = {}
+
 
 
 
@@ -1200,6 +1203,7 @@ local Fact = {}
 local is_attribute = {
    ["const"] = true,
    ["close"] = true,
+   ["total"] = true,
 }
 
 
@@ -3755,6 +3759,12 @@ function tl.pretty_print_ast(ast, gen_target, mode)
 
    local visit_node = {}
 
+   local lua_54_attribute = {
+      ["const"] = " <const>",
+      ["close"] = " <close>",
+      ["total"] = " <const>",
+   }
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(node, children)
@@ -3787,7 +3797,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
                   end
 
                   if gen_target == "5.4" then
-                     add_string(out, " <" .. var.attribute .. ">")
+                     add_string(out, lua_54_attribute[var.attribute])
                   end
                end
             end
@@ -4788,10 +4798,6 @@ end
 
 
 
-local function var_is_const(v)
-   return v.attribute ~= nil
-end
-
 local function sorted_keys(m)
    local keys = {}
    for k, _ in pairs(m) do
@@ -5625,7 +5631,7 @@ tl.type_check = function(ast, opts)
             if use == "lvalue" and var.is_narrowed then
                if var.narrowed_from then
                   var.used = true
-                  return { t = var.narrowed_from, attribute = var.attribute }, i, var_is_const(var)
+                  return { t = var.narrowed_from, attribute = var.attribute }, i, var.attribute
                end
             else
                if i == 1 and var.needs_compat then
@@ -5636,7 +5642,7 @@ tl.type_check = function(ast, opts)
                elseif use ~= "check_only" then
                   var.used = true
                end
-               return var, i, var_is_const(var)
+               return var, i, var.attribute
             end
          end
       end
@@ -7607,23 +7613,23 @@ tl.type_check = function(ast, opts)
          add_unknown(node, var)
       end
 
-      local existing, scope, existing_is_const = find_var(var)
+      local existing, scope, existing_attr = find_var(var)
       if existing and scope > 1 then
          node_error(node, "cannot define a global when a local with the same name is in scope")
          return nil
       end
 
-      local is_const = node.attribute == "const"
+      local is_const = node.attribute ~= nil
 
       if existing then
-         if is_assigning and existing_is_const then
-            node_error(node, "cannot reassign to <const> global: " .. var)
+         if is_assigning and existing_attr then
+            node_error(node, "cannot reassign to <" .. node.attribute .. "> global: " .. var)
          end
-         if existing_is_const == true and not is_const then
-            node_error(node, "global was previously declared as <const>: " .. var)
+         if existing_attr and not is_const then
+            node_error(node, "global was previously declared as <" .. existing_attr .. ">: " .. var)
          end
-         if existing_is_const == false and is_const then
-            node_error(node, "global was previously declared as not <const>: " .. var)
+         if (not existing_attr) and is_const then
+            node_error(node, "global was previously declared as not <" .. node.attribute .. ">: " .. var)
          end
          if valtype and not same_type(existing.t, valtype) then
             node_error(node, "cannot redeclare global with a different type: previous type of " .. var .. " is %s", existing.t)
@@ -8675,6 +8681,36 @@ tl.type_check = function(ast, opts)
          end
       end
 
+      if var.attribute == "total" then
+         local rd = decltype and resolve_tuple_and_nominal(decltype)
+         if rd and (rd.typename ~= "map" and rd.typename ~= "record") then
+            node_error(var, "attribute <total> only applies to maps and records")
+            ok = false
+         elseif not infertype then
+            node_error(var, "variable declared <total> does not declare an initialization value")
+            ok = false
+         elseif not (node.exps[i] and node.exps[i].attribute == "total") then
+            local ri = resolve_tuple_and_nominal(infertype)
+            if ri.typename ~= "map" and ri.typename ~= "record" then
+               node_error(var, "attribute <total> only applies to maps and records")
+               ok = false
+            elseif not infertype.is_total then
+               local missing = ""
+               if infertype.missing then
+                  missing = " (missing: " .. table.concat(infertype.missing, ", ") .. ")"
+               end
+               if ri.typename == "map" then
+                  node_error(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
+                  ok = false
+               elseif ri.typename == "record" then
+                  node_error(var, "record variable declared <total> does not declare values for all fields" .. missing)
+                  ok = false
+               end
+            end
+            infertype.is_total = nil
+         end
+      end
+
       local t = decltype or infertype
       if t == nil then
          t = missing_initializer(node, i, name)
@@ -8693,6 +8729,46 @@ tl.type_check = function(ast, opts)
       else
          return resolve_nominal_typetype(node.value.newtype)
       end
+   end
+
+   local function total_check_key(key, seen_keys, is_total, missing)
+      if not seen_keys[key] then
+         missing = missing or {}
+         table.insert(missing, tostring(key))
+         return false, missing
+      end
+      return is_total, missing
+   end
+
+   local function total_record_check(t, seen_keys)
+      if t.meta_field_order then
+         return false
+      end
+
+      local is_total = true
+      local missing
+      for _, key in ipairs(t.field_order) do
+         is_total, missing = total_check_key(key, seen_keys, is_total, missing)
+      end
+      return is_total, missing
+   end
+
+   local function total_map_check(t, seen_keys)
+      local k = resolve_tuple_and_nominal(t.keys)
+      local is_total = true
+      local missing
+      if k.typename == "enum" then
+         for _, key in ipairs(sorted_keys(k.enumset)) do
+            is_total, missing = total_check_key(key, seen_keys, is_total, missing)
+         end
+      elseif k.typename == "boolean" then
+         for _, key in ipairs({ true, false }) do
+            is_total, missing = total_check_key(key, seen_keys, is_total, missing)
+         end
+      else
+         is_total = false
+      end
+      return is_total, missing
    end
 
    local visit_node = {}
@@ -9262,6 +9338,21 @@ tl.type_check = function(ast, opts)
                   })
                else
                   node.type = resolve_typevars_at(node, node.expected)
+                  if node.expected == node.type and node.type.typename == "nominal" then
+                     node.type = {
+                        typeid = node.type.typeid,
+                        typename = "nominal",
+                        names = node.type.names,
+                        found = node.type.found,
+                        resolved = node.type.resolved,
+                     }
+                  end
+               end
+
+               if decltype.typename == "record" then
+                  node.type.is_total, node.type.missing = total_record_check(decltype, seen_keys)
+               elseif decltype.typename == "map" then
+                  node.type.is_total, node.type.missing = total_map_check(decltype, seen_keys)
                end
             else
                node.type = infer_table_literal(node, children)

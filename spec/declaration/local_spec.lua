@@ -264,6 +264,129 @@ describe("local", function()
          local x <const> = 1
       ]])
 
+      describe("<total>", function()
+         it("fails without an init value", util.check_type_error([[
+            local x <total>: {boolean:string}
+         ]], {
+            { msg = "variable declared <total> does not declare an initialization value" },
+         }))
+
+         it("only accepts maps and records", util.check_type_error([[
+            local x <total>: integer
+         ]], {
+            { msg = "attribute <total> only applies to maps and records" },
+         }))
+
+         it("fails when missing boolean keys from the domain", util.check_type_error([[
+            local x <total>: {boolean:string} = {
+               [true] = "hello"
+            }
+            local y <total>: {boolean:string} = {
+               [false] = "hello"
+            }
+         ]], {
+            { y = 1, msg = "map variable declared <total> does not declare values for all possible keys (missing: false)" },
+            { y = 4, msg = "map variable declared <total> does not declare values for all possible keys (missing: true)" },
+         }))
+
+         it("fails when missing enum keys from the domain", util.check_type_error([[
+            local enum Color
+               "red"
+               "green"
+               "blue"
+            end
+            local x <total>: {Color:string} = {
+               ["red"] = "hello"
+            }
+         ]], {
+            { msg = "map variable declared <total> does not declare values for all possible keys (missing: blue, green)" },
+         }))
+
+         it("accepts nil declarations in keys", util.check [[
+            local enum Color
+               "red"
+               "green"
+               "blue"
+            end
+            local x <total>: {Color:string} = {
+               ["red"] = "hello",
+               ["green"] = nil,
+               ["blue"] = nil,
+            }
+         ]])
+
+         it("accepts direct declaration from total to total", util.check [[
+            local record Point
+               x: number
+            end
+
+            local p <total>: Point = {
+               x = 2,
+            }
+
+            local p2 <total>: Point = p
+         ]])
+
+         it("rejects direct declaration from non-total to total", util.check_type_error([[
+            local record Point
+               x: number
+            end
+
+            local p: Point = {
+               x = 2,
+            }
+
+            local p2 <total>: Point = p
+         ]], {
+            { msg = "record variable declared <total> does not declare values for all fields" },
+         }))
+
+         it("cannot reassign a total", util.check_type_error([[
+            local record Point
+               x: number
+            end
+
+            local p1 <total>: Point = {
+               x = 1,
+            }
+
+            local p2 <total>: Point = {
+               x = 2,
+            }
+
+            p2 = p1
+         ]], {
+            { msg = "cannot assign to <total> variable" },
+         }))
+
+         it("fails when map domain can't be total", util.check_type_error([[
+            local enum Color
+               "red"
+               "green"
+               "blue"
+            end
+            local x <total>: {string:string} = {
+               ["red"] = "hello"
+            }
+         ]], {
+            { msg = "map variable declared <total> does not declare values for all possible keys" },
+         }))
+
+         it("fails when missing fields from a record", util.check_type_error([[
+            local record Point
+               x: number
+               y: number
+               z: number
+            end
+            local p <total>: Point = {
+               x = 1.0,
+               y = 2.0,
+            }
+         ]], {
+            { msg = "record variable declared <total> does not declare values for all fields (missing: z)" },
+         }))
+      end)
+
       describe("<close>", function()
          local function check54(code) return util.check(code, "5.4") end
          local function check_type54(code, errs) return util.check_type_error(code, errs, "5.4") end
