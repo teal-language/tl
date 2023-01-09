@@ -318,11 +318,11 @@ do
 
 
    local last_token_kind = {
-
-
+      ["start"] = nil,
+      ["any"] = nil,
       ["identifier"] = "identifier",
       ["got -"] = "op",
-
+      ["got --"] = nil,
       ["got ."] = ".",
       ["got .."] = "op",
       ["got ="] = "op",
@@ -333,14 +333,14 @@ do
       ["got >"] = "op",
       ["got /"] = "op",
       ["got :"] = "op",
-
+      ["got --["] = nil,
       ["string single"] = "$ERR invalid_string$",
       ["string single got \\"] = "$ERR invalid_string$",
       ["string double"] = "$ERR invalid_string$",
       ["string double got \\"] = "$ERR invalid_string$",
       ["string long"] = "$ERR invalid_string$",
       ["string long got ]"] = "$ERR invalid_string$",
-
+      ["comment short"] = nil,
       ["comment long"] = "$ERR unfinished_comment$",
       ["comment long got ]"] = "$ERR unfinished_comment$",
       ["number dec"] = "integer",
@@ -1231,11 +1231,12 @@ local Fact = {}
 
 
 
-local is_attribute = {
+local attributes = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
 }
+local is_attribute = attributes
 
 
 

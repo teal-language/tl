@@ -317,12 +317,12 @@ do
       "number powersign"
    end
 
-   local last_token_kind: {LexState:TokenKind} = {
-      -- ["start"]: never in a token
-      -- ["any"]: never in a token
+   local last_token_kind <total>: {LexState:TokenKind} = {
+      ["start"] = nil, -- never in a token
+      ["any"] = nil, -- never in a token
       ["identifier"] = "identifier",
       ["got -"] = "op",
-      -- ["got --"]: drop comment
+      ["got --"] = nil, -- drop comment
       ["got ."] = ".",
       ["got .."] = "op",
       ["got ="] = "op",
@@ -333,14 +333,14 @@ do
       ["got >"] = "op",
       ["got /"] = "op",
       ["got :"] = "op",
-      -- ["got --["]: drop comment
+      ["got --["] = nil, -- drop comment
       ["string single"] = "$ERR invalid_string$",
       ["string single got \\"] = "$ERR invalid_string$",
       ["string double"] = "$ERR invalid_string$",
       ["string double got \\"] = "$ERR invalid_string$",
       ["string long"] = "$ERR invalid_string$",
       ["string long got ]"] = "$ERR invalid_string$",
-      -- ["comment short"]: drop comment
+      ["comment short"] = nil, -- drop comment
       ["comment long"] = "$ERR unfinished_comment$",
       ["comment long got ]"] = "$ERR unfinished_comment$",
       ["number dec"] = "integer",
@@ -1231,11 +1231,12 @@ local enum Attribute
    "total"
 end
 
-local is_attribute <const>: {string:boolean} = {
+local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
 }
+local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
 local record Node
    {Node}
@@ -3790,7 +3791,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
 
    local visit_node: Visitor<NodeKind, Node, Output> = {}
 
-   local lua_54_attribute: {Attribute:string} = {
+   local lua_54_attribute <total>: {Attribute:string} = {
       ["const"] = " <const>",
       ["close"] = " <close>",
       ["total"] = " <const>",
