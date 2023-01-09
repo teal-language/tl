@@ -65,6 +65,12 @@ describe("union declaration", function()
       { msg = "cannot discriminate a union between multiple table types" },
    }))
 
+   it("cannot declare a union between multiple tuple types", util.check_type_error([[
+      local t: {number, number} | {string, number}
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
    it("cannot declare a union between multiple userdata types", util.check_type_error([[
       local record R1
          userdata
