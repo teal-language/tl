@@ -138,13 +138,15 @@ tl.version = function(): string
    return VERSION
 end
 
-tl.warning_kinds = {
+local wk <total>: {tl.WarningKind:boolean} = {
+   ["unknown"] = true,
    ["unused"] = true,
    ["redeclaration"] = true,
    ["branch"] = true,
    ["hint"] = true,
    ["debug"] = true,
 }
+tl.warning_kinds = wk
 
 -- Implementation rationale:
 -- * bit 31: (MSB) special ("any", "unknown", "invalid")

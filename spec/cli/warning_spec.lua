@@ -1,5 +1,20 @@
 local assert = require("luassert")
 local util = require("spec.util")
+local tl = require("tl")
+
+describe("tl warnings", function()
+   it("reports existing warning types when given no arguments", function()
+      local pd = io.popen(util.tl_cmd("warnings"), "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      local i = 0
+      for kind, _ in pairs(tl.warning_kinds) do
+         assert.match(kind .. " : enabled", output, 1, true)
+         i = i + 1
+      end
+      assert.same(6, i)
+   end)
+end)
 
 describe("warning flags", function()
    describe("in tlconfig.lua", function()
