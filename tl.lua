@@ -138,13 +138,15 @@ tl.version = function()
    return VERSION
 end
 
-tl.warning_kinds = {
+local wk = {
+   ["unknown"] = true,
    ["unused"] = true,
    ["redeclaration"] = true,
    ["branch"] = true,
    ["hint"] = true,
    ["debug"] = true,
 }
+tl.warning_kinds = wk
 
 
 
