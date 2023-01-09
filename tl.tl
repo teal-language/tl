@@ -1016,12 +1016,41 @@ local enum TypeName
    "none"
 end
 
-local table_types: {TypeName:boolean} = {
+local table_types <total>: {TypeName:boolean} = {
    ["array"] = true,
    ["map"] = true,
    ["arrayrecord"] = true,
    ["record"] = true,
    ["emptytable"] = true,
+   ["tupletable"] = true,
+
+   ["typetype"] = false,
+   ["nestedtype"] = false,
+   ["typevar"] = false,
+   ["typearg"] = false,
+   ["function"] = false,
+   ["enum"] = false,
+   ["boolean"] = false,
+   ["string"] = false,
+   ["nil"] = false,
+   ["thread"] = false,
+   ["number"] = false,
+   ["integer"] = false,
+   ["union"] = false,
+   ["nominal"] = false,
+   ["bad_nominal"] = false,
+   ["table_item"] = false,
+   ["unresolved_emptytable_value"] = false,
+   ["unresolved_typearg"] = false,
+   ["unresolvable_typearg"] = false,
+   ["circular_require"] = false,
+   ["tuple"] = false,
+   ["poly"] = false,
+   ["any"] = false,
+   ["unknown"] = false,
+   ["invalid"] = false,
+   ["unresolved"] = false,
+   ["none"] = false,
 }
 
 local record Type
