@@ -8429,9 +8429,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function check_redeclared_key(node: Node, ctx: Node.ExpectedContext, seen_keys: {(string | number):Node}, ck: string, n: number)
-      local key: string | number = ck or n
-      if key then
+   local type CheckableKey = string | number | boolean
+
+   local function check_redeclared_key(node: Node, ctx: Node.ExpectedContext, seen_keys: {CheckableKey:Node}, key: CheckableKey)
+      if key ~= nil then
          local s = seen_keys[key]
          if s then
             node_error(node, in_context(ctx, "redeclared key " .. tostring(key) .. " (previously declared at " .. filename .. ":" .. s.y .. ":" .. s.x .. ")"))
@@ -8459,14 +8460,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local last_array_idx = 1
       local largest_array_idx = -1
 
-      local seen_keys: {(number | string):Node} = {}
+      local seen_keys: {CheckableKey:Node} = {}
 
       for i, child in ipairs(children) do
          assert(child.typename == "table_item")
 
          local ck = child.kname
          local n = node[i].key.constnum
-         check_redeclared_key(node[i], nil, seen_keys, ck, n)
+         local b: boolean = nil
+         if child.ktype.typename == "boolean" then
+            b = (node[i].key.tk == "true")
+         end
+
+         local key: CheckableKey = ck or n or b
+         check_redeclared_key(node[i], nil, seen_keys, key)
 
          local uvtype = resolve_tuple(child.vtype)
          if ck then
@@ -9136,14 +9143,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local force_array: Type = nil
 
-               local seen_keys: {(number | string):Node} = {}
+               local seen_keys: {CheckableKey:Node} = {}
 
                for i, child in ipairs(children) do
                   assert(child.typename == "table_item")
                   local cvtype = resolve_tuple(child.vtype)
                   local ck = child.kname
                   local n = node[i].key.constnum
-                  check_redeclared_key(node[i], node.expected_context, seen_keys, ck, n)
+                  local b: boolean = nil
+                  if child.ktype.typename == "boolean" then
+                     b = (node[i].key.tk == "true")
+                  end
+                  check_redeclared_key(node[i], node.expected_context, seen_keys, ck or n or b)
                   if is_record and ck then
                      local df = decltype.fields[ck]
                      if not df then

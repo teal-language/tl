@@ -8429,9 +8429,10 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function check_redeclared_key(node, ctx, seen_keys, ck, n)
-      local key = ck or n
-      if key then
+
+
+   local function check_redeclared_key(node, ctx, seen_keys, key)
+      if key ~= nil then
          local s = seen_keys[key]
          if s then
             node_error(node, in_context(ctx, "redeclared key " .. tostring(key) .. " (previously declared at " .. filename .. ":" .. s.y .. ":" .. s.x .. ")"))
@@ -8466,7 +8467,13 @@ tl.type_check = function(ast, opts)
 
          local ck = child.kname
          local n = node[i].key.constnum
-         check_redeclared_key(node[i], nil, seen_keys, ck, n)
+         local b = nil
+         if child.ktype.typename == "boolean" then
+            b = (node[i].key.tk == "true")
+         end
+
+         local key = ck or n or b
+         check_redeclared_key(node[i], nil, seen_keys, key)
 
          local uvtype = resolve_tuple(child.vtype)
          if ck then
@@ -9143,7 +9150,11 @@ tl.type_check = function(ast, opts)
                   local cvtype = resolve_tuple(child.vtype)
                   local ck = child.kname
                   local n = node[i].key.constnum
-                  check_redeclared_key(node[i], node.expected_context, seen_keys, ck, n)
+                  local b = nil
+                  if child.ktype.typename == "boolean" then
+                     b = (node[i].key.tk == "true")
+                  end
+                  check_redeclared_key(node[i], node.expected_context, seen_keys, ck or n or b)
                   if is_record and ck then
                      local df = decltype.fields[ck]
                      if not df then

@@ -24,4 +24,17 @@ describe("maps", function()
       { y = 5, msg = "redeclared key 1 " },
       { y = 6, msg = "redeclared key 0.5 " },
    }))
+
+   it("catches redeclaration of literal boolean keys", util.check_type_error([[
+      local foo: {boolean: string} = {}
+      foo = {
+         [true] = "hello",
+         [false] = "oi",
+         [false] = "wat",
+         [true] = "oi",
+      }
+   ]], {
+      { y = 5, msg = "redeclared key false" },
+      { y = 6, msg = "redeclared key true" },
+   }))
 end)
