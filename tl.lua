@@ -9431,6 +9431,8 @@ tl.type_check = function(ast, opts)
             local ra = a and resolve_tuple_and_nominal(a)
             local rb = b and resolve_tuple_and_nominal(b)
 
+            local expected = node.expected and resolve_tuple_and_nominal(node.expected)
+
             if ra.typename == "circular_require" or (ra.def and ra.def.typename == "circular_require") then
                node_error(node, "cannot dereference a type from a circular require")
                node.type = INVALID
@@ -9524,7 +9526,7 @@ tl.type_check = function(ast, opts)
                (ra.typename == "string" and rb.typename == "enum" and is_a(ra, rb))) then
                node.known = nil
                node.type = (ra.typename == "enum" and ra or rb)
-            elseif node.op.op == "or" and node.expected and node.expected.typename == "union" then
+            elseif node.op.op == "or" and expected and expected.typename == "union" then
 
                node.known = facts_or(node, node.e1.known, node.e2.known)
                local u = unite({ ra, rb }, true)
@@ -9534,9 +9536,9 @@ tl.type_check = function(ast, opts)
                node.type = u
             elseif node.op.op == "or" and is_a(rb, ra) then
                node.known = facts_or(node, node.e1.known, node.e2.known)
-               if node.expected then
-                  local a_is = is_a(ra, node.expected)
-                  local b_is = is_a(rb, node.expected)
+               if expected then
+                  local a_is = is_a(a, node.expected)
+                  local b_is = is_a(b, node.expected)
                   if a_is and b_is then
                      node.type = node.expected
                   elseif a_is then
