@@ -7230,6 +7230,7 @@ tl.type_check = function(ast, opts)
             infer_emptytable(t2, infer_at(node, t1))
          elseif t1.typename ~= "emptytable" then
             node_error(node, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
+            return false
          end
          return true
       end
