@@ -463,7 +463,7 @@ where the record type is defined:
 
 ```
 function Point.new(x: number, y: number): Point
-   local self = setmetatable({} as Point, { __index = Point })
+   local self: Point = setmetatable({}, { __index = Point })
    self.x = x or 0
    self.y = y or 0
    return self
@@ -594,26 +594,26 @@ rec_mt = {
       return tostring(self.x * n) .. s
    end,
    __add = function(a: Rec, b: Rec): Rec
-      local res = setmetatable({} as Rec, rec_mt)
+      local res: Rec = setmetatable({}, rec_mt)
       res.x = a.x + b.x
       return res
    end,
 }
 
-local r = setmetatable({ x = 10 } as Rec, rec_mt)
-local s = setmetatable({ x = 20 } as Rec, rec_mt)
+local r: Rec = setmetatable({ x = 10 }, rec_mt)
+local s: Rec = setmetatable({ x = 20 }, rec_mt)
 
 r.x = 12
 print(r("!!!", 1000)) -- prints 12000!!!
 print((r + s).x)      -- prints 32
 ```
 
-Note the use of the `as` operator to specify the type of the raw tables when
-using `setmetatable`. The Teal standard library definiton of `setmetatable` is
-`function<T>(T, metatable<T>)`, so casting the table to the correct record
-type in the first argument assigns the type variable `T` in that call, causing
-it to propagate to the second argument's type, matching the correct metatable
-type.
+Note that we explicitly declare variables as `Rec` when initializing the
+declaration with `setmetatable`. The Teal standard library definiton of
+`setmetatable` is `function<T>(T, metatable<T>): T`, so declaring the correct
+record type in the declaration assigns the record type to the type variable
+`T` in the return value of the function call, causing it to propagate to the
+argument types, matching the correct table and metatable types.
 
 Operator metamethods for integer division `//` and bitwise operators are
 supported even when Teal runs on top of Lua versions that do not support them
