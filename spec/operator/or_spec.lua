@@ -34,8 +34,13 @@ describe("or", function()
 
       local u: string | R1 = "hello"
 
+      if math.random(2) == 0 then
+         u = r1
+      end
+
       local u2 = u or r1
       u2 = "world" -- u2 is a u
+      u2 = r1      -- u2 is a u
    ]])
 
    it("string or enum matches enum", util.check [[

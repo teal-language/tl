@@ -8611,7 +8611,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       apply_facts(where, f)
    end
 
-   local function determine_declaration_type(name: string, node: Node, infertypes: {Type}, i: integer): Type, boolean
+   local function determine_declaration_type(var: Node, node: Node, infertypes: {Type}, i: integer): boolean, Type, boolean
+      local ok = true
+      local name = var.tk
       local infertype = infertypes and infertypes[i]
       if lax and infertype and infertype.typename == "nil" then
          infertype = nil
@@ -8624,11 +8626,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          if infertype then
-            assert_is_a(node.vars[i], infertype, decltype, context_name[node.kind], name)
+            ok = assert_is_a(node.vars[i], infertype, decltype, context_name[node.kind], name)
          end
       else
          if infertype and infertype.typename == "unresolvable_typearg" then
             node_error(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
+            ok = false
             infertype = INVALID
          end
       end
@@ -8642,7 +8645,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
       t.inferred_len = nil
 
-      return t, infertype ~= nil
+      return ok, t, infertype ~= nil
    end
 
    local function get_type_declaration(node: Node): Type, Variable
@@ -8742,7 +8745,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               local t = determine_declaration_type(var.tk, node, infertypes, i)
+               local ok, t = determine_declaration_type(var, node, infertypes, i)
 
                if var.attribute == "close" then
                   if not type_is_closable(t) then
@@ -8755,6 +8758,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                assert(var)
                add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i))
 
+               if ok and infertypes and infertypes[i] then
+                  local where = node.exps[i] or node.exps
+                  local infertype = infertypes[i]
+
+                  local rt = resolve_tuple_and_nominal(t)
+                  if rt.typename ~= "enum" and not same_type(t, infertype) then
+                     apply_facts(where, Fact { fact = "is", var = var.tk, typ = infertype, where = where })
+                  end
+               end
+
                dismiss_unresolved(var.tk)
             end
             node.type = NONE
@@ -8766,7 +8779,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          after = function(node: Node, children: {Type}): Type
             local infertypes: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
-               local t, is_inferred = determine_declaration_type(var.tk, node, infertypes, i)
+               local _, t, is_inferred = determine_declaration_type(var, node, infertypes, i)
 
                if var.attribute == "close" then
                   node_error(var, "globals may not be <close>")
@@ -8923,6 +8936,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             begin_scope(node)
          end,
          before_statements = function(node: Node)
+            widen_all_unions()
             local exp1 = node.exps[1]
             local args = {
                typename = "tuple",
@@ -9000,6 +9014,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["fornum"] = {
          before_statements = function(node: Node, children: {Type})
+            widen_all_unions()
             begin_scope(node)
             local from_t = resolve_tuple_and_nominal(children[2])
             local to_t = resolve_tuple_and_nominal(children[3])
@@ -9238,6 +9253,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["local_function"] = {
          before = function(node: Node)
+            widen_all_unions()
             reserve_symbol_list_slot(node)
             begin_scope(node)
          end,
@@ -9263,6 +9279,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["global_function"] = {
          before = function(node: Node)
+            widen_all_unions()
             begin_scope(node)
             if node.implicit_global_function then
                local typ = find_var_type(node.name.tk)
@@ -9300,6 +9317,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["record_function"] = {
          before = function(node: Node)
+            widen_all_unions()
             begin_scope(node)
          end,
          before_statements = function(node: Node, children: {Type})
@@ -9369,6 +9387,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["function"] = {
          before = function(node: Node)
+            widen_all_unions()
             begin_scope(node)
          end,
          before_statements = function(node: Node)

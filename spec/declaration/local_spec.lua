@@ -49,11 +49,12 @@ describe("local", function()
          }))
 
          it("propagates correct type", util.check_type_error([[
-            local x, y: number, string = 1, "a"
+            local x, y: integer, string = 1, "a"
             local z: table
+
             z = x + string.byte(y)
          ]], {
-            { msg = "in assignment: got number" },
+            { msg = "in assignment: got integer" },
          }))
 
          it("uses correct type", util.check [[
