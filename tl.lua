@@ -1170,6 +1170,7 @@ local table_types = {
 
 
 
+
 local Fact = {}
 
 
@@ -5594,6 +5595,7 @@ tl.type_check = function(ast, opts)
    local lax = opts.lax
    local filename = opts.filename
 
+
    local st = { env.globals }
 
    local symbol_list = {}
@@ -6171,43 +6173,65 @@ tl.type_check = function(ast, opts)
       node.symbol_list_slot = symbol_list_n
    end
 
-   local function add_var(node, var, valtype, attribute, is_narrowing, dont_check_redeclaration)
-      if lax and node and is_unknown(valtype) and (var ~= "self" and var ~= "...") and not is_narrowing then
-         add_unknown(node, var)
-      end
+   local get_unresolved
+
+   local function add_to_scope(node, name, t, attribute, is_narrowing, dont_check_redeclaration)
       local scope = st[#st]
-      local old_var = scope[var]
-      if not attribute then
-         valtype = drop_constant_value(valtype)
-      end
-      if old_var and is_narrowing then
-         if not old_var.is_narrowed then
-            old_var.narrowed_from = old_var.t
-         end
-         old_var.is_narrowed = true
-         old_var.t = valtype
-      else
-         if not dont_check_redeclaration and
-            node and
-            not is_narrowing and
-            var ~= "self" and
-            var ~= "..." and
-            var:sub(1, 1) ~= "@" then
-
-            check_if_redeclaration(var, node)
-         end
-         scope[var] = { t = valtype, attribute = attribute, is_narrowed = is_narrowing, declared_at = node }
-         if old_var then
-
-
-            if not old_var.used then
-               unused_warning(var, old_var)
+      local var = scope[name]
+      if is_narrowing then
+         if var then
+            if var.is_narrowed then
+               var.t = t
+               return var
             end
+
+            var.is_narrowed = true
+            var.narrowed_from = var.t
+            var.t = t
+         else
+            var = { t = t, attribute = attribute, is_narrowed = true, declared_at = node }
+            scope[name] = var
          end
+
+         local unresolved = get_unresolved(scope)
+         unresolved.narrows[name] = true
+
+         return var
       end
 
-      if node and valtype.typename ~= "unresolved" and valtype.typename ~= "none" then
-         node.type = node.type or valtype
+      if not dont_check_redeclaration and
+         node and
+         name ~= "self" and
+         name ~= "..." and
+         name:sub(1, 1) ~= "@" then
+
+         check_if_redeclaration(name, node)
+      end
+
+      if var and not var.used then
+
+
+         unused_warning(name, var)
+      end
+
+      var = { t = t, attribute = attribute, is_narrowed = false, declared_at = node }
+      scope[name] = var
+
+      return var
+   end
+
+   local function add_var(node, name, t, attribute, is_narrowing, dont_check_redeclaration)
+      if lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not is_narrowing then
+         add_unknown(node, name)
+      end
+      if not attribute then
+         t = drop_constant_value(t)
+      end
+
+      local var = add_to_scope(node, name, t, attribute, is_narrowing, dont_check_redeclaration)
+
+      if node and t.typename ~= "unresolved" and t.typename ~= "none" then
+         node.type = node.type or t
          local slot
          if node.symbol_list_slot then
             slot = node.symbol_list_slot
@@ -6215,10 +6239,10 @@ tl.type_check = function(ast, opts)
             symbol_list_n = symbol_list_n + 1
             slot = symbol_list_n
          end
-         symbol_list[slot] = { y = node.y, x = node.x, name = var, typ = assert(scope[var].t) }
+         symbol_list[slot] = { y = node.y, x = node.x, name = name, typ = t }
       end
 
-      return scope[var]
+      return var
    end
 
 
@@ -6397,20 +6421,23 @@ tl.type_check = function(ast, opts)
       end
    end
 
-
-
-
-
-   local function get_unresolved(where, node)
+   get_unresolved = function(scope)
       local unresolved
-      if where == "top_scope" then
-         unresolved = st[#st]["@unresolved"] and st[#st]["@unresolved"].t
+      if scope then
+         local unr = scope["@unresolved"]
+         unresolved = unr and unr.t
       else
          unresolved = find_var_type("@unresolved")
       end
       if not unresolved then
-         unresolved = { typename = "unresolved", labels = {}, nominals = {}, global_types = {} }
-         add_var(node, "@unresolved", unresolved)
+         unresolved = {
+            typename = "unresolved",
+            labels = {},
+            nominals = {},
+            global_types = {},
+            narrows = {},
+         }
+         add_var(nil, "@unresolved", unresolved)
       end
       return unresolved
    end
@@ -6425,9 +6452,11 @@ tl.type_check = function(ast, opts)
    end
 
    local function end_scope(node)
-      local unresolved = st[#st]["@unresolved"]
+      local scope = st[#st]
+      local unresolved = scope["@unresolved"]
       if unresolved then
-         local upper = st[#st - 1]["@unresolved"]
+         local next_scope = st[#st - 1]
+         local upper = next_scope["@unresolved"]
          if upper then
             for name, nodes in pairs(unresolved.t.labels) do
                for _, n in ipairs(nodes) do
@@ -6445,11 +6474,12 @@ tl.type_check = function(ast, opts)
                upper.t.global_types[name] = true
             end
          else
-            st[#st - 1]["@unresolved"] = unresolved
+            next_scope["@unresolved"] = unresolved
+            unresolved.t.narrows = {}
          end
       end
-      close_types(st[#st])
-      check_for_unused_vars(st[#st])
+      close_types(scope)
+      check_for_unused_vars(scope)
       table.remove(st)
 
       if node then
@@ -6549,7 +6579,7 @@ tl.type_check = function(ast, opts)
       if #t1.names == 1 and #t2.names == 1 and
          t1.names[1] == t2.names[1] then
 
-         local unresolved = get_unresolved("any_scope", nil)
+         local unresolved = get_unresolved()
          if unresolved.global_types[t1.names[1]] then
             return true
          end
@@ -7528,6 +7558,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function widen_in_scope(scope, var)
+      assert(scope[var], "no " .. var .. " in scope")
       if scope[var].is_narrowed then
          if scope[var].narrowed_from then
             scope[var].t = scope[var].narrowed_from
@@ -7536,16 +7567,19 @@ tl.type_check = function(ast, opts)
          else
             scope[var] = nil
          end
+
+         local unresolved = get_unresolved(scope)
+         unresolved.narrows[var] = nil
          return true
       end
       return false
    end
 
-   local function widen_back_var(var)
+   local function widen_back_var(name)
       local widened = false
       for i = #st, 1, -1 do
-         if st[i][var] then
-            if widen_in_scope(st[i], var) then
+         if st[i][name] then
+            if widen_in_scope(st[i], name) then
                widened = true
             else
                break
@@ -7557,8 +7591,12 @@ tl.type_check = function(ast, opts)
 
    local function widen_all_unions()
       for i = #st, 1, -1 do
-         for var, _ in pairs(st[i]) do
-            widen_in_scope(st[i], var)
+         local scope = st[i]
+         local unr = scope["@unresolved"]
+         if unr and unr.t.narrows then
+            for name, _ in pairs(unr.t.narrows) do
+               widen_in_scope(scope, name)
+            end
          end
       end
    end
@@ -8697,7 +8735,7 @@ tl.type_check = function(ast, opts)
       ["global_type"] = {
          before = function(node)
             local name = node.var.tk
-            local unresolved = get_unresolved("any_scope", node)
+            local unresolved = get_unresolved()
             if node.value then
                local resolved, aliasing = get_type_declaration(node)
                local added = add_global(node.var, name, resolved)
@@ -8915,7 +8953,7 @@ tl.type_check = function(ast, opts)
       ["goto"] = {
          after = function(node, _children)
             if not find_var_type("::" .. node.label .. "::") then
-               local unresolved = get_unresolved("top_scope", node)
+               local unresolved = get_unresolved(st[#st])
                unresolved.labels[node.label] = unresolved.labels[node.label] or {}
                table.insert(unresolved.labels[node.label], node)
             end
@@ -9939,7 +9977,7 @@ tl.type_check = function(ast, opts)
                   end
                else
                   local name = typ.names[1]
-                  local unresolved = get_unresolved("any_scope", nil)
+                  local unresolved = get_unresolved()
                   unresolved.nominals[name] = unresolved.nominals[name] or {}
                   table.insert(unresolved.nominals[name], typ)
                end
