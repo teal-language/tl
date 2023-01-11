@@ -4828,6 +4828,9 @@ end
 local compat_code_cache: {string:Node} = {}
 
 local function add_compat_entries(program: Node, used_set: {string: boolean}, gen_compat: CompatMode)
+   local tl_debug = TL_DEBUG
+   TL_DEBUG = nil
+
    if gen_compat == "off" or not next(used_set) then
       return
    end
@@ -4876,6 +4879,8 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       end
    end
    program.y = 1
+
+   TL_DEBUG = tl_debug
 end
 
 local function get_stdlib_compat(lax: boolean): {string:boolean}

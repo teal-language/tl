@@ -4828,6 +4828,9 @@ end
 local compat_code_cache = {}
 
 local function add_compat_entries(program, used_set, gen_compat)
+   local tl_debug = TL_DEBUG
+   TL_DEBUG = nil
+
    if gen_compat == "off" or not next(used_set) then
       return
    end
@@ -4876,6 +4879,8 @@ local function add_compat_entries(program, used_set, gen_compat)
       end
    end
    program.y = 1
+
+   TL_DEBUG = tl_debug
 end
 
 local function get_stdlib_compat(lax)
