@@ -15,20 +15,46 @@ describe("array argument", function()
       { y = 7, msg = 'argument 1: got integer, expected {string}' },
    }))
 
-   it("constructs type of complex array correctly (#111)", util.check_type_error([[
+   it("constructs type of complex array correctly - given explicit type (#111)", util.check [[
       local type MyRecord = record
          func: function<K, V>(t: {{K:V}}): {V}
       end
 
-      local x: {string} = MyRecord.func({
+      local maps: {{string : number | string}} = {
+         {id = 2},
+         {otherkey = "hello"},
+         {id = "yo"},
+      }
+
+      local x = MyRecord.func(maps)
+   ]])
+
+   it("constructs type of complex array correctly - inferred from function return (#111)", util.check_type_error([[
+      local type MyRecord = record
+         func: function<K, V>(t: {{K:V}}): {V}
+      end
+
+      local good: {number | string} = MyRecord.func({
+         {id = 2},
+         {otherkey = "hello"},
+         {id = "yo"},
+      })
+
+      local bad1: {string} = MyRecord.func({
+         {id = 2},
+         {otherkey = "hello"},
+         {id = "yo"},
+      })
+
+      local bad2: {number} = MyRecord.func({
          {id = 2},
          {otherkey = "hello"},
          {id = "yo"},
       })
    ]], {
-      { y = 5, "got {number | string}, expected {string}"},
-      { y = 7, "in array: at index 2: got {number | string}, expected {string}"},
-      { y = 8, "in array: at index 3: got {number | string}, expected {string}"},
+      { y = 12, msg = "in map value: got integer, expected string"},
+      { y = 19, msg = 'in map value: got string "hello", expected number'},
+      { y = 20, msg = 'in map value: got string "yo", expected number'},
    }))
 
 end)

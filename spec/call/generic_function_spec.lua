@@ -106,7 +106,7 @@ describe("generic function", function()
 
       local x: number = use_id("hello", string_id)
    ]], {
-      { msg = "got string, expected number" }
+      { msg = 'got string "hello", expected number' }
    }))
 
    it("can use the function along with an indirect typevar", util.check [[
@@ -136,7 +136,8 @@ describe("generic function", function()
 
       local x: number = use_id({"hello"}, string_id)
    ]], {
-      { msg = "got string, expected number" }
+      { msg = 'at index 1: got string "hello", expected number' },
+      { msg = "argument 2: argument 1: got string, expected number" },
    }))
 
    it("can use the function along with an indirect typevar", util.check [[

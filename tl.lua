@@ -6649,6 +6649,10 @@ tl.type_check = function(ast, opts)
          return true
       end
 
+      if t2.typename == "emptytable" and is_lua_table_type(resolve_tuple_and_nominal(t1)) then
+         return true
+      end
+
       if t1.typename ~= t2.typename then
          return false, terr(t1, "got %s, expected %s", t1, t2)
       end
@@ -7319,21 +7323,21 @@ tl.type_check = function(ast, opts)
          end
 
          check_args_rets = function(where, where_args, f, args, rets, argdelta)
-            local ok, errs
-
-            ok, errs = check_func_type_list(where, where_args, args, f.args, argdelta, "argument")
-            if not ok then
-               return nil, errs
-            end
+            local rets_ok = true
+            local rets_errs
+            local args_ok
+            local args_errs
 
             if rets then
                rets = infer_at(where, rets)
                infer_emptytables(where, nil, rets, f.rets, 0)
 
-               ok, errs = check_func_type_list(where, nil, f.rets, rets, 0, "return")
-               if not ok then
-                  return nil, {}
-               end
+               rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, rets, 0, "return")
+            end
+
+            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, argdelta, "argument")
+            if (not args_ok) or (not rets_ok) then
+               return nil, args_errs or {}
             end
 
 
@@ -9424,6 +9428,9 @@ tl.type_check = function(ast, opts)
             elseif node.op.op == "@funcall" then
                if node.e1.type.typename == "function" then
                   local argdelta = (node.e1.op and node.e1.op.op == ":") and -1 or 0
+                  if node.expected then
+                     is_a(node.e1.type.rets, node.expected)
+                  end
                   for i, typ in ipairs(node.e1.type.args) do
                      if node.e2[i + argdelta] then
                         node.e2[i + argdelta].expected = typ
