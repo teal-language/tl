@@ -8793,6 +8793,10 @@ tl.type_check = function(ast, opts)
       return is_total, missing
    end
 
+   local function show_fn_owner(node)
+      return (tl.pretty_print_ast(node.fn_owner, opts.gen_target, { preserve_indent = true, preserve_newlines = false }))
+   end
+
    local visit_node = {}
 
    visit_node.cbs = {
@@ -9476,60 +9480,61 @@ tl.type_check = function(ast, opts)
             add_internal_function_variables(node)
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
-            local owner = find_record_to_extend(node.fn_owner)
+            if rtype.typename == "emptytable" then
+               rtype.typename = "record"
+               rtype.fields = {}
+               rtype.field_order = {}
+            end
+
+            if lax and rtype.typename == "unknown" then
+               return
+            end
+
+            if not is_record_type(rtype) then
+               node_error(node, "not a module: %s", rtype)
+               return
+            end
 
             if node.is_method then
                children[3][1] = rtype
                add_var(nil, "self", rtype)
             end
 
-            if rtype.typename == "emptytable" then
-               rtype.typename = "record"
-               rtype.fields = {}
-               rtype.field_order = {}
-            end
-            if is_record_type(rtype) then
-               local fn_type = ensure_fresh_typeargs(a_type({
-                  y = node.y,
-                  x = node.x,
-                  typename = "function",
-                  is_method = node.is_method,
-                  typeargs = node.typeargs,
-                  args = children[3],
-                  rets = get_rets(children[4]),
-                  filename = filename,
-               }))
+            local fn_type = ensure_fresh_typeargs(a_type({
+               y = node.y,
+               x = node.x,
+               typename = "function",
+               is_method = node.is_method,
+               typeargs = node.typeargs,
+               args = children[3],
+               rets = get_rets(children[4]),
+               filename = filename,
+            }))
 
-               local rfieldtype = rtype.fields[node.name.tk]
-               local ok = false
-               local err = nil
-               if rfieldtype then
-                  ok, err = is_a(fn_type, rfieldtype)
-               end
-
-               if not ok and (lax or owner == rtype) then
-                  rtype.fields[node.name.tk] = fn_type
-                  table.insert(rtype.field_order, node.name.tk)
-                  ok = true
-               end
-
-               if ok then
-                  node.name.type = fn_type
-               else
-                  local name = tl.pretty_print_ast(node.fn_owner, opts.gen_target, { preserve_indent = true, preserve_newlines = false })
-                  if rfieldtype then
-                     local shortname = node.fn_owner.type.typename == "nominal" and show_type(node.fn_owner.type) or name
-                     local msg = "type signature of '" .. node.name.tk .. "' does not match its declaration in " .. shortname .. ": "
-                     add_errs_prefixing(node, err, errors, msg)
-                  else
-                     node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
-                  end
+            local rfieldtype = rtype.fields[node.name.tk]
+            if rfieldtype then
+               local ok, err = is_a(fn_type, rfieldtype)
+               if not ok then
+                  local shortname = node.fn_owner.type.typename == "nominal" and
+                  show_type(node.fn_owner.type) or
+                  show_fn_owner(node)
+                  local msg = "type signature of '" .. node.name.tk .. "' does not match its declaration in " .. shortname .. ": "
+                  add_errs_prefixing(node, err, errors, msg)
+                  return
                end
             else
-               if not (lax and rtype.typename == "unknown") then
-                  node_error(node, "not a module: %s", rtype)
+               local open = find_record_to_extend(node.fn_owner)
+               if lax or rtype == open then
+                  rtype.fields[node.name.tk] = fn_type
+                  table.insert(rtype.field_order, node.name.tk)
+               else
+                  local name = show_fn_owner(node)
+                  node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
+                  return
                end
             end
+
+            node.name.type = fn_type
          end,
          after = function(node, _children)
             end_function_scope(node)
