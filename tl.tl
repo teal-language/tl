@@ -7989,36 +7989,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return old
    end
 
-   local function find_record_to_extend(exp: Node): Type
-      if exp.kind == "type_identifier" then
+   local find_record_to_extend: function(exp: Node): Type
+   do
+      local function get_record_if_open(exp: Node): Type
          local t = find_var_type(exp.tk)
-         if not t then
-            return t
-         end
-
-         -- FIXME assert(t.def)
-         if t.def then
-            if not t.def.closed and not t.closed then
-               return t.def
-            end
-         end
-         if not t.closed then
-            return t
-         end
-      elseif exp.kind == "op" and exp.op.op == "." then
-         local t = find_record_to_extend(exp.e1)
-         if not t then
+         if (not t) or t.closed then
             return nil
          end
-         while exp.e2.kind == "op" and exp.e2.op.op == "." do
-            t = t.fields and t.fields[exp.e2.e1.tk]
-            if not t then
-               return nil
-            end
-            exp = exp.e2
+
+         return t.def or t
+      end
+
+      find_record_to_extend = function(exp: Node): Type
+         if exp.kind == "type_identifier" then
+            return get_record_if_open(exp)
+         elseif exp.kind == "op" and exp.op.op == "." then
+            local t = find_record_to_extend(exp.e1)
+            return t and t.fields and t.fields[exp.e2.tk]
          end
-         t = t.fields and t.fields[exp.e2.tk]
-         return t
       end
    end
 
