@@ -9555,6 +9555,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local ok, err = same_type(fn_type, rfieldtype)
                if not ok then
+                  if rfieldtype.typename == "poly" then
+                     add_errs_prefixing(node, err, errors, "type signature does not match declaration: field has multiple function definitions (such polymorphic declarations are intended for Lua module interoperability)")
+                     return
+                  end
+
                   local shortname = node.fn_owner.type.typename == "nominal"
                                     and show_type(node.fn_owner.type)
                                     or show_fn_owner(node)
