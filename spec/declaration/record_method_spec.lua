@@ -474,6 +474,19 @@ describe("record method", function()
          { y = 5, msg = "type signature of 'do_x' does not match its declaration in Y: argument 2: got string, expected integer" },
       }))
 
+      it("cannot implement a polymorphic method via redeclaration", util.check_type_error([[
+         local record Y
+            do_x: function(Y, integer, integer): integer
+            do_x: function(Y, integer): integer
+         end
+
+         function Y:do_x(a: integer, b: string): integer
+             return a + math.tointeger(b)
+         end
+      ]], {
+         { y = 6, msg = "type signature does not match declaration: field has multiple function definitions" },
+      }))
+
       it("an inconsistent type in redeclaration produces an error", util.check_type_error([[
          local record Y
          end
