@@ -1103,6 +1103,7 @@ local record Type
    is_method: boolean
    args: Type
    rets: Type
+   implemented: boolean
 
    typeid: integer
 
@@ -6104,13 +6105,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       local var_kind = "variable"
       local var_name = node.tk
-      if node.kind == "local_function" then
+      if node.kind == "local_function" or node.kind == "record_function" then
          var_kind = "function"
          var_name = node.name.tk
       end
 
       local short_error = "redeclaration of " .. var_kind .. " '%s'"
-      if old_var.declared_at then
+      if old_var and old_var.declared_at then
          node_warning("redeclaration", node, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
       else
          node_warning("redeclaration", node, short_error, var_name)
@@ -6758,18 +6759,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t1.typename == "record" then
          return invariant_match_fields_to_record(t1, t2)
       elseif t1.typename == "function" then
+         local argdelta = t1.is_method and 1 or 0
          if #t1.args ~= #t2.args then
-            return false, terr(t1, "different number of input arguments: got " .. #t1.args .. ", expected " .. #t2.args)
+            if t1.is_method ~= t2.is_method then
+               return false, terr(t1, "different number of input arguments: method and non-method are not the same type")
+            end
+            return false, terr(t1, "different number of input arguments: got " .. #t1.args - argdelta .. ", expected " .. #t2.args - argdelta)
          end
          if #t1.rets ~= #t2.rets then
             return false, terr(t1, "different number of return values: got " .. #t1.args .. ", expected " .. #t2.args)
          end
-         if t1.is_method ~= t2.is_method then
-            return false, terr(t1, "method and non-method are not the same type")
-         end
          local all_errs = {}
          for i = 1, #t1.args do
-            arg_check(t1 as Node, same_type, t1.args[i], t2.args[i], i, all_errs)
+            arg_check(t1 as Node, same_type, t1.args[i], t2.args[i], i - argdelta, all_errs)
          end
          for i = 1, #t1.rets do
             local _, errs = same_type(t1.rets[i], t2.rets[i])
@@ -7989,24 +7991,57 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return old
    end
 
-   local find_record_to_extend: function(exp: Node): Type
-   do
-      local function get_record_if_open(exp: Node): Type
+   local function find_record_to_extend(exp: Node): Type
+      -- base
+      if exp.kind == "type_identifier" then
          local t = find_var_type(exp.tk)
          if (not t) or t.closed then
             return nil
          end
 
          return t.def or t
+      -- recurse
+      elseif exp.kind == "op" then -- assert(exp.op.op == ".")
+         local t = find_record_to_extend(exp.e1)
+         return t and t.fields and t.fields[exp.e2.tk]
       end
+   end
 
-      find_record_to_extend = function(exp: Node): Type
-         if exp.kind == "type_identifier" then
-            return get_record_if_open(exp)
-         elseif exp.kind == "op" and exp.op.op == "." then
-            local t = find_record_to_extend(exp.e1)
-            return t and t.fields and t.fields[exp.e2.tk]
+   local function get_self_type(exp: Node): Type
+      -- base
+      if exp.kind == "type_identifier" then
+         local t = find_var_type(exp.tk)
+         if not t then
+            return nil
          end
+
+         if t.typename == "typetype" then
+            return a_type {
+               y = exp.y,
+               x = exp.x,
+               typename = "nominal",
+               names = { exp.tk },
+               found = t,
+            }
+         else
+            return t
+         end
+      -- recurse
+      elseif exp.kind == "op" then -- assert(exp.op.op == ".")
+         local t = get_self_type(exp.e1)
+         if not t then
+            return nil
+         end
+
+         if t.typename == "typetype" then
+            if t.found.fields and t.found.fields[exp.e2.tk] then
+               table.insert(t.names, exp.e2.tk)
+               t.found = t.found.fields[exp.e2.tk]
+            end
+         else
+            return t.fields and t.fields[exp.e2.tk]
+         end
+         return t
       end
    end
 
@@ -9496,8 +9531,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if node.is_method then
-               children[3][1] = rtype
-               add_var(nil, "self", rtype)
+               local selftype = get_self_type(node.fn_owner)
+               children[3][1] = selftype
+               add_var(nil, "self", selftype)
             end
 
             local fn_type = ensure_fresh_typeargs(a_type {
@@ -9513,7 +9549,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             local rfieldtype = rtype.fields[node.name.tk]
             if rfieldtype then
-               local ok, err = is_a(fn_type, rfieldtype)
+               rfieldtype = resolve_tuple_and_nominal(rfieldtype)
+
+               if rfieldtype.implemented then
+                  redeclaration_warning(node)
+               end
+
+               local ok, err = same_type(fn_type, rfieldtype)
                if not ok then
                   local shortname = node.fn_owner.type.typename == "nominal"
                                     and show_type(node.fn_owner.type)
@@ -9522,6 +9564,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   add_errs_prefixing(node, err, errors, msg)
                   return
                end
+
+               rfieldtype.implemented = true
             else
                local open = find_record_to_extend(node.fn_owner)
                if lax or rtype == open then
@@ -9532,6 +9576,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
                   return
                end
+
+               fn_type.implemented = true
             end
 
             node.name.type = fn_type

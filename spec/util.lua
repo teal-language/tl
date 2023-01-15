@@ -529,7 +529,7 @@ function util.check_syntax_error(code, syntax_errors)
    end
 end
 
-function util.check_warnings(code, warnings)
+function util.check_warnings(code, warnings, type_errors)
    assert(type(code) == "string")
    assert(type(warnings) == "table")
 
@@ -537,6 +537,9 @@ function util.check_warnings(code, warnings)
       local result = tl.process_string(code)
       local batch = batch_assertions()
       batch_compare(batch, "warnings", warnings, result.warnings or {})
+      if type_errors then
+         batch_compare(batch, "type errors", type_errors, result.type_errors or {})
+      end
       batch:assert()
    end
 end

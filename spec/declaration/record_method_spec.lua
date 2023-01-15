@@ -431,7 +431,7 @@ describe("record method", function()
       function b.stop(self: Rec.Plugin)
       end
    ]], {
-      { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin: incompatible number of arguments: " }
+      { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin: different number of input arguments: " }
    }))
 
    it("does not cause conflicts with type variables (regression test for #610)", util.check [[
@@ -445,4 +445,85 @@ describe("record method", function()
          return MyObj.do_something(array)
       end
    ]])
+
+   describe("redeclaration: ", function()
+      it("an inconsistent arity in redeclaration produces an error (regression test for #496)", util.check_type_error([[
+         local record Y
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a + b
+         end
+
+         function Y:do_x(a: integer): integer
+             return self:do_x(a, 1)
+         end
+      ]], {
+         { y = 8, msg = "type signature of 'do_x' does not match its declaration in Y: different number of input arguments: got 1, expected 2" },
+      }))
+
+      it("an inconsistent type in declaration produces an error", util.check_type_error([[
+         local record Y
+            do_x: function(Y, integer, integer): integer
+         end
+
+         function Y:do_x(a: integer, b: string): integer
+             return a + math.tointeger(b)
+         end
+      ]], {
+         { y = 5, msg = "type signature of 'do_x' does not match its declaration in Y: argument 2: got string, expected integer" },
+      }))
+
+      it("an inconsistent type in redeclaration produces an error", util.check_type_error([[
+         local record Y
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a + b
+         end
+
+         function Y:do_x(a: integer, b: string): integer
+             return a + math.tointeger(b)
+         end
+      ]], {
+         { y = 8, msg = "type signature of 'do_x' does not match its declaration in Y: argument 2: got string, expected integer" },
+      }))
+
+      it("a consistent redeclaration produces a warning", util.check_warnings([[
+         local record Y
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a + b
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a - b
+         end
+      ]], {
+         { y = 8, msg = "redeclaration of function 'do_x'" },
+      }))
+
+      it("a type signature does not count as a redeclaration", util.check_warnings([[
+         local record Y
+            do_x: function(Y, integer, integer): integer
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a + b
+         end
+      ]], {}, {}))
+
+      it("a type signature does not count as a redeclaration, but catches inconsistency", util.check_warnings([[
+         local record Y
+            do_x: function(integer, integer): integer
+         end
+
+         function Y:do_x(a: integer, b: integer): integer
+             return a + b
+         end
+      ]], {}, {
+         { y = 5, msg = "method and non-method are not the same type" },
+      }))
+   end)
 end)
