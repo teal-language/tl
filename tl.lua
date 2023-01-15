@@ -7357,10 +7357,12 @@ tl.type_check = function(ast, opts)
             local x = xs[i]
             if x.typename == "emptytable" or x.typename == "unresolved_emptytable_value" then
                local y = ys[i] or (ys.is_va and ys[n_ys])
-               local w = wheres and wheres[i + delta] or where
-               local inferred_y = infer_at(w, y)
-               infer_emptytable(x, inferred_y)
-               xs[i] = inferred_y
+               if y then
+                  local w = wheres and wheres[i + delta] or where
+                  local inferred_y = infer_at(w, y)
+                  infer_emptytable(x, inferred_y)
+                  xs[i] = inferred_y
+               end
             end
          end
       end
