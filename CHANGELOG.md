@@ -1,3 +1,130 @@
+# 0.15.0
+
+2023-01-20
+
+This release features commits by Li Jin, Carl Lei, Yang Li,
+Pierre Chapuis, @lenscas, Stéphane Veyret, and Hisham Muhammad.
+
+# What's New
+
+### Language
+
+* Type-only `require`:
+  * Adds new syntax for requiring a module's exported type
+    without generating a `require()` call in the output Lua:
+    `local type MyType = require("mytype")` -- circular
+    definitions of `local type`-required types are allowed,
+    as long as the type is only referenced but its contents
+    are not dereferenced.
+* New variable attribute `<total>`:
+  * It declares a const variable with a table where the
+    domain of its keys are totally declared.
+  * This check can only be applied when a literal table is given
+    at the time of variable initialization, and only for table types
+    with well-known finite domains: maps with enum keys, maps with
+    boolean keys, records.
+  * Note that the requirement is that keys are declared: they may
+    still be explicitly declared to be nil.
+* Type inference improvements:
+  * Improved flow-typing in `if` blocks - if a block ends
+    with `return`, then the remainder of the function can
+    infer the negation of its condition.
+  * In contexts where the expected type of an expression
+    is known (e.g. assignments, declarations with explicit
+    type signatures), the return type a function call can
+    now determine the type argument of a function.
+    * In particular, `local x: T = setmetatable({}, mt)`
+      can now infer that `{}` is `T` without a cast.
+  * When initializing a union with a value, that value
+    is now used by the flow-typing engine to narrow the
+    variable's concrete known type.
+* Local functions can be forward-declared with a `local`
+  variable declaration and then implemented with bare
+  `function` notation, more similarly to how record functions
+  (and Lua functions) work.
+* Handling of `.` and index notations is now more consistent
+  for both maps and records:
+  * Map keys can now use `.`-notation like records, and
+    get the same checks (e.g. if a key type is a valid enum)
+  * `__index` metamethod works for `.`-notation as well.
+* Some stricter checks:
+  * Unused type arguments in function signatures are now
+    flagged as an error.
+  * Using the `#` operator on a numeric-keyed map now produces a
+    warning, and on a non-numeric-keyed map it produces an error.
+  * Redeclaration of boolean keys in a map literal are
+    now an error.
+  * Cannot declare a union between multiple tuple types
+    as these can't be discriminated.
+  * Cannot redeclare a record method with different type
+    signatures; produces a warning when redeclaring with
+    the same type signature.
+* Standard library improvements:
+  * `pcall` and `xpcall` have vararg return types
+
+### Fixes
+
+* Fixed check between `or` expression and nominal unions.
+* Fixed function call return values when returning
+  unions with type arguments. (#604)
+* Fixed an error when exporting type aliases. (#586)
+* `__call` metamethods that are declared using a type alias
+  now resolve correctly. (#605)
+* Generic return types are more consistenly checked,
+  potentially reporting errors that went undetected before.
+* Fixed type variable name conflicts in record functions,
+  ensuring nested uses of generic record functions using
+  type variables don't cause conflicts. (#560)
+* Fixed the inference of type arguments in return values. (#512)
+* Fixed the error message for redefined functions. (#566)
+* Fixed a case where a userdata record type is not
+  resolved properly. (#585)
+* Fixed some issues with the `<close>` attribute.
+* `tl warnings` no longer misses some warning types.
+
+### Code generation
+
+* Report error on unterminated long comments instead of
+  generating invalid code.
+* Cleaner code is produced for `is nil` checks.
+
+### API
+
+API changes for more consistent processing of syntax errors:
+
+* `tl.lex` changed: it now returns an `{Error}` array instead
+  of a list of error Tokens.
+  * from `function tl.lex(input: string): {Token}, {Token}`
+  * to `function tl.lex(input: string, filename: string): {Token}, {Error}`
+* `tl.parse_program` changed: it no longer returns the first
+  integer argument, which as always ignored by every caller.
+  * from `function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): integer, Node, {string}`
+  * to `function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): Node, {string}`
+* `tl.parse` is a new function that combines
+  `tl.lex` and `tl.parse_program` the right way, avoiding previous
+  mistakes; this is the preferred function to use moving forward.
+  * signature: `function tl.parse(input: string, filename: string): Node, {Error}, {string}`
+
+### Tooling
+
+* Better handling of newlines on Windows.
+* `tl types`: in function calls of polymorphic functions, now
+  the return type of the resolved function is reported.
+* More informative pretty-print of polymorphic function signatures
+  in error messages.
+* More informative error message for field assignment failures.
+* Improved error message for inconsistent fields (#576)
+* The parser now does some lookahead heuristics to provide nicer
+  error messages.
+* The compiler now detects mis-aligned `end` keywords when reporting
+  about unmatched blocks, which helps pointing to the place where a
+  mistake actually occurred, instead of the end of the file.
+* For debugging the compiler itself:
+  * new environment variable mode `TL_DEBUG=1` inspects AST nodes
+    and types as program is compiled.
+  * `TL_DEBUG` with a negative value `-x` will run like `TL_DEBUG=1`
+    but halt the compiler after processing input line `x`.
+
 # 0.14.1
 
 2022-08-23
@@ -454,7 +581,7 @@ This new release does not include big language changes, but includes a lot of
 new stuff! The new `tl types` infrastructure for IDE tooling, `build.tl`
 support in `tl build`, code generation options, and tons of bugfixes.
 
-This release features commits by Corey Williamson, lenscas, Patrick
+This release features commits by Corey Williamson, @lenscas, Patrick
 Desaulniers and Hisham Muhammad.
 
 ## What's New
