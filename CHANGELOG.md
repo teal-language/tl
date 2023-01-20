@@ -2,6 +2,14 @@
 
 2023-01-20
 
+Two new language features, a bunch of inference improvements, some more
+stricter checks for correctness, and a bunch of fixes! There's a lot to unpack
+in this release, but all changes should be backwards-compatible for correct
+code, so migration should be smooth for end-users of the compiler.
+
+However, if you're using `tl` module API directly, please note that there are
+some API changes, listed below.
+
 This release features commits by Li Jin, Carl Lei, Yang Li,
 Pierre Chapuis, @lenscas, Stéphane Veyret, and Hisham Muhammad.
 
