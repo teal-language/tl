@@ -727,3 +727,18 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       }))
    end)
 end
+
+describe("arrayrecord", function()
+   it("assigning to array produces no warnings", util.check_warnings([[
+      local record R1
+         {string}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[1] = "hello"
+
+      local a: {string} = v
+   ]], {}))
+end)

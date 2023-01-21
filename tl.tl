@@ -1208,6 +1208,7 @@ end
 local record Fact
    fact: FactType
    where: Node
+   ctx: NodeKind
 
    -- is
    var: string
@@ -8283,15 +8284,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not typ then
                return { [f.var] = invalid_from(f) }
             end
-            if typ.typename ~= "typevar" and is_a(typ, f.typ) then
-               node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
-               return { [f.var] = f }
-            elseif typ.typename ~= "typevar" and not is_a(f.typ, typ) then
-               node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
-               return { [f.var] = invalid_from(f) }
-            else
-               return { [f.var] = f }
+            if f.ctx ~= "local_declaration" then
+               if typ.typename ~= "typevar" and is_a(typ, f.typ) then
+                  node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
+                  return { [f.var] = f }
+               elseif typ.typename ~= "typevar" and not is_a(f.typ, typ) then
+                  node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
+                  return { [f.var] = invalid_from(f) }
+               end
             end
+            return { [f.var] = f }
          elseif f.fact == "==" then
             return { [f.var] = f }
          elseif f.fact == "not" then
@@ -8940,7 +8942,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                   local rt = resolve_tuple_and_nominal(t)
                   if rt.typename ~= "enum" and not same_type(t, infertype) then
-                     apply_facts(where, Fact { fact = "is", var = var.tk, typ = infertype, where = where })
+                     apply_facts(where, Fact { fact = "is", ctx = node.kind, var = var.tk, typ = infertype, where = where })
                   end
                end
 
