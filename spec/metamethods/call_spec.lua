@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("metamethod __call", function()
-   it("can be set on a record", util.check [[
+   it("can be set on a record", util.check([[
       local type Rec = record
          x: number
          metamethod __call: function(Rec, string, number): string
@@ -17,9 +17,9 @@ describe("metamethod __call", function()
 
       r.x = 12
       print(r("!!!", 34))
-   ]])
+   ]]))
 
-   it("can be used on a record prototype", util.check [[
+   it("can be used on a record prototype", util.check([[
       local record A
          value: number
          metamethod __call: function(A, number): A
@@ -33,7 +33,7 @@ describe("metamethod __call", function()
 
       local inst = A(2)
       print(inst.value)
-   ]])
+   ]]))
 
    it("can type check arguments and argument count skips self", util.check_type_error([[
       local type Rec = record
@@ -76,7 +76,7 @@ describe("metamethod __call", function()
       { msg = "not a function" }
    }))
 
-   it("can use the record prototype in setmetatable and types flow through correctly", util.check [[
+   it("can use the record prototype in setmetatable and types flow through correctly", util.check([[
       local record mymod
         metamethod __call: function(mymod, string): string
       end
@@ -90,9 +90,9 @@ describe("metamethod __call", function()
           return mymod.myfunc(s)
         end
       })
-   ]])
+   ]]))
 
-   it("can use nested record prototypes in setmetatable and types flow through correctly", util.check [[
+   it("can use nested record prototypes in setmetatable and types flow through correctly", util.check([[
       local record Rec
          record Type
             x: number
@@ -124,7 +124,7 @@ describe("metamethod __call", function()
       end
 
       f(Rec)
-   ]])
+   ]]))
 
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
@@ -149,7 +149,7 @@ describe("metamethod __call", function()
       { y = 7, msg = "in assignment: argument 2: got string, expected number" }
    }))
 
-   it("can resolve a __call type that uses a type alias (regression test for #605)", util.check [[
+   it("can resolve a __call type that uses a type alias (regression test for #605)", util.check([[
       local record Callable
          type Call_Type = function(self: Callable): boolean
          metamethod __call: Call_Type
@@ -161,5 +161,5 @@ describe("metamethod __call", function()
       end
 
       f()
-   ]])
+   ]]))
 end)

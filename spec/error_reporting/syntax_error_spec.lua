@@ -126,11 +126,11 @@ describe("syntax errors", function()
       { y = 1, msg = "malformed number" },
    }))
 
-   it("valid strings: numbered escape", util.check [[
+   it("valid strings: numbered escape", util.check([[
       print("hello\1hello")
       print("hello\12hello")
       print("hello\123hello")
-   ]])
+   ]]))
 
    it("malformed string: numbered escape", util.check_syntax_error([[
       print("hello\300hello")

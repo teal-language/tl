@@ -12,12 +12,12 @@ describe("local", function()
          { msg = "in assignment: got integer" },
       }))
 
-      it("basic inference sets types, pass", util.check [[
+      it("basic inference sets types, pass", util.check([[
          local x = 1
          local y = 2
          local z: number
          z = x + y
-      ]])
+      ]]))
    end)
 
    describe("multiple declaration", function()
@@ -29,11 +29,11 @@ describe("local", function()
          { msg = "in assignment: got integer" },
       }))
 
-      it("basic inference sets types", util.check [[
+      it("basic inference sets types", util.check([[
          local x, y = 1, 2
          local z: number
          z = x + y
-      ]])
+      ]]))
 
       describe("with types", function()
          it("checks values", util.check_type_error([[
@@ -57,11 +57,11 @@ describe("local", function()
             { msg = "in assignment: got integer" },
          }))
 
-         it("uses correct type", util.check [[
+         it("uses correct type", util.check([[
             local x, y: number, string = 1, "a"
             local z: number
             z = x + string.byte(y)
-         ]])
+         ]]))
       end)
 
       it("reports unset and untyped values as errors in tl mode", util.check_type_error([[
@@ -130,7 +130,7 @@ describe("local", function()
          { msg = "UnknownType is not a type" }
       }))
 
-      it("nominal types can take type arguments", util.check [[
+      it("nominal types can take type arguments", util.check([[
          local record Foo<R>
             item: R
          end
@@ -140,9 +140,9 @@ describe("local", function()
 
          local x: Bla = { item = 123 }
          local y: Foo2<number> = { item = 123 }
-      ]])
+      ]]))
 
-      it("types declared as nominal types are aliases", util.check [[
+      it("types declared as nominal types are aliases", util.check([[
          local record Foo<R>
             item: R
          end
@@ -159,9 +159,9 @@ describe("local", function()
          local zep: Foo2<string> = { item = "hello" }
          local zip: Foo3<string> = zep
          local zup: Foo4<string> = zip
-      ]])
+      ]]))
 
-      it("nested types can be resolved as aliases", util.check [[
+      it("nested types can be resolved as aliases", util.check([[
          local record Foo<R>
             enum LocalEnum
                "loc"
@@ -176,15 +176,15 @@ describe("local", function()
          end
 
          local type Nested = Foo.Nested
-      ]])
+      ]]))
 
-      it("'type', 'record' and 'enum' are not reserved keywords", util.check [[
+      it("'type', 'record' and 'enum' are not reserved keywords", util.check([[
          local type = type
          local record: string = "hello"
          local enum: number = 123
          print(record)
          print(enum + 123)
-      ]])
+      ]]))
 
       it("local type can require a module", function ()
          util.mock_io(finally, {
@@ -260,9 +260,9 @@ describe("local", function()
          { msg = "unknown variable annotation: blergh" },
       }))
 
-      it("accepts <const> annotation", util.check [[
+      it("accepts <const> annotation", util.check([[
          local x <const> = 1
-      ]])
+      ]]))
 
       describe("<total>", function()
          it("fails without an init value", util.check_type_error([[
@@ -302,7 +302,7 @@ describe("local", function()
             { msg = "map variable declared <total> does not declare values for all possible keys (missing: blue, green)" },
          }))
 
-         it("accepts nil declarations in keys", util.check [[
+         it("accepts nil declarations in keys", util.check([[
             local enum Color
                "red"
                "green"
@@ -313,9 +313,9 @@ describe("local", function()
                ["green"] = nil,
                ["blue"] = nil,
             }
-         ]])
+         ]]))
 
-         it("accepts direct declaration from total to total", util.check [[
+         it("accepts direct declaration from total to total", util.check([[
             local record Point
                x: number
             end
@@ -325,7 +325,7 @@ describe("local", function()
             }
 
             local p2 <total>: Point = p
-         ]])
+         ]]))
 
          it("rejects direct declaration from non-total to total", util.check_type_error([[
             local record Point
@@ -390,9 +390,9 @@ describe("local", function()
       describe("<close>", function()
          local function check54(code) return util.check(code, "5.4") end
          local function check_type54(code, errs) return util.check_type_error(code, errs, "5.4") end
-         it("accepted for 5.4 target", check54 [[
+         it("accepted for 5.4 target", check54([[
             local x <close> = io.open("foobar", "r")
-         ]])
+         ]]))
 
          for _, t in ipairs{"5.1", "5.3"} do
             it("rejected for non 5.4 target (" .. t .. ")", util.check_type_error([[
@@ -422,9 +422,9 @@ describe("local", function()
             { y = 4, msg = "assigned a non-closable value" }
          }))
 
-         it("allows nil to be closed", check54 [[
+         it("allows nil to be closed", check54([[
             local x <close>: nil
-         ]])
+         ]]))
       end)
    end)
 end)

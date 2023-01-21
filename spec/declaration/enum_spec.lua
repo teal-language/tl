@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("enum declaration", function()
-   it("declares a enum with local type", util.check [[
+   it("declares a enum with local type", util.check([[
       local type t = enum
          "left"
          "right"
@@ -14,9 +14,9 @@ describe("enum declaration", function()
             return "right"
          end
       end
-   ]])
+   ]]))
 
-   it("declares a enum with local enum", util.check [[
+   it("declares a enum with local enum", util.check([[
       local enum t
          "left"
          "right"
@@ -29,9 +29,9 @@ describe("enum declaration", function()
             return "right"
          end
       end
-   ]])
+   ]]))
 
-   it("declares a enum with global type", util.check [[
+   it("declares a enum with global type", util.check([[
       global type t = enum
          "left"
          "right"
@@ -44,9 +44,9 @@ describe("enum declaration", function()
             return "right"
          end
       end
-   ]])
+   ]]))
 
-   it("declares a enum with global enum", util.check [[
+   it("declares a enum with global enum", util.check([[
       global enum t
          "left"
          "right"
@@ -59,7 +59,7 @@ describe("enum declaration", function()
             return "right"
          end
       end
-   ]])
+   ]]))
 
    it("produces a nice error when local declared with the old syntax", util.check_syntax_error([[
       local t = enum

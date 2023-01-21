@@ -14,11 +14,11 @@ describe("flow analysis with is", function()
    }))
 
    describe("on expressions", function()
-      it("narrows type on expressions with and", util.check [[
+      it("narrows type on expressions with and", util.check([[
          local x: number | string
 
          local s = x is string and x:lower()
-      ]])
+      ]]))
 
       it("does not narrow type on expressions with conditional 'is' and or", util.check_type_error([[
          local x: number | string
@@ -28,15 +28,15 @@ describe("flow analysis with is", function()
          { x = 62, msg = "cannot index key 'upper' in union 'x' of type number | string"}
       }))
 
-      it("does not narrow type on expressions with conditional 'is' and or", util.check [[
+      it("does not narrow type on expressions with conditional 'is' and or", util.check([[
          local x: number | string
 
          x = "b"
          local s = x is string and (x:sub(1,1) == "a" and x) or "somethingelse"
          print(s:upper())
-      ]])
+      ]]))
 
-      it("narrows type on expressions with not", util.check [[
+      it("narrows type on expressions with not", util.check([[
          local x: number | string
 
          local function ohoh(n: number): number
@@ -48,7 +48,7 @@ describe("flow analysis with is", function()
          end
 
          local s = not x is string and ohoh(x + 1)
-      ]])
+      ]]))
 
       it("does not narrow 'or' type on conditional expressions with not", util.check_type_error([[
          local x: number | string
@@ -66,13 +66,13 @@ describe("flow analysis with is", function()
          { y = 11, x = 57, msg = [[cannot index key 'upper' in union 'x' of type number | string]]}
       }))
 
-      it("propagates with 'and' and 'assert' because result is known to be truthy", util.check [[
+      it("propagates with 'and' and 'assert' because result is known to be truthy", util.check([[
          local record Foo
          end
          local makeFoo: function(string): Foo
          local a: string | Foo
          local _b: Foo = a is string and assert(makeFoo(a)) or a
-      ]])
+      ]]))
 
       it("does not propagate with 'and' and arbitrary functions because result may be nil", util.check_type_error([[
          local record Foo
@@ -86,16 +86,16 @@ describe("flow analysis with is", function()
    end)
 
    describe("on if", function()
-      it("resolves both then and else branches", util.check [[
+      it("resolves both then and else branches", util.check([[
          local t: number | string
          if t is number then
             print(t + 1)
          else
             print(t:upper())
          end
-      ]])
+      ]]))
 
-      it("works for type arguments", util.check [[
+      it("works for type arguments", util.check([[
          local function test<T>(t: T)
             if t is number then
                print(t + 1)
@@ -103,9 +103,9 @@ describe("flow analysis with is", function()
                print(t)
             end
          end
-      ]])
+      ]]))
 
-      it("not works for type arguments", util.check [[
+      it("not works for type arguments", util.check([[
          local function test<T>(t: T)
             if not t is number then
                print(t)
@@ -113,27 +113,27 @@ describe("flow analysis with is", function()
                print(t + 1)
             end
          end
-      ]])
+      ]]))
 
-      it("negates with not", util.check [[
+      it("negates with not", util.check([[
          local t: number | string
          if not t is number then
             print(t:upper())
          else
             print(t + 1)
          end
-      ]])
+      ]]))
 
-      it("resolves with elseif", util.check [[
+      it("resolves with elseif", util.check([[
          local v: number | string | {boolean}
          if v is number then
             v = v + 1
          elseif v is string then
             print(v:upper())
          end
-      ]])
+      ]]))
 
-      it("resolves with else and a type definition (regression test for #250)", util.check [[
+      it("resolves with else and a type definition (regression test for #250)", util.check([[
          local type A = number
          local type B = record
            h: UnionAorB
@@ -148,9 +148,9 @@ describe("flow analysis with is", function()
              return n + 1
            end
          end
-      ]])
+      ]]))
 
-      it("resolves incrementally with elseif", util.check [[
+      it("resolves incrementally with elseif", util.check([[
          local v: number | string | {boolean}
          if v is number then
             v = v + 1
@@ -159,9 +159,9 @@ describe("flow analysis with is", function()
          else
             local b: {boolean} = v
          end
-      ]])
+      ]]))
 
-      it("can use inferred facts in elseif expression", util.check [[
+      it("can use inferred facts in elseif expression", util.check([[
          local record Rec
             op: string
          end
@@ -171,7 +171,7 @@ describe("flow analysis with is", function()
          elseif v.op:match("something") then
             print(v.op:upper())
          end
-      ]])
+      ]]))
 
       it("resolves partially", util.check_type_error([[
          local v: number | string | {boolean}
@@ -210,7 +210,7 @@ describe("flow analysis with is", function()
          { msg = "cannot use operator '+' for types number | boolean" },
       }))
 
-      it("resolves incrementally with elseif and negation", util.check [[
+      it("resolves incrementally with elseif and negation", util.check([[
          local v: number | string | {boolean}
          if v is number then
             print(v + 1)
@@ -219,7 +219,7 @@ describe("flow analysis with is", function()
          else
             v = {true, false}
          end
-      ]])
+      ]]))
 
       it("rejects other side of the union in the tested branch", util.check_type_error([[
          local t: number | string
@@ -246,7 +246,7 @@ describe("flow analysis with is", function()
          { y = 6, msg = 'cannot resolve a type for t here' },
       }))
 
-      it("is combined with other tests narrows it, but prevents its negation from narrowing types (any)", util.check [[
+      it("is combined with other tests narrows it, but prevents its negation from narrowing types (any)", util.check([[
          local function func(x: string, y: string): string
             return x > y and x .. "!" or x
          end
@@ -260,9 +260,9 @@ describe("flow analysis with is", function()
                return d -- d is still any here
             end
          end
-      ]])
+      ]]))
 
-      it("is combined with other tests narrows it, but prevents its negation from narrowing types (union)", util.check [[
+      it("is combined with other tests narrows it, but prevents its negation from narrowing types (union)", util.check([[
          local function func(x: string, y: string): string
             return x > y and x .. "!" or x
          end
@@ -277,7 +277,7 @@ describe("flow analysis with is", function()
                return d
             end
          end
-      ]])
+      ]]))
 
       it("else narrows the negation of 'or' if both of its sides match 'is' purely", util.check_type_error([[
          local a: string | number
@@ -380,7 +380,7 @@ end]]))
    end)
 
    describe("on while", function()
-      pending("needs to resolve a fixpoint to accept some valid code", util.check [[
+      pending("needs to resolve a fixpoint to accept some valid code", util.check([[
          local t: number | string
          t = 1
          if t is number then
@@ -394,7 +394,7 @@ end]]))
                end
             end
          end
-      ]])
+      ]]))
 
       it("needs to resolve a fixpoint to detect some errors", util.check_type_error([[
          local t: number | string
@@ -413,7 +413,7 @@ end]]))
          { y = 4, msg = [[cannot use operator '<' for types number | string and integer]] },
       }))
 
-      it("resolves is on the test", util.check [[
+      it("resolves is on the test", util.check([[
          local function process(ts: {number | string})
             local t: number | string
             t = ts[1]
@@ -424,7 +424,7 @@ end]]))
                t = ts[i]
             end
          end
-      ]])
+      ]]))
 
       it("does not crash on invalid variables", util.check_type_error([[
          local t: number | string
@@ -439,7 +439,7 @@ end]]))
          { y = 4, x = 10, msg = "cannot resolve a type for x here" },
       }))
 
-      it("can resolve on else block even if it can't on if block (#210)", util.check [[
+      it("can resolve on else block even if it can't on if block (#210)", util.check([[
          local function foo(v: any)
             if not v is string then
                print("foo")
@@ -447,7 +447,7 @@ end]]))
                print(v:upper())
             end
          end
-      ]])
+      ]]))
 
       it("attempting to use a type as a value produces sensible messages (#210)", util.check_type_error([[
          local record MyRecord
@@ -504,19 +504,19 @@ end]]))
             { y = 5, msg = [[cannot discriminate a union between multiple string/enum types: string | Enum]] },
          }))
 
-         it("literal strings are truthy, preserve 'is' inference", util.check [[
+         it("literal strings are truthy, preserve 'is' inference", util.check([[
             local x: number | string
 
             local s = x is string and "literal" or tostring(x / 2)
-         ]])
+         ]]))
 
-         it("literal numbers are truthy, preserve 'is' inference", util.check [[
+         it("literal numbers are truthy, preserve 'is' inference", util.check([[
             local x: number | string
 
             local n = x is number and 123 or tonumber(x:sub(1,2))
-         ]])
+         ]]))
 
-         it("literal tables are truthy, preserve 'is' inference", util.check [[
+         it("literal tables are truthy, preserve 'is' inference", util.check([[
             local x: number | string
 
             local record R
@@ -524,7 +524,7 @@ end]]))
             end
 
             local r: R = x is number and { z = 123.0 } or { z = tonumber(x:sub(1,2)) }
-         ]])
+         ]]))
 
          it("relational operators do not preserve 'is' inference", util.check_type_error([[
             local x: number | string

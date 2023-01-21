@@ -1,14 +1,14 @@
 local util = require("spec.util")
 
 describe("<", function()
-   it("ok", util.check [[
+   it("ok", util.check([[
       local x = 1
       local y = 2
       local z = true
       if x < y then
          z = false
       end
-   ]])
+   ]]))
 
    it("fail", util.check_type_error([[
       local x = 1

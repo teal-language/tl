@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("setmetatable", function()
-   it("can infer {} from context", util.check [[
+   it("can infer {} from context", util.check([[
       local type Rec = record
          x: number
          metamethod __call: function(Rec, string, number): string
@@ -26,5 +26,5 @@ describe("setmetatable", function()
       r.x = 12
       print(r("!!!", 1000)) -- prints 12000!!!
       print((r + s).x)      -- prints 32
-   ]])
+   ]]))
 end)

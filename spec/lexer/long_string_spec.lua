@@ -18,12 +18,12 @@ describe("long string", function()
          ]]
    ]=])
 
-   it("accepts a level 1 long string", util.check [[
+   it("accepts a level 1 long string", util.check([[
       local foo = [=[
             long string line 1
             long string line 2
          ]=]
-   ]])
+   ]]))
 
    it("does not get confused by a ] when closing a level 1 long string", util.check [===[
       local foo = [=[hello]]=]
@@ -33,7 +33,7 @@ describe("long string", function()
       local foo = [=[hello]]]]]]=]
    ]===])
 
-   it("accepts a level 1 long string inside a level 2 long string", util.check [[
+   it("accepts a level 1 long string inside a level 2 long string", util.check([[
       local foo = [=[
             long string line 1
             [==[
@@ -41,9 +41,9 @@ describe("long string", function()
             ]==]
             long string line 2
          ]=]
-   ]])
+   ]]))
 
-   it("accepts a level 2 long string inside a level 1 long string", util.check [[
+   it("accepts a level 2 long string inside a level 1 long string", util.check([[
       local foo = [==[
             long string line 1
             [=[
@@ -51,7 +51,7 @@ describe("long string", function()
             ]=]
             long string line 2
          ]==]
-   ]])
+   ]]))
 
    it("long strings can contain quotes and double quotes", util.check [=[
       local foo = [[

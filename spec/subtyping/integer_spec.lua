@@ -9,10 +9,10 @@ describe("subtyping of integer:", function()
       { msg = "got integer, expected nil" }
    }))
 
-   it("integer <: any", util.check [[
+   it("integer <: any", util.check([[
       local a: any
       a = 42
-   ]])
+   ]]))
 
    it("integer <: unknown", util.lax_check([[
       local function f(unk)
@@ -29,15 +29,15 @@ describe("subtyping of integer:", function()
       { msg = "got integer, expected string" }
    }))
 
-   it("integer <: number", util.check [[
+   it("integer <: number", util.check([[
       local n: number
       n = 42
-   ]])
+   ]]))
 
-   it("integer <: integer", util.check [[
+   it("integer <: integer", util.check([[
       local n: integer
       n = 42
-   ]])
+   ]]))
 
    it("integer <╱: boolean", util.check_type_error([[
       local n: boolean
@@ -65,17 +65,17 @@ describe("subtyping of integer:", function()
       { msg = "in assignment: cannot match against all alternatives of the polymorphic type" },
    }))
 
-   it("integer <: union including integer", util.check [[
+   it("integer <: union including integer", util.check([[
       local u: string | integer
       local i: integer = 42
       u = i
-   ]])
+   ]]))
 
-   it("integer <: union including number", util.check [[
+   it("integer <: union including number", util.check([[
       local u: string | number
       local i: integer = 42
       u = i
-   ]])
+   ]]))
 
    it("integer <╱: union not including integer", util.check_type_error([[
       local u: string | boolean
@@ -94,12 +94,12 @@ describe("subtyping of integer:", function()
       { msg = "got integer, expected R" },
    }))
 
-   it("integer <: nominal type alias for integer", util.check [[
+   it("integer <: nominal type alias for integer", util.check([[
       local type R = integer
 
       local n: R
       n = 42
-   ]])
+   ]]))
 
    it("integer <╱: enum", util.check_type_error([[
       local enum E

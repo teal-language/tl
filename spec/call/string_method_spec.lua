@@ -2,9 +2,9 @@ local util = require("spec.util")
 
 describe("string method call", function()
    describe("simple", function()
-      it("pass", util.check [[
+      it("pass", util.check([[
          print(("  "):rep(12))
-      ]])
+      ]]))
 
       it("fail", util.check_type_error([[
          print(("  "):rep("foo"))
@@ -20,10 +20,10 @@ describe("string method call", function()
       }))
    end)
    describe("with variable", function()
-      it("pass", util.check [[
+      it("pass", util.check([[
          local s = "a"
          s = s:gsub("a", "b") .. "!"
-      ]])
+      ]]))
 
       it("fail", util.check_type_error([[
          local s = "a"

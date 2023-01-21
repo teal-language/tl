@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("or", function()
-   it("map or record matching map", util.check [[
+   it("map or record matching map", util.check([[
       local type Ty = record
          name: string
          foo: number
@@ -9,7 +9,7 @@ describe("or", function()
       local t: Ty = { name = "bla" }
       local m1: {string:Ty} = {}
       local m2: {string:Ty} = m1 or { foo = t }
-   ]])
+   ]]))
 
    it("record or record: need to be compatible", util.check_type_error([[
       local record R1
@@ -25,7 +25,7 @@ describe("or", function()
       { msg = "cannot use operator 'or' for types R2 and R1" }
    }))
 
-   it("or works with subtypes", util.check [[
+   it("or works with subtypes", util.check([[
       local record R1
          x: string
          y: string
@@ -41,9 +41,9 @@ describe("or", function()
       local u2 = u or r1
       u2 = "world" -- u2 is a u
       u2 = r1      -- u2 is a u
-   ]])
+   ]]))
 
-   it("string or enum matches enum", util.check [[
+   it("string or enum matches enum", util.check([[
       local type Dir = enum
          "left"
          "right"
@@ -52,7 +52,7 @@ describe("or", function()
       local v: Dir = "left"
       local x: Dir = v or "right"
       local y: Dir = "right" or v
-   ]])
+   ]]))
 
    it("enum constants flow on both sides (#487)", util.check_type_error([[
       local enum State
@@ -71,7 +71,7 @@ describe("or", function()
       { y = 10, x = 40, msg = "in assignment: string is not a State" },
    }))
 
-   it("works with tables and {}", util.check [[
+   it("works with tables and {}", util.check([[
       local type Ty = record
          name: string
          foo: number
@@ -82,7 +82,7 @@ describe("or", function()
       local zz = map or {}
       local arr: {string}
       local zzz = arr or {}
-   ]])
+   ]]))
 
    it("rejects non-tables and {}", util.check_type_error([[
       local a: string
@@ -105,21 +105,21 @@ describe("or", function()
       { y = 3, msg = [[cannot use operator 'or' for types string and number]] },
    }))
 
-   it("produces a union if expected context asks for one", util.check [[
+   it("produces a union if expected context asks for one", util.check([[
       local x: number | string
 
       local s: number | string = x is string and x .. "!" or x + 1
-   ]])
+   ]]))
 
-   it("produces a union if expected context asks for one as a nominal", util.check [[
+   it("produces a union if expected context asks for one as a nominal", util.check([[
       local type T = number | string
       local x: T
 
       local s: T = x is string and x .. "!" or x + 1
-   ]])
+   ]]))
 
-   it("does not produce a union if expected but both sides are the same type (regression test for #551)", util.check [[
+   it("does not produce a union if expected but both sides are the same type (regression test for #551)", util.check([[
       local x: string | number = "hello" or "world"
-   ]])
+   ]]))
 
 end)

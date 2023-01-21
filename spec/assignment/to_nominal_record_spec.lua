@@ -1,14 +1,14 @@
 local util = require("spec.util")
 
 describe("assignment to nominal record", function()
-   it("accepts empty table", util.check [[
+   it("accepts empty table", util.check([[
       local type Node = record
          b: boolean
       end
       local x: Node = {}
-   ]])
+   ]]))
 
-   it("accepts complete table", util.check [[
+   it("accepts complete table", util.check([[
       local type R = record
          foo: string
       end
@@ -32,9 +32,9 @@ describe("assignment to nominal record", function()
          r = {},
          ar = {},
       }
-   ]])
+   ]]))
 
-   it("accepts incomplete table", util.check [[
+   it("accepts incomplete table", util.check([[
       local type Node = record
          b: boolean
          n: number
@@ -42,7 +42,7 @@ describe("assignment to nominal record", function()
       local x: Node = {
          b = true,
       }
-   ]])
+   ]]))
 
    it("fails if table has extra fields", util.check_type_error([[
       local type Node = record
@@ -82,7 +82,7 @@ describe("assignment to nominal record", function()
       { msg = "in assignment: Node2 is not a Node1" },
    }))
 
-   it("identical generic instances resolve to the same type", util.check [[
+   it("identical generic instances resolve to the same type", util.check([[
       local type R = record<T>
          x: T
       end
@@ -97,5 +97,5 @@ describe("assignment to nominal record", function()
 
       local v = foo()
       v = bar()
-   ]])
+   ]]))
 end)

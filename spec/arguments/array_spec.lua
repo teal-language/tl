@@ -15,7 +15,7 @@ describe("array argument", function()
       { y = 7, msg = 'argument 1: got integer, expected {string}' },
    }))
 
-   it("constructs type of complex array correctly - given explicit type (#111)", util.check [[
+   it("constructs type of complex array correctly - given explicit type (#111)", util.check([[
       local type MyRecord = record
          func: function<K, V>(t: {{K:V}}): {V}
       end
@@ -27,7 +27,7 @@ describe("array argument", function()
       }
 
       local x = MyRecord.func(maps)
-   ]])
+   ]]))
 
    it("constructs type of complex array correctly - inferred from function return (#111)", util.check_type_error([[
       local type MyRecord = record

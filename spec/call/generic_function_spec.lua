@@ -13,19 +13,19 @@ describe("generic function", function()
       { msg = "type argument list cannot be empty" }
    }))
 
-   it("can declare a generic function type", util.check [[
+   it("can declare a generic function type", util.check([[
       local type ParseItem = function<T>(number): T
-   ]])
+   ]]))
 
-   it("can declare a function using the function type as an argument", util.check [[
+   it("can declare a function using the function type as an argument", util.check([[
       local type ParseItem = function<T>(number): T
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem): number, T
          return 0, list[1]
       end
-   ]])
+   ]]))
 
-   it("can use the typevar in the function body", util.check [[
+   it("can use the typevar in the function body", util.check([[
       local type ParseItem = function<T>(number): T
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem): number, {T}
@@ -33,9 +33,9 @@ describe("generic function", function()
          local n = 0
          return n, ret
       end
-   ]])
+   ]]))
 
-   it("can use the function along with a typevar", util.check [[
+   it("can use the function along with a typevar", util.check([[
       local type Id = function<a>(a): a
 
       local function string_id(a: string): string
@@ -47,9 +47,9 @@ describe("generic function", function()
       end
 
       local x: string = use_id("hello", string_id)
-   ]])
+   ]]))
 
-   it("does not mix up typevars with the same name in different scopes", util.check [[
+   it("does not mix up typevars with the same name in different scopes", util.check([[
       local type Convert = function<a, b>(a): b
 
       local function id<a>(x: a): a
@@ -71,7 +71,7 @@ describe("generic function", function()
       print(use_conv(122.0, convert_num_str) .. "!")
 
       print(use_conv("123", convert_str_num) + 123.0)
-   ]])
+   ]]))
 
    it("catches incorrect typevars, does not mix up multiple uses", util.check_type_error([[
       local type Convert = function<a, b>(a): b
@@ -109,7 +109,7 @@ describe("generic function", function()
       { msg = 'got string "hello", expected number' }
    }))
 
-   it("can use the function along with an indirect typevar", util.check [[
+   it("can use the function along with an indirect typevar", util.check([[
       local type Id = function<a>(a): a
 
       local function string_id(a: string): string
@@ -121,7 +121,7 @@ describe("generic function", function()
       end
 
       local x: string = use_id({"hello"}, string_id)
-   ]])
+   ]]))
 
    it("will catch if resolved indirect typevar does not match", util.check_type_error([[
       local type Id = function<a>(a): a
@@ -140,7 +140,7 @@ describe("generic function", function()
       { msg = "argument 2: argument 1: got string, expected number" },
    }))
 
-   it("can use the function along with an indirect typevar", util.check [[
+   it("can use the function along with an indirect typevar", util.check([[
       local type ParseItem = function<X>(number): X
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
@@ -164,13 +164,13 @@ describe("generic function", function()
       end
 
       local x, result: number, {Node} = parse_list(nodes, parse_node)
-   ]])
+   ]]))
 
-   it("can use a typevar from an argument as the function return type", util.check [[
+   it("can use a typevar from an argument as the function return type", util.check([[
       local function parse_list<T>(list: {T}): T
          return list[1]
       end
-   ]])
+   ]]))
 
    it("will catch if typevar is unbound", util.check_type_error([[
       local function parse_list<T>(list: {T}): T
@@ -180,13 +180,13 @@ describe("generic function", function()
       { msg = "got boolean, expected T" }
    }))
 
-   it("will accept if typevar is bound at a higher level", util.check [[
+   it("will accept if typevar is bound at a higher level", util.check([[
       local function fun<T>(another: T)
          local function parse_list<T>(list: {T}): T
             return list[1]
          end
       end
-   ]])
+   ]]))
 
    it("will catch if return value does not match the typevar", util.check_type_error([[
       local function parse_list<T>(list: {T}): T
@@ -245,7 +245,7 @@ describe("generic function", function()
       { msg = "got {Node}, expected Other" }
    }))
 
-   it("can map one typevar to another", util.check [[
+   it("can map one typevar to another", util.check([[
       local type ParseItem = function<V>(number): V
 
       local function parse_list<T>(list: {T}, parse_item: ParseItem<T>): number, {T}
@@ -269,7 +269,7 @@ describe("generic function", function()
       end
 
       local x, result: number, {Node} = parse_list(nodes, parse_node)
-   ]])
+   ]]))
 
    it("checks that missing typevars are caught", util.check_type_error([[
       local type Node = record
@@ -291,7 +291,7 @@ describe("generic function", function()
       { msg = "unknown type Type", y = 12, x = 53 },
    }))
 
-   it("propagates resolved typevar in return type", util.check [[
+   it("propagates resolved typevar in return type", util.check([[
       local type Node = record
       end
 
@@ -309,9 +309,9 @@ describe("generic function", function()
          local visit_type: {string:VisitorCallbacks<Type, string>} = {}
          return recurse_node(ast, visit_node, visit_type)
       end
-   ]])
+   ]]))
 
-   it("checks that typevars that appear in multiple arguments must match, pass", util.check [[
+   it("checks that typevars that appear in multiple arguments must match, pass", util.check([[
       local type Node = record
       end
 
@@ -329,7 +329,7 @@ describe("generic function", function()
          local visit_type: {string:VisitorCallbacks<Type, string>} = {}
          return recurse_node(ast, visit_node, visit_type)
       end
-   ]])
+   ]]))
 
    it("checks that typevars that appear in multiple arguments must match, fail", util.check_type_error([[
       local type Node = record
@@ -353,7 +353,7 @@ describe("generic function", function()
       { x = 40, msg = "argument 3: in map value: type parameter <T>: got number, expected string" }
    }))
 
-   it("inference trickles down to function arguments, pass", util.check [[
+   it("inference trickles down to function arguments, pass", util.check([[
       local type R = record
          arch: string
       end
@@ -362,7 +362,7 @@ describe("generic function", function()
          { arch = "bar" },
       }
       table.sort(data, function(a:R,b:R):boolean return a.arch < b.arch end)
-   ]])
+   ]]))
 
    it("inference trickles down to function arguments, pass", util.check_type_error([[
       local type R = record
@@ -404,7 +404,7 @@ describe("generic function", function()
       { y = 6, msg = "cannot infer declaration type; an explicit type annotation is necessary" },
    }))
 
-   it("works when an annotation is given", util.check [[
+   it("works when an annotation is given", util.check([[
       local record Container
          try_resolve: function<T>(Container):T
       end
@@ -413,9 +413,9 @@ describe("generic function", function()
          local t: T = self:try_resolve()
          return t
       end
-   ]])
+   ]]))
 
-   it("works when inference is possible from context", util.check [[
+   it("works when inference is possible from context", util.check([[
       local record Container
          try_resolve: function<T>(Container):T
       end
@@ -423,7 +423,7 @@ describe("generic function", function()
       function Container:resolve<T>():T
          return self:try_resolve()
       end
-   ]])
+   ]]))
 
    it("does not leak an unresolved generic type", util.check_type_error([[
       local function f<a, b>(x: {a:b}): (a, b)
@@ -455,7 +455,7 @@ describe("generic function", function()
       { msg = "v" },
    }))
 
-   pending("check that 'any' matches any type variable", util.check [[
+   pending("check that 'any' matches any type variable", util.check([[
       local function map<X, Y>(xs: {X}, f: function(X):Y): {Y}
          local rs = {}
          for i, v in ipairs(xs) do
@@ -471,16 +471,16 @@ describe("generic function", function()
       for _, n in ipairs(numbers) do
          print(n)
       end
-   ]])
+   ]]))
 
-   it("generic function definitions do not leak type variables (#322)", util.check [[
+   it("generic function definitions do not leak type variables (#322)", util.check([[
       local function my_unpack<T>(_list: {T}, _x: number, _y: number): T...
       end
       local _tbl_unpack = my_unpack or table.unpack
       local _map: {string:number} = setmetatable(assert({}), { __mode = "k" })
-   ]])
+   ]]))
 
-   it("nested uses of generic functions using the same names for type variables don't cause conflicts", util.check [[
+   it("nested uses of generic functions using the same names for type variables don't cause conflicts", util.check([[
       local function pcall1<A, B>(f: function(A):(B), a: A): boolean, B
          return true, f(a)
       end
@@ -499,9 +499,9 @@ describe("generic function", function()
       print(pok1)
       print(pok2)
       print(msg)
-   ]])
+   ]]))
 
-   it("nested uses of generic record functions using the same names for type variables don't cause conflicts (#560)", util.check [[
+   it("nested uses of generic record functions using the same names for type variables don't cause conflicts (#560)", util.check([[
       local M = {}
 
       function M.array_slice<T>(t: {T}, begin: integer, ed: integer): {T}
@@ -510,9 +510,9 @@ describe("generic function", function()
       function M.array_prefix<T>(t: {T}, n: integer): {T}
           return M.array_slice(t, 1, n+1)
       end
-   ]])
+   ]]))
 
-   it("doesn't leak type variables in function returns (regression test for #582)", util.check [[
+   it("doesn't leak type variables in function returns (regression test for #582)", util.check([[
       local record Container
          try_resolve: function<T>(Container):T
       end
@@ -523,9 +523,9 @@ describe("generic function", function()
 
       local _foo: integer = Container:resolve()
       local _bar: string = Container:resolve()
-   ]])
+   ]]))
 
-   it("should resolve union with typearg in return value (regression test for #604)", util.check [[
+   it("should resolve union with typearg in return value (regression test for #604)", util.check([[
       local record A
          f: function()
       end
@@ -534,6 +534,6 @@ describe("generic function", function()
       if not a is nil then
          a.f()
       end
-   ]])
+   ]]))
 end)
 

@@ -1,18 +1,18 @@
 local util = require("spec.util")
 
 describe("array declarations", function()
-   it("can be simple", util.check [[
+   it("can be simple", util.check([[
       local x = {1, 2, 3}
       x[2] = 10
-   ]])
+   ]]))
 
-   it("can be sparse", util.check [[
+   it("can be sparse", util.check([[
       local x = {
          [2] = 2,
          [10] = 3,
       }
       print(x[10])
-   ]])
+   ]]))
 
    it("catches redeclaration of literal keys", util.check_type_error([[
       local x = {
@@ -25,18 +25,18 @@ describe("array declarations", function()
       { msg = "redeclared key 10" }
    }))
 
-   it("skips over nils when defining the type (regression test for #268)", util.check [[
+   it("skips over nils when defining the type (regression test for #268)", util.check([[
       local x: {number} = {nil, 5}
-   ]])
+   ]]))
 
-   it("can be declared as a nominal type", util.check [[
+   it("can be declared as a nominal type", util.check([[
       local type Booleans = {boolean}
       local bs: Booleans = {
          true, false, [12] = true,
       }
-   ]])
+   ]]))
 
-   it("can be indirect", util.check [[
+   it("can be indirect", util.check([[
       local RED = 1
       local BLUE = 2
       local x = {
@@ -44,7 +44,7 @@ describe("array declarations", function()
          [BLUE] = 3,
       }
       print(x[RED])
-   ]])
+   ]]))
 
    it("indirect only works for numeric keys", util.check_type_error([[
       local RED = 1
@@ -60,16 +60,16 @@ describe("array declarations", function()
       { msg = "cannot determine type of table literal" },
    }))
 
-   it("explicit number indices work with array-records", util.check [[
+   it("explicit number indices work with array-records", util.check([[
       local x = {
          [1] = 2,
          [2] = 3,
          GREEN = 4,
       }
       print(x.GREEN)
-   ]])
+   ]]))
 
-   it("indirect works with array-records", util.check [[
+   it("indirect works with array-records", util.check([[
       local RED = 1
       local BLUE = 2
       local x = {
@@ -78,5 +78,5 @@ describe("array declarations", function()
          GREEN = 4,
       }
       print(x[RED])
-   ]])
+   ]]))
 end)

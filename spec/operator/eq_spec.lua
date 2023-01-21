@@ -1,12 +1,12 @@
 local util = require("spec.util")
 
 describe("==", function()
-   it("passes with the same type", util.check [[
+   it("passes with the same type", util.check([[
       local x = "hello"
       if x == "hello" then
          print("hello!")
       end
-   ]])
+   ]]))
 
    it("fails with different types", util.check_type_error([[
       local x = "hello"
@@ -33,12 +33,12 @@ end)
 
 describe("flow analysis with ==", function()
    describe("on expressions", function()
-      it("narrows type on expressions with and", util.check [[
+      it("narrows type on expressions with and", util.check([[
          local x: number | string
          local y: string
 
          local s = x == y and x:lower()
-      ]])
+      ]]))
 
       it("does not narrow type on expressions with or", util.check_type_error([[
          local x: number | string
@@ -60,13 +60,13 @@ describe("flow analysis with ==", function()
    end)
 
    describe("on if", function()
-      it("resolves in both directions", util.check [[
+      it("resolves in both directions", util.check([[
          local t: number | string
          local n: number
          if n == t then
             print(t + 1)
          end
-      ]])
+      ]]))
 
       it("resolves only on then branch", util.check_type_error([[
          local t: number | string
@@ -79,7 +79,7 @@ describe("flow analysis with ==", function()
          { msg = [[cannot index key 'upper' in union 't' of type number | string]] }
       }))
 
-      it("can combine with is", util.check [[
+      it("can combine with is", util.check([[
          local function foo(a: number | string | function)
             if a is string and a == 'hello' then
                print(a:upper())
@@ -91,9 +91,9 @@ describe("flow analysis with ==", function()
          end
 
          foo('hello')
-      ]])
+      ]]))
 
-      it("propagates string constants for use as enums", util.check [[
+      it("propagates string constants for use as enums", util.check([[
          local enum Direction
             "north"
             "south"
@@ -109,9 +109,9 @@ describe("flow analysis with ==", function()
          if s == "north" then
             f(s)
          end
-      ]])
+      ]]))
 
-      it("combines string constants for use as enums", util.check [[
+      it("combines string constants for use as enums", util.check([[
          local enum Direction
             "north"
             "south"
@@ -127,7 +127,7 @@ describe("flow analysis with ==", function()
          if s == "north" or s == "south" then
             f(s)
          end
-      ]])
+      ]]))
 
       it("does not combine if not valid as enums", util.check_type_error([[
          local enum Direction
@@ -149,7 +149,7 @@ describe("flow analysis with ==", function()
          { msg = [[argument 1: got string "north" | string "bad" (inferred at foo.tl:13:26), expected Direction]] }
       }))
 
-      it("works for type arguments", util.check [[
+      it("works for type arguments", util.check([[
          local function test<T>(t: T)
             if t == 9 then
                print(t + 1)
@@ -157,9 +157,9 @@ describe("flow analysis with ==", function()
                print(t)
             end
          end
-      ]])
+      ]]))
 
-      it("works for not and type arguments", util.check [[
+      it("works for not and type arguments", util.check([[
          local function test<T>(t: T)
             if not (t == 9) then
                print(t)
@@ -167,7 +167,7 @@ describe("flow analysis with ==", function()
                print(t + 1)
             end
          end
-      ]])
+      ]]))
 
       it("does not narrow with not", util.check_type_error([[
          local t: number | string
@@ -180,16 +180,16 @@ describe("flow analysis with ==", function()
          { msg = [[cannot index key 'upper' in union 't' of type number | string]] }
       }))
 
-      it("resolves with elseif", util.check [[
+      it("resolves with elseif", util.check([[
          local v: number | string | {boolean}
          if v == 9 then
             v = v + 1
          elseif v == "hello" then
             print(v:upper())
          end
-      ]])
+      ]]))
 
-      it("resolves with a type definition", util.check [[
+      it("resolves with a type definition", util.check([[
          local type A = number
          local type B = record
            h: UnionAorB
@@ -203,7 +203,7 @@ describe("flow analysis with ==", function()
              return n.h
            end
          end
-      ]])
+      ]]))
 
       it("does not resolve incrementally", util.check_type_error([[
          local v: number | string | {boolean}
@@ -218,7 +218,7 @@ describe("flow analysis with ==", function()
          { msg = "in local declaration: b: got number | string | {boolean}, expected {boolean}" }
       }))
 
-      it("can use inferred facts in elseif expression", util.check [[
+      it("can use inferred facts in elseif expression", util.check([[
          local record Rec
             op: string
          end
@@ -228,7 +228,7 @@ describe("flow analysis with ==", function()
          elseif v.op:match("something") then
             print(v.op:upper())
          end
-      ]])
+      ]]))
 
       it("does not resolve partially", util.check_type_error([[
          local v: number | string | {boolean}
@@ -278,7 +278,7 @@ describe("flow analysis with ==", function()
          { y = 4, msg = [[cannot use operator '<' for types number | string and integer]] },
       }))
 
-      it("resolves == on the test", util.check [[
+      it("resolves == on the test", util.check([[
          local function process(ts: {number | string})
             local t: number | string
             t = ts[1]
@@ -291,6 +291,6 @@ describe("flow analysis with ==", function()
                n = i
             end
          end
-      ]])
+      ]]))
    end)
 end)

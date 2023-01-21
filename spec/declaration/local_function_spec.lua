@@ -3,23 +3,23 @@ local util = require("spec.util")
 
 describe("local function", function()
    describe("type", function()
-      it("can have anonymous arguments", util.check [[
+      it("can have anonymous arguments", util.check([[
          local f: function(number, string): boolean
 
          f = function(a: number, b: string): boolean
             return #b == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can have type variables", util.check [[
+      it("can have type variables", util.check([[
          local f: function<a, b>(a, b): a
 
          f = function(a: number, b: string): number
             return a + #b
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
       it("cannot have unused type variables", util.check_type_error([[
          local function f<Z>(a: number, b: string): ()
@@ -29,25 +29,25 @@ describe("local function", function()
          { msg = "type argument 'Z' is not used in function signature" }
       }))
 
-      it("can take names in arguments but names are ignored", util.check [[
+      it("can take names in arguments but names are ignored", util.check([[
          local f: function(x: number, y: string): boolean
 
          f = function(a: number, b: string): boolean
             return #b == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can take typed vararg in arguments", util.check [[
+      it("can take typed vararg in arguments", util.check([[
          local f: function(x: number, ...: string): boolean
 
          f = function(a: number, ...: string): boolean
             return #select(1, ...) == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can take typed vararg in return types", util.check [[
+      it("can take typed vararg in return types", util.check([[
          local f: function(x: number): string...
 
          f = function(x: number): string...
@@ -56,9 +56,9 @@ describe("local function", function()
 
          local s1, s2 = f(123)
          local x = s1 .. s2
-      ]])
+      ]]))
 
-      it("can take parenthesized typed vararg in return types", util.check [[
+      it("can take parenthesized typed vararg in return types", util.check([[
          local f: function(x: number): (number, string...)
 
          f = function(x: number): (number, string...)
@@ -67,7 +67,7 @@ describe("local function", function()
 
          local n, s1, s2 = f(123)
          local x = s1 .. s2 .. tostring(math.floor(n))
-      ]])
+      ]]))
 
       it("cannot take untyped vararg", util.check_syntax_error([[
          local f: function(number, ...): boolean
@@ -81,14 +81,14 @@ describe("local function", function()
       }))
    end)
 
-   it("declaration", util.check [[
+   it("declaration", util.check([[
       local function f(a: number, b: string): boolean
          return #b == a
       end
       local ok = f(3, "abc")
-   ]])
+   ]]))
 
-   it("declaration with type variables", util.check [[
+   it("declaration with type variables", util.check([[
       local function f<a, b>(a1: a, a2: a, b1: b, b2: b): b
          if a1 == a2 then
             return b1
@@ -97,21 +97,21 @@ describe("local function", function()
          end
       end
       local ok = f(10, 20, "hello", "world")
-   ]])
+   ]]))
 
-   it("declaration with nil as return", util.check [[
+   it("declaration with nil as return", util.check([[
       local function f(a: number, b: string): nil
          return
       end
       local ok = f(3, "abc")
-   ]])
+   ]]))
 
-   it("declaration with no return", util.check [[
+   it("declaration with no return", util.check([[
       local function f(a: number, b: string): ()
          return
       end
       f(3, "abc")
-   ]])
+   ]]))
 
    it("declaration with no return cannot be used in assignment", util.check_type_error([[
       local function f(a: number, b: string): ()
@@ -122,12 +122,12 @@ describe("local function", function()
       { msg = "assignment in declaration did not produce an initial value for variable 'x'" }
    }))
 
-   it("declaration with return nil can be used in assignment", util.check [[
+   it("declaration with return nil can be used in assignment", util.check([[
       local function f(a: number, b: string): nil
          return
       end
       local x = f(3, "abc")
-   ]])
+   ]]))
 
    describe("with function arguments", function()
       it("has ambiguity without parentheses in function type return", util.check_syntax_error([[
@@ -150,7 +150,7 @@ describe("local function", function()
          { y = 1 },
       }))
 
-      it("has no ambiguity with parentheses in function type return", util.check [[
+      it("has no ambiguity with parentheses in function type return", util.check([[
          local function map<a,b>(f: function(a):(b), xs: {a}): {b}
             local r = {}
             for i, x in ipairs(xs) do
@@ -163,11 +163,11 @@ describe("local function", function()
          end
 
          print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
-      ]])
+      ]]))
    end)
 
    describe("shadowing", function()
-      it("arguments shadow variables", util.check [[
+      it("arguments shadow variables", util.check([[
          local record Name
             normal: string
             folded: string
@@ -180,9 +180,9 @@ describe("local function", function()
                normal = normal:upper()
             }
          end
-      ]])
+      ]]))
 
-      it("arguments shadow variables but not argument types", util.check [[
+      it("arguments shadow variables but not argument types", util.check([[
          local record CaseMapping
             upper: string
             lower: string
@@ -209,6 +209,6 @@ describe("local function", function()
          return {
             Name = Name;
          }
-      ]])
+      ]]))
    end)
 end)

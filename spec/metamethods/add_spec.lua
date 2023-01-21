@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("binary metamethod __add", function()
-   it("can be set on a record", util.check [[
+   it("can be set on a record", util.check([[
       local type Rec = record
          x: number
          metamethod __call: function(Rec, string, number): string
@@ -25,9 +25,9 @@ describe("binary metamethod __add", function()
 
       print((r + s).x)
       print(r("!!!", 34))
-   ]])
+   ]]))
 
-   it("can be used on a record prototype", util.check [[
+   it("can be used on a record prototype", util.check([[
       local record A
          value: number
          metamethod __call: function(A, number): A
@@ -48,9 +48,9 @@ describe("binary metamethod __add", function()
       A.value = 10
       local c = A + A
       print(c.value)
-   ]])
+   ]]))
 
-   it("can be used via the second argument", util.check [[
+   it("can be used via the second argument", util.check([[
       local type Rec = record
          x: number
          metamethod __add: function(number, Rec): Rec
@@ -68,5 +68,5 @@ describe("binary metamethod __add", function()
       local s = setmetatable({ y = 20 } as Rec, rec_mt)
 
       print((10 + s).x)
-   ]])
+   ]]))
 end)

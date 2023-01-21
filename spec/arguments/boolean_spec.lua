@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("boolean argument", function()
-   it("accepts a boolean", util.check [[
+   it("accepts a boolean", util.check([[
       local function f(b: boolean)
          if b then
             print("I'm true!")
@@ -10,9 +10,9 @@ describe("boolean argument", function()
 
       f(true)
       f(false)
-   ]])
+   ]]))
 
-   it("accepts nil", util.check [[
+   it("accepts nil", util.check([[
       local function f(b: boolean)
          if b then
             print("I'm true!")
@@ -20,7 +20,7 @@ describe("boolean argument", function()
       end
 
       f(nil)
-   ]])
+   ]]))
 
    it("rejects non-booleans", util.check_type_error([[
       local function f(b: boolean)

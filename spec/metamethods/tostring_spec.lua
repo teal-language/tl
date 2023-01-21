@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("unary metamethod __tostring", function()
-   it("can be set on a record", util.check [[
+   it("can be set on a record", util.check([[
       local type Rec = record
          x: number
          metamethod __tostring: function(Rec): string
@@ -16,9 +16,9 @@ describe("unary metamethod __tostring", function()
 
       local r = setmetatable({ x = 10 } as Rec, rec_mt)
       print(r)
-   ]])
+   ]]))
 
-   it("can be used on a record prototype", util.check [[
+   it("can be used on a record prototype", util.check([[
       local record A
          value: number
          metamethod __tostring: function(A): string
@@ -32,5 +32,5 @@ describe("unary metamethod __tostring", function()
 
       A.value = 10
       print(A)
-   ]])
+   ]]))
 end)

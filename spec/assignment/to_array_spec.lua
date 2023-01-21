@@ -11,12 +11,12 @@ describe("assignment to array", function()
       { y = 3, msg = "expected an array: at index 2: got integer, expected string" },
    }))
 
-   it("resolves arity of function returns", util.check [[
+   it("resolves arity of function returns", util.check([[
       local function f(): number
          return 2
       end
       local m: {number} = { f() }
-   ]])
+   ]]))
 
    it("check expansion of expression inside array", util.check_type_error([[
       local function f(): string, number
@@ -28,13 +28,13 @@ describe("assignment to array", function()
       { y = 5, msg = "expected an array: at index 2: got number, expected string" },
    }))
 
-   it("accept expression", util.check [[
+   it("accept expression", util.check([[
       local self = {
          fmt = "hello"
       }
       local str = "hello"
       local a = {str:sub(2, 10)}
-   ]])
+   ]]))
 
    it("catches a syntax error", util.check_syntax_error([[
       local self = {

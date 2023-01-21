@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("subtyping of union:", function()
 
-   it("t1 <: t2 union if ∃ t in t2, t1 <: t", util.check [[
+   it("t1 <: t2 union if ∃ t in t2, t1 <: t", util.check([[
       local record T1
          poly: function(s: string)
          poly: function(n: number)
@@ -21,7 +21,7 @@ describe("subtyping of union:", function()
       -- ──────────────────
       --   t1 <: t2 union
       t2 = t1
-   ]])
+   ]]))
 
    it("t1 <╱: t2 union if ¬∃ t in t2, t1 <: t", util.check_type_error([[
       local record T1
@@ -46,7 +46,7 @@ describe("subtyping of union:", function()
       { y = 18, msg = "expected function(boolean) | number" },
    }))
 
-   it("t1 union <: t2 if ∀ t in t1, t <: t2", util.check [[
+   it("t1 union <: t2 if ∀ t in t1, t <: t2", util.check([[
       local record AR
          {number}
          x: string
@@ -65,7 +65,7 @@ describe("subtyping of union:", function()
       -- ──────────────────
       --   t1 <: t2 union
       t2 = t1
-   ]])
+   ]]))
 
    it("t1 union <╱: t2 if ¬∀ t in t1, t <: t2", util.check_type_error([[
       local record AR
@@ -91,7 +91,7 @@ describe("subtyping of union:", function()
       { y = 18, msg = "got AR | string, expected {number} | string" },
    }))
 
-   it("t1 union <: t2 union if ∀ t in t1, ∃ u in t2 t <: u (regression test for #507)", util.check [[
+   it("t1 union <: t2 union if ∀ t in t1, ∃ u in t2 t <: u (regression test for #507)", util.check([[
       local record Rec<T>
           value: T | string
           new: (function(Rec<T>, T): Rec<T>)
@@ -103,9 +103,9 @@ describe("subtyping of union:", function()
 
       local a = Rec:new(nil)
       local b = Rec:new(10)
-   ]])
+   ]]))
 
-   it("a potentially more idiomatic rendition of the code from #507", util.check [[
+   it("a potentially more idiomatic rendition of the code from #507", util.check([[
       local record Rec<T>
         value: T | string
         new: function<T>(T): Rec<T>
@@ -117,6 +117,6 @@ describe("subtyping of union:", function()
 
       local a = Rec.new(nil)
       local b = Rec.new(10)
-   ]])
+   ]]))
 
 end)

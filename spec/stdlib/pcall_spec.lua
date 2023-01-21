@@ -17,7 +17,7 @@ describe("pcall", function()
       { msg = "argument 2: got integer, expected string" }
    }))
 
-   it("pcalls through pcall", util.check [[
+   it("pcalls through pcall", util.check([[
       local function f(s: string): number
          return 123
       end
@@ -26,9 +26,9 @@ describe("pcall", function()
       assert(a == true)
       assert(b == true)
       assert(d == 123)
-   ]])
+   ]]))
 
-   it("pcalls through pcall through pcall", util.check [[
+   it("pcalls through pcall through pcall", util.check([[
       local function f(s: string): number
          return 123
       end
@@ -38,7 +38,7 @@ describe("pcall", function()
       assert(b == true)
       assert(c == true)
       assert(d == 123)
-   ]])
+   ]]))
 
    it("pcalls through other magical stdlib functions", function()
       -- ok

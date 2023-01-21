@@ -1,22 +1,22 @@
 local util = require("spec.util")
 
 describe("assignment to maps", function()
-   it("resolves a record to a map", util.check [[
+   it("resolves a record to a map", util.check([[
       local m: {string:number} = {
          hello = 123,
          world = 234,
       }
-   ]])
+   ]]))
 
-   it("resolves arity of function returns", util.check [[
+   it("resolves arity of function returns", util.check([[
       local function f(): number
          return 2
       end
       local x = "hello"
       local m: {string:number} = { [x] = f() }
-   ]])
+   ]]))
 
-   it("resolves strings to enum", util.check [[
+   it("resolves strings to enum", util.check([[
       local type Direction = enum
          "north"
          "south"
@@ -27,9 +27,9 @@ describe("assignment to maps", function()
          hello = "north",
          world = "south",
       }
-   ]])
+   ]]))
 
-   it("resolves empty tables in values to nominals (regression test for #332)", util.check [[
+   it("resolves empty tables in values to nominals (regression test for #332)", util.check([[
       local keystr = "aaaa"
 
       local record user_login_count_t
@@ -43,7 +43,7 @@ describe("assignment to maps", function()
       for k, v in pairs(data) do
          print(k, v)
       end
-   ]])
+   ]]))
 
    it("does not accept an array-like key in a map", util.check_type_error([[
       local function f(x: {string:any})

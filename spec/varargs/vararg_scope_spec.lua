@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("vararg scope", function()
-   it("works", util.check [[
+   it("works", util.check([[
       local function f(a: number, ...: string): boolean
          local function g(a: number, ...: number): number
             local n = select(1, ...)
@@ -9,7 +9,7 @@ describe("vararg scope", function()
          end
          return true
       end
-   ]])
+   ]]))
 
    it("catches use in incorrect scope", util.check_type_error([[
       local function foo(...: any): function(): any

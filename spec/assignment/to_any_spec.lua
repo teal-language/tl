@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("assignment with any", function()
-   it("is ok from any type", util.check [[
+   it("is ok from any type", util.check([[
       local a: any
 
       local i = 0
@@ -25,5 +25,5 @@ describe("assignment with any", function()
       local a2: any
       a = a2
       a2 = a
-   ]])
+   ]]))
 end)

@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("metamethod __index", function()
-   it("can be set on a record", util.check [[
+   it("can be set on a record", util.check([[
       local type Rec = record
          x: number
          metamethod __index: function(Rec, string): string
@@ -17,9 +17,9 @@ describe("metamethod __index", function()
 
       r.x = 12
       print(r["!!!"])
-   ]])
+   ]]))
 
-   it("can be used on a record prototype", util.check [[
+   it("can be used on a record prototype", util.check([[
       local record A
          value: number
          metamethod __index: function(A, number): A
@@ -33,7 +33,7 @@ describe("metamethod __index", function()
 
       local inst = A[2]
       print(inst.value)
-   ]])
+   ]]))
 
    it("can type check arguments", util.check_type_error([[
       local type Rec = record
@@ -76,7 +76,7 @@ describe("metamethod __index", function()
       { msg = "invalid key '!!!' in record 'r' of type Rec" }
    }))
 
-   it("can use the record prototype in setmetatable and types flow through correctly", util.check [[
+   it("can use the record prototype in setmetatable and types flow through correctly", util.check([[
       local record mymod
         metamethod __index: function(mymod, string): string
       end
@@ -90,9 +90,9 @@ describe("metamethod __index", function()
           return mymod.myfunc(s)
         end
       })
-   ]])
+   ]]))
 
-   it("can use nested record prototypes in setmetatable and types flow through correctly", util.check [[
+   it("can use nested record prototypes in setmetatable and types flow through correctly", util.check([[
       local record Rec
          record Type
             x: number
@@ -128,9 +128,9 @@ describe("metamethod __index", function()
       end
 
       f(Rec)
-   ]])
+   ]]))
 
-   it("can simulate reading a map using __index", util.check [[
+   it("can simulate reading a map using __index", util.check([[
       local record R
          metamethod __index: function(R, string): number
          foo: string
@@ -142,7 +142,7 @@ describe("metamethod __index", function()
       r.bar = true
       print(123 + r["wat"] + r["yep"]) -- these get resolved by __index
       print(123 + r.wat + r.hello) -- these get resolved by __index too
-   ]])
+   ]]))
 
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the

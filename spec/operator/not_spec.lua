@@ -6,24 +6,24 @@ local function trim_code(c)
 end
 
 describe("not", function()
-   it("ok with any type", util.check [[
+   it("ok with any type", util.check([[
       local x = 1
       local y = 2
       local z = true
       if not x then
          z = false
       end
-   ]])
+   ]]))
 
-   it("ok with not not", util.check [[
+   it("ok with not not", util.check([[
       local x = true
       local z: boolean = not not x
-   ]])
+   ]]))
 
-   it("not not casts to boolean", util.check [[
+   it("not not casts to boolean", util.check([[
       local i = 12
       local z: boolean = not not 12
-   ]])
+   ]]))
 
    it("handles precedence of sequential unaries correctly", function()
       local code = [[

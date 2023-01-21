@@ -16,15 +16,15 @@ describe("long comment", function()
       local foo = 1
    ]=])
 
-   it("accepts a level 1 long comment", util.check [[
+   it("accepts a level 1 long comment", util.check([[
       --[=[
          long comment line 1
          long comment line 2
       ]=]
       local foo = 1
-   ]])
+   ]]))
 
-   it("accepts a level 1 long comment inside a level 2 long comment", util.check [[
+   it("accepts a level 1 long comment inside a level 2 long comment", util.check([[
       --[=[
          long comment line 1
          --[==[
@@ -33,9 +33,9 @@ describe("long comment", function()
          long comment line 2
       ]=]
       local foo = 1
-   ]])
+   ]]))
 
-   it("accepts a level 2 long comment inside a level 1 long comment", util.check [[
+   it("accepts a level 2 long comment inside a level 1 long comment", util.check([[
       --[==[
          long comment line 1
          --[=[
@@ -44,7 +44,7 @@ describe("long comment", function()
          long comment line 2
       ]==]
       local foo = 1
-   ]])
+   ]]))
 
    it("long comments can contain quotes and double quotes", util.check [=[
       --[[

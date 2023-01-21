@@ -9,10 +9,10 @@ describe("subtyping of number:", function()
       { msg = "got number, expected nil" }
    }))
 
-   it("number <: any", util.check [[
+   it("number <: any", util.check([[
       local a: any
       a = 1.5
-   ]])
+   ]]))
 
    it("number <: unknown", util.lax_check([[
       local function f(unk)
@@ -29,10 +29,10 @@ describe("subtyping of number:", function()
       { msg = "got number, expected string" }
    }))
 
-   it("number <: number", util.check [[
+   it("number <: number", util.check([[
       local n: number
       n = 1.5
-   ]])
+   ]]))
 
    it("number <╱: integer", util.check_type_error([[
       local n: integer
@@ -67,10 +67,10 @@ describe("subtyping of number:", function()
       { msg = "in assignment: cannot match against all alternatives of the polymorphic type" },
    }))
 
-   it("number <: union including number", util.check [[
+   it("number <: union including number", util.check([[
       local u: string | number
       u = 1.5
-   ]])
+   ]]))
 
    it("number <╱: union not including number", util.check_type_error([[
       local u: string | integer
@@ -89,12 +89,12 @@ describe("subtyping of number:", function()
       { msg = "got number, expected R" },
    }))
 
-   it("number <: nominal type alias for number", util.check [[
+   it("number <: nominal type alias for number", util.check([[
       local type R = number
 
       local n: R
       n = 1.5
-   ]])
+   ]]))
 
    it("number <╱: enum", util.check_type_error([[
       local enum E

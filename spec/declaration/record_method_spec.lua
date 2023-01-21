@@ -2,7 +2,7 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("record method", function()
-   it("valid declaration", util.check [[
+   it("valid declaration", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -15,9 +15,9 @@ describe("record method", function()
          end
       end
       local ok = r:f(3, "abc")
-   ]])
+   ]]))
 
-   it("valid declaration with type variables", util.check [[
+   it("valid declaration with type variables", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -31,9 +31,9 @@ describe("record method", function()
       end
       local ok, s = r:f(3, "abc", {"what"})
       print(s .. "!")
-   ]])
+   ]]))
 
-   it("nested declaration", util.check [[
+   it("nested declaration", util.check([[
       local r = {
          z = {
             x = 2,
@@ -48,9 +48,9 @@ describe("record method", function()
          end
       end
       local ok = r.z:f(3, "abc")
-   ]])
+   ]]))
 
-   it("nested declaration in {}", util.check [[
+   it("nested declaration in {}", util.check([[
       local r = {
          z = {},
       }
@@ -58,9 +58,9 @@ describe("record method", function()
          return true
       end
       local ok = r.z:f(3, "abc")
-   ]])
+   ]]))
 
-   it("deep nested declaration", util.check [[
+   it("deep nested declaration", util.check([[
       local r = {
          a = {
             b = {
@@ -72,7 +72,7 @@ describe("record method", function()
          return self.x
       end
       local ok = r.a.b:f(3, "abc")
-   ]])
+   ]]))
 
    it("resolves self", util.check_type_error([[
       local r = {
@@ -133,7 +133,7 @@ describe("record method", function()
       { msg = "invoked method as a regular function" }
    }))
 
-   it("allows invocation when properly used with '.'", util.check [[
+   it("allows invocation when properly used with '.'", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -142,9 +142,9 @@ describe("record method", function()
          return self.b
       end
       local ok = r.f(r, 3, "abc")
-   ]])
+   ]]))
 
-   it("allows invocation when properly used with ':'", util.check [[
+   it("allows invocation when properly used with ':'", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -153,7 +153,7 @@ describe("record method", function()
          return self.b
       end
       local ok = r:f(3, "abc")
-   ]])
+   ]]))
 
    it("allows colon notation in methods", function()
       util.mock_io(finally, {
@@ -334,7 +334,7 @@ describe("record method", function()
       { y = 12, msg = "incompatible number of arguments" },
    }))
 
-   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check [[
+   it("does not fail when declaring methods on untyped self (regression test for #427)", util.check([[
       local record T<A, B>
         method: function(T<A, B>, function(A)): T<A, B>
       end
@@ -350,9 +350,9 @@ describe("record method", function()
       end
 
       return t
-   ]])
+   ]]))
 
-   it("does not fail when declaring methods a record where they were already declared (regression test for #463)", util.check [[
+   it("does not fail when declaring methods a record where they were already declared (regression test for #463)", util.check([[
       local record Tank
           left: function(Tank)
           right: function(Tank)
@@ -370,7 +370,7 @@ describe("record method", function()
           playerTank[direction as E](playerTank)
           return false
       end
-   ]])
+   ]]))
 
    it("catches method on unknown variable (regression test for #470)", util.check_type_error([[
       function bla.dosomething()
@@ -434,7 +434,7 @@ describe("record method", function()
       { y = 15, msg = "type signature of 'start' does not match its declaration in Rec.Plugin: different number of input arguments: " }
    }))
 
-   it("does not cause conflicts with type variables (regression test for #610)", util.check [[
+   it("does not cause conflicts with type variables (regression test for #610)", util.check([[
       local MyObj = {}
 
       function MyObj.do_something<T>(array: {T}): {T}
@@ -444,7 +444,7 @@ describe("record method", function()
       function MyObj.test_fails<T>(array: {T}): {T}
          return MyObj.do_something(array)
       end
-   ]])
+   ]]))
 
    describe("redeclaration: ", function()
       it("an inconsistent arity in redeclaration produces an error (regression test for #496)", util.check_type_error([[

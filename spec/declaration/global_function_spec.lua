@@ -2,41 +2,41 @@ local util = require("spec.util")
 
 describe("global function", function()
    describe("type", function()
-      it("can have anonymous arguments", util.check [[
+      it("can have anonymous arguments", util.check([[
          global f: function(number, string): boolean
 
          f = function(a: number, b: string): boolean
             return #b == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can have type variables", util.check [[
+      it("can have type variables", util.check([[
          global f: function<a, b>(a, b): a
 
          f = function(a: number, b: string): number
             return a + #b
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can take names in arguments but names are ignored", util.check [[
+      it("can take names in arguments but names are ignored", util.check([[
          global f: function(x: number, y: string): boolean
 
          f = function(a: number, b: string): boolean
             return #b == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
-      it("can take typed vararg in arguments", util.check [[
+      it("can take typed vararg in arguments", util.check([[
          global f: function(x: number, ...: string): boolean
 
          f = function(a: number, ...: string): boolean
             return #select(1, ...) == a
          end
          local ok = f(3, "abc")
-      ]])
+      ]]))
 
       it("cannot take untyped vararg", util.check_syntax_error([[
          global f: function(number, ...): boolean
@@ -58,12 +58,12 @@ describe("global function", function()
       { y = 1, msg = "functions need an explicit 'local' or 'global' annotation" },
    }))
 
-   it("a function can be pre-declared", util.check [[
+   it("a function can be pre-declared", util.check([[
       local f: function()
       function f()
          print("I am a bare function")
       end
-   ]])
+   ]]))
 
    local modes = {
       {

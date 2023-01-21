@@ -2,10 +2,10 @@ local util = require("spec.util")
 
 describe("[]", function()
    describe("on records", function()
-      it("ok if indexing by string", util.check [[
+      it("ok if indexing by string", util.check([[
          local x = { foo = "f" }
          print(x["foo"])
-      ]])
+      ]]))
 
       it("fails if indexing by a bad type", util.check_type_error([[
          local x = { foo = 123 }
@@ -31,7 +31,7 @@ describe("[]", function()
          { msg = "cannot index object of type record (foo: integer; bar: string) with a string, consider using an enum" },
       }))
 
-      it("ok without declaration if key is enum and all keys map to the same type", util.check [[
+      it("ok without declaration if key is enum and all keys map to the same type", util.check([[
          local type Keys = enum
             "foo"
             "bar"
@@ -39,7 +39,7 @@ describe("[]", function()
          local x = { foo = 12, bar = 24, bla = "something else" }
          local e: Keys = "foo"
          local n: number = x[e]
-      ]])
+      ]]))
 
       it("fail if key is enum and not all keys map to the same type", util.check_type_error([[
          local type Keys = enum
@@ -75,7 +75,7 @@ describe("[]", function()
    end)
 
    describe("on strings", function()
-      it("works with relevant stdlib string functions", util.check [[
+      it("works with relevant stdlib string functions", util.check([[
          local s: string
          s:byte()
          s:find()
@@ -92,11 +92,11 @@ describe("[]", function()
          s:sub()
          s:unpack()
          s:upper()
-      ]])
+      ]]))
    end)
 
    describe("on enums", function()
-      it("works with relevant stdlib string functions", util.check [[
+      it("works with relevant stdlib string functions", util.check([[
          local type foo = enum
             "bar"
          end
@@ -116,20 +116,20 @@ describe("[]", function()
          s:sub()
          s:unpack()
          s:upper()
-      ]])
+      ]]))
    end)
 
    describe("on tuples", function()
-      it("results in the correct type for integer literals", util.check [[
+      it("results in the correct type for integer literals", util.check([[
          local t: {string, number} = {"hi", 1}
          local str: string = t[1]
          local num: number = t[2]
-      ]])
-      it("produces a union when indexed with a number variable", util.check [[
+      ]]))
+      it("produces a union when indexed with a number variable", util.check([[
          local t: {string, integer} = {"hi", 1}
          local x = 1
          local var: string | integer = t[x]
-      ]])
+      ]]))
       it("errors when a union can't be produced from indexing", util.check_type_error([[
          local t: {{string}, {integer}} = {{"hey"}, {1}}
          local x = 1
@@ -192,7 +192,7 @@ describe("[]", function()
          { msg = "inconsistent index type: got WrongType, expected IndexType" },
       }))
 
-      it("accepts valid enum keys", util.check [[
+      it("accepts valid enum keys", util.check([[
          global record R
              record StrategyType
                  -- ...
@@ -207,7 +207,7 @@ describe("[]", function()
 
          R.fn("hello", 1000, R.Strategy["Precise"])
          R.fn("hello", 1000, R.Strategy["BestEffort"])
-      ]])
+      ]]))
 
       it("catches invalid enum keys", util.check_type_error([[
          global record R

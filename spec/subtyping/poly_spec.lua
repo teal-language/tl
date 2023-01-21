@@ -2,7 +2,7 @@ local util = require("spec.util")
 
 describe("subtyping of poly:", function()
 
-   it("t1 poly <: t2 if ∃ t in t1, t <: t2", util.check [[
+   it("t1 poly <: t2 if ∃ t in t1, t <: t2", util.check([[
       local record T1
          poly: function(s: string)
          poly: function(n: number)
@@ -16,7 +16,7 @@ describe("subtyping of poly:", function()
       -- ──────────────────   -- a type t1 is a poly if
       --   t1 poly <: t2      -- t1 is some of of the poly's types
       t2 = t1
-   ]])
+   ]]))
 
    it("t1 poly <╱: t2 if ¬∃ t in t1, t <: t2", util.check_type_error([[
       local record T1
@@ -40,7 +40,7 @@ describe("subtyping of poly:", function()
       { y = 16, msg = "cannot match against any alternatives of the polymorphic type" },
    }))
 
-   it("t1 <: t2 poly if ∀ t in t2, t1 <: t", util.check [[
+   it("t1 <: t2 poly if ∀ t in t2, t1 <: t", util.check([[
       local record T1
          two: function(s: string)
          two: function(n: number)
@@ -58,7 +58,7 @@ describe("subtyping of poly:", function()
       -- ──────────────────   -- a type t1 is a poly type t2
       --   t1 <: t2 poly      -- if all of t2's poly types are satisfied by t1
       two = three
-   ]])
+   ]]))
 
    it("t1 <╱: t2 poly if ¬∀ t in t2, t1 <: t", util.check_type_error([[
       local record T1

@@ -1,7 +1,7 @@
 local util = require("spec.util")
 
 describe("record method call", function()
-   it("method call on an expression", util.check [[
+   it("method call on an expression", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -14,14 +14,14 @@ describe("record method call", function()
          end
       end
       (r):f(3, "abc")
-   ]])
+   ]]))
 
-   it("method call with different call forms", util.check [[
+   it("method call with different call forms", util.check([[
       local foo = {bar = function(x: any, t: any) end}
       print(foo:bar())
       print(foo:bar{})
       print(foo:bar"hello")
-   ]])
+   ]]))
 
    it("catches wrong use of : without a call", util.check_syntax_error([[
       local foo = {bar = function(x: any, t: any) end}
@@ -30,7 +30,7 @@ describe("record method call", function()
       { y = 2, msg = "expected a function call" },
    }))
 
-   it("nested record method calls", util.check [[
+   it("nested record method calls", util.check([[
       local r = {
          x = 2,
          b = true,
@@ -44,7 +44,7 @@ describe("record method call", function()
       local function foo()
          r:f(r:f("hello"))
       end
-   ]])
+   ]]))
 
    describe("lax", function()
       it("nested record method calls", util.lax_check([[

@@ -1,14 +1,14 @@
 local util = require("spec.util")
 
 describe("tuple declarations", function()
-   it("can be simple", util.check [[
+   it("can be simple", util.check([[
       local x = { 1, "hi" }
-   ]])
+   ]]))
 
-   it("can be declared as a nominal type", util.check [[
+   it("can be declared as a nominal type", util.check([[
       local type Coords = {number, number}
       local c: Coords = { 1, 2 }
-   ]])
+   ]]))
 
    it("should report when an array literal is too long to fit within tuple type", util.check_type_error([[
       local a: {number, number} = {1, 2, 3}
@@ -26,11 +26,11 @@ describe("tuple declarations", function()
       { y = 3, msg = "in local declaration: c: unknown index in tuple {string, number}" },
    }))
 
-   it("should allow array literals that fit within then tuple length", util.check [[
+   it("should allow array literals that fit within then tuple length", util.check([[
       local a: {number, string} = { 1 }
       local b: {boolean, boolean, number} = { false, true }
       local c: {string, number} = { "hi" }
-   ]])
+   ]]))
 
    it("should report when a tuple has incompatible entries", util.check_type_error([[
       local b: {number, string} = { 1, false }
@@ -44,8 +44,8 @@ describe("tuple declarations", function()
       { y = 1, msg = "in local declaration: c: unexpected index 3 in tuple {number, string}" },
    }))
 
-   it("should work with explicit integer indices", util.check [[
+   it("should work with explicit integer indices", util.check([[
       local a: {number, string} = { [1] = 10, [2] = "hello" }
       local b: {number, string} = { [2] = "hello", [1] = 10 }
-   ]])
+   ]]))
 end)
