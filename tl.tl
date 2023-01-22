@@ -8034,10 +8034,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return nil
          end
 
-         if t.typename == "typetype" then
-            if t.found.fields and t.found.fields[exp.e2.tk] then
+         if t.typename == "nominal" then
+            if t.found and t.found.def and t.found.def.fields and t.found.def.fields[exp.e2.tk] then
                table.insert(t.names, exp.e2.tk)
-               t.found = t.found.fields[exp.e2.tk]
+               t.found = t.found.def.fields[exp.e2.tk]
             end
          else
             return t.fields and t.fields[exp.e2.tk]
@@ -9534,6 +9534,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             if node.is_method then
                local selftype = get_self_type(node.fn_owner)
+               if not selftype then
+                  node_error(node, "could not resolve type of self")
+                  return
+               end
                children[3][1] = selftype
                add_var(nil, "self", selftype)
             end

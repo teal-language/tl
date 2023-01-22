@@ -538,5 +538,17 @@ describe("record method", function()
       ]], {}, {
          { y = 5, msg = "method and non-method are not the same type" },
       }))
+
+      it("nested records resolve correctly and do not crash (regression test for #615)", util.check([[
+         local record Bar
+            record Qux
+               foo:function(Qux)
+            end
+         end
+
+         function Bar.Qux:foo()
+            print("todo")
+         end
+      ]]))
    end)
 end)
