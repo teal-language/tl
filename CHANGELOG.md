@@ -1,3 +1,20 @@
+# 0.15.1
+
+2023-01-23
+
+A minor bugfix release, thanks to feedback received upon the release
+of 0.15.03
+
+This release features commits by Hisham Muhammad.
+
+## What's New
+
+### Fixes
+
+* Fixes resolution of nominals across scope levels.
+* Fixes a crash when resolving nested records in a record function. (#615)
+* Avoid spurious inference warnings in local declarations.
+
 # 0.15.0
 
 2023-01-20
