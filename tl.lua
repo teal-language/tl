@@ -8332,14 +8332,17 @@ tl.type_check = function(ast, opts)
    end
 
    local function dismiss_unresolved(name)
-      local unresolved = st[#st]["@unresolved"]
-      if unresolved then
-         if unresolved.t.nominals[name] then
-            for _, t in ipairs(unresolved.t.nominals[name]) do
-               resolve_nominal(t)
+      for i = #st, 1, -1 do
+         local unresolved = st[i]["@unresolved"]
+         if unresolved then
+            if unresolved.t.nominals[name] then
+               for _, t in ipairs(unresolved.t.nominals[name]) do
+                  resolve_nominal(t)
+               end
+               unresolved.t.nominals[name] = nil
+               return
             end
          end
-         unresolved.t.nominals[name] = nil
       end
    end
 
