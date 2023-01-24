@@ -93,5 +93,19 @@ describe("record function", function()
       ]], {}, {
          { y = 5, msg = "different number of input arguments: got 2, expected 3" },
       }))
+
+      it("report error in return args correctly (regression test for #618)", util.check_warnings([[
+         local record R
+           _current: R
+
+           func: function(R)
+         end
+
+         function R:func(): boolean
+           return self._current and self._current:func()
+         end
+      ]], {}, {
+         { y = 7, msg = "different number of return values: got 1, expected 0" },
+      }))
    end)
 end)

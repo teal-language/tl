@@ -6768,7 +6768,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return false, terr(t1, "different number of input arguments: got " .. #t1.args - argdelta .. ", expected " .. #t2.args - argdelta)
          end
          if #t1.rets ~= #t2.rets then
-            return false, terr(t1, "different number of return values: got " .. #t1.args .. ", expected " .. #t2.args)
+            return false, terr(t1, "different number of return values: got " .. #t1.rets .. ", expected " .. #t2.rets)
          end
          local all_errs = {}
          for i = 1, #t1.args do
