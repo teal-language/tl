@@ -396,11 +396,11 @@ end]]))
          end
       ]]))
 
-      it("needs to resolve a fixpoint to detect some errors", util.check_type_error([[
+      it("widens narrowed union if value is assigned", util.check_type_error([[
          local t: number | string
          t = 1
          if t is number then
-            while t < 1000 do -- FIXME: this is accepted even though t is not always a number
+            while t < 1000 do
                if t is number then
                   t = t + 1
                end
@@ -412,6 +412,36 @@ end]]))
       ]], {
          { y = 4, msg = [[cannot use operator '<' for types number | string and integer]] },
       }))
+
+      it("preserves narrowed union in loop if value is not assigned", util.check([[
+         local function f(s: string, fn: function())
+            print(s)
+            fn()
+         end
+
+         local function handle_writer(pipe: FILE, x: {string} | string)
+            if x is {string} then
+               repeat
+                  for i, v in ipairs(x) do
+                     pipe:write(v)
+
+                     -- this #x produces no error even though it's inside a loop
+                     if i ~= #x then
+                        pipe:write("\n")
+                     else
+                        f("\n", function()
+                           print(pipe)
+                        end)
+                     end
+                  end
+               until false
+            elseif x then
+               f(x, function()
+                  print(pipe)
+               end)
+            end
+         end
+      ]]))
 
       it("resolves is on the test", util.check([[
          local function process(ts: {number | string})

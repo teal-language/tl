@@ -3245,16 +3245,10 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
 
    local cbs = visit.cbs
    local cbkind = cbs and cbs[kind]
-   do -- before
-      if cbkind then
-         local cbkind_before = cbkind.before
-         if cbkind_before then
-            cbkind_before(ast)
-         end
-      else
-         if cbs then
-            error("internal compiler error: no visitor for " .. kind as string)
-         end
+   if cbkind then
+      local cbkind_before = cbkind.before
+      if cbkind_before then
+         cbkind_before(ast)
       end
    end
 
@@ -3322,15 +3316,13 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    end
 
    local ret: T
-   do -- after
-      local cbkind_after = cbkind and cbkind.after
-      if cbkind_after then
-         ret = cbkind_after(ast, xs)
-      end
-      local visit_after = visit.after
-      if visit_after then
-         ret = visit_after(ast, xs, ret)
-      end
+   local cbkind_after = cbkind and cbkind.after
+   if cbkind_after then
+      ret = cbkind_after(ast, xs)
+   end
+   local visit_after = visit.after
+   if visit_after then
+      ret = visit_after(ast, xs, ret)
    end
 
    if TL_DEBUG then
@@ -3558,15 +3550,9 @@ local function recurse_node<T>(root: Node,
 
       local cbs = visit_node.cbs
       local cbkind = cbs and cbs[kind]
-      do -- before
-         if cbkind then
-            if cbkind.before then
-               cbkind.before(ast)
-            end
-         else
-            if cbs then
-               error("internal compiler error: no visitor for " .. kind as string)
-            end
+      if cbkind then
+         if cbkind.before then
+            cbkind.before(ast)
          end
       end
 
@@ -3586,14 +3572,12 @@ local function recurse_node<T>(root: Node,
       end
 
       local ret: T
-      do -- after
-         local cbkind_after = cbkind and cbkind.after
-         if cbkind_after then
-            ret = cbkind_after(ast, xs)
-         end
-         if visit_after then
-            ret = visit_after(ast, xs, ret)
-         end
+      local cbkind_after = cbkind and cbkind.after
+      if cbkind_after then
+         ret = cbkind_after(ast, xs)
+      end
+      if visit_after then
+         ret = visit_after(ast, xs, ret)
       end
 
       if TL_DEBUG then
@@ -7637,13 +7621,50 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return widened
    end
 
-   local function widen_all_unions()
+   local function assigned_anywhere(name: string, root: Node): boolean
+      local visit_node: Visitor<NodeKind, Node, boolean> = {
+         cbs = {
+            ["assignment"] = {
+               after = function(node: Node, _children: {boolean}): boolean
+                  for _, v in ipairs(node.vars) do
+                     if v.kind == "variable" and v.tk == name then
+                        return true
+                     end
+                  end
+                  return false
+               end
+            }
+         },
+         after = function(_node: Node, children: {boolean}, ret: boolean): boolean
+            ret = ret or false
+            for _, c in ipairs(children) do
+               local ca = c as any
+               if ca is boolean then
+                  ret = ret or c
+               end
+            end
+            return ret
+         end
+      }
+
+      local visit_type: Visitor<TypeName, Type, boolean> = {
+         after = function(): boolean
+            return false
+         end
+      }
+
+      return recurse_node(root, visit_node, visit_type)
+   end
+
+   local function widen_all_unions(node: Node)
       for i = #st, 1, -1 do
          local scope = st[i]
          local unr = scope["@unresolved"]
          if unr and unr.t.narrows then
             for name, _ in pairs(unr.t.narrows) do
-               widen_in_scope(scope, name)
+               if not node or assigned_anywhere(name, node) then
+                  widen_in_scope(scope, name)
+               end
             end
          end
       end
@@ -9008,6 +9029,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      node_error(varnode, "cannot reassign a type")
                   elseif val then
                      assert_is_a(varnode, val, vartype, "in assignment")
+
+                     -- assigning a function
+                     local rval = resolve_tuple_and_nominal(val)
+                     if rval.typename == "function" then
+                        widen_all_unions()
+                     end
+
                      if varnode.kind == "variable" and vartype.typename == "union" then
                         -- narrow union
                         add_var(varnode, varnode.tk, val, nil, "is")
@@ -9075,9 +9103,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       },
       ["while"] = {
-         before = function()
+         before = function(node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
-            widen_all_unions()
+            widen_all_unions(node)
          end,
          before_statements = function(node: Node)
             begin_scope(node)
@@ -9116,9 +9144,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["repeat"] = {
-         before = function()
+         before = function(node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
-            widen_all_unions()
+            widen_all_unions(node)
          end,
          -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
          after = end_scope_and_none_type,
@@ -9128,7 +9156,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             begin_scope(node)
          end,
          before_statements = function(node: Node)
-            widen_all_unions()
+            widen_all_unions(node)
             local exp1 = node.exps[1]
             local args = {
                typename = "tuple",
@@ -9206,7 +9234,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["fornum"] = {
          before_statements = function(node: Node, children: {Type})
-            widen_all_unions()
+            widen_all_unions(node)
             begin_scope(node)
             local from_t = resolve_tuple_and_nominal(children[2])
             local to_t = resolve_tuple_and_nominal(children[3])
@@ -9618,7 +9646,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["function"] = {
          before = function(node: Node)
-            widen_all_unions()
+            widen_all_unions(node)
             begin_scope(node)
          end,
          before_statements = function(node: Node)
