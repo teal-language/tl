@@ -7385,6 +7385,15 @@ tl.type_check = function(ast, opts)
             local args_ok
             local args_errs
 
+            local from = 1
+            if argdelta == -1 then
+               from = 2
+               local errs = {}
+               if not arg_check(where, is_a, args[1], f.args[1], nil, errs, "self") then
+                  return nil, errs
+               end
+            end
+
             if rets then
                rets = infer_at(where, rets)
                infer_emptytables(where, nil, rets, f.rets, 0)
