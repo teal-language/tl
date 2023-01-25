@@ -6379,7 +6379,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function arg_check(where: Node, cmp: CompareTypes, a: Type, b: Type, n: integer, errs: {Error}, ctx: string): boolean
       local matches, match_errs = cmp(a, b)
       if not matches then
-         add_errs_prefixing(where, match_errs, errs, (ctx or "argument") .. " " .. n .. ": ")
+         add_errs_prefixing(where, match_errs, errs, ctx .. (n and " " .. n or "") .. ": ")
          return false
       end
       return true
@@ -6776,7 +6776,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
          local all_errs = {}
          for i = 1, #t1.args do
-            arg_check(t1 as Node, same_type, t1.args[i], t2.args[i], i - argdelta, all_errs)
+            arg_check(t1 as Node, same_type, t1.args[i], t2.args[i], i - argdelta, all_errs, "argument")
          end
          for i = 1, #t1.rets do
             local _, errs = same_type(t1.rets[i], t2.rets[i])
@@ -7222,7 +7222,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
          else
             for i = ((t1.is_method or t2.is_method) and 2 or 1), #t1.args do
-               arg_check(nil, is_a, t1.args[i], t2.args[i] or ANY, i, all_errs)
+               arg_check(nil, is_a, t1.args[i], t2.args[i] or ANY, i, all_errs, "argument")
             end
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
@@ -7377,7 +7377,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local check_args_rets: function(where: Node, where_args: {Node}, f: Type, args: {Type}, rets: {Type}, argdelta: integer): Type, {Error}
       do
          -- check if a tuple `xs` matches tuple `ys`
-         local function check_func_type_list(where: Node, wheres: {Node}, xs: Type, ys: Type, delta: integer, mode: string): boolean, {Error}
+         local function check_func_type_list(where: Node, wheres: {Node}, xs: Type, ys: Type, from: integer, delta: integer, mode: string): boolean, {Error}
             assert(xs.typename == "tuple", xs.typename)
             assert(ys.typename == "tuple", ys.typename)
 
@@ -7385,7 +7385,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local n_xs = #xs
             local n_ys = #ys
 
-            for i = 1, math.max(n_xs, n_ys) do
+            for i = from, math.max(n_xs, n_ys) do
                local pos = i + delta
                local x = xs[i] or (xs.is_va and xs[n_xs]) or NIL
                local y = ys[i] or (ys.is_va and ys[n_ys])
@@ -7410,10 +7410,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                rets = infer_at(where, rets)
                infer_emptytables(where, nil, rets, f.rets, 0)
 
-               rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, rets, 0, "return")
+               rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, rets, 1, 0, "return")
             end
 
-            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, argdelta, "argument")
+            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, 1, argdelta, "argument")
             if (not args_ok) or (not rets_ok) then
                return nil, args_errs or {}
             end
