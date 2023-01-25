@@ -1204,7 +1204,6 @@ local table_types = {
 
 
 
-
 local Fact = {}
 
 
@@ -4832,6 +4831,7 @@ end
 
 
 
+
 local function sorted_keys(m)
    local keys = {}
    for k, _ in pairs(m) do
@@ -7995,16 +7995,27 @@ tl.type_check = function(ast, opts)
    local function find_record_to_extend(exp)
 
       if exp.kind == "type_identifier" then
-         local t = find_var_type(exp.tk)
-         if (not t) or t.closed then
-            return nil
+         local v = find_var(exp.tk)
+         if not v then
+            return nil, nil, exp.tk
          end
 
-         return t.def or t
+         local t = v.t
+         if t.closed then
+            return nil, nil, exp.tk
+         end
+
+         return t.def or t, v, exp.tk
 
       elseif exp.kind == "op" then
-         local t = find_record_to_extend(exp.e1)
-         return t and t.fields and t.fields[exp.e2.tk]
+         local t, v, rname = find_record_to_extend(exp.e1)
+         local fname = exp.e2.tk
+         local dname = rname .. "." .. fname
+         if not t then
+            return nil, nil, dname
+         end
+         t = t and t.fields and t.fields[fname]
+         return t, v, dname
       end
    end
 
@@ -8833,10 +8844,6 @@ tl.type_check = function(ast, opts)
       return is_total, missing
    end
 
-   local function show_fn_owner(node)
-      return (tl.pretty_print_ast(node.fn_owner, opts.gen_target, { preserve_indent = true, preserve_newlines = false }))
-   end
-
    local visit_node = {}
 
    visit_node.cbs = {
@@ -9556,11 +9563,13 @@ tl.type_check = function(ast, opts)
                filename = filename,
             }))
 
+            local open_t, open_v, owner_name = find_record_to_extend(node.fn_owner)
+            local open_k = owner_name .. "." .. node.name.tk
             local rfieldtype = rtype.fields[node.name.tk]
             if rfieldtype then
                rfieldtype = resolve_tuple_and_nominal(rfieldtype)
 
-               if rfieldtype.implemented then
+               if open_v and open_v.implemented and open_v.implemented[open_k] then
                   redeclaration_warning(node)
                end
 
@@ -9573,27 +9582,28 @@ tl.type_check = function(ast, opts)
 
                   local shortname = node.fn_owner.type.typename == "nominal" and
                   show_type(node.fn_owner.type) or
-                  show_fn_owner(node)
+                  owner_name
                   local msg = "type signature of '" .. node.name.tk .. "' does not match its declaration in " .. shortname .. ": "
                   add_errs_prefixing(node, err, errors, msg)
                   return
                end
-
-               rfieldtype.implemented = true
             else
-               local open = find_record_to_extend(node.fn_owner)
-               if lax or rtype == open then
+               if lax or rtype == open_t then
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
                else
-                  local name = show_fn_owner(node)
-                  node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
+                  node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. owner_name .. "' was originally declared")
                   return
                end
 
-               fn_type.implemented = true
             end
 
+            if open_v then
+               if not open_v.implemented then
+                  open_v.implemented = {}
+               end
+               open_v.implemented[open_k] = true
+            end
             node.name.type = fn_type
          end,
          after = function(node, _children)

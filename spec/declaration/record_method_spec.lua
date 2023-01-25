@@ -550,5 +550,64 @@ describe("record method", function()
             print("todo")
          end
       ]]))
+
+      it("regression test for #620", function ()
+         util.mock_io(finally, {
+            ["base.tl"] = [[
+               local record M
+                  foo: function(M)
+               end
+
+               return M
+            ]],
+            ["t1.tl"] = [[
+               local B = require('base')
+
+               local M: B = {}
+
+               function M:foo()
+               end
+
+               return M
+            ]],
+            ["t2.tl"] = [[
+               local B = require('base')
+
+               local M: B = {}
+
+               function M:foo()
+               end
+
+               return M
+            ]],
+            ["top.tl"] = [[
+               local B = require('base')
+
+               local function new(cond: boolean): B
+                 local C: B
+                 if cond then
+                   C = require('t1')
+                 else
+                   C = require('t2')
+                 end
+               end
+
+               return new
+            ]],
+         })
+
+         local env = tl.init_env()
+         local _, err = tl.process("top.tl", env)
+
+         assert.same(nil, err)
+         assert.same(4, #env.loaded_order)
+         for _, name in ipairs(env.loaded_order) do
+            local result = env.loaded[name]
+
+            assert.same({}, result.warnings)
+            assert.same({}, result.syntax_errors)
+            assert.same({}, result.type_errors)
+         end
+      end)
    end)
 end)
