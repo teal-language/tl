@@ -82,6 +82,12 @@ describe("warnings", function()
          { y = 1, msg = "unused variable a: integer" },
       }))
 
+      it("reports unused union narrowed in declaration", util.check_warnings([[
+         local s: string | number = 12
+      ]], {
+         { y = 1, msg = "unused variable s" },
+      }))
+
       it("should not report that a narrowed variable is unused", util.check_warnings([[
          local function foo(bar: string | number): string
             if bar is string then

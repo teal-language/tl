@@ -740,5 +740,6 @@ describe("arrayrecord", function()
       v[1] = "hello"
 
       local a: {string} = v
+      print(a)
    ]], {}))
 end)

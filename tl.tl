@@ -1207,7 +1207,6 @@ end
 local record Fact
    fact: FactType
    where: Node
-   ctx: NodeKind
 
    -- is
    var: string
@@ -4818,12 +4817,17 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
+local enum Narrow
+   "is"
+   "declaration"
+end
+
 local record Variable
    t: Type
    attribute: Attribute
    needs_compat: boolean
    narrowed_from: Type
-   is_narrowed: boolean
+   is_narrowed: Narrow
    declared_at: Node
    is_func_arg: boolean
    used: boolean
@@ -6129,7 +6133,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function unused_warning(name: string, var: Variable)
       local prefix <const> = name:sub(1,1)
       if var.declared_at
-         and not var.is_narrowed
+         and not (var.is_narrowed == "is")
          and prefix ~= "_"
          and prefix ~= "@"
       then
@@ -6215,21 +6219,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local get_unresolved: function(scope: Scope): Type
 
-   local function add_to_scope(node: Node, name: string, t: Type, attribute: Attribute, is_narrowing: boolean, dont_check_redeclaration: boolean): Variable
+   local function add_to_scope(node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow, dont_check_redeclaration: boolean): Variable
       local scope <const> = st[#st]
       local var = scope[name]
-      if is_narrowing then
+      if narrow then
          if var then
             if var.is_narrowed then
                var.t = t
                return var
             end
 
-            var.is_narrowed = true
+            var.is_narrowed = narrow
             var.narrowed_from = var.t
             var.t = t
          else
-            var = { t = t, attribute = attribute, is_narrowed = true, declared_at = node }
+            var = { t = t, attribute = attribute, is_narrowed = narrow, declared_at = node }
             scope[name] = var
          end
 
@@ -6254,21 +6258,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          unused_warning(name, var)
       end
 
-      var = { t = t, attribute = attribute, is_narrowed = false, declared_at = node }
+      var = { t = t, attribute = attribute, is_narrowed = nil, declared_at = node }
       scope[name] = var
 
       return var
    end
 
-   local function add_var(node: Node, name: string, t: Type, attribute: Attribute, is_narrowing: boolean, dont_check_redeclaration: boolean): Variable
-      if lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not is_narrowing then
+   local function add_var(node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow, dont_check_redeclaration: boolean): Variable
+      if lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
          add_unknown(node, name)
       end
       if not attribute then
          t = drop_constant_value(t)
       end
 
-      local var = add_to_scope(node, name, t, attribute, is_narrowing, dont_check_redeclaration)
+      local var = add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
 
       if node and t.typename ~= "unresolved" and t.typename ~= "none" then
          node.type = node.type or t
@@ -7607,7 +7611,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if scope[var].narrowed_from then
             scope[var].t = scope[var].narrowed_from
             scope[var].narrowed_from = nil
-            scope[var].is_narrowed = false
+            scope[var].is_narrowed = nil
          else
             scope[var] = nil
          end
@@ -8295,11 +8299,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not typ then
                return { [f.var] = invalid_from(f) }
             end
-            if f.ctx ~= "local_declaration" then
-               if typ.typename ~= "typevar" and is_a(typ, f.typ) then
+            if typ.typename ~= "typevar" then
+               if is_a(typ, f.typ) then
                   node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
                   return { [f.var] = f }
-               elseif typ.typename ~= "typevar" and not is_a(f.typ, typ) then
+               elseif not is_a(f.typ, typ) then
                   node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
                   return { [f.var] = invalid_from(f) }
                end
@@ -8337,7 +8341,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not f.where then
                t.inferred_at = nil
             end
-            add_var(nil, v, t, "const", true)
+            add_var(nil, v, t, "const", "is")
          end
       end
    end
@@ -8944,7 +8948,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
 
                assert(var)
-               add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i))
+               add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "declaration")
 
                if ok and infertypes and infertypes[i] then
                   local where = node.exps[i] or node.exps
@@ -8952,7 +8956,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                   local rt = resolve_tuple_and_nominal(t)
                   if rt.typename ~= "enum" and not same_type(t, infertype) then
-                     apply_facts(where, Fact { fact = "is", ctx = node.kind, var = var.tk, typ = infertype, where = where })
+                     add_var(where, var.tk, infertype, "const", "declaration")
                   end
                end
 
@@ -9006,7 +9010,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      assert_is_a(varnode, val, vartype, "in assignment")
                      if varnode.kind == "variable" and vartype.typename == "union" then
                         -- narrow union
-                        add_var(varnode, varnode.tk, val, nil, true)
+                        add_var(varnode, varnode.tk, val, nil, "is")
                      end
                   else
                      node_error(varnode, "variable is not being assigned a value")
