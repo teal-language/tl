@@ -281,7 +281,6 @@ end
 
 
 
-
 do
 
 
@@ -525,7 +524,6 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
-            i = ti,
             tk = tk,
             kind = kind,
          }
@@ -538,7 +536,6 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
-            i = ti,
             tk = tk,
             kind = keywords[tk] and "keyword" or "identifier",
          }
@@ -551,7 +548,6 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
-            i = ti,
             tk = tk,
             kind = kind,
          }
@@ -564,7 +560,6 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
-            i = ti,
             tk = tk,
             kind = kind,
          }
