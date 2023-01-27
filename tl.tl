@@ -8981,7 +8981,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                   local rt = resolve_tuple_and_nominal(t)
                   if rt.typename ~= "enum" and not same_type(t, infertype) then
-                     add_var(where, var.tk, infertype, "const", "declaration")
+                     add_var(where, var.tk, infer_at(where, infertype), "const", "declaration")
                   end
                end
 
