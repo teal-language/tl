@@ -5471,7 +5471,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["match"] = a_type { typename = "function", args = TUPLE { STRING, STRING, NUMBER }, rets = VARARG { STRING } },
             ["pack"] = a_type { typename = "function", args = VARARG { STRING, ANY }, rets = TUPLE { STRING } },
             ["packsize"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { INTEGER } },
-            ["rep"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER }, rets = TUPLE { STRING } },
+            ["rep"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, OPT(STRING) }, rets = TUPLE { STRING } },
             ["reverse"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE { STRING } },
             ["sub"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = TUPLE { STRING } },
             ["unpack"] = a_type { typename = "function", args = TUPLE { STRING, STRING, OPT(NUMBER) }, rets = VARARG { ANY } },
