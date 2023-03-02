@@ -125,7 +125,7 @@ local record tl
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env, string, FILE): (Result, string)
    process_string: function(string, boolean, Env, string, string): Result
-   gen: function(string, Env): string
+   gen: function(string, Env): string, Result
    type_check: function(Node, TypeCheckOptions): Result, string
    init_env: function(boolean, boolean | CompatMode, TargetMode, {string}): Env, string
    version: function(): string
