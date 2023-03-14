@@ -80,4 +80,18 @@ describe("record method call", function()
       { y = 9, msg = "invoked method as a regular function: use ':' instead of '.'" },
    }))
 
+   it("reports potentially wrong use of self. in call", util.check_warnings([[
+      local record Foo
+         x: integer
+      end
+      function Foo:copy_x(other: Foo)
+         self.x = other.x
+      end
+      function Foo:copy_all(other: Foo)
+         self.copy_x(other)
+      end
+   ]], {
+      { y = 8, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+   }))
+
 end)
