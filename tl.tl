@@ -1430,6 +1430,17 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    }
 end
 
+-- Makes a shallow copy of the given type with a new typeid
+local function shallow_copy_type(t: Type): Type
+   local copy: {any:any} = {}
+   for k, v in pairs(t as {any:any}) do
+      copy[k] = v
+   end
+   local typ: Type = copy as Type
+   typ.typeid = new_typeid()
+   return typ
+end
+
 local function verify_kind(ps: ParseState, i: integer, kind: TokenKind, node_kind: NodeKind): integer, Node
    if ps.tokens[i].kind == kind then
       return i + 1, new_node(ps.tokens, i, node_kind)
@@ -8787,6 +8798,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             node_error(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
             ok = false
             infertype = INVALID
+         elseif infertype and infertype.is_method then
+            -- If we assign a method to a variable, e.g local myfunc = myobj.dothing, the variable should not be treated as a method
+            infertype = shallow_copy_type(infertype)
+            infertype.is_method = false
          end
       end
 
@@ -9485,6 +9500,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if node.decltype then
                vtype = node.decltype
                assert_is_a(node.value, children[2], node.decltype, "in table item")
+            end
+            if vtype.is_method then
+               -- If we assign a method to a table item, e.g local a = { myfunc = myobj.dothing }, the table item should not be treated as a method
+               vtype = shallow_copy_type(vtype)
+               vtype.is_method = false
             end
             node.type = a_type {
                y = node.y,
