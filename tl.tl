@@ -7495,7 +7495,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   local f = is_func and func or func.types[i]
                   if f.is_method and not is_method then
                      if args[1] and is_a(args[1], f.args[1]) then
-                        node_warning("hint", where, "invoked method as a regular function: consider using ':' instead of '.'")
+                        local receiver_is_typetype = where.e1.e1 and where.e1.e1.type and where.e1.e1.type.resolved and where.e1.e1.type.resolved.typename == "typetype"
+                        if not receiver_is_typetype then
+                           node_warning("hint", where, "invoked method as a regular function: consider using ':' instead of '.'")
+                        end
                      else
                         return node_error(where, "invoked method as a regular function: use ':' instead of '.'")
                      end
