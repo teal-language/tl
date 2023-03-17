@@ -94,4 +94,21 @@ describe("record method call", function()
       { y = 8, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
    }))
 
+   it("accepts use of dot call for method on record typetype", util.check_warnings([[
+      local record Foo
+         x: integer
+      end
+      function Foo:add(other: Foo)
+         self.x = other and (self.x + other.x) or self.x
+      end
+      local first: Foo = {}
+      Foo.add(first)
+      local q = Foo
+      q.add(first)
+      local m = {
+         a: Foo
+      }
+      m.a.add(first)
+   ]], {}, {}))
+
 end)
