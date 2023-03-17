@@ -1430,6 +1430,17 @@ local function new_type(ps, i, typename)
    })
 end
 
+
+local function shallow_copy_type(t)
+   local copy = {}
+   for k, v in pairs(t) do
+      copy[k] = v
+   end
+   local typ = copy
+   typ.typeid = new_typeid()
+   return typ
+end
+
 local function verify_kind(ps, i, kind, node_kind)
    if ps.tokens[i].kind == kind then
       return i + 1, new_node(ps.tokens, i, node_kind)
@@ -8787,6 +8798,10 @@ tl.type_check = function(ast, opts)
             node_error(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
             ok = false
             infertype = INVALID
+         elseif infertype and infertype.is_method then
+
+            infertype = shallow_copy_type(infertype)
+            infertype.is_method = false
          end
       end
 
@@ -9485,6 +9500,11 @@ tl.type_check = function(ast, opts)
             if node.decltype then
                vtype = node.decltype
                assert_is_a(node.value, children[2], node.decltype, "in table item")
+            end
+            if vtype.is_method then
+
+               vtype = shallow_copy_type(vtype)
+               vtype.is_method = false
             end
             node.type = a_type({
                y = node.y,

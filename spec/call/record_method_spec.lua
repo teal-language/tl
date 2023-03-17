@@ -111,4 +111,47 @@ describe("record method call", function()
       m.a.add(first)
    ]], {}, {}))
 
+   it("reports correct errors for calls on aliases of method", util.check_type_error([[
+      local record Foo
+         x: integer
+      end
+      function Foo:add(other: integer)
+         self.x = other and (self.x + other) or self.x
+      end
+      local first: Foo = {}
+      local fadd = first.add
+      fadd(12)
+      global gadd = first.add
+      gadd(13)
+      local tab = {
+         hadd = first.add
+      }
+      tab.hadd(14)
+
+   ]],
+   { 
+      { y = 9, msg = "argument 1: got integer, expected Foo" },
+      { y = 11, msg = "argument 1: got integer, expected Foo" },
+      { y = 15, msg = "argument 1: got integer, expected Foo" },
+   }))
+
+   it("reports no warnings for correctly-typed calls on aliases of method", util.check_warnings([[
+      local record Foo
+         x: integer
+      end
+      function Foo:add(other: Foo)
+         self.x = other and (self.x + other.x) or self.x
+      end
+      local first: Foo = {}
+      local fadd = first.add
+      fadd(first)
+      global gadd = first.add
+      gadd(first)
+      local tab = {
+         hadd = first.add
+      }
+      tab.hadd(first)
+
+   ]], {}, {}))
+
 end)
