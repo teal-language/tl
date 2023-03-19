@@ -64,35 +64,101 @@ describe("record method call", function()
       }))
    end)
 
-   it("catches wrong use of self. in call", util.check_type_error([[
-      local record Foo
-      end
-      function Foo:method_a()
-      end
-      function Foo:method_c(arg: string)
-      end
-      function Foo:method_b()
-         self.method_a()
-         self.method_c("hello")
-      end
-   ]], {
-      { y = 8, msg = "invoked method as a regular function: use ':' instead of '.'" },
-      { y = 9, msg = "invoked method as a regular function: use ':' instead of '.'" },
-   }))
+   describe("catches wrong use of self. in call", function()
+      it("for methods declared outside of the record", util.check_type_error([[
+         local record Foo
+         end
+         function Foo:method_a()
+         end
+         function Foo:method_c(arg: string)
+         end
+         function Foo:method_b()
+            self.method_a()
+            self.method_c("hello")
+         end
+      ]], {
+         { y = 8, msg = "invoked method as a regular function: use ':' instead of '.'" },
+         { y = 9, msg = "invoked method as a regular function: use ':' instead of '.'" },
+      }))
 
-   it("reports potentially wrong use of self. in call", util.check_warnings([[
-      local record Foo
-         x: integer
-      end
-      function Foo:copy_x(other: Foo)
-         self.x = other.x
-      end
-      function Foo:copy_all(other: Foo)
-         self.copy_x(other)
-      end
-   ]], {
-      { y = 8, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
-   }))
+      it("for methods declared inside of the record", util.check_type_error([[
+         local record Foo
+            method_a: function(self: Foo)
+            method_b: function(self: Foo)
+            method_c: function(self: Foo, arg: string)
+         end
+         Foo.method_b = function(self: Foo)
+            self.method_a()
+            self.method_c("hello")
+         end
+      ]], {
+         { y = 7, msg = "invoked method as a regular function: use ':' instead of '.'" },
+         { y = 8, msg = "invoked method as a regular function: use ':' instead of '.'" },
+      }))
+
+      it("for methods declared inside of a nested record", util.check_type_error([[
+         local record Foo
+            record Bar
+               method_a: function(self: Bar)
+               method_b: function(self: Bar)
+               method_c: function(self: Bar, arg: string)
+            end
+         end
+         Foo.Bar.method_b = function(self: Foo.Bar)
+            self.method_a()
+            self.method_c("hello")
+         end
+      ]], {
+         { y = 9, msg = "invoked method as a regular function: use ':' instead of '.'" },
+         { y = 10, msg = "invoked method as a regular function: use ':' instead of '.'" },
+      }))
+   
+   end)
+
+   describe("reports potentially wrong use of self. in call", function()
+      it("for methods declared outside of the record", util.check_warnings([[
+         local record Foo
+            x: integer
+         end
+         function Foo:copy_x(other: Foo)
+            self.x = other.x
+         end
+         function Foo:copy_all(other: Foo)
+            self.copy_x(other)
+         end
+      ]], {
+         { y = 8, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+      }))
+
+      it("for methods declared inside of the record", util.check_warnings([[
+         local record Foo
+            x: integer
+            copy_x: function(self: Foo, other: Foo)
+            copy_all: function(self: Foo, other: Foo)
+         end
+         Foo.copy_all = function(self: Foo, other: Foo)
+            self.copy_x(other)
+         end
+      ]], {
+         { y = 7, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+      }))
+
+      it("for methods declared inside of a nested record", util.check_warnings([[
+         local record Foo
+            record Bar
+               x: integer
+               copy_x: function(self: Bar, other: Bar)
+               copy_all: function(self: Bar, other: Bar)
+            end
+         end
+         Foo.Bar.copy_all = function(self: Foo.Bar, other: Foo.Bar)
+            self.copy_x(other)
+         end
+      ]], {
+         { y = 9, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+      }))
+
+   end)
 
    it("accepts use of dot call for method on record typetype", util.check_warnings([[
       local record Foo

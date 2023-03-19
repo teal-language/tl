@@ -1199,6 +1199,9 @@ local table_types = {
 
 
 
+
+
+
 local Fact = {}
 
 
@@ -1694,6 +1697,9 @@ local function parse_function_type(ps, i)
    else
       typ.args = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
       typ.rets = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
+   end
+   if typ.args[1] and typ.args[1].is_self then
+      typ.is_method = true
    end
    return i, typ
 end
@@ -2318,7 +2324,9 @@ end
 
 local function parse_argument_type(ps, i)
    local is_va = false
+   local argument_name = nil
    if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+      argument_name = ps.tokens[i].tk
       i = i + 2
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == ":" then
@@ -2333,6 +2341,10 @@ local function parse_argument_type(ps, i)
    if typ then
 
       typ.is_va = is_va
+   end
+
+   if argument_name == "self" then
+      typ.is_self = true
    end
 
    return i, typ, 0
@@ -2402,7 +2414,7 @@ local function parse_function(ps, i, ft)
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
-      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier" })
+      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
    end
 
    if not fn.name then
@@ -3299,7 +3311,7 @@ local function recurse_type(ast, visit)
    end
    if ast.args then
       for i, child in ipairs(ast.args) do
-         if i > 1 or not ast.is_method then
+         if i > 1 or not ast.is_method or child.is_self then
             table.insert(xs, recurse_type(child, visit))
          end
       end
