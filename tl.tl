@@ -1433,15 +1433,13 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    }
 end
 
--- Makes a shallow copy of the given type with a new typeid
+-- Makes a shallow copy of the given type
 local function shallow_copy_type(t: Type): Type
    local copy: {any:any} = {}
    for k, v in pairs(t as {any:any}) do
       copy[k] = v
    end
-   local typ: Type = copy as Type
-   typ.typeid = new_typeid()
-   return typ
+   return copy as Type
 end
 
 local function verify_kind(ps: ParseState, i: integer, kind: TokenKind, node_kind: NodeKind): integer, Node
@@ -6206,17 +6204,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return typ
    end
 
-   local function shallow_copy(t: Type): Type
-      local copy = {}
-      for k, v in pairs(t as {any:any}) do
-         copy[k] = v
-      end
-      return copy as Type
-   end
-
    local function infer_at(where: Node, t: Type): Type
       local ret = resolve_typevars_at(where, t)
-      ret = (ret ~= t) and ret or shallow_copy(t)
+      ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename
       return ret
@@ -6226,7 +6216,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if not t.tk then
          return t
       end
-      local ret = shallow_copy(t)
+      local ret = shallow_copy_type(t)
       ret.tk = nil
       return ret
    end
@@ -8830,6 +8820,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          elseif infertype and infertype.is_method then
             -- If we assign a method to a variable, e.g local myfunc = myobj.dothing, the variable should not be treated as a method
             infertype = shallow_copy_type(infertype)
+            infertype.typeid = new_typeid()
             infertype.is_method = false
          end
       end
@@ -9533,6 +9524,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if vtype.is_method then
                -- If we assign a method to a table item, e.g local a = { myfunc = myobj.dothing }, the table item should not be treated as a method
                vtype = shallow_copy_type(vtype)
+               vtype.typeid = new_typeid()
                vtype.is_method = false
             end
             node.type = a_type {

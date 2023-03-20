@@ -1439,9 +1439,7 @@ local function shallow_copy_type(t)
    for k, v in pairs(t) do
       copy[k] = v
    end
-   local typ = copy
-   typ.typeid = new_typeid()
-   return typ
+   return copy
 end
 
 local function verify_kind(ps, i, kind, node_kind)
@@ -6206,17 +6204,9 @@ tl.type_check = function(ast, opts)
       return typ
    end
 
-   local function shallow_copy(t)
-      local copy = {}
-      for k, v in pairs(t) do
-         copy[k] = v
-      end
-      return copy
-   end
-
    local function infer_at(where, t)
       local ret = resolve_typevars_at(where, t)
-      ret = (ret ~= t) and ret or shallow_copy(t)
+      ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename
       return ret
@@ -6226,7 +6216,7 @@ tl.type_check = function(ast, opts)
       if not t.tk then
          return t
       end
-      local ret = shallow_copy(t)
+      local ret = shallow_copy_type(t)
       ret.tk = nil
       return ret
    end
@@ -8830,6 +8820,7 @@ tl.type_check = function(ast, opts)
          elseif infertype and infertype.is_method then
 
             infertype = shallow_copy_type(infertype)
+            infertype.typeid = new_typeid()
             infertype.is_method = false
          end
       end
@@ -9533,6 +9524,7 @@ tl.type_check = function(ast, opts)
             if vtype.is_method then
 
                vtype = shallow_copy_type(vtype)
+               vtype.typeid = new_typeid()
                vtype.is_method = false
             end
             node.type = a_type({
