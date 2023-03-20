@@ -2638,7 +2638,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
    local nt = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt)
+   local iok = parse_body(ps, i, rdef, nt, v.tk)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -2692,7 +2692,7 @@ local metamethod_names = {
    ["__close"] = true,
 }
 
-parse_record_body = function(ps, i, def, node)
+parse_record_body = function(ps, i, def, node, name)
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
@@ -2732,7 +2732,7 @@ parse_record_body = function(ps, i, def, node)
          end
          i = verify_tk(ps, i, "=")
          local nt
-         i, nt = parse_newtype(ps, i)
+         i, nt = parse_newtype(ps, i, v.tk)
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -2786,6 +2786,23 @@ parse_record_body = function(ps, i, def, node)
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
             end
+
+            if t.is_method and t.args and t.args[1] and t.args[1].is_self then
+               local selfarg = t.args[1]
+               if selfarg.tk ~= name or (def.typeargs and not selfarg.typevals) then
+                  t.is_method = false
+                  selfarg.is_self = false
+               elseif def.typeargs then
+                  for j = 1, #def.typeargs do
+                     if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= def.typeargs[j].typearg then
+                        t.is_method = false
+                        selfarg.is_self = false
+                        break
+                     end
+                  end
+               end
+            end
+
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -2805,13 +2822,13 @@ parse_record_body = function(ps, i, def, node)
    return i, node
 end
 
-parse_newtype = function(ps, i)
+parse_newtype = function(ps, i, name)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
       local def = new_type(ps, i, "record")
       i = i + 1
-      i = parse_record_body(ps, i, def, node)
+      i = parse_record_body(ps, i, def, node, name)
       node.newtype.def = def
       return i, node
    elseif ps.tokens[i].tk == "enum" then
@@ -2957,7 +2974,7 @@ local function parse_type_declaration(ps, i, node_name)
       return i, asgn
    end
 
-   i, asgn.value = parse_newtype(ps, i)
+   i, asgn.value = parse_newtype(ps, i, asgn.var.tk)
    if not asgn.value then
       return i
    end
@@ -2984,7 +3001,7 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_body(ps, i, def, nt)
+   i = parse_body(ps, i, def, nt, asgn.var.tk)
    return i, asgn
 end
 

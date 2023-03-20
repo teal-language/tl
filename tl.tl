@@ -1366,9 +1366,9 @@ local parse_statements: function(ParseState, integer, boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node
 local parse_argument_type_list: function(ParseState, integer): integer, Type
 local parse_type: function(ParseState, integer): integer, Type, integer
-local parse_newtype: function(ps: ParseState, i: integer): integer, Node
+local parse_newtype: function(ps: ParseState, i: integer, name: string): integer, Node
 local parse_enum_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
-local parse_record_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+local parse_record_body: function(ps: ParseState, i: integer, def: Type, node: Node, name: string): integer, Node
 
 local function fail(ps: ParseState, i: integer, msg: string): integer
    if not ps.tokens[i] then
@@ -2623,7 +2623,7 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
    return true
 end
 
-local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Node, name: string): integer, Node
 
 local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename: TypeName, parse_body: ParseBody): integer, boolean
    i = i + 1 -- skip 'record' or 'enum'
@@ -2638,7 +2638,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
    local nt: Node = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt)
+   local iok = parse_body(ps, i, rdef, nt, v.tk)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -2692,7 +2692,7 @@ local metamethod_names: {string:boolean} = {
    ["__close"] = true,
 }
 
-parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, name: string): integer, Node
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
@@ -2732,7 +2732,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
          end
          i = verify_tk(ps, i, "=")
          local nt: Node
-         i, nt = parse_newtype(ps, i)
+         i, nt = parse_newtype(ps, i, v.tk)
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -2786,6 +2786,23 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
             end
+
+            if t.is_method and t.args and t.args[1] and t.args[1].is_self then
+               local selfarg = t.args[1]
+               if selfarg.tk ~= name or (def.typeargs and not selfarg.typevals) then
+                  t.is_method = false
+                  selfarg.is_self = false
+               elseif def.typeargs then
+                  for j=1,#def.typeargs do
+                     if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= def.typeargs[j].typearg then
+                        t.is_method = false
+                        selfarg.is_self = false
+                        break
+                     end
+                  end
+               end
+            end
+
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -2805,13 +2822,13 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
    return i, node
 end
 
-parse_newtype = function(ps: ParseState, i: integer): integer, Node
+parse_newtype = function(ps: ParseState, i: integer, name: string): integer, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
       local def = new_type(ps, i, "record")
       i = i + 1
-      i = parse_record_body(ps, i, def, node)
+      i = parse_record_body(ps, i, def, node, name)
       node.newtype.def = def
       return i, node
    elseif ps.tokens[i].tk == "enum" then
@@ -2957,7 +2974,7 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
       return i, asgn
    end
 
-   i, asgn.value = parse_newtype(ps, i)
+   i, asgn.value = parse_newtype(ps, i, asgn.var.tk)
    if not asgn.value then
       return i
    end
@@ -2984,7 +3001,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_body(ps, i, def, nt)
+   i = parse_body(ps, i, def, nt, asgn.var.tk)
    return i, asgn
 end
 
