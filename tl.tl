@@ -8872,7 +8872,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local is_total = true
       local missing: {string}
       for _, key in ipairs(t.field_order) do
-         is_total, missing = total_check_key(key, seen_keys, is_total, missing)
+         if not is_typetype(t.fields[key]) then
+            is_total, missing = total_check_key(key, seen_keys, is_total, missing)
+         end
       end
       return is_total, missing
    end

@@ -385,6 +385,30 @@ describe("local", function()
          ]], {
             { msg = "record variable declared <total> does not declare values for all fields (missing: z)" },
          }))
+
+         it("does not consider a subtype to be a missing field", util.check([[
+            local record Fruit
+               name: string
+            end
+
+            local record Person
+               record Identity
+                  name: string
+                  born: integer
+               end
+
+               id: Identity
+               likes: Fruit
+            end
+
+            local person <total>: Person = {
+               id = {
+                  name = 'Fulano',
+                  born = 1995
+               },
+               likes = {name='orange'}
+            }
+         ]]))
       end)
 
       describe("<close>", function()
