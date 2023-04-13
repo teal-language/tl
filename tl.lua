@@ -6903,7 +6903,7 @@ tl.type_check = function(ast, opts)
    end
 
 
-   is_a = function(t1, t2, for_equality)
+   is_a = function(t1, t2, for_equality, ignore_nil)
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -6939,7 +6939,7 @@ tl.type_check = function(ast, opts)
       end
 
 
-      if t1.typename == "nil" then
+      if not ignore_nil and t1.typename == "nil" then
          return true
       end
 
@@ -7252,6 +7252,9 @@ tl.type_check = function(ast, opts)
 
 
       if t1.typename == "nil" then
+         if not is_a(t1, t2, nil, true) then
+            node_warning("hint", node, "assigning nil to a non-nilable type %s", t2.typename)
+         end
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
          if is_number_type(t2.emptytable_type.keys) then

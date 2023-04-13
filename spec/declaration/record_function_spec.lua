@@ -101,7 +101,7 @@ describe("record function", function()
            func: function(R)
          end
 
-         function R:func(): boolean
+         function R:func(): boolean | nil
            return self._current and self._current:func()
          end
       ]], {}, {

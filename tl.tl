@@ -6279,7 +6279,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return var
    end
 
-   local type CompareTypes = function(Type, Type, boolean): boolean, {Error}
+   local type CompareTypes = function(Type, Type, boolean, boolean): boolean, {Error}
 
    local function compare_and_infer_typevars(t1: Type, t2: Type, comp: CompareTypes): boolean, {Error}
       -- if both are typevars and they are the same variable, nothing to do here
@@ -6315,7 +6315,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local same_type: function(t1: Type, t2: Type): boolean, {Error}
-   local is_a: function(Type, Type, boolean): boolean, {Error}
+   local is_a: function(Type, Type, boolean, boolean): boolean, {Error}
 
    local type TypeGetter = function(string): Type
 
@@ -6903,7 +6903,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    -- subtyping comparison
-   is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
+   is_a = function(t1: Type, t2: Type, for_equality: boolean, ignore_nil: boolean): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -6939,7 +6939,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       -- ∀ t, nil <: t
-      if t1.typename == "nil" then -- TODO nilable
+      if not ignore_nil and t1.typename == "nil" then -- TODO nilable
          return true
       end
 
@@ -7252,6 +7252,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       -- some flow-based inference
       if t1.typename == "nil" then
+         if not is_a(t1, t2, nil, true) then
+            node_warning("hint", node, "assigning nil to a non-nilable type %s", t2.typename)
+         end
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
          if is_number_type(t2.emptytable_type.keys) then -- ideally integer only
