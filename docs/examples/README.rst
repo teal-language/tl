@@ -11,6 +11,9 @@ examples are provided.
 
 In all of these examples it is assumed that the initial directory is 'examples'.
 
+The use of 'tree' command is only for illustration in these notes. The user does
+*not* need to use the 'tree' command.
+
 Files
 -----
 
@@ -54,7 +57,7 @@ Create *src/main.tl*
 
 .. image:: assets/files-src-main.tl.png
   :width: 700 px
-  
+
 
 
 Build the Project
