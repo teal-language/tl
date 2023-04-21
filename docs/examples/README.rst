@@ -20,7 +20,9 @@ basic IO.
 
 Create the Project
 ..................
-Creating your 'files' project looks like this.::
+Create your 'files' project with ``cyan init files``.
+
+::
 
   examples> cyan init files
         Info Created directory files
@@ -29,7 +31,8 @@ Creating your 'files' project looks like this.::
         Info Wrote files/tlconfig.lua
 
 
-Cyan has created a configuration file (tlconfig) and two directories.
+Cyan has created a configuration file (``tlconfig``) and two directories. This
+is the standard project layout.
 
 ::
 
@@ -40,7 +43,6 @@ Cyan has created a configuration file (tlconfig) and two directories.
   ├── src
   └── tlconfig.lua
 
-  3 directories, 1 file
 
 Create main.tl
 ..............
@@ -48,7 +50,7 @@ Create main.tl
 In these examples ``main.tl`` will be the program that gets run. In other
 examples you will have modules that are called from main.
 
-src/main.tl
+Create *src/main.tl*
 
 ::
 
@@ -114,20 +116,19 @@ And now the project directories look like...
 
 ::
 
-files> tree .
-.
-├── build
-│   └── main.lua
-├── src
-│   └── main.tl
-└── tlconfig.lua
+  files> tree .
+  .
+  ├── build
+  │   └── main.lua
+  ├── src
+  │   └── main.tl
+  └── tlconfig.lua
 
 
 Run the Project
 ...............
 
-In this example the program reads from STDIN and writes to a
-file.
+In this example the program reads from STDIN and writes to a file.
 
 ::
 
@@ -148,3 +149,15 @@ You can delete the temporary file.
 ::
 
   files> rm tmp.out
+
+Exercises
+.........
+
+#. Demonstrate that you can use all four possible I/O
+
+   * read from STDIN, write to STDOUT
+   * read from STDIN, write to a file
+   * read from a file, write to STDOUT
+   * read from a file, write to file
+
+#. Update src/main.tl to put a line number in front of each output line.
