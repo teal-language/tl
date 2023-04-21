@@ -1,6 +1,28 @@
 Examples
 ========
 
+The user new to Teal may find a few examples helpful.  In that light these
+examples are provided.::
+
+  NOTE  The examples use the 'cyan' build tool, as it is expected to be the
+        common tool used for initializing and building projects.
+
+Files
+-----
+
+This example demonstrates ``records``, the type 'FILE' for file handles, and basic
+IO.
+
+Say you are in the directory 'examples', creating your 'files' project looks
+like this.::
+
+examples> cyan init files
+      Info Created directory files
+      Info Created directory files/src
+      Info Created directory files/build
+      Info Wrote files/tlconfig.lua
+
+
 The 'files' example shows:
 
 * use of record
