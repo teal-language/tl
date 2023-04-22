@@ -2,14 +2,17 @@ Examples
 ========
 
 The user new to Teal may find a few examples helpful.  In that light these
-examples are provided.
+examples are provided; where each example has:
+
+1. Explanatory text, and
+2. Working source code.
 
 ::
 
   NOTE  The examples use the 'cyan' build tool, as it is expected to be the
         common tool used for initializing and building projects.
 
-In all of these examples it is assumed that the initial directory is 'examples'.
+In all of these examples it is assumed that the root directory is 'examples'.
 
 The use of 'tree' command is only for illustration in these notes. The user does
 *not* need to use the 'tree' command.
