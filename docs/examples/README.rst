@@ -56,7 +56,7 @@ Create main.tl
 In these examples ``main.tl`` will be the program that gets run. In other
 examples you will have modules that are called from main.
 
-Create *src/main.tl*
+Create *src/main.tl* [`link to source <files/src/main.tl>`_]
 
 .. image:: assets/files-src-main.tl.png
   :width: 700 px
