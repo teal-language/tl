@@ -8062,7 +8062,8 @@ tl.type_check = function(ast, opts)
             return nil, nil, dname
          end
          t = t and t.fields and t.fields[fname]
-         return t, v, dname
+
+         return t.def or t, v, dname
       end
    end
 

@@ -50,6 +50,20 @@ describe("record method", function()
       local ok = r.z:f(3, "abc")
    ]]))
 
+   it("nested declaration for record (regression test for #648)", util.check([[
+      local record Math
+         record Point
+            x: number
+            y: number
+         end
+      end
+
+      function Math.Point:move(dx: number, dy: number)
+         self.x = self.x + dx
+         self.y = self.y + dy
+      end
+   ]]))
+
    it("nested declaration in {}", util.check([[
       local r = {
          z = {},
