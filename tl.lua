@@ -1199,6 +1199,9 @@ local table_types = {
 
 
 
+
+
+
 local Fact = {}
 
 
@@ -1436,9 +1439,7 @@ local function shallow_copy_type(t)
    for k, v in pairs(t) do
       copy[k] = v
    end
-   local typ = copy
-   typ.typeid = new_typeid()
-   return typ
+   return copy
 end
 
 local function verify_kind(ps, i, kind, node_kind)
@@ -1694,6 +1695,9 @@ local function parse_function_type(ps, i)
    else
       typ.args = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
       typ.rets = a_type({ typename = "tuple", is_va = true, a_type({ typename = "any" }) })
+   end
+   if typ.args[1] and typ.args[1].is_self then
+      typ.is_method = true
    end
    return i, typ
 end
@@ -2318,7 +2322,9 @@ end
 
 local function parse_argument_type(ps, i)
    local is_va = false
+   local argument_name = nil
    if ps.tokens[i].kind == "identifier" and ps.tokens[i + 1].tk == ":" then
+      argument_name = ps.tokens[i].tk
       i = i + 2
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == ":" then
@@ -2333,6 +2339,10 @@ local function parse_argument_type(ps, i)
    if typ then
 
       typ.is_va = is_va
+   end
+
+   if argument_name == "self" then
+      typ.is_self = true
    end
 
    return i, typ, 0
@@ -2402,7 +2412,7 @@ local function parse_function(ps, i, ft)
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
-      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier" })
+      table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
    end
 
    if not fn.name then
@@ -2626,7 +2636,7 @@ local function parse_nested_type(ps, i, def, typename, parse_body)
    local nt = new_node(ps.tokens, i - 2, "newtype")
    nt.newtype = new_type(ps, i, "typetype")
    local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt)
+   local iok = parse_body(ps, i, rdef, nt, v.tk)
    if iok then
       i = iok
       nt.newtype.def = rdef
@@ -2680,7 +2690,7 @@ local metamethod_names = {
    ["__close"] = true,
 }
 
-parse_record_body = function(ps, i, def, node)
+parse_record_body = function(ps, i, def, node, name)
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
@@ -2720,7 +2730,7 @@ parse_record_body = function(ps, i, def, node)
          end
          i = verify_tk(ps, i, "=")
          local nt
-         i, nt = parse_newtype(ps, i)
+         i, nt = parse_newtype(ps, i, v.tk)
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -2774,6 +2784,23 @@ parse_record_body = function(ps, i, def, node)
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
             end
+
+            if t.is_method and t.args and t.args[1] and t.args[1].is_self then
+               local selfarg = t.args[1]
+               if selfarg.tk ~= name or (def.typeargs and not selfarg.typevals) then
+                  t.is_method = false
+                  selfarg.is_self = false
+               elseif def.typeargs then
+                  for j = 1, #def.typeargs do
+                     if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= def.typeargs[j].typearg then
+                        t.is_method = false
+                        selfarg.is_self = false
+                        break
+                     end
+                  end
+               end
+            end
+
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -2793,13 +2820,13 @@ parse_record_body = function(ps, i, def, node)
    return i, node
 end
 
-parse_newtype = function(ps, i)
+parse_newtype = function(ps, i, name)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
    if ps.tokens[i].tk == "record" then
       local def = new_type(ps, i, "record")
       i = i + 1
-      i = parse_record_body(ps, i, def, node)
+      i = parse_record_body(ps, i, def, node, name)
       node.newtype.def = def
       return i, node
    elseif ps.tokens[i].tk == "enum" then
@@ -2945,7 +2972,7 @@ local function parse_type_declaration(ps, i, node_name)
       return i, asgn
    end
 
-   i, asgn.value = parse_newtype(ps, i)
+   i, asgn.value = parse_newtype(ps, i, asgn.var.tk)
    if not asgn.value then
       return i
    end
@@ -2972,7 +2999,7 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
    end
    nt.newtype.def.names = { asgn.var.tk }
 
-   i = parse_body(ps, i, def, nt)
+   i = parse_body(ps, i, def, nt, asgn.var.tk)
    return i, asgn
 end
 
@@ -3299,7 +3326,7 @@ local function recurse_type(ast, visit)
    end
    if ast.args then
       for i, child in ipairs(ast.args) do
-         if i > 1 or not ast.is_method then
+         if i > 1 or not ast.is_method or child.is_self then
             table.insert(xs, recurse_type(child, visit))
          end
       end
@@ -6177,17 +6204,9 @@ tl.type_check = function(ast, opts)
       return typ
    end
 
-   local function shallow_copy(t)
-      local copy = {}
-      for k, v in pairs(t) do
-         copy[k] = v
-      end
-      return copy
-   end
-
    local function infer_at(where, t)
       local ret = resolve_typevars_at(where, t)
-      ret = (ret ~= t) and ret or shallow_copy(t)
+      ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename
       return ret
@@ -6197,7 +6216,7 @@ tl.type_check = function(ast, opts)
       if not t.tk then
          return t
       end
-      local ret = shallow_copy(t)
+      local ret = shallow_copy_type(t)
       ret.tk = nil
       return ret
    end
@@ -8802,6 +8821,7 @@ tl.type_check = function(ast, opts)
          elseif infertype and infertype.is_method then
 
             infertype = shallow_copy_type(infertype)
+            infertype.typeid = new_typeid()
             infertype.is_method = false
          end
       end
@@ -9507,6 +9527,7 @@ tl.type_check = function(ast, opts)
             if vtype.is_method then
 
                vtype = shallow_copy_type(vtype)
+               vtype.typeid = new_typeid()
                vtype.is_method = false
             end
             node.type = a_type({
