@@ -56,46 +56,44 @@ Create [src/main.tl](files/src/main.tl)
 
 Use Cyan to build the project.
 
-::
-
-  files> cyan build
-        Info Type checked src/main.tl
-        Info Wrote build/main.lua
+```
+files> cyan build
+    Info Type checked src/main.tl
+    Info Wrote build/main.lua
+```
 
 And now the project directories look like...
 
-::
-
-  files> tree .
-  .
-  ├── build
-  │   └── main.lua
-  ├── src
-  │   └── main.tl
-  └── tlconfig.lua
-
+```
+files> tree .
+.
+├── build
+│   └── main.lua
+├── src
+│   └── main.tl
+└── tlconfig.lua
+```
 
 ### Run the Project
 
 In this example the program reads from STDIN and writes to a file.
 
-::
+```
+files> ls -R1 | lua build/main.lua -o tmp.out
+files> cat tmp.out
+build
+src
+tlconfig.lua
 
-  files> ls -R1 | lua build/main.lua -o tmp.out
-  files> cat tmp.out
-  build
-  src
-  tlconfig.lua
+./build:
+main.lua
 
-  ./build:
-  main.lua
-
-  ./src:
-  main.tl
+./src:
+main.tl
+```
 
 You can delete the temporary file.
 
-::
-
+```
   files> rm tmp.out
-
+```
