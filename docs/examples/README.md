@@ -63,9 +63,11 @@ end
 
 And are used like this:
 ```
-local type Handles = record
-  i: FILE       -- input
-  o: FILE       -- output
+local function main(f: Handles): integer
+  local lines = f.i:read("a")
+  -- do work on input, then write it out --
+  f.o:write(lines)
+  return 0
 end
 ```
 
