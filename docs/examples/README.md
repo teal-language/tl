@@ -49,7 +49,7 @@ files> tree .
 In these examples `main.tl` will be the program that gets run. In other
 examples you will have modules that are called from main.
 
-Create [src/main.tl](src/main.tl)
+Create [src/main.tl](files/src/main.tl)
 
 
 ### Build the Project
