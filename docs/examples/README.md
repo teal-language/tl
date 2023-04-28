@@ -51,6 +51,23 @@ examples you will have modules that are called from main.
 
 Create [src/main.tl](files/src/main.tl)
 
+The file handles appear like this in main.tl
+
+```
+-- record to hold file handles
+local type Handles = record
+  i: FILE       -- input
+  o: FILE       -- output
+end
+```
+
+And are used like this:
+```
+local type Handles = record
+  i: FILE       -- input
+  o: FILE       -- output
+end
+```
 
 ### Build the Project
 
@@ -95,5 +112,5 @@ main.tl
 You can delete the temporary file.
 
 ```
-  files> rm tmp.out
+files> rm tmp.out
 ```

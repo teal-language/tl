@@ -29,17 +29,40 @@ local errstr = ""
 local i = 1
 while i <= #arg do
    local a, b = arg[i], arg[i + 1]
-   if a == "-i" then if not b then errstr = "-i filename?" else fin = b; i = i + 2 end
-   elseif a == "-o" then if not b then errstr = "-o filename?" else fout = b; i = i + 2 end
-   else errstr = "unknown arg: " .. a
+   if a == "-i" then
+      if not b then
+         errstr = "-i filename?"
+      else
+         fin = b
+         i = i + 2
+      end
+   elseif a == "-o" then
+      if not b then
+         errstr = "-o filename?"
+      else
+         fout = b
+         i = i + 2
+      end
+   else
+      errstr = "unknown arg: " .. a
    end
-   if errstr ~= "" then error(errstr) end
+   if errstr ~= "" then
+      error(errstr)
+   end
 end
 
 
 local handle = {}
-if fin == "" then handle.i = io.stdin else handle.i = assert(io.open(fin, "r")) end
-if fout == "" then handle.o = io.stdout else handle.o = assert(io.open(fout, "w")) end
+if fin == "" then
+   handle.i = io.stdin
+else
+   handle.i = assert(io.open(fin, "r"))
+end
+if fout == "" then
+   handle.o = io.stdout
+else
+   handle.o = assert(io.open(fout, "w"))
+end
 
 
 return main(handle)
