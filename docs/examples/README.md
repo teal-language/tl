@@ -25,37 +25,31 @@ basic IO.
 Create your 'files' project with `cyan init files`.
 
 ```
-
-  examples> cyan init files
-        Info Created directory files
-        Info Created directory files/src
-        Info Created directory files/build
-        Info Wrote files/tlconfig.lua
+examples> cyan init files
+    Info Created directory files
+    Info Created directory files/src
+    Info Created directory files/build
+    Info Wrote files/tlconfig.lua
 ```
 
-Cyan has created a configuration file (``tlconfig``) and two directories. This
+Cyan has created a configuration file (`tlconfig`) and two directories. This
 is the standard project layout.
 
-::
-
-  examples> cd files
-  files> tree .
-  .
-  ├── build
-  ├── src
-  └── tlconfig.lua
-
+```
+examples> cd files
+files> tree .
+.
+├── build
+├── src
+└── tlconfig.lua
+```
 
 ### Create main.tl
 
-In these examples ``main.tl`` will be the program that gets run. In other
+In these examples `main.tl` will be the program that gets run. In other
 examples you will have modules that are called from main.
 
-Create *src/main.tl*
-
-.. image:: assets/files-src-main.tl.png
-  :width: 700 px
-
+Create [src/main.tl](src/main.tl)
 
 
 ### Build the Project
