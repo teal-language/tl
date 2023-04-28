@@ -1,3 +1,50 @@
+# 0.15.2
+
+2023-04-27
+
+This is primarily a bugfix release, but it does include
+some significant quality-of-life improvements when using
+record methods.
+
+This release features commits by JR Mitchell, @IcyLava
+and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Improved checks over uses of `self` in forward-declared
+  methods:
+  * In a `record` declaration, when fields of type `function`
+    are declared within a and they have a matching `self`
+    first argument, those are now treated as methods
+    (similar to explicit `function R:method` declarations
+    using colon-notation), so misuses of `:` versus `.`
+    can be detected in those as well.
+* Warn when invoking a method as a function, even if the type
+  of the first non-self argument matches.
+* Standard library improvements:
+  * Add optional third argument for `string.rep`
+
+### API
+
+* Public signature of `tl.gen` features second return value of
+  type `Result`
+
+### Fixes
+
+* Acept record method declaration for nested records. (#648)
+* Do not consider an inner type to be a missing key when declaring
+  a total table. (#647)
+* Change inference order in function calls to better match programmer
+  intent: infer `self` (which is usually explicitly given)
+  before return values (which are implied by context).
+* Preserve narrowed union in a loop if the variable is not assigned. (#617)
+* Don't miss a "unused variable" warning when it is a narrowed union.
+* Fixes the detection of record method redeclaration. (#620)
+* Fixes the error message when number of return arguments is
+  mismatched. (#618)
+
 # 0.15.1
 
 2023-01-23
@@ -30,7 +77,7 @@ some API changes, listed below.
 This release features commits by Li Jin, Carl Lei, Yang Li,
 Pierre Chapuis, @lenscas, Stéphane Veyret, and Hisham Muhammad.
 
-# What's New
+## What's New
 
 ### Language
 
