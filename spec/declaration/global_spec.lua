@@ -85,6 +85,12 @@ describe("global", function()
          { msg = "cannot reassign to <const> global" },
       }))
 
+      it("fails for const if reassigning (regression test for #653)", util.check_type_error([[
+         global assert = 1
+      ]], {
+         { msg = "cannot reassign to <const> global: assert" },
+      }))
+
       it("fails if adding const", util.check_type_error([[
          global x: number
          global x <const>: number

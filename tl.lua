@@ -7726,7 +7726,7 @@ tl.type_check = function(ast, opts)
 
       if existing then
          if is_assigning and existing_attr then
-            node_error(node, "cannot reassign to <" .. node.attribute .. "> global: " .. var)
+            node_error(node, "cannot reassign to <" .. existing_attr .. "> global: " .. var)
          end
          if existing_attr and not is_const then
             node_error(node, "global was previously declared as <" .. existing_attr .. ">: " .. var)
