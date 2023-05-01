@@ -47,6 +47,26 @@ describe("local function", function()
          local ok = f(3, "abc")
       ]]))
 
+      it("can take return-style input varargs in type declarations", util.check([[
+         local f: function(x: number, string...): boolean
+
+         f = function(a: number, ...: string): boolean
+            return #select(1, ...) == a
+         end
+         local ok = f(3, "abc")
+      ]]))
+
+      it("cannot take return-style input varargs in function declarations", util.check_syntax_error([[
+         local f: function(x: number, string...): boolean
+
+         f = function(a: number, string...): boolean
+            return #select(1, ...) == a
+         end
+         local ok = f(3, "abc")
+      ]], {
+         { y = 3, msg = "'...' needs to be declared as a typed argument" }
+      }))
+
       it("can take typed vararg in return types", util.check([[
          local f: function(x: number): string...
 
@@ -78,6 +98,18 @@ describe("local function", function()
          local ok = f(3, "abc")
       ]], {
          { msg = "cannot have untyped '...' when declaring the type of an argument" }
+      }))
+
+      it("vararg can only be the last argument", util.check_syntax_error([[
+         local f: function(...: string, number): boolean
+
+         f = function(...: string, a: number): boolean
+            return #select(1, ...) == a
+         end
+         local ok = f(3, "abc")
+      ]], {
+         { y = 1, msg = "'...' can only be last argument" },
+         { y = 3, msg = "'...' can only be last argument" },
       }))
    end)
 

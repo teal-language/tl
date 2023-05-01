@@ -2296,6 +2296,9 @@ local function parse_argument(ps: ParseState, i: integer): integer, Node, intege
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
+   if ps.tokens[i].tk == "..." then
+      fail(ps, i, "'...' needs to be declared as a typed argument")
+   end
    if ps.tokens[i].tk == ":" then
       i = i + 1
       local decltype: Type
@@ -2337,6 +2340,10 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Type, i
 
    local typ: Type; i, typ = parse_type(ps, i)
    if typ then
+      if not is_va and ps.tokens[i].tk == "..." then
+         i = i + 1
+         is_va = true
+      end
       -- HACK: we're storing the attribute in the wrong node during the iteration...
       typ.is_va = is_va
    end
@@ -2352,9 +2359,17 @@ parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type
    local list = new_type(ps, i, "tuple")
    i = parse_bracket_list(ps, i, list, "(", ")", "sep", parse_argument_type)
    -- HACK: ...and then cleaning it up and setting in the right node
-   if list[#list] and list[#list].is_va then
-      list[#list].is_va = nil
-      list.is_va = true
+   if list[#list] then
+      for l = 1, #list - 1 do
+         if list[l].is_va then
+            list[l].is_va = nil
+            fail(ps, i, "'...' can only be last argument")
+         end
+      end
+      if list[#list].is_va then
+         list[#list].is_va = nil
+         list.is_va = true
+      end
    end
    return i, list
 end
