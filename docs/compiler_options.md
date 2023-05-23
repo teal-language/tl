@@ -42,11 +42,35 @@ return {
 Teal is a Lua dialect that most closely resembles Lua 5.3-5.4, but it is able
 to target Lua 5.1 (including LuaJIT) and Lua 5.2 as well. The compiler attempts
 to produce code that, given an input `.tl` file, generates the same behavior
-on various Lua versions.
+on various Lua versions. For example, if you are targeting Lua 5.1, the Teal
+code `x // y` will generate `math.floor(x / y)` instead.
 
 However, there are limitations in the portability across Lua versions, and the
 options `--gen-target` and `--gen-compat` give you some control over the generated
-code.
+code. If you do not use these options, the Teal compiler will infer a default
+target implicitly.
+
+#### Which Lua version does the Teal compiler target by default?
+
+If set explicitly via the `--gen-target` flag of the `tl` CLI (or the equivalent
+options in the programmatic API), the generated code will target the Lua
+version requested: 5.1, 5.3 or 5.4.
+
+If the code generation target is not set explicitly via `--gen-target`, Teal
+will target the Lua version most compatible with the version of the Lua VM
+under which the compiler itself is running. For example, if running under
+something that reports `_VERSION` as `"Lua 5.1"` or `"Lua 5.2"` (such as LuaJIT),
+it will generate 5.1-compatible code. If running under Lua 5.3 or greater, it
+will output code that uses 5.3 extensions.
+
+The stand-alone `tl` binaries are built using Lua 5.4, so they default to
+generating 5.3-compatible code. If you install `tl` using LuaRocks, the CLI
+will use the Lua version you use with LuaRocks, so it will default to that
+Lua's version.
+
+If you require the `tl` Lua module and use the `tl.loader()`, it will do the
+implicit version selection, picking the right choice based on the Lua version
+you're running it on.
 
 #### Target version
 
