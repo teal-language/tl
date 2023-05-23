@@ -23,7 +23,7 @@ return {
 | `-l --require`  | | `{string}` | `run` | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
 | `-I --include-dir` |  `include_dir` | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
 | `--gen-compat` | `gen_compat` | `string` | `build` `gen` `run` | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
-| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1` and `5.3`. See [below](#generated-code) for details.
+| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
 || `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
 || `exclude` | `{string}` | `build` | The set of files to exclude. See below for details on patterns.
 | `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
@@ -42,12 +42,34 @@ return {
 Teal is a Lua dialect that most closely resembles Lua 5.3-5.4, but it is able
 to target Lua 5.1 (including LuaJIT) and Lua 5.2 as well. The compiler attempts
 to produce code that, given an input `.tl` file, generates the same behavior
-on various Lua versions. For example, if you are targeting Lua 5.1, the Teal
-code `x // y` will generate `math.floor(x / y)` instead.
+on various Lua versions.
 
 However, there are limitations in the portability across Lua versions, and the
 options `--gen-target` and `--gen-compat` give you some control over the generated
-code. If you do not use these options, the Teal compiler will infer a default
+code.
+
+#### Target version
+
+The configuration option `gen_target` (`--gen-target` in the CLI) allow you to
+choose what is the minimum Lua version you want to target. Valid options are
+`5.1` (for Lua 5.1 and above, including LuaJIT) and `5.3` for Lua 5.3 and above.
+
+Using `5.1`, Teal will generate compatibility code for the integer division operator,
+a compatibility forward declaration for `table.unpack` and will use the `bit32`
+library for bitwise operators.
+
+Using `5.3`, Teal will generate code using the native `//` and bitwise operators.
+
+The option `5.4` is equivalent to `5.3`, but it also allows using the `<close>`
+variable annotation. Since that is incompatible with other Lua versions, using
+this option requires using `--gen-compat=off`.
+
+Code generated with `--gen-target=5.1` will still run on Lua 5.3+, but not
+optimally: the native Lua 5.3+ operators have better performance and better
+precision. For example, if you are targeting Lua 5.1, the Teal code `x // y`
+will generate `math.floor(x / y)` instead.
+
+If you do not use these options, the Teal compiler will infer a default
 target implicitly.
 
 #### Which Lua version does the Teal compiler target by default?
@@ -71,22 +93,6 @@ Lua's version.
 If you require the `tl` Lua module and use the `tl.loader()`, it will do the
 implicit version selection, picking the right choice based on the Lua version
 you're running it on.
-
-#### Target version
-
-The configuration option `gen_target` (`--gen-target` in the CLI) allow you to
-choose what is the minimum Lua version you want to target. Valid options are
-`5.1` (for Lua 5.1 and above, including LuaJIT) and `5.3` for Lua 5.3 and above.
-
-Using `5.1`, Teal will generate compatibility code for the integer division operator,
-a compatibility forward declaration for `table.unpack` and will use the `bit32`
-library for bitwise operators.
-
-Using `5.3`, Teal will generate code using the native `//` and bitwise operators.
-
-Code generated with `--gen-target=5.1` will still run on Lua 5.3+, but not
-optimally: the native Lua 5.3+ operators have better performance and better
-precision.
 
 #### Compatibility wrappers
 
