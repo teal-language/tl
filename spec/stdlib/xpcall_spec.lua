@@ -134,4 +134,23 @@ describe("xpcall", function()
       xpcall(myText.print, msgh, myText)
    ]], {}, {}))
 
+   it("checks the correct input arguments when passed a method as the first argument", util.check_type_error([[
+      local record Text
+         text: string
+      end
+      
+      local function msgh(err: nil) print(err) end
+
+      function Text:print(): nil
+         if self.text == nil then
+            error("Text is nil")
+         end
+         print(self.text)
+      end
+      local myText: Text = {}
+      xpcall(myText.print, msgh, 12)
+   ]], {
+      { msg = "argument 3: got integer, expected Text" }
+   }))
+
 end)
