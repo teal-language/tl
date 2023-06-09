@@ -8448,7 +8448,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return TUPLE { BOOLEAN }
       end
 
-      -- The function called by pcall/xpcall is invoked as a regular function, so we wish to avoid incorrect error messages / unnecessary warning messages
+      -- The function called by pcall/xpcall is invoked as a regular function, so we wish to avoid incorrect error messages / unnecessary warning messages associated with calling methods as functions
       local ftype = table.remove(b, 1)
       ftype = shallow_copy_type(ftype)
       ftype.is_method = false
