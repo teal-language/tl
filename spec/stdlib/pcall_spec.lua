@@ -72,4 +72,21 @@ describe("pcall", function()
    ]], {
       { msg = "xyz: got boolean, expected number" }
    }))
+
+   it("does not warn when passed a method as the first argument", util.check_warnings([[
+      local record Text
+         text: string
+      end
+      function Text:print(): nil
+         if self.text == nil then
+            error("Text is nil")
+         end
+         print(self.text)
+      end
+      local myText: Text = {}
+      local ok, err = pcall(myText.print, myText)
+      if not ok then
+         print(err)
+      end
+   ]], {}, {}))
 end)
