@@ -8448,7 +8448,11 @@ tl.type_check = function(ast, opts)
          return TUPLE({ BOOLEAN })
       end
 
+
       local ftype = table.remove(b, 1)
+      ftype = shallow_copy_type(ftype)
+      ftype.is_method = false
+
       local fe2 = {}
       if node.e1.tk == "xpcall" then
          base_nargs = 2
