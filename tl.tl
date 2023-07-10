@@ -1272,6 +1272,7 @@ local record Node
    body: Node
    implicit_global_function: boolean
    is_predeclared_local_function: boolean
+   rtype: Type
 
    name: Node
 
@@ -3182,12 +3183,14 @@ end
 local record VisitorCallbacks<N, T>
    before: function(N, {T})
    before_expressions: function({N}, {T})
+   before_arguments: function({N}, {T})
    before_statements: function({N}, {T})
    before_e2: function({N}, {T})
    after: function(N, {T}, T): T
 end
 
 local enum VisitorExtraCallback
+   "before_arguments"
    "before_statements"
    "before_expressions"
    "before_e2"
@@ -3542,6 +3545,7 @@ local function recurse_node<T>(root: Node,
          recurse_typeargs(ast, visit_type)
          xs[1] = recurse(ast.fn_owner)
          xs[2] = recurse(ast.name)
+         extra_callback("before_arguments", ast, xs, visit_node)
          xs[3] = recurse(ast.args)
          xs[4] = recurse_type(ast.rets, visit_type)
          extra_callback("before_statements", ast, xs, visit_node)
@@ -8110,10 +8114,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          if t.typename == "typetype" then
+            local typevals: Type
+            if t.def.typeargs then
+               typevals = {}
+               for _, a in ipairs(t.def.typeargs) do
+                  table.insert(typevals, a_type { typename = "typevar", typevar = a.typearg })
+               end
+            end
             return a_type {
                y = exp.y,
                x = exp.x,
                typename = "nominal",
+               typevals = typevals,
                names = { exp.tk },
                found = t,
             }
@@ -9629,10 +9641,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             widen_all_unions()
             begin_scope(node)
          end,
+         before_arguments = function(node: Node, children: {Type})
+            node.rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+
+            -- add type arguments from the record implicitly
+            if node.rtype.typeargs then
+               for _, typ in ipairs(node.rtype.typeargs) do
+                  add_var(nil, typ.typearg, a_type {
+                     y = typ.y,
+                     x = typ.x,
+                     typename = "typearg",
+                     typearg = typ.typearg,
+                  })
+               end
+            end
+         end,
          before_statements = function(node: Node, children: {Type})
             add_internal_function_variables(node)
 
-            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+            local rtype = node.rtype
             if rtype.typename == "emptytable" then
                rtype.typename = "record"
                rtype.fields = {}

@@ -460,6 +460,21 @@ describe("record method", function()
       end
    ]]))
 
+   it("inherits type variables from the record definition (regression test for #657)", util.check([[
+      local record Test<T>
+          value: T
+      end
+
+      function Test.new(value: T): Test<T>
+          return setmetatable({ value = value }, { __index = Test })
+      end
+
+      function Test:print()
+          local t: T
+          t = self.value
+      end
+   ]]))
+
    describe("redeclaration: ", function()
       it("an inconsistent arity in redeclaration produces an error (regression test for #496)", util.check_type_error([[
          local record Y
