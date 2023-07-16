@@ -102,6 +102,7 @@ describe("local function", function()
 
       it("vararg can only be the last argument", util.check_syntax_error([[
          local f: function(...: string, number): boolean
+         local g: function(string, string..., number): boolean
 
          f = function(...: string, a: number): boolean
             return #select(1, ...) == a
@@ -109,8 +110,14 @@ describe("local function", function()
          local ok = f(3, "abc")
       ]], {
          { y = 1, msg = "'...' can only be last argument" },
-         { y = 3, msg = "'...' can only be last argument" },
+         { y = 2, msg = "'...' can only be last argument" },
+         { y = 4, msg = "'...' can only be last argument" },
       }))
+
+      it("does not get multiple uses of base types confused (regression test for #679)", util.check([[
+         local f: function(x: number, s: string, string...): boolean
+         local g: function(x: number, s: string, ...: string): boolean
+      ]]))
    end)
 
    it("declaration", util.check([[
