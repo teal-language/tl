@@ -166,4 +166,18 @@ describe("metamethod __index", function()
    ]], {
       { y = 7, msg = "in assignment: argument 2: got string, expected number" }
    }))
+
+   it("passes regression test for #680", util.check([[
+      local record R
+        metamethod __index: function(self: R, key: string): any
+      end
+
+      function R:brackets()
+        print(self["x"])
+      end
+
+      function R:dot()
+        print(self.x)
+      end
+   ]]))
 end)
