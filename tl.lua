@@ -134,6 +134,7 @@ local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {
 
 
 
+
 tl.version = function()
    return VERSION
 end
@@ -4951,6 +4952,8 @@ local function add_compat_entries(program, used_set, gen_compat)
    for _, name in ipairs(used_list) do
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
+      elseif name == "bit" then
+         load_code(name, "local bit = bit; if not bit then local p, m = " .. req("bit") .. "; if p then bit = m end")
       elseif name == "bit32" then
          load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
       elseif name == "mt" then
@@ -10014,6 +10017,16 @@ tl.type_check = function(ast, opts)
                      all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
                   else
+                     all_needs_compat["bit"] = true
+                     convert_node_to_compat_call(node, "bit", "bnot", node.e1)
+                  end
+               end
+
+               if node.op.op == "~" and env.gen_target == "5.2" then
+                  if meta_on_operator then
+                     all_needs_compat["mt"] = true
+                     convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
+                  else
                      all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
                   end
@@ -10048,7 +10061,7 @@ tl.type_check = function(ast, opts)
                   node.known = FACT_TRUTHY
                end
 
-               if node.op.op == "//" and env.gen_target == "5.1" then
+               if node.op.op == "//" and (env.gen_target == "5.1" or env.gen_target == "5.2") then
                   if meta_on_operator then
                      all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, "__idiv", meta_on_operator, node.e1, node.e2)
@@ -10057,6 +10070,14 @@ tl.type_check = function(ast, opts)
                      convert_node_to_compat_call(node, "math", "floor", div)
                   end
                elseif bit_operators[node.op.op] and env.gen_target == "5.1" then
+                  if meta_on_operator then
+                     all_needs_compat["mt"] = true
+                     convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_on_operator, node.e1, node.e2)
+                  else
+                     all_needs_compat["bit"] = true
+                     convert_node_to_compat_call(node, "bit", bit_operators[node.op.op], node.e1, node.e2)
+                  end
+               elseif bit_operators[node.op.op] and env.gen_target == "5.2" then
                   if meta_on_operator then
                      all_needs_compat["mt"] = true
                      convert_node_to_compat_mt_call(node, binop_to_metamethod[node.op.op], meta_on_operator, node.e1, node.e2)

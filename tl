@@ -766,7 +766,7 @@ local function validate_config(config)
       quiet = "boolean",
       skip_compat53 = "boolean",
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
-      gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
+      gen_target = { ["5.1"] = true, ["5.2"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
 
@@ -842,7 +842,7 @@ local function get_args_parser()
          :defmode("a")
 
    parser:option("--gen-target", "Minimum targeted Lua version for generated code.")
-         :choices({ "5.1", "5.3", "5.4" })
+         :choices({ "5.1", "5.2", "5.3", "5.4" })
 
    parser:flag("--skip-compat53", "Skip compat53 insertions.")
          :hidden(true)

@@ -1045,7 +1045,8 @@ your own.
 The Teal compiler also supports Lua-5.3-style bitwise operators (`&`, `|`, `~`,
 `<<`, `>>`) and the integer division `//` operator on all supported Lua
 versions. For Lua versions that do not support it natively, it generates code
-using the bit32 library, which is also included in compat-5.3 for Lua 5.1.
+using the bit32 library for Lua 5.2, and using the bit library for Lua 5.1
+(included in LuaJIT or from the luabitop compat module).
 
 You can explicitly disable the use of compat-5.3 with the `--skip-compat53`
 flag and equivalent option in `tlconfig.lua`. However, if you do so, the Lua

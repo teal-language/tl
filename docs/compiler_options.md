@@ -23,7 +23,7 @@ return {
 | `-l --require`  | | `{string}` | `run` | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
 | `-I --include-dir` |  `include_dir` | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
 | `--gen-compat` | `gen_compat` | `string` | `build` `gen` `run` | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
-| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
+| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1`, `5.2`, `5.3` and `5.4`. See [below](#generated-code) for details.
 || `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
 || `exclude` | `{string}` | `build` | The set of files to exclude. See below for details on patterns.
 | `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
@@ -55,6 +55,10 @@ choose what is the minimum Lua version you want to target. Valid options are
 `5.1` (for Lua 5.1 and above, including LuaJIT) and `5.3` for Lua 5.3 and above.
 
 Using `5.1`, Teal will generate compatibility code for the integer division operator,
+a compatibility forward declaration for `table.unpack` and will use the `bit`
+library (from LuaJIT or the luabitop compat module) for bitwise operators.
+
+Using `5.2`, Teal will generate compatibility code for the integer division operator,
 a compatibility forward declaration for `table.unpack` and will use the `bit32`
 library for bitwise operators.
 
