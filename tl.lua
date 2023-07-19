@@ -4874,6 +4874,7 @@ end
 
 
 
+
 local function sorted_keys(m)
    local keys = {}
    for k, _ in pairs(m) do
@@ -6171,7 +6172,7 @@ tl.type_check = function(ast, opts)
    local function unused_warning(name, var)
       local prefix = name:sub(1, 1)
       if var.declared_at and
-         not (var.is_narrowed == "is") and
+         var.is_narrowed ~= "narrow" and
          prefix ~= "_" and
          prefix ~= "@" then
 
@@ -7656,7 +7657,8 @@ tl.type_check = function(ast, opts)
 
    local function widen_in_scope(scope, var)
       assert(scope[var], "no " .. var .. " in scope")
-      if scope[var].is_narrowed then
+      local narrow_mode = scope[var].is_narrowed
+      if narrow_mode and narrow_mode ~= "declaration" then
          if scope[var].narrowed_from then
             scope[var].t = scope[var].narrowed_from
             scope[var].narrowed_from = nil
@@ -8436,7 +8438,7 @@ tl.type_check = function(ast, opts)
             if not f.where then
                t.inferred_at = nil
             end
-            add_var(nil, v, t, "const", "is")
+            add_var(nil, v, t, "const", "narrow")
          end
       end
    end
@@ -9062,7 +9064,7 @@ tl.type_check = function(ast, opts)
 
                   local rt = resolve_tuple_and_nominal(t)
                   if rt.typename ~= "enum" and not same_type(t, infertype) then
-                     add_var(where, var.tk, infer_at(where, infertype), "const", "declaration")
+                     add_var(where, var.tk, infer_at(where, infertype), "const", "narrowed_declaration")
                   end
                end
 
@@ -9123,7 +9125,7 @@ tl.type_check = function(ast, opts)
 
                      if varnode.kind == "variable" and vartype.typename == "union" then
 
-                        add_var(varnode, varnode.tk, val, nil, "is")
+                        add_var(varnode, varnode.tk, val, nil, "narrow")
                      end
                   else
                      node_error(varnode, "variable is not being assigned a value")

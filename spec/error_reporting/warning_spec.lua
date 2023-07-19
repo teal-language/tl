@@ -100,6 +100,22 @@ describe("warnings", function()
          foo()
       ]], { }))
 
+      it("should report a unused localized global (regression test for #677)", util.check_warnings([[
+         local print = print
+         local type = type
+         local _ENV = nil
+
+         return {
+             say = function (msg: any)
+                 if msg is string then
+                     print(msg)
+                 end
+             end,
+         }
+      ]], {
+         { y = 2, msg = "unused function type" },
+      }))
+
       it("reports when implicitly declared variables redeclare a local (for loop)", util.check_warnings([[
          local i = 1
          for i = 1, 10 do
