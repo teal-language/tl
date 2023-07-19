@@ -9986,14 +9986,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if not node.type then
                   node.type, meta_on_operator = check_metamethod(node, node.op.op, a)
                   if not node.type then
-                     return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
                if a.typename == "map" then
                   if a.keys.typename == "number" or a.keys.typename == "integer" then
                       node_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
                   else
-                      return node_error(node, "using the '#' operator on this map will always return 0")
+                      node_error(node, "using the '#' operator on this map will always return 0")
                   end
                end
 
@@ -10032,7 +10032,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if not node.type then
                   node.type, meta_on_operator = check_metamethod(node, node.op.op, a, b)
                   if not node.type then
-                     return node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                   end
                end
 
