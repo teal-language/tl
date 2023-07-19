@@ -6474,7 +6474,7 @@ tl.type_check = function(ast, opts)
 
 
 
-   local function check_for_unused_vars(vars)
+   local function check_for_unused_vars(vars, is_global)
       if not next(vars) then
          return
       end
@@ -6484,6 +6484,9 @@ tl.type_check = function(ast, opts)
             if var.used_as_type then
                var.declared_at.elide_type = true
             else
+               if is_typetype(var.t) and not is_global then
+                  var.declared_at.elide_type = true
+               end
                table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
             end
          elseif var.used and is_typetype(var.t) and var.aliasing then
@@ -10368,7 +10371,7 @@ tl.type_check = function(ast, opts)
    recurse_node(ast, visit_node, visit_type)
 
    close_types(st[1])
-   check_for_unused_vars(st[1])
+   check_for_unused_vars(st[1], true)
 
    clear_redundant_errors(errors)
 
