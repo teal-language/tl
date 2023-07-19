@@ -104,4 +104,11 @@ describe("enum declaration", function()
    ]], {
       { y = 2, msg = "syntax error: this syntax is no longer valid; declare nested enum inside a record" },
    }))
+
+   it("accepts enum as soft keyword", util.check([[
+      local enum = 2
+      local t = {
+         enum = enum,
+      }
+   ]]))
 end)

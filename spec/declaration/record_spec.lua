@@ -52,6 +52,13 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          { y = 2, msg = "syntax error: this syntax is no longer valid; declare nested record inside a record" },
       }))
 
+      it("accepts record as soft keyword", util.check([[
+         local record = 2
+         local t = {
+            record = record,
+         }
+      ]]))
+
       it("can be declared with 'global type'", util.check([[
          global type Point = record ]]..pick(i, "", "{Point}")..[[
             x: number

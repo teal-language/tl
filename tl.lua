@@ -1480,14 +1480,19 @@ end
 
 local function parse_table_value(ps, i)
    local next_word = ps.tokens[i].tk
-   local e
    if next_word == "record" then
-      i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record", skip_record)
-   elseif next_word == "enum" then
+      local skip_i, e = skip(ps, i, skip_record)
+      if e then
+         fail(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record")
+         return skip_i, new_node(ps.tokens, i, "error_node")
+      end
+   elseif next_word == "enum" and ps.tokens[i + 1].kind == "string" then
       i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
-   else
-      i, e = parse_expression(ps, i)
+      return i, new_node(ps.tokens, i - 1, "error_node")
    end
+
+   local e
+   i, e = parse_expression(ps, i)
    if not e then
       e = new_node(ps.tokens, i - 1, "error_node")
    end
@@ -3022,7 +3027,7 @@ local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
 end
 
 local function skip_type_declaration(ps, i)
-   return (parse_type_declaration(ps, i - 1, "local_type"))
+   return parse_type_declaration(ps, i - 1, "local_type")
 end
 
 local function parse_local(ps, i)
