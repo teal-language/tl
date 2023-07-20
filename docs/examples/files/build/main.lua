@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local string = _tl_compat and _tl_compat.string or string
 
 
 
@@ -10,59 +10,90 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
-
-
-
-
-
-local function main(f)
-   local lines = f.i:read("a")
-
-   f.o:write(lines)
-   return 0
-end
-
-
-
-local fin, fout = "", ""
-local errstr = ""
-local i = 1
-while i <= #arg do
-   local a, b = arg[i], arg[i + 1]
-   if a == "-i" then
-      if not b then
-         errstr = "-i filename?"
+local function parse_arguments(args)
+   local i_name, o_name
+   local err
+   local i = 1
+   while i <= #args do
+      local a, b = args[i], args[i + 1]
+      if a == "-i" then
+         if not b then
+            err = "-i name?"
+         else
+            i_name = b
+            i = i + 2
+         end
+      elseif a == "-o" then
+         if not b then
+            err = "-o name?"
+         else
+            o_name = b
+            i = i + 2
+         end
       else
-         fin = b
-         i = i + 2
+         err = "unknown arg: " .. a
       end
-   elseif a == "-o" then
-      if not b then
-         errstr = "-o filename?"
-      else
-         fout = b
-         i = i + 2
+      if err then
+
+         error(err)
       end
-   else
-      errstr = "unknown arg: " .. a
    end
-   if errstr ~= "" then
-      error(errstr)
+   return i_name, o_name
+end
+
+
+local function get_fd(name, mode, default)
+   if not name then
+      return default
    end
+
+   local fd, err = io.open(name, mode)
+   if not fd then
+      return nil, err
+   end
+
+   return fd
 end
 
 
-local handle = {}
-if fin == "" then
-   handle.i = io.stdin
-else
-   handle.i = assert(io.open(fin, "r"))
-end
-if fout == "" then
-   handle.o = io.stdout
-else
-   handle.o = assert(io.open(fout, "w"))
+local function get_handles(input_name, output_name)
+   local handles = {}
+   local err
+
+   handles.input, err = get_fd(input_name, "r", io.stdin)
+   if err then
+      error(err)
+   end
+
+   handles.output, err = get_fd(output_name, "w", io.stdout)
+   if err then
+      error(err)
+   end
+
+   return handles
 end
 
 
-return main(handle)
+local function process_handles(h)
+   local lines = h.input:read("*a")
+   h.input:close()
+
+
+
+   lines = lines:upper()
+
+   h.output:write(lines)
+   h.output:close()
+end
+
+local function main(args)
+   local input_name, output_name = parse_arguments(args)
+
+   local h = get_handles(input_name, output_name)
+
+   process_handles(h)
+
+   os.exit(0)
+end
+
+main(arg)

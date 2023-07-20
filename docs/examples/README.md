@@ -13,9 +13,9 @@ In all of these examples it is assumed that the root directory is 'examples'.
 
 ## Files
 
-This example demonstrates `cyan init` to create a Teal project, as well as the
-Teal language construct of `record`, the type `FILE` for file handles, and
-basic IO.
+This example demonstrates using `cyan` to create and build a Teal project, as
+well as the Teal language construct of `record`, the type `FILE` for file
+handles, and basic IO.
 
 ### Create the Project
 
@@ -43,30 +43,10 @@ files> find .
 
 ### Create main.tl
 
-In these examples `main.tl` will be the program that gets run. In other
-examples you will have modules that are called from main.
+In this example `main.tl` will be the program that gets run. More complex
+projects will have modules that are called from main.
 
 Create [src/main.tl](files/src/main.tl).
-
-The file handles appear like this in main.tl
-
-```
--- record to hold file handles
-local type Handles = record
-  i: FILE       -- input
-  o: FILE       -- output
-end
-```
-
-And are used like this:
-```
-local function main(f: Handles): integer
-  local lines = f.i:read("a")
-  -- do work on input, then write it out --
-  f.o:write(lines)
-  return 0
-end
-```
 
 ### Build the Project
 
@@ -92,20 +72,25 @@ files> tree .
 
 ### Run the Project
 
-In this example the program reads from STDIN and writes to a file.
+The program reads input arguments `-i <filename>` and `-o <filename>` from
+the command line to select input and output filenames. If those are not
+given, it uses standard input and standard output as fallback defaults.
+
+In this example the program reads data from the `ls` command piped via
+standard input, and writes to a file:
 
 ```
 files> ls -R1 | lua build/main.lua -o tmp.out
 files> cat tmp.out
-build
-src
-tlconfig.lua
+BUILD
+SRC
+TLCONFIG.LUA
 
-./build:
-main.lua
+./BUILD:
+MAIN.LUA
 
-./src:
-main.tl
+./SRC:
+MAIN.TL
 ```
 
 You can delete the temporary file.
