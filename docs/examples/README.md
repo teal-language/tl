@@ -11,9 +11,6 @@ examples are provided; where each example has:
 
 In all of these examples it is assumed that the root directory is 'examples'.
 
-The use of 'tree' command is only for illustration in these notes. The user does
-*not* need to use the 'tree' command.
-
 ## Files
 
 This example demonstrates `cyan init` to create a Teal project, as well as the
@@ -37,11 +34,11 @@ is the standard project layout.
 
 ```
 examples> cd files
-files> tree .
+files> find .
 .
-├── build
-├── src
-└── tlconfig.lua
+./build
+./src
+./tlconfig.lua
 ```
 
 ### Create main.tl
@@ -49,7 +46,7 @@ files> tree .
 In these examples `main.tl` will be the program that gets run. In other
 examples you will have modules that are called from main.
 
-Create [src/main.tl](files/src/main.tl)
+Create [src/main.tl](files/src/main.tl).
 
 The file handles appear like this in main.tl
 
@@ -86,11 +83,11 @@ And now the project directories look like...
 ```
 files> tree .
 .
-├── build
-│   └── main.lua
-├── src
-│   └── main.tl
-└── tlconfig.lua
+./build
+./build/main.lua
+./src
+./src/main.tl
+./tlconfig.lua
 ```
 
 ### Run the Project
