@@ -9371,7 +9371,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if #children[1] > nrets and (not lax) and not vatype then
-               node_error(node, "in " .. what ..": excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
+               node_error(node, what ..": excess return values, expected " .. #rets .. " %s, got " .. #children[1] .. " %s", rets, children[1])
             end
 
             if nrets > 1
