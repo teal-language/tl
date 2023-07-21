@@ -1368,8 +1368,11 @@ local parse_argument_list
 local parse_argument_type_list
 local parse_type
 local parse_newtype
+
+
 local parse_enum_body
 local parse_record_body
+local parse_type_body_fns
 
 local function fail(ps, i, msg)
    if not ps.tokens[i] then
@@ -1468,26 +1471,23 @@ local function failskip(ps, i, msg, skip_fn, starti)
    return skip_i
 end
 
-local function skip_record(ps, i)
+local function skip_type_body(ps, i)
+   local tn = ps.tokens[i].tk
    i = i + 1
-   return parse_record_body(ps, i, {}, { kind = "function" })
-end
-
-local function skip_enum(ps, i)
-   i = i + 1
-   return parse_enum_body(ps, i, {}, { kind = "function" })
+   assert(parse_type_body_fns[tn], tn .. " has no parse body function")
+   return parse_type_body_fns[tn](ps, i, {}, { kind = "function" })
 end
 
 local function parse_table_value(ps, i)
    local next_word = ps.tokens[i].tk
    if next_word == "record" then
-      local skip_i, e = skip(ps, i, skip_record)
+      local skip_i, e = skip(ps, i, skip_type_body)
       if e then
          fail(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record")
          return skip_i, new_node(ps.tokens, i, "error_node")
       end
    elseif next_word == "enum" and ps.tokens[i + 1].kind == "string" then
-      i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_enum)
+      i = failskip(ps, i, "syntax error: this syntax is no longer valid; declare nested enum inside a record", skip_type_body)
       return i, new_node(ps.tokens, i - 1, "error_node")
    end
 
@@ -2644,8 +2644,6 @@ local function store_field_in_record(ps, i, field_name, t, fields, field_order)
    return true
 end
 
-
-
 local function parse_nested_type(ps, i, def, typename, parse_body)
    i = i + 1
    local iv = i
@@ -2721,6 +2719,7 @@ parse_record_body = function(ps, i, def, node, name)
       i, def.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
+      local tn = ps.tokens[i].tk
       if ps.tokens[i].tk == "userdata" and ps.tokens[i + 1].tk ~= ":" then
          if def.is_userdata then
             fail(ps, i, "duplicated 'userdata' declaration in record")
@@ -2759,10 +2758,8 @@ parse_record_body = function(ps, i, def, node, name)
          end
 
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
-      elseif ps.tokens[i].tk == "record" and ps.tokens[i + 1].tk ~= ":" then
-         i = parse_nested_type(ps, i, def, "record", parse_record_body)
-      elseif ps.tokens[i].tk == "enum" and ps.tokens[i + 1].tk ~= ":" then
-         i = parse_nested_type(ps, i, def, "enum", parse_enum_body)
+      elseif parse_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
+         i = parse_nested_type(ps, i, def, tn, parse_type_body_fns[tn])
       else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
@@ -2843,19 +2840,19 @@ parse_record_body = function(ps, i, def, node, name)
    return i, node
 end
 
+parse_type_body_fns = {
+   ["record"] = parse_record_body,
+   ["enum"] = parse_enum_body,
+}
+
 parse_newtype = function(ps, i, name)
    local node = new_node(ps.tokens, i, "newtype")
    node.newtype = new_type(ps, i, "typetype")
-   if ps.tokens[i].tk == "record" then
-      local def = new_type(ps, i, "record")
+   local tn = ps.tokens[i].tk
+   if parse_type_body_fns[tn] then
+      local def = new_type(ps, i, tn)
       i = i + 1
-      i = parse_record_body(ps, i, def, node, name)
-      node.newtype.def = def
-      return i, node
-   elseif ps.tokens[i].tk == "enum" then
-      local def = new_type(ps, i, "enum")
-      i = i + 1
-      i = parse_enum_body(ps, i, def, node)
+      i = parse_type_body_fns[tn](ps, i, def, node, name)
       node.newtype.def = def
       return i, node
    else
@@ -2954,13 +2951,10 @@ local function parse_variable_declarations(ps, i, node_name)
    if ps.tokens[i].tk == "=" then
 
       local next_word = ps.tokens[i + 1].tk
-      if next_word == "record" then
+      local tn = next_word
+      if parse_type_body_fns[tn] then
          local scope = node_name == "local_declaration" and "local" or "global"
-
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " record " .. asgn.vars[1].tk .. "'", skip_record)
-      elseif next_word == "enum" then
-         local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " enum " .. asgn.vars[1].tk .. "'", skip_enum)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn.vars[1].tk .. "'", skip_type_body)
       elseif next_word == "functiontype" then
          local scope = node_name == "local_declaration" and "local" or "global"
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn.vars[1].tk .. " = function('...", parse_function_type)
@@ -3032,28 +3026,26 @@ end
 
 local function parse_local(ps, i)
    local ntk = ps.tokens[i + 1].tk
+   local tn = ntk
    if ntk == "function" then
       return parse_local_function(ps, i)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return parse_type_declaration(ps, i, "local_type")
-   elseif ntk == "record" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "local_type", "record", parse_record_body)
-   elseif ntk == "enum" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "local_type", "enum", parse_enum_body)
+   elseif parse_type_body_fns[tn] and ps.tokens[i + 2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "local_type", tn, parse_type_body_fns[tn])
    end
    return parse_variable_declarations(ps, i + 1, "local_declaration")
 end
 
 local function parse_global(ps, i)
    local ntk = ps.tokens[i + 1].tk
+   local tn = ntk
    if ntk == "function" then
       return parse_function(ps, i + 1, "global")
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return parse_type_declaration(ps, i, "global_type")
-   elseif ntk == "record" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "global_type", "record", parse_record_body)
-   elseif ntk == "enum" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "global_type", "enum", parse_enum_body)
+   elseif parse_type_body_fns[tn] and ps.tokens[i + 2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "global_type", tn, parse_type_body_fns[tn])
    elseif ps.tokens[i + 1].kind == "identifier" then
       return parse_variable_declarations(ps, i + 1, "global_declaration")
    end
@@ -3079,16 +3071,17 @@ local parse_statement_fns = {
    ["function"] = parse_record_function,
 }
 
+local function type_needs_local_or_global(ps, i)
+   local tk = ps.tokens[i].tk
+   return failskip(ps, i, ("%s needs to be declared with 'local %s' or 'global %s'"):format(tk, tk, tk), skip_type_body)
+end
+
 local needs_local_or_global = {
    ["type"] = function(ps, i)
       return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    end,
-   ["record"] = function(ps, i)
-      return failskip(ps, i, "records need to be declared with 'local record' or 'global record'", skip_record)
-   end,
-   ["enum"] = function(ps, i)
-      return failskip(ps, i, "enums need to be declared with 'local enum' or 'global enum'", skip_enum)
-   end,
+   ["record"] = type_needs_local_or_global,
+   ["enum"] = type_needs_local_or_global,
 }
 
 parse_statements = function(ps, i, toplevel)
@@ -4646,6 +4639,35 @@ local function show_type_base(t, short, seen)
       return show_type(typ, short, seen)
    end
 
+   local function show_record_type(name)
+      if short then
+         return name
+      else
+         local out = { name }
+         if t.typeargs then
+            table.insert(out, "<")
+            local typeargs = {}
+            for _, v in ipairs(t.typeargs) do
+               table.insert(typeargs, show(v))
+            end
+            table.insert(out, table.concat(typeargs, ", "))
+            table.insert(out, ">")
+         end
+         table.insert(out, " (")
+         if t.elements then
+            table.insert(out, "{" .. show(t.elements) .. "}")
+         end
+         local fs = {}
+         for _, k in ipairs(t.field_order) do
+            local v = t.fields[k]
+            table.insert(fs, k .. ": " .. show(v))
+         end
+         table.insert(out, table.concat(fs, "; "))
+         table.insert(out, ")")
+         return table.concat(out)
+      end
+   end
+
    if t.typename == "nominal" then
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
@@ -4692,32 +4714,7 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
    elseif is_record_type(t) then
-      if short then
-         return "record"
-      else
-         local out = { "record" }
-         if t.typeargs then
-            table.insert(out, "<")
-            local typeargs = {}
-            for _, v in ipairs(t.typeargs) do
-               table.insert(typeargs, show(v))
-            end
-            table.insert(out, table.concat(typeargs, ", "))
-            table.insert(out, ">")
-         end
-         table.insert(out, " (")
-         if t.elements then
-            table.insert(out, "{" .. show(t.elements) .. "}")
-         end
-         local fs = {}
-         for _, k in ipairs(t.field_order) do
-            local v = t.fields[k]
-            table.insert(fs, k .. ": " .. show(v))
-         end
-         table.insert(out, table.concat(fs, "; "))
-         table.insert(out, ")")
-         return table.concat(out)
-      end
+      return show_record_type("record")
    elseif t.typename == "function" then
       local out = { "function" }
       if t.typeargs then

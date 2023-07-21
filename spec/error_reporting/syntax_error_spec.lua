@@ -243,7 +243,7 @@ describe("syntax errors", function()
          print("parse continues as normal")
       end
    ]], {
-      { y = 1, msg = "records need to be declared with 'local record' or 'global record'" },
+      { y = 1, msg = "record needs to be declared with 'local record' or 'global record'" },
    }))
 
    it("reports a helpful error when 'local' or 'global' are missing in enums", util.check_syntax_error([[
@@ -254,7 +254,7 @@ describe("syntax errors", function()
          print("parse continues as normal")
       end
    ]], {
-      { y = 1, msg = "enums need to be declared with 'local enum' or 'global enum'" },
+      { y = 1, msg = "enum needs to be declared with 'local enum' or 'global enum'" },
    }))
 
    it("reports a helpful error when 'local' or 'global' are missing in types", util.check_syntax_error([[
