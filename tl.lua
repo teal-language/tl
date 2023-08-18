@@ -1212,6 +1212,10 @@ local table_types = {
 
 
 
+
+
+
+
 local Fact = {}
 
 
@@ -1245,6 +1249,9 @@ local attributes = {
    ["total"] = true,
 }
 local is_attribute = attributes
+
+local Node = {ExpectedContext = {}, }
+
 
 
 
@@ -1450,6 +1457,15 @@ end
 
 
 local function shallow_copy_type(t)
+   local copy = {}
+   for k, v in pairs(t) do
+      copy[k] = v
+   end
+   return copy
+end
+
+
+local function shallow_copy_node(t)
    local copy = {}
    for k, v in pairs(t) do
       copy[k] = v
@@ -2722,6 +2738,22 @@ local metamethod_names = {
    ["__close"] = true,
 }
 
+local function parse_macroexp(ps, i)
+   local istart = i - 1
+
+
+
+
+   local node = new_node(ps.tokens, i, "macroexp")
+   i, node.args = parse_argument_list(ps, i)
+   i, node.rets = parse_return_types(ps, i)
+   i, node.exp = parse_expression(ps, i)
+   end_at(node, ps.tokens[i])
+   i = verify_end(ps, i, istart, node)
+   assert(node.rets.typename == "tuple")
+   return i, node
+end
+
 parse_record_body = function(ps, i, def, node, name)
    local istart = i - 1
    def.fields = {}
@@ -2830,6 +2862,13 @@ parse_record_body = function(ps, i, def, node, name)
                      end
                   end
                end
+            end
+
+            if ps.tokens[i].tk == "=" and ps.tokens[i + 1].tk == "macroexp" then
+               if t.typename ~= "function" then
+                  fail(ps, i + 1, "macroexp must have a function type")
+               end
+               i, t.macroexp = parse_macroexp(ps, i + 2)
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -7445,6 +7484,85 @@ tl.type_check = function(ast, opts)
       return func, is_method
    end
 
+
+
+
+   local function traverse_macroexp(macroexp, on_arg_id, on_node)
+      local root = macroexp.exp
+      local argnames = {}
+      for i, a in ipairs(macroexp.args) do
+         argnames[a.tk] = i
+      end
+
+      local visit_node = {
+         cbs = {
+            ["variable"] = {
+               after = function(node, _children)
+                  local i = argnames[node.tk]
+                  if not i then
+                     return nil
+                  end
+
+                  return on_arg_id(node, i)
+               end,
+            },
+         },
+         after = on_node,
+      }
+
+      return recurse_node(root, visit_node, {})
+   end
+
+   local function expand_macroexp(orignode, args, macroexp)
+      local on_arg_id = function(_node, i)
+         return { Node, args[i] }
+      end
+
+      local on_node = function(node, children, ret)
+         local orig = ret and ret[2] or node
+
+         local out = shallow_copy_node(orig)
+
+         local map = {}
+         for _, pair in pairs(children) do
+            if type(pair) == "table" then
+               map[pair[1]] = pair[2]
+            end
+         end
+
+         for k, v in pairs(orig) do
+            if type(v) == "table" and map[v] then
+               (out)[k] = map[v]
+            end
+         end
+
+         out.y = orignode.y
+         out.x = orignode.x
+         out.yend = nil
+         out.xend = nil
+         return { node, out }
+      end
+
+      local p = traverse_macroexp(macroexp, on_arg_id, on_node)
+      orignode.expanded = p[2]
+   end
+
+   local function apply_macroexp(orignode)
+      local expanded = orignode.expanded
+      local savetype = orignode.type
+      local saveknown = orignode.known
+      orignode.expanded = nil
+
+      for k, _ in pairs(orignode) do
+         (orignode)[k] = nil
+      end
+      for k, v in pairs(expanded) do
+         (orignode)[k] = v
+      end
+      orignode.type = savetype
+      orignode.known = saveknown
+   end
+
    local type_check_function_call
    do
       local function mark_invalid_typeargs(f)
@@ -7681,6 +7799,11 @@ tl.type_check = function(ast, opts)
          if e1 then
             e1.type = f
          end
+
+         if func.macroexp then
+            expand_macroexp(where, where_args, func.macroexp)
+         end
+
          return ret
       end
    end
@@ -10073,6 +10196,11 @@ tl.type_check = function(ast, opts)
                node.type.tk = nil
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
+
+               if is_lua_table_type(ra) and is_lua_table_type(rb) then
+                  check_metamethod(node, node.op.op, ra, rb)
+               end
+
                if is_a(b, a, true) or a.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
                      node.known = Fact({ fact = "==", var = node.e1.tk, typ = b, where = node })
@@ -10315,6 +10443,10 @@ tl.type_check = function(ast, opts)
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
    visit_node.after = function(node, _children)
+      if node.expanded then
+         apply_macroexp(node)
+      end
+
       if type(node.type) ~= "table" then
          error(node.kind .. " did not produce a type")
       end
@@ -10454,7 +10586,14 @@ tl.type_check = function(ast, opts)
    }
 
    if not opts.run_internal_compiler_checks then
-      visit_node.after = nil
+      visit_node.after = function(node, _children)
+         if node.expanded then
+            apply_macroexp(node)
+         end
+
+         return node.type
+      end
+
       visit_type.after = nil
    end
 
