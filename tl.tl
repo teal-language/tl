@@ -1146,6 +1146,9 @@ local record Type
    -- enum
    enumset: {string:boolean}
 
+   -- macroexp
+   macroexp: Node
+
    -- unresolved items
    labels: {string:{Node}}
    nominals: {string:{Type}}
@@ -1203,6 +1206,7 @@ local enum NodeKind
    "cast"
    "..."
    "paren"
+   "macroexp"
    "error_node"
 end
 
@@ -1339,6 +1343,9 @@ local record Node
    -- variable
    is_lvalue: boolean
 
+   -- macroexp
+   expanded: Node
+
    type: Type
    decltype: Type
 end
@@ -1458,6 +1465,15 @@ local function shallow_copy_type(t: Type): Type
       copy[k] = v
    end
    return copy as Type
+end
+
+-- Makes a shallow copy of the given type
+local function shallow_copy_node(t: Node): Node
+   local copy: {any:any} = {}
+   for k, v in pairs(t as {any:any}) do
+      copy[k] = v
+   end
+   return copy as Node
 end
 
 local function verify_kind(ps: ParseState, i: integer, kind: TokenKind, node_kind: NodeKind): integer, Node
@@ -2733,6 +2749,22 @@ local metamethod_names: {string:boolean} = {
    ["__close"] = true,
 }
 
+local function parse_macroexp(ps: ParseState, i: integer): integer, Node
+   local istart = i - 1
+-- TODO: generic macroexp
+--   if ps.tokens[i].tk == "<" then
+--      i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
+--   end
+   local node = new_node(ps.tokens, i, "macroexp")
+   i, node.args = parse_argument_list(ps, i)
+   i, node.rets = parse_return_types(ps, i)
+   i, node.exp = parse_expression(ps, i)
+   end_at(node, ps.tokens[i])
+   i = verify_end(ps, i, istart, node)
+   assert(node.rets.typename == "tuple")
+   return i, node
+end
+
 parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, name: string): integer, Node
    local istart = i - 1
    def.fields = {}
@@ -2841,6 +2873,13 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
                      end
                   end
                end
+            end
+
+            if ps.tokens[i].tk == "=" and ps.tokens[i + 1].tk == "macroexp" then
+               if t.typename ~= "function" then
+                  fail(ps, i + 1, "macroexp must have a function type")
+               end
+               i, t.macroexp = parse_macroexp(ps, i + 2)
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -7524,6 +7563,85 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return func, is_method
    end
 
+   local type OnArgId = function<T>(node: Node, i: integer): T
+   local type OnNode = function<T>(node: Node, children: {T}, ret: T): T
+
+   local function traverse_macroexp<T>(macroexp: Node, on_arg_id: OnArgId<T>, on_node: OnNode<T>): T
+      local root = macroexp.exp
+      local argnames = {}
+      for i, a in ipairs(macroexp.args) do
+         argnames[a.tk] = i
+      end
+
+      local visit_node: Visitor<NodeKind, Node, T> = {
+         cbs = {
+            ["variable"] = {
+               after = function(node: Node, _children: {T}): T
+                  local i = argnames[node.tk]
+                  if not i then
+                     return nil
+                  end
+
+                  return on_arg_id(node, i)
+               end
+            }
+         },
+         after = on_node,
+      }
+
+      return recurse_node(root, visit_node, {})
+   end
+
+   local function expand_macroexp(orignode: Node, args: {Node}, macroexp: Node)
+      local on_arg_id = function(_node: Node, i: integer): {Node, Node}
+         return { Node, args[i] }
+      end
+
+      local on_node = function(node: Node, children: {{Node, Node}}, ret: {Node, Node}): {Node, Node}
+         local orig = ret and ret[2] or node
+
+         local out = shallow_copy_node(orig)
+
+         local map = {}
+         for _, pair in pairs(children as {integer:{Node, Node}}) do
+            if type(pair) == "table" then
+               map[pair[1]] = pair[2]
+            end
+         end
+
+         for k, v in pairs(orig as {any:Node}) do
+            if type(v) == "table" and map[v] then
+               (out as {any:any})[k] = map[v]
+            end
+         end
+
+         out.y = orignode.y
+         out.x = orignode.x
+         out.yend = nil
+         out.xend = nil
+         return { node, out }
+      end
+
+      local p = traverse_macroexp(macroexp, on_arg_id, on_node)
+      orignode.expanded = p[2]
+   end
+
+   local function apply_macroexp(orignode: Node)
+      local expanded = orignode.expanded
+      local savetype = orignode.type
+      local saveknown = orignode.known
+      orignode.expanded = nil
+
+      for k, _ in pairs(orignode as {any:any}) do
+         (orignode as {any:any})[k] = nil
+      end
+      for k, v in pairs(expanded as {any:any}) do
+         (orignode as {any:any})[k] = v
+      end
+      orignode.type = savetype
+      orignode.known = saveknown
+   end
+
    local type_check_function_call: function(Node, {Node}, Type, {Type}, Node, boolean, integer): Type
    do
       local function mark_invalid_typeargs(f: Type)
@@ -7760,6 +7878,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if e1 then
             e1.type = f
          end
+
+         if func.macroexp then
+            expand_macroexp(where, where_args, func.macroexp)
+         end
+
          return ret
       end
    end
@@ -10136,6 +10259,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.type.tk = nil
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
+
+               if is_lua_table_type(ra) and is_lua_table_type(rb) then
+                  check_metamethod(node, node.op.op, ra, rb)
+               end
+
                if is_a(b, a, true) or a.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
                      node.known = Fact { fact = "==", var = node.e1.tk, typ = b, where = node }
@@ -10378,6 +10506,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
    visit_node.after = function(node: Node, _children: {Type}): Type
+      if node.expanded then
+         apply_macroexp(node)
+      end
+
       if type(node.type) ~= "table" then
          error(node.kind .. " did not produce a type")
       end
@@ -10517,7 +10649,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    }
 
    if not opts.run_internal_compiler_checks then
-      visit_node.after = nil
+      visit_node.after = function(node: Node, _children: {Type}): Type
+         if node.expanded then
+            apply_macroexp(node)
+         end
+
+         return node.type
+      end
+
       visit_type.after = nil
    end
 
