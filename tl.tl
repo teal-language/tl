@@ -7494,6 +7494,34 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+   local function same_in_all_union_entries(u: Type, check: function(Type): (Type, Type)): Type
+      local t1, f = check(u.types[1])
+      if not t1 then
+         return nil
+      end
+      for i = 2, #u.types do
+         local t2 = check(u.types[i])
+         if not t2 or not same_type(t1, t2) then
+            return nil
+         end
+      end
+      return f or t1
+   end
+
+   local function same_call_mt_in_all_union_entries(tbl: Type): Type
+      return same_in_all_union_entries(tbl, function(t: Type): (Type, Type)
+         t = resolve_tuple_and_nominal(t)
+         local call_mt = t.meta_fields and t.meta_fields["__call"]
+         if call_mt then
+            local args_tuple = a_type { typename = "tuple" }
+            for i = 2, #call_mt.args do
+               table.insert(args_tuple, call_mt.args[i])
+            end
+            return args_tuple, call_mt
+         end
+      end)
+   end
+
    local function resolve_for_call(func: Type, args: {Type}, is_method: boolean): Type, boolean
       -- resolve unknown in lax mode, produce a general unknown function
       if lax and is_unknown(func) then
@@ -7502,6 +7530,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       -- unwrap if tuple, resolve if nominal
       func = resolve_tuple_and_nominal(func)
       if func.typename ~= "function" and func.typename ~= "poly" then
+         -- resolve if union
+         if func.typename == "union" then
+            local r = same_call_mt_in_all_union_entries(func)
+            if r then
+               table.insert(args, 1, func.types[1]) -- FIXME: is this right?
+               return resolve_tuple_and_nominal(r), true
+            end
+         end
          -- resolve if prototype
          if is_typetype(func) and func.def.typename == "record" then
             func = func.def
@@ -7901,6 +7937,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       tbl = resolve_typetype(tbl)
+
+      if tbl.typename == "union" then
+         local t = same_in_all_union_entries(tbl, function(t: Type): (Type, Type)
+            return (match_record_key(t, rec, key))
+         end)
+
+         if t then
+            return t
+         end
+      end
 
       if is_record_type(tbl) then
          assert(tbl.fields, "record has no fields!?")
