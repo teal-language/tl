@@ -5961,11 +5961,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function union_type(t: Type): string
+   local function union_type(t: Type): string, Type
       if is_typetype(t) then
-         return union_type(t.def)
+         return union_type(t.def), t.def
       elseif t.typename == "tuple" then
-         return union_type(t[1])
+         return union_type(t[1]), t[1]
       elseif t.typename == "nominal" then
          local typetype = t.found or find_type(t.names)
          if not typetype then
@@ -5974,13 +5974,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return union_type(typetype)
       elseif t.typename == "record" then
          if t.is_userdata then
-            return "userdata"
+            return "userdata", t
          end
-         return "table"
+         return "table", t
       elseif table_types[t.typename] then
-         return "table"
+         return "table", t
       else
-         return t.typename
+         return t.typename, t
       end
    end
 
@@ -5992,21 +5992,43 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       -- check for limitations in our union support
       -- due to codegen limitations (we only check with type() so far)
       local n_table_types = 0
+      local n_table_is_types = 0
       local n_function_types = 0
       local n_userdata_types = 0
+      local n_userdata_is_types = 0
       local n_string_enum = 0
       local has_primitive_string_type = false
       for _, t in ipairs(typ.types) do
-         local ut = union_type(t)
+         local ut, rt = union_type(t)
          if ut == "userdata" then -- must be tested before table_types
-            n_userdata_types = n_userdata_types + 1
-            if n_userdata_types > 1 then
-               return false, "cannot discriminate a union between multiple userdata types: %s"
+            if rt.meta_fields and rt.meta_fields["__is"] then
+               n_userdata_is_types = n_userdata_is_types + 1
+               if n_userdata_types > 0 then
+                  return false, "cannot mix userdata types with and without __is metamethod: %s"
+               end
+            else
+               n_userdata_types = n_userdata_types + 1
+               if n_userdata_types > 1 then
+                  return false, "cannot discriminate a union between multiple userdata types: %s"
+               end
+               if n_userdata_is_types > 0 then
+                  return false, "cannot mix userdata types with and without __is metamethod: %s"
+               end
             end
          elseif ut == "table" then
-            n_table_types = n_table_types + 1
-            if n_table_types > 1 then
-               return false, "cannot discriminate a union between multiple table types: %s"
+            if rt.meta_fields and rt.meta_fields["__is"] then
+               n_table_is_types = n_table_is_types + 1
+               if n_table_types > 0 then
+                  return false, "cannot mix table types with and without __is metamethod: %s"
+               end
+            else
+               n_table_types = n_table_types + 1
+               if n_table_types > 1 then
+                  return false, "cannot discriminate a union between multiple table types: %s"
+               end
+               if n_table_is_types > 0 then
+                  return false, "cannot mix table types with and without __is metamethod: %s"
+               end
             end
          elseif ut == "function" then
             n_function_types = n_function_types + 1
@@ -7669,7 +7691,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, rets, 1, 0, "return")
             end
 
-            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, 1, argdelta, "argument")
+            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, from, argdelta, "argument")
             if (not args_ok) or (not rets_ok) then
                return nil, args_errs or {}
             end
@@ -7833,35 +7855,31 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function check_metamethod(node: Node, op: string, a: Type, b: Type, orig_a: Type, orig_b: Type): Type, integer
-      local method_name: string
-      local where_args: {Node}
-      local args: Type
-      local meta_on_operator = 1
-
+   local function check_metamethod(node: Node, method_name: string, a: Type, b: Type, orig_a: Type, orig_b: Type): Type, integer
       if lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
          return UNKNOWN, nil
       elseif not a.meta_fields and not (b and b.meta_fields) then
          return nil, nil
       end
 
-      if a and b then
-         method_name = binop_to_metamethod[op]
-         where_args = { node.e1, node.e2 }
-         args = { typename = "tuple", orig_a, orig_b }
-      else
-         method_name = unop_to_metamethod[op]
-         where_args = { node.e1 }
-         args = { typename = "tuple", orig_a }
+      local meta_on_operator = 1
+      local metamethod: Type
+      if method_name ~= "__is" then
+         metamethod = a.meta_fields and a.meta_fields[method_name or ""]
       end
-
-      local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
-      if (not metamethod) and b and op ~= "@index" then
+      if (not metamethod) and b and method_name ~= "__index" then
          metamethod = b.meta_fields and b.meta_fields[method_name or ""]
          meta_on_operator = 2
       end
+
       if metamethod then
-         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, false, 0)), meta_on_operator
+         local where_args = { node.e1 }
+         local args = { typename = "tuple", orig_a }
+         if b and method_name ~= "__is" then
+            where_args[2] = node.e2
+            args[2] = orig_b
+         end
+         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, true)), meta_on_operator
       else
          return nil, nil
       end
@@ -7891,7 +7909,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return tbl.fields[key]
          end
 
-         local meta_t = check_metamethod(rec, "@index", tbl, STRING, tbl, STRING)
+         local meta_t = check_metamethod(rec, "__index", tbl, STRING, tbl, STRING)
          if meta_t then
             return meta_t
          end
@@ -8262,7 +8280,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
       end
 
-      local meta_t = check_metamethod(anode, "@index", a, orig_b, orig_a, orig_b)
+      local meta_t = check_metamethod(anode, "__index", a, orig_b, orig_a, orig_b)
       if meta_t then
          return meta_t
       end
@@ -10183,6 +10201,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if ra.typename == "typetype" then
                   node_error(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
+                  check_metamethod(node, "__is", ra, resolve_typetype(rb), orig_a, orig_b)
                   node.known = Fact { fact = "is", var = node.e1.tk, typ = b, where = node }
                else
                   node_error(node, "can only use 'is' on variables")
@@ -10248,9 +10267,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             elseif node.op.op == "==" or node.op.op == "~=" then
                node.type = BOOLEAN
 
-               if is_lua_table_type(ra) and is_lua_table_type(rb) then
-                  check_metamethod(node, node.op.op, ra, rb)
-               end
+--               if is_lua_table_type(ra) and is_lua_table_type(rb) then
+--                  check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb)
+--               end
 
                if is_a(b, a, true) or a.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
@@ -10275,7 +10294,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.type = types_op[a.typename]
                local meta_on_operator: integer
                if not node.type then
-                  node.type, meta_on_operator = check_metamethod(node, node.op.op, a, nil, orig_a, nil)
+                  local mt_name = unop_to_metamethod[node.op.op]
+                  if mt_name then
+                     node.type, meta_on_operator = check_metamethod(node, mt_name, a, nil, orig_a, nil)
+                  end
                   if not node.type then
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
@@ -10321,7 +10343,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.type = types_op[a.typename] and types_op[a.typename][b.typename]
                local meta_on_operator: integer
                if not node.type then
-                  node.type, meta_on_operator = check_metamethod(node, node.op.op, a, b, orig_a, orig_b)
+                  local mt_name = binop_to_metamethod[node.op.op]
+                  if mt_name then
+                     node.type, meta_on_operator = check_metamethod(node, mt_name, a, b, orig_a, orig_b)
+                  end
                   if not node.type then
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                      if node.op.op == "or" and is_valid_union(unite({orig_a, orig_b})) then
