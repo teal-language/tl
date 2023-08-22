@@ -52,7 +52,7 @@ describe("metamethod __index", function()
       r.x = 12
       print(r[r])
    ]], {
-      { msg = "argument 2: got Rec, expected number" },
+      { msg = "argument 1: got Rec, expected number" },
    }))
 
    it("cannot be typechecked if the metamethod is not defined in the record", util.check_type_error([[
