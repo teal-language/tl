@@ -1216,8 +1216,96 @@ local table_types = {
 
 
 
-local Fact = {}
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local TruthyFact = {}
+
+
+
+
+
+
+
+
+
+
+local NotFact = {}
+
+
+
+
+
+
+
+
+
+
+
+
+local AndFact = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+local OrFact = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+local EqFact = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+local IsFact = {}
 
 
 
@@ -7921,7 +8009,9 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function match_record_key(tbl, rec, key)
+   local match_record_key
+
+   match_record_key = function(tbl, rec, key)
       assert(type(tbl) == "table")
       assert(type(rec) == "table")
       assert(type(key) == "string")
@@ -8460,37 +8550,93 @@ tl.type_check = function(ast, opts)
    local apply_facts
    local FACT_TRUTHY
    do
-      setmetatable(Fact, {
+      local IsFact_mt = {
+         __tostring = function(f)
+            return ("(%s is %s)"):format(f.var, show_type(f.typ))
+         end,
+      }
+
+      setmetatable(IsFact, {
          __call = function(_, fact)
-            return setmetatable(fact, {
-               __tostring = function(f)
-                  if f.fact == "is" then
-                     return ("(%s is %s)"):format(f.var, show_type(f.typ))
-                  elseif f.fact == "==" then
-                     return ("(%s == %s)"):format(f.var, show_type(f.typ))
-                  elseif f.fact == "truthy" then
-                     return "*"
-                  elseif f.fact == "not" then
-                     return ("(not %s)"):format(tostring(f.f1))
-                  elseif f.fact == "or" then
-                     return ("(%s or %s)"):format(tostring(f.f1), tostring(f.f2))
-                  elseif f.fact == "and" then
-                     return ("(%s and %s)"):format(tostring(f.f1), tostring(f.f2))
-                  end
-               end,
-            })
+            fact.fact = "is"
+            return setmetatable(fact, IsFact_mt)
          end,
       })
 
-      FACT_TRUTHY = Fact({ fact = "truthy" })
+      local EqFact_mt = {
+         __tostring = function(f)
+            return ("(%s == %s)"):format(f.var, show_type(f.typ))
+         end,
+      }
+
+      setmetatable(EqFact, {
+         __call = function(_, fact)
+            fact.fact = "=="
+            return setmetatable(fact, EqFact_mt)
+         end,
+      })
+
+      local TruthyFact_mt = {
+         __tostring = function(_f)
+            return "*"
+         end,
+      }
+
+      setmetatable(TruthyFact, {
+         __call = function(_, fact)
+            fact.fact = "truthy"
+            return setmetatable(fact, TruthyFact_mt)
+         end,
+      })
+
+      local NotFact_mt = {
+         __tostring = function(f)
+            return ("(not %s)"):format(tostring(f.f1))
+         end,
+      }
+
+      setmetatable(NotFact, {
+         __call = function(_, fact)
+            fact.fact = "not"
+            return setmetatable(fact, NotFact_mt)
+         end,
+      })
+
+      local AndFact_mt = {
+         __tostring = function(f)
+            return ("(%s and %s)"):format(tostring(f.f1), tostring(f.f2))
+         end,
+      }
+
+      setmetatable(AndFact, {
+         __call = function(_, fact)
+            fact.fact = "and"
+            return setmetatable(fact, AndFact_mt)
+         end,
+      })
+
+      local OrFact_mt = {
+         __tostring = function(f)
+            return ("(%s or %s)"):format(tostring(f.f1), tostring(f.f2))
+         end,
+      }
+
+      setmetatable(OrFact, {
+         __call = function(_, fact)
+            fact.fact = "or"
+            return setmetatable(fact, OrFact_mt)
+         end,
+      })
+
+      FACT_TRUTHY = TruthyFact({})
 
       facts_and = function(where, f1, f2)
-         return Fact({ fact = "and", f1 = f1, f2 = f2, where = where })
+         return AndFact({ f1 = f1, f2 = f2, where = where })
       end
 
       facts_or = function(where, f1, f2)
          if f1 and f2 then
-            return Fact({ fact = "or", f1 = f1, f2 = f2, where = where })
+            return OrFact({ f1 = f1, f2 = f2, where = where })
          else
             return nil
          end
@@ -8498,7 +8644,7 @@ tl.type_check = function(ast, opts)
 
       facts_not = function(where, f1)
          if f1 then
-            return Fact({ fact = "not", f1 = f1, where = where })
+            return NotFact({ f1 = f1, where = where })
          else
             return nil
          end
@@ -8582,35 +8728,31 @@ tl.type_check = function(ast, opts)
       local eval_fact
 
       local function invalid_from(f)
-         return Fact({ fact = "is", var = f.var, typ = INVALID, where = f.where })
+         return IsFact({ fact = "is", var = f.var, typ = INVALID, where = f.where })
       end
 
       not_facts = function(fs)
          local ret = {}
          for var, f in pairs(fs) do
             local typ = find_var_type(f.var, "check_only")
-            local fact = "=="
-            local where = f.where
+
             if not typ then
-               typ = INVALID
+               ret[var] = EqFact({ var = var, typ = INVALID, where = f.where })
+            elseif f.fact == "==" then
+
+               ret[var] = EqFact({ var = var, typ = typ })
+            elseif typ.typename == "typevar" then
+               assert(f.fact == "is")
+
+               ret[var] = EqFact({ var = var, typ = typ })
+            elseif not is_a(f.typ, typ) then
+               assert(f.fact == "is")
+               node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+               ret[var] = EqFact({ var = var, typ = INVALID, where = f.where })
             else
-               if f.fact == "is" then
-                  if typ.typename == "typevar" then
-
-                     where = nil
-                  elseif not is_a(f.typ, typ) then
-                     node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
-                     typ = INVALID
-                  else
-                     fact = "is"
-                     typ = subtract_types(typ, f.typ)
-                  end
-               elseif f.fact == "==" then
-
-                  where = nil
-               end
+               assert(f.fact == "is")
+               ret[var] = IsFact({ var = var, typ = subtract_types(typ, f.typ), where = f.where })
             end
-            ret[var] = Fact({ fact = fact, var = var, typ = typ, where = where })
          end
          return ret
       end
@@ -8640,9 +8782,12 @@ tl.type_check = function(ast, opts)
 
          for var, f in pairs(fs2) do
             if fs1[var] then
-               local fact = (fs1[var].fact == "is" and f.fact == "is") and
-               "is" or "=="
-               ret[var] = Fact({ fact = fact, var = var, typ = unite_types(f.typ, fs1[var].typ), where = f.where })
+               local united = unite_types(f.typ, fs1[var].typ)
+               if fs1[var].fact == "is" and f.fact == "is" then
+                  ret[var] = IsFact({ var = var, typ = united, where = f.where })
+               else
+                  ret[var] = EqFact({ var = var, typ = united, where = f.where })
+               end
             end
          end
 
@@ -8655,21 +8800,23 @@ tl.type_check = function(ast, opts)
 
          for var, f in pairs(fs1) do
             local rt
-            local fact
+            local ctor = EqFact
             if fs2[var] then
-               fact = (fs2[var].fact == "is" and f.fact == "is") and "is" or "=="
+               if fs2[var].fact == "is" and f.fact == "is" then
+                  ctor = IsFact
+               end
                rt = intersect_types(f.typ, fs2[var].typ)
             else
-               fact = "=="
                rt = f.typ
             end
-            ret[var] = Fact({ fact = fact, var = var, typ = rt, where = f.where })
-            has[fact] = true
+            local ff = ctor({ var = var, typ = rt, where = f.where })
+            ret[var] = ff
+            has[ff.fact] = true
          end
 
          for var, f in pairs(fs2) do
             if not fs1[var] then
-               ret[var] = Fact({ fact = "==", var = var, typ = f.typ, where = f.where })
+               ret[var] = EqFact({ var = var, typ = f.typ, where = f.where })
                has["=="] = true
             end
          end
@@ -8714,7 +8861,7 @@ tl.type_check = function(ast, opts)
             return eval_not(f.f1)
          elseif f.fact == "and" then
             return and_facts(eval_fact(f.f1), eval_fact(f.f2))
-         elseif f.fact == "or" then
+         else
             return or_facts(eval_fact(f.f1), eval_fact(f.f2))
          end
       end
@@ -10248,7 +10395,7 @@ tl.type_check = function(ast, opts)
                   node_error(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
                   check_metamethod(node, "__is", ra, resolve_typetype(rb), orig_a, orig_b)
-                  node.known = Fact({ fact = "is", var = node.e1.tk, typ = b, where = node })
+                  node.known = IsFact({ var = node.e1.tk, typ = b, where = node })
                else
                   node_error(node, "can only use 'is' on variables")
                end
@@ -10317,11 +10464,11 @@ tl.type_check = function(ast, opts)
 
                if is_a(b, a, true) or a.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
-                     node.known = Fact({ fact = "==", var = node.e1.tk, typ = b, where = node })
+                     node.known = EqFact({ var = node.e1.tk, typ = b, where = node })
                   end
                elseif is_a(a, b, true) or b.typename == "typevar" then
                   if node.op.op == "==" and node.e2.kind == "variable" then
-                     node.known = Fact({ fact = "==", var = node.e2.tk, typ = a, where = node })
+                     node.known = EqFact({ var = node.e2.tk, typ = a, where = node })
                   end
                elseif lax and (is_unknown(a) or is_unknown(b)) then
                   node.type = UNKNOWN
