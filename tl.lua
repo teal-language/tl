@@ -3462,7 +3462,7 @@ local function recurse_node(root,
       if ast.decltype then
          xs[2] = recurse_type(ast.decltype, visit_type)
       end
-      extra_callback("before_expressions", ast, xs, visit_node)
+      extra_callback("before_exp", ast, xs, visit_node)
       if ast.exps then
          xs[3] = recurse(ast.exps)
       end
@@ -9112,7 +9112,7 @@ tl.type_check = function(ast, opts)
                reserve_symbol_list_slot(var)
             end
          end,
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node, children)
             local encountered_close = false
             local infertypes = get_assignment_values(children[3], #node.vars)
@@ -9159,7 +9159,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["global_declaration"] = {
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node, children)
             local infertypes = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
@@ -9179,7 +9179,7 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["assignment"] = {
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node, children)
             local valtypes = get_assignment_values(children[3], #children[1])
             local exps = flatten_list(valtypes)

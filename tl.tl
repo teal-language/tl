@@ -3202,7 +3202,7 @@ end
 
 local record VisitorCallbacks<N, T>
    before: function(N, {T})
-   before_expressions: function({N}, {T})
+   before_exp: function({N}, {T})
    before_arguments: function({N}, {T})
    before_statements: function({N}, {T})
    before_e2: function({N}, {T})
@@ -3212,7 +3212,7 @@ end
 local enum VisitorExtraCallback
    "before_arguments"
    "before_statements"
-   "before_expressions"
+   "before_exp"
    "before_e2"
 end
 
@@ -3462,7 +3462,7 @@ local function recurse_node<T>(root: Node,
       if ast.decltype then
          xs[2] = recurse_type(ast.decltype, visit_type)
       end
-      extra_callback("before_expressions", ast, xs, visit_node)
+      extra_callback("before_exp", ast, xs, visit_node)
       if ast.exps then
          xs[3] = recurse(ast.exps)
       end
@@ -9112,7 +9112,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                reserve_symbol_list_slot(var)
             end
          end,
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
             local encountered_close = false
             local infertypes: {Type} = get_assignment_values(children[3], #node.vars)
@@ -9159,7 +9159,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["global_declaration"] = {
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
             local infertypes: {Type} = get_assignment_values(children[3], #node.vars)
             for i, var in ipairs(node.vars) do
@@ -9179,7 +9179,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["assignment"] = {
-         before_expressions = set_expected_types_to_decltypes,
+         before_exp = set_expected_types_to_decltypes,
          after = function(node: Node, children: {Type}): Type
             local valtypes: {Type} = get_assignment_values(children[3], #children[1])
             local exps = flatten_list(valtypes)
