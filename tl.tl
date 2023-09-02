@@ -1065,6 +1065,11 @@ local table_types <total>: {TypeName:boolean} = {
 
 local record Type
    {Type}
+
+   metamethod __is: function(self: Type) = macroexp(self: Type)
+      self.typename ~= nil
+   end
+
    y: integer
    x: integer
    filename: string
@@ -1137,10 +1142,7 @@ local record Type
    -- emptytable
    declared_at: Node
    assigned_to: string
-   keys_inferred_at: Node
-   keys_inferred_at_file: string
-   inferred_at: Node
-   inferred_at_file: string
+   inferred_at: Where
    emptytable_type: Type
 
    -- enum
@@ -1248,7 +1250,7 @@ local record TruthyFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    metamethod __call: function(Fact, Fact): TruthyFact
 end
@@ -1259,7 +1261,7 @@ local record NotFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    f1: Fact
 
@@ -1272,7 +1274,7 @@ local record AndFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    f1: Fact
    f2: Fact
@@ -1286,7 +1288,7 @@ local record OrFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    f1: Fact
    f2: Fact
@@ -1300,7 +1302,7 @@ local record EqFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    var: string
    typ: Type
@@ -1314,7 +1316,7 @@ local record IsFact
    end
 
    fact: FactType
-   where: Node
+   where: Where
 
    var: string
    typ: Type
@@ -1344,6 +1346,10 @@ local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 local record Node
    {Node}
 
+   metamethod __is: function(self: Node) = macroexp(self: Node)
+      self.kind ~= nil
+   end
+
    record ExpectedContext
       kind: NodeKind
       name: string
@@ -1351,6 +1357,8 @@ local record Node
 
    y: integer
    x: integer
+   filename: string
+
    tk: string
    kind: NodeKind
    symbol_list_slot: integer
@@ -1437,6 +1445,10 @@ local record Node
    type: Type
    decltype: Type
 end
+
+local type Where
+   = Node
+   | Type
 
 local function is_array_type(t:Type): boolean
    return t.typename == "array" or t.typename == "arrayrecord"
@@ -5023,7 +5035,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
 end
 
 local function inferred_msg(t: Type): string
-   return " (inferred at "..t.inferred_at_file..":"..t.inferred_at.y..":"..t.inferred_at.x..")"
+   return " (inferred at "..t.inferred_at.filename..":"..t.inferred_at.y..":"..t.inferred_at.x..")"
 end
 
 show_type = function(t: Type, short: boolean, seen: {Type:string}): string
@@ -6063,7 +6075,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function error_in_type(where: Type, msg: string, ...: Type): Error
+   local function Err(where: Where, msg: string, ...: Type): Error
       local n = select("#", ...)
       if n > 0 then
          local showt = {}
@@ -6087,8 +6099,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       }
    end
 
-   local function type_error(t: Type, msg: string, ...:Type): boolean
-      local e = error_in_type(t, msg, ...)
+   local function error_at(w: Where, msg: string, ...:Type): boolean
+      local e = Err(w, msg, ...)
       if e then
          table.insert(errors, e)
          return true
@@ -6214,7 +6226,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local function validate_union(where: Node, u: Type, store_errs: boolean, errs: {Error}): Type, {Error}
+   local function validate_union(where: Where, u: Type, store_errs: boolean, errs: {Error}): Type, {Error}
       local valid, err = is_valid_union(u)
       if err then
          if store_errs then
@@ -6222,7 +6234,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          else
             errs = errors
          end
-         table.insert(errs, error_in_type(where as Type, err, u))
+         table.insert(errs, Err(where, err, u))
       end
       if not valid then
          u = INVALID
@@ -6378,7 +6390,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                copy.types[i], same = resolve(tf, same)
             end
 
-            copy, errs = validate_union(t as Node, copy, true, errs)
+            copy, errs = validate_union(t, copy, true, errs)
          elseif t.typename == "poly" or t.typename == "tupletable" then
             copy.types = {}
             for i, tf in ipairs(t.types) do
@@ -6430,28 +6442,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t
    end
 
-   local function node_warning(tag: tl.WarningKind, node: Node, fmt: string, ...: any)
+   local function add_warning(tag: tl.WarningKind, where: Where, fmt: string, ...: any)
       table.insert(warnings, {
-         y = node.y,
-         x = node.x,
+         y = where.y,
+         x = where.x,
          msg = fmt:format(...),
-         filename = filename,
+         filename = where.filename or filename,
          tag = tag,
       })
    end
 
    local function node_error(node: Node, msg: string, ...:Type): Type
-      type_error(node as Type, msg, ...)
+      error_at(node, msg, ...)
       node.type = INVALID
       return node.type
    end
 
-   local function terr(t: Type, s: string, ...: Type): {Error}
-      return { error_in_type(t, s, ...) }
-   end
-
    local function add_unknown(node: Node, name: string)
-      node_warning("unknown", node, "unknown variable: %s", name)
+      add_warning("unknown", node, "unknown variable: %s", name)
    end
 
    local function redeclaration_warning(node: Node, old_var: Variable)
@@ -6466,9 +6474,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       local short_error = "redeclaration of " .. var_kind .. " '%s'"
       if old_var and old_var.declared_at then
-         node_warning("redeclaration", node, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
+         add_warning("redeclaration", node, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
       else
-         node_warning("redeclaration", node, short_error, var_name)
+         add_warning("redeclaration", node, short_error, var_name)
       end
    end
 
@@ -6487,9 +6495,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          and prefix ~= "@"
       then
          if name:sub(1, 2) == "::" then
-            node_warning("unused", var.declared_at, "unused label %s", name)
+            add_warning("unused", var.declared_at, "unused label %s", name)
          else
-            node_warning(
+            add_warning(
                "unused",
                var.declared_at,
                "unused %s %s: %s",
@@ -6504,14 +6512,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function add_errs_prefixing(where: Node, src: {Error}, dst: {Error}, prefix: string)
+   local function add_errs_prefixing(where: Where, src: {Error}, dst: {Error}, prefix: string)
       if not src then
          return
       end
       for _, err in ipairs(src) do
          err.msg = prefix .. err.msg
 
-         -- where.y may be nil because of `typ as Node` casts and not all types have .y set
+         -- where.y may be nil because not all types have .y set
          if where and where.y and (
             (err.filename ~= filename)
             or (not err.y)
@@ -6526,7 +6534,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function resolve_typevars_at(where: Node, t: Type): Type
+   local function resolve_typevars_at(where: Where, t: Type): Type
       assert(where)
       local ok, typ, errs = resolve_typevars(t)
       if not ok then
@@ -6536,14 +6544,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return typ
    end
 
-   local function infer_at(where: Node, t: Type): Type
+   local function infer_at(where: Where, t: Type): Type
       local ret = resolve_typevars_at(where, t)
       if ret.typename == "invalid" then
          ret = t -- errors are produced by resolve_typevars_at
       end
       ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
-      ret.inferred_at_file = filename
+      ret.inferred_at.filename = filename
       return ret
    end
 
@@ -6680,7 +6688,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local t2k = t2(k)
          if t2k == nil then
             if (not lax) and invariant then
-               table.insert(fielderrs, error_in_type(f, "unknown field " .. k))
+               table.insert(fielderrs, Err(f, "unknown field " .. k))
             end
          else
             local ok, errs: boolean, {Error}
@@ -6702,7 +6710,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function match_fields_to_record(rec1: Type, rec2: Type, invariant: boolean): boolean, {Error}
       if rec1.is_userdata ~= rec2.is_userdata then
-         return false, { error_in_type(rec1, "userdata record doesn't match: %s", rec2) }
+         return false, { Err(rec1, "userdata record doesn't match: %s", rec2) }
       end
       local ok, fielderrs = match_record_fields(rec1, function(k: string): Type return rec2.fields[k] end, invariant)
       if not ok then
@@ -6715,12 +6723,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function match_fields_to_map(rec1: Type, map: Type): boolean, {Error}
       if not match_record_fields(rec1, function(_: string): Type return map.values end) then
-         return false, { error_in_type(rec1, "record is not a valid map; not all fields have the same type") }
+         return false, { Err(rec1, "record is not a valid map; not all fields have the same type") }
       end
       return true
    end
 
-   local function arg_check(where: Node, cmp: CompareTypes, a: Type, b: Type, n: integer, errs: {Error}, ctx: string): boolean
+   local function arg_check(where: Where, cmp: CompareTypes, a: Type, b: Type, n: integer, errs: {Error}, ctx: string): boolean
       local matches, match_errs = cmp(a, b)
       if not matches then
          add_errs_prefixing(where, match_errs, errs, ctx .. (n and " " .. n or "") .. ": ")
@@ -6895,7 +6903,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local function match_typevals(t: Type, def: Type): Type
          if t.typevals and def.typeargs then
             if #t.typevals ~= #def.typeargs then
-               type_error(t, "mismatch in number of type arguments")
+               error_at(t, "mismatch in number of type arguments")
                return nil
             end
 
@@ -6907,10 +6915,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end_scope()
             return ret
          elseif t.typevals then
-            type_error(t, "spurious type arguments")
+            error_at(t, "spurious type arguments")
             return nil
          elseif def.typeargs then
-            type_error(t, "missing type arguments in %s", def)
+            error_at(t, "missing type arguments in %s", def)
             return nil
          else
             return def
@@ -6926,7 +6934,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          local typetype = t.found or find_type(t.names)
          if not typetype then
-            type_error(t, "unknown type %s", t)
+            error_at(t, "unknown type %s", t)
             return INVALID
          elseif is_typetype(typetype) then
             if typetype.is_alias then
@@ -6946,7 +6954,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             assert(typetype.def.typename ~= "nominal")
             resolved = match_typevals(t, typetype.def)
          else
-            type_error(t, table.concat(t.names, ".") .. " is not a type")
+            error_at(t, table.concat(t.names, ".") .. " is not a type")
          end
 
          if not resolved then
@@ -6993,10 +7001,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if not ft1 then
-               type_error(t1, "unknown type %s", t1)
+               error_at(t1, "unknown type %s", t1)
             end
             if not ft2 then
-               type_error(t2, "unknown type %s", t2)
+               error_at(t2, "unknown type %s", t2)
             end
             return false, {} -- errors were already produced
          end
@@ -7030,7 +7038,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                t2name = t2name .. " (defined in " .. t2r.filename .. ":" .. t2r.y .. ")"
             end
          end
-         return false, terr(t1, t1name .. " is not a " .. t2name)
+         return false, { Err(t1, t1name .. " is not a " .. t2name) }
       end
    end
 
@@ -7075,7 +7083,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       if t1.typename ~= t2.typename then
-         return false, terr(t1, "got %s, expected %s", t1, t2)
+         return false, { Err(t1, "got %s, expected %s", t1, t2) }
       end
       if t1.typename == "array" then
          return same_type(t1.elements, t2.elements)
@@ -7104,7 +7112,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          and has_all_types_of(t2.types, t1.types, same_type) then
             return true
          else
-            return false, terr(t1, "got %s, expected %s", t1, t2)
+            return false, { Err(t1, "got %s, expected %s", t1, t2) }
          end
       elseif t1.typename == "nominal" then
          return are_same_nominals(t1, t2)
@@ -7114,12 +7122,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local argdelta = t1.is_method and 1 or 0
          if #t1.args ~= #t2.args then
             if t1.is_method ~= t2.is_method then
-               return false, terr(t1, "different number of input arguments: method and non-method are not the same type")
+               return false, { Err(t1, "different number of input arguments: method and non-method are not the same type") }
             end
-            return false, terr(t1, "different number of input arguments: got " .. #t1.args - argdelta .. ", expected " .. #t2.args - argdelta)
+            return false, { Err(t1, "different number of input arguments: got " .. #t1.args - argdelta .. ", expected " .. #t2.args - argdelta) }
          end
          if #t1.rets ~= #t2.rets then
-            return false, terr(t1, "different number of return values: got " .. #t1.rets .. ", expected " .. #t2.rets)
+            return false, { Err(t1, "different number of return values: got " .. #t1.rets .. ", expected " .. #t2.rets) }
          end
          local all_errs = {}
          for i = 1, #t1.args do
@@ -7233,8 +7241,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return known_table_types[t.typename] and not t.is_userdata
    end
 
-   local expand_type: function(where: Node, old: Type, new: Type): Type
-   local function arraytype_from_tuple(where: Node, tupletype: Type): Type, {Error}
+   local expand_type: function(where: Where, old: Type, new: Type): Type
+   local function arraytype_from_tuple(where: Where, tupletype: Type): Type, {Error}
       -- first just try a basic union
       local element_type = unite(tupletype.types, true)
       local valid = element_type.typename ~= "union" and true or is_valid_union(element_type)
@@ -7253,7 +7261,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       for i = 2, #tupletype.types do
          arr_type = expand_type(where, arr_type, a_type { elements = tupletype.types[i], typename = "array" })
          if not arr_type or not arr_type.elements then
-            return nil, terr(tupletype, "unable to convert tuple %s to array", tupletype)
+            return nil, { Err(tupletype, "unable to convert tuple %s to array", tupletype) }
          end
       end
       return arr_type
@@ -7326,7 +7334,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                end_scope() -- don't preserve failed inferences
                if not ok then
-                  return false, terr(t1, "got %s, expected %s", t1, t2)
+                  return false, { Err(t1, "got %s, expected %s", t1, t2) }
                end
             end
             -- preserve all valid inferences
@@ -7341,7 +7349,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          else
             for _, t in ipairs(t1.types) do
                if not is_a(t, t2, for_equality) then
-                  return false, terr(t1, "got %s, expected %s", t1, t2)
+                  return false, { Err(t1, "got %s, expected %s", t1, t2) }
                end
             end
             return true
@@ -7363,7 +7371,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t2.typename == "poly" then
          for _, t in ipairs(t2.types) do
             if not is_a(t1, t, for_equality) then
-               return false, terr(t1, "cannot match against all alternatives of the polymorphic type")
+               return false, { Err(t1, "cannot match against all alternatives of the polymorphic type") }
             end
          end
          return true
@@ -7377,7 +7385,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return true
             end
          end
-         return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
+         return false, { Err(t1, "cannot match against any alternatives of the polymorphic type") }
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
          local t1r = resolve_tuple_and_nominal(t1)
          local t2r = resolve_tuple_and_nominal(t2)
@@ -7396,7 +7404,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if ok then
             return true
          else
-            return false, terr(t1, "enum is incompatible with %s", t2)
+            return false, { Err(t1, "enum is incompatible with %s", t2) }
          end
       elseif t1.typename == "integer" and t2.typename == "number" then
          return true
@@ -7406,9 +7414,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return true
          else
             if t1.tk then
-               return false, terr(t1, "%s is not a member of %s", t1, t2)
+               return false, { Err(t1, "%s is not a member of %s", t1, t2) }
             else
-               return false, terr(t1, "string is not a %s", t2)
+               return false, { Err(t1, "string is not a %s", t2) }
             end
          end
       elseif t1.typename == "nominal" or t2.typename == "nominal" then
@@ -7419,7 +7427,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if errs[1].msg:match("^got ") then
                --local got = t1.typename == "nominal" and t1.name or show_type(t1)
                --local expected = t2.typename == "nominal" and t2.name or show_type(t2)
-               errs = terr(t1, "got %s, expected %s", t1, t2)
+               errs = { Err(t1, "got %s, expected %s", t1, t2) }
             end
          end
          return ok, errs
@@ -7434,7 +7442,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   for i = 2, #t1.types do
                      local t = t1.types[i]
                      if not is_a(t, t2e) then
-                        return false, terr(t, "%s is not a member of %s", t, t2e)
+                        return false, { Err(t, "%s is not a member of %s", t, t2e) }
                      end
                   end
                end
@@ -7442,14 +7450,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          elseif t1.typename == "tupletable" then
             if t2.inferred_len and t2.inferred_len > #t1.types then
-               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len))
+               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len)) }
             end
             local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
             if not t1a then
                return false, err
             end
             if not is_a(t1a, t2) then
-               return false, terr(t2, "got %s (from %s), expected %s", t1a, t1, t2)
+               return false, { Err(t2, "got %s (from %s), expected %s", t1a, t1, t2) }
             end
             return true
          elseif t1.typename == "map" then
@@ -7469,21 +7477,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return is_a(t1.elements, t2.elements)
          elseif t1.typename == "tupletable" then
             if t2.inferred_len and t2.inferred_len > #t1.types then
-               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len))
+               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len)) }
             end
             local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
             if not t1a then
                return false, err
             end
             if not is_a(t1a, t2) then
-               return false, terr(t2, "got %s (from %s), expected %s", t1a, t1, t2)
+               return false, { Err(t2, "got %s (from %s), expected %s", t1a, t1, t2) }
             end
             return true
          elseif t1.typename == "record" then
             return match_fields_to_record(t1, t2)
          elseif t1.typename == "arrayrecord" then
             if not is_a(t1.elements, t2.elements) then
-               return false, terr(t1, "array parts have incompatible element types")
+               return false, { Err(t1, "array parts have incompatible element types") }
             end
             return match_fields_to_record(t1, t2)
          elseif is_typetype(t1) and is_record_type(t1.def) then -- record as prototype
@@ -7504,7 +7512,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if t1.typename == "tupletable" then
                local arr_type = arraytype_from_tuple(t1.inferred_at, t1)
                if not arr_type then
-                  return false, terr(t1, "Unable to convert tuple %s to map", t1)
+                  return false, { Err(t1, "Unable to convert tuple %s to map", t1) }
                end
                elements = arr_type.elements
             else
@@ -7516,12 +7524,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return combine_map_errs(errs_keys, errs_values)
          elseif is_record_type(t1) then -- FIXME
             if not is_a(t2.keys, STRING) then
-               return false, terr(t1, "can't match a record to a map with non-string keys")
+               return false, { Err(t1, "can't match a record to a map with non-string keys") }
             end
             if t2.keys.typename == "enum" then
                for _, k in ipairs(t1.field_order) do
                   if not t2.keys.enumset[k] then
-                     return false, terr(t1, "key is not an enum value: " .. k)
+                     return false, { Err(t1, "key is not an enum value: " .. k) }
                   end
                end
             end
@@ -7531,19 +7539,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if t1.typename == "tupletable" then
             for i = 1, math.min(#t1.types, #t2.types) do
                if not is_a(t1.types[i], t2.types[i], for_equality) then
-                  return false, terr(t1, "in tuple entry " .. tostring(i) .. ": got %s, expected %s", t1.types[i], t2.types[i])
+                  return false, { Err(t1, "in tuple entry " .. tostring(i) .. ": got %s, expected %s", t1.types[i], t2.types[i]) }
                end
             end
             if for_equality and #t1.types ~= #t2.types then
-               return false, terr(t1, "tuples are not the same size")
+               return false, { Err(t1, "tuples are not the same size") }
             end
             if #t1.types > #t2.types then
-               return false, terr(t1, "tuple %s is too big for tuple %s", t1, t2)
+               return false, { Err(t1, "tuple %s is too big for tuple %s", t1, t2) }
             end
             return true
          elseif is_array_type(t1) then
             if t1.inferred_len and t1.inferred_len > #t2.types then
-               return false, terr(t1, "incompatible length, expected maximum length of " .. tostring(#t2.types) .. ", got " .. tostring(t1.inferred_len))
+               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t2.types) .. ", got " .. tostring(t1.inferred_len)) }
             end
 
             -- for array literals (which is the only case where inferred_len is defined),
@@ -7554,7 +7562,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             for i = 1, len do
                if not is_a(t1.elements, t2.types[i], for_equality) then
-                  return false, terr(t1, "tuple entry " .. tostring(i) .. " of type %s does not match type of array elements, which is %s", t2.types[i], t1.elements)
+                  return false, { Err(t1, "tuple entry " .. tostring(i) .. " of type %s does not match type of array elements, which is %s", t2.types[i], t1.elements) }
                end
             end
             return true
@@ -7562,7 +7570,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t1.typename == "function" and t2.typename == "function" then
          local all_errs = {}
          if (not t2.args.is_va) and #t1.args > #t2.args then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
+            table.insert(all_errs, Err(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
          else
             for i = ((t1.is_method or t2.is_method) and 2 or 1), #t1.args do
                arg_check(nil, is_a, t1.args[i], t2.args[i] or ANY, i, all_errs, "argument")
@@ -7570,7 +7578,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
          local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
          if #t1.rets < #t2.rets and not diff_by_va then
-            table.insert(all_errs, error_in_type(t1, "incompatible number of returns: got " .. #t1.rets .. " %s, expected " .. #t2.rets .. " %s", t1.rets, t2.rets))
+            table.insert(all_errs, Err(t1, "incompatible number of returns: got " .. #t1.rets .. " %s, expected " .. #t2.rets .. " %s", t1.rets, t2.rets))
          else
             local nrets = #t2.rets
             if diff_by_va then
@@ -7593,7 +7601,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return true
       end
 
-      return false, terr(t1, "got %s, expected %s", t1, t2)
+      return false, { Err(t1, "got %s, expected %s", t1, t2) }
    end
 
    local function assert_is_a(node: Node, t1: Type, t2: Type, context: string, name: string): boolean
@@ -7825,7 +7833,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function infer_emptytables(where: Node, wheres: {Node}, xs: Type, ys: Type, delta: integer)
+      local function infer_emptytables(where: Where, wheres: {Where}, xs: Type, ys: Type, delta: integer)
          assert(xs.typename == "tuple")
          assert(ys.typename == "tuple")
 
@@ -7846,10 +7854,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local check_args_rets: function(where: Node, where_args: {Node}, f: Type, args: {Type}, rets: {Type}, argdelta: integer): Type, {Error}
+      local check_args_rets: function(where: Where, where_args: {Node}, f: Type, args: {Type}, rets: {Type}, argdelta: integer): Type, {Error}
       do
          -- check if a tuple `xs` matches tuple `ys`
-         local function check_func_type_list(where: Node, wheres: {Node}, xs: Type, ys: Type, from: integer, delta: integer, mode: string): boolean, {Error}
+         local function check_func_type_list(where: Where, wheres: {Where}, xs: Type, ys: Type, from: integer, delta: integer, mode: string): boolean, {Error}
             assert(xs.typename == "tuple", xs.typename)
             assert(ys.typename == "tuple", ys.typename)
 
@@ -7872,7 +7880,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return true
          end
 
-         check_args_rets = function(where: Node, where_args: {Node}, f: Type, args: {Type}, rets: {Type}, argdelta: integer): Type, {Error}
+         check_args_rets = function(where: Where, where_args: {Node}, f: Type, args: {Type}, rets: {Type}, argdelta: integer): Type, {Error}
             local rets_ok = true
             local rets_errs: {Error}
             local args_ok: boolean
@@ -7958,7 +7966,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolve_typevars_at(node, f.rets)
       end
 
-      local function check_call(where: Node, where_args: {Node}, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
+      local function check_call(node: Node, where_args: {Node}, func: Type, args: {Type}, is_method: boolean, argdelta: integer): Type, Type
          assert(type(func) == "table")
          assert(type(args) == "table")
 
@@ -7971,7 +7979,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local is_func = func.typename == "function"
          local is_poly = func.typename == "poly"
          if not (is_func or is_poly) then
-            return node_error(where, "not a function: %s", func)
+            return node_error(node, "not a function: %s", func)
          end
 
          local passes, n = 1, 1
@@ -7988,15 +7996,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   local f = is_func and func or func.types[i]
                   if f.is_method and not is_method then
                      if args[1] and is_a(args[1], f.args[1]) then
-                        -- a non-"@funcall" `where` means a synthesized call, e.g. from a metamethod
-                        if where.kind == "op" and where.op.op == "@funcall" then
-                           local receiver_is_typetype = where.e1.e1 and where.e1.e1.type and where.e1.e1.type.resolved and where.e1.e1.type.resolved.typename == "typetype"
+                        -- a non-"@funcall" `node` means a synthesized call, e.g. from a metamethod
+                        if node.kind == "op" and node.op.op == "@funcall" then
+                           local receiver_is_typetype = node.e1.e1 and node.e1.e1.type and node.e1.e1.type.resolved and node.e1.e1.type.resolved.typename == "typetype"
                            if not receiver_is_typetype then
-                              node_warning("hint", where, "invoked method as a regular function: consider using ':' instead of '.'")
+                              add_warning("hint", node, "invoked method as a regular function: consider using ':' instead of '.'")
                            end
                         end
                      else
-                        return node_error(where, "invoked method as a regular function: use ':' instead of '.'")
+                        return node_error(node, "invoked method as a regular function: use ':' instead of '.'")
                      end
                   end
                   local expected = #f.args
@@ -8012,16 +8020,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   then
                      push_typeargs(f)
 
-                     local matched, errs = check_args_rets(where, where_args, f, args, where.expected, argdelta)
+                     local matched, errs = check_args_rets(node, where_args, f, args, node.expected, argdelta)
                      if matched then
                         -- success!
                         return matched, f
                      end
                      first_errs = first_errs or errs
 
-                     if where.expected then
+                     if node.expected then
                         -- revert inferred returns
-                        infer_emptytables(where, where_args, f.rets, f.rets, argdelta)
+                        infer_emptytables(node, where_args, f.rets, f.rets, argdelta)
                      end
 
                      if is_poly then
@@ -8034,24 +8042,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         return fail_call(where, func, given, first_errs)
+         return fail_call(node, func, given, first_errs)
       end
 
-      type_check_function_call = function(where: Node, where_args: {Node}, func: Type, args: {Type}, e1: Node, is_method: boolean, argdelta: integer): Type
-         if where.expected and where.expected.typename ~= "tuple" then
-            where.expected = a_type { typename = "tuple", where.expected }
+      type_check_function_call = function(node: Node, where_args: {Node}, func: Type, args: {Type}, e1: Node, is_method: boolean, argdelta: integer): Type
+         if node.expected and node.expected.typename ~= "tuple" then
+            node.expected = a_type { typename = "tuple", node.expected }
          end
 
          begin_scope()
-         local ret, f = check_call(where, where_args, func, args, is_method, argdelta)
-         ret = resolve_typevars_at(where, ret)
+         local ret, f = check_call(node, where_args, func, args, is_method, argdelta)
+         ret = resolve_typevars_at(node, ret)
          end_scope()
          if e1 then
             e1.type = f
          end
 
          if func.macroexp then
-            expand_macroexp(where, where_args, func.macroexp)
+            expand_macroexp(node, where_args, func.macroexp)
          end
 
          return ret
@@ -8288,7 +8296,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          for _, t in ipairs(node.typeargs) do
             local v = find_var(t.typearg, "check_only")
             if not v or not v.used_as_type then
-               type_error(t, "type argument '%s' is not used in function signature", t)
+               error_at(t, "type argument '%s' is not used in function signature", t)
             end
          end
       end
@@ -8321,7 +8329,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                for _, typ in ipairs(types) do
                   assert(typ.x)
                   assert(typ.y)
-                  type_error(typ, "unknown type %s", typ)
+                  error_at(typ, "unknown type %s", typ)
                end
             end
          end
@@ -8447,9 +8455,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return a.elements
       elseif a.typename == "emptytable" then
          if a.keys == nil then
-            a.keys = resolve_tuple(orig_b)
-            a.keys_inferred_at = assert(anode)
-            a.keys_inferred_at_file = filename
+            a.keys = infer_at(anode, resolve_tuple(orig_b))
          end
 
          if is_a(orig_b, a.keys) then
@@ -8457,9 +8463,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s (type of keys inferred at "
-                            .. a.keys_inferred_at_file .. ":"
-                            .. a.keys_inferred_at.y .. ":"
-                            .. a.keys_inferred_at.x .. ": )", orig_b, a.keys
+                            .. a.keys.inferred_at.filename .. ":"
+                            .. a.keys.inferred_at.y .. ":"
+                            .. a.keys.inferred_at.x .. ": )", orig_b, a.keys
       elseif a.typename == "map" then
          if is_a(orig_b, a.keys) then
             return a.values
@@ -8503,7 +8509,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return node_error(bnode, errm, erra, errb)
    end
 
-   expand_type = function(where: Node, old: Type, new: Type): Type
+   expand_type = function(where: Where, old: Type, new: Type): Type
       if not old or old.typename == "nil" then
          return new
       else
@@ -8514,7 +8520,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      old.values = expand_type(where, old.values, ftype)
                   end
                else
-                  node_error(where, "cannot determine table literal type")
+                  error_at(where, "cannot determine table literal type")
                end
             elseif is_record_type(old) and is_record_type(new) then
                old.typename = "map"
@@ -8623,10 +8629,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    -- Inference engine for 'is' operator
-   local facts_and: function(where: Node, f1: Fact, f2: Fact): Fact
-   local facts_or: function(where: Node, f1: Fact, f2: Fact): Fact
-   local facts_not: function(where: Node, f1: Fact): Fact
-   local apply_facts: function(where: Node, known: Fact)
+   local facts_and: function(where: Where, f1: Fact, f2: Fact): Fact
+   local facts_or: function(where: Where, f1: Fact, f2: Fact): Fact
+   local facts_not: function(where: Where, f1: Fact): Fact
+   local apply_facts: function(where: Where, known: Fact)
    local FACT_TRUTHY: Fact
    do
       local IsFact_mt: metatable<IsFact> = {
@@ -8709,11 +8715,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       FACT_TRUTHY = TruthyFact {}
 
-      facts_and = function(where: Node, f1: Fact, f2: Fact): Fact
+      facts_and = function(where: Where, f1: Fact, f2: Fact): Fact
          return AndFact { f1 = f1, f2 = f2, where = where }
       end
 
-      facts_or = function(where: Node, f1: Fact, f2: Fact): Fact
+      facts_or = function(where: Where, f1: Fact, f2: Fact): Fact
          if f1 and f2 then
             return OrFact { f1 = f1, f2 = f2, where = where }
          else
@@ -8721,7 +8727,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      facts_not = function(where: Node, f1: Fact): Fact
+      facts_not = function(where: Where, f1: Fact): Fact
          if f1 then
             return NotFact { f1 = f1, where = where }
          else
@@ -8826,7 +8832,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                ret[var] = EqFact { var = var, typ = typ }
             elseif not is_a(f.typ, typ) then
                assert(f.fact == "is")
-               node_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+               add_warning("branch", f.where, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
                ret[var] = EqFact { var = var, typ = INVALID, where = f.where }
             else
                assert(f.fact == "is")
@@ -8920,10 +8926,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if typ.typename ~= "typevar" then
                if is_a(typ, f.typ) then
                   -- drop this warning because of implicit nil in all unions
-                  -- node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
+                  -- add_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
                   return { [f.var] = f }
                elseif not is_a(f.typ, typ) then
-                  node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
+                  error_at(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)
                   return { [f.var] = invalid_from(f) }
                end
             end
@@ -8945,7 +8951,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      apply_facts = function(where: Node, known: Fact)
+      apply_facts = function(where: Where, known: Fact)
          if not known then
             return
          end
@@ -8954,7 +8960,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          for v, f in pairs(facts) do
             if f.typ.typename == "invalid" then
-               node_error(where, "cannot resolve a type for " .. v .. " here")
+               error_at(where, "cannot resolve a type for " .. v .. " here")
             end
             local t = infer_at(where, f.typ)
             if not f.where then
@@ -9100,7 +9106,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          else
             resolved = find_type(names)
             if (not resolved) or (not is_typetype(resolved)) then
-               type_error(typetype, "%s is not a type", typetype)
+               error_at(typetype, "%s is not a type", typetype)
                resolved = a_type { typename = "bad_nominal", names = names }
             end
          end
@@ -9327,7 +9333,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return typ
    end
 
-   local function infer_negation_of_if_blocks(where: Node, ifnode: Node, n: integer)
+   local function infer_negation_of_if_blocks(where: Where, ifnode: Node, n: integer)
       local f = facts_not(where, ifnode.if_blocks[1].exp.known)
       for e = 2, n do
          local b = ifnode.if_blocks[e]
@@ -9639,7 +9645,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                            local msg = #rets == 1
                                        and "only 1 value is returned by the function"
                                        or ("only " .. #rets .. " values are returned by the function")
-                           node_warning("hint", varnode, msg)
+                           add_warning("hint", varnode, msg)
                         end
                      end
                   end
@@ -9766,7 +9772,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if exp1.op and exp1.op.op == "@funcall" then
                   local t = resolve_tuple_and_nominal(exp1.e2.type)
                   if exp1.e1.tk == "pairs" and is_array_type(t) then
-                     node_warning("hint", exp1, "hint: applying pairs on an array: did you intend to apply ipairs?")
+                     add_warning("hint", exp1, "hint: applying pairs on an array: did you intend to apply ipairs?")
                   end
 
                   if exp1.e1.tk == "pairs" and t.typename ~= "map" then
@@ -9775,7 +9781,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                            match_all_record_field_names(exp1.e2, t, t.field_order,
                               "attempting pairs loop on a record with attributes of different types")
                            local ct = t.typename == "record" and "{string:any}" or "{any:any}"
-                           node_warning("hint", exp1.e2, "hint: if you want to iterate over fields of a record, cast it to " .. ct)
+                           add_warning("hint", exp1.e2, "hint: if you want to iterate over fields of a record, cast it to " .. ct)
                         else
                            node_error(exp1.e2, "cannot apply pairs on values of type: %s", exp1.e2.type)
                         end
@@ -9878,7 +9884,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             and node.exps[1].kind == "op"
             and (node.exps[1].op.op == "and" or node.exps[1].op.op == "or")
             and #node.exps[1].e2.type > 1 then
-               node_warning("hint", node.exps[1].e2, "additional return values are being discarded due to '" .. node.exps[1].op.op .. "' expression; suggest parentheses if intentional")
+               add_warning("hint", node.exps[1].e2, "additional return values are being discarded due to '" .. node.exps[1].op.op .. "' expression; suggest parentheses if intentional")
             end
 
             for i = 1, #children[1] do
@@ -10045,12 +10051,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
 
                if force_array then
-                  node.type = a_type {
-                     inferred_at = node,
-                     inferred_at_file = filename,
+                  node.type = infer_at(node, a_type {
                      typename = "array",
                      elements = force_array,
-                  }
+                  })
                else
                   node.type = resolve_typevars_at(node, node.expected)
                   if node.expected == node.type and node.type.typename == "nominal" then
@@ -10558,7 +10562,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                if a.typename == "map" then
                   if a.keys.typename == "number" or a.keys.typename == "integer" then
-                      node_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
+                      add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
                   else
                       node_error(node, "using the '#' operator on this map will always return 0")
                   end
@@ -10604,7 +10608,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if not node.type then
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                      if node.op.op == "or" and is_valid_union(unite({orig_a, orig_b})) then
-                        node_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
+                        add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
                      end
                   end
                end
@@ -10808,7 +10812,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   check_macroexp_arg_use(typ.macroexp)
 
                   if not is_a(typ.macroexp.type, typ) then
-                     type_error(typ.macroexp.type, "macroexp type does not match declaration")
+                     error_at(typ.macroexp.type, "macroexp type does not match declaration")
                   end
                end
 
@@ -10876,7 +10880,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["typevar"] = {
             after = function(typ: Type, _children: {Type}): Type
                if not find_var_type(typ.typevar) then
-                  type_error(typ, "undefined type variable " .. typ.typevar)
+                  error_at(typ, "undefined type variable " .. typ.typevar)
                end
                return typ
             end,
@@ -10913,7 +10917,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          },
          ["union"] = {
             after = function(typ: Type, _children: {Type}): Type
-               return (validate_union(typ as Node, typ))
+               return (validate_union(typ, typ))
             end
          },
       },
