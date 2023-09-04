@@ -10825,7 +10825,7 @@ local function tl_package_loader(module_name)
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function()
-            local ret = chunk()
+            local ret = chunk(module_name, found_filename)
             package.loaded[module_name] = ret
             return ret
          end
