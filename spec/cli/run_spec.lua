@@ -93,6 +93,28 @@ describe("tl run", function()
          ]], output)
       end)
 
+      it("passes standard arguments to required chunks", function()
+         local dir_name = util.write_tmp_dir(finally, {
+            ["ld.tl"] = [[
+            require("foo")
+            print("Done")
+            ]],
+            ["foo.tl"] = [[
+            print(...)
+            ]]
+         })
+         local pd, output
+         util.do_in(dir_name, function()
+            pd = io.popen(util.tl_cmd("run", "ld.tl"), "r")
+            output = pd:read("*a")
+         end)
+         util.assert_popen_close(0, pd:close())
+         util.assert_line_by_line(util.os_path([[
+            foo ./foo.tl
+            Done
+         ]]), output)
+      end)
+
       describe("-l --require", function()
          it("can require a module from the CLI like Lua", function()
             local dir_name = util.write_tmp_dir(finally, {
