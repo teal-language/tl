@@ -109,10 +109,10 @@ describe("tl run", function()
             output = pd:read("*a")
          end)
          util.assert_popen_close(0, pd:close())
-         util.assert_line_by_line([[
+         util.assert_line_by_line(util.os_path([[
             foo ./foo.tl
             Done
-         ]], output)
+         ]]), output)
       end)
 
       describe("-l --require", function()
