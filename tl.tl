@@ -8238,7 +8238,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             elseif is_a(t2, t1) then
                return t2
             else
-               return INVALID
+               return NIL -- because of implicit nil in all unions
             end
          end
       end
@@ -8279,7 +8279,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          if #types == 0 then
-            return INVALID
+            return NIL -- because of implicit nil in all unions
          end
 
          return unite(types)
@@ -8403,7 +8403,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
             if typ.typename ~= "typevar" then
                if is_a(typ, f.typ) then
-                  node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
+                  -- drop this warning because of implicit nil in all unions
+                  -- node_warning("branch", f.where, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
                   return { [f.var] = f }
                elseif not is_a(f.typ, typ) then
                   node_error(f.where, f.var .. " (of type %s) can never be a %s", typ, f.typ)

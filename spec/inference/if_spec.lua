@@ -131,4 +131,17 @@ describe("flow typing in 'if' statements", function()
    ]], {
       { msg = "cannot use operator '+' for types integer | boolean | string and integer" },
    }))
+
+   -- see also pending test "detects empty unions" in spec/operators/is_spec.lua
+   it("detects a union value to be nil if all types are exhausted (regression test for #695)", util.check_warnings([[
+      global function f2(val: string|number)
+         if val is string then
+            print(val)
+         elseif val is number then
+            print(val)
+         else
+            error("string or number expected")
+         end
+      end
+   ]], {}, {}))
 end)
