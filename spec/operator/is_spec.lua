@@ -233,7 +233,8 @@ describe("flow analysis with is", function()
          { y = 5, msg = [[cannot use operator '+' for types string (inferred at foo.tl:4:10) and integer]] },
       }))
 
-      it("detects empty unions", util.check_type_error([[
+      -- this is not an empty union because `number | string` implies nil.
+      pending("detects empty unions", util.check_type_error([[
          local t: number | string
          if t is number then
             t = t + 1
