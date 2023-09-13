@@ -7617,6 +7617,40 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function check_metamethod(node, op, a, b)
+      local method_name
+      local where_args
+      local args
+      local meta_on_operator = 1
+
+      if lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
+         return UNKNOWN, nil
+      elseif not a.meta_fields and not (b and b.meta_fields) then
+         return nil, nil
+      end
+
+      if a and b then
+         method_name = binop_to_metamethod[op]
+         where_args = { node.e1, node.e2 }
+         args = { typename = "tuple", a, b }
+      else
+         method_name = unop_to_metamethod[op]
+         where_args = { node.e1 }
+         args = { typename = "tuple", a }
+      end
+
+      local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
+      if (not metamethod) and b and op ~= "@index" then
+         metamethod = b.meta_fields and b.meta_fields[method_name or ""]
+         meta_on_operator = 2
+      end
+      if metamethod then
+         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, false, 0)), meta_on_operator
+      else
+         return nil, nil
+      end
+   end
+
    local function match_record_key(tbl, rec, key)
       assert(type(tbl) == "table")
       assert(type(rec) == "table")
@@ -7639,6 +7673,11 @@ tl.type_check = function(ast, opts)
 
          if tbl.fields[key] then
             return tbl.fields[key]
+         end
+
+         local meta_t = check_metamethod(rec, "@index", tbl, STRING)
+         if meta_t then
+            return meta_t
          end
 
          if rec.kind == "variable" then
@@ -7923,35 +7962,6 @@ tl.type_check = function(ast, opts)
          return t
       else
          return node_error(node, errmsg)
-      end
-   end
-
-   local function check_metamethod(node, op, a, b)
-      local method_name
-      local where_args
-      local args
-      local meta_on_operator = 1
-      if a and b then
-         method_name = binop_to_metamethod[op]
-         where_args = { node.e1, node.e2 }
-         args = { typename = "tuple", a, b }
-      else
-         method_name = unop_to_metamethod[op]
-         where_args = { node.e1 }
-         args = { typename = "tuple", a }
-      end
-
-      local metamethod = a.meta_fields and a.meta_fields[method_name or ""]
-      if (not metamethod) and b and op ~= "@index" then
-         metamethod = b.meta_fields and b.meta_fields[method_name or ""]
-         meta_on_operator = 2
-      end
-      if metamethod then
-         return resolve_tuple_and_nominal(type_check_function_call(node, where_args, metamethod, args, nil, false, 0)), meta_on_operator
-      elseif lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
-         return UNKNOWN, nil
-      else
-         return nil, nil
       end
    end
 

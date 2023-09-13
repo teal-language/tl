@@ -180,4 +180,13 @@ describe("metamethod __index", function()
         print(self.x)
       end
    ]]))
+
+   it("passes regression test for #692", util.check([[
+      local record R
+         metamethod __index: function(self: R, key: string): function(R)
+      end
+
+      R.hello(R)
+      R:hello()
+   ]]))
 end)
