@@ -5571,7 +5571,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["charpattern"] = STRING,
             ["codepoint"] = a_type { typename = "function", args = TUPLE { STRING, OPT(NUMBER), OPT(NUMBER) }, rets = VARARG { INTEGER } },
             ["codes"] = a_type { typename = "function", args = TUPLE { STRING }, rets = TUPLE {
-               a_type { typename = "function", args = TUPLE {}, rets = TUPLE { NUMBER, NUMBER } },
+               a_type { typename = "function", args = TUPLE { STRING, OPT(NUMBER) }, rets = TUPLE { NUMBER, NUMBER } },
             }, },
             ["len"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = TUPLE { INTEGER } },
             ["offset"] = a_type { typename = "function", args = TUPLE { STRING, NUMBER, NUMBER }, rets = TUPLE { INTEGER } },
