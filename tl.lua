@@ -9536,13 +9536,27 @@ tl.type_check = function(ast, opts)
                local decltype = resolve_tuple_and_nominal(node.expected)
 
                if decltype.typename == "union" then
+                  local single_table_type
+                  local single_table_rt
+
                   for _, t in ipairs(decltype.types) do
                      local rt = resolve_tuple_and_nominal(t)
                      if is_lua_table_type(rt) then
-                        node.expected = t
-                        decltype = rt
-                        break
+                        if single_table_type then
+
+                           single_table_type = nil
+                           single_table_rt = nil
+                           break
+                        end
+
+                        single_table_type = t
+                        single_table_rt = rt
                      end
+                  end
+
+                  if single_table_type then
+                     node.expected = single_table_type
+                     decltype = single_table_rt
                   end
                end
 
