@@ -7556,6 +7556,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       orignode.expanded = p[2]
    end
 
+   local function check_macroexp_arg_use(macroexp: Node)
+      local used: {string:boolean} = {}
+
+      local on_arg_id = function(node: Node, _i: integer): {Node, Node}
+         if used[node.tk] then
+            node_error(node, "cannot use argument '" .. node.tk .. "' multiple times in macroexp")
+         else
+            used[node.tk] = true
+         end
+      end
+
+      traverse_macroexp(macroexp, on_arg_id, nil)
+   end
+
    local function apply_macroexp(orignode: Node)
       local expanded = orignode.expanded
       local savetype = orignode.type
@@ -10509,6 +10523,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                if typ.macroexp then
                   recurse_node(typ.macroexp, visit_node, visit_type)
+
+                  check_macroexp_arg_use(typ.macroexp)
 
                   if not is_a(typ.macroexp.type, typ) then
                      type_error(typ.macroexp.type, "macroexp type does not match declaration")
