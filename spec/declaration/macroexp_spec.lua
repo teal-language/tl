@@ -21,4 +21,18 @@ describe("macroexp declaration", function()
    ]], {
       { y = 2, x = 70, msg = "macroexp type does not match declaration" }
    }))
+
+   it("checks multiple use of arguments", util.check_type_error([[
+      global function f(a: string, b:string)
+         print(a, b)
+      end
+
+      local record R1
+         metamethod __call: function(self: R1, s: string): boolean = macroexp(self: R1, s: string): boolean
+            print(s, s)
+         end
+      end
+   ]], {
+      { y = 7, x = 22, msg = "cannot use argument 's' multiple times in macroexp" }
+   }))
 end)
