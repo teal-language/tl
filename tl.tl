@@ -1457,7 +1457,7 @@ local function is_array_type(t:Type): boolean
 end
 
 local function is_record_type(t:Type): boolean
-   return t.typename == "record" or t.typename == "arrayrecord"
+   return t.typename == "record" or t.typename == "arrayrecord" or t.typename == "interface"
 end
 
 local function is_number_type(t:Type): boolean
