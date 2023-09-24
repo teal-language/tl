@@ -109,11 +109,13 @@ precedence, see below.
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  interfacelist ::= nominal {‘,’ nominal}
+*  interfacelist ::= nominal {‘,’ nominal} |
+*     ‘{’ type ‘}’ {‘,’ nominal}
 
-*  recordbody ::= [typeargs] [‘is’ interfacelist] {recordentry} ‘end’
+*  recordbody ::= [typeargs] [‘is’ interfacelist]
+*     [‘where’ exp] {recordentry} ‘end’
 
-*  recordentry ::= ‘userdata’ | ‘{’ type ‘}’ |
+*  recordentry ::= ‘userdata’ |
 *      ‘type’ Name ‘=’ newtype | [‘metamethod’] recordkey ‘:’ type |
 *      ‘record’ recordbody | ‘enum’ enumbody
 
