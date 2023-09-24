@@ -2866,6 +2866,20 @@ local function parse_macroexp(ps: ParseState, i: integer): integer, Node
    return i, node
 end
 
+local function parse_where_clause(ps: ParseState, i: integer): integer, Node
+   local node = new_node(ps.tokens, i, "macroexp")
+   node.args = new_node(ps.tokens, i, "argument_list")
+   node.args[1] = new_node(ps.tokens, i, "argument")
+   node.args[1].tk = "self"
+   node.args[1].decltype = new_type(ps, i, "nominal")
+   node.args[1].decltype.names = { "@self" }
+   node.rets = new_type(ps, i, "tuple")
+   node.rets[1] = BOOLEAN
+   i, node.exp = parse_expression(ps, i)
+   end_at(node, ps.tokens[i - 1])
+   return i, node
+end
+
 local function parse_interface_name(ps: ParseState, i: integer): integer, Type, integer
    local istart = i
    local typ: Type
@@ -2884,6 +2898,24 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
    if ps.tokens[i].tk == "is" then
       i = i + 1
       i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+   end
+
+   if ps.tokens[i].tk == "where" then
+      local wstart = i
+      i = i + 1
+      local where_macroexp: Node
+      i, where_macroexp = parse_where_clause(ps, i)
+
+      def.meta_fields = {}
+      def.meta_field_order = {}
+
+      local typ = new_type(ps, wstart, "function")
+      typ.is_method = true
+      typ.args = a_type { typename = "tuple", a_type { typename = "nominal", y = typ.y, x = typ.x, names = { "@self" } } }
+      typ.rets = a_type { typename = "tuple", a_type { typename = "boolean" } }
+      typ.macroexp = where_macroexp
+
+      store_field_in_record(ps, i, "__is", typ, def.meta_fields, def.meta_field_order)
    end
 
    if ps.tokens[i].tk == "<" then
