@@ -1245,6 +1245,7 @@ local table_types = {
 
 
 
+
 local TruthyFact = {}
 
 
@@ -1849,30 +1850,35 @@ local simple_types = {
    ["integer"] = INTEGER,
 }
 
+local function parse_simple_type_or_nominal(ps, i)
+   local tk = ps.tokens[i].tk
+   local st = simple_types[tk]
+   if st then
+      return i + 1, st
+   end
+   local typ = new_type(ps, i, "nominal")
+   typ.names = { tk }
+   i = i + 1
+   while ps.tokens[i].tk == "." do
+      i = i + 1
+      if ps.tokens[i].kind == "identifier" then
+         table.insert(typ.names, ps.tokens[i].tk)
+         i = i + 1
+      else
+         return fail(ps, i, "syntax error, expected identifier")
+      end
+   end
+
+   if ps.tokens[i].tk == "<" then
+      i, typ.typevals = parse_anglebracket_list(ps, i, parse_type)
+   end
+   return i, typ
+end
+
 local function parse_base_type(ps, i)
    local tk = ps.tokens[i].tk
    if ps.tokens[i].kind == "identifier" then
-      local st = simple_types[tk]
-      if st then
-         return i + 1, st
-      end
-      local typ = new_type(ps, i, "nominal")
-      typ.names = { tk }
-      i = i + 1
-      while ps.tokens[i].tk == "." do
-         i = i + 1
-         if ps.tokens[i].kind == "identifier" then
-            table.insert(typ.names, ps.tokens[i].tk)
-            i = i + 1
-         else
-            return fail(ps, i, "syntax error, expected identifier")
-         end
-      end
-
-      if ps.tokens[i].tk == "<" then
-         i, typ.typevals = parse_anglebracket_list(ps, i, parse_type)
-      end
-      return i, typ
+      return parse_simple_type_or_nominal(ps, i)
    elseif tk == "{" then
       i = i + 1
       local decl = new_type(ps, i, "array")
@@ -2850,10 +2856,26 @@ local function parse_macroexp(ps, i)
    return i, node
 end
 
+local function parse_interface_name(ps, i)
+   local istart = i
+   local typ
+   i, typ = parse_simple_type_or_nominal(ps, i)
+   if typ.typename ~= "nominal" then
+      return fail(ps, istart, "expected an interface")
+   end
+   return i, typ
+end
+
 parse_record_body = function(ps, i, def, node, name)
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
+
+   if ps.tokens[i].tk == "is" then
+      i = i + 1
+      i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+   end
+
    if ps.tokens[i].tk == "<" then
       i, def.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
@@ -3474,6 +3496,11 @@ local function recurse_type(ast, visit)
    if ast.types then
       for _, child in ipairs(ast.types) do
          table.insert(xs, recurse_type(child, visit))
+      end
+   end
+   if ast.interface_list then
+      for _, child in ipairs(ast.interface_list) do
+         recurse_type(child, visit)
       end
    end
    if ast.def then

@@ -95,9 +95,11 @@ precedence, see below.
 
 *  type ::= ‘(’ type ‘)’ | basetype {‘|’ basetype}
 
+*  nominal ::= Name {{‘.’ Name }} [typeargs]
+
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
 *      ‘{’ type {',' type} ‘}’ | ‘{’ type ‘:’ type ‘}’ | functiontype
-*      | Name {{‘.’ Name }} [typeargs]
+*      | nominal
 
 *  typelist ::= type {‘,’ type}
 
@@ -107,7 +109,9 @@ precedence, see below.
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  recordbody ::= [typeargs] {recordentry} ‘end’
+*  interfacelist ::= nominal {‘,’ nominal}
+
+*  recordbody ::= [typeargs] [‘is’ interfacelist] {recordentry} ‘end’
 
 *  recordentry ::= ‘userdata’ | ‘{’ type ‘}’ |
 *      ‘type’ Name ‘=’ newtype | [‘metamethod’] recordkey ‘:’ type |
