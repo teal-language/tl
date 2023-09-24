@@ -728,10 +728,31 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          { y = 9, msg = "argument 1: userdata record doesn't match: Foo" },
          nil
       }))
+
+      it("reports error on unknown interfaces", util.check_type_error([[
+         local record Foo ]]..pick(i, "is Bongo, Bingo", "is {number}, Bongo, Bingo")..[[
+            userdata
+            a: number
+         end
+      ]], {
+         { y = 1, msg = "unknown type Bongo" },
+         { y = 1, msg = "unknown type Bingo" },
+      }))
    end)
 end
 
 describe("arrayrecord", function()
+   it("can be declared with is", util.check([[
+      local record R1
+         is {string}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[1] = "hello"
+   ]]))
+
    it("assigning to array produces no warnings", util.check_warnings([[
       local record R1
          {string}
