@@ -2880,14 +2880,49 @@ local function parse_interface_name(ps, i)
    return i, typ
 end
 
+local function parse_arrayrecord_declaration(ps, i, def)
+   if def.typename == "arrayrecord" then
+      i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
+   else
+      i = i + 1
+      local t
+      i, t = parse_type(ps, i)
+      if ps.tokens[i].tk == "}" then
+         i = verify_tk(ps, i, "}")
+      else
+         return fail(ps, i, "expected an array declaration")
+      end
+      def.typename = "arrayrecord"
+      def.elements = t
+   end
+   return i
+end
+
 parse_record_body = function(ps, i, def, node, name)
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
 
+   if ps.tokens[i].tk == "<" then
+      i, def.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
+   end
+
+   if ps.tokens[i].tk == "{" then
+      i = parse_arrayrecord_declaration(ps, i, def)
+   end
+
    if ps.tokens[i].tk == "is" then
       i = i + 1
-      i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+
+      if ps.tokens[i].tk == "{" then
+         i = parse_arrayrecord_declaration(ps, i, def)
+         if ps.tokens[i].tk == "," then
+            i = i + 1
+            i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+         end
+      else
+         i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+      end
    end
 
    if ps.tokens[i].tk == "where" then
@@ -2908,9 +2943,6 @@ parse_record_body = function(ps, i, def, node, name)
       store_field_in_record(ps, i, "__is", typ, def.meta_fields, def.meta_field_order)
    end
 
-   if ps.tokens[i].tk == "<" then
-      i, def.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
-   end
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
       local tn = ps.tokens[i].tk
       if ps.tokens[i].tk == "userdata" and ps.tokens[i + 1].tk ~= ":" then
@@ -2921,20 +2953,7 @@ parse_record_body = function(ps, i, def, node, name)
          end
          i = i + 1
       elseif ps.tokens[i].tk == "{" then
-         if def.typename == "arrayrecord" then
-            i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
-         else
-            i = i + 1
-            local t
-            i, t = parse_type(ps, i)
-            if ps.tokens[i].tk == "}" then
-               i = verify_tk(ps, i, "}")
-            else
-               return fail(ps, i, "expected an array declaration")
-            end
-            def.typename = "arrayrecord"
-            def.elements = t
-         end
+         return fail(ps, i, "syntax error: this syntax is no longer valid; declare arrayrecord at the top with 'is {...}'")
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
          local iv = i
