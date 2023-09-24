@@ -4913,6 +4913,8 @@ local function show_type_base(t, short, seen)
       return "{" .. show(t.elements) .. "}"
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
+   elseif t.typename == "interface" then
+      return show_record_type("interface")
    elseif is_record_type(t) then
       return show_record_type("record")
    elseif t.typename == "function" then
