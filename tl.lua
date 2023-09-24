@@ -188,6 +188,7 @@ tl.typecodes = {
    TUPLE = 0x00080008,
    EMPTY_TABLE = 0x00000008,
    ENUM = 0x00010004,
+   INTERFACE = 0x00100008,
 
    IS_ARRAY = 0x00010008,
    IS_RECORD = 0x00020008,
@@ -1023,11 +1024,13 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
    ["arrayrecord"] = true,
    ["record"] = true,
+   ["interface"] = true,
    ["emptytable"] = true,
    ["tupletable"] = true,
 
@@ -1059,6 +1062,7 @@ local table_types = {
    ["unresolved"] = false,
    ["none"] = false,
 }
+
 
 
 
@@ -2983,6 +2987,7 @@ parse_record_body = function(ps, i, def, node, name)
 end
 
 parse_type_body_fns = {
+   ["interface"] = parse_record_body,
    ["record"] = parse_record_body,
    ["enum"] = parse_enum_body,
 }
@@ -10959,6 +10964,7 @@ local typename_to_typecode = {
    ["map"] = tl.typecodes.MAP,
    ["tupletable"] = tl.typecodes.TUPLE,
    ["arrayrecord"] = tl.typecodes.ARRAYRECORD,
+   ["interface"] = tl.typecodes.INTERFACE,
    ["record"] = tl.typecodes.RECORD,
    ["enum"] = tl.typecodes.ENUM,
    ["boolean"] = tl.typecodes.BOOLEAN,

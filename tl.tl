@@ -188,6 +188,7 @@ tl.typecodes = {
    TUPLE                  = 0x00080008,
    EMPTY_TABLE            = 0x00000008,
    ENUM                   = 0x00010004,
+   INTERFACE              = 0x00100008,
    -- Teal type masks
    IS_ARRAY               = 0x00010008,
    IS_RECORD              = 0x00020008,
@@ -998,6 +999,7 @@ local enum TypeName
    "tupletable"
    "arrayrecord"
    "record"
+   "interface"
    "enum"
    "boolean"
    "string"
@@ -1028,6 +1030,7 @@ local table_types <total>: {TypeName:boolean} = {
    ["map"] = true,
    ["arrayrecord"] = true,
    ["record"] = true,
+   ["interface"] = true,
    ["emptytable"] = true,
    ["tupletable"] = true,
 
@@ -1206,6 +1209,7 @@ local enum NodeKind
    "..."
    "paren"
    "macroexp"
+   "interface"
    "error_node"
 end
 
@@ -2993,6 +2997,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
 end
 
 parse_type_body_fns = {
+   ["interface"] = parse_record_body,
    ["record"] = parse_record_body,
    ["enum"] = parse_enum_body,
 }
@@ -10971,6 +10976,7 @@ local typename_to_typecode <total>: {TypeName:integer} = {
    ["map"] = tl.typecodes.MAP,
    ["tupletable"] = tl.typecodes.TUPLE,
    ["arrayrecord"] = tl.typecodes.ARRAYRECORD,
+   ["interface"] = tl.typecodes.INTERFACE,
    ["record"] = tl.typecodes.RECORD,
    ["enum"] = tl.typecodes.ENUM,
    ["boolean"] = tl.typecodes.BOOLEAN,

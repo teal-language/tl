@@ -31,12 +31,14 @@ precedence, see below.
 +      ‘local’ attnamelist [‘:’ typelist] [‘=’ explist] |
        ‘local’ ‘function’ Name funcbody |
 *      ‘local’ ‘record’ Name recordbody |
+*      ‘local’ ‘interface’ Name recordbody |
 *      ‘local’ ‘enum’ Name enumbody |
 *      ‘local’ ‘type’ Name ‘=’ newtype |
 *      ‘global’ attnamelist ‘:’ typelist [‘=’ explist] |
 *      ‘global’ attnamelist ‘=’ explist |
 *      ‘global’ ‘function’ Name funcbody |
 *      ‘global’ ‘record’ Name recordbody |
+*      ‘global’ ‘interface’ Name recordbody |
 *      ‘global’ ‘enum’ Name enumbody |
 *      ‘global’ ‘type’ Name [‘=’ newtype]
 
