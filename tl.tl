@@ -241,7 +241,7 @@ if TL_DEBUG then
                return
             end
 
-            io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event, "\n")
+            io.stderr:write(info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or "", " :: ", event as string, "\n")
             io.stderr:flush()
          else
             count = count + 100
@@ -5232,7 +5232,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                ["read"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, UNION { STRING, NUMBER } }, rets = TUPLE { STRING, STRING } },
                ["seek"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, OPT(STRING), OPT(NUMBER) }, rets = TUPLE { INTEGER, STRING } },
                ["setvbuf"] = a_type { typename = "function", args = TUPLE { NOMINAL_FILE, STRING, OPT(NUMBER) }, rets = TUPLE {} },
-               ["write"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, STRING }, rets = TUPLE { NOMINAL_FILE, STRING } },
+               ["write"] = a_type { typename = "function", args = VARARG { NOMINAL_FILE, UNION { STRING, NUMBER } }, rets = TUPLE { NOMINAL_FILE, STRING } },
                -- TODO complete...
             },
             meta_fields = { ["__close"] = FUNCTION },
@@ -5375,7 +5375,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             ["stdout"] = NOMINAL_FILE,
             ["tmpfile"] = a_type { typename = "function", args = TUPLE {}, rets = TUPLE { NOMINAL_FILE } },
             ["type"] = a_type { typename = "function", args = TUPLE { ANY }, rets = TUPLE { STRING } },
-            ["write"] = a_type { typename = "function", args = VARARG { STRING }, rets = TUPLE { NOMINAL_FILE, STRING } },
+            ["write"] = a_type { typename = "function", args = VARARG { UNION { STRING, NUMBER } }, rets = TUPLE { NOMINAL_FILE, STRING } },
          },
       },
       ["math"] = a_type {
