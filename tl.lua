@@ -1243,12 +1243,7 @@ local table_types = {
 
 
 
-
-
-
 local TruthyFact = {}
-
-
 
 
 
@@ -1268,11 +1263,7 @@ local NotFact = {}
 
 
 
-
-
 local AndFact = {}
-
-
 
 
 
@@ -1296,11 +1287,7 @@ local OrFact = {}
 
 
 
-
-
 local EqFact = {}
-
-
 
 
 
@@ -1336,8 +1323,6 @@ local IsFact = {}
 
 
 
-
-
 local attributes = {
    ["const"] = true,
    ["close"] = true,
@@ -1346,6 +1331,13 @@ local attributes = {
 local is_attribute = attributes
 
 local Node = {ExpectedContext = {}, }
+
+
+
+
+
+
+
 
 
 
