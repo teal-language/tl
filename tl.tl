@@ -1064,11 +1064,8 @@ local table_types <total>: {TypeName:boolean} = {
 }
 
 local record Type
-   {Type}
-
-   metamethod __is: function(self: Type) = macroexp(self: Type)
-      self.typename ~= nil
-   end
+   is {Type}
+   where self.typename ~= nil
 
    y: integer
    x: integer
@@ -1247,9 +1244,7 @@ local type Fact
    | EqFact
 
 local record TruthyFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: TruthyFact): boolean
-      self.fact == "truthy"
-   end
+   where self.fact == "truthy"
 
    fact: FactType
    where: Where
@@ -1258,9 +1253,7 @@ local record TruthyFact
 end
 
 local record NotFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: NotFact): boolean
-      self.fact == "not"
-   end
+   where self.fact == "not"
 
    fact: FactType
    where: Where
@@ -1271,9 +1264,7 @@ local record NotFact
 end
 
 local record AndFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: AndFact): boolean
-      self.fact == "and"
-   end
+   where self.fact == "and"
 
    fact: FactType
    where: Where
@@ -1285,9 +1276,7 @@ local record AndFact
 end
 
 local record OrFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: AndFact): boolean
-      self.fact == "or"
-   end
+   where self.fact == "or"
 
    fact: FactType
    where: Where
@@ -1299,9 +1288,7 @@ local record OrFact
 end
 
 local record EqFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: AndFact): boolean
-      self.fact == "=="
-   end
+   where self.fact == "=="
 
    fact: FactType
    where: Where
@@ -1313,9 +1300,7 @@ local record EqFact
 end
 
 local record IsFact
-   metamethod __is: function(self: Fact): boolean = macroexp(self: AndFact): boolean
-      self.fact == "is"
-   end
+   where self.fact == "is"
 
    fact: FactType
    where: Where
@@ -1346,11 +1331,8 @@ local attributes <total>: {Attribute: boolean} = {
 local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
 local record Node
-   {Node}
-
-   metamethod __is: function(self: Node) = macroexp(self: Node)
-      self.kind ~= nil
-   end
+   is {Node}
+   where self.kind ~= nil
 
    record ExpectedContext
       kind: NodeKind
