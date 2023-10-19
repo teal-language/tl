@@ -11,7 +11,7 @@ describe("or", function()
       local m2: {string:Ty} = m1 or { foo = t }
    ]]))
 
-   it("record or record: need to be compatible", util.check_type_error([[
+   it("record or record: need to be compatible", util.check_warnings([[
       local record R1
          x: number
       end
@@ -21,7 +21,10 @@ describe("or", function()
       local r1: R1
       local r2: R2
       local r3 = r2 or r1
+      print(r3)
    ]], {
+      -- no warnings because `r2 or r1` is not a valid union
+   }, {
       { msg = "cannot use operator 'or' for types R2 and R1" }
    }))
 
@@ -97,11 +100,14 @@ describe("or", function()
       { msg = "cannot use operator 'or' for types boolean and {}" },
    }))
 
-   it("does not produce new unions if not asked to", util.check_type_error([[
+   it("does not produce new unions if not asked to", util.check_warnings([[
       local x: number | string
 
       local s = x is string and x .. "!" or x + 1
+      print(s)
    ]], {
+      { y = 3, msg = [[if a union type was intended, consider declaring it explicitly]] }
+   }, {
       { y = 3, msg = [[cannot use operator 'or' for types string and number]] },
    }))
 

@@ -5870,6 +5870,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function is_valid_union(typ: Type): boolean, string
+      if typ.typename ~= "union" then
+         return false, nil
+      end
+
       -- check for limitations in our union support
       -- due to codegen limitations (we only check with type() so far)
       local n_table_types = 0
@@ -10049,6 +10053,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.type, meta_on_operator = check_metamethod(node, node.op.op, a, b)
                   if not node.type then
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     if node.op.op == "or" and is_valid_union(unite({orig_a, orig_b})) then
+                        node_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
+                     end
                   end
                end
 
