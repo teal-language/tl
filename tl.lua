@@ -9969,7 +9969,7 @@ tl.type_check = function(ast, opts)
                   local a_is = is_a(a, node.expected)
                   local b_is = is_a(b, node.expected)
                   if a_is and b_is then
-                     node.type = node.expected
+                     node.type = resolve_typevars_at(node, node.expected)
                   elseif a_is then
                      node.type = resolve_tuple(b)
                   else

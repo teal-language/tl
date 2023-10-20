@@ -128,4 +128,11 @@ describe("or", function()
       local x: string | number = "hello" or "world"
    ]]))
 
+   it("resolves type arguments when both types in 'or' match expected type (regression test for #706)", util.check([[
+      local t1: {string:number} = { foo = 42 }
+      local t2: {string:number} = { foo = 42 }
+      for _, v in pairs(t1 or t2) do
+          print(v * v)
+      end
+   ]]))
 end)
