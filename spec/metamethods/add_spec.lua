@@ -69,4 +69,35 @@ describe("binary metamethod __add", function()
 
       print((10 + s).x)
    ]]))
+
+   it("preserves nominal type checking when resolving metamethods for operators", util.check_type_error([[
+      local type Temperature = record
+         n: number
+         metamethod __add: function(t1: Temperature, t2: Temperature): Temperature
+      end
+
+      local type Date = record
+         n: number
+         metamethod __add: function(t1: Date, t2: Date): Date
+      end
+
+      local temp2: Temperature = { n = 45 }
+      local birthday2 : Date = { n = 34 }
+
+      setmetatable(temp2, {
+         __add = function(t1: Temperature, t2: Temperature): Temperature
+            return { n = t1.n + t2.n }
+         end,
+      })
+
+      setmetatable(birthday2, {
+         __add = function(t1: Date, t2: Date): Date
+            return { n = t1.n + t2.n }
+         end,
+      })
+
+      print((temp2 + birthday2).n)
+   ]], {
+      { y = 26, msg = "Date is not a Temperature" },
+   }))
 end)
