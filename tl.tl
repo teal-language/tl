@@ -6234,6 +6234,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function infer_at(where: Node, t: Type): Type
       local ret = resolve_typevars_at(where, t)
+      if ret.typename == "invalid" then
+         ret = t -- errors are produced by resolve_typevars_at
+      end
       ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename

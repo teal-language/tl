@@ -6234,6 +6234,9 @@ tl.type_check = function(ast, opts)
 
    local function infer_at(where, t)
       local ret = resolve_typevars_at(where, t)
+      if ret.typename == "invalid" then
+         ret = t
+      end
       ret = (ret ~= t) and ret or shallow_copy_type(t)
       ret.inferred_at = where
       ret.inferred_at_file = filename

@@ -189,4 +189,23 @@ describe("return", function()
       assert.same({}, result.type_errors)
    end)
 
+   it("does not crash when a return type inference causes an error", util.check_type_error([[
+      local type A = record
+      end
+
+      local type B = record
+      end
+
+      local function f(): A
+      end
+
+      local function fail(): A | B
+         return f()
+      end
+   ]], {
+      -- the duplicated error is not ideal, but it's harmless, and better than a crash
+      { y = 10, msg = "cannot discriminate a union between multiple table types" },
+      { y = 11, msg = "cannot discriminate a union between multiple table types" },
+   }))
+
 end)
