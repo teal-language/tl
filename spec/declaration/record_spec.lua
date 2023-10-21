@@ -702,7 +702,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          end
 
          function Foo.new(): Foo
-            return setmetatable({}, Foo) -- typing of arguments is being very permissive here, may change in the future and require a cast
+            return setmetatable({}, Foo as metatable<Foo>)
          end
 
          local foo = Foo.new()
