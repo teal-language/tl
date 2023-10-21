@@ -1429,7 +1429,7 @@ end
 
 local function new_node(tokens: {Token}, i: integer, kind: NodeKind): Node
    local t = tokens[i]
-   return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
+   return { y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }
 end
 
 local function a_type(t: Type): Type
@@ -7140,17 +7140,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
          return false, terr(t1, "cannot match against any alternatives of the polymorphic type")
       elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         local same, err = are_same_nominals(t1, t2)
-         if same then
-            return true
-         end
          local t1r = resolve_tuple_and_nominal(t1)
          local t2r = resolve_tuple_and_nominal(t2)
-         if is_record_type(t1r) and is_record_type(t2r) then
-            return same, err
-         else
+         if t1r.typename == "union" or t2r.typename == "union" then
             return is_a(t1r, t2r, for_equality)
          end
+
+         return are_same_nominals(t1, t2)
       elseif t1.typename == "enum" and t2.typename == "string" then
          local ok: boolean
          if for_equality then
@@ -9151,7 +9147,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   local infertype = infertypes[i]
 
                   local rt = resolve_tuple_and_nominal(t)
-                  if rt.typename ~= "enum" and not same_type(t, infertype) then
+                  if rt.typename ~= "enum" and (t.typename ~= "nominal" or rt.typename == "union") and not same_type(t, infertype) then
                      add_var(where, var.tk, infer_at(where, infertype), "const", "narrowed_declaration")
                   end
                end
@@ -10140,6 +10136,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      if node.op.op == "or" and is_valid_union(unite({orig_a, orig_b})) then
                         node_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
                      end
+                  end
+               end
+
+               if orig_a.typename == "nominal" and orig_b.typename == "nominal" and not meta_on_operator then
+                  if is_a(orig_a, orig_b) then
+                     node.type = resolve_tuple(orig_a)
+                  else
+                     node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for distinct nominal types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
                   end
                end
 
