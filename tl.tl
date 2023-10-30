@@ -5315,6 +5315,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
                types = {
                   a_type { typename = "function", args = TUPLE { THREAD, FUNCTION, NUMBER }, rets = TUPLE {} },
                   a_type { typename = "function", args = TUPLE { FUNCTION, NUMBER }, rets = TUPLE {} },
+                  a_type { typename = "function", args = TUPLE { NUMBER, NUMBER }, rets = TUPLE { STRING, ANY } },
                },
             },
             ["getmetatable"] = a_gfunction(1, function(a: Type): Type return { args = TUPLE { a }, rets = TUPLE { METATABLE(a) } } end),
