@@ -5313,8 +5313,10 @@ local function init_globals(lax)
             ["getlocal"] = a_type({
                typename = "poly",
                types = {
-                  a_type({ typename = "function", args = TUPLE({ THREAD, FUNCTION, NUMBER }), rets = TUPLE({}) }),
-                  a_type({ typename = "function", args = TUPLE({ FUNCTION, NUMBER }), rets = TUPLE({}) }),
+                  a_type({ typename = "function", args = TUPLE({ THREAD, FUNCTION, NUMBER }), rets = STRING }),
+                  a_type({ typename = "function", args = TUPLE({ THREAD, NUMBER, NUMBER }), rets = TUPLE({ STRING, ANY }) }),
+                  a_type({ typename = "function", args = TUPLE({ FUNCTION, NUMBER }), rets = STRING }),
+                  a_type({ typename = "function", args = TUPLE({ NUMBER, NUMBER }), rets = TUPLE({ STRING, ANY }) }),
                },
             }),
             ["getmetatable"] = a_gfunction(1, function(a) return { args = TUPLE({ a }), rets = TUPLE({ METATABLE(a) }) } end),
