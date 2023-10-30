@@ -185,6 +185,23 @@ describe("forin", function()
    }))
 
    describe("regression tests", function()
+      it("does not accept annotations (#701)", util.check_syntax_error([[
+         for k <const>, v <const> in pairs(table as {string:any}) do
+             k = "hello"
+             print(k, v)
+         end
+      ]], {
+         -- skips one bad token at a time. Too much of a corner case to
+         -- add parser code just to produce a nicer error, the generic
+         -- message should be enough to indicate this is not supporter.
+         { y = 1, msg = "syntax error" },
+         { y = 1, msg = "syntax error" },
+         { y = 1, msg = "syntax error" },
+         { y = 1, msg = "syntax error" },
+         { y = 1, msg = "syntax error" },
+         { y = 1, msg = "syntax error" },
+      }))
+
       it("with an iterator declared as a nominal (#183)", util.check([[
          local type Iterator = function(): string
 

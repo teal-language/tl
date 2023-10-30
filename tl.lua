@@ -2532,7 +2532,7 @@ local function parse_forin(ps, i)
    local node = new_node(ps.tokens, i, "forin")
    i = i + 1
    node.vars = new_node(ps.tokens, i, "variable_list")
-   i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true }, "sep", parse_variable_name)
+   i, node.vars = parse_list(ps, i, node.vars, { ["in"] = true }, "sep", parse_identifier)
    i = verify_tk(ps, i, "in")
    node.exps = new_node(ps.tokens, i, "expression_list")
    i = parse_list(ps, i, node.exps, { ["do"] = true }, "sep", parse_expression)
