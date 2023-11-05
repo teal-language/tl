@@ -47,7 +47,7 @@ describe("io", function()
 
       describe("read", function()
          it("accepts a union (#317)", util.check([[
-            local function loadFile(textFile: string, amount: string | number): string, FILE
+            local function loadFile(textFile: string, amount: string | integer): string, FILE
                 local file = io.open(textFile, "r")
                 if not file then error("ftcsv: File not found at " .. textFile) end
                 local lines: string

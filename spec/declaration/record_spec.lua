@@ -86,7 +86,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
              parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
           end
 
-         local myxml = io.open('my.xml'):read('*all')
+         local myxml = io.open('my.xml'):read('*all') as string
          SLAXML:parse(myxml, SLAXML)
       ]]))
 
