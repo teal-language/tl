@@ -5068,6 +5068,45 @@ local function init_globals(lax)
       return t
    end
 
+   local function an_enum(keys)
+      local t = a_type({
+         typename = "enum",
+         enumset = {},
+      })
+      for _, k in ipairs(keys) do
+         t.enumset[k] = true
+      end
+      return t
+   end
+
+
+
+
+
+
+
+
+
+   local file_reader_poly_types = {
+      { ctor = VARARG, args = { UNION({ NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L" }) }) }, rets = { STRING } },
+      { ctor = TUPLE, args = { an_enum({ "*n", "n" }) }, rets = { NUMBER, STRING } },
+      { ctor = VARARG, args = { UNION({ NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L", "*n", "n" }) }) }, rets = { UNION({ STRING, NUMBER }) } },
+      { ctor = VARARG, args = { UNION({ NUMBER, STRING }) }, rets = { STRING } },
+   }
+
+   local function a_file_reader(fn)
+      local t = a_type({
+         typename = "poly",
+         types = {},
+      })
+      for _, entry in ipairs(file_reader_poly_types) do
+         local args = shallow_copy_type(entry.args)
+         local rets = shallow_copy_type(entry.rets)
+         table.insert(t.types, fn(entry.ctor, args, rets))
+      end
+      return t
+   end
+
    local LOAD_FUNCTION = a_type({ typename = "function", args = {}, rets = TUPLE({ STRING }) })
 
    local OS_DATE_TABLE = a_type({
@@ -5084,8 +5123,6 @@ local function init_globals(lax)
          ["isdst"] = BOOLEAN,
       },
    })
-
-   local OS_DATE_TABLE_FORMAT = a_type({ typename = "enum", enumset = { ["!*t"] = true, ["*t"] = true } })
 
    local DEBUG_GETINFO_TABLE = a_type({
       typename = "record",
@@ -5107,16 +5144,8 @@ local function init_globals(lax)
       },
    })
 
-   local DEBUG_HOOK_EVENT = a_type({
-      typename = "enum",
-      enumset = {
-         ["call"] = true,
-         ["tail call"] = true,
-         ["return"] = true,
-         ["line"] = true,
-         ["count"] = true,
-      },
-   })
+   local DEBUG_HOOK_EVENT = an_enum({ "call", "tail call", "return", "line", "count" })
+
    local DEBUG_HOOK_FUNCTION = a_type({
       typename = "function",
       args = TUPLE({ DEBUG_HOOK_EVENT, INTEGER }),
@@ -5161,9 +5190,9 @@ local function init_globals(lax)
       ["collectgarbage"] = a_type({
          typename = "poly",
          types = {
-            a_type({ typename = "function", args = TUPLE({ a_type({ typename = "enum", enumset = { ["collect"] = true, ["count"] = true, ["stop"] = true, ["restart"] = true } }) }), rets = TUPLE({ NUMBER }) }),
-            a_type({ typename = "function", args = TUPLE({ a_type({ typename = "enum", enumset = { ["step"] = true, ["setpause"] = true, ["setstepmul"] = true } }), NUMBER }), rets = TUPLE({ NUMBER }) }),
-            a_type({ typename = "function", args = TUPLE({ a_type({ typename = "enum", enumset = { ["isrunning"] = true } }) }), rets = TUPLE({ BOOLEAN }) }),
+            a_type({ typename = "function", args = TUPLE({ an_enum({ "collect", "count", "stop", "restart" }) }), rets = TUPLE({ NUMBER }) }),
+            a_type({ typename = "function", args = TUPLE({ an_enum({ "step", "setpause", "setstepmul" }), NUMBER }), rets = TUPLE({ NUMBER }) }),
+            a_type({ typename = "function", args = TUPLE({ an_enum({ "isrunning" }) }), rets = TUPLE({ BOOLEAN }) }),
             a_type({ typename = "function", args = TUPLE({ STRING, OPT(NUMBER) }), rets = TUPLE({ a_type({ typename = "union", types = { BOOLEAN, NUMBER } }) }) }),
          },
       }),
@@ -5226,10 +5255,16 @@ local function init_globals(lax)
             fields = {
                ["close"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE }), rets = TUPLE({ BOOLEAN, STRING, INTEGER }) }),
                ["flush"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE }), rets = TUPLE({}) }),
-               ["lines"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = TUPLE({
-                  a_type({ typename = "function", args = TUPLE({}), rets = VARARG({ STRING }) }),
-               }), }),
-               ["read"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, UNION({ STRING, NUMBER }) }), rets = TUPLE({ STRING, STRING }) }),
+               ["lines"] = a_file_reader(function(ctor, args, rets)
+                  table.insert(args, 1, NOMINAL_FILE)
+                  return a_type({ typename = "function", args = ctor(args), rets = TUPLE({
+                     a_type({ typename = "function", args = TUPLE({}), rets = ctor(rets) }),
+                  }), })
+               end),
+               ["read"] = a_file_reader(function(ctor, args, rets)
+                  table.insert(args, 1, NOMINAL_FILE)
+                  return a_type({ typename = "function", args = ctor(args), rets = ctor(rets) })
+               end),
                ["seek"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, OPT(STRING), OPT(NUMBER) }), rets = TUPLE({ INTEGER, STRING }) }),
                ["setvbuf"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, STRING, OPT(NUMBER) }), rets = TUPLE({}) }),
                ["write"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, UNION({ STRING, NUMBER }) }), rets = TUPLE({ NOMINAL_FILE, STRING }) }),
@@ -5247,7 +5282,7 @@ local function init_globals(lax)
                ["__gc"] = a_type({ typename = "function", args = TUPLE({ a }), rets = TUPLE({}) }),
                ["__index"] = ANY,
                ["__len"] = a_type({ typename = "function", args = TUPLE({ a }), rets = TUPLE({ ANY }) }),
-               ["__mode"] = a_type({ typename = "enum", enumset = { ["k"] = true, ["v"] = true, ["kv"] = true } }),
+               ["__mode"] = an_enum({ "k", "v", "kv" }),
                ["__newindex"] = ANY,
                ["__pairs"] = a_gfunction(2, function(k, v)
                   return {
@@ -5365,13 +5400,17 @@ local function init_globals(lax)
             ["close"] = a_type({ typename = "function", args = TUPLE({ OPT(NOMINAL_FILE) }), rets = TUPLE({ BOOLEAN, STRING }) }),
             ["flush"] = a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({}) }),
             ["input"] = a_type({ typename = "function", args = TUPLE({ OPT(UNION({ STRING, NOMINAL_FILE })) }), rets = TUPLE({ NOMINAL_FILE }) }),
-            ["lines"] = a_type({ typename = "function", args = VARARG({ OPT(STRING), a_type({ typename = "union", types = { STRING, NUMBER } }) }), rets = TUPLE({
-               a_type({ typename = "function", args = TUPLE({}), rets = VARARG({ STRING }) }),
-            }), }),
+            ["lines"] = a_file_reader(function(ctor, args, rets)
+               return a_type({ typename = "function", args = ctor(args), rets = TUPLE({
+                  a_type({ typename = "function", args = TUPLE({}), rets = ctor(rets) }),
+               }), })
+            end),
             ["open"] = a_type({ typename = "function", args = TUPLE({ STRING, STRING }), rets = TUPLE({ NOMINAL_FILE, STRING }) }),
             ["output"] = a_type({ typename = "function", args = TUPLE({ OPT(UNION({ STRING, NOMINAL_FILE })) }), rets = TUPLE({ NOMINAL_FILE }) }),
             ["popen"] = a_type({ typename = "function", args = TUPLE({ STRING, STRING }), rets = TUPLE({ NOMINAL_FILE, STRING }) }),
-            ["read"] = a_type({ typename = "function", args = TUPLE({ UNION({ STRING, NUMBER }) }), rets = TUPLE({ STRING, STRING }) }),
+            ["read"] = a_file_reader(function(ctor, args, rets)
+               return a_type({ typename = "function", args = ctor(args), rets = ctor(rets) })
+            end),
             ["stderr"] = NOMINAL_FILE,
             ["stdin"] = NOMINAL_FILE,
             ["stdout"] = NOMINAL_FILE,
@@ -5462,7 +5501,7 @@ local function init_globals(lax)
                typename = "poly",
                types = {
                   a_type({ typename = "function", args = TUPLE({}), rets = TUPLE({ STRING }) }),
-                  a_type({ typename = "function", args = TUPLE({ OS_DATE_TABLE_FORMAT, NUMBER }), rets = TUPLE({ OS_DATE_TABLE }) }),
+                  a_type({ typename = "function", args = TUPLE({ an_enum({ "!*t", "*t" }), NUMBER }), rets = TUPLE({ OS_DATE_TABLE }) }),
                   a_type({ typename = "function", args = TUPLE({ OPT(STRING), OPT(NUMBER) }), rets = TUPLE({ STRING }) }),
                },
             }),
