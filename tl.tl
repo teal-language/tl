@@ -9576,8 +9576,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                         assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
                      end
                   elseif node[i].key_parsed == "implicit" then
+                     if is_map then
+                        assert_is_a(node[i], INTEGER, decltype.keys, in_context(node.expected_context, "in map key"))
+                        assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
+                     end
                      force_array = expand_type(node[i], force_array, child.vtype)
                   elseif is_map then
+                     force_array = nil
                      assert_is_a(node[i], child.ktype, decltype.keys, in_context(node.expected_context, "in map key"))
                      assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
                   else
@@ -9881,9 +9886,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if node.expected then
                      is_a(node.e1.type.rets, node.expected)
                   end
-                  for i, typ in ipairs(node.e1.type.args) do
-                     if node.e2[i + argdelta] then
-                        node.e2[i + argdelta].expected = typ
+                  local e1args = node.e1.type.args
+                  local at = argdelta
+                  for _, typ in ipairs(e1args) do
+                     at = at + 1
+                     if node.e2[at] then
+                        node.e2[at].expected = typ
+                     end
+                  end
+                  if e1args.is_va then
+                     local typ = e1args[#e1args]
+                     for i = at + 1, #node.e2 do
+                        node.e2[i].expected = typ
                      end
                   end
                end

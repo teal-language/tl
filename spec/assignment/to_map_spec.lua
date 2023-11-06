@@ -51,6 +51,6 @@ describe("assignment to maps", function()
 
       f({"string value", pi=math.pi})
    ]], {
-      { msg = "argument 1: in map key: got integer, expected string" }
+      { msg = "in map key: got integer, expected string" }
    }))
 end)
