@@ -1,3 +1,64 @@
+# 0.15.3
+
+2023-11-05
+
+It's been a long time since the last release! Lots of fixes got merged in, and
+there's a lot of new code that I want to merge in the near future. So, let's
+get a more fix-oriented release out before more significant changes.
+
+This release features commits by @JLPLabs, François Perrad, JR Mitchell and
+Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Accept return-like syntax for vararg inputs in function type signatures
+  (e.g. `function(string...): string...`)
+* Parser no longer accepts annotations (e.g. `<const>`) in `for-in` variables.
+  It used to accept but ignore them before.
+* New warning for `or` between incompatible types in a context where no
+  union is expected.
+* Record functions now implicitly inherit type variables from its parent
+  record's definition. (#669)
+* Standard library improvements:
+  * improved return values for `debug.getlocal`
+  * improvements to `utf8.codes` signature
+  * `io.write` and `file:write` signatures also accept numbers
+  * `file:close` signature now produces Lua 5.2+ returns (and matches Lua 5.2+
+    behavior thanks to update in Compat-5.3 library)
+  * file reader functions (`io.read`, `io.lines`, `FILE:read`, `FILE:lines`)
+    now support the `"n"`/`"*n"` pattern
+
+### Fixes
+
+* No longer produces spurious warnings when using methods with `pcall`. (#668)
+* Better acceptance of `record` and `enum` as soft keywords.
+* `is` inference now takes into account that unions also imply nil,
+  therefore accepting an `else` case even if all cases of an union are
+  tested in `if`/`else if` branches. (#699)
+* `:`-style function calls also check for the `__index` metamethod.
+  Also avoids mistaking `__index` for an incorrect method use.
+* Resolves type arguments when both types in an `or` expression match the
+  expected type. (#709)
+* Checks records nominally when resolving metamethods for operators. (#710)
+* Avoids confusing a localized global for an automatic type narrowing
+  when reporting unused variables.
+* When generating compatibility bit32 code, always do it, even for invalid
+  variables, instead of emitting incompatible operators.
+* Compiler no longer crashes if type variable resolution fails when setting an
+  inference location.
+* Compiler no longer crashes when checking for a reassigned const global.
+
+### Code generation
+
+* Unused local types no longer emit dummy variables.
+
+### Tooling
+
+* `tl` for many files is much faster as it avoids running the GC on every file.
+* Package loader now populates the `...` tuple
+
 # 0.15.2
 
 2023-04-27
