@@ -5255,7 +5255,7 @@ local function init_globals(lax)
          types = {
             a_gfunction(1, function(a) return { args = VARARG({ NUMBER, a }), rets = TUPLE({ a }) } end),
             a_type({ typename = "function", args = VARARG({ INTEGER, ANY }), rets = VARARG({ ANY }) }),
-            a_type({ typename = "function", args = VARARG({ STRING, ANY }), rets = TUPLE({ INTEGER }) }),
+            a_type({ typename = "function", args = VARARG({ an_enum({ "#" }), ANY }), rets = TUPLE({ INTEGER }) }),
          },
       }),
       ["setmetatable"] = a_gfunction(1, function(a) return { args = TUPLE({ a, METATABLE(a) }), rets = TUPLE({ a }) } end),
@@ -5286,8 +5286,8 @@ local function init_globals(lax)
                   table.insert(args, 1, NOMINAL_FILE)
                   return a_type({ typename = "function", args = ctor(args), rets = ctor(rets) })
                end),
-               ["seek"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, OPT(STRING), OPT(INTEGER) }), rets = TUPLE({ INTEGER, STRING }) }),
-               ["setvbuf"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, STRING, OPT(INTEGER) }), rets = TUPLE({}) }),
+               ["seek"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, OPT(an_enum({ "set", "cur", "end" })), OPT(INTEGER) }), rets = TUPLE({ INTEGER, STRING }) }),
+               ["setvbuf"] = a_type({ typename = "function", args = TUPLE({ NOMINAL_FILE, an_enum({ "no", "full", "line" }), OPT(INTEGER) }), rets = TUPLE({}) }),
                ["write"] = a_type({ typename = "function", args = VARARG({ NOMINAL_FILE, UNION({ STRING, NUMBER }) }), rets = TUPLE({ NOMINAL_FILE, STRING }) }),
 
             },
