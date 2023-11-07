@@ -5254,7 +5254,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
          typename = "poly",
          types = {
             a_gfunction(1, function(a: Type): Type return { args = VARARG { NUMBER, a }, rets = TUPLE { a } } end),
-            a_type { typename = "function", args = VARARG { INTEGER, ANY }, rets = TUPLE { ANY } },
+            a_type { typename = "function", args = VARARG { INTEGER, ANY }, rets = VARARG { ANY } },
             a_type { typename = "function", args = VARARG { STRING, ANY }, rets = TUPLE { INTEGER } },
          }
       },
