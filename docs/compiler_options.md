@@ -18,24 +18,24 @@ return {
 
 ## List of compiler options
 
-| Command line option | Config key | Type | Relevant Commands | Description |
-| --- | --- | --- | --- | --- |
-| `-l --require`  | | `{string}` | `run` | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
-| `-I --include-dir` |  `include_dir` | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
-| `--gen-compat` | `gen_compat` | `string` | `build` `gen` `run` | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
-| `--gen-target` | `gen_target` | `string` | `build` `gen` `run` | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
-|| `include` | `{string}` | `build` | The set of files to compile/check. See below for details on patterns.
-|| `exclude` | `{string}` | `build` | The set of files to exclude. See below for details on patterns.
-| `-s --source-dir` | `source_dir` | `string` | `build` | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
-| `-b --build-dir` | `build_dir` | `string` | `build` | Set the directory for generated files, mimicking the file structure of the source files.
-|| `files` | `{string}` | `build` | The names of files to be compiled. Does not accept patterns like `include`.
-| `-p --pretend` ||| `build` `gen`  | Don't compile/write to any files, but type check and log what files would be written to.
-| `--wdisable` | `disable_warnings` | `{string}` | `build` `check` `run` | Disable the given warnings.
-| `--werror` | `warning_error` | `{string}` | `build` `check` `run` | Promote the given warnings to errors.
-| `--run-build-script` | `run_build_script` | `boolean` | `run` `check` `gen`| Runs the build script as if `tl build` was being run
-| | `build_file_output_dir` | `string` | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
-| | `internal_compiler_output` | `string` |`run` `check` `gen` `build` | Folder to store cache files for use by the compiler
-| `--global-env-def`  | `global_env_def` | `string` | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
+| Command line option  | Config key                 | Type       | Relevant Commands           | Description |
+| -------------------- | -------------------------- | ---------- | --------------------------- | ----------- |
+| `-l --require`       |                            | `{string}` | `run`                       | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
+| `-I --include-dir`   | `include_dir`              | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
+| `--gen-compat`       | `gen_compat`               | `string`   | `build` `gen` `run`         | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
+| `--gen-target`       | `gen_target`               | `string`   | `build` `gen` `run`         | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
+|                      | `include`                  | `{string}` | `build`                     | The set of files to compile/check. See below for details on patterns.
+|                      | `exclude`                  | `{string}` | `build`                     | The set of files to exclude. See below for details on patterns.
+| `-s --source-dir`    | `source_dir`               | `string`   | `build`                     | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
+| `-b --build-dir`     | `build_dir`                | `string`   | `build`                     | Set the directory for generated files, mimicking the file structure of the source files.
+|                      | `files`                    | `{string}` | `build`                     | The names of files to be compiled. Does not accept patterns like `include`.
+| `-p --pretend`       |                            |            | `build` `gen`               | Don't compile/write to any files, but type check and log what files would be written to.
+| `--wdisable`         | `disable_warnings`         | `{string}` | `build` `check` `run`       | Disable the given warnings.
+| `--werror`           | `warning_error`            | `{string}` | `build` `check` `run`       | Promote the given warnings to errors.
+| `--run-build-script` | `run_build_script`         | `boolean`  | `run` `check` `gen`         | Runs the build script as if `tl build` was being run
+|                      | `build_file_output_dir`    | `string`   | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
+|                      | `internal_compiler_output` | `string`   | `run` `check` `gen` `build` | Folder to store cache files for use by the compiler
+| `--global-env-def`   | `global_env_def`           | `string`   | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
 
 ### Generated code
 
