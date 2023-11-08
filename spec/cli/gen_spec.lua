@@ -72,6 +72,16 @@ end
 local c = 100
 ]]
 
+local script_with_hashbang = [[
+#!/usr/bin/env lua
+print("hello world")
+]]
+
+local script_without_hashbang = [[
+
+print("hello world")
+]]
+
 local function tl_to_lua(name)
    return (name:gsub("%.tl$", ".lua"):gsub("^" .. util.os_tmp .. util.os_sep, ""))
 end
@@ -183,6 +193,26 @@ describe("tl gen", function()
          assert.match("Wrote: " .. lua_name, output, 1, true)
          assert.equal(output_file, util.read_file(lua_name))
       end)
+   end)
+
+   it("preserves hashbang with --keep-hashbang", function()
+      local name = util.write_tmp_file(finally, script_with_hashbang)
+      local pd = io.popen(util.tl_cmd("gen", "--keep-hashbang", name), "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      local lua_name = tl_to_lua(name)
+      assert.match("Wrote: " .. lua_name, output, 1, true)
+      util.assert_line_by_line(script_with_hashbang, util.read_file(lua_name))
+   end)
+
+   it("drops hashbang when not using --keep-hashbang", function()
+      local name = util.write_tmp_file(finally, script_with_hashbang)
+      local pd = io.popen(util.tl_cmd("gen", name), "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      local lua_name = tl_to_lua(name)
+      assert.match("Wrote: " .. lua_name, output, 1, true)
+      util.assert_line_by_line(script_without_hashbang, util.read_file(lua_name))
    end)
 
    describe("with --gen-target=5.1", function()

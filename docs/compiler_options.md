@@ -26,6 +26,7 @@ return {
 | `--gen-target`       | `gen_target`               | `string`   | `build` `gen` `run`         | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
 |                      | `include`                  | `{string}` | `build`                     | The set of files to compile/check. See below for details on patterns.
 |                      | `exclude`                  | `{string}` | `build`                     | The set of files to exclude. See below for details on patterns.
+| `--keep-hashbang`    |                            |            | `gen`                       | Preserve hashbang line (`#!`) at the top of file if present.
 | `-s --source-dir`    | `source_dir`               | `string`   | `build`                     | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
 | `-b --build-dir`     | `build_dir`                | `string`   | `build`                     | Set the directory for generated files, mimicking the file structure of the source files.
 |                      | `files`                    | `{string}` | `build`                     | The names of files to be compiled. Does not accept patterns like `include`.

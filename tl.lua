@@ -1,7 +1,13 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 local VERSION = "0.15.3+dev"
 
-local tl = {TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+
+
+
+
+
+
 
 
 
@@ -217,6 +223,7 @@ tl.typecodes = {
 
 
 
+
 local TL_DEBUG = os.getenv("TL_DEBUG")
 local TL_DEBUG_MAXLINE = _tl_math_maxinteger
 
@@ -252,6 +259,7 @@ if TL_DEBUG then
       end, "cr", 100)
    end
 end
+
 
 
 
@@ -592,10 +600,12 @@ do
 
       local len = #input
       if input:sub(1, 2) == "#!" then
+         begin_token()
          i = input:find("\n")
          if not i then
             i = len + 1
          end
+         end_token_here("hashbang")
          y = 2
          x = 0
       end
@@ -1235,6 +1245,7 @@ local attributes = {
    ["total"] = true,
 }
 local is_attribute = attributes
+
 
 
 
@@ -3164,7 +3175,16 @@ function tl.parse_program(tokens, errs, filename)
       filename = filename or "",
       required_modules = {},
    }
-   local _, node = parse_statements(ps, 1, true)
+   local i = 1
+   local hashbang
+   if ps.tokens[i].kind == "hashbang" then
+      hashbang = ps.tokens[i].tk
+      i = i + 1
+   end
+   local _, node = parse_statements(ps, i, true)
+   if hashbang then
+      node.hashbang = hashbang
+   end
 
    clear_redundant_errors(errs)
    return node, ps.required_modules
@@ -3689,18 +3709,16 @@ local spaced_op = {
 }
 
 
-
-
-
-
 local default_pretty_print_ast_opts = {
    preserve_indent = true,
    preserve_newlines = true,
+   preserve_hashbang = false,
 }
 
 local fast_pretty_print_ast_opts = {
    preserve_indent = false,
    preserve_newlines = true,
+   preserve_hashbang = false,
 }
 
 local primitive = {
@@ -3837,6 +3855,9 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       ["statements"] = {
          after = function(node, children)
             local out = { y = node.y, h = 0 }
+            if opts.preserve_hashbang and node.hashbang then
+               table.insert(out, node.hashbang)
+            end
             local space
             for i, child in ipairs(children) do
                add_child(out, child, space, indent)
@@ -10854,7 +10875,7 @@ function tl.process_string(input, is_lua, env, filename, module_name)
    return result
 end
 
-tl.gen = function(input, env)
+tl.gen = function(input, env, pp)
    env = env or assert(tl.init_env(), "Default environment initialization failed")
    local result = tl.process_string(input, false, env)
 
@@ -10863,7 +10884,7 @@ tl.gen = function(input, env)
    end
 
    local code
-   code, result.gen_error = tl.pretty_print_ast(result.ast, env.gen_target)
+   code, result.gen_error = tl.pretty_print_ast(result.ast, env.gen_target, pp)
    return code, result
 end
 
