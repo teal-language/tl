@@ -2739,12 +2739,13 @@ local metamethod_names: {string:boolean} = {
 }
 
 local function parse_macroexp(ps: ParseState, i: integer): integer, Node
-   local istart = i - 1
+   local istart = i
 -- TODO: generic macroexp
 --   if ps.tokens[i].tk == "<" then
 --      i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
 --   end
-   local node = new_node(ps.tokens, i, "macroexp")
+   local node = new_node(ps.tokens, istart, "macroexp")
+   i = i + 1 -- skip 'macroexp'
    i, node.args = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
    i, node.exp = parse_expression(ps, i)
@@ -2868,7 +2869,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
                if t.typename ~= "function" then
                   fail(ps, i + 1, "macroexp must have a function type")
                end
-               i, t.macroexp = parse_macroexp(ps, i + 2)
+               i, t.macroexp = parse_macroexp(ps, i + 1)
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -3589,6 +3590,14 @@ local function recurse_node<T>(root: Node,
       ["repeat"] = function(ast: Node, xs: {T})
          xs[1] = recurse(ast.body)
          xs[2] = recurse(ast.exp)
+      end,
+
+      ["macroexp"] = function(ast: Node, xs: {T})
+         recurse_typeargs(ast, visit_type)
+         xs[1] = recurse(ast.args)
+         xs[2] = recurse_type(ast.rets, visit_type)
+         extra_callback("before_exp", ast, xs, visit_node)
+         xs[3] = recurse(ast.exp)
       end,
 
       ["function"] = function(ast: Node, xs: {T})
@@ -10002,6 +10011,30 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return node.type
          end,
       },
+      ["macroexp"] = {
+         before = function(node: Node)
+            widen_all_unions(node)
+            begin_scope(node)
+         end,
+         before_exp = function(node: Node)
+            add_internal_function_variables(node)
+         end,
+         after = function(node: Node, children: {Type}): Type
+            end_function_scope(node)
+            -- children[1] args
+            -- children[2] body
+            node.type = ensure_fresh_typeargs(a_type {
+               y = node.y,
+               x = node.x,
+               typename = "function",
+               typeargs = node.typeargs,
+               args = children[1],
+               rets = children[2],
+               filename = filename,
+            })
+            return node.type
+         end,
+      },
       ["cast"] = {
          after = function(node: Node, _children: {Type}): Type
             node.type = node.casttype
@@ -10458,7 +10491,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return node.type
    end
 
-   local visit_type: Visitor<TypeName,Type,Type> = {
+   local visit_type: Visitor<TypeName,Type,Type>
+   visit_type = {
       cbs = {
          ["string"] = {
             after = function(typ: Type, _children: {Type}): Type
@@ -10471,7 +10505,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end,
             after = function(typ: Type, _children: {Type}): Type
                end_scope()
-               return ensure_fresh_typeargs(typ)
+               typ = ensure_fresh_typeargs(typ)
+
+               if typ.macroexp then
+                  recurse_node(typ.macroexp, visit_node, visit_type)
+
+                  if not is_a(typ.macroexp.type, typ) then
+                     type_error(typ.macroexp.type, "macroexp type does not match declaration")
+                  end
+               end
+
+               return typ
             end,
          },
          ["record"] = {

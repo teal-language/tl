@@ -2739,12 +2739,13 @@ local metamethod_names = {
 }
 
 local function parse_macroexp(ps, i)
-   local istart = i - 1
+   local istart = i
 
 
 
 
-   local node = new_node(ps.tokens, i, "macroexp")
+   local node = new_node(ps.tokens, istart, "macroexp")
+   i = i + 1
    i, node.args = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
    i, node.exp = parse_expression(ps, i)
@@ -2868,7 +2869,7 @@ parse_record_body = function(ps, i, def, node, name)
                if t.typename ~= "function" then
                   fail(ps, i + 1, "macroexp must have a function type")
                end
-               i, t.macroexp = parse_macroexp(ps, i + 2)
+               i, t.macroexp = parse_macroexp(ps, i + 1)
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -3589,6 +3590,14 @@ local function recurse_node(root,
       ["repeat"] = function(ast, xs)
          xs[1] = recurse(ast.body)
          xs[2] = recurse(ast.exp)
+      end,
+
+      ["macroexp"] = function(ast, xs)
+         recurse_typeargs(ast, visit_type)
+         xs[1] = recurse(ast.args)
+         xs[2] = recurse_type(ast.rets, visit_type)
+         extra_callback("before_exp", ast, xs, visit_node)
+         xs[3] = recurse(ast.exp)
       end,
 
       ["function"] = function(ast, xs)
@@ -10002,6 +10011,30 @@ tl.type_check = function(ast, opts)
             return node.type
          end,
       },
+      ["macroexp"] = {
+         before = function(node)
+            widen_all_unions(node)
+            begin_scope(node)
+         end,
+         before_exp = function(node)
+            add_internal_function_variables(node)
+         end,
+         after = function(node, children)
+            end_function_scope(node)
+
+
+            node.type = ensure_fresh_typeargs(a_type({
+               y = node.y,
+               x = node.x,
+               typename = "function",
+               typeargs = node.typeargs,
+               args = children[1],
+               rets = children[2],
+               filename = filename,
+            }))
+            return node.type
+         end,
+      },
       ["cast"] = {
          after = function(node, _children)
             node.type = node.casttype
@@ -10456,7 +10489,8 @@ tl.type_check = function(ast, opts)
       return node.type
    end
 
-   local visit_type = {
+   local visit_type
+   visit_type = {
       cbs = {
          ["string"] = {
             after = function(typ, _children)
@@ -10469,7 +10503,17 @@ tl.type_check = function(ast, opts)
             end,
             after = function(typ, _children)
                end_scope()
-               return ensure_fresh_typeargs(typ)
+               typ = ensure_fresh_typeargs(typ)
+
+               if typ.macroexp then
+                  recurse_node(typ.macroexp, visit_node, visit_type)
+
+                  if not is_a(typ.macroexp.type, typ) then
+                     type_error(typ.macroexp.type, "macroexp type does not match declaration")
+                  end
+               end
+
+               return typ
             end,
          },
          ["record"] = {
