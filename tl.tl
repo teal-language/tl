@@ -3619,6 +3619,7 @@ local function recurse_node<T>(root: Node,
    recurse = function(ast: Node): T
       local xs: {T} = {}
       local kind = assert(ast.kind)
+      local kprint: string
 
       local cbs = visit_node.cbs
       local cbkind = cbs and cbs[kind]
@@ -3632,8 +3633,8 @@ local function recurse_node<T>(root: Node,
          if ast.y > TL_DEBUG_MAXLINE then
             error("Halting execution at input line " .. ast.y)
          end
-         local k = kind == "op" and "op " .. ast.op.op or kind
-         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", k)
+         kprint = kind == "op" and "op " .. ast.op.op or kind
+         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
       end
 
       local fn = walkers[kind]
@@ -3653,8 +3654,7 @@ local function recurse_node<T>(root: Node,
       end
 
       if TL_DEBUG then
-         local k = kind == "op" and "op " .. ast.op.op or kind
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s] = %s", k, ast.type and show_type(ast.type))
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s] = %s", kprint, ast.type and show_type(ast.type))
       end
 
       return ret
