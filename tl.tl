@@ -4935,12 +4935,12 @@ end
 local compat_code_cache: {string:Node} = {}
 
 local function add_compat_entries(program: Node, used_set: {string: boolean}, gen_compat: CompatMode)
-   local tl_debug = TL_DEBUG
-   TL_DEBUG = nil
-
    if gen_compat == "off" or not next(used_set) then
       return
    end
+
+   local tl_debug = TL_DEBUG
+   TL_DEBUG = nil
 
    local used_list: {string} = sorted_keys(used_set)
 
