@@ -4843,6 +4843,10 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    end
 
    if t.typename == "nominal" then
+      if #t.names == 1 and t.names[1] == "@self" then
+         return "self"
+      end
+
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
          local vals: {string} = {}
@@ -7188,6 +7192,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return arr_type
    end
 
+   local function is_self(t: Type): boolean
+      return t.typename == "nominal" and t.names[1] == "@self"
+   end
+
    -- subtyping comparison
    is_a = function(t1: Type, t2: Type, for_equality: boolean): boolean, {Error}
       assert(type(t1) == "table")
@@ -7233,6 +7241,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if t2.typename == "any" then
          return true
 
+      elseif is_self(t1) then
+         return is_a(resolve_tuple_and_nominal(t1), t2, for_equality)
+
+      elseif is_self(t2) then
+         return is_a(t1, resolve_tuple_and_nominal(t2), for_equality)
 
       elseif t1.typename == "union" then
 
@@ -7811,7 +7824,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if argdelta == -1 then
                from = 2
                local errs = {}
-               if not arg_check(where, is_a, args[1], f.args[1], nil, errs, "self") then
+               if (not is_self(f.args[1])) and not arg_check(where, is_a, args[1], f.args[1], nil, errs, "self") then
                   return nil, errs
                end
             end
@@ -7896,6 +7909,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          argdelta = is_method and -1 or argdelta or 0
+
+         if is_method and args[1] then
+            add_var(nil, "@self", a_type({ typename = "typetype", y = node.y, x = node.x, def = args[1] }))
+         end
 
          local is_func = func.typename == "function"
          local is_poly = func.typename == "poly"
@@ -10761,6 +10778,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["record"] = {
             before = function(typ: Type, _children: {Type})
                begin_scope()
+               add_var(nil, "@self", a_type { typename = "typetype", y = typ.y, x = typ.x, def = typ })
+
                for name, typ2 in fields_of(typ) do
                   if typ2.typename == "typetype" then
                      typ2.typename = "nestedtype"
