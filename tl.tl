@@ -1593,10 +1593,12 @@ end
 
 local function parse_table_value(ps: ParseState, i: integer): integer, Node, integer
    local next_word = ps.tokens[i].tk
-   if next_word == "record" then
+   if next_word == "record" or next_word == "interface" then
       local skip_i, e = skip(ps, i, skip_type_body)
       if e then
-         fail(ps, i, "syntax error: this syntax is no longer valid; declare nested record inside a record")
+         fail(ps, i, next_word == "record"
+                     and "syntax error: this syntax is no longer valid; declare nested record inside a record"
+                     or  "syntax error: cannot declare interface inside a table; use a statement")
          return skip_i, new_node(ps.tokens, i, "error_node")
       end
    elseif next_word == "enum" and ps.tokens[i + 1].kind == "string" then
@@ -2947,7 +2949,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node, 
       local tn = ps.tokens[i].tk as TypeName
       if ps.tokens[i].tk == "userdata" and ps.tokens[i+1].tk ~= ":" then
          if def.is_userdata then
-            fail(ps, i, "duplicated 'userdata' declaration in record")
+            fail(ps, i, "duplicated 'userdata' declaration")
          else
             def.is_userdata = true
          end
@@ -5981,7 +5983,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function find_var(name: string, use: VarUse): Variable, integer, Attribute
-
       for i = #st, 1, -1 do
          local scope = st[i]
          local var = scope[name]
@@ -7219,16 +7220,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return false, errs
    end
 
-   local known_table_types: {TypeName:boolean} = {
-      array = true,
-      map = true,
-      record = true,
-      tupletable = true,
-   }
+   do
+      local known_table_types: {TypeName:boolean} = {
+         array = true,
+         map = true,
+         record = true,
+         tupletable = true,
+         interface = true,
+      }
 
-   -- Is the type represented concretely as a Lua table?
-   is_lua_table_type = function(t: Type): boolean
-      return known_table_types[t.typename] and not t.is_userdata
+      -- Is the type represented concretely as a Lua table?
+      is_lua_table_type = function(t: Type): boolean
+         return known_table_types[t.typename] and not t.is_userdata
+      end
    end
 
    local expand_type: function(where: Where, old: Type, new: Type): Type
@@ -10059,7 +10063,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      if not df then
                         node_error(node[i], in_context(node.expected_context, "unknown field " .. ck))
                      else
-                        assert_is_a(node[i], cvtype, df, "in record field", ck)
+                        if is_typetype(df) then
+                           node_error(node[i], in_context(node.expected_context, "cannot reassign a type"))
+                        else
+                           assert_is_a(node[i], cvtype, df, "in record field", ck)
+                        end
                      end
                   elseif is_tupletable and is_number_type(child.ktype) then
                      local dt = decltype.types[n as integer]
@@ -10452,11 +10460,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return node.type
             end
 
-            if is_typetype(ra) and ra.def.typename == "record" then
-               ra = ra.def
+            if is_typetype(ra) then
+               if ra.def.typename == "record" then
+                  ra = ra.def
+               elseif ra.def.typename == "interface" then
+                  node_error(node, "interfaces are abstract; consider using a concrete record")
+               end
             end
             if rb and is_typetype(rb) and rb.def.typename == "record" then
-               rb = rb.def
+               if rb.def.typename == "record" then
+                  rb = rb.def
+               elseif rb.def.typename == "interface" then
+                  node_error(node, "interfaces are abstract; consider using a concrete record")
+               end
             end
 
             if node.op.op == "@funcall" then
@@ -11003,6 +11019,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
+   visit_type.cbs["interface"] = visit_type.cbs["record"]
    visit_type.cbs["enum"] = visit_type.cbs["string"]
    visit_type.cbs["boolean"] = visit_type.cbs["string"]
    visit_type.cbs["nil"] = visit_type.cbs["string"]
