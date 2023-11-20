@@ -1,13 +1,18 @@
 local util = require("spec.util")
 
-local function pick(...)
-   return select(...) .. "\n"
+local function array(i, arr, not_arr)
+   if i == 2 or i == 4 then
+      return arr .. "\n"
+   else
+      return (not_arr or "") .. "\n"
+   end
 end
 
-for i, name in ipairs({"records", "arrayrecords"}) do
-   describe(name, function()
+for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces"}) do
+   local statement = select(i, "record", "record", "interface", "interface")
+   describe("#" .. name, function()
       it("can be declared with 'local type'", util.check([[
-         local type Point = record ]]..pick(i, "", "{Point}")..[[
+         local type Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
             x: number
             y: number
          end
@@ -17,8 +22,8 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          p.y = 12
       ]]))
 
-      it("can be declared with 'local record'", util.check([[
-         local record Point ]]..pick(i, "", "{Point}")..[[
+      it("can be declared with 'local "..statement.."'", util.check([[
+         local ]]..statement..[[ Point ]]..array(i, "{Point}")..[[
             x: number
             y: number
          end
@@ -29,7 +34,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("produces a nice error when declared with bare 'local'", util.check_syntax_error([[
-         local Point = record ]]..pick(i, "", "{Point}")..[[
+         local Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
             x: number
             y: number
          end
@@ -38,29 +43,31 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          p.x = 12
          p.y = 12
       ]], {
-         { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local record Point'" },
+         { y = 1, msg = "syntax error: this syntax is no longer valid; use 'local "..statement.." Point'" },
       }))
 
       it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[
          local t = {
-            Point = record ]]..pick(i, "", "{Point}")..[[
+            Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
                x: number
                y: number
             end
          }
       ]], {
-         { y = 2, msg = "syntax error: this syntax is no longer valid; declare nested record inside a record" },
+         { y = 2, msg = (statement == "interface"
+                         and "syntax error: cannot declare interface inside a table; use a statement"
+                         or  "syntax error: this syntax is no longer valid; declare nested record inside a record") },
       }))
 
-      it("accepts record as soft keyword", util.check([[
-         local record = 2
+      it("accepts "..statement.." as soft keyword", util.check([[
+         local ]]..statement..[[ = 2
          local t = {
-            record = record,
+            ]]..statement..[[ = ]]..statement..[[,
          }
       ]]))
 
       it("can be declared with 'global type'", util.check([[
-         global type Point = record ]]..pick(i, "", "{Point}")..[[
+         global type Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
             x: number
             y: number
          end
@@ -70,8 +77,8 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          p.y = 12
       ]]))
 
-      it("can be declared with 'global record'", util.check([[
-         global record Point ]]..pick(i, "", "{Point}")..[[
+      it("can be declared with 'global "..statement.."'", util.check([[
+         global ]]..statement..[[ Point ]]..array(i, "{Point}")..[[
             x: number
             y: number
          end
@@ -81,21 +88,33 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          p.y = 12
       ]]))
 
-      it("can have self-references", util.check([[
-         local record SLAXML ]]..pick(i, "", "{SLAXML}")..[[
-             parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
-          end
+      if statement == "interface" then
+         it("can have self-references", util.check([[
+            local interface SLAXML
+               parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
+            end
 
-         local myxml = io.open('my.xml'):read('*all')
-         SLAXML:parse(myxml, SLAXML)
-      ]]))
+            local myxml = io.open('my.xml'):read('*all')
+            local slaxml: SLAXML = {}
+            slaxml:parse(myxml, slaxml)
+         ]]))
+      else
+         it("can have self-references", util.check([[
+            local ]]..statement..[[ SLAXML ]]..array(i, "{SLAXML}")..[[
+               parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
+            end
+
+            local myxml = io.open('my.xml'):read('*all')
+            SLAXML:parse(myxml, SLAXML)
+         ]]))
+      end
 
       it("can have circular type dependencies", util.check([[
-         local type R = record ]]..pick(i, "", "{S}")..[[
+         local type R = ]]..statement..[[ ]]..array(i, "{S}")..[[
             foo: S
          end
 
-         local type S = record ]]..pick(i, "", "{R}")..[[
+         local type S = ]]..statement..[[ ]]..array(i, "{R}")..[[
             foo: R
          end
 
@@ -106,29 +125,29 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
       it("recursive types don't trip up the resolver", util.check([[
          local type EmptyString = enum "" end
-         local record ltn12 ]]..pick(i, "", "{ltn12}")..[[
+         local ]]..statement..[[ ltn12 ]]..array(i, "{ltn12}")..[[
             type FancySource = function<T>(): T|EmptyString, string|FancySource<T>
          end
          return ltn12
       ]]))
 
       it("can overload functions", util.check([[
-         global type love_graphics = record ]]..pick(i, "", "{love_graphics}")..[[
+         global type love_graphics = ]]..statement..[[ ]]..array(i, "{love_graphics}")..[[
             print: function(text: string, x: number, y: number, r: number, sx: number, sy: number, ox: number, oy: number, kx: number, ky:number)
             print: function(coloredtext: {any}, x: number, y: number, r: number, sx: number, sy: number, ox: number, oy: number, kx: number, ky:number)
          end
 
-         global type love = record ]]..pick(i, "", "{love}")..[[
+         global type love = ]]..statement..[[ ]]..array(i, "{love}")..[[
             graphics: love_graphics
          end
-
+      ]] .. (statement ~= "interface" and [[
          global function main()
             love.graphics.print("Hello world", 100, 100)
          end
-      ]]))
+      ]] or "")))
 
       it("cannot overload other things", util.check_syntax_error([[
-         global type love_graphics = record ]]..pick(i, "", "{love_graphics}")..[[
+         global type love_graphics = ]]..statement..[[ ]]..array(i, "{love_graphics}")..[[
             print: number
             print: string
          end
@@ -142,7 +161,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             "b"
             "c"
          end
-         local type R = record ]]..pick(i, "", "{number}")..[[
+         local type R = ]]..statement..[[ ]]..array(i, "{number}")..[[
             f: function(enums: {E})
             f: function(tuple: {string, number})
          end
@@ -154,7 +173,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
       it("can report an error on unknown types in polymorphic definitions", util.check_type_error([[
          -- this reports an error
-         local type R = record ]]..pick(i, "", "{R}")..[[
+         local type R = ]]..statement..[[ ]]..array(i, "{R}")..[[
             u: function(): UnknownType
             u: function(): string
          end
@@ -168,7 +187,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
       it("can report an error on unknown types in polymorphic definitions in any order", util.check_type_error([[
          -- this reports an error
-         local type R = record ]]..pick(i, "", "{R}")..[[
+         local type R = ]]..statement..[[ ]]..array(i, "{R}")..[[
             u: function(): string
             u: function(): UnknownType
          end
@@ -181,14 +200,14 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       }))
 
       it("can produce an intersection type for polymorphic functions", util.check([[
-         local type requests = record ]]..pick(i, "", "{requests}")..[[
+         local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
 
-            type RequestOpts = record
+            type RequestOpts = ]]..statement..[[
                {string}
                url: string
             end
 
-            type Response = record ]]..pick(i, "", "{Response}")..[[
+            type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
                status_code: number
             end
 
@@ -202,14 +221,14 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("can check the arity of polymorphic functions", util.check_type_error([[
-         local type requests = record ]]..pick(i, "", "{requests}")..[[
+         local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
 
-            type RequestOpts = record
+            type RequestOpts = ]]..statement..[[ --
                {string}
                url: string
             end
 
-            type Response = record ]]..pick(i, "", "{Response}")..[[
+            type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
                status_code: number
             end
 
@@ -221,7 +240,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          local r: requests = {}
          local resp = r.get("hello", 123, 123)
       ]], {
-        { y = 18, msg = "wrong number of arguments (given 3, expects 1 or 2)" }
+        { y = 18, x = 28, msg = "wrong number of arguments (given 3, expects 1 or 2)" }
       }))
 
       it("can be nested", function()
@@ -229,12 +248,12 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             ["req.d.tl"] = [[
                local type requests = record
 
-                  type RequestOpts = record
+                  type RequestOpts = ]]..statement..[[ --
                      {string}
                      url: string
                   end
 
-                  type Response = record ]]..pick(i, "", "{Response}")..[[
+                  type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
                      status_code: number
                   end
 
@@ -253,7 +272,10 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             print(r.status_code)
             print(r.status_coda)
          ]], {
-            { msg = "invalid key 'status_coda' in record 'r' of type Response" }
+            { msg = (statement == "interface")
+                    and "invalid key 'status_coda' in 'r' of interface type Response"
+                    or  "invalid key 'status_coda' in record 'r' of type Response"
+            }
          })
       end)
 
@@ -262,12 +284,12 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             ["req.d.tl"] = [[
                local type requests = record
 
-                  record RequestOpts
+                  ]]..statement..[[ RequestOpts
                      {string}
                      url: string
                   end
 
-                  record Response ]]..pick(i, "", "{Response}")..[[
+                  ]]..statement..[[ Response ]]..array(i, "{Response}")..[[
                      status_code: number
                   end
 
@@ -286,37 +308,40 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             print(r.status_code)
             print(r.status_coda)
          ]], {
-            { msg = "invalid key 'status_coda' in record 'r' of type Response" }
+            { msg = (statement == "interface")
+                    and "invalid key 'status_coda' in 'r' of interface type Response"
+                    or  "invalid key 'status_coda' in record 'r' of type Response"
+            }
          })
       end)
 
-      it("record and enum and not reserved words", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
-            record: string
+      it(statement.." and enum and not reserved words", util.check([[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            ]]..statement..[[: string
             enum: number
          end
 
          local f: foo = {}
 
-         foo.record = "hello"
-         foo.enum = 123
+         f.]]..statement..[[ = "hello"
+         f.enum = 123
       ]]))
 
       it("can have nested generic " .. name, util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
-            type bar = record<T> ]]..pick(i, "", "{bar<T>}")..[[
+         local type Foo = ]]..statement..[[ ]]..array(i, "{Foo}")..[[
+            type Bar = ]]..statement..[[<T> ]]..array(i, "{Bar<T>}")..[[
                x: T
             end
-            example: bar<string>
+            example: Bar<string>
          end
 
-         local f: foo = {}
+         local f: Foo = {}
 
-         foo.example = { x = "hello" }
+         f.example = { x = "hello" }
       ]]))
 
       it("can have nested enums", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             enum Direction
                "north"
                "south"
@@ -330,12 +355,12 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          local f: foo = {}
 
          local dir: foo.Direction = "north"
-         foo.d = dir
+         f.d = dir
       ]]))
 
       it("can have nested generic " .. name .. " with shorthand syntax", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
-            record bar<T> ]]..pick(i, "", "{bar<T>}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            ]]..statement..[[ bar<T> ]]..array(i, "{bar<T>}")..[[
                x: T
             end
             example: bar<string>
@@ -343,13 +368,13 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
          local f: foo = {}
 
-         foo.example = { x = "hello" }
+         f.example = { x = "hello" }
       ]]))
 
-      it("can mix nested record syntax", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
-            record mid<T> ]]..pick(i, "", "{mid<T>}")..[[
-               type bar = record ]]..pick(i, "", "{bar}")..[[
+      it("can mix nested "..statement.." syntax", util.check([[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            ]]..statement..[[ mid<T> ]]..array(i, "{mid<T>}")..[[
+               type bar = ]]..statement..[[ ]]..array(i, "{bar}")..[[
                   x: T
                end
                z: bar
@@ -359,47 +384,51 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
          local f: foo = {}
 
-         foo.example = { z = { x = "hello" } }
+         f.example = { z = { x = "hello" } }
       ]]))
 
       it("can have " .. name .. " in arrayrecords", util.check([[
-         local record bar ]]..pick(i, "", "{bar}")..[[
+         local ]]..statement..[[ bar ]]..array(i, "{bar}")..[[
          end
-         local record foo
+         local ]]..statement..[[ foo
             { bar }
          end
          local f : foo = { {  } }
       ]]))
 
       it("nested " .. name .. " in " .. name, util.check_type_error([[
-         local record foo ]]..pick(i, "", "{foo}")..[[
-            record bar ]]..pick(i, "", "{bar}")..[[
+         local ]]..statement..[[ foo ]]..array(i, "{foo}")..[[
+            ]]..statement..[[ bar ]]..array(i, "{bar}")..[[
             end
          end
          local f : foo = { {  } }
       ]], {
-         select(i,
+         ({
             { msg = "in local declaration: f: got {{}} (inferred at foo.tl:5:26), expected foo" }, -- records
-            nil -- arrayrecords
-         )
+            nil, -- arrayrecords
+            { msg = "in local declaration: f: got {{}} (inferred at foo.tl:5:26), expected foo" }, -- interfaces
+            nil, -- interfaces with arrays
+         })[i]
       }))
 
       it("can have nested enums in " .. name, util.check_type_error([[
-         local record foo ]]..pick(i, "", "{bar}")..[[
+         local ]]..statement..[[ foo ]]..array(i, "{bar}")..[[
             enum bar
                "baz"
             end
          end
          local f : foo = { "baz" }
       ]], {
-         select(i,
+         ({
             { msg = "in local declaration: f: got {string \"baz\"} (inferred at foo.tl:6:26), expected foo" }, -- records
-            nil -- arrayrecords
-         )
+            nil, -- arrayrecords
+            { msg = "in local declaration: f: got {string \"baz\"} (inferred at foo.tl:6:26), expected foo" }, -- interfaces
+            nil, -- interfaces with arrays
+         })[i]
       }))
 
       it("can extend generic functions", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             type bar = function<T>(T)
             example: bar<string>
          end
@@ -409,27 +438,45 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          end
       ]]))
 
-      it("does not produce an esoteric type error (#167)", util.check_type_error([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
-            type bar = function<T>(T)
-            example: bar<string>
-         end
+      if statement == "record" then
+         it("does not produce an esoteric type error (#167)", util.check_type_error([[
+            local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+               type bar = function<T>(T)
+               example: bar<string>
+            end
 
-         foo.example = function(data: string)
-            print(data)
-         end as bar<string>
-      ]], {
-         -- this is expected, because bar is local to foo
-         { y = 8, x = 17, msg = "unknown type bar<string>" },
-      }))
+            foo.example = function(data: string)
+               print(data)
+            end as bar<string>
+         ]], {
+            -- this is expected, because bar is local to foo
+            { y = 8, x = 20, msg = "unknown type bar<string>" },
+         }))
+      else
+         it("does not produce an esoteric type error (#167)", util.check_type_error([[
+            local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+               type bar = function<T>(T)
+               example: bar<string>
+            end
+
+            local f: foo = {}
+            f.example = function(data: string)
+               print(data)
+            end as bar<string>
+         ]], {
+            -- this is expected, because bar is local to foo
+            { y = 9, x = 20, msg = "unknown type bar<string>" },
+         }))
+      end
 
       it("can cast generic member using full path of type name", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             type bar = function<T>(T)
             example: bar<string>
          end
 
-         foo.example = function(data: string)
+         local f: foo = {}
+         f.example = function(data: string)
             print(data)
          end as foo.bar<string>
       ]]))
@@ -439,12 +486,12 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             ["req.d.tl"] = [[
                local record requests
 
-                  type RequestOpts = record
+                  type RequestOpts = ]]..statement..[[
                      {string}
                      url: string
                   end
 
-                  type Response = record ]]..pick(i, "", "{Response}")..[[
+                  type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
                      status_code: number
                   end
 
@@ -468,8 +515,8 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       end)
 
       it("resolves aliasing of nested " .. name .. " (see #400)", util.check([[
-         local record Foo ]]..pick(i, "", "{Foo}")..[[
-            record Bar ]]..pick(i, "", "{Bar}")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+            ]]..statement..[[ Bar ]]..array(i, "{Bar}")..[[
             end
          end
          local function func(_f: Foo.Bar) end
@@ -482,7 +529,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
 
       it("resolves nested type aliases (see #416)", util.check([[
          local type A = number
-         local record Foo ]]..pick(i, "", "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
             type B = A
          end
 
@@ -491,7 +538,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("resolves nested type aliases to other aliases (see #527)", util.check([[
-         local record M
+         local ]]..statement..[[ M
             type Type1 = number
             type Type2 = Type1
          end
@@ -504,14 +551,14 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("can use nested type aliases as types (see #416)", util.check_type_error([[
-         local record F1 ]]..pick(i, "", "{F1}")..[[
-            record A ]]..pick(i, "", "{A}")..[[
+         local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
+            ]]..statement..[[ A ]]..array(i, "{A}")..[[
                x: number
             end
             type C1 = A
-            record F2 ]]..pick(i, "", "{F2}")..[[
+            ]]..statement..[[ F2 ]]..array(i, "{F2}")..[[
                type C2 = C1
-               record F3 ]]..pick(i, "", "{F3}")..[[
+               ]]..statement..[[ F3 ]]..array(i, "{F3}")..[[
                   type C3 = C2
                end
             end
@@ -526,60 +573,94 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          { y = 18, msg = 'got string "hello", expected number' },
       }))
 
-      it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
-         local record F1 ]]..pick(i, "", "{F1}")..[[
-            record A ]]..pick(i, "", "{C1}")..[[
-               x: number
-            end
-            type C1 = A
-            record F2 ]]..pick(i, "", "{C2}")..[[
-               type C2 = C1
-               record F3 ]]..pick(i, "", "{C3}")..[[
-                  type C3 = C2
+      if statement == "record" then
+         it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
+            local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
+               ]]..statement..[[ A ]]..array(i, "{C1}")..[[
+                  x: number
+               end
+               type C1 = A
+               ]]..statement..[[ F2 ]]..array(i, "{C2}")..[[
+                  type C2 = C1
+                  ]]..statement..[[ F3 ]]..array(i, "{C3}")..[[
+                     type C3 = C2
+                  end
                end
             end
-         end
 
-         -- Let's use nested type aliases as prototypes
+            -- Let's use nested type aliases as prototypes
 
-         F1.C1.x = 2
+            F1.C1.x = 2
 
-         local proto = F1.F2.F3.C3
+            local proto = F1.F2.F3.C3
 
-         proto.x = 2
-      ]], {
-         { y = 16, msg = "cannot use a nested type alias as a concrete value" },
-         { y = 20, msg = "cannot use a nested type alias as a concrete value" },
-      }))
+            proto.x = 2
+         ]], {
+            { y = 16, msg = "cannot use a nested type alias as a concrete value" },
+            { y = 20, msg = "cannot use a nested type alias as a concrete value" },
+         }))
+      else
+         it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
+            local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
+               ]]..statement..[[ A ]]..array(i, "{C1}")..[[
+                  x: number
+               end
+               type C1 = A
+               ]]..statement..[[ F2 ]]..array(i, "{C2}")..[[
+                  type C2 = C1
+                  ]]..statement..[[ F3 ]]..array(i, "{C3}")..[[
+                     type C3 = C2
+                  end
+               end
+            end
+
+            -- Let's use nested type aliases as prototypes
+
+            F1.C1.x = 2
+
+            local proto = F1.F2.F3.C3
+
+            proto.x = 2
+         ]], {
+            { y = 16, msg = "interfaces are abstract" },
+            { y = 16, msg = "cannot use a nested type alias as a concrete value" },
+            { y = 18, msg = "interfaces are abstract" },
+            { y = 18, msg = "interfaces are abstract" },
+            { y = 18, msg = "interfaces are abstract" },
+            { y = 20, msg = "cannot use a nested type alias as a concrete value" },
+         }))
+      end
 
       it("can resolve generics partially (see #417)", function()
          local _, ast = util.check([[
-            local record fun ]]..pick(i, "", "{fun}")..[[
-                record iterator<T> ]]..pick(i, "", "{iterator<T>}")..[[
+            local ]]..statement..[[ fun ]]..array(i, "{fun}")..[[
+                ]]..statement..[[ iterator<T> ]]..array(i, "{iterator<T>}")..[[
                     reduce: function<R>(iterator<T>, (function(R, T): R), R): R
                 end
                 iter: function<T>({T}): iterator<T>
             end
 
-            local sum = fun.iter({ 1, 2, 3, 4 }):reduce(function(a:integer,x:integer): integer
+            local f: fun
+
+            local sum = f.iter({ 1, 2, 3, 4 }):reduce(function(a:integer,x:integer): integer
                 return a + x
             end, 0)
          ]])()
 
-         assert.same("integer", ast[2].exps[1].type[1].typename)
+         assert.same("integer", ast[3].exps[1].type[1].typename)
       end)
 
       it("can have circular type dependencies on nested types", util.check([[
-         local type R = record ]]..pick(i, "", "{S}")..[[
-            type R2 = record ]]..pick(i, "", "{S.S2}")..[[
+         local type R = ]]..statement..[[ ]]..array(i, "{S}")..[[
+            type R2 = ]]..statement..[[ ]]..array(i, "{S.S2}")..[[
                foo: S.S2
             end
 
             foo: S
          end
 
-         local type S = record ]]..pick(i, "", "{R}")..[[
-            type S2 = record ]]..pick(i, "", "{R.R2}")..[[
+         local type S = ]]..statement..[[ ]]..array(i, "{R}")..[[
+            type S2 = ]]..statement..[[ ]]..array(i, "{R.R2}")..[[
                foo: R.R2
             end
 
@@ -592,16 +673,16 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("can detect errors in type dependencies on nested types", util.check_type_error([[
-         local record R ]]..pick(i, "", "{R}")..[[
-            record R2 ]]..pick(i, "", "{R2}")..[[
+         local ]]..statement..[[ R ]]..array(i, "{R}")..[[
+            ]]..statement..[[ R2 ]]..array(i, "{R2}")..[[
                foo: S.S3
             end
 
             foo: S
          end
 
-         local record S ]]..pick(i, "", "{S}")..[[
-            record S2 ]]..pick(i, "", "{S2}")..[[
+         local ]]..statement..[[ S ]]..array(i, "{S}")..[[
+            ]]..statement..[[ S2 ]]..array(i, "{S2}")..[[
                foo: R.R2
             end
 
@@ -616,7 +697,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       }))
 
       it("can contain reserved words/arbitrary strings with ['table key syntax']", util.check([[
-         local record A ]]..pick(i, "", "{A}")..[=[
+         local ]]..statement..[[ A ]]..array(i, "{A}")..[=[
             start: number
             ["end"]: number
             [" "]: string
@@ -626,7 +707,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]=]))
 
       it("can be declared as userdata", util.check([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             userdata
             x: number
             y: number
@@ -634,18 +715,18 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       ]]))
 
       it("cannot be declared as userdata twice", util.check_syntax_error([[
-         local type foo = record ]]..pick(i, "", "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             userdata
             userdata
             x: number
             y: number
          end
       ]], {
-         { msg = "duplicated 'userdata' declaration in record" },
+         { msg = "duplicated 'userdata' declaration" },
       }))
 
       it("untyped attributes are not accepted (#381)", util.check_syntax_error([[
-         local record kons ]]..pick(i, "", "{kons}")..[[
+         local ]]..statement..[[ kons ]]..array(i, "{kons}")..[[
             any_identifier other_sequence
             aaa bbb
          end
@@ -659,7 +740,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       }))
 
       it("catches redeclaration of literal keys", util.check_type_error([[
-         local record Foo ]]..pick(i, "", "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
             foo: string
             bar: boolean
          end
@@ -673,7 +754,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       }))
 
       it("catches redeclaration of literal keys, bracket syntax", util.check_type_error([[
-         local record Foo ]]..pick(i, "", "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
             foo: string
             bar: boolean
          end
@@ -686,30 +767,32 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          { y = 8, msg = "redeclared key foo" }
       }))
 
-      it("can use itself in a constructor (regression test for #422)", util.check([[
-         local record Foo ]]..pick(i, "", "{number}")..[[
-         end
+      if statement ~= "interface" then
+         it("can use itself in a constructor (regression test for #422)", util.check([[
+            local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
+            end
 
-         function Foo:new(): Foo
-            return setmetatable({} as Foo, self as metatable<Foo>)
-         end
+            function Foo:new(): Foo
+               return setmetatable({} as Foo, self as metatable<Foo>)
+            end
 
-         local foo = Foo:new()
-      ]]))
+            local foo = Foo:new()
+         ]]))
 
-      it("can use itself in a constructor with dot notation (regression test for #422)", util.check([[
-         local record Foo ]]..pick(i, "", "{number}")..[[
-         end
+         it("can use itself in a constructor with dot notation (regression test for #422)", util.check([[
+            local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
+            end
 
-         function Foo.new(): Foo
-            return setmetatable({}, Foo as metatable<Foo>)
-         end
+            function Foo.new(): Foo
+               return setmetatable({}, Foo as metatable<Foo>)
+            end
 
-         local foo = Foo.new()
-      ]]))
+            local foo = Foo.new()
+         ]]))
+      end
 
       it("creation of userdata records should be disallowed (#460)", util.check_type_error([[
-         local record Foo ]]..pick(i, "", "{number}")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
             userdata
             a: number
          end
@@ -723,14 +806,24 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          f(bar)
       ]], {
          { y = 5, msg = "in local declaration: foo: got {}, expected Foo" },
-         { y = 6, msg = "in assignment: userdata record doesn't match: Foo" },
+         select(i,
+            { y = 6, msg = "in assignment: userdata "..statement.." doesn't match: Foo" },
+            { y = 6, msg = "in assignment: userdata "..statement.." doesn't match: Foo" },
+            { y = 6, msg = "in assignment: got record (a: integer), expected Foo" },
+            { y = 6, msg = "in assignment: got record (a: integer), expected Foo" }
+         ),
          { y = 8, msg = "argument 1: got {}, expected Foo" },
-         { y = 9, msg = "argument 1: userdata record doesn't match: Foo" },
+         select(i,
+            { y = 9, msg = "argument 1: userdata "..statement.." doesn't match: Foo" },
+            { y = 9, msg = "argument 1: userdata "..statement.." doesn't match: Foo" },
+            { y = 9, msg = "argument 1: got record (a: integer), expected Foo" },
+            { y = 9, msg = "argument 1: got record (a: integer), expected Foo" }
+         ),
          nil
       }))
 
       it("reports error on unknown interfaces", util.check_type_error([[
-         local record Foo ]]..pick(i, "is Bongo, Bingo", "is {number}, Bongo, Bingo")..[[
+         local ]]..statement..[[ Foo ]]..array(i, "is {number}, Bongo, Bingo", "is Bongo, Bingo")..[[
             userdata
             a: number
          end
