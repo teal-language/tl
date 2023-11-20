@@ -6327,7 +6327,10 @@ tl.type_check = function(ast, opts)
          elseif is_typetype(t) then
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "nominal" then
-            copy.typevals, same = resolve(t.typevals, same)
+            copy.typevals = {}
+            for i, tf in ipairs(t.typevals) do
+               copy.typevals[i], same = resolve(tf, same)
+            end
             copy.found = t.found
          elseif t.typename == "function" then
             if t.typeargs then

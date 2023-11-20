@@ -1120,7 +1120,7 @@ local record Type
 
    -- nominal
    names: {string}
-   typevals: Type
+   typevals: {Type}
    found: Type    -- type is found but typeargs are not resolved
    resolved: Type -- type is found and typeargs are resolved
 
@@ -6327,7 +6327,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          elseif is_typetype(t) then
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "nominal" then
-            copy.typevals, same = resolve(t.typevals, same)
+            copy.typevals = {}
+            for i, tf in ipairs(t.typevals) do
+               copy.typevals[i], same = resolve(tf, same)
+            end
             copy.found = t.found
          elseif t.typename == "function" then
             if t.typeargs then
