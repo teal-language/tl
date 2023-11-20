@@ -164,6 +164,7 @@ tl.warning_kinds = wk
 
 
 
+
 tl.typecodes = {
 
    NIL = 0x00000001,
@@ -183,7 +184,6 @@ tl.typecodes = {
    INTEGER = 0x00010002,
    ARRAY = 0x00010008,
    RECORD = 0x00020008,
-   ARRAYRECORD = 0x00030008,
    MAP = 0x00040008,
    TUPLE = 0x00080008,
    EMPTY_TABLE = 0x00000008,
@@ -1024,11 +1024,9 @@ end
 
 
 
-
 local table_types = {
    ["array"] = true,
    ["map"] = true,
-   ["arrayrecord"] = true,
    ["record"] = true,
    ["interface"] = true,
    ["emptytable"] = true,
@@ -1435,11 +1433,12 @@ local Node = {ExpectedContext = {}, }
 
 
 local function is_array_type(t)
-   return t.typename == "array" or t.typename == "arrayrecord"
+
+   return t.typename == "array" or t.elements ~= nil
 end
 
 local function is_record_type(t)
-   return t.typename == "record" or t.typename == "arrayrecord" or t.typename == "interface"
+   return t.typename == "record" or t.typename == "interface"
 end
 
 local function is_number_type(t)
@@ -2872,22 +2871,21 @@ local function parse_interface_name(ps, i)
    return i, typ
 end
 
-local function parse_arrayrecord_declaration(ps, i, def)
-   if def.typename == "arrayrecord" then
-      i = failskip(ps, i, "duplicated declaration of array element type in record", parse_type)
-   else
-      i = i + 1
-      local t
-      i, t = parse_type(ps, i)
-      if ps.tokens[i].tk == "}" then
-         i = verify_tk(ps, i, "}")
-      else
-         return fail(ps, i, "expected an array declaration")
-      end
-      def.typename = "arrayrecord"
-      def.elements = t
+local function parse_array_interface_type(ps, i, def)
+   if def.interface_list and def.interface_list[1].typename == "array" then
+      return failskip(ps, i, "duplicated declaration of array element type", parse_type)
    end
-   return i
+   local t
+   i, t = parse_base_type(ps, i)
+   if not t then
+      return i
+   end
+   if t.typename ~= "array" then
+      fail(ps, i, "expected an array declaration")
+      return i
+   end
+   def.elements = t.elements
+   return i, t
 end
 
 parse_record_body = function(ps, i, def, node, name)
@@ -2900,17 +2898,27 @@ parse_record_body = function(ps, i, def, node, name)
    end
 
    if ps.tokens[i].tk == "{" then
-      i = parse_arrayrecord_declaration(ps, i, def)
+      local atype
+      i, atype = parse_array_interface_type(ps, i, def)
+      if atype then
+         def.interface_list = { atype }
+      end
    end
 
    if ps.tokens[i].tk == "is" then
       i = i + 1
 
       if ps.tokens[i].tk == "{" then
-         i = parse_arrayrecord_declaration(ps, i, def)
+         local atype
+         i, atype = parse_array_interface_type(ps, i, def)
          if ps.tokens[i].tk == "," then
             i = i + 1
             i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+         else
+            def.interface_list = {}
+         end
+         if atype then
+            table.insert(def.interface_list, 1, atype)
          end
       else
          i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
@@ -2945,7 +2953,7 @@ parse_record_body = function(ps, i, def, node, name)
          end
          i = i + 1
       elseif ps.tokens[i].tk == "{" then
-         return fail(ps, i, "syntax error: this syntax is no longer valid; declare arrayrecord at the top with 'is {...}'")
+         return fail(ps, i, "syntax error: this syntax is no longer valid; declare array interface at the top with 'is {...}'")
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
          local iv = i
@@ -4534,7 +4542,6 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
-   visit_type.cbs["arrayrecord"] = visit_type.cbs["string"]
    visit_type.cbs["record"] = visit_type.cbs["string"]
    visit_type.cbs["enum"] = visit_type.cbs["string"]
    visit_type.cbs["boolean"] = visit_type.cbs["string"]
@@ -4686,20 +4693,11 @@ local equality_binop = {
    },
    ["record"] = {
       ["emptytable"] = BOOLEAN,
-      ["arrayrecord"] = BOOLEAN,
       ["record"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
    ["array"] = {
       ["emptytable"] = BOOLEAN,
-      ["arrayrecord"] = BOOLEAN,
-      ["array"] = BOOLEAN,
-      ["nil"] = BOOLEAN,
-   },
-   ["arrayrecord"] = {
-      ["emptytable"] = BOOLEAN,
-      ["arrayrecord"] = BOOLEAN,
-      ["record"] = BOOLEAN,
       ["array"] = BOOLEAN,
       ["nil"] = BOOLEAN,
    },
@@ -4716,7 +4714,6 @@ local equality_binop = {
 
 local unop_types = {
    ["#"] = {
-      ["arrayrecord"] = INTEGER,
       ["string"] = INTEGER,
       ["array"] = INTEGER,
       ["tupletable"] = INTEGER,
@@ -4737,7 +4734,6 @@ local unop_types = {
       ["integer"] = BOOLEAN,
       ["boolean"] = BOOLEAN,
       ["record"] = BOOLEAN,
-      ["arrayrecord"] = BOOLEAN,
       ["array"] = BOOLEAN,
       ["tupletable"] = BOOLEAN,
       ["map"] = BOOLEAN,
@@ -4798,9 +4794,6 @@ local binop_types = {
          ["boolean"] = BOOLEAN,
       },
       ["record"] = {
-         ["boolean"] = BOOLEAN,
-      },
-      ["arrayrecord"] = {
          ["boolean"] = BOOLEAN,
       },
       ["map"] = {
@@ -6346,13 +6339,14 @@ tl.type_check = function(ast, opts)
             copy.is_method = t.is_method
             copy.args, same = resolve(t.args, same)
             copy.rets, same = resolve(t.rets, same)
-         elseif t.typename == "record" or t.typename == "arrayrecord" then
+         elseif is_record_type(t) then
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
                   copy.typeargs[i], same = resolve(tf, same)
                end
             end
+
 
             if t.elements then
                copy.elements, same = resolve(t.elements, same)
@@ -7109,6 +7103,17 @@ tl.type_check = function(ast, opts)
       elseif t1.typename == "nominal" then
          return are_same_nominals(t1, t2)
       elseif t1.typename == "record" then
+
+         if (t1.elements ~= nil) ~= (t2.elements ~= nil) then
+            return false, { Err(t1, "types do not have the same array interface") }
+         end
+         if t1.elements and t2.elements then
+            local ok, errs = same_type(t1.elements, t2.elements)
+            if not ok then
+               return ok, errs
+            end
+         end
+
          return invariant_match_fields_to_record(t1, t2)
       elseif t1.typename == "function" then
          local argdelta = t1.is_method and 1 or 0
@@ -7130,12 +7135,6 @@ tl.type_check = function(ast, opts)
             add_errs_prefixing(t1, errs, all_errs, "return " .. i)
          end
          return any_errors(all_errs)
-      elseif t1.typename == "arrayrecord" then
-         local ok, errs = same_type(t1.elements, t2.elements)
-         if not ok then
-            return ok, errs
-         end
-         return invariant_match_fields_to_record(t1, t2)
       end
       return true
    end
@@ -7224,7 +7223,6 @@ tl.type_check = function(ast, opts)
       array = true,
       map = true,
       record = true,
-      arrayrecord = true,
       tupletable = true,
    }
 
@@ -7468,15 +7466,9 @@ tl.type_check = function(ast, opts)
             return combine_map_errs(errs_keys, errs_values)
          end
       elseif t2.typename == "record" then
-         if is_record_type(t1) then
-            return match_fields_to_record(t1, t2)
-         elseif is_typetype(t1) and is_record_type(t1.def) then
-            return is_a(t1.def, t2, for_equality)
-         end
-      elseif t2.typename == "arrayrecord" then
-         if t1.typename == "array" then
-            return is_a(t1.elements, t2.elements)
-         elseif t1.typename == "tupletable" then
+
+
+         if t1.typename == "tupletable" and t2.elements then
             if t2.inferred_len and t2.inferred_len > #t1.types then
                return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len)) }
             end
@@ -7488,12 +7480,17 @@ tl.type_check = function(ast, opts)
                return false, { Err(t2, "got %s (from %s), expected %s", t1a, t1, t2) }
             end
             return true
-         elseif t1.typename == "record" then
-            return match_fields_to_record(t1, t2)
-         elseif t1.typename == "arrayrecord" then
+         end
+         if t1.elements and t2.elements then
             if not is_a(t1.elements, t2.elements) then
                return false, { Err(t1, "array parts have incompatible element types") }
             end
+            if t1.typename == "array" then
+               return true
+            end
+         end
+
+         if is_record_type(t1) then
             return match_fields_to_record(t1, t2)
          elseif is_typetype(t1) and is_record_type(t1.def) then
             return is_a(t1.def, t2, for_equality)
@@ -9305,7 +9302,17 @@ tl.type_check = function(ast, opts)
          typ.elements = nil
          node_error(node, "cannot determine type of table literal")
       elseif is_record and is_array then
-         typ.typename = "arrayrecord"
+         typ.typename = "record"
+         typ.interface_list = {
+            a_type({
+               filename = filename,
+               y = node.y,
+               x = node.x,
+               typename = "array",
+               elements = typ.elements,
+            }),
+         }
+
       elseif is_record and is_map then
          if typ.keys.typename == "string" then
             typ.typename = "map"
@@ -9318,12 +9325,8 @@ tl.type_check = function(ast, opts)
             node_error(node, "cannot determine type of table literal")
          end
       elseif is_array then
-         if is_not_tuple then
-            typ.typename = "array"
-            typ.inferred_len = largest_array_idx - 1
-         else
-            local pure_array = true
-
+         local pure_array = true
+         if not is_not_tuple then
             local last_t
             for _, current_t in pairs(typ.types) do
                if last_t then
@@ -9334,13 +9337,16 @@ tl.type_check = function(ast, opts)
                end
                last_t = current_t
             end
+         end
+         if pure_array then
+            typ.typename = "array"
 
-            if not pure_array then
-               typ.typename = "tupletable"
-            else
-               typ.typename = "array"
-               typ.inferred_len = largest_array_idx - 1
-            end
+            assert(typ.elements)
+            typ.inferred_len = largest_array_idx - 1
+         else
+            typ.typename = "tupletable"
+            typ.elements = nil
+            assert(typ.types)
          end
       elseif is_record then
          typ.typename = "record"
@@ -9487,6 +9493,21 @@ tl.type_check = function(ast, opts)
          is_total = false
       end
       return is_total, missing
+   end
+
+   local function find_in_interface_list(a, f)
+      if not a.interface_list then
+         return nil
+      end
+
+      for _, t in ipairs(a.interface_list) do
+         local ret = f(t)
+         if ret then
+            return ret
+         end
+      end
+
+      return nil
    end
 
    local visit_node = {}
@@ -10489,6 +10510,8 @@ tl.type_check = function(ast, opts)
                end
                node.type = BOOLEAN
             elseif node.op.op == ":" then
+
+
                if lax and (is_unknown(a) or a.typename == "typevar") then
                   if node.e1.kind == "variable" then
                      add_unknown_dot(node.e1, node.e1.tk .. "." .. node.e2.tk)
@@ -10571,6 +10594,13 @@ tl.type_check = function(ast, opts)
 
                local types_op = unop_types[node.op.op]
                node.type = types_op[a.typename]
+
+               if not node.type then
+                  node.type = find_in_interface_list(a, function(t)
+                     return types_op[t.typename]
+                  end)
+               end
+
                local meta_on_operator
                if not node.type then
                   local mt_name = unop_to_metamethod[node.op.op]
@@ -10581,6 +10611,7 @@ tl.type_check = function(ast, opts)
                      node_error(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
                   end
                end
+
                if a.typename == "map" then
                   if a.keys.typename == "number" or a.keys.typename == "integer" then
                      add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
@@ -10972,7 +11003,6 @@ tl.type_check = function(ast, opts)
    visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
-   visit_type.cbs["arrayrecord"] = visit_type.cbs["record"]
    visit_type.cbs["enum"] = visit_type.cbs["string"]
    visit_type.cbs["boolean"] = visit_type.cbs["string"]
    visit_type.cbs["nil"] = visit_type.cbs["string"]
@@ -11035,7 +11065,6 @@ local typename_to_typecode = {
    ["array"] = tl.typecodes.ARRAY,
    ["map"] = tl.typecodes.MAP,
    ["tupletable"] = tl.typecodes.TUPLE,
-   ["arrayrecord"] = tl.typecodes.ARRAYRECORD,
    ["interface"] = tl.typecodes.INTERFACE,
    ["record"] = tl.typecodes.RECORD,
    ["enum"] = tl.typecodes.ENUM,
