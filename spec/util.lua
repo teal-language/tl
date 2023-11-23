@@ -535,6 +535,7 @@ function util.check_warnings(code, warnings, type_errors)
 
    return function()
       local result = tl.process_string(code)
+      assert.same({}, result.syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       batch_compare(batch, "warnings", warnings, result.warnings or {})
       if type_errors then
