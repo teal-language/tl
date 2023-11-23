@@ -2937,7 +2937,7 @@ local function parse_array_interface_type(ps, i, def)
    return i, t
 end
 
-parse_record_body = function(ps, i, def, node, name)
+parse_record_body = function(ps, i, def, node)
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
@@ -3063,22 +3063,6 @@ parse_record_body = function(ps, i, def, node, name)
                field_order = def.meta_field_order
                if not metamethod_names[field_name] then
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
-               end
-            end
-
-            if t.is_method and t.args and t.args[1] and t.args[1].is_self then
-               local selfarg = t.args[1]
-               if selfarg.tk ~= name or (def.typeargs and not selfarg.typevals) then
-                  t.is_method = false
-                  selfarg.is_self = false
-               elseif def.typeargs then
-                  for j = 1, #def.typeargs do
-                     if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= def.typeargs[j].typearg then
-                        t.is_method = false
-                        selfarg.is_self = false
-                        break
-                     end
-                  end
                end
             end
 
@@ -10983,6 +10967,26 @@ tl.type_check = function(ast, opts)
                   if ftype.typename == "nestedtype" then
                      ftype.typename = "typetype"
                   end
+
+                  if ftype.is_method and ftype.args and ftype.args[1] and ftype.args[1].is_self then
+                     local record_name = typ.names and typ.names[1]
+                     if record_name then
+                        local selfarg = ftype.args[1]
+                        if selfarg.tk ~= record_name or (typ.typeargs and not selfarg.typevals) then
+                           ftype.is_method = false
+                           selfarg.is_self = false
+                        elseif typ.typeargs then
+                           for j = 1, #typ.typeargs do
+                              if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= typ.typeargs[j].typearg then
+                                 ftype.is_method = false
+                                 selfarg.is_self = false
+                                 break
+                              end
+                           end
+                        end
+                     end
+                  end
+
                   typ.fields[name] = ftype
                   i = i + 1
                end
