@@ -64,7 +64,7 @@ describe("record method call", function()
       }))
    end)
 
-   describe("catches wrong use of self. in call", function()
+   describe("catches wrong use of self, in call", function()
       it("for methods declared outside of the record", util.check_type_error([[
          local record Foo
          end
@@ -126,7 +126,7 @@ describe("record method call", function()
          { y = 6, msg = "invoked method as a regular function: use ':' instead of '.'" },
          { y = 7, msg = "invoked method as a regular function: use ':' instead of '.'" },
       }))
-   
+
    end)
 
    describe("reports potentially wrong use of self. in call", function()
@@ -187,7 +187,7 @@ describe("record method call", function()
 
    end)
 
-   describe("accepts use of dot call", function() 
+   describe("accepts use of dot call", function()
       it("for method on record typetype", util.check_warnings([[
          local record Foo
             x: integer
@@ -199,13 +199,16 @@ describe("record method call", function()
          Foo.add(first)
          local q = Foo
          q.add(first)
-         local m = {
+         local record m
             a: Foo
-         }
+         end
          m.a.add(first)
-      ]], {}, {}))
+      ]], {
+         -- FIXME this warning needs to go away when we detect that "m.a" and "first" are not the same
+         { y = 14, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+      }, {}))
 
-      it("for function declared in method body with self as different type from receiver", util.check_warnings([[
+      it("for function declared in record body with self as different type from receiver", util.check_warnings([[
          local record Bar
          end
          local record Foo
@@ -243,13 +246,13 @@ describe("record method call", function()
             hadd = first.add
          }
          tab.hadd(first)
-   
+
       ]], {}, {}))
-   
+
    end)
 
    describe("reports correct errors", function()
-   
+
       it("for calls on aliases of method", util.check_type_error([[
          local record Foo
             x: integer
@@ -268,13 +271,13 @@ describe("record method call", function()
          tab.hadd(14)
 
       ]],
-      { 
+      {
          { y = 9, msg = "argument 1: got integer, expected Foo" },
          { y = 11, msg = "argument 1: got integer, expected Foo" },
          { y = 15, msg = "argument 1: got integer, expected Foo" },
       }))
 
-      it("for function declared in method body with self as different type from receiver", util.check_type_error([[
+      it("for function declared in record body with self as different type from receiver", util.check_type_error([[
          local record Bar
          end
          local record Foo
@@ -284,11 +287,11 @@ describe("record method call", function()
          local first: Foo = {}
          first.add(first)
       ]],
-      { 
+      {
          { y = 8, msg = "argument 1: Foo is not a Bar" },
       }))
 
-      it("for function declared in method body with self as different generic type from receiver", util.check_type_error([[
+      it("for function declared in record body with self as different generic type from receiver", util.check_type_error([[
          local record Foo<T>
             x: T
             add: function(self: Foo<integer>, other: Foo<integer>)
@@ -296,10 +299,10 @@ describe("record method call", function()
          local first: Foo<string> = {}
          first.add(first)
       ]],
-      { 
+      {
          { y = 6, msg = "argument 1: type parameter <integer>: got string, expected integer" },
       }))
-   
+
    end)
 
 end)
