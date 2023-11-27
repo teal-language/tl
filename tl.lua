@@ -7647,7 +7647,7 @@ tl.type_check = function(ast, opts)
       return false, { Err(t1, "got %s, expected %s", t1, t2) }
    end
 
-   local function assert_is_a(node, t1, t2, context, name)
+   local function assert_is_a(where, t1, t2, context, name)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
       if lax and (is_unknown(t1) or is_unknown(t2)) then
@@ -7659,23 +7659,23 @@ tl.type_check = function(ast, opts)
          return true
       elseif t2.typename == "unresolved_emptytable_value" then
          if is_number_type(t2.emptytable_type.keys) then
-            infer_emptytable(t2.emptytable_type, infer_at(node, a_type({ typename = "array", elements = t1 })))
+            infer_emptytable(t2.emptytable_type, infer_at(where, a_type({ typename = "array", elements = t1 })))
          else
-            infer_emptytable(t2.emptytable_type, infer_at(node, a_type({ typename = "map", keys = t2.emptytable_type.keys, values = t1 })))
+            infer_emptytable(t2.emptytable_type, infer_at(where, a_type({ typename = "map", keys = t2.emptytable_type.keys, values = t1 })))
          end
          return true
       elseif t2.typename == "emptytable" then
          if is_lua_table_type(t1) then
-            infer_emptytable(t2, infer_at(node, t1))
+            infer_emptytable(t2, infer_at(where, t1))
          elseif t1.typename ~= "emptytable" then
-            node_error(node, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
+            error_at(where, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
             return false
          end
          return true
       end
 
       local ok, match_errs = is_a(t1, t2)
-      add_errs_prefixing(node, match_errs, errors, context .. ": " .. (name and (name .. ": ") or ""))
+      add_errs_prefixing(where, match_errs, errors, context .. ": " .. (name and (name .. ": ") or ""))
       return ok
    end
 
