@@ -545,6 +545,53 @@ function util.check_warnings(code, warnings, type_errors)
    end
 end
 
+local function show_keys(arr)
+   local out = {}
+   for k, _ in pairs(arr) do
+      table.insert(out, k)
+   end
+   table.sort(out)
+   return table.concat(out, ", ")
+end
+
+function util.check_types(code, types)
+   assert(type(code) == "string")
+   assert(type(types) == "table")
+
+   return function()
+      local ast, syntax_errors = tl.parse(code, "foo.tl")
+      assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
+      local batch = batch_assertions()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = tl.type_check(ast, { filename = "foo.tl", env = env, lax = false })
+      batch:add(assert.same, {}, result.type_errors, "Code was not expected to have type errors")
+
+      local tr = tl.get_types(result, env.trenv)
+      for i, e in ipairs(types) do
+         assert(e.x, "[" .. i .. "] missing 'x' key in test specification")
+         assert(e.y, "[" .. i .. "] missing 'y' key in test specification")
+         assert(e.type, "[" .. i .. "] missing 'type' key in test specification")
+         local info = tr.by_pos["foo.tl"]
+         if not info[e.y] then
+            batch:add(assert.True, false, "[" .. i .. "] No type info for line " .. e.y .. " (has lines " .. show_keys(info) .. ")")
+         end
+         info = info[e.y]
+         if not info[e.x] then
+            batch:add(assert.True, false, "[" .. i .. "] No type info for position " .. e.x .. " in line " .. e.y .. " (has positions " .. show_keys(info) .. ")")
+         end
+         info = info[e.x]
+         if info then
+            info = tr.types[info]
+            batch:add(assert.same, e.type, info.str, "[" .. i .. "] Evaluated type at position " .. e.y .. ":" .. e.x .. " does not match:")
+         end
+      end
+
+      batch:assert()
+      return true
+   end
+end
+
 local function gen(lax, code, expected, gen_target)
    return function()
       local ast, syntax_errors = tl.parse(code, "foo.tl")

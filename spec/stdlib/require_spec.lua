@@ -547,6 +547,7 @@ describe("require", function()
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
+      assert.same(1, #result.type_errors)
       assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
    end)
 

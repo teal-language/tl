@@ -850,6 +850,7 @@ do
 
       local env = setup_env(tlconfig, args["file"][1])
       env.keep_going = true
+      env.report_types = true
 
       local tr, trenv
       for i, input_file in ipairs(args["file"]) do
