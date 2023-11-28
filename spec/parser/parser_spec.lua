@@ -19,9 +19,6 @@ describe("parser", function()
       assert.same({
          kind = "statements",
          tk = "$EOF$",
-         type = {
-            typename = "none",
-         },
          x = 1,
          y = 1,
          xend = 5,
