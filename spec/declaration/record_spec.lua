@@ -631,24 +631,22 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          }))
       end
 
-      it("can resolve generics partially (see #417)", function()
-         local _, ast = util.check([[
-            local ]]..statement..[[ fun ]]..array(i, "{fun}")..[[
-                ]]..statement..[[ iterator<T> ]]..array(i, "{iterator<T>}")..[[
-                    reduce: function<R>(iterator<T>, (function(R, T): R), R): R
-                end
-                iter: function<T>({T}): iterator<T>
-            end
+      it("can resolve generics partially (see #417)", util.check_types([[
+         local ]]..statement..[[ fun ]]..array(i, "{fun}")..[[
+             ]]..statement..[[ iterator<T> ]]..array(i, "{iterator<T>}")..[[
+                 reduce: function<R>(iterator<T>, (function(R, T): R), R): R
+             end
+             iter: function<T>({T}): iterator<T>
+         end
 
-            local f: fun
+         local f: fun
 
-            local sum = f.iter({ 1, 2, 3, 4 }):reduce(function(a:integer,x:integer): integer
-                return a + x
-            end, 0)
-         ]])()
-
-         assert.same("integer", ast[3].exps[1].type[1].typename)
-      end)
+         local sum = f.iter({ 1, 2, 3, 4 }):reduce(function(a:integer,x:integer): integer
+             return a + x
+         end, 0)
+      ]], {
+         { y = 10, x = 16, type = "integer" },
+      }))
 
       it("can have circular type dependencies on nested types", util.check([[
          local type R = ]]..statement..[[ ]]..array(i, "{S}")..[[
