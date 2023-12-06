@@ -1435,6 +1435,8 @@ local record Node
 
    decltype: Type
    opt: boolean
+
+   debug_type: Type
 end
 
 local type Where
@@ -3913,7 +3915,8 @@ local function recurse_node<T>(root: Node,
       end
 
       if TL_DEBUG then
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]", kprint)
+         local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
       end
 
       return ret
@@ -6283,6 +6286,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          msg = msg:format(table.unpack(showt))
       end
       local name = where.filename or filename
+
+      if TL_DEBUG then
+         io.stderr:write("ERROR:" .. where.y .. ":" .. where.x .. ": " .. msg .. "\n")
+      end
 
       return {
          y = where.y,
@@ -11376,6 +11383,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+   local function debug_type_after(fn: function(Node, {Type}, Type): (Type)): (function(Node, {Type}, Type): (Type))
+      return function(node: Node, children: {Type}, t: Type): Type
+         t = fn and fn(node, children, t) or t
+         node.debug_type = t
+         return t
+      end
+   end
+
    if opts.run_internal_compiler_checks then
       visit_node.after = internal_compiler_check(visit_node.after)
       visit_type.after = internal_compiler_check(visit_type.after)
@@ -11384,6 +11399,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    if store_type then
       visit_node.after = store_type_after(visit_node.after)
       visit_type.after = store_type_after(visit_type.after)
+   end
+
+   if TL_DEBUG then
+      visit_node.after = debug_type_after(visit_node.after)
    end
 
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]

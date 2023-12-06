@@ -1441,6 +1441,8 @@ local Node = {ExpectedContext = {}, }
 
 
 
+
+
 local function is_array_type(t)
 
    return t.typename == "array" or t.elements ~= nil
@@ -3913,7 +3915,8 @@ local function recurse_node(root,
       end
 
       if TL_DEBUG then
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]", kprint)
+         local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
       end
 
       return ret
@@ -6283,6 +6286,10 @@ tl.type_check = function(ast, opts)
          msg = msg:format(_tl_table_unpack(showt))
       end
       local name = where.filename or filename
+
+      if TL_DEBUG then
+         io.stderr:write("ERROR:" .. where.y .. ":" .. where.x .. ": " .. msg .. "\n")
+      end
 
       return {
          y = where.y,
@@ -11376,6 +11383,14 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function debug_type_after(fn)
+      return function(node, children, t)
+         t = fn and fn(node, children, t) or t
+         node.debug_type = t
+         return t
+      end
+   end
+
    if opts.run_internal_compiler_checks then
       visit_node.after = internal_compiler_check(visit_node.after)
       visit_type.after = internal_compiler_check(visit_type.after)
@@ -11384,6 +11399,10 @@ tl.type_check = function(ast, opts)
    if store_type then
       visit_node.after = store_type_after(visit_node.after)
       visit_type.after = store_type_after(visit_type.after)
+   end
+
+   if TL_DEBUG then
+      visit_node.after = debug_type_after(visit_node.after)
    end
 
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
