@@ -1027,6 +1027,7 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1062,6 +1063,7 @@ local table_types = {
    ["invalid"] = false,
    ["unresolved"] = false,
    ["none"] = false,
+   ["*"] = false,
 }
 
 
@@ -4668,6 +4670,7 @@ local typename_to_typecode = {
    ["unresolved"] = tl.typecodes.UNKNOWN,
    ["typetype"] = tl.typecodes.UNKNOWN,
    ["nestedtype"] = tl.typecodes.UNKNOWN,
+   ["*"] = tl.typecodes.UNKNOWN,
 }
 
 local skip_types = {
@@ -6288,7 +6291,7 @@ tl.type_check = function(ast, opts)
       local name = where.filename or filename
 
       if TL_DEBUG then
-         io.stderr:write("ERROR:" .. where.y .. ":" .. where.x .. ": " .. msg .. "\n")
+         io.stderr:write("ERROR:" .. (where.y or -1) .. ":" .. (where.x or -1) .. ": " .. msg .. "\n")
       end
 
       return {
@@ -6872,90 +6875,8 @@ tl.type_check = function(ast, opts)
 
 
 
-   local function compare_and_infer_typevars(t1, t2, comp)
-
-      if t1.typevar == t2.typevar then
-         return true
-      end
-
-
-      local typevar = t2.typevar or t1.typevar
-
-
-      local vt = find_var_type(typevar)
-      if vt then
-
-         if t2.typevar then
-            return comp(t1, vt)
-         else
-            return comp(vt, t2)
-         end
-      else
-
-         local other = t2.typevar and t1 or t2
-         local ok, resolved, errs = resolve_typevars(other)
-         if not ok then
-            return false, errs
-         end
-         if resolved.typename ~= "unknown" then
-            resolved = resolve_typetype(resolved)
-            add_var(nil, typevar, resolved)
-         end
-         return true
-      end
-   end
-
    local same_type
    local is_a
-
-
-
-   local function match_record_fields(rec1, t2, invariant)
-      local fielderrs = {}
-      for _, k in ipairs(rec1.field_order) do
-         local f = rec1.fields[k]
-         local t2k = t2(k)
-         if t2k == nil then
-            if (not lax) and invariant then
-               table.insert(fielderrs, Err(f, "unknown field " .. k))
-            end
-         else
-            local ok, errs
-            if invariant then
-               ok, errs = same_type(f, t2k)
-            else
-               ok, errs = is_a(f, t2k)
-            end
-            if not ok then
-               add_errs_prefixing(nil, errs, fielderrs, "record field doesn't match: " .. k .. ": ")
-            end
-         end
-      end
-      if #fielderrs > 0 then
-         return false, fielderrs
-      end
-      return true
-   end
-
-   local function match_fields_to_record(rec1, rec2, invariant)
-      if rec1.is_userdata ~= rec2.is_userdata then
-         return false, { Err(rec1, "userdata record doesn't match: %s", rec2) }
-      end
-      local ok, fielderrs = match_record_fields(rec1, function(k) return rec2.fields[k] end, invariant)
-      if not ok then
-         local errs = {}
-         add_errs_prefixing(nil, fielderrs, errs, show_type(rec1) .. " is not a " .. show_type(rec2) .. ": ")
-         return false, errs
-      end
-      return true
-   end
-
-   local function match_fields_to_map(rec1, map)
-      if not match_record_fields(rec1, function(_) return map.values end, false) then
-         return false, { Err(rec1, "record is not a valid map; not all fields have the same type") }
-      end
-      return true
-   end
 
    local function arg_check(where, cmp, a, b, n, errs, ctx)
       local matches, match_errs = cmp(a, b)
@@ -6966,11 +6887,11 @@ tl.type_check = function(ast, opts)
       return true
    end
 
-   local function has_all_types_of(t1s, t2s, cmp)
+   local function has_all_types_of(t1s, t2s)
       for _, t1 in ipairs(t1s) do
          local found = false
          for _, t2 in ipairs(t2s) do
-            if cmp(t2, t1) then
+            if same_type(t2, t1) then
                found = true
                break
             end
@@ -7214,6 +7135,22 @@ tl.type_check = function(ast, opts)
       return false
    end
 
+   local function fail_nominals(t1, t2)
+      local t1name = show_type(t1)
+      local t2name = show_type(t2)
+      if t1name == t2name then
+         local t1r = resolve_nominal(t1)
+         if t1r.filename then
+            t1name = t1name .. " (defined in " .. t1r.filename .. ":" .. t1r.y .. ")"
+         end
+         local t2r = resolve_nominal(t2)
+         if t2r.filename then
+            t2name = t2name .. " (defined in " .. t2r.filename .. ":" .. t2r.y .. ")"
+         end
+      end
+      return false, { Err(t1, t1name .. " is not a " .. t2name) }
+   end
+
    local function are_same_nominals(t1, t2)
       local same_names
       if t1.found and t2.found then
@@ -7238,148 +7175,23 @@ tl.type_check = function(ast, opts)
          end
       end
 
-      if same_names then
-         if t1.typevals == nil and t2.typevals == nil then
-            return true
-         elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
-            local all_errs = {}
-            for i = 1, #t1.typevals do
-               local _, errs = same_type(t1.typevals[i], t2.typevals[i])
-               add_errs_prefixing(t1, errs, all_errs, "type parameter <" .. show_type(t2.typevals[i]) .. ">: ")
-            end
-            if #all_errs == 0 then
-               return true
-            else
-               return false, all_errs
-            end
+      if not same_names then
+         return fail_nominals(t1, t2)
+      elseif t1.typevals == nil and t2.typevals == nil then
+         return true
+      elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
+         local errs = {}
+         for i = 1, #t1.typevals do
+            local _, typeval_errs = same_type(t1.typevals[i], t2.typevals[i])
+            add_errs_prefixing(t1, typeval_errs, errs, "type parameter <" .. show_type(t2.typevals[i]) .. ">: ")
          end
-      else
-         local t1name = show_type(t1)
-         local t2name = show_type(t2)
-         if t1name == t2name then
-            local t1r = resolve_nominal(t1)
-            if t1r.filename then
-               t1name = t1name .. " (defined in " .. t1r.filename .. ":" .. t1r.y .. ")"
-            end
-            local t2r = resolve_nominal(t2)
-            if t2r.filename then
-               t2name = t2name .. " (defined in " .. t2r.filename .. ":" .. t2r.y .. ")"
-            end
-         end
-         return false, { Err(t1, t1name .. " is not a " .. t2name) }
+         return any_errors(errs)
       end
+      return true
    end
 
    local is_lua_table_type
-   local resolve_tuple_and_nominal = nil
-
-   local function invariant_match_fields_to_record(t1, t2)
-      local ok, errs = match_fields_to_record(t1, t2, true)
-      if not ok then
-         return ok, errs
-      end
-      ok, errs = match_fields_to_record(t2, t1, true)
-      if not ok then
-         return ok, errs
-      end
-      return true
-   end
-
-
-   same_type = function(t1, t2)
-      assert(type(t1) == "table")
-      assert(type(t2) == "table")
-
-      if t1.typeid == t2.typeid then
-         if TL_DEBUG then
-            local st1, st2 = show_type_base(t1, false, {}), show_type_base(t2, false, {})
-            assert(st1 == st2, st1 .. " ~= " .. st2)
-         end
-         return true
-      end
-
-      if t1.typename == "typevar" or t2.typename == "typevar" then
-         return compare_and_infer_typevars(t1, t2, same_type)
-      end
-
-      if t1.typename == "emptytable" and is_lua_table_type(resolve_tuple_and_nominal(t2)) then
-         return true
-      end
-
-      if t2.typename == "emptytable" and is_lua_table_type(resolve_tuple_and_nominal(t1)) then
-         return true
-      end
-
-      if t1.typename ~= t2.typename then
-         return false, { Err(t1, "got %s, expected %s", t1, t2) }
-      end
-      if t1.typename == "array" then
-         return same_type(t1.elements, t2.elements)
-      elseif t1.typename == "tupletable" then
-         local all_errs = {}
-         for i = 1, math.min(#t1.types, #t2.types) do
-            local ok, err = same_type(t1.types[i], t2.types[i])
-            if not ok then
-               add_errs_prefixing(t1, err, all_errs, "values")
-            end
-         end
-         return any_errors(all_errs)
-      elseif t1.typename == "map" then
-         local all_errs = {}
-         local k_ok, k_errs = same_type(t1.keys, t2.keys)
-         if not k_ok then
-            add_errs_prefixing(t1, k_errs, all_errs, "keys")
-         end
-         local v_ok, v_errs = same_type(t1.values, t2.values)
-         if not v_ok then
-            add_errs_prefixing(t1, v_errs, all_errs, "values")
-         end
-         return any_errors(all_errs)
-      elseif t1.typename == "union" then
-         if has_all_types_of(t1.types, t2.types, same_type) and
-            has_all_types_of(t2.types, t1.types, same_type) then
-            return true
-         else
-            return false, { Err(t1, "got %s, expected %s", t1, t2) }
-         end
-      elseif t1.typename == "nominal" then
-         return are_same_nominals(t1, t2)
-      elseif t1.typename == "record" then
-
-         if (t1.elements ~= nil) ~= (t2.elements ~= nil) then
-            return false, { Err(t1, "types do not have the same array interface") }
-         end
-         if t1.elements and t2.elements then
-            local ok, errs = same_type(t1.elements, t2.elements)
-            if not ok then
-               return ok, errs
-            end
-         end
-
-         return invariant_match_fields_to_record(t1, t2)
-      elseif t1.typename == "function" then
-         local argdelta = t1.is_method and 1 or 0
-         if #t1.args ~= #t2.args then
-            if t1.is_method ~= t2.is_method then
-               return false, { Err(t1, "different number of input arguments: method and non-method are not the same type") }
-            end
-            return false, { Err(t1, "different number of input arguments: got " .. #t1.args - argdelta .. ", expected " .. #t2.args - argdelta) }
-         end
-         if #t1.rets ~= #t2.rets then
-            return false, { Err(t1, "different number of return values: got " .. #t1.rets .. ", expected " .. #t2.rets) }
-         end
-         local all_errs = {}
-         for i = 1, #t1.args do
-            arg_check(t1, same_type, t1.args[i], t2.args[i], i - argdelta, all_errs, "argument")
-         end
-         for i = 1, #t1.rets do
-            local _, errs = same_type(t1.rets[i], t2.rets[i])
-            add_errs_prefixing(t1, errs, all_errs, "return " .. i)
-         end
-         return any_errors(all_errs)
-      end
-      return true
-   end
+   local resolve_tuple_and_nominal
 
    local function unite(types, flatten_constants)
       if #types == 1 then
@@ -7442,25 +7254,6 @@ tl.type_check = function(ast, opts)
       end
    end
 
-   local function add_map_errors(errs, ctx, ctx_errs)
-      if ctx_errs then
-         for _, err in ipairs(ctx_errs) do
-            err.msg = ctx .. err.msg
-            table.insert(errs, err)
-         end
-      end
-   end
-
-   local function combine_map_errs(key_errs, value_errs)
-      if not key_errs and not value_errs then
-         return true
-      end
-      local errs = {}
-      add_map_errors(errs, "in map key: ", key_errs)
-      add_map_errors(errs, "in map value: ", value_errs)
-      return false, errs
-   end
-
    do
       local known_table_types = {
          array = true,
@@ -7495,7 +7288,7 @@ tl.type_check = function(ast, opts)
       })
       for i = 2, #tupletype.types do
          arr_type = expand_type(where, arr_type, a_type({ elements = tupletype.types[i], typename = "array" }))
-         if not arr_type or not arr_type.elements then
+         if not arr_type.elements then
             return nil, { Err(tupletype, "unable to convert tuple %s to array", tupletype) }
          end
       end
@@ -7506,349 +7299,630 @@ tl.type_check = function(ast, opts)
       return t.typename == "nominal" and t.names[1] == "@self"
    end
 
+   local function compare_false(_, _)
+      return false
+   end
 
-   is_a = function(t1, t2, for_equality)
-      assert(type(t1) == "table")
-      assert(type(t2) == "table")
+   local function compare_true(_, _)
+      return true
+   end
 
-      if lax and (is_unknown(t1) or is_unknown(t2)) then
+   local function subtype_nominal(a, b)
+      if is_self(a) and is_self(b) then
          return true
       end
 
-      if t1.typeid == t2.typeid then
-         if TL_DEBUG then
-            local st1, st2 = show_type_base(t1, false, {}), show_type_base(t2, false, {})
-            assert(st1 == st2, st1 .. " ~= " .. st2)
-         end
-         return true
-      end
-
-      if t1.typename == "bad_nominal" or t2.typename == "bad_nominal" then
+      local ra = a.typename == "nominal" and resolve_nominal(a) or a
+      local rb = b.typename == "nominal" and resolve_nominal(b) or b
+      local ok, errs = is_a(ra, rb)
+      if errs and #errs == 1 and errs[1].msg:match("^got ") then
          return false
       end
+      return ok, errs
+   end
 
-      if t2.typename ~= "tuple" then
-         t1 = resolve_tuple(t1)
+   local function subtype_array(a, b)
+
+      if (not a.elements) or (not is_a(a.elements, b.elements)) then
+         return false
+      end
+      if a.types and #a.types > 1 then
+
+         for i = 1, #a.types do
+            local e = a.types[i]
+            if not is_a(e, b.elements) then
+               return false, { Err(a, "%s is not a member of %s", e, b.elements) }
+            end
+         end
+      end
+      return true
+   end
+
+   local function subtype_record(a, b)
+
+      if a.elements and b.elements then
+         if not is_a(a.elements, b.elements) then
+            return false, { Err(a, "array parts have incompatible element types") }
+         end
       end
 
-      if t2.typename == "tuple" and t1.typename ~= "tuple" then
-         t1 = a_type({
-            typename = "tuple",
-            [1] = t1,
-         })
+      if a.is_userdata ~= b.is_userdata then
+         return false, { Err(a, a.is_userdata and "userdata is not a record" or
+"record is not a userdata"), }
       end
 
-      if t1.typename == "typevar" or t2.typename == "typevar" then
-         return compare_and_infer_typevars(t1, t2, is_a)
+      local errs = {}
+      for _, k in ipairs(a.field_order) do
+         local ak = a.fields[k]
+         local bk = b.fields[k]
+         if bk then
+            local ok, fielderrs = is_a(ak, bk)
+            if not ok then
+               add_errs_prefixing(nil, fielderrs, errs, "record field doesn't match: " .. k .. ": ")
+            end
+         end
+      end
+      if #errs > 0 then
+         for _, err in ipairs(errs) do
+            err.msg = show_type(a) .. " is not a " .. show_type(b) .. ": " .. err.msg
+         end
+         return false, errs
       end
 
+      return true
+   end
 
-      if t1.typename == "nil" then
-         return true
+   local eqtype_record = function(a, b)
+
+      if (a.elements ~= nil) ~= (b.elements ~= nil) then
+         return false, { Err(a, "types do not have the same array interface") }
+      end
+      if a.elements then
+         local ok, errs = same_type(a.elements, b.elements)
+         if not ok then
+            return ok, errs
+         end
       end
 
-
-      if t2.typename == "any" then
-         return true
-
-      elseif is_self(t1) then
-         if is_self(t2) then
-            return true
-         end
-
-         return is_a(resolve_tuple_and_nominal(t1), t2, for_equality)
-
-      elseif is_self(t2) then
-         return is_a(t1, resolve_tuple_and_nominal(t2), for_equality)
-
-      elseif t1.typename == "union" then
-
-
-
-
-         if t2.typename == "union" then
-            local used = {}
-            for _, t in ipairs(t1.types) do
-               local ok = false
-               begin_scope()
-               for _, u in ipairs(t2.types) do
-                  if not used[u] then
-                     if is_a(t, u, for_equality) then
-                        used[u] = t
-                        ok = true
-                        break
-                     end
-                  end
-               end
-               end_scope()
-               if not ok then
-                  return false, { Err(t1, "got %s, expected %s", t1, t2) }
-               end
-            end
-
-            for u, t in pairs(used) do
-               is_a(t, u, for_equality)
-            end
-            return true
-
-
-
-
-         else
-            for _, t in ipairs(t1.types) do
-               if not is_a(t, t2, for_equality) then
-                  return false, { Err(t1, "got %s, expected %s", t1, t2) }
-               end
-            end
-            return true
-         end
-
-
-
-
-      elseif t2.typename == "union" then
-         for _, t in ipairs(t2.types) do
-            if is_a(t1, t, for_equality) then
-               return true
-            end
-         end
-
-
-
-
-      elseif t2.typename == "poly" then
-         for _, t in ipairs(t2.types) do
-            if not is_a(t1, t, for_equality) then
-               return false, { Err(t1, "cannot match against all alternatives of the polymorphic type") }
-            end
-         end
-         return true
-
-
-
-
-      elseif t1.typename == "poly" then
-         for _, t in ipairs(t1.types) do
-            if is_a(t, t2, for_equality) then
-               return true
-            end
-         end
-         return false, { Err(t1, "cannot match against any alternatives of the polymorphic type") }
-      elseif t1.typename == "nominal" and t2.typename == "nominal" then
-         local t1r = resolve_tuple_and_nominal(t1)
-         local t2r = resolve_tuple_and_nominal(t2)
-         if t1r.typename == "union" or t2r.typename == "union" then
-            return is_a(t1r, t2r, for_equality)
-         end
-
-         return are_same_nominals(t1, t2)
-      elseif t1.typename == "enum" and t2.typename == "string" then
-         local ok
-         if for_equality then
-            ok = t2.tk and t1.enumset[unquote(t2.tk)]
-         else
-            ok = true
-         end
-         if ok then
-            return true
-         else
-            return false, { Err(t1, "enum is incompatible with %s", t2) }
-         end
-      elseif t1.typename == "integer" and t2.typename == "number" then
-         return true
-      elseif t1.typename == "string" and t2.typename == "enum" then
-         local ok = t1.tk and t2.enumset[unquote(t1.tk)]
-         if ok then
-            return true
-         else
-            if t1.tk then
-               return false, { Err(t1, "%s is not a member of %s", t1, t2) }
-            else
-               return false, { Err(t1, "string is not a %s", t2) }
-            end
-         end
-      elseif t1.typename == "nominal" or t2.typename == "nominal" then
-         local t1r = resolve_tuple_and_nominal(t1)
-         local t2r = resolve_tuple_and_nominal(t2)
-         local ok, errs = is_a(t1r, t2r, for_equality)
-         if errs and #errs == 1 then
-            if errs[1].msg:match("^got ") then
-
-
-               errs = { Err(t1, "got %s, expected %s", t1, t2) }
-            end
-         end
+      local ok, errs = subtype_record(a, b)
+      if not ok then
          return ok, errs
-      elseif t1.typename == "emptytable" and is_lua_table_type(t2) then
-         return true
-      elseif t2.typename == "array" then
-         if is_array_type(t1) then
-            if is_a(t1.elements, t2.elements) then
-               local t1e = resolve_tuple_and_nominal(t1.elements)
-               local t2e = resolve_tuple_and_nominal(t2.elements)
-               if t2e.typename == "enum" and t1e.typename == "string" and #t1.types > 1 then
-                  for i = 2, #t1.types do
-                     local t = t1.types[i]
-                     if not is_a(t, t2e) then
-                        return false, { Err(t, "%s is not a member of %s", t, t2e) }
-                     end
-                  end
-               end
-               return true
-            end
-         elseif t1.typename == "tupletable" then
-            if t2.inferred_len and t2.inferred_len > #t1.types then
-               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len)) }
-            end
-            local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
-            if not t1a then
-               return false, err
-            end
-            if not is_a(t1a, t2) then
-               return false, { Err(t2, "got %s (from %s), expected %s", t1a, t1, t2) }
-            end
-            return true
-         elseif t1.typename == "map" then
-            local _, errs_keys, errs_values
-            _, errs_keys = is_a(t1.keys, INTEGER)
-            _, errs_values = is_a(t1.values, t2.elements)
-            return combine_map_errs(errs_keys, errs_values)
-         end
-      elseif t2.typename == "record" then
+      end
+      ok, errs = subtype_record(b, a)
+      if not ok then
+         return ok, errs
+      end
+      return true
+   end
+
+   local function compare_map(ak, bk, av, bv, no_hack)
+      local ok1, errs_k = same_type(ak, bk)
+      local ok2, errs_v = same_type(av, bv)
 
 
-         if t1.typename == "tupletable" and t2.elements then
-            if t2.inferred_len and t2.inferred_len > #t1.types then
-               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t1.types) .. ", got " .. tostring(t2.inferred_len)) }
-            end
-            local t1a, err = arraytype_from_tuple(t1.inferred_at, t1)
-            if not t1a then
-               return false, err
-            end
-            if not is_a(t1a, t2) then
-               return false, { Err(t2, "got %s (from %s), expected %s", t1a, t1, t2) }
-            end
-            return true
-         end
-         if t1.elements and t2.elements then
-            if not is_a(t1.elements, t2.elements) then
-               return false, { Err(t1, "array parts have incompatible element types") }
-            end
-            if t1.typename == "array" then
-               return true
-            end
-         end
+      if bk.typename == "any" and not no_hack then
+         ok1, errs_k = true, nil
+      end
+      if bv.typename == "any" and not no_hack then
+         ok2, errs_v = true, nil
+      end
 
-         if is_record_type(t1) then
-            return match_fields_to_record(t1, t2, false)
-         elseif is_typetype(t1) and is_record_type(t1.def) then
-            return is_a(t1.def, t2, for_equality)
-         end
-      elseif t2.typename == "map" then
-         if t1.typename == "map" then
-            local _, errs_keys, errs_values
-            if t2.keys.typename ~= "any" then
-               _, errs_keys = same_type(t2.keys, t1.keys)
-            end
-            if t2.values.typename ~= "any" then
-               _, errs_values = same_type(t1.values, t2.values)
-            end
-            return combine_map_errs(errs_keys, errs_values)
-         elseif t1.typename == "array" or t1.typename == "tupletable" then
-            local elements
-            if t1.typename == "tupletable" then
-               local arr_type = arraytype_from_tuple(t1.inferred_at, t1)
-               if not arr_type then
-                  return false, { Err(t1, "Unable to convert tuple %s to map", t1) }
-               end
-               elements = arr_type.elements
-            else
-               elements = t1.elements
-            end
-            local _, errs_keys, errs_values
-            _, errs_keys = is_a(INTEGER, t2.keys)
-            _, errs_values = is_a(elements, t2.values)
-            return combine_map_errs(errs_keys, errs_values)
-         elseif is_record_type(t1) then
-            if not is_a(t2.keys, STRING) then
-               return false, { Err(t1, "can't match a record to a map with non-string keys") }
-            end
-            if t2.keys.typename == "enum" then
-               for _, k in ipairs(t1.field_order) do
-                  if not t2.keys.enumset[k] then
-                     return false, { Err(t1, "key is not an enum value: " .. k) }
-                  end
-               end
-            end
-            return match_fields_to_map(t1, t2)
-         end
-      elseif t2.typename == "tupletable" then
-         if t1.typename == "tupletable" then
-            for i = 1, math.min(#t1.types, #t2.types) do
-               if not is_a(t1.types[i], t2.types[i], for_equality) then
-                  return false, { Err(t1, "in tuple entry " .. tostring(i) .. ": got %s, expected %s", t1.types[i], t2.types[i]) }
-               end
-            end
-            if for_equality and #t1.types ~= #t2.types then
-               return false, { Err(t1, "tuples are not the same size") }
-            end
-            if #t1.types > #t2.types then
-               return false, { Err(t1, "tuple %s is too big for tuple %s", t1, t2) }
-            end
-            return true
-         elseif is_array_type(t1) then
-            if t1.inferred_len and t1.inferred_len > #t2.types then
-               return false, { Err(t1, "incompatible length, expected maximum length of " .. tostring(#t2.types) .. ", got " .. tostring(t1.inferred_len)) }
-            end
-
-
-
-            local len = (t1.inferred_len and t1.inferred_len > 0) and
-            t1.inferred_len or
-            #t2.types
-
-            for i = 1, len do
-               if not is_a(t1.elements, t2.types[i], for_equality) then
-                  return false, { Err(t1, "tuple entry " .. tostring(i) .. " of type %s does not match type of array elements, which is %s", t2.types[i], t1.elements) }
-               end
-            end
-            return true
-         end
-      elseif t1.typename == "function" and t2.typename == "function" then
-         local all_errs = {}
-         if (not t2.args.is_va) and #t1.args > #t2.args then
-            table.insert(all_errs, Err(t1, "incompatible number of arguments: got " .. #t1.args .. " %s, expected " .. #t2.args .. " %s", t1.args, t2.args))
-         else
-            for i = ((t1.is_method or t2.is_method) and 2 or 1), #t1.args do
-               arg_check(nil, is_a, t1.args[i], t2.args[i] or ANY, i, all_errs, "argument")
-            end
-         end
-         local diff_by_va = #t2.rets - #t1.rets == 1 and t2.rets.is_va
-         if #t1.rets < #t2.rets and not diff_by_va then
-            table.insert(all_errs, Err(t1, "incompatible number of returns: got " .. #t1.rets .. " %s, expected " .. #t2.rets .. " %s", t1.rets, t2.rets))
-         else
-            local nrets = #t2.rets
-            if diff_by_va then
-               nrets = nrets - 1
-            end
-            for i = 1, nrets do
-               local _, errs = is_a(t1.rets[i], t2.rets[i])
-               add_errs_prefixing(nil, errs, all_errs, "return " .. i .. ": ")
-            end
-         end
-         if #all_errs == 0 then
-            return true
-         else
-            return false, all_errs
-         end
-      elseif lax and ((not for_equality) and t2.typename == "boolean") then
-
-         return true
-      elseif t1.typename == t2.typename then
+      if ok1 and ok2 then
          return true
       end
 
-      return false, { Err(t1, "got %s, expected %s", t1, t2) }
+
+      for i = 1, errs_k and #errs_k or 0 do
+         errs_k[i].msg = "in map key: " .. errs_k[i].msg
+      end
+      for i = 1, errs_v and #errs_v or 0 do
+         errs_v[i].msg = "in map value: " .. errs_v[i].msg
+      end
+      if errs_k and errs_v then
+         for i = 1, #errs_v do
+            table.insert(errs_k, errs_v[i])
+         end
+         return false, errs_k
+      end
+      return false, errs_k or errs_v
+   end
+
+   local function compare_or_infer_typevar(typevar, a, b, cmp)
+
+
+
+      local vt = find_var_type(typevar)
+      if vt then
+
+         return cmp(a or vt, b or vt)
+      else
+
+         local ok, r, errs = resolve_typevars(a or b)
+         if not ok then
+            return false, errs
+         end
+         if r.typevar == typevar then
+            return true
+         end
+         add_var(nil, typevar, r)
+         return true
+      end
+   end
+
+
+   local function exists_supertype_in(t, xs)
+      for _, x in ipairs(xs.types) do
+         if is_a(t, x) then
+            return x
+         end
+      end
+   end
+
+
+   local emptytable_relations = {
+      ["array"] = compare_true,
+      ["map"] = compare_true,
+      ["tupletable"] = compare_true,
+      ["interface"] = function(_a, b)
+         return not b.is_userdata
+      end,
+      ["record"] = function(_a, b)
+         return not b.is_userdata
+      end,
+   }
+
+
+
+   local eqtype_relations
+   eqtype_relations = {
+      ["bad_nominal"] = {
+         ["*"] = compare_false,
+      },
+      ["typevar"] = {
+         ["typevar"] = function(a, b)
+            if a.typevar == b.typevar then
+               return true
+            end
+
+            return compare_or_infer_typevar(b.typevar, a, nil, same_type)
+         end,
+         ["*"] = function(a, b)
+            return compare_or_infer_typevar(a.typevar, nil, b, same_type)
+         end,
+      },
+      ["emptytable"] = emptytable_relations,
+      ["tupletable"] = {
+         ["tupletable"] = function(a, b)
+            for i = 1, math.min(#a.types, #b.types) do
+               if not same_type(a.types[i], b.types[i]) then
+                  return false, { Err(a, "in tuple entry " .. tostring(i) .. ": got %s, expected %s", a.types[i], b.types[i]) }
+               end
+            end
+            if #a.types ~= #b.types then
+               return false, { Err(a, "tuples have different size", a, b) }
+            end
+            return true
+         end,
+      },
+      ["array"] = {
+         ["array"] = function(a, b)
+            return same_type(a.elements, b.elements)
+         end,
+      },
+      ["map"] = {
+         ["map"] = function(a, b)
+            return compare_map(a.keys, b.keys, a.values, b.values, true)
+         end,
+      },
+      ["union"] = {
+         ["union"] = function(a, b)
+            return (has_all_types_of(a.types, b.types) and
+            has_all_types_of(b.types, a.types))
+         end,
+      },
+      ["nominal"] = {
+         ["nominal"] = are_same_nominals,
+      },
+      ["record"] = {
+         ["record"] = eqtype_record,
+      },
+      ["function"] = {
+         ["function"] = function(a, b)
+            local argdelta = a.is_method and 1 or 0
+            if #a.args ~= #b.args then
+               if a.is_method ~= b.is_method then
+                  return false, { Err(a, "different number of input arguments: method and non-method are not the same type") }
+               end
+               return false, { Err(a, "different number of input arguments: got " .. #a.args - argdelta .. ", expected " .. #b.args - argdelta) }
+            end
+            if #a.rets ~= #b.rets then
+               return false, { Err(a, "different number of return values: got " .. #a.rets .. ", expected " .. #b.rets) }
+            end
+            local errs = {}
+            for i = 1, #a.args do
+               arg_check(a, same_type, a.args[i], b.args[i], i - argdelta, errs, "argument")
+            end
+            for i = 1, #a.rets do
+               arg_check(a, same_type, a.rets[i], b.rets[i], i, errs, "return")
+            end
+            return any_errors(errs)
+         end,
+      },
+      ["*"] = {
+         ["bad_nominal"] = compare_false,
+         ["typevar"] = function(a, b)
+            return compare_or_infer_typevar(b.typevar, a, nil, same_type)
+         end,
+      },
+   }
+
+   local subtype_relations
+   subtype_relations = {
+      ["bad_nominal"] = {
+         ["*"] = compare_false,
+      },
+      ["tuple"] = {
+         ["tuple"] = function(a, b)
+            if #a ~= #b then
+               return false
+            end
+            for i = 1, #a do
+               if not is_a(a[i], b[i]) then
+                  return false
+               end
+            end
+            return true
+         end,
+         ["*"] = function(a, b)
+            return is_a(resolve_tuple(a), b)
+         end,
+      },
+      ["typevar"] = {
+         ["typevar"] = function(a, b)
+            if a.typevar == b.typevar then
+               return true
+            end
+
+            return compare_or_infer_typevar(b.typevar, a, nil, is_a)
+         end,
+         ["*"] = function(a, b)
+            return compare_or_infer_typevar(a.typevar, nil, b, is_a)
+         end,
+      },
+      ["nil"] = {
+         ["*"] = compare_true,
+      },
+      ["union"] = {
+         ["union"] = function(a, b)
+            local used = {}
+            for _, t in ipairs(a.types) do
+               begin_scope()
+               local u = exists_supertype_in(t, b)
+               end_scope()
+               if not u then
+                  return false
+               end
+               if not used[u] then
+                  used[u] = t
+               end
+            end
+            for u, t in pairs(used) do
+               is_a(t, u)
+            end
+            return true
+         end,
+         ["*"] = function(a, b)
+            for _, t in ipairs(a.types) do
+               if not is_a(t, b) then
+                  return false
+               end
+            end
+            return true
+         end,
+      },
+      ["poly"] = {
+         ["*"] = function(a, b)
+            if exists_supertype_in(b, a) then
+               return true
+            end
+            return false, { Err(a, "cannot match against any alternatives of the polymorphic type") }
+         end,
+      },
+      ["nominal"] = {
+         ["nominal"] = function(a, b)
+            local ra = resolve_nominal(a)
+            local rb = resolve_nominal(b)
+
+            if ra.typename == "union" or rb.typename == "union" then
+               return is_a(ra, rb)
+            end
+
+            return are_same_nominals(a, b)
+         end,
+         ["*"] = subtype_nominal,
+      },
+      ["enum"] = {
+         ["string"] = compare_true,
+      },
+      ["string"] = {
+         ["enum"] = function(a, b)
+            if not a.tk then
+               return false, { Err(a, "string is not a %s", b) }
+            end
+
+            if b.enumset[unquote(a.tk)] then
+               return true
+            end
+
+            return false, { Err(a, "%s is not a member of %s", a, b) }
+         end,
+      },
+      ["integer"] = {
+         ["number"] = compare_true,
+      },
+      ["interface"] = {
+         ["array"] = subtype_array,
+         ["record"] = subtype_record,
+         ["tupletable"] = function(a, b)
+            return subtype_relations["record"]["tupletable"](a, b)
+         end,
+      },
+      ["emptytable"] = emptytable_relations,
+      ["tupletable"] = {
+         ["tupletable"] = function(a, b)
+            for i = 1, math.min(#a.types, #b.types) do
+               if not is_a(a.types[i], b.types[i]) then
+                  return false, { Err(a, "in tuple entry " ..
+tostring(i) .. ": got %s, expected %s",
+a.types[i], b.types[i]), }
+               end
+            end
+            if #a.types > #b.types then
+               return false, { Err(a, "tuple %s is too big for tuple %s", a, b) }
+            end
+            return true
+         end,
+         ["record"] = function(a, b)
+            if b.elements then
+               return subtype_relations["tupletable"]["array"](a, b)
+            end
+         end,
+         ["array"] = function(a, b)
+            if b.inferred_len and b.inferred_len > #a.types then
+               return false, { Err(a, "incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
+            end
+            local aa, err = arraytype_from_tuple(a.inferred_at, a)
+            if not aa then
+               return false, err
+            end
+            if not is_a(aa, b) then
+               return false, { Err(a, "got %s (from %s), expected %s", aa, a, b) }
+            end
+            return true
+         end,
+         ["map"] = function(a, b)
+            local aa = arraytype_from_tuple(a.inferred_at, a)
+            if not aa then
+               return false, { Err(a, "Unable to convert tuple %s to map", a) }
+            end
+
+            return compare_map(INTEGER, b.keys, aa.elements, b.values)
+         end,
+      },
+      ["record"] = {
+         ["record"] = subtype_record,
+         ["array"] = subtype_array,
+         ["map"] = function(a, b)
+            if not is_a(b.keys, STRING) then
+               return false, { Err(a, "can't match a record to a map with non-string keys") }
+            end
+
+            for _, k in ipairs(a.field_order) do
+               if b.keys.typename == "enum" and not b.keys.enumset[k] then
+                  return false, { Err(a, "key is not an enum value: " .. k) }
+               end
+               if not is_a(a.fields[k], b.values) then
+                  return false, { Err(a, "record is not a valid map; not all fields have the same type") }
+               end
+            end
+
+            return true
+         end,
+         ["tupletable"] = function(a, b)
+            if a.elements then
+               return subtype_relations["array"]["tupletable"](a, b)
+            end
+         end,
+      },
+      ["array"] = {
+         ["array"] = subtype_array,
+         ["record"] = function(a, b)
+            if b.elements then
+               return subtype_array(a, b)
+            end
+         end,
+         ["map"] = function(a, b)
+            return compare_map(INTEGER, b.keys, a.elements, b.values)
+         end,
+         ["tupletable"] = function(a, b)
+            local alen = a.inferred_len or 0
+            if alen > #b.types then
+               return false, { Err(a, "incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
+            end
+
+
+
+            for i = 1, (alen > 0) and alen or #b.types do
+               if not is_a(a.elements, b.types[i]) then
+                  return false, { Err(a, "tuple entry " .. i .. " of type %s does not match type of array elements, which is %s", b.types[i], a.elements) }
+               end
+            end
+            return true
+         end,
+      },
+      ["map"] = {
+         ["map"] = function(a, b)
+            return compare_map(a.keys, b.keys, a.values, b.values)
+         end,
+         ["array"] = function(a, b)
+            return compare_map(a.keys, INTEGER, a.values, b.elements)
+         end,
+      },
+      ["typetype"] = {
+         ["record"] = function(a, b)
+            return subtype_record(a.def, b)
+         end,
+      },
+      ["function"] = {
+         ["function"] = function(a, b)
+            local errs = {}
+
+            local aa, ba = a.args, b.args
+            set_min_arity(a)
+            set_min_arity(b)
+            if (not ba.is_va) and a.min_arity > b.min_arity then
+               table.insert(errs, Err(a, "incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", aa, ba))
+            else
+               for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
+                  arg_check(nil, is_a, aa[i], ba[i] or ANY, i, errs, "argument")
+               end
+            end
+
+            local ar, br = a.rets, b.rets
+            local diff_by_va = #br - #ar == 1 and br.is_va
+            if #ar < #br and not diff_by_va then
+               table.insert(errs, Err(a, "incompatible number of returns: got " .. #ar .. " %s, expected " .. #br .. " %s", ar, br))
+            else
+               local nrets = #br
+               if diff_by_va then
+                  nrets = nrets - 1
+               end
+               for i = 1, nrets do
+                  arg_check(nil, is_a, ar[i], br[i], i, errs, "return")
+               end
+            end
+
+            return any_errors(errs)
+         end,
+      },
+      ["*"] = {
+         ["bad_nominal"] = compare_false,
+         ["any"] = compare_true,
+         ["tuple"] = function(a, b)
+            return is_a(TUPLE({ a }), b)
+         end,
+         ["typevar"] = function(a, b)
+            return compare_or_infer_typevar(b.typevar, a, nil, is_a)
+         end,
+         ["union"] = exists_supertype_in,
+
+
+         ["nominal"] = subtype_nominal,
+         ["poly"] = function(a, b)
+            for _, t in ipairs(b.types) do
+               if not is_a(a, t) then
+                  return false, { Err(a, "cannot match against all alternatives of the polymorphic type") }
+               end
+            end
+            return true
+         end,
+      },
+   }
+
+
+   local type_priorities = {
+
+      ["bad_nominal"] = 1,
+      ["tuple"] = 2,
+      ["typevar"] = 3,
+      ["nil"] = 4,
+      ["any"] = 5,
+      ["union"] = 6,
+      ["poly"] = 7,
+      ["nominal"] = 8,
+
+      ["enum"] = 9,
+      ["string"] = 9,
+      ["integer"] = 9,
+      ["boolean"] = 9,
+
+      ["interface"] = 10,
+
+      ["emptytable"] = 11,
+      ["tupletable"] = 12,
+
+      ["record"] = 13,
+      ["array"] = 13,
+      ["map"] = 13,
+      ["function"] = 13,
+   }
+
+   if lax then
+      type_priorities["unknown"] = 0
+
+      subtype_relations["unknown"] = {}
+      subtype_relations["unknown"]["*"] = compare_true
+      subtype_relations["*"]["unknown"] = compare_true
+
+      subtype_relations["boolean"] = {}
+      subtype_relations["boolean"]["boolean"] = compare_true
+      subtype_relations["*"]["boolean"] = compare_true
+   end
+
+   local function compare_types(relations, t1, t2)
+      if t1.typeid == t2.typeid then
+         return true
+      end
+
+      local s1 = relations[t1.typename]
+      local fn = s1 and s1[t2.typename]
+      if not fn then
+         local p1 = type_priorities[t1.typename] or 999
+         local p2 = type_priorities[t2.typename] or 999
+         fn = (p1 < p2 and (s1 and s1["*"]) or (relations["*"][t2.typename]))
+      end
+
+      local ok, err
+      if fn then
+         if fn == compare_true then
+            return true
+         end
+         ok, err = fn(t1, t2)
+      else
+         ok = t1.typename == t2.typename
+      end
+      if (not ok) and not err then
+         return false, { Err(t1, "got %s, expected %s", t1, t2) }
+      end
+      return ok, err
+   end
+
+
+   is_a = function(t1, t2)
+      return compare_types(subtype_relations, t1, t2)
+   end
+
+
+   same_type = function(t1, t2)
+
+
+      return compare_types(eqtype_relations, t1, t2)
+   end
+
+   if TL_DEBUG then
+      local orig_is_a = is_a
+      is_a = function(t1, t2)
+         assert(type(t1) == "table")
+         assert(type(t2) == "table")
+
+         if t1.typeid == t2.typeid then
+            local st1, st2 = show_type_base(t1, false, {}), show_type_base(t2, false, {})
+            assert(st1 == st2, st1 .. " ~= " .. st2)
+            return true
+         end
+
+         return orig_is_a(t1, t2)
+      end
    end
 
    local function assert_is_a(where, t1, t2, context, name)
@@ -8836,6 +8910,27 @@ tl.type_check = function(ast, opts)
       end
    end
 
+   local function typetype_to_nominal(where, name, t, resolved)
+      assert(t.typename == "typetype")
+
+      local typevals
+      if t.def.typeargs then
+         typevals = {}
+         for _, a in ipairs(t.def.typeargs) do
+            table.insert(typevals, a_type({ typename = "typevar", typevar = a.typearg }))
+         end
+      end
+      return a_type({
+         y = where.y,
+         x = where.x,
+         typename = "nominal",
+         typevals = typevals,
+         names = { name },
+         found = t,
+         resolved = resolved,
+      })
+   end
+
    local function get_self_type(exp)
 
       if exp.kind == "type_identifier" then
@@ -8845,21 +8940,7 @@ tl.type_check = function(ast, opts)
          end
 
          if t.typename == "typetype" then
-            local typevals
-            if t.def.typeargs then
-               typevals = {}
-               for _, a in ipairs(t.def.typeargs) do
-                  table.insert(typevals, a_type({ typename = "typevar", typevar = a.typearg }))
-               end
-            end
-            return a_type({
-               y = exp.y,
-               x = exp.x,
-               typename = "nominal",
-               typevals = typevals,
-               names = { exp.tk },
-               found = t,
-            })
+            return typetype_to_nominal(exp, exp.tk, t)
          else
             return t
          end
@@ -10256,6 +10337,7 @@ tl.type_check = function(ast, opts)
                if final_tuple.is_va then
                   tuple.is_va = true
                end
+               tuple[n] = nil
                for i, c in ipairs(final_tuple) do
                   tuple[n + i - 1] = c
                end
@@ -10919,11 +11001,17 @@ tl.type_check = function(ast, opts)
 
 
 
-               if is_a(b, a, true) or a.typename == "typevar" then
+               if ra.typename == "enum" and rb.typename == "string" then
+                  if not (rb.tk and ra.enumset[unquote(rb.tk)]) then
+                     return invalid_at(node, "%s is not a member of %s", b, a)
+                  end
+               elseif ra.typename == "tupletable" and rb.typename == "tupletable" and #ra.types ~= #rb.types then
+                  return invalid_at(node, "tuples are not the same size")
+               elseif is_a(b, a) or a.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
                      node.known = EqFact({ var = node.e1.tk, typ = b, where = node })
                   end
-               elseif is_a(a, b, true) or b.typename == "typevar" then
+               elseif is_a(a, b) or b.typename == "typevar" then
                   if node.op.op == "==" and node.e2.kind == "variable" then
                      node.known = EqFact({ var = node.e2.tk, typ = a, where = node })
                   end
@@ -11085,14 +11173,7 @@ tl.type_check = function(ast, opts)
             end
 
             if is_typetype(t) then
-               t = a_type({
-                  y = node.y,
-                  x = node.x,
-                  typename = "nominal",
-                  names = { node.tk },
-                  found = t,
-                  resolved = t,
-               })
+               t = typetype_to_nominal(node, node.tk, t, t)
             end
 
             return t
