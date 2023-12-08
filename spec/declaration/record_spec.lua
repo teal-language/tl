@@ -805,15 +805,15 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]], {
          { y = 5, msg = "in local declaration: foo: got {}, expected Foo" },
          select(i,
-            { y = 6, msg = "in assignment: userdata "..statement.." doesn't match: Foo" },
-            { y = 6, msg = "in assignment: userdata "..statement.." doesn't match: Foo" },
+            { y = 6, msg = "in assignment: record is not a userdata" },
+            { y = 6, msg = "in assignment: record is not a userdata" },
             { y = 6, msg = "in assignment: got record (a: integer), expected Foo" },
             { y = 6, msg = "in assignment: got record (a: integer), expected Foo" }
          ),
          { y = 8, msg = "argument 1: got {}, expected Foo" },
          select(i,
-            { y = 9, msg = "argument 1: userdata "..statement.." doesn't match: Foo" },
-            { y = 9, msg = "argument 1: userdata "..statement.." doesn't match: Foo" },
+            { y = 9, msg = "argument 1: record is not a userdata" },
+            { y = 9, msg = "argument 1: record is not a userdata" },
             { y = 9, msg = "argument 1: got record (a: integer), expected Foo" },
             { y = 9, msg = "argument 1: got record (a: integer), expected Foo" }
          ),
