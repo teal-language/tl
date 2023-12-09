@@ -1027,7 +1027,6 @@ end
 
 
 
-
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1037,7 +1036,6 @@ local table_types = {
    ["tupletable"] = true,
 
    ["typetype"] = false,
-   ["nestedtype"] = false,
    ["typevar"] = false,
    ["typearg"] = false,
    ["function"] = false,
@@ -1459,7 +1457,7 @@ local function is_number_type(t)
 end
 
 local function is_typetype(t)
-   return t.typename == "typetype" or t.typename == "nestedtype"
+   return t.typename == "typetype"
 end
 
 
@@ -4669,7 +4667,6 @@ local typename_to_typecode = {
    ["table_item"] = tl.typecodes.UNKNOWN,
    ["unresolved"] = tl.typecodes.UNKNOWN,
    ["typetype"] = tl.typecodes.UNKNOWN,
-   ["nestedtype"] = tl.typecodes.UNKNOWN,
    ["*"] = tl.typecodes.UNKNOWN,
 }
 
@@ -4679,7 +4676,6 @@ local skip_types = {
    ["table_item"] = true,
    ["unresolved"] = true,
    ["typetype"] = true,
-   ["nestedtype"] = true,
 }
 
 local get_typenum
@@ -11316,7 +11312,6 @@ a.types[i], b.types[i]), }
 
                for name, typ2 in fields_of(typ) do
                   if typ2.typename == "typetype" then
-                     typ2.typename = "nestedtype"
                      local resolved, is_alias = resolve_nominal_typetype(typ2)
                      if is_alias then
                         typ2.is_alias = true
@@ -11341,9 +11336,6 @@ a.types[i], b.types[i]), }
                end
                for name, _ in fields_of(typ) do
                   local ftype = children[i]
-                  if ftype.typename == "nestedtype" then
-                     ftype.typename = "typetype"
-                  end
 
                   if ftype.is_method and ftype.args and ftype.args[1] and ftype.args[1].is_self then
                      local record_name = typ.names and typ.names[1]
@@ -11369,9 +11361,6 @@ a.types[i], b.types[i]), }
                end
                for name, _ in fields_of(typ, "meta") do
                   local ftype = children[i]
-                  if ftype.typename == "nestedtype" then
-                     ftype.typename = "typetype"
-                  end
                   typ.meta_fields[name] = ftype
                   i = i + 1
                end
@@ -11488,7 +11477,6 @@ a.types[i], b.types[i]), }
 
    visit_type.cbs["tupletable"] = visit_type.cbs["string"]
    visit_type.cbs["typetype"] = visit_type.cbs["string"]
-   visit_type.cbs["nestedtype"] = visit_type.cbs["string"]
    visit_type.cbs["array"] = visit_type.cbs["string"]
    visit_type.cbs["map"] = visit_type.cbs["string"]
    visit_type.cbs["interface"] = visit_type.cbs["record"]
