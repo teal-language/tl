@@ -8949,9 +8949,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                new.tk = nil
                table.insert(old.types, new)
             else
-               old.tk = nil
-               new.tk = nil
-               return unite({ old, new })
+               return unite({ old, new }, true)
             end
          end
       end
