@@ -8869,9 +8869,7 @@ a.types[i], b.types[i]), }
                new.tk = nil
                table.insert(old.types, new)
             else
-               old.tk = nil
-               new.tk = nil
-               return unite({ old, new })
+               return unite({ old, new }, true)
             end
          end
       end
