@@ -32,7 +32,10 @@ describe("assignment", function()
                err = { { y = 6, msg = "cannot reassign a type" } }
             elseif scope:match("to inner def") then -- 3
                if outer == "interface" and scope:match("with outer def") then
-                  err = { { y = 6, msg = "interfaces are abstract; consider using a concrete record" } }
+                  err = {
+                     { y = 6, msg = "interfaces are abstract; consider using a concrete record" },
+                     { y = 6, msg = "cannot reassign a type" },
+                  }
                else
                   err = { { y = 6, msg = "cannot reassign a type" } }
                end
