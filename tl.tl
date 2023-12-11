@@ -1093,6 +1093,7 @@ local record Type
    def: Type
    is_alias: boolean
    closed: boolean
+   is_abstract: boolean
 
    -- map
    keys: Type
@@ -1559,6 +1560,25 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    })
 end
 
+local function new_typetype(ps: ParseState, i: integer, def: Type): Type
+   local t = new_type(ps, i, "typetype")
+   t.def = def
+   if def.typename == "interface" then
+      -- ...or should this be set on traversal, to account for nominal type aliases?
+      t.is_abstract = true
+   end
+   return t
+end
+
+local macroexp a_typetype(t: Type): Type
+-- FIXME set is_abstract here once standard_library defines interfaces
+--   if t.def.typename == "interface" then
+--      t.is_abstract = true
+--   end
+--   return t
+   return a_type("typetype", t)
+end
+
 local macroexp a_tuple(t: {Type}): Type
    return a_type("tuple", t)
 end
@@ -1577,10 +1597,6 @@ end
 
 local macroexp a_function(t: Type): Type
    return a_type("function", t)
-end
-
-local macroexp a_typetype(t: Type): Type
-   return a_type("typetype", t)
 end
 
 local function a_vararg(t: {Type}): Type
@@ -2874,12 +2890,11 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
    end
 
    local nt: Node = new_node(ps.tokens, i - 2, "newtype")
-   nt.newtype = new_type(ps, i, "typetype")
-   local rdef = new_type(ps, i, typename)
-   local iok = parse_body(ps, i, rdef, nt)
+   local ndef = new_type(ps, i, typename)
+   local iok = parse_body(ps, i, ndef, nt)
    if iok then
       i = iok
-      nt.newtype.def = rdef
+      nt.newtype = new_typetype(ps, i, ndef)
    end
 
    store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
@@ -3040,6 +3055,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
       typ.args = a_tuple { a_type("nominal", { y = typ.y, x = typ.x, names = { "@self" } }) }
       typ.rets = a_tuple { BOOLEAN }
       typ.macroexp = where_macroexp
+      typ.is_abstract = true
 
       store_field_in_record(ps, i, "__is", typ, def.meta_fields, def.meta_field_order)
    end
@@ -3123,6 +3139,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
                   fail(ps, i + 1, "macroexp must have a function type")
                end
                i, t.macroexp = parse_macroexp(ps, i + 1, i + 2)
+               t.is_abstract = true
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -3152,19 +3169,22 @@ parse_type_body_fns = {
 
 parse_newtype = function(ps: ParseState, i: integer): integer, Node
    local node: Node = new_node(ps.tokens, i, "newtype")
-   node.newtype = new_type(ps, i, "typetype")
+   local def: Type
    local tn = ps.tokens[i].tk as TypeName
+   local itype = i
    if parse_type_body_fns[tn] then
-      local def = new_type(ps, i, tn)
+      def = new_type(ps, i, tn)
       i = i + 1
       i = parse_type_body_fns[tn](ps, i, def, node)
-      node.newtype.def = def
-      return i, node
    else
-      i, node.newtype.def = parse_type(ps, i)
-      if not node.newtype.def then
+      i, def = parse_type(ps, i)
+      if not def then
          return i
       end
+   end
+
+   if def then
+      node.newtype = new_typetype(ps, itype, def)
       return i, node
    end
    return fail(ps, i, "expected a type")
@@ -3309,9 +3329,8 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    local asgn: Node = new_node(ps.tokens, i, node_name)
    local nt: Node = new_node(ps.tokens, i, "newtype")
    asgn.value = nt
-   nt.newtype = new_type(ps, i, "typetype")
+   local itype = i
    local def = new_type(ps, i, type_name)
-   nt.newtype.def = def
 
    i = i + 2 -- skip `local` or `global`, and the constructor name
 
@@ -3319,9 +3338,12 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    if not asgn.var then
       return fail(ps, i, "expected a type name")
    end
-   nt.newtype.def.names = { asgn.var.tk }
+   def.names = { asgn.var.tk }
 
    i = parse_body(ps, i, def, nt)
+
+   nt.newtype = new_typetype(ps, itype, def)
+
    return i, asgn
 end
 
@@ -6256,6 +6278,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
+    local function ensure_not_abstract(where: Where, t: Type)
+      if not t.is_abstract then
+         return
+      end
+
+      if t.macroexp then
+         error_at(where, "macroexps are abstract; consider using a concrete function")
+      else
+         error_at(where, "interfaces are abstract; consider using a concrete record")
+      end
+   end
+
    local function find_type(names: {string}, accept_typearg?: boolean): Type
       local typ = find_var_type(names[1], "use_type")
       if not typ then
@@ -6483,6 +6517,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          copy.opt = t.opt
          copy.is_userdata = t.is_userdata
+         copy.is_abstract = t.is_abstract
          copy.typename = t.typename
          copy.filename = t.filename
          copy.x = t.x
@@ -10261,10 +10296,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["variable_list"] = {
-         after = function(_node: Node, children: {Type}): Type
+         after = function(node: Node, children: {Type}): Type
             local tuple = a_tuple(children)
 
             tuple = flatten_tuple(tuple)
+
+            for i, t in ipairs(tuple) do
+               ensure_not_abstract(node[i], t)
+            end
 
             return tuple
          end,
@@ -10778,21 +10817,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return invalid_at(node, "cannot dereference a type from a circular require")
             end
 
-            if is_typetype(ra) then
-               if ra.def.typename == "record" then
-                  ra = ra.def
-               elseif ra.def.typename == "interface" then
-                  error_at(node.e1, "interfaces are abstract; consider using a concrete record")
-               end
-            end
-            if rb and is_typetype(rb) and rb.def.typename == "record" then
-               if rb.def.typename == "record" then
-                  rb = rb.def
-               elseif rb.def.typename == "interface" then
-                  error_at(node.e2, "interfaces are abstract; consider using a concrete record")
-               end
-            end
-
             if node.op.op == "@funcall" then
                if lax and is_unknown(a) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
@@ -10802,12 +10826,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return type_check_funcall(node, a, b)
             end
 
-            if ra.macroexp then
-               error_at(node.e1, "macroexps are abstract; consider using a concrete function")
+            ensure_not_abstract(node.e1, ra)
+            if ra.typename == "typetype" and ra.def.typename == "record" then
+               ra = ra.def
             end
-
-            if rb and rb.macroexp then
-               error_at(node.e2, "macroexps are abstract; consider using a concrete function")
+            if rb then
+               ensure_not_abstract(node.e2, rb)
+               if rb.typename == "typetype" and rb.def.typename == "record" then
+                  rb = rb.def
+               end
             end
 
             if node.op.op == "." then
