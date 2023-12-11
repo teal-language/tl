@@ -10742,14 +10742,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if ra.def.typename == "record" then
                   ra = ra.def
                elseif ra.def.typename == "interface" then
-                  error_at(node, "interfaces are abstract; consider using a concrete record")
+                  error_at(node.e1, "interfaces are abstract; consider using a concrete record")
                end
             end
             if rb and is_typetype(rb) and rb.def.typename == "record" then
                if rb.def.typename == "record" then
                   rb = rb.def
                elseif rb.def.typename == "interface" then
-                  error_at(node, "interfaces are abstract; consider using a concrete record")
+                  error_at(node.e2, "interfaces are abstract; consider using a concrete record")
                end
             end
 
