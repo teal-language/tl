@@ -858,3 +858,17 @@ describe("arrayrecord", function()
       print(a)
    ]], {}))
 end)
+
+describe("abstract check", function()
+   it("for nested interface", util.check_type_error([[
+      local record F1
+         interface F2
+            z: number
+         end
+      end
+
+      F1.F2.z = 9
+   ]], {
+      { y = 7, x = 9, msg = "interfaces are abstract", }
+   }))
+end)
