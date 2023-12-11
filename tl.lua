@@ -2942,6 +2942,7 @@ local function parse_macroexp(ps, i)
    i = i + 1
    i, node.args = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
+   i = verify_tk(ps, i, "return")
    i, node.exp = parse_expression(ps, i)
    end_at(node, ps.tokens[i])
    i = verify_end(ps, i, istart, node)

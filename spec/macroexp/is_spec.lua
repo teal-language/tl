@@ -4,13 +4,13 @@ describe("__is with macroexp", function()
    it("can expand a constant expression", util.gen([[
       local record R1
          metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
-            true
+            return true
          end
       end
 
       local record R2
          metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
-            false
+            return false
          end
       end
 
@@ -58,7 +58,7 @@ describe("__is with macroexp", function()
    it("can expand self in an expression", util.gen([[
       local record R1
          metamethod __is: function(self: R1|R2): boolean = macroexp(self: R1|R2): boolean
-            self.kind == "r1"
+            return self.kind == "r1"
          end
 
          kind: string
@@ -66,7 +66,7 @@ describe("__is with macroexp", function()
 
       local record R2
          metamethod __is: function(self: R1|R2): boolean = macroexp(self: R1|R2): boolean
-            self.kind == "r2"
+            return self.kind == "r2"
          end
 
          kind: string
