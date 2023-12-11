@@ -1212,6 +1212,7 @@ local enum NodeKind
    "..."
    "paren"
    "macroexp"
+   "local_macroexp"
    "interface"
    "error_node"
 end
@@ -1431,6 +1432,7 @@ local record Node
    is_lvalue: boolean
 
    -- macroexp
+   macrodef: Node
    expanded: Node
 
    decltype: Type
@@ -1558,23 +1560,27 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    })
 end
 
-local function a_tuple(t: {Type}): Type
+local macroexp a_tuple(t: {Type}): Type
    return a_type("tuple", t)
 end
 
-local function a_union(t: {Type}): Type
+local function c_tuple(t: {Type}): Type
+   return a_type("tuple", t)
+end
+
+local macroexp a_union(t: {Type}): Type
    return a_type("union", { types = t })
 end
 
-local function a_poly(t: {Type}): Type
+local macroexp a_poly(t: {Type}): Type
    return a_type("poly", { types = t })
 end
 
-local function a_function(t: Type): Type
+local macroexp a_function(t: Type): Type
    return a_type("function", t)
 end
 
-local function a_typetype(t: Type): Type
+local macroexp a_typetype(t: Type): Type
    return a_type("typetype", t)
 end
 
@@ -1584,17 +1590,12 @@ local function a_vararg(t: {Type}): Type
    return a_tuple(t)
 end
 
-local function an_array(t: Type): Type
-   return a_type("array", {
-      elements = t,
-   })
+local macroexp an_array(t: Type): Type
+   return a_type("array", { elements = t })
 end
 
-local function a_map(k: Type, v: Type): Type
-   return a_type("map", {
-      keys = k,
-      values = v,
-   })
+local macroexp a_map(k: Type, v: Type): Type
+   return a_type("map", { keys = k, values = v })
 end
 
 local NIL = a_type("nil", {})
@@ -2932,15 +2933,14 @@ local metamethod_names: {string:boolean} = {
    ["__is"] = true,
 }
 
-local function parse_macroexp(ps: ParseState, i: integer): integer, Node
-   local istart = i
+local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): integer, Node
 -- TODO: generic macroexp
 --   if ps.tokens[i].tk == "<" then
 --      i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
 --   end
    local node = new_node(ps.tokens, istart, "macroexp")
-   i = i + 1 -- skip 'macroexp'
-   i, node.args = parse_argument_list(ps, i)
+   local i: integer
+   i, node.args = parse_argument_list(ps, iargs)
    i, node.rets = parse_return_types(ps, i)
    i = verify_tk(ps, i, "return")
    i, node.exp = parse_expression(ps, i)
@@ -3124,7 +3124,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
                if t.typename ~= "function" then
                   fail(ps, i + 1, "macroexp must have a function type")
                end
-               i, t.macroexp = parse_macroexp(ps, i + 1)
+               i, t.macroexp = parse_macroexp(ps, i + 1, i + 2)
             end
 
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
@@ -3331,6 +3331,15 @@ local function skip_type_declaration(ps: ParseState, i: integer): integer, Node
    return parse_type_declaration(ps, i - 1, "local_type")
 end
 
+local function parse_local_macroexp(ps: ParseState, i: integer): integer, Node
+   local istart = i
+   i = i + 2 -- skip `local`
+   local node = new_node(ps.tokens, i, "local_macroexp")
+   i, node.name = parse_identifier(ps, i)
+   i, node.macrodef = parse_macroexp(ps, istart, i)
+   return i, node
+end
+
 local function parse_local(ps: ParseState, i: integer): integer, Node
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
@@ -3338,6 +3347,8 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
       return parse_local_function(ps, i)
    elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
       return parse_type_declaration(ps, i, "local_type")
+   elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
+      return parse_local_macroexp(ps, i)
    elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
       return parse_type_constructor(ps, i, "local_type", tn, parse_type_body_fns[tn])
    end
@@ -3879,6 +3890,14 @@ local function recurse_node<T>(root: Node,
          xs[4] = recurse_type(ast.rets, visit_type)
          extra_callback("before_statements", ast, xs, visit_node)
          xs[5] = recurse(ast.body)
+      end,
+      ["local_macroexp"] = function(ast: Node, xs: {T})
+         -- TODO: generic macroexp
+         xs[1] = recurse(ast.name)
+         xs[2] = recurse(ast.macrodef.args)
+         xs[3] = recurse_type(ast.macrodef.rets, visit_type)
+         extra_callback("before_exp", ast, xs, visit_node)
+         xs[4] = recurse(ast.macrodef.exp)
       end,
 
       ["forin"] = function(ast: Node, xs: {T})
@@ -4427,6 +4446,12 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             end
             add_child(out, children[2])
             return out
+         end,
+      },
+      ["local_macroexp"] = {
+         before = increment_indent,
+         after = function(node: Node, _children: {Output}): Output
+            return { y = node.y, h = 0 }
          end,
       },
       ["local_function"] = {
@@ -5578,7 +5603,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
 
    local file_reader_poly_types: {ArgsRets} = {
       { ctor = a_vararg, args = { a_union { NUMBER, an_enum { "*a", "a", "*l", "l", "*L", "L" } } }, rets = { STRING } },
-      { ctor = a_tuple, args = { an_enum { "*n", "n" } }, rets = { NUMBER, STRING } },
+      { ctor = c_tuple, args = { an_enum { "*n", "n" } }, rets = { NUMBER, STRING } },
       { ctor = a_vararg, args = { a_union { NUMBER, an_enum { "*a", "a", "*l", "l", "*L", "L", "*n", "n" } } }, rets = { a_union { STRING, NUMBER } } },
       { ctor = a_vararg, args = { a_union { NUMBER, STRING } }, rets = { STRING } },
       { ctor = a_vararg, args = { }, rets = { STRING } },
@@ -8541,7 +8566,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function add_function_definition_for_recursion(node: Node, fnargs: Type)
       assert(fnargs.typename == "tuple")
 
-      local args = a_tuple({})
+      local args = a_type("tuple", {})
       args.is_va = fnargs.is_va
       for _, fnarg in ipairs(fnargs) do
          table.insert(args, fnarg)
@@ -10470,6 +10495,34 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return t
          end,
       },
+      ["local_macroexp"] = {
+         before = function(node: Node)
+            widen_all_unions()
+            if symbol_list then
+               reserve_symbol_list_slot(node)
+            end
+            begin_scope(node)
+         end,
+         after = function(node: Node, children: {Type}): Type
+            end_function_scope(node)
+            local rets = get_rets(children[3])
+
+            check_macroexp_arg_use(node.macrodef)
+
+            local t = ensure_fresh_typeargs(a_function {
+               y = node.y,
+               x = node.x,
+               typeargs = node.typeargs,
+               args = children[2],
+               rets = rets,
+               filename = filename,
+               macroexp = node.macrodef,
+            })
+
+            add_var(node, node.name.tk, t)
+            return t
+         end,
+      },
       ["global_function"] = {
          before = function(node: Node)
             widen_all_unions()
@@ -10762,6 +10815,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
                return type_check_funcall(node, a, b)
+            end
+
+            if ra.macroexp then
+               error_at(node.e1, "macroexps are abstract; consider using a concrete function")
+            end
+
+            if rb and rb.macroexp then
+               error_at(node.e2, "macroexps are abstract; consider using a concrete function")
             end
 
             if node.op.op == "." then
