@@ -8036,10 +8036,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
+         out.yend = out.yend and (orignode.y + (out.yend - out.y)) or nil
+         out.xend = nil
          out.y = orignode.y
          out.x = orignode.x
-         out.yend = nil
-         out.xend = nil
          return { node, out }
       end
 
