@@ -4,7 +4,7 @@ describe("macroexp declaration", function()
    it("checks unused arguments", util.check_warnings([[
       local record R1
          metamethod __is: function(self: R1): boolean = macroexp(self: R1): boolean
-            true
+            return true
          end
       end
    ]], {
@@ -14,7 +14,7 @@ describe("macroexp declaration", function()
    it("checks argument mismatch", util.check_type_error([[
       local record R1
          metamethod __call: function(self: R1, n: number): boolean = macroexp(self: R1, s: string): boolean
-            self.field == s
+            return self.field == s
          end
          field: string
       end
@@ -29,10 +29,10 @@ describe("macroexp declaration", function()
 
       local record R1
          metamethod __call: function(self: R1, s: string): boolean = macroexp(self: R1, s: string): boolean
-            print(s, s)
+            return print(s, s)
          end
       end
    ]], {
-      { y = 7, x = 22, msg = "cannot use argument 's' multiple times in macroexp" }
+      { y = 7, x = 29, msg = "cannot use argument 's' multiple times in macroexp" }
    }))
 end)
