@@ -405,13 +405,13 @@ describe("flow analysis with is", function()
       it("produces no errors or warnings for checks on unions of records", util.check_warnings([[
          local record R1
             metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
-               true
+               return true
             end
          end
 
          local record R2
             metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
-               false
+               return false
             end
          end
 
