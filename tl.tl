@@ -1376,7 +1376,6 @@ local record Node
    body: Node
    implicit_global_function: boolean
    is_predeclared_local_function: boolean
-   rtype: Type
 
    name: Node
 
@@ -10568,12 +10567,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             widen_all_unions()
             begin_scope(node)
          end,
-         before_arguments = function(node: Node, children: {Type})
-            node.rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+         before_arguments = function(_node: Node, children: {Type})
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
             -- add type arguments from the record implicitly
-            if node.rtype.typeargs then
-               for _, typ in ipairs(node.rtype.typeargs) do
+            if rtype.typeargs then
+               for _, typ in ipairs(rtype.typeargs) do
                   add_var(nil, typ.typearg, a_type("typearg", {
                      y = typ.y,
                      x = typ.x,
@@ -10585,7 +10584,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          before_statements = function(node: Node, children: {Type})
             local args = children[3]
 
-            local rtype = node.rtype
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+
             if rtype.typename == "emptytable" then
                edit_type(rtype, "record")
                rtype.fields = {}

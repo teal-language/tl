@@ -1444,7 +1444,6 @@ local Node = {ExpectedContext = {}, }
 
 
 
-
 local function is_array_type(t)
 
    return t.typename == "array" or t.elements ~= nil
@@ -10568,12 +10567,12 @@ a.types[i], b.types[i]), }
             widen_all_unions()
             begin_scope(node)
          end,
-         before_arguments = function(node, children)
-            node.rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+         before_arguments = function(_node, children)
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
 
-            if node.rtype.typeargs then
-               for _, typ in ipairs(node.rtype.typeargs) do
+            if rtype.typeargs then
+               for _, typ in ipairs(rtype.typeargs) do
                   add_var(nil, typ.typearg, a_type("typearg", {
                      y = typ.y,
                      x = typ.x,
@@ -10585,7 +10584,8 @@ a.types[i], b.types[i]), }
          before_statements = function(node, children)
             local args = children[3]
 
-            local rtype = node.rtype
+            local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
+
             if rtype.typename == "emptytable" then
                edit_type(rtype, "record")
                rtype.fields = {}
