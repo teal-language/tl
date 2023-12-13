@@ -1606,17 +1606,16 @@ local THREAD = a_type("thread", {})
 local BOOLEAN = a_type("boolean", {})
 local INTEGER = a_type("integer", {})
 
-
-local function shallow_copy_type(t)
+local function shallow_copy_new_type(t)
    local copy = {}
    for k, v in pairs(t) do
       copy[k] = v
    end
+   copy.typeid = new_typeid()
    return copy
 end
 
-
-local function shallow_copy_node(t)
+local function shallow_copy_table(t)
    local copy = {}
    for k, v in pairs(t) do
       copy[k] = v
@@ -1905,7 +1904,7 @@ local function OPT(t)
       return memoize_opt_types[t]
    end
 
-   local ot = shallow_copy_type(t)
+   local ot = shallow_copy_new_type(t)
    ot.opt = true
    memoize_opt_types[t] = ot
    return ot
@@ -2577,7 +2576,7 @@ local function parse_argument_type(ps, i)
       end
 
       if argument_name == "self" then
-         typ = shallow_copy_type(typ)
+         typ = shallow_copy_new_type(typ)
          typ.is_self = true
       end
    end
@@ -5611,8 +5610,8 @@ local function init_globals(lax)
    local function a_file_reader(fn)
       local t = a_type("poly", { types = {} })
       for _, entry in ipairs(file_reader_poly_types) do
-         local args = shallow_copy_type(entry.args)
-         local rets = shallow_copy_type(entry.rets)
+         local args = shallow_copy_table(entry.args)
+         local rets = shallow_copy_table(entry.rets)
          table.insert(t.types, fn(entry.ctor, args, rets))
       end
       return t
@@ -6725,7 +6724,7 @@ tl.type_check = function(ast, opts)
       if ret.typename == "invalid" then
          ret = t
       end
-      ret = (ret ~= t) and ret or shallow_copy_type(t)
+      ret = (ret ~= t) and ret or shallow_copy_table(t)
       ret.inferred_at = where
       ret.inferred_at.filename = filename
       return ret
@@ -6735,7 +6734,7 @@ tl.type_check = function(ast, opts)
       if not t.tk then
          return t
       end
-      local ret = shallow_copy_type(t)
+      local ret = shallow_copy_table(t)
       ret.tk = nil
       return ret
    end
@@ -8020,7 +8019,7 @@ a.types[i], b.types[i]), }
       local on_node = function(node, children, ret)
          local orig = ret and ret[2] or node
 
-         local out = shallow_copy_node(orig)
+         local out = shallow_copy_table(orig)
 
          local map = {}
          for _, pair in pairs(children) do
@@ -9272,7 +9271,7 @@ a.types[i], b.types[i]), }
 
 
       local ftype = table.remove(b, 1)
-      ftype = shallow_copy_type(ftype)
+      ftype = shallow_copy_new_type(ftype)
       ftype.is_method = false
 
       local fe2 = {}
@@ -9715,8 +9714,7 @@ a.types[i], b.types[i]), }
             infertype = INVALID
          elseif infertype and infertype.is_method then
 
-            infertype = shallow_copy_type(infertype)
-            infertype.typeid = new_typeid()
+            infertype = shallow_copy_new_type(infertype)
             infertype.is_method = false
          end
       end
@@ -10452,8 +10450,7 @@ a.types[i], b.types[i]), }
             end
             if vtype.is_method then
 
-               vtype = shallow_copy_type(vtype)
-               vtype.typeid = new_typeid()
+               vtype = shallow_copy_new_type(vtype)
                vtype.is_method = false
             end
             return a_type("table_item", {

@@ -1606,22 +1606,21 @@ local THREAD = a_type("thread", {})
 local BOOLEAN = a_type("boolean", {})
 local INTEGER = a_type("integer", {})
 
--- Makes a shallow copy of the given type
-local function shallow_copy_type(t: Type): Type
+local function shallow_copy_new_type(t: Type): Type
    local copy: {any:any} = {}
    for k, v in pairs(t as {any:any}) do
       copy[k] = v
    end
+   copy.typeid = new_typeid()
    return copy as Type
 end
 
--- Makes a shallow copy of the given node
-local function shallow_copy_node(t: Node): Node
+local function shallow_copy_table<T>(t: T): T
    local copy: {any:any} = {}
    for k, v in pairs(t as {any:any}) do
       copy[k] = v
    end
-   return copy as Node
+   return copy as T
 end
 
 local function verify_kind(ps: ParseState, i: integer, kind: TokenKind, node_kind?: NodeKind): integer, Node
@@ -1905,7 +1904,7 @@ local function OPT(t: Type): Type
       return memoize_opt_types[t]
    end
 
-   local ot = shallow_copy_type(t)
+   local ot = shallow_copy_new_type(t)
    ot.opt = true
    memoize_opt_types[t] = ot
    return ot
@@ -2577,7 +2576,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, TypeAnd
       end
 
       if argument_name == "self" then
-         typ = shallow_copy_type(typ)
+         typ = shallow_copy_new_type(typ)
          typ.is_self = true
       end
    end
@@ -5611,8 +5610,8 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    local function a_file_reader(fn: (function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type)): Type
       local t = a_poly {}
       for _, entry in ipairs(file_reader_poly_types) do
-         local args = shallow_copy_type(entry.args as Type) as {Type}
-         local rets = shallow_copy_type(entry.rets as Type) as {Type}
+         local args = shallow_copy_table(entry.args)
+         local rets = shallow_copy_table(entry.rets)
          table.insert(t.types, fn(entry.ctor, args, rets))
       end
       return t
@@ -6725,7 +6724,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if ret.typename == "invalid" then
          ret = t -- errors are produced by resolve_typevars_at
       end
-      ret = (ret ~= t) and ret or shallow_copy_type(t)
+      ret = (ret ~= t) and ret or shallow_copy_table(t)
       ret.inferred_at = where
       ret.inferred_at.filename = filename
       return ret
@@ -6735,7 +6734,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if not t.tk then
          return t
       end
-      local ret = shallow_copy_type(t)
+      local ret = shallow_copy_table(t)
       ret.tk = nil
       return ret
    end
@@ -8020,7 +8019,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local on_node = function(node: Node, children: {{Node, Node}}, ret: {Node, Node}): {Node, Node}
          local orig = ret and ret[2] or node
 
-         local out = shallow_copy_node(orig)
+         local out = shallow_copy_table(orig)
 
          local map = {}
          for _, pair in pairs(children as {integer:{Node, Node}}) do
@@ -9272,7 +9271,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       -- The function called by pcall/xpcall is invoked as a regular function, so we wish to avoid incorrect error messages / unnecessary warning messages associated with calling methods as functions
       local ftype = table.remove(b, 1)
-      ftype = shallow_copy_type(ftype)
+      ftype = shallow_copy_new_type(ftype)
       ftype.is_method = false
 
       local fe2: Node = {}
@@ -9715,8 +9714,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             infertype = INVALID
          elseif infertype and infertype.is_method then
             -- If we assign a method to a variable, e.g local myfunc = myobj.dothing, the variable should not be treated as a method
-            infertype = shallow_copy_type(infertype)
-            infertype.typeid = new_typeid()
+            infertype = shallow_copy_new_type(infertype)
             infertype.is_method = false
          end
       end
@@ -10452,8 +10450,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
             if vtype.is_method then
                -- If we assign a method to a table item, e.g local a = { myfunc = myobj.dothing }, the table item should not be treated as a method
-               vtype = shallow_copy_type(vtype)
-               vtype.typeid = new_typeid()
+               vtype = shallow_copy_new_type(vtype)
                vtype.is_method = false
             end
             return a_type("table_item", {
