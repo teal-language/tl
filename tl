@@ -259,8 +259,7 @@ end
 -- Build system (deprecated, use Cyan)
 --------------------------------------------------------------------------------
 
--- local has_lfs, lfs = pcall(require, "lfs")
-local has_lfs = false
+local has_lfs, lfs = pcall(require, "lfs")
 
 local build
 if has_lfs then
