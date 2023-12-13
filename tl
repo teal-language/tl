@@ -259,9 +259,12 @@ end
 -- Build system (deprecated, use Cyan)
 --------------------------------------------------------------------------------
 
-local build = {}
-do
-   local lfs = require("lfs")
+-- local has_lfs, lfs = pcall(require, "lfs")
+local has_lfs = false
+
+local build
+if has_lfs then
+   build = {}
 
    local function str_split(str, delimiter)
       local idx = 0
@@ -874,7 +877,9 @@ local function get_args_parser()
               :argname("<modulename>")
               :count("*")
 
-   build.arg_parser(parser)
+   if build then
+      build.arg_parser(parser)
+   end
 
    parser:command("warnings", "List each kind of warning the compiler can produce.")
 
@@ -899,7 +904,9 @@ local function get_config(cmd)
    local conf, err = loadfile(config_path)
    if not conf then
       if err:match("No such file or directory$") then
-         build.tlconfig_not_found(cmd)
+         if build then
+            build.tlconfig_not_found(cmd)
+         end
       else
          die("Error loading tlconfig.lua:\n" .. err)
       end
@@ -920,7 +927,9 @@ local function get_config(cmd)
       end
    end
 
-   build.config_dir(cmd, config_path, config)
+   if build then
+      build.config_dir(cmd, config_path, config)
+   end
 
    local errs, warnings = validate_config(config)
 
@@ -984,7 +993,9 @@ local function merge_config_and_args(tlconfig, args)
       prepend_to_lua_paths(include)
    end
 
-   build.merge_config(tlconfig, args)
+   if build then
+      build.merge_config(tlconfig, args)
+   end
 end
 
 local function get_output_filename(file_name)
@@ -1378,8 +1389,9 @@ end
 --------------------------------------------------------------------------------
 -- tl build
 --------------------------------------------------------------------------------
-
-commands["build"] = build.run
+if build then
+   commands["build"] = build.run
+end
 
 --------------------------------------------------------------------------------
 -- Main program
@@ -1410,6 +1422,8 @@ if not args["quiet"] then
    end
 end
 
-build.run_build_script(tlconfig)
+if build then
+   build.run_build_script(tlconfig)
+end
 
 commands[cmd](tlconfig, args)
