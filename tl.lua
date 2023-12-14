@@ -3357,6 +3357,7 @@ local function parse_local_macroexp(ps, i)
    local node = new_node(ps.tokens, i, "local_macroexp")
    i, node.name = parse_identifier(ps, i)
    i, node.macrodef = parse_macroexp(ps, istart, i)
+   end_at(node, ps.tokens[i - 1])
    return i, node
 end
 
