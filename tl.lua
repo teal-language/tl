@@ -8612,54 +8612,53 @@ a.types[i], b.types[i]), }
       return t
    end
 
-   local function flatten_list(list)
-      local exps = {}
-      for i = 1, #list - 1 do
-         table.insert(exps, resolve_tuple_and_nominal(list[i]))
-      end
-      if #list > 0 then
-         local last = list[#list]
-         if last.typename == "tuple" then
-            for _, val in ipairs(last) do
-               table.insert(exps, val)
-            end
-         else
-            table.insert(exps, last)
-         end
-      end
-      return exps
-   end
+   local function flatten_tuple(vals)
+      local vt = vals
+      local n_vals = #vt
+      local ret = a_type("tuple", {})
+      local rt = ret
 
-   local function get_assignment_values(vals, wanted)
-      local ret = {}
-      if vals == nil then
+      if n_vals == 0 then
          return ret
       end
 
 
-      local is_va = vals.is_va
-      for i = 1, #vals - 1 do
-         ret[i] = resolve_tuple(vals[i])
+      for i = 1, n_vals - 1 do
+         rt[i] = resolve_tuple(vt[i])
       end
 
-      local last = vals[#vals]
-      if last then
-         if last.typename == "tuple" then
+      local last = vt[n_vals]
+      if last.typename == "tuple" then
 
-            is_va = last.is_va
-            for _, v in ipairs(last) do
-               table.insert(ret, v)
-            end
-         else
-
-            table.insert(ret, last)
+         local lt = last
+         for _, v in ipairs(lt) do
+            table.insert(rt, v)
          end
+         ret.is_va = last.is_va
+      else
+         rt[n_vals] = vt[n_vals]
+         ret.is_va = vals.is_va
       end
 
+      return ret
+   end
 
-      if is_va and last and #ret < wanted then
-         while #ret < wanted do
-            table.insert(ret, last)
+   local function get_assignment_values(vals, wanted)
+      if vals == nil then
+         return a_type("tuple", {})
+      end
+
+      local ret = flatten_tuple(vals)
+
+
+      if ret.is_va then
+         local n_ret = #ret
+         local rt = ret
+         if n_ret > 0 and n_ret < wanted then
+            local last = rt[n_ret]
+            for _ = n_ret + 1, wanted do
+               table.insert(rt, last)
+            end
          end
       end
       return ret
@@ -10012,7 +10011,6 @@ a.types[i], b.types[i]), }
          before_exp = set_expected_types_to_decltypes,
          after = function(node, children)
             local valtypes = get_assignment_values(children[3], #children[1])
-            valtypes = flatten_list(valtypes)
             for i, vartype in ipairs(children[1]) do
                local varnode = node.vars[i]
                local varname = varnode.tk
@@ -10266,18 +10264,7 @@ a.types[i], b.types[i]), }
          after = function(_node, children)
             local tuple = a_type("tuple", children)
 
-
-            local n = #tuple
-            if n > 0 and tuple[n].typename == "tuple" then
-               local final_tuple = tuple[n]
-               if final_tuple.is_va then
-                  tuple.is_va = true
-               end
-               tuple[n] = nil
-               for i, c in ipairs(final_tuple) do
-                  tuple[n + i - 1] = c
-               end
-            end
+            tuple = flatten_tuple(tuple)
 
             return tuple
          end,
