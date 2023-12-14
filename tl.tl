@@ -4669,46 +4669,47 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
    }
 
    local visit_type: Visitor<TypeName, Type, Output> = {}
-   visit_type.cbs = {
-      ["string"] = {
-         after = function(typ: Type, _children: {Output}): Output
-            local out: Output = { y = typ.y or -1, h = 0 }
-            local r = typ.resolved or typ
-            local lua_type = primitive[r.typename]
-                             or (r.is_userdata and "userdata")
-                             or "table"
-            table.insert(out, lua_type)
-            return out
-         end,
-      },
+   visit_type.cbs = {}
+   local default_type_visitor = {
+      after = function(typ: Type, _children: {Output}): Output
+         local out: Output = { y = typ.y or -1, h = 0 }
+         local r = typ.resolved or typ
+         local lua_type = primitive[r.typename]
+                          or (r.is_userdata and "userdata")
+                          or "table"
+         table.insert(out, lua_type)
+         return out
+      end,
    }
-   visit_type.cbs["typetype"] = visit_type.cbs["string"]
-   visit_type.cbs["typevar"] = visit_type.cbs["string"]
-   visit_type.cbs["typearg"] = visit_type.cbs["string"]
-   visit_type.cbs["function"] = visit_type.cbs["string"]
-   visit_type.cbs["thread"] = visit_type.cbs["string"]
-   visit_type.cbs["array"] = visit_type.cbs["string"]
-   visit_type.cbs["map"] = visit_type.cbs["string"]
-   visit_type.cbs["tupletable"] = visit_type.cbs["string"]
-   visit_type.cbs["record"] = visit_type.cbs["string"]
-   visit_type.cbs["enum"] = visit_type.cbs["string"]
-   visit_type.cbs["boolean"] = visit_type.cbs["string"]
-   visit_type.cbs["nil"] = visit_type.cbs["string"]
-   visit_type.cbs["number"] = visit_type.cbs["string"]
-   visit_type.cbs["integer"] = visit_type.cbs["string"]
-   visit_type.cbs["union"] = visit_type.cbs["string"]
-   visit_type.cbs["nominal"] = visit_type.cbs["string"]
-   visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
-   visit_type.cbs["emptytable"] = visit_type.cbs["string"]
-   visit_type.cbs["table_item"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
-   visit_type.cbs["tuple"] = visit_type.cbs["string"]
-   visit_type.cbs["poly"] = visit_type.cbs["string"]
-   visit_type.cbs["any"] = visit_type.cbs["string"]
-   visit_type.cbs["unknown"] = visit_type.cbs["string"]
-   visit_type.cbs["invalid"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved"] = visit_type.cbs["string"]
-   visit_type.cbs["none"] = visit_type.cbs["string"]
+
+   visit_type.cbs["string"] = default_type_visitor
+   visit_type.cbs["typetype"] = default_type_visitor
+   visit_type.cbs["typevar"] = default_type_visitor
+   visit_type.cbs["typearg"] = default_type_visitor
+   visit_type.cbs["function"] = default_type_visitor
+   visit_type.cbs["thread"] = default_type_visitor
+   visit_type.cbs["array"] = default_type_visitor
+   visit_type.cbs["map"] = default_type_visitor
+   visit_type.cbs["tupletable"] = default_type_visitor
+   visit_type.cbs["record"] = default_type_visitor
+   visit_type.cbs["enum"] = default_type_visitor
+   visit_type.cbs["boolean"] = default_type_visitor
+   visit_type.cbs["nil"] = default_type_visitor
+   visit_type.cbs["number"] = default_type_visitor
+   visit_type.cbs["integer"] = default_type_visitor
+   visit_type.cbs["union"] = default_type_visitor
+   visit_type.cbs["nominal"] = default_type_visitor
+   visit_type.cbs["bad_nominal"] = default_type_visitor
+   visit_type.cbs["emptytable"] = default_type_visitor
+   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
+   visit_type.cbs["tuple"] = default_type_visitor
+   visit_type.cbs["poly"] = default_type_visitor
+   visit_type.cbs["any"] = default_type_visitor
+   visit_type.cbs["unknown"] = default_type_visitor
+   visit_type.cbs["invalid"] = default_type_visitor
+   visit_type.cbs["unresolved"] = default_type_visitor
+   visit_type.cbs["none"] = default_type_visitor
 
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
@@ -11290,11 +11291,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local visit_type: Visitor<TypeName,Type,Type>
    visit_type = {
       cbs = {
-         ["string"] = {
-            after = function(typ: Type, _children: {Type}): Type
-               return typ
-            end,
-         },
          ["function"] = {
             before = function(_typ: Type)
                begin_scope()
@@ -11483,28 +11479,36 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       visit_node.after = debug_type_after(visit_node.after)
    end
 
-   visit_type.cbs["tupletable"] = visit_type.cbs["string"]
-   visit_type.cbs["typetype"] = visit_type.cbs["string"]
-   visit_type.cbs["array"] = visit_type.cbs["string"]
-   visit_type.cbs["map"] = visit_type.cbs["string"]
+   local default_type_visitor = {
+      after = function(typ: Type, _children: {Type}): Type
+         return typ
+      end,
+   }
+
    visit_type.cbs["interface"] = visit_type.cbs["record"]
-   visit_type.cbs["enum"] = visit_type.cbs["string"]
-   visit_type.cbs["boolean"] = visit_type.cbs["string"]
-   visit_type.cbs["nil"] = visit_type.cbs["string"]
-   visit_type.cbs["number"] = visit_type.cbs["string"]
-   visit_type.cbs["integer"] = visit_type.cbs["string"]
-   visit_type.cbs["thread"] = visit_type.cbs["string"]
-   visit_type.cbs["bad_nominal"] = visit_type.cbs["string"]
-   visit_type.cbs["emptytable"] = visit_type.cbs["string"]
-   visit_type.cbs["table_item"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved_emptytable_value"] = visit_type.cbs["string"]
-   visit_type.cbs["tuple"] = visit_type.cbs["string"]
-   visit_type.cbs["poly"] = visit_type.cbs["string"]
-   visit_type.cbs["any"] = visit_type.cbs["string"]
-   visit_type.cbs["unknown"] = visit_type.cbs["string"]
-   visit_type.cbs["invalid"] = visit_type.cbs["string"]
-   visit_type.cbs["unresolved"] = visit_type.cbs["string"]
-   visit_type.cbs["none"] = visit_type.cbs["string"]
+
+   visit_type.cbs["string"] = default_type_visitor
+   visit_type.cbs["tupletable"] = default_type_visitor
+   visit_type.cbs["typetype"] = default_type_visitor
+   visit_type.cbs["array"] = default_type_visitor
+   visit_type.cbs["map"] = default_type_visitor
+   visit_type.cbs["enum"] = default_type_visitor
+   visit_type.cbs["boolean"] = default_type_visitor
+   visit_type.cbs["nil"] = default_type_visitor
+   visit_type.cbs["number"] = default_type_visitor
+   visit_type.cbs["integer"] = default_type_visitor
+   visit_type.cbs["thread"] = default_type_visitor
+   visit_type.cbs["bad_nominal"] = default_type_visitor
+   visit_type.cbs["emptytable"] = default_type_visitor
+   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
+   visit_type.cbs["tuple"] = default_type_visitor
+   visit_type.cbs["poly"] = default_type_visitor
+   visit_type.cbs["any"] = default_type_visitor
+   visit_type.cbs["unknown"] = default_type_visitor
+   visit_type.cbs["invalid"] = default_type_visitor
+   visit_type.cbs["unresolved"] = default_type_visitor
+   visit_type.cbs["none"] = default_type_visitor
 
    assert(ast.kind == "statements")
    recurse_node(ast, visit_node, visit_type)
