@@ -10242,6 +10242,11 @@ a.types[i], b.types[i]), }
                      end
                   end
                   add_var(v, v.tk, r)
+
+                  if store_type then
+                     store_type(v.y, v.x, r)
+                  end
+
                   last = r
                end
                local nrets = #rets.tuple

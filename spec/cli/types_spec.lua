@@ -203,5 +203,33 @@ describe("tl types works like check", function()
          assert(by_pos["1"]["21"]) -- "os"
          assert(by_pos["1"]["26"]) -- .
       end)
+
+      it("produce values for forin variables", function()
+         local name = util.write_tmp_file(finally, [[
+            local x: {string:boolean} = {}
+            for k, v in pairs(x) do
+            end
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name) .. " 2>" .. util.os_null, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         local types = json.decode(output)
+         assert(types.by_pos)
+         local by_pos = types.by_pos[next(types.by_pos)]
+         assert.same({
+            ["19"] = 2,
+            ["20"] = 5,
+            ["22"] = 2,
+            ["39"] = 6,
+            ["41"] = 2,
+         }, by_pos["1"])
+         assert.same({
+            ["17"] = 3,
+            ["20"] = 4,
+            ["25"] = 15,
+            ["30"] = 14,
+            ["31"] = 2,
+         }, by_pos["2"])
+      end)
    end)
 end)
