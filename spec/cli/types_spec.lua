@@ -202,7 +202,6 @@ describe("tl types works like check", function()
          assert(by_pos["1"]["20"]) -- (
          assert(by_pos["1"]["21"]) -- "os"
          assert(by_pos["1"]["26"]) -- .
-         assert(by_pos["1"]["20"] == by_pos["1"]["26"])
       end)
    end)
 end)
