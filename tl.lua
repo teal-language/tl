@@ -9331,16 +9331,17 @@ a.types[i], b.types[i]), }
          if not b[1] then
             return invalid_at(node, "ipairs requires an argument")
          end
-         local t = resolve_tuple_and_nominal(b[1])
+         local orig_t = b[1]
+         local t = resolve_tuple_and_nominal(orig_t)
 
          if t.typename == "tupletable" then
             local arr_type = arraytype_from_tuple(node.e2, t)
             if not arr_type then
-               return invalid_at(node.e2, "attempting ipairs on tuple that's not a valid array: %s", t)
+               return invalid_at(node.e2, "attempting ipairs on tuple that's not a valid array: %s", orig_t)
             end
          elseif not is_array_type(t) then
             if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
-               return invalid_at(node.e2, "attempting ipairs on something that's not an array: %s", t)
+               return invalid_at(node.e2, "attempting ipairs on something that's not an array: %s", orig_t)
             end
          end
 
