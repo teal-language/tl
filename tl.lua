@@ -6913,10 +6913,41 @@ tl.type_check = function(ast, opts)
    local same_type
    local is_a
 
-   local function arg_check(where, cmp, a, b, n, errs, ctx)
-      local matches, match_errs = cmp(a, b)
-      if not matches then
-         add_errs_prefixing(where, match_errs, errs, ctx .. (n and " " .. n or "") .. ": ")
+
+
+
+
+
+
+
+
+
+
+
+
+
+   local function arg_check(where, all_errs, a, b, v, mode, n)
+      local ok, errs
+
+      if v == "covariant" then
+         ok, errs = is_a(a, b)
+      elseif v == "contravariant" then
+         ok, errs = is_a(b, a)
+      elseif v == "bivariant" then
+         ok, errs = is_a(a, b)
+         if ok then
+            return true
+         end
+         ok = is_a(b, a)
+         if ok then
+            return true
+         end
+      elseif v == "invariant" then
+         ok, errs = same_type(a, b)
+      end
+
+      if not ok then
+         add_errs_prefixing(where, errs, all_errs, mode .. (n and " " .. n or "") .. ": ")
          return false
       end
       return true
@@ -7599,10 +7630,10 @@ tl.type_check = function(ast, opts)
             end
             local errs = {}
             for i = 1, naargs do
-               arg_check(a, same_type, a.args.tuple[i], b.args.tuple[i], i - argdelta, errs, "argument")
+               arg_check(a, errs, a.args.tuple[i], b.args.tuple[i], "invariant", "argument", i - argdelta)
             end
             for i = 1, narets do
-               arg_check(a, same_type, a.rets.tuple[i], b.rets.tuple[i], i, errs, "return")
+               arg_check(a, errs, a.rets.tuple[i], b.rets.tuple[i], "invariant", "return", i)
             end
             return any_errors(errs)
          end,
@@ -7851,7 +7882,7 @@ a.types[i], b.types[i]), }
                table.insert(errs, Err(a, "incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", a.args, b.args))
             else
                for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
-                  arg_check(nil, is_a, aa[i], ba[i] or ANY, i, errs, "argument")
+                  arg_check(nil, errs, aa[i], ba[i] or ba[#ba], "bivariant", "argument", i)
                end
             end
 
@@ -7865,7 +7896,7 @@ a.types[i], b.types[i]), }
                   nrets = nrets - 1
                end
                for i = 1, nrets do
-                  arg_check(nil, is_a, ar[i], br[i], i, errs, "return")
+                  arg_check(nil, errs, ar[i], br[i], "bivariant", "return", i)
                end
             end
 
@@ -8245,7 +8276,7 @@ a.types[i], b.types[i]), }
       local check_args_rets
       do
 
-         local function check_func_type_list(where, wheres, xs, ys, from, delta, mode)
+         local function check_func_type_list(where, wheres, xs, ys, from, delta, v, mode)
             assert(xs.typename == "tuple", xs.typename)
             assert(ys.typename == "tuple", ys.typename)
 
@@ -8260,7 +8291,7 @@ a.types[i], b.types[i]), }
                local y = yt[i] or (ys.is_va and yt[n_ys])
                if y then
                   local w = wheres and wheres[pos] or where
-                  if not arg_check(w, is_a, x, y, pos, errs, mode) then
+                  if not arg_check(w, errs, x, y, v, mode, pos) then
                      return nil, errs
                   end
                end
@@ -8280,7 +8311,7 @@ a.types[i], b.types[i]), }
             if argdelta == -1 then
                from = 2
                local errs = {}
-               if (not is_self(fargs[1])) and not arg_check(where, is_a, args.tuple[1], fargs[1], nil, errs, "self") then
+               if (not is_self(fargs[1])) and not arg_check(where, errs, fargs[1], args.tuple[1], "contravariant", "self") then
                   return nil, errs
                end
             end
@@ -8289,10 +8320,10 @@ a.types[i], b.types[i]), }
                expected_rets = infer_at(where, expected_rets)
                infer_emptytables(where, nil, expected_rets, f.rets, 0)
 
-               rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, expected_rets, 1, 0, "return")
+               rets_ok, rets_errs = check_func_type_list(where, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
             end
 
-            args_ok, args_errs = check_func_type_list(where, where_args, args, f.args, from, argdelta, "argument")
+            args_ok, args_errs = check_func_type_list(where, where_args, f.args, args, from, argdelta, "contravariant", "argument")
             if (not args_ok) or (not rets_ok) then
                return nil, args_errs or {}
             end
