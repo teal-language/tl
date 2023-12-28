@@ -8504,9 +8504,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local match_record_key: function(tbl: Type, rec: Node, key: string): Type, string
-
-   match_record_key = function(tbl: Type, rec: Node, key: string): Type, string
+   local function match_record_key(tbl: Type, rec: Node, key: string): Type, string
       assert(type(tbl) == "table")
       assert(type(rec) == "table")
       assert(type(key) == "string")
@@ -8527,6 +8525,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local t = same_in_all_union_entries(tbl, function(t: Type): (Type, Type)
             return (match_record_key(t, rec, key))
          end)
+
+         if t then
+            return t
+         end
+      end
+
+      if tbl.typename == "typevar" and tbl.interface_type then
+         local t = match_record_key(tbl.interface_type, rec, key)
 
          if t then
             return t
@@ -11521,6 +11527,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             after = function(typ: Type, _children: {Type}): Type
                if not find_var_type(typ.typevar) then
                   error_at(typ, "undefined type variable " .. typ.typevar)
+               end
+               if typ.interface_name then
+                  typ.interface_type = find_var_type(typ.interface_name)
                end
                return typ
             end,
