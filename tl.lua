@@ -5254,6 +5254,9 @@ local function show_type_base(t, short, seen)
    end
 
    local function show_record_type(name)
+      if t.names then
+         return t.names[1]
+      end
       if short then
          return name
       else
