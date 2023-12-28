@@ -8564,9 +8564,7 @@ a.types[i], b.types[i]), }
       end
    end
 
-   local match_record_key
-
-   match_record_key = function(tbl, rec, key)
+   local function match_record_key(tbl, rec, key)
       assert(type(tbl) == "table")
       assert(type(rec) == "table")
       assert(type(key) == "string")
@@ -8587,6 +8585,14 @@ a.types[i], b.types[i]), }
          local t = same_in_all_union_entries(tbl, function(t)
             return (match_record_key(t, rec, key))
          end)
+
+         if t then
+            return t
+         end
+      end
+
+      if tbl.typename == "typevar" and tbl.interface_type then
+         local t = match_record_key(tbl.interface_type, rec, key)
 
          if t then
             return t
@@ -11581,6 +11587,9 @@ a.types[i], b.types[i]), }
             after = function(typ, _children)
                if not find_var_type(typ.typevar) then
                   error_at(typ, "undefined type variable " .. typ.typevar)
+               end
+               if typ.interface_name then
+                  typ.interface_type = find_var_type(typ.interface_name)
                end
                return typ
             end,
