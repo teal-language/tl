@@ -1252,6 +1252,7 @@ local table_types = {
 
 
 
+
 local TruthyFact = {}
 
 
@@ -3684,7 +3685,7 @@ local function recurse_type(ast, visit)
    end
    if ast.interface_list then
       for _, child in ipairs(ast.interface_list) do
-         recurse_type(child, visit)
+         table.insert(xs, recurse_type(child, visit))
       end
    end
    if ast.def then
@@ -11291,6 +11292,61 @@ a.types[i], b.types[i]), }
       return t
    end
 
+   local expand_interfaces
+   do
+      local function add_interface_fields(what, fields, field_order, iface, orig_iface, list)
+         for fname, ftype in fields_of(iface, list) do
+            if fields[fname] then
+               if not is_a(fields[fname], ftype) then
+                  error_at(fields[fname], what .. " '" .. fname .. "' does not match definition in interface %s", orig_iface)
+               end
+            else
+               table.insert(field_order, fname)
+               fields[fname] = ftype
+            end
+         end
+      end
+
+      local function expand(t, seen)
+         if t.interfaces_expanded then
+            return t
+         end
+         t.interfaces_expanded = true
+         if seen[t] then
+            return
+         end
+         seen[t] = true
+
+         t.fields = t.fields or {}
+         t.meta_fields = t.meta_fields or {}
+         t.field_order = t.field_order or {}
+         t.meta_field_order = t.meta_field_order or {}
+
+
+         for _, iface in ipairs(t.interface_list) do
+            local orig_iface = iface
+
+            if iface.typename == "nominal" then
+               iface = resolve_nominal(iface)
+            end
+
+            if iface.typename == "interface" then
+               if iface.interface_list then
+                  iface = expand(iface, seen)
+               end
+
+               add_interface_fields("field", t.fields, t.field_order, iface, orig_iface)
+               add_interface_fields("metamethod", t.meta_fields, t.meta_field_order, iface, orig_iface, "meta")
+            end
+         end
+         return t
+      end
+
+      expand_interfaces = function(t)
+         return expand(t, {})
+      end
+   end
+
    local visit_type
    visit_type = {
       cbs = {
@@ -11300,19 +11356,7 @@ a.types[i], b.types[i]), }
             end,
             after = function(typ, _children)
                end_scope()
-               typ = ensure_fresh_typeargs(typ)
-
-               if typ.macroexp then
-                  local macroexp_type = recurse_node(typ.macroexp, visit_node, visit_type)
-
-                  check_macroexp_arg_use(typ.macroexp)
-
-                  if not is_a(macroexp_type, typ) then
-                     error_at(macroexp_type, "macroexp type does not match declaration")
-                  end
-               end
-
-               return typ
+               return ensure_fresh_typeargs(typ)
             end,
          },
          ["record"] = {
@@ -11332,7 +11376,6 @@ a.types[i], b.types[i]), }
                end
             end,
             after = function(typ, children)
-               end_scope()
                local i = 1
                if typ.typeargs then
                   for _, _ in ipairs(typ.typeargs) do
@@ -11340,12 +11383,23 @@ a.types[i], b.types[i]), }
                      i = i + 1
                   end
                end
+               if typ.interface_list then
+                  for j, _ in ipairs(typ.interface_list) do
+                     typ.interface_list[j] = children[i]
+                     i = i + 1
+                  end
+               end
                if typ.elements then
                   typ.elements = children[i]
                   i = i + 1
                end
+               local fmacros
                for name, _ in fields_of(typ) do
                   local ftype = children[i]
+                  if ftype.macroexp then
+                     fmacros = fmacros or {}
+                     table.insert(fmacros, ftype)
+                  end
                   if ftype.typename == "function" and ftype.is_method then
                      local fargs = ftype.args.tuple
                      if fargs[1] and fargs[1].is_self then
@@ -11373,9 +11427,32 @@ a.types[i], b.types[i]), }
                end
                for name, _ in fields_of(typ, "meta") do
                   local ftype = children[i]
+                  if ftype.macroexp then
+                     fmacros = fmacros or {}
+                     table.insert(fmacros, ftype)
+                  end
                   typ.meta_fields[name] = ftype
                   i = i + 1
                end
+
+               if typ.interface_list then
+                  expand_interfaces(typ)
+               end
+
+               if fmacros then
+                  for _, t in ipairs(fmacros) do
+                     local macroexp_type = recurse_node(t.macroexp, visit_node, visit_type)
+
+                     check_macroexp_arg_use(t.macroexp)
+
+                     if not is_a(macroexp_type, t) then
+                        error_at(macroexp_type, "macroexp type does not match declaration")
+                     end
+                  end
+               end
+
+               end_scope()
+
                return typ
             end,
          },
