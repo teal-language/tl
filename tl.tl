@@ -7409,14 +7409,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return nil
    end
 
-   local function subtype_interface(a: Type, b: Type): boolean, {Error}
-      if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
-         return true
-      end
-
-      return same_type(a, b)
-   end
-
    local function subtype_record(a: Type, b: Type): boolean, {Error}
       -- assert(b.typename == "record")
       if a.elements and b.elements then
@@ -7757,7 +7749,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["number"] = compare_true,
       },
       ["interface"] = {
-         ["interface"] = subtype_interface,
+         ["interface"] = function(a: Type, b: Type): boolean, {Error}
+            if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
+               return true
+            end
+            return same_type(a, b)
+         end,
          ["array"] = subtype_array,
          ["record"] = subtype_record,
          ["tupletable"] = function(a: Type, b: Type): boolean, {Error}
@@ -7808,7 +7805,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["record"] = {
          ["record"] = subtype_record,
-         ["interface"] = subtype_interface,
+         ["interface"] = function(a: Type, b: Type): boolean, {Error}
+            if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
+               return true
+            end
+            if not a.names then
+               -- match inferred table (anonymous record) structurally to interface
+               return subtype_record(a, b)
+            end
+         end,
          ["array"] = subtype_array,
          ["map"] = function(a: Type, b: Type): boolean, {Error}
             if not is_a(b.keys, STRING) then
