@@ -7341,6 +7341,29 @@ tl.type_check = function(ast, opts)
       return true
    end
 
+   local function find_in_interface_list(a, f)
+      if not a.interface_list then
+         return nil
+      end
+
+      for _, t in ipairs(a.interface_list) do
+         local ret = f(t)
+         if ret then
+            return ret
+         end
+      end
+
+      return nil
+   end
+
+   local function subtype_interface(a, b)
+      if find_in_interface_list(a, function(t) return (is_a(t, b)) end) then
+         return true
+      end
+
+      return same_type(a, b)
+   end
+
    local function subtype_record(a, b)
 
       if a.elements and b.elements then
@@ -7639,9 +7662,14 @@ tl.type_check = function(ast, opts)
             local ra = resolve_nominal(a)
             local rb = resolve_nominal(b)
 
-            if ra.typename == "union" or rb.typename == "union" then
+            if rb.typename == "interface" then
+
+               return is_a(a, rb)
+            elseif ra.typename == "union" or rb.typename == "union" then
+
                return is_a(ra, rb)
             end
+
 
             return are_same_nominals(a, b)
          end,
@@ -7667,6 +7695,7 @@ tl.type_check = function(ast, opts)
          ["number"] = compare_true,
       },
       ["interface"] = {
+         ["interface"] = subtype_interface,
          ["array"] = subtype_array,
          ["record"] = subtype_record,
          ["tupletable"] = function(a, b)
@@ -7717,6 +7746,7 @@ a.types[i], b.types[i]), }
       },
       ["record"] = {
          ["record"] = subtype_record,
+         ["interface"] = subtype_interface,
          ["array"] = subtype_array,
          ["map"] = function(a, b)
             if not is_a(b.keys, STRING) then
@@ -9882,21 +9912,6 @@ a.types[i], b.types[i]), }
          is_total = false
       end
       return is_total, missing
-   end
-
-   local function find_in_interface_list(a, f)
-      if not a.interface_list then
-         return nil
-      end
-
-      for _, t in ipairs(a.interface_list) do
-         local ret = f(t)
-         if ret then
-            return ret
-         end
-      end
-
-      return nil
    end
 
 

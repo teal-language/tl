@@ -7341,6 +7341,29 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
+   local function find_in_interface_list<T>(a: Type, f: function(Type): T): T
+      if not a.interface_list then
+         return nil
+      end
+
+      for _, t in ipairs(a.interface_list) do
+         local ret = f(t)
+         if ret then
+            return ret
+         end
+      end
+
+      return nil
+   end
+
+   local function subtype_interface(a: Type, b: Type): boolean, {Error}
+      if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
+         return true
+      end
+
+      return same_type(a, b)
+   end
+
    local function subtype_record(a: Type, b: Type): boolean, {Error}
       -- assert(b.typename == "record")
       if a.elements and b.elements then
@@ -7638,10 +7661,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["nominal"] = function(a: Type, b: Type): boolean, {Error}
             local ra = resolve_nominal(a)
             local rb = resolve_nominal(b)
-            -- match unions structurally
-            if ra.typename == "union" or rb.typename == "union" then
+
+            if rb.typename == "interface" then
+               -- match interface subtyping
+               return is_a(a, rb)
+            elseif ra.typename == "union" or rb.typename == "union" then
+               -- match unions structurally
                return is_a(ra, rb)
             end
+
             -- all other types nominally
             return are_same_nominals(a, b)
          end,
@@ -7667,6 +7695,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["number"] = compare_true,
       },
       ["interface"] = {
+         ["interface"] = subtype_interface,
          ["array"] = subtype_array,
          ["record"] = subtype_record,
          ["tupletable"] = function(a: Type, b: Type): boolean, {Error}
@@ -7717,6 +7746,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["record"] = {
          ["record"] = subtype_record,
+         ["interface"] = subtype_interface,
          ["array"] = subtype_array,
          ["map"] = function(a: Type, b: Type): boolean, {Error}
             if not is_a(b.keys, STRING) then
@@ -9882,21 +9912,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          is_total = false
       end
       return is_total, missing
-   end
-
-   local function find_in_interface_list<T>(a: Type, f: function(Type): T): T
-      if not a.interface_list then
-         return nil
-      end
-
-      for _, t in ipairs(a.interface_list) do
-         local ret = f(t)
-         if ret then
-            return ret
-         end
-      end
-
-      return nil
    end
 
    local enum MissingError
