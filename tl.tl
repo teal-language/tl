@@ -1138,6 +1138,8 @@ local record Type
 
    -- typearg
    typearg: string
+   interface_name: string
+   interface_type: Type
 
    -- table items
    kname: string
@@ -1879,11 +1881,19 @@ local function parse_anglebracket_list(ps: ParseState, i: integer, parse_item: P
 end
 
 local function parse_typearg(ps: ParseState, i: integer): integer, Type, integer
+   local name = ps.tokens[i].tk
+   local interface_constraint: string
    i = verify_kind(ps, i, "identifier")
+   if ps.tokens[i].tk == "is" then
+      i = i + 1
+      interface_constraint = ps.tokens[i].tk
+      i = verify_kind(ps, i, "identifier") -- FIXME generic interfaces...
+   end
    return i, a_type("typearg", {
       y = ps.tokens[i - 2].y,
       x = ps.tokens[i - 2].x,
-      typearg = ps.tokens[i-1].tk,
+      typearg = name,
+      interface_name = interface_constraint,
    })
 end
 
@@ -6226,13 +6236,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function fresh_typevar(t: Type): Type, Type, boolean
       return a_type("typevar", {
-         typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+         typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+         interface_name = t.interface_name,
+         interface_type = t.interface_type,
       })
    end
 
    local function fresh_typearg(t: Type): Type
       return a_type("typearg", {
-         typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr
+         typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+         interface_name = t.interface_name,
+         interface_type = t.interface_type,
       })
    end
 
@@ -6248,12 +6262,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t
    end
 
-   local function find_var_type(name: string, use?: VarUse): Type, Attribute
+   local function find_var_type(name: string, use?: VarUse): Type, Attribute, Type
       local var = find_var(name, use)
       if var then
          local t = var.t
          if t.typename == "unresolved_typearg" then
-            return nil
+            return nil, nil, t.interface_type
          end
          t = ensure_fresh_typeargs(t)
          return t, var.attribute
@@ -6558,11 +6572,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                copy = fn_arg(t)
             else
                copy.typearg = t.typearg
+               copy.interface_name = t.interface_name
+               if t.interface_type then
+                  copy.interface_type, same = resolve(t.interface_type, same)
+               end
             end
          elseif t.typename == "unresolvable_typearg" then
             copy.typearg = t.typearg
          elseif t.typename == "typevar" then
             copy.typevar = t.typevar
+            copy.interface_name = t.interface_name
+            if t.interface_type then
+               copy.interface_type, same = resolve(t.interface_type, same)
+            end
          elseif is_typetype(t) then
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "nominal" then
@@ -7457,13 +7479,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       -- assert((a == nil and b ~= nil) or (a ~= nil and b == nil))
 
       -- does the typevar currently match to a type?
-      local vt = find_var_type(typevar)
+      local vt, _, interface_type = find_var_type(typevar)
       if vt then
          -- If so, compare it to the other type
          return cmp(a or vt, b or vt)
       else
          -- otherwise, infer it to the other type
-         local ok, r, errs = resolve_typevars(a or b)
+         local other = a or b
+
+         -- but check interface constraint first if present
+         if interface_type then
+            if not is_a(other, interface_type) then
+               return false, { Err(other, "given type %s does not satisfy %s constraint in type variable " .. typevar, other, interface_type) }
+            end
+         end
+
+         local ok, r, errs = resolve_typevars(other)
          if not ok then
             return false, errs
          end
@@ -8280,7 +8311,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local function push_typeargs(func: Type)
          if func.typeargs then
             for _, fnarg in ipairs(func.typeargs) do
-               add_var(nil, fnarg.typearg, a_type("unresolved_typearg", {}))
+               add_var(nil, fnarg.typearg, a_type("unresolved_typearg", {
+                  interface_type = func.interface_name and find_var_type(func.interface_name),
+               }))
             end
          end
       end
@@ -8962,7 +8995,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if t.def.typeargs then
          typevals = {}
          for _, a in ipairs(t.def.typeargs) do
-            table.insert(typevals, a_type("typevar", { typevar = a.typearg }))
+            table.insert(typevals, a_type("typevar", {
+               typevar = a.typearg,
+               interface_name = a.interface_name,
+            }))
          end
       end
       return type_at(where, a_type("nominal", {
@@ -11473,7 +11509,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          },
          ["typearg"] = {
             after = function(typ: Type, _children: {Type}): Type
-               add_var(nil, typ.typearg, type_at(typ, a_type("typearg", { typearg = typ.typearg })))
+               add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
+                  typearg = typ.typearg,
+                  interface_name = typ.interface_name,
+                  interface_type = typ.interface_name and find_var_type(typ.interface_name),
+               })))
                return typ
             end,
          },
@@ -11498,6 +11538,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      edit_type(typ, "typevar")
                      typ.names = nil
                      typ.typevar = t.typearg
+                     typ.interface_name = t.interface_name
+                     typ.interface_type = t.interface_type
                   else
                      if t.is_alias then
                         t = t.def.resolved
