@@ -723,13 +723,9 @@ for i, name in ipairs({"records", "arrayrecords"}) do
          f(bar)
       ]], {
          { y = 5, msg = "in local declaration: foo: got {}, expected Foo" },
-         select(i,
-            { y = 6, msg = "in assignment: userdata record doesn't match: record (a: number)" },
-            { y = 6, msg = "in assignment: userdata record doesn't match: record ({number}a: number)" }),
+         { y = 6, msg = "in assignment: userdata record doesn't match: Foo" },
          { y = 8, msg = "argument 1: got {}, expected Foo" },
-         select(i,
-            { y = 9, msg = "argument 1: userdata record doesn't match: record (a: number)" },
-            { y = 9, msg = "argument 1: userdata record doesn't match: record ({number}a: number)" }),
+         { y = 9, msg = "argument 1: userdata record doesn't match: Foo" },
          nil
       }))
    end)
