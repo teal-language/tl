@@ -7482,14 +7482,6 @@ tl.type_check = function(ast, opts)
       return nil
    end
 
-   local function subtype_interface(a, b)
-      if find_in_interface_list(a, function(t) return (is_a(t, b)) end) then
-         return true
-      end
-
-      return same_type(a, b)
-   end
-
    local function subtype_record(a, b)
 
       if a.elements and b.elements then
@@ -7830,7 +7822,12 @@ tl.type_check = function(ast, opts)
          ["number"] = compare_true,
       },
       ["interface"] = {
-         ["interface"] = subtype_interface,
+         ["interface"] = function(a, b)
+            if find_in_interface_list(a, function(t) return (is_a(t, b)) end) then
+               return true
+            end
+            return same_type(a, b)
+         end,
          ["array"] = subtype_array,
          ["record"] = subtype_record,
          ["tupletable"] = function(a, b)
@@ -7881,7 +7878,15 @@ a.types[i], b.types[i]), }
       },
       ["record"] = {
          ["record"] = subtype_record,
-         ["interface"] = subtype_interface,
+         ["interface"] = function(a, b)
+            if find_in_interface_list(a, function(t) return (is_a(t, b)) end) then
+               return true
+            end
+            if not a.names then
+
+               return subtype_record(a, b)
+            end
+         end,
          ["array"] = subtype_array,
          ["map"] = function(a, b)
             if not is_a(b.keys, STRING) then
