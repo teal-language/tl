@@ -1116,6 +1116,7 @@ local interface Type
 
    -- array
    elements: Type
+   consttypes: {Type}
    -- tupletable/array
    inferred_len: integer
 
@@ -7458,10 +7459,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if (not a.elements) or (not is_a(a.elements, b.elements)) then
          return false
       end
-      if a.types and #a.types > 1 then
+      if a.consttypes and #a.consttypes > 1 then
          -- constant array, check elements (useful for array of enums)
-         for i = 1, #a.types do
-            local e = a.types[i]
+         for _, e in ipairs(a.consttypes) do
             if not is_a(e, b.elements) then
                return false, { Err(a, "%s is not a member of %s", e, b.elements) }
             end
@@ -9795,6 +9795,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       local seen_keys: {CheckableKey:Where} = {}
 
+      local types: {Type}
+
       for i, child in ipairs(children) do
          assert(child.typename == "table_item")
 
@@ -9822,8 +9824,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not is_not_tuple then
                is_tuple = true
             end
-            if not typ.types then
-               typ.types = {}
+            if not types then
+               types = {}
             end
 
             if node[i].key_parsed == "implicit" then
@@ -9831,11 +9833,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   -- need to expand last item in an array (e.g { 1, 2, 3, f() })
                   for _, c in ipairs(child.vtype.tuple) do
                      typ.elements = expand_type(node, typ.elements, c)
-                     typ.types[last_array_idx] = resolve_tuple(c)
+                     types[last_array_idx] = resolve_tuple(c)
                      last_array_idx = last_array_idx + 1
                   end
                else
-                  typ.types[last_array_idx] = uvtype
+                  types[last_array_idx] = uvtype
                   last_array_idx = last_array_idx + 1
                   typ.elements = expand_type(node, typ.elements, uvtype)
                end
@@ -9844,7 +9846,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   typ.elements = expand_type(node, typ.elements, uvtype)
                   is_not_tuple = true
                elseif n then
-                  typ.types[n as integer] = uvtype
+                  types[n as integer] = uvtype
                   if n > largest_array_idx then
                      largest_array_idx = n as integer
                   end
@@ -9893,7 +9895,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local pure_array = true
          if not is_not_tuple then
             local last_t: Type
-            for _, current_t in pairs(typ.types as {integer:Type}) do
+            for _, current_t in pairs(types as {integer:Type}) do
                if last_t then
                   if not same_type(last_t, current_t) then
                      pure_array = false
@@ -9905,13 +9907,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
          if pure_array then
             typ.typename = "array"
-            -- typ.types = nil
+            typ.consttypes = types
             assert(typ.elements)
             typ.inferred_len = largest_array_idx - 1
          else
             typ.typename = "tupletable"
             typ.elements = nil
-            assert(typ.types)
+            typ.types = types
          end
       elseif is_record then
          typ.typename = "record"
@@ -9919,7 +9921,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          typ.typename = "map"
       elseif is_tuple then
          typ.typename = "tupletable"
-         if not typ.types or #typ.types == 0 then
+         typ.types = types
+         if not types or #types == 0 then
             error_at(node, "cannot determine type of tuple elements")
          end
       end
