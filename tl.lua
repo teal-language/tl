@@ -1296,6 +1296,30 @@ local table_types = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local TruthyFact = {}
 
 
@@ -3781,8 +3805,10 @@ local function recurse_type(ast, visit)
    if ast.vtype then
       table.insert(xs, recurse_type(ast.vtype, visit))
    end
-   if ast.constraint then
-      table.insert(xs, recurse_type(ast.constraint, visit))
+   if ast.typename == "typearg" then
+      if ast.constraint then
+         table.insert(xs, recurse_type(ast.constraint, visit))
+      end
    end
 
    local ret
@@ -6577,7 +6603,7 @@ tl.type_check = function(ast, opts)
          if t.typename == "typevar" then
             local rt = fn_var(t)
             if rt then
-               resolved[orig_t.typevar] = true
+               resolved[t.typevar] = true
                if no_nested_types[rt.typename] or (rt.typename == "nominal" and not rt.typevals) then
                   seen[orig_t] = rt
                   return rt, false
@@ -6608,14 +6634,17 @@ tl.type_check = function(ast, opts)
             if fn_arg then
                copy = fn_arg(t)
             else
+               assert(copy.typename == "typearg")
                copy.typearg = t.typearg
                if t.constraint then
                   copy.constraint, same = resolve(t.constraint, same)
                end
             end
          elseif t.typename == "unresolvable_typearg" then
+            assert(copy.typename == "unresolvable_typearg")
             copy.typearg = t.typearg
          elseif t.typename == "typevar" then
+            assert(copy.typename == "typevar")
             copy.typevar = t.typevar
             if t.constraint then
                copy.constraint, same = resolve(t.constraint, same)
@@ -7573,7 +7602,7 @@ tl.type_check = function(ast, opts)
          if not ok then
             return false, errs
          end
-         if r.typevar == typevar then
+         if r.typename == "typevar" and r.typevar == typevar then
             return true
          end
          add_var(nil, typevar, r)
@@ -8307,7 +8336,9 @@ a.types[i], b.types[i]), }
                   if a.constraint then
                      add_var(nil, a.typearg, a.constraint)
                   else
-                     add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", { typearg = a.typearg }))
+                     add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", {
+                        typearg = a.typearg,
+                     }))
                   end
                end
             end
@@ -10841,7 +10872,9 @@ expand_type(node, values, elements) })
 
             if rtype.typeargs then
                for _, typ in ipairs(rtype.typeargs) do
-                  add_var(nil, typ.typearg, type_at(typ, a_type("typearg", { typearg = typ.typearg })))
+                  add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
+                     typearg = typ.typearg,
+                  })))
                end
             end
          end,
@@ -11686,8 +11719,9 @@ expand_type(node, values, elements) })
                if t then
                   if t.typename == "typearg" then
 
-                     edit_type(typ, "typevar")
                      typ.names = nil
+                     edit_type(typ, "typevar")
+                     assert(typ.typename == "typevar")
                      typ.typevar = t.typearg
                      typ.constraint = t.constraint
                   else
