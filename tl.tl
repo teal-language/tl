@@ -1064,7 +1064,7 @@ local table_types <total>: {TypeName:boolean} = {
    ["*"] = false,
 }
 
-local record Type
+local interface Type
    where self.typename ~= nil
 
    y: integer
@@ -1152,9 +1152,6 @@ local record Type
    inferred_at: Where
    emptytable_type: Type
 
-   -- enum
-   enumset: {string:boolean}
-
    -- macroexp
    macroexp: Node
 
@@ -1163,6 +1160,10 @@ local record Type
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local record EnumType is Type where self.typename == "enum"
+   enumset: {string:boolean}
 end
 
 local type TupleType = Type
@@ -1495,7 +1496,7 @@ local parse_type: function(ParseState, integer): integer, Type, integer
 local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
-local parse_enum_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+local parse_enum_body: function(ps: ParseState, i: integer, def: EnumType, node: Node): integer, Node
 local parse_record_body: function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
 local parse_type_body_fns: {TypeName:ParseBody}
 
@@ -1546,7 +1547,7 @@ local function new_node(tokens: {Token}, i: integer, kind?: NodeKind): Node
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }
 end
 
-local function a_type(typename: TypeName, t: Type): Type
+local function a_type<T is Type>(typename: TypeName, t: T): T
    t.typeid = new_typeid()
    t.typename = typename
    return t
@@ -2925,7 +2926,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename
    return i
 end
 
-parse_enum_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+parse_enum_body = function(ps: ParseState, i: integer, def: EnumType, node: Node): integer, Node
    local istart = i - 1
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
@@ -4899,7 +4900,7 @@ get_typenum = function(trenv:TypeReportEnv, t: Type): integer
    if rt.typename == "map" then
       ti.keys = get_typenum(trenv, rt.keys)
       ti.values = get_typenum(trenv, rt.values)
-   elseif rt.typename == "enum" then
+   elseif rt is EnumType then
       ti.enums = mark_array(sorted_keys(rt.enumset))
    elseif rt.typename == "function" then
       store_function(trenv, ti, rt)
@@ -5637,13 +5638,13 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    end
 
    local function a_grecord(n: integer, f: function(...: Type): Type): Type
-      local t = a_gfunction(n, f, "record")
+      local t = a_gfunction(n, f, "record") as Type -- FIXME
       t.field_order = sorted_keys(t.fields)
       return t
    end
 
-   local function an_enum(keys: {string}): Type
-      local t = a_type("enum", { enumset = {} })
+   local function an_enum(keys: {string}): EnumType
+      local t = a_type("enum", { enumset = {} } as EnumType)
       for _, k in ipairs(keys) do
          t.enumset[k] = true
       end
@@ -7737,7 +7738,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["string"] = compare_true,
       },
       ["string"] = {
-         ["enum"] = function(a: Type, b: Type): boolean, {Error}
+         ["enum"] = function(a: Type, b: EnumType): boolean, {Error}
             if not a.tk then
                return false, { Err(a, "string is not a %s", b) }
             end
@@ -7825,7 +7826,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             for _, k in ipairs(a.field_order) do
-               if b.keys.typename == "enum" and not b.keys.enumset[k] then
+               local bk = b.keys
+               if bk is EnumType and not bk.enumset[k] then
                   return false, { Err(a, "key is not an enum value: " .. k) }
                end
                if not is_a(a.fields[k], b.values) then
@@ -8559,7 +8561,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       tbl = resolve_tuple_and_nominal(tbl)
 
-      if tbl.typename == "string" or tbl.typename == "enum" then
+      if tbl.typename == "string" or tbl is EnumType then
          tbl = find_var_type("string") -- simulate string metatable
       end
 
@@ -8940,7 +8942,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          errm, erra = e, orig_a
       elseif is_record_type(a) then
-         if b.typename == "enum" then
+         if b is EnumType then
             local field_names: {string} = sorted_keys(b.enumset)
             for _, k in ipairs(field_names) do
                if not a.fields[k] then
@@ -9990,7 +9992,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local k = resolve_tuple_and_nominal(t.keys)
       local is_total = true
       local missing: {string}
-      if k.typename == "enum" then
+      if k is EnumType then
          for _, key in ipairs(sorted_keys(k.enumset)) do
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
@@ -11094,10 +11096,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.known = nil
                   t = a
 
-               elseif ((ra.typename == "enum" and rb.typename == "string" and is_a(rb, ra))
-                  or (ra.typename == "string" and rb.typename == "enum" and is_a(ra, rb))) then
+               elseif ((ra is EnumType and rb.typename == "string" and is_a(rb, ra))
+                  or (ra.typename == "string" and rb is EnumType and is_a(ra, rb))) then
                   node.known = nil
-                  t = (ra.typename == "enum" and ra or rb)
+                  t = (ra is EnumType and ra or rb)
 
                elseif expected and expected.typename == "union" then
                   -- must be checked after string/enum above
@@ -11137,7 +11139,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 --                  check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb)
 --               end
 
-               if ra.typename == "enum" and rb.typename == "string" then
+               if ra is EnumType and rb.typename == "string" then
                   if not (rb.tk and ra.enumset[unquote(rb.tk)]) then
                      return invalid_at(node, "%s is not a member of %s", b, a)
                   end
@@ -11379,11 +11381,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    visit_node.cbs["string"] = {
       after = function(node: Node, _children: {Type}): Type
          local t = after_literal(node)
-         if node.expected then
-            if node.expected.typename == "enum" and is_a(t, node.expected) then
-               t = node.expected
-            end
+
+         local expected = node.expected
+         if expected and expected is EnumType and is_a(t, expected) then
+            return node.expected
          end
+
          return t
       end,
    }

@@ -1255,6 +1255,7 @@ local table_types = {
 
 
 
+
 local TruthyFact = {}
 
 
@@ -7825,7 +7826,8 @@ a.types[i], b.types[i]), }
             end
 
             for _, k in ipairs(a.field_order) do
-               if b.keys.typename == "enum" and not b.keys.enumset[k] then
+               local bk = b.keys
+               if bk.typename == "enum" and not bk.enumset[k] then
                   return false, { Err(a, "key is not an enum value: " .. k) }
                end
                if not is_a(a.fields[k], b.values) then
@@ -11379,11 +11381,12 @@ a.types[i], b.types[i]), }
    visit_node.cbs["string"] = {
       after = function(node, _children)
          local t = after_literal(node)
-         if node.expected then
-            if node.expected.typename == "enum" and is_a(t, node.expected) then
-               t = node.expected
-            end
+
+         local expected = node.expected
+         if expected and expected.typename == "enum" and is_a(t, expected) then
+            return node.expected
          end
+
          return t
       end,
    }
