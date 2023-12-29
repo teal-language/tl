@@ -1467,7 +1467,7 @@ local function is_number_type(t:Type): boolean
    return t.typename == "number" or t.typename == "integer"
 end
 
-local function is_typetype(t:Type): boolean
+local function is_typetype(t: Type): boolean
    return t.typename == "typetype"
 end
 
@@ -1491,7 +1491,7 @@ local parse_expression: function(ParseState, integer): integer, Node, integer
 local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node
-local parse_argument_type_list: function(ParseState, integer): integer, Type
+local parse_argument_type_list: function(ParseState, integer): integer, TupleType
 local parse_type: function(ParseState, integer): integer, Type, integer
 local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
@@ -1589,11 +1589,11 @@ local macroexp a_typetype(t: Type): Type
    return a_type("typetype", t)
 end
 
-local macroexp a_tuple(t: {Type}): Type
+local macroexp a_tuple(t: {Type}): TupleType
    return a_type("tuple", { tuple = t })
 end
 
-local function c_tuple(t: {Type}): Type
+local function c_tuple(t: {Type}): TupleType
    return a_type("tuple", { tuple = t })
 end
 
@@ -1634,13 +1634,13 @@ local THREAD = a_type("thread", {})
 local BOOLEAN = a_type("boolean", {})
 local INTEGER = a_type("integer", {})
 
-local function shallow_copy_new_type(t: Type): Type
+local function shallow_copy_new_type<T is Type>(t: T): T
    local copy: {any:any} = {}
    for k, v in pairs(t as {any:any}) do
       copy[k] = v
    end
    copy.typeid = new_typeid()
-   return copy as Type
+   return copy as T
 end
 
 local function shallow_copy_table<T>(t: T): T
@@ -2658,12 +2658,12 @@ local function parse_local_function(ps: ParseState, i: integer): integer, Node
    return parse_function_args_rets_body(ps, i, node)
 end
 
-local enum FunctionType
+local enum FunctionKind
    "global"
    "record"
 end
 
-local function parse_function(ps: ParseState, i: integer, ft: FunctionType): integer, Node
+local function parse_function(ps: ParseState, i: integer, fk: FunctionKind): integer, Node
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i - 1, "global_function")
@@ -2702,9 +2702,9 @@ local function parse_function(ps: ParseState, i: integer, ft: FunctionType): int
       return orig_i + 1
    end
 
-   if fn.kind == "record_function" and ft == "global" then
+   if fn.kind == "record_function" and fk == "global" then
       fail(ps, orig_i, "record functions cannot be annotated as 'global'")
-   elseif fn.kind == "global_function" and ft == "record" then
+   elseif fn.kind == "global_function" and fk == "record" then
       fn.implicit_global_function = true
    end
 
@@ -4847,7 +4847,7 @@ local function store_function(trenv: TypeReportEnv, ti: TypeInfo, rt: Type)
    ti.vararg = not not rt.is_va
 end
 
-get_typenum = function(trenv:TypeReportEnv, t: Type): integer
+get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    assert(t.typeid)
    -- try by typeid
    local n = trenv.typeid_to_num[t.typeid]
@@ -6461,7 +6461,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          table.insert(errs, Err(where, err, u))
       end
       if not valid then
-         u = INVALID
+         return INVALID, store_errs and errs
       end
       return u, store_errs and errs
    end

@@ -2663,7 +2663,7 @@ end
 
 
 
-local function parse_function(ps, i, ft)
+local function parse_function(ps, i, fk)
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps.tokens, i - 1, "global_function")
@@ -2702,9 +2702,9 @@ local function parse_function(ps, i, ft)
       return orig_i + 1
    end
 
-   if fn.kind == "record_function" and ft == "global" then
+   if fn.kind == "record_function" and fk == "global" then
       fail(ps, orig_i, "record functions cannot be annotated as 'global'")
-   elseif fn.kind == "global_function" and ft == "record" then
+   elseif fn.kind == "global_function" and fk == "record" then
       fn.implicit_global_function = true
    end
 
@@ -6461,7 +6461,7 @@ tl.type_check = function(ast, opts)
          table.insert(errs, Err(where, err, u))
       end
       if not valid then
-         u = INVALID
+         return INVALID, store_errs and errs
       end
       return u, store_errs and errs
    end
