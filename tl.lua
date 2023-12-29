@@ -9601,7 +9601,9 @@ a.types[i], b.types[i]), }
 
       ["assert"] = function(node, a, b, argdelta)
          node.known = FACT_TRUTHY
-         return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
+         local r = type_check_function_call(node, node.e2, a, b, node, false, argdelta)
+         apply_facts(node, node.e2[1].known)
+         return r
       end,
    }
 
