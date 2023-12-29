@@ -7518,6 +7518,13 @@ tl.type_check = function(ast, opts)
             if not is_a(other, constraint) then
                return false, { Err(other, "given type %s does not satisfy %s constraint in type variable " .. display_typevar(typevar), other, constraint) }
             end
+
+            if same_type(other, constraint) then
+
+
+
+               return true
+            end
          end
 
          local ok, r, errs = resolve_typevars(other)
@@ -8254,7 +8261,11 @@ a.types[i], b.types[i]), }
          if f.typeargs then
             for _, a in ipairs(f.typeargs) do
                if not find_var_type(a.typearg) then
-                  add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", { typearg = a.typearg }))
+                  if a.constraint then
+                     add_var(nil, a.typearg, a.constraint)
+                  else
+                     add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", { typearg = a.typearg }))
+                  end
                end
             end
          end
