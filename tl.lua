@@ -8248,6 +8248,13 @@ a.types[i], b.types[i]), }
       orignode.known = saveknown
    end
 
+   local function resolve_interface_type(interface_name)
+      if not interface_name then
+         return nil
+      end
+      return resolve_typetype((find_var_type(interface_name, "use_type")))
+   end
+
    local type_check_function_call
    do
       local function mark_invalid_typeargs(f)
@@ -8352,7 +8359,8 @@ a.types[i], b.types[i]), }
          if func.typeargs then
             for _, fnarg in ipairs(func.typeargs) do
                add_var(nil, fnarg.typearg, a_type("unresolved_typearg", {
-                  interface_type = func.interface_name and find_var_type(func.interface_name),
+                  interface_name = fnarg.interface_name,
+                  interface_type = resolve_interface_type(fnarg.interface_name),
                }))
             end
          end
@@ -10461,6 +10469,11 @@ a.types[i], b.types[i]), }
          before = function(node)
             if node.expected then
                local decltype = resolve_tuple_and_nominal(node.expected)
+
+               if decltype.typename == "typevar" and decltype.interface_type then
+                  decltype = decltype.interface_type
+               end
+
                if decltype.typename == "tupletable" then
                   for _, child in ipairs(node) do
                      local n = child.key.constnum
@@ -10498,6 +10511,11 @@ a.types[i], b.types[i]), }
             end
 
             local decltype = resolve_tuple_and_nominal(node.expected)
+            local interface_type = decltype.typename == "typevar" and decltype.interface_type
+
+            if interface_type then
+               decltype = interface_type
+            end
 
             if decltype.typename == "union" then
                local single_table_type
@@ -10609,6 +10627,10 @@ a.types[i], b.types[i]), }
                t.is_total, t.missing = total_record_check(decltype, seen_keys)
             elseif decltype.typename == "map" then
                t.is_total, t.missing = total_map_check(decltype, seen_keys)
+            end
+
+            if interface_type then
+               return interface_type
             end
 
             return t
@@ -11558,7 +11580,7 @@ a.types[i], b.types[i]), }
                add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
                   typearg = typ.typearg,
                   interface_name = typ.interface_name,
-                  interface_type = typ.interface_name and find_var_type(typ.interface_name),
+                  interface_type = resolve_interface_type(typ.interface_name),
                })))
                return typ
             end,
@@ -11568,9 +11590,7 @@ a.types[i], b.types[i]), }
                if not find_var_type(typ.typevar) then
                   error_at(typ, "undefined type variable " .. typ.typevar)
                end
-               if typ.interface_name then
-                  typ.interface_type = find_var_type(typ.interface_name)
-               end
+               typ.interface_type = resolve_interface_type(typ.interface_name)
                return typ
             end,
          },
