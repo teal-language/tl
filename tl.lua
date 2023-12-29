@@ -1291,6 +1291,11 @@ local table_types = {
 
 
 
+
+
+
+
+
 local TruthyFact = {}
 
 
@@ -3734,10 +3739,8 @@ local function recurse_type(ast, visit)
    if ast.def then
       table.insert(xs, recurse_type(ast.def, visit))
    end
-   if ast.keys then
+   if ast.typename == "map" then
       table.insert(xs, recurse_type(ast.keys, visit))
-   end
-   if ast.values then
       table.insert(xs, recurse_type(ast.values, visit))
    end
    if ast.elements then
@@ -6668,6 +6671,7 @@ tl.type_check = function(ast, opts)
                end
             end
          elseif t.typename == "map" then
+            assert(copy.typename == "map")
             copy.keys, same = resolve(t.keys, same)
             copy.values, same = resolve(t.values, same)
          elseif t.typename == "union" then
@@ -9026,6 +9030,7 @@ a.types[i], b.types[i]), }
                end
             elseif is_record_type(old) and is_record_type(new) then
                edit_type(old, "map")
+               assert(old.typename == "map")
                old.keys = STRING
                for _, ftype in fields_of(old) do
                   if not old.values then
@@ -9036,9 +9041,9 @@ a.types[i], b.types[i]), }
                end
                for _, ftype in fields_of(new) do
                   if not old.values then
-                     new.values = ftype
+                     old.values = ftype
                   else
-                     new.values = expand_type(where, old.values, ftype)
+                     old.values = expand_type(where, old.values, ftype)
                   end
                end
                old.fields = nil
@@ -10618,7 +10623,6 @@ expand_type(node, values, elements) })
 
             local is_record = is_record_type(decltype)
             local is_array = is_array_type(decltype)
-            local is_map = decltype.typename == "map"
 
             local force_array = nil
 
@@ -10664,12 +10668,12 @@ expand_type(node, values, elements) })
                      assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
                   end
                elseif node[i].key_parsed == "implicit" then
-                  if is_map then
+                  if decltype.typename == "map" then
                      assert_is_a(node[i], INTEGER, decltype.keys, in_context(node.expected_context, "in map key"))
                      assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
                   end
                   force_array = expand_type(node[i], force_array, child.vtype)
-               elseif is_map then
+               elseif decltype.typename == "map" then
                   force_array = nil
                   assert_is_a(node[i], child.ktype, decltype.keys, in_context(node.expected_context, "in map key"))
                   assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))

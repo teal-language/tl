@@ -1078,6 +1078,9 @@ local interface Type
 
    inferred_at: Where
 
+   is_total: boolean
+   missing: {string}
+
    -- Lua compatibilty
    needs_compat: boolean
 
@@ -1093,12 +1096,6 @@ local interface Type
    is_alias: boolean
    closed: boolean
    is_abstract: boolean
-
-   -- map
-   keys: Type
-   values: Type
-   is_total: boolean
-   missing: {string}
 
    -- records
    interface_list: {Type}
@@ -1144,6 +1141,14 @@ local interface Type
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local record MapType
+   is Type -- TODO TotalType
+   where self.typename == "map"
+
+   keys: Type
+   values: Type
 end
 
 local record EmptyTableType
@@ -1654,13 +1659,13 @@ local macroexp an_array(t: Type): Type
    return a_type("array", { elements = t })
 end
 
-local macroexp a_map(k: Type, v: Type): Type
-   return a_type("map", { keys = k, values = v })
+local macroexp a_map(k: Type, v: Type): MapType
+   return a_type("map", { keys = k, values = v } as MapType)
 end
 
 local NIL = a_type("nil", {})
 local ANY = a_type("any", {})
-local TABLE = a_type("map", { keys = ANY, values = ANY })
+local TABLE = a_map(ANY, ANY)
 local NUMBER = a_type("number", {})
 local STRING = a_type("string", {})
 local THREAD = a_type("thread", {})
@@ -2037,7 +2042,7 @@ local function parse_base_type(ps: ParseState, i: integer): integer, Type, integ
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == ":" then
-         local decl = new_type(ps, istart, "map")
+         local decl = new_type(ps, istart, "map") as MapType
          i = i + 1
          decl.keys = t
          i, decl.values = parse_type(ps, i)
@@ -2054,7 +2059,7 @@ local function parse_base_type(ps: ParseState, i: integer): integer, Type, integ
    elseif tk == "nil" then
       return i + 1, simple_types["nil"]
    elseif tk == "table" then
-      local typ = new_type(ps, i, "map")
+      local typ = new_type(ps, i, "map") as MapType
       typ.keys = ANY
       typ.values = ANY
       return i + 1, typ
@@ -3734,10 +3739,8 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    if ast.def then
       table.insert(xs, recurse_type(ast.def, visit))
    end
-   if ast.keys then
+   if ast is MapType then
       table.insert(xs, recurse_type(ast.keys, visit))
-   end
-   if ast.values then
       table.insert(xs, recurse_type(ast.values, visit))
    end
    if ast.elements then
@@ -4934,7 +4937,7 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
       ti.elements = get_typenum(trenv, rt.elements)
    end
 
-   if rt.typename == "map" then
+   if rt is MapType then
       ti.keys = get_typenum(trenv, rt.keys)
       ti.values = get_typenum(trenv, rt.values)
    elseif rt is EnumType then
@@ -5323,7 +5326,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return table.concat(out, " | ")
    elseif t is EmptyTableType then
       return "{}"
-   elseif t.typename == "map" then
+   elseif t is MapType then
       return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
    elseif t.typename == "array" then
       return "{" .. show(t.elements) .. "}"
@@ -6667,7 +6670,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   copy.meta_fields[k], same = resolve(t.meta_fields[k], same)
                end
             end
-         elseif t.typename == "map" then
+         elseif t is MapType then
+            assert(copy is MapType)
             copy.keys, same = resolve(t.keys, same)
             copy.values, same = resolve(t.values, same)
          elseif t is UnionType then
@@ -7638,7 +7642,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["map"] = {
-         ["map"] = function(a: Type, b: Type): boolean, {Error}
+         ["map"] = function(a: MapType, b: MapType): boolean, {Error}
             return compare_map(a.keys, b.keys, a.values, b.values, true)
          end,
       },
@@ -7843,7 +7847,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
             return true
          end,
-         ["map"] = function(a: TupleTableType, b: Type): boolean, {Error}
+         ["map"] = function(a: TupleTableType, b: MapType): boolean, {Error}
             local aa = arraytype_from_tuple(a.inferred_at, a)
             if not aa then
                return false, { Err(a, "Unable to convert tuple %s to map", a) }
@@ -7864,7 +7868,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end,
          ["array"] = subtype_array,
-         ["map"] = function(a: Type, b: Type): boolean, {Error}
+         ["map"] = function(a: Type, b: MapType): boolean, {Error}
             if not is_a(b.keys, STRING) then
                return false, { Err(a, "can't match a record to a map with non-string keys") }
             end
@@ -7894,7 +7898,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return subtype_array(a, b)
             end
          end,
-         ["map"] = function(a: Type, b: Type): boolean, {Error}
+         ["map"] = function(a: Type, b: MapType): boolean, {Error}
             return compare_map(INTEGER, b.keys, a.elements, b.values)
          end,
          ["tupletable"] = function(a: Type, b: TupleTableType): boolean, {Error}
@@ -7914,10 +7918,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["map"] = {
-         ["map"] = function(a: Type, b: Type): boolean, {Error}
+         ["map"] = function(a: MapType, b: MapType): boolean, {Error}
             return compare_map(a.keys, b.keys, a.values, b.values)
          end,
-         ["array"] = function(a: Type, b: Type): boolean, {Error}
+         ["array"] = function(a: MapType, b: Type): boolean, {Error}
             return compare_map(a.keys, INTEGER, a.values, b.elements)
          end,
       },
@@ -8967,7 +8971,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                             .. a.keys.inferred_at.filename .. ":"
                             .. a.keys.inferred_at.y .. ":"
                             .. a.keys.inferred_at.x .. ": )", orig_b, a.keys
-      elseif a.typename == "map" then
+      elseif a is MapType then
          if is_a(orig_b, a.keys) then
             return a.values
          end
@@ -9015,7 +9019,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return new
       else
          if not is_a(new, old) then
-            if old.typename == "map" and is_record_type(new) then
+            if old is MapType and is_record_type(new) then
                if old.keys.typename == "string" then
                   for _, ftype in fields_of(new) do
                      old.values = expand_type(where, old.values, ftype)
@@ -9026,6 +9030,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             elseif is_record_type(old) and is_record_type(new) then
                edit_type(old, "map")
+               assert(old is MapType)
                old.keys = STRING
                for _, ftype in fields_of(old) do
                   if not old.values then
@@ -9036,9 +9041,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                for _, ftype in fields_of(new) do
                   if not old.values then
-                     new.values = ftype
+                     old.values = ftype
                   else
-                     new.values = expand_type(where, old.values, ftype)
+                     old.values = expand_type(where, old.values, ftype)
                   end
                end
                old.fields = nil
@@ -10055,7 +10060,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return is_total, missing
    end
 
-   local function total_map_check(t: Type, seen_keys: {CheckableKey:Where}): boolean, {string}
+   local function total_map_check(t: MapType, seen_keys: {CheckableKey:Where}): boolean, {string}
       local k = resolve_tuple_and_nominal(t.keys)
       local is_total = true
       local missing: {string}
@@ -10556,7 +10561,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                         child.value.expected = decltype.elements
                      end
                   end
-               elseif decltype.typename == "map" then
+               elseif decltype is MapType then
                   for _, child in ipairs(node) do
                      child.key.expected = decltype.keys
                      child.value.expected = decltype.values
@@ -10618,7 +10623,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             local is_record = is_record_type(decltype)
             local is_array = is_array_type(decltype)
-            local is_map = decltype.typename == "map"
 
             local force_array: Type = nil
 
@@ -10664,12 +10668,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      assert_is_a(node[i], cvtype, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(n))
                   end
                elseif node[i].key_parsed == "implicit" then
-                  if is_map then
+                  if decltype is MapType then
                      assert_is_a(node[i], INTEGER, decltype.keys, in_context(node.expected_context, "in map key"))
                      assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
                   end
                   force_array = expand_type(node[i], force_array, child.vtype)
-               elseif is_map then
+               elseif decltype is MapType then
                   force_array = nil
                   assert_is_a(node[i], child.ktype, decltype.keys, in_context(node.expected_context, "in map key"))
                   assert_is_a(node[i], cvtype, decltype.values, in_context(node.expected_context, "in map value"))
@@ -10694,7 +10698,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             if decltype.typename == "record" then
                t.is_total, t.missing = total_record_check(decltype, seen_keys)
-            elseif decltype.typename == "map" then
+            elseif decltype is MapType then
                t.is_total, t.missing = total_map_check(decltype, seen_keys)
             end
 
@@ -11032,7 +11036,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
             elseif node.op.op == "@index" then
-               if e1type.typename == "map" then
+               if e1type is MapType then
                   node.e2.expected = e1type.keys
                end
             end
@@ -11259,7 +11263,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               if a.typename == "map" then
+               if a is MapType then
                   if a.keys.typename == "number" or a.keys.typename == "integer" then
                       add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
                   else
