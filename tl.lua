@@ -5193,6 +5193,10 @@ local function is_unknown(t)
    t.typename == "unresolved_emptytable_value"
 end
 
+local function display_typevar(typevar)
+   return TL_DEBUG and typevar or (typevar:gsub("@.*", ""))
+end
+
 local function show_type_base(t, short, seen)
 
    if seen[t] then
@@ -5340,11 +5344,11 @@ local function show_type_base(t, short, seen)
          (t.tk and " " .. t.tk or "")
       end
    elseif t.typename == "typevar" then
-      return TL_DEBUG and t.typevar or (t.typevar:gsub("@.*", ""))
+      return display_typevar(t.typevar)
    elseif t.typename == "typearg" then
-      return TL_DEBUG and t.typearg or (t.typearg:gsub("@.*", ""))
+      return display_typevar(t.typearg)
    elseif t.typename == "unresolvable_typearg" then
-      return (TL_DEBUG and t.typearg or (t.typearg:gsub("@.*", ""))) .. " (unresolved generic)"
+      return display_typevar(t.typearg) .. " (unresolved generic)"
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -7513,7 +7517,7 @@ tl.type_check = function(ast, opts)
 
          if interface_type then
             if not is_a(other, interface_type) then
-               return false, { Err(other, "given type %s does not satisfy %s constraint in type variable " .. typevar, other, interface_type) }
+               return false, { Err(other, "given type %s does not satisfy %s constraint in type variable " .. display_typevar(typevar), other, interface_type) }
             end
          end
 
