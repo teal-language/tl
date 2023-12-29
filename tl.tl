@@ -10218,8 +10218,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      widen_all_unions()
                   end
 
-                  if varname and rvar.typename == "union" then
-                     -- narrow union
+                  if varname and (rvar.typename == "union" or rvar.typename == "interface") then
+                     -- narrow unions and interfaces
                      add_var(varnode, varname, rval, nil, "narrow")
                   end
 

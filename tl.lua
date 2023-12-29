@@ -10218,7 +10218,7 @@ a.types[i], b.types[i]), }
                      widen_all_unions()
                   end
 
-                  if varname and rvar.typename == "union" then
+                  if varname and (rvar.typename == "union" or rvar.typename == "interface") then
 
                      add_var(varnode, varname, rval, nil, "narrow")
                   end
