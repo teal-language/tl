@@ -1258,6 +1258,7 @@ local table_types = {
 
 
 
+
 local TruthyFact = {}
 
 
@@ -7458,10 +7459,9 @@ tl.type_check = function(ast, opts)
       if (not a.elements) or (not is_a(a.elements, b.elements)) then
          return false
       end
-      if a.types and #a.types > 1 then
+      if a.consttypes and #a.consttypes > 1 then
 
-         for i = 1, #a.types do
-            local e = a.types[i]
+         for _, e in ipairs(a.consttypes) do
             if not is_a(e, b.elements) then
                return false, { Err(a, "%s is not a member of %s", e, b.elements) }
             end
@@ -9795,6 +9795,8 @@ a.types[i], b.types[i]), }
 
       local seen_keys = {}
 
+      local types
+
       for i, child in ipairs(children) do
          assert(child.typename == "table_item")
 
@@ -9822,8 +9824,8 @@ a.types[i], b.types[i]), }
             if not is_not_tuple then
                is_tuple = true
             end
-            if not typ.types then
-               typ.types = {}
+            if not types then
+               types = {}
             end
 
             if node[i].key_parsed == "implicit" then
@@ -9831,11 +9833,11 @@ a.types[i], b.types[i]), }
 
                   for _, c in ipairs(child.vtype.tuple) do
                      typ.elements = expand_type(node, typ.elements, c)
-                     typ.types[last_array_idx] = resolve_tuple(c)
+                     types[last_array_idx] = resolve_tuple(c)
                      last_array_idx = last_array_idx + 1
                   end
                else
-                  typ.types[last_array_idx] = uvtype
+                  types[last_array_idx] = uvtype
                   last_array_idx = last_array_idx + 1
                   typ.elements = expand_type(node, typ.elements, uvtype)
                end
@@ -9844,7 +9846,7 @@ a.types[i], b.types[i]), }
                   typ.elements = expand_type(node, typ.elements, uvtype)
                   is_not_tuple = true
                elseif n then
-                  typ.types[n] = uvtype
+                  types[n] = uvtype
                   if n > largest_array_idx then
                      largest_array_idx = n
                   end
@@ -9893,7 +9895,7 @@ a.types[i], b.types[i]), }
          local pure_array = true
          if not is_not_tuple then
             local last_t
-            for _, current_t in pairs(typ.types) do
+            for _, current_t in pairs(types) do
                if last_t then
                   if not same_type(last_t, current_t) then
                      pure_array = false
@@ -9905,13 +9907,13 @@ a.types[i], b.types[i]), }
          end
          if pure_array then
             typ.typename = "array"
-
+            typ.consttypes = types
             assert(typ.elements)
             typ.inferred_len = largest_array_idx - 1
          else
             typ.typename = "tupletable"
             typ.elements = nil
-            assert(typ.types)
+            typ.types = types
          end
       elseif is_record then
          typ.typename = "record"
@@ -9919,7 +9921,8 @@ a.types[i], b.types[i]), }
          typ.typename = "map"
       elseif is_tuple then
          typ.typename = "tupletable"
-         if not typ.types or #typ.types == 0 then
+         typ.types = types
+         if not types or #types == 0 then
             error_at(node, "cannot determine type of tuple elements")
          end
       end
