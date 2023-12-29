@@ -1076,6 +1076,8 @@ local interface Type
    yend: integer
    xend: integer
 
+   inferred_at: Where
+
    -- Lua compatibilty
    needs_compat: boolean
 
@@ -1137,17 +1139,27 @@ local interface Type
    ktype: Type
    vtype: Type
 
-   -- emptytable
-   declared_at: Node
-   assigned_to: string
-   inferred_at: Where
-   emptytable_type: Type
-
    -- unresolved items
    labels: {string:{Node}}
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local record EmptyTableType
+   is Type
+   where self.typename == "emptytable"
+
+   declared_at: Node
+   assigned_to: string
+   keys: Type
+end
+
+local record UnresolvedEmptyTableValueType
+   is Type
+   where self.typename == "unresolved_emptytable_value"
+
+   emptytable_type: EmptyTableType
 end
 
 local record FunctionType
@@ -5309,7 +5321,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          table.insert(out, show(v))
       end
       return table.concat(out, " | ")
-   elseif t.typename == "emptytable" then
+   elseif t is EmptyTableType then
       return "{}"
    elseif t.typename == "map" then
       return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
@@ -6707,7 +6719,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true, copy
    end
 
-   local function infer_emptytable(emptytable: Type, fresh_t: Type)
+   local function infer_emptytable(emptytable: EmptyTableType, fresh_t: Type)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
       local nst = is_global and 1 or #st
       for i = nst, 1, -1 do
@@ -8077,17 +8089,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       -- some flow-based inference
       if t1.typename == "nil" then
          return true
-      elseif t2.typename == "unresolved_emptytable_value" then
+      elseif t2 is UnresolvedEmptyTableValueType then
          if is_number_type(t2.emptytable_type.keys) then -- ideally integer only
             infer_emptytable(t2.emptytable_type, infer_at(where, an_array(t1)))
          else
             infer_emptytable(t2.emptytable_type, infer_at(where, a_map(t2.emptytable_type.keys, t1)))
          end
          return true
-      elseif t2.typename == "emptytable" then
+      elseif t2 is EmptyTableType then
          if is_lua_table_type(t1) then
             infer_emptytable(t2, infer_at(where, t1))
-         elseif t1.typename ~= "emptytable" then
+         elseif not t1 is EmptyTableType then
             error_at(where, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
             return false
          end
@@ -8308,7 +8320,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          -- resolve inference of emptytables used as arguments or returns
          for i = 1, n_xs do
             local x = xt[i]
-            if x.typename == "emptytable" or x.typename == "unresolved_emptytable_value" then
+            if x is EmptyTableType then
                local y = yt[i] or (ys.is_va and yt[n_ys])
                if y then -- y may not be present when inferring returns
                   local w = wheres and wheres[i + delta] or where -- for self, a + argdelta is 0
@@ -8631,7 +8643,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          else
             return nil, "invalid key '" .. key .. "' in type %s"
          end
-      elseif tbl.typename == "emptytable" or is_unknown(tbl) then
+      elseif tbl is EmptyTableType or is_unknown(tbl) then
          if lax then
             return INVALID
          end
@@ -8940,13 +8952,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       elseif is_array_type(a) and is_a(b, INTEGER) then
          return a.elements
-      elseif a.typename == "emptytable" then
+      elseif a is EmptyTableType then
          if a.keys == nil then
             a.keys = infer_at(anode, resolve_tuple(orig_b))
          end
 
          if is_a(orig_b, a.keys) then
-            return type_at(anode, a_type("unresolved_emptytable_value", { emptytable_type = a }))
+            return type_at(anode, a_type("unresolved_emptytable_value", {
+               emptytable_type = a
+            } as UnresolvedEmptyTableValueType))
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s (type of keys inferred at "
@@ -9563,7 +9577,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return invalid_at(node.e2, "attempting ipairs on tuple that's not a valid array: %s", orig_t)
             end
          elseif not is_array_type(t) then
-            if not (lax and (is_unknown(t) or t.typename == "emptytable")) then
+            if not (lax and (is_unknown(t) or t is EmptyTableType)) then
                return invalid_at(node.e2, "attempting ipairs on something that's not an array: %s", orig_t)
             end
          end
@@ -9993,7 +10007,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local t = decltype or infertype
       if t == nil then
          t = missing_initializer(node, i, name)
-      elseif t.typename == "emptytable" then
+      elseif t is EmptyTableType then
          t.declared_at = node
          t.assigned_to = name
       end
@@ -10833,7 +10847,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
-            if rtype.typename == "emptytable" then
+            if rtype is EmptyTableType then
                edit_type(rtype, "record")
                rtype.fields = {}
                rtype.field_order = {}
@@ -11147,7 +11161,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.known = nil
                   t = a
 
-               elseif is_lua_table_type(ra) and b.typename == "emptytable" then
+               elseif is_lua_table_type(ra) and b is EmptyTableType then
                   node.known = nil
                   t = a
 

@@ -1279,6 +1279,18 @@ local table_types = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 local TruthyFact = {}
 
 
@@ -8087,7 +8099,7 @@ a.types[i], b.types[i]), }
       elseif t2.typename == "emptytable" then
          if is_lua_table_type(t1) then
             infer_emptytable(t2, infer_at(where, t1))
-         elseif t1.typename ~= "emptytable" then
+         elseif not (t1.typename == "emptytable") then
             error_at(where, context .. ": " .. (name and (name .. ": ") or "") .. "assigning %s to a variable declared with {}", t1)
             return false
          end
@@ -8308,7 +8320,7 @@ a.types[i], b.types[i]), }
 
          for i = 1, n_xs do
             local x = xt[i]
-            if x.typename == "emptytable" or x.typename == "unresolved_emptytable_value" then
+            if x.typename == "emptytable" then
                local y = yt[i] or (ys.is_va and yt[n_ys])
                if y then
                   local w = wheres and wheres[i + delta] or where
@@ -8946,7 +8958,9 @@ a.types[i], b.types[i]), }
          end
 
          if is_a(orig_b, a.keys) then
-            return type_at(anode, a_type("unresolved_emptytable_value", { emptytable_type = a }))
+            return type_at(anode, a_type("unresolved_emptytable_value", {
+               emptytable_type = a,
+            }))
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s (type of keys inferred at " ..
