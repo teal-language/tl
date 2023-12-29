@@ -1103,7 +1103,7 @@ local interface Type
    -- records
    interface_list: {Type}
    interfaces_expanded: boolean
-   typeargs: {Type}
+   typeargs: {TypeArgType}
    fields: {string: Type}
    field_order: {string}
    meta_fields: {string: Type}
@@ -1127,13 +1127,6 @@ local interface Type
    found: Type    -- type is found but typeargs are not resolved
    resolved: Type -- type is found and typeargs are resolved
 
-   -- typevar
-   typevar: string
-
-   -- typearg
-   typearg: string
-   constraint: Type
-
    -- table items
    kname: string
    ktype: Type
@@ -1144,6 +1137,37 @@ local interface Type
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local record TypeArgType
+   is Type
+   where self.typename == "typearg"
+
+   typearg: string
+   constraint: Type
+end
+
+local record UnresolvedTypeArgType
+   is Type
+   where self.typename == "unresolved_typearg"
+
+   typearg: string
+   constraint: Type
+end
+
+local record UnresolvableTypeArgType
+   is Type
+   where self.typename == "unresolvable_typearg"
+
+   typearg: string
+end
+
+local record TypeVarType
+   is Type
+   where self.typename == "typevar"
+
+   typevar: string
+   constraint: Type
 end
 
 local record MapType
@@ -1420,7 +1444,7 @@ local record Node
    value: Node
    key_parsed: KeyParsed
 
-   typeargs: {Type}
+   typeargs: {TypeArgType}
    args: Node
    rets: Type
    body: Node
@@ -1907,11 +1931,11 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
    return i, list
 end
 
-local function parse_anglebracket_list(ps: ParseState, i: integer, parse_item: ParseItem<Type>): integer, {Type}
+local function parse_anglebracket_list<T is Type>(ps: ParseState, i: integer, parse_item: ParseItem<T>): integer, {T}
    if ps.tokens[i+1].tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
    end
-   local types: {Type} = {}
+   local types: {T} = {}
    i = verify_tk(ps, i, "<")
    i = parse_list(ps, i, types, { [">"] = true, [">>"] = true, }, "sep", parse_item)
    if ps.tokens[i].tk == ">" then
@@ -1925,7 +1949,7 @@ local function parse_anglebracket_list(ps: ParseState, i: integer, parse_item: P
    return i, types
 end
 
-local function parse_typearg(ps: ParseState, i: integer): integer, Type, integer
+local function parse_typearg(ps: ParseState, i: integer): integer, TypeArgType, integer
    local name = ps.tokens[i].tk
    local constraint: Type
    i = verify_kind(ps, i, "identifier")
@@ -1938,7 +1962,7 @@ local function parse_typearg(ps: ParseState, i: integer): integer, Type, integer
       x = ps.tokens[i - 2].x,
       typearg = name,
       constraint = constraint,
-   })
+   } as TypeArgType)
 end
 
 local function parse_return_types(ps: ParseState, i: integer): integer, Type
@@ -3792,8 +3816,10 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
    if ast.vtype then
       table.insert(xs, recurse_type(ast.vtype, visit))
    end
-   if ast.constraint then
-      table.insert(xs, recurse_type(ast.constraint, visit))
+   if ast is TypeArgType then
+      if ast.constraint then
+         table.insert(xs, recurse_type(ast.constraint, visit))
+      end
    end
 
    local ret: T
@@ -5455,11 +5481,11 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          return t.typename ..
                 (t.tk and " " .. t.tk or "")
       end
-   elseif t.typename == "typevar" then
+   elseif t is TypeVarType then
       return display_typevar(t.typevar)
-   elseif t.typename == "typearg" then
+   elseif t is TypeArgType then
       return display_typevar(t.typearg)
-   elseif t.typename == "unresolvable_typearg" then
+   elseif t is UnresolvableTypeArgType then
       return display_typevar(t.typearg) .. " (unresolved generic)"
    elseif is_unknown(t) then
       return "<unknown type>"
@@ -5733,15 +5759,15 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       return t
    end
 
-   local function a_gfunction(n: integer, f: function(...: Type): (FunctionType), typename?: TypeName): FunctionType
+   local function a_gfunction(n: integer, f: function(...: TypeVarType): (FunctionType), typename?: TypeName): FunctionType
       local typevars = {}
       local typeargs = {}
       local c = string.byte("A") - 1
       fresh_typevar_ctr = fresh_typevar_ctr + 1
       for i = 1, n do
          local name = string.char(c + i) .. "@" .. fresh_typevar_ctr
-         typevars[i] = a_type("typevar", { typevar = name })
-         typeargs[i] = a_type("typearg", { typearg = name })
+         typevars[i] = a_type("typevar", { typevar = name } as TypeVarType)
+         typeargs[i] = a_type("typearg", { typearg = name } as TypeArgType)
       end
       local t = f(table.unpack(typevars))
       t.typeargs = typeargs
@@ -6350,18 +6376,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local type ResolveType = function(Type): Type
    local resolve_typevars: function (typ: Type, fn_var?: ResolveType, fn_arg?: ResolveType): boolean, Type, {Error}
 
-   local function fresh_typevar(t: Type): Type, Type, boolean
+   local function fresh_typevar(t: TypeVarType): Type, Type, boolean
       return a_type("typevar", {
          typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
          constraint = t.constraint,
-      })
+      } as TypeVarType)
    end
 
-   local function fresh_typearg(t: Type): Type
+   local function fresh_typearg(t: TypeArgType): Type
       return a_type("typearg", {
          typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
          constraint = t.constraint,
-      })
+      } as TypeArgType)
    end
 
    local function ensure_fresh_typeargs(t: Type): Type
@@ -6380,7 +6406,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local var = find_var(name, use)
       if var then
          local t = var.t
-         if t.typename == "unresolved_typearg" then
+         if t is UnresolvedTypeArgType then
             return nil, nil, t.constraint
          end
          t = ensure_fresh_typeargs(t)
@@ -6464,7 +6490,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return nil
          end
       end
-      if is_typetype(typ) or (accept_typearg and typ.typename == "typearg") then
+      if is_typetype(typ) or (accept_typearg and typ is TypeArgType) then
          return typ
       end
    end
@@ -6616,7 +6642,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["unknown"] = true,
    }
 
-   local function default_resolve_typevars_callback(t: Type): Type
+   local function default_resolve_typevars_callback(t: TypeVarType): Type
       local rt = find_var_type(t.typevar)
       if not rt then
          return nil
@@ -6647,10 +6673,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          local orig_t = t
-         if t.typename == "typevar" then
+         if t is TypeVarType then
             local rt = fn_var(t)
             if rt then
-               resolved[orig_t.typevar] = true
+               resolved[t.typevar] = true
                if no_nested_types[rt.typename] or (rt.typename == "nominal" and not rt.typevals) then
                   seen[orig_t] = rt
                   return rt, false
@@ -6677,18 +6703,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if t.typename == "array" then
             copy.elements, same = resolve(t.elements, same)
             -- inferred_len is not propagated
-         elseif t.typename == "typearg" then
+         elseif t is TypeArgType then
             if fn_arg then
                copy = fn_arg(t)
             else
+               assert(copy is TypeArgType)
                copy.typearg = t.typearg
                if t.constraint then
                   copy.constraint, same = resolve(t.constraint, same)
                end
             end
-         elseif t.typename == "unresolvable_typearg" then
+         elseif t is UnresolvableTypeArgType then
+            assert(copy is UnresolvableTypeArgType)
             copy.typearg = t.typearg
-         elseif t.typename == "typevar" then
+         elseif t is TypeVarType then
+            assert(copy is TypeVarType)
             copy.typevar = t.typevar
             if t.constraint then
                copy.constraint, same = resolve(t.constraint, same)
@@ -6705,7 +6734,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same)
+                  copy.typeargs[i], same = resolve(tf, same) as (TypeArgType, boolean)
                end
             end
 
@@ -6719,7 +6748,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same)
+                  copy.typeargs[i], same = resolve(tf, same) as (TypeArgType, boolean)
                end
             end
 
@@ -7646,7 +7675,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if not ok then
             return false, errs
          end
-         if r.typevar == typevar then
+         if r is TypeVarType and r.typevar == typevar then
             return true
          end
          add_var(nil, typevar, r)
@@ -7684,14 +7713,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["*"] = compare_false,
       },
       ["typevar"] = {
-         ["typevar"] = function(a: Type, b: Type): boolean, {Error}
+         ["typevar"] = function(a: TypeVarType, b: TypeVarType): boolean, {Error}
             if a.typevar == b.typevar then
                return true
             end
 
             return compare_or_infer_typevar(b.typevar, a, nil, same_type)
          end,
-         ["*"] = function(a: Type, b: Type): boolean, {Error}
+         ["*"] = function(a: TypeVarType, b: Type): boolean, {Error}
             return compare_or_infer_typevar(a.typevar, nil, b, same_type)
          end,
       },
@@ -7757,7 +7786,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["*"] = {
          ["bad_nominal"] = compare_false,
-         ["typevar"] = function(a: Type, b: Type): boolean, {Error}
+         ["typevar"] = function(a: Type, b: TypeVarType): boolean, {Error}
             return compare_or_infer_typevar(b.typevar, a, nil, same_type)
          end,
       },
@@ -7786,14 +7815,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["typevar"] = {
-         ["typevar"] = function(a: Type, b: Type): boolean, {Error}
+         ["typevar"] = function(a: TypeVarType, b: TypeVarType): boolean, {Error}
             if a.typevar == b.typevar then
                return true
             end
 
             return compare_or_infer_typevar(b.typevar, a, nil, is_a)
          end,
-         ["*"] = function(a: Type, b: Type): boolean, {Error}
+         ["*"] = function(a: TypeVarType, b: Type): boolean, {Error}
             return compare_or_infer_typevar(a.typevar, nil, b, is_a)
          end,
       },
@@ -8041,7 +8070,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["tuple"] = function(a: Type, b: Type): boolean, {Error}
             return is_a(a_tuple({a}), b)
          end,
-         ["typevar"] = function(a: Type, b: Type): boolean, {Error}
+         ["typevar"] = function(a: Type, b: TypeVarType): boolean, {Error}
             return compare_or_infer_typevar(b.typevar, a, nil, is_a)
          end,
          ["union"] = exists_supertype_in as CompareTypes,            -- ∃ t ∈ b, a <: t
@@ -8380,7 +8409,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if a.constraint then
                      add_var(nil, a.typearg, a.constraint)
                   else
-                     add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", { typearg = a.typearg }))
+                     add_var(nil, a.typearg, lax and UNKNOWN or a_type("unresolvable_typearg", {
+                        typearg = a.typearg
+                     } as UnresolvableTypeArgType))
                   end
                end
             end
@@ -8480,7 +8511,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             for _, fnarg in ipairs(func.typeargs) do
                add_var(nil, fnarg.typearg, a_type("unresolved_typearg", {
                   constraint = fnarg.constraint,
-               }))
+               } as UnresolvedTypeArgType))
             end
          end
       end
@@ -8695,7 +8726,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      if (tbl.typename == "typevar" or tbl.typename == "typearg") and tbl.constraint then
+      if (tbl is TypeVarType or tbl is TypeArgType) and tbl.constraint then
          local t = match_record_key(tbl.constraint, rec, key)
 
          if t then
@@ -9175,7 +9206,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             table.insert(typevals, a_type("typevar", {
                typevar = a.typearg,
                constraint = a.constraint,
-            }))
+            } as TypeVarType))
          end
       end
       return type_at(where, a_type("nominal", {
@@ -10601,7 +10632,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if node.expected then
                local decltype = resolve_tuple_and_nominal(node.expected)
 
-               if decltype.typename == "typevar" and decltype.constraint then
+               if decltype is TypeVarType and decltype.constraint then
                   decltype = resolve_typetype(resolve_tuple_and_nominal(decltype.constraint))
                end
 
@@ -10644,7 +10675,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local decltype = resolve_tuple_and_nominal(node.expected)
 
             local constraint: Type
-            if decltype.typename == "typevar" and decltype.constraint then
+            if decltype is TypeVarType and decltype.constraint then
                constraint = resolve_typetype(decltype.constraint)
                decltype = resolve_tuple_and_nominal(constraint)
             end
@@ -10898,7 +10929,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             -- add type arguments from the record implicitly
             if rtype.typeargs then
                for _, typ in ipairs(rtype.typeargs) do
-                  add_var(nil, typ.typearg, type_at(typ, a_type("typearg", { typearg = typ.typearg })))
+                  add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
+                     typearg = typ.typearg
+                  } as TypeArgType)))
                end
             end
          end,
@@ -11634,7 +11667,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                local i = 1
                if typ.typeargs then
                   for _, _ in ipairs(typ.typeargs) do
-                     typ.typeargs[i] = children[i]
+                     typ.typeargs[i] = children[i] as TypeArgType
                      i = i + 1
                   end
                end
@@ -11717,16 +11750,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end,
          },
          ["typearg"] = {
-            after = function(typ: Type, _children: {Type}): Type
+            after = function(typ: TypeArgType, _children: {Type}): Type
                add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
                   typearg = typ.typearg,
                   constraint = typ.constraint,
-               })))
+               } as TypeArgType)))
                return typ
             end,
          },
          ["typevar"] = {
-            after = function(typ: Type, _children: {Type}): Type
+            after = function(typ: TypeVarType, _children: {Type}): Type
                if not find_var_type(typ.typevar) then
                   error_at(typ, "undefined type variable " .. typ.typevar)
                end
@@ -11741,10 +11774,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local t = find_type(typ.names, true)
                if t then
-                  if t.typename == "typearg" then
+                  if t is TypeArgType then
                      -- convert nominal into a typevar
-                     edit_type(typ, "typevar")
                      typ.names = nil
+                     edit_type(typ, "typevar")
+                     assert(typ is TypeVarType)
                      typ.typevar = t.typearg
                      typ.constraint = t.constraint
                   else
