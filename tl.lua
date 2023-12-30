@@ -7854,6 +7854,11 @@ tl.type_check = function(ast, opts)
       },
       ["nominal"] = {
          ["nominal"] = function(a, b)
+            local ok, errs = are_same_nominals(a, b)
+            if ok then
+               return true
+            end
+
             local rb = resolve_nominal(b)
             if rb.typename == "interface" then
 
@@ -7865,12 +7870,6 @@ tl.type_check = function(ast, opts)
 
                return is_a(ra, rb)
             end
-
-            local ok, errs = are_same_nominals(a, b)
-            if ok then
-               return true
-            end
-
 
 
             return ok, errs

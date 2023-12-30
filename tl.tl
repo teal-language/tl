@@ -7854,6 +7854,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["nominal"] = {
          ["nominal"] = function(a: Type, b: Type): boolean, {Error}
+            local ok, errs = are_same_nominals(a, b)
+            if ok then
+               return true
+            end
+
             local rb = resolve_nominal(b)
             if rb.typename == "interface" then
                -- match interface subtyping
@@ -7865,12 +7870,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                -- match unions structurally
                return is_a(ra, rb)
             end
-
-            local ok, errs = are_same_nominals(a, b)
-            if ok then
-               return true
-            end
-
 
             -- all other types nominally
             return ok, errs
