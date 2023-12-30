@@ -7806,8 +7806,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return is_a(ra, rb)
             end
 
+            local ok, errs = are_same_nominals(a, b)
+            if ok then
+               return true
+            end
+
+
             -- all other types nominally
-            return are_same_nominals(a, b)
+            return ok, errs
          end,
          ["*"] = subtype_nominal,
       },
@@ -7991,6 +7997,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return any_errors(errs)
          end,
       },
+      ["typearg"] = {
+         ["typearg"] = function(a: TypeArgType, b: TypeArgType): boolean, {Error}
+            return a.typearg == b.typearg
+         end,
+         ["*"] = function(a: TypeArgType, b: Type): boolean, {Error}
+            if a.constraint then
+               return is_a(a.constraint, b)
+            end
+         end,
+      },
       ["*"] = {
          ["bad_nominal"] = compare_false,
          ["any"] = compare_true,
@@ -7999,6 +8015,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          ["typevar"] = function(a: Type, b: TypeVarType): boolean, {Error}
             return compare_or_infer_typevar(b.typevar, a, nil, is_a)
+         end,
+         ["typearg"] = function(a: Type, b: TypeArgType): boolean, {Error}
+            if b.constraint then
+               return is_a(a, b.constraint)
+            end
          end,
          ["union"] = exists_supertype_in as CompareTypes,            -- ∃ t ∈ b, a <: t
                                                                      -- ───────────────
@@ -8025,22 +8046,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["any"] = 5,
       ["union"] = 6,
       ["poly"] = 7,
-      ["nominal"] = 8,
+      -- then typeargs
+      ["typearg"] = 8,
+      -- then nominals
+      ["nominal"] = 9,
       -- then base types
-      ["enum"] = 9,
-      ["string"] = 9,
-      ["integer"] = 9,
-      ["boolean"] = 9,
+      ["enum"] = 10,
+      ["string"] = 10,
+      ["integer"] = 10,
+      ["boolean"] = 10,
       -- then interfaces
-      ["interface"] = 10,
+      ["interface"] = 11,
       -- then special cases of tables
-      ["emptytable"] = 11,
-      ["tupletable"] = 12,
+      ["emptytable"] = 12,
+      ["tupletable"] = 13,
       -- then other recursive types
-      ["record"] = 13,
-      ["array"] = 13,
-      ["map"] = 13,
-      ["function"] = 13,
+      ["record"] = 14,
+      ["array"] = 14,
+      ["map"] = 14,
+      ["function"] = 14,
    }
 
    if lax then
@@ -10873,7 +10897,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if rtype.typeargs then
                for _, typ in ipairs(rtype.typeargs) do
                   add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
-                     typearg = typ.typearg
+                     typearg = typ.typearg,
+                     constraint = typ.constraint,
                   } as TypeArgType)))
                end
             end

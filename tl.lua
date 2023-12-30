@@ -7806,8 +7806,14 @@ tl.type_check = function(ast, opts)
                return is_a(ra, rb)
             end
 
+            local ok, errs = are_same_nominals(a, b)
+            if ok then
+               return true
+            end
 
-            return are_same_nominals(a, b)
+
+
+            return ok, errs
          end,
          ["*"] = subtype_nominal,
       },
@@ -7991,6 +7997,16 @@ a.types[i], b.types[i]), }
             return any_errors(errs)
          end,
       },
+      ["typearg"] = {
+         ["typearg"] = function(a, b)
+            return a.typearg == b.typearg
+         end,
+         ["*"] = function(a, b)
+            if a.constraint then
+               return is_a(a.constraint, b)
+            end
+         end,
+      },
       ["*"] = {
          ["bad_nominal"] = compare_false,
          ["any"] = compare_true,
@@ -7999,6 +8015,11 @@ a.types[i], b.types[i]), }
          end,
          ["typevar"] = function(a, b)
             return compare_or_infer_typevar(b.typevar, a, nil, is_a)
+         end,
+         ["typearg"] = function(a, b)
+            if b.constraint then
+               return is_a(a, b.constraint)
+            end
          end,
          ["union"] = exists_supertype_in,
 
@@ -8025,22 +8046,25 @@ a.types[i], b.types[i]), }
       ["any"] = 5,
       ["union"] = 6,
       ["poly"] = 7,
-      ["nominal"] = 8,
 
-      ["enum"] = 9,
-      ["string"] = 9,
-      ["integer"] = 9,
-      ["boolean"] = 9,
+      ["typearg"] = 8,
 
-      ["interface"] = 10,
+      ["nominal"] = 9,
 
-      ["emptytable"] = 11,
-      ["tupletable"] = 12,
+      ["enum"] = 10,
+      ["string"] = 10,
+      ["integer"] = 10,
+      ["boolean"] = 10,
 
-      ["record"] = 13,
-      ["array"] = 13,
-      ["map"] = 13,
-      ["function"] = 13,
+      ["interface"] = 11,
+
+      ["emptytable"] = 12,
+      ["tupletable"] = 13,
+
+      ["record"] = 14,
+      ["array"] = 14,
+      ["map"] = 14,
+      ["function"] = 14,
    }
 
    if lax then
@@ -10874,6 +10898,7 @@ expand_type(node, values, elements) })
                for _, typ in ipairs(rtype.typeargs) do
                   add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
                      typearg = typ.typearg,
+                     constraint = typ.constraint,
                   })))
                end
             end
