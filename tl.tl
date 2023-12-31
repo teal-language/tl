@@ -111,6 +111,7 @@ local record tl
       args: {{integer, string}} -- FUNCTION
       rets: {{integer, string}} -- FUNCTION
       vararg: boolean -- FUNCTION
+      varret: boolean -- FUNCTION
       types: {integer} -- UNION, POLY, TUPLE
       keys: integer -- MAP
       values: integer -- MAP
@@ -1087,10 +1088,6 @@ local interface Type
    -- arguments: optional arity
    opt: boolean
 
-   -- tuple
-   is_va: boolean
-   tuple: {Type}
-
    -- typetype
    def: Type
    is_alias: boolean
@@ -1134,6 +1131,20 @@ local interface Type
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local record InvalidType
+   is Type
+   where self.typename == "invalid"
+end
+
+local record TupleType
+   is Type
+   where self.typename == "tuple"
+
+   -- tuple
+   is_va: boolean
+   tuple: {Type}
 end
 
 local record TypeArgType
@@ -1229,8 +1240,6 @@ end
 local record EnumType is Type where self.typename == "enum"
    enumset: {string:boolean}
 end
-
-local type TupleType = Type
 
 local record Operator
    y: integer
@@ -1443,7 +1452,7 @@ local record Node
 
    typeargs: {TypeArgType}
    args: Node
-   rets: Type
+   rets: TupleType
    body: Node
    implicit_global_function: boolean
    is_predeclared_local_function: boolean
@@ -1550,7 +1559,7 @@ local enum ParseTypeListMode
    "casttype"
 end
 
-local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer, Type
+local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer, TupleType
 local parse_expression: function(ParseState, integer): integer, Node, integer
 local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
@@ -1654,11 +1663,11 @@ local macroexp a_typetype(t: Type): Type
 end
 
 local macroexp a_tuple(t: {Type}): TupleType
-   return a_type("tuple", { tuple = t })
+   return a_type("tuple", { tuple = t } as TupleType)
 end
 
 local function c_tuple(t: {Type}): TupleType
-   return a_type("tuple", { tuple = t })
+   return a_type("tuple", { tuple = t } as TupleType)
 end
 
 local macroexp a_union(t: {Type}): UnionType
@@ -1673,7 +1682,7 @@ local function a_function(t: FunctionType): FunctionType
    return a_type("function", t)
 end
 
-local function a_vararg(t: {Type}): Type
+local function a_vararg(t: {Type}): TupleType
    local typ = a_tuple(t)
    typ.is_va = true
    return typ
@@ -1960,7 +1969,7 @@ local function parse_typearg(ps: ParseState, i: integer): integer, TypeArgType, 
    } as TypeArgType)
 end
 
-local function parse_return_types(ps: ParseState, i: integer): integer, Type
+local function parse_return_types(ps: ParseState, i: integer): integer, TupleType
    return parse_type_list(ps, i, "rets")
 end
 
@@ -2122,13 +2131,13 @@ parse_type = function(ps: ParseState, i: integer): integer, Type, integer
    return i, bt
 end
 
-local function new_tuple(ps: ParseState, i: integer): Type, {Type}
-   local t = new_type(ps, i, "tuple")
+local function new_tuple(ps: ParseState, i: integer): TupleType, {Type}
+   local t = new_type(ps, i, "tuple") as TupleType
    t.tuple = {}
    return t, t.tuple
 end
 
-parse_type_list = function(ps: ParseState, i: integer, mode: ParseTypeListMode): integer, Type
+parse_type_list = function(ps: ParseState, i: integer, mode: ParseTypeListMode): integer, TupleType
    local t, list = new_tuple(ps, i)
 
    local first_token = ps.tokens[i].tk
@@ -3745,7 +3754,7 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
       end
    end
 
-   if ast.tuple then
+   if ast is TupleType then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(child, visit)
       end
@@ -4907,7 +4916,8 @@ local function store_function(trenv: TypeReportEnv, ti: TypeInfo, rt: FunctionTy
       table.insert(rets, mark_array { get_typenum(trenv, fnarg), nil })
    end
    ti.rets = mark_array(rets)
-   ti.vararg = not not rt.is_va
+   ti.vararg = not not rt.args.is_va
+   ti.varret = not not rt.rets.is_va
 end
 
 get_typenum = function(trenv: TypeReportEnv, t: Type): integer
@@ -4926,7 +4936,7 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    local rt = t
    if is_typetype(rt) then
       rt = rt.def
-   elseif rt.typename == "tuple" and #rt.tuple == 1 then
+   elseif rt is TupleType and #rt.tuple == 1 then
       rt = rt.tuple[1]
    end
 
@@ -5009,7 +5019,7 @@ end
 --------------------------------------------------------------------------------
 
 local NONE = a_type("none", {})
-local INVALID = a_type("invalid", {})
+local INVALID = a_type("invalid", {} as InvalidType)
 local UNKNOWN = a_type("unknown", {})
 local CIRCULAR_REQUIRE = a_type("circular_require", {})
 
@@ -5322,7 +5332,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       else
          return table.concat(t.names, ".")
       end
-   elseif t.typename == "tuple" then
+   elseif t is TupleType then
       local out: {string} = {}
       for _, v in ipairs(t.tuple) do
          table.insert(out, show(v))
@@ -5715,7 +5725,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       return t
    end
 
-   local type TypeConstructor = function({Type}):Type
+   local type TypeConstructor = function({Type}):TupleType
 
    local record ArgsRets
       ctor: TypeConstructor
@@ -5849,13 +5859,13 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
             fields = {
                ["close"] = a_function { args = a_tuple { NOMINAL_FILE }, rets = a_tuple { BOOLEAN, STRING, INTEGER } },
                ["flush"] = a_function { args = a_tuple { NOMINAL_FILE }, rets = a_tuple {} },
-               ["lines"] = a_file_reader(function(ctor: (function({Type}):Type), args: {Type}, rets: {Type}): Type
+               ["lines"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
                   table.insert(args, 1, NOMINAL_FILE)
                   return a_function { args = ctor(args), rets = a_tuple {
                      a_function { args = a_tuple {}, rets = ctor(rets) },
                   } }
                end),
-               ["read"] = a_file_reader(function(ctor: (function({Type}):Type), args: {Type}, rets: {Type}): Type
+               ["read"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
                   table.insert(args, 1, NOMINAL_FILE)
                   return a_function { args = ctor(args), rets = ctor(rets) }
                end),
@@ -6425,7 +6435,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function union_type(t: Type): string, Type
       if is_typetype(t) then
          return union_type(t.def), t.def
-      elseif t.typename == "tuple" then
+      elseif t is TupleType then
          return union_type(t.tuple[1]), t.tuple[1]
       elseif t.typename == "nominal" then
          local typetype = t.found or find_type(t.names)
@@ -6669,8 +6679,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             assert(copy is FunctionType)
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
-            copy.args, same = resolve(t.args, same)
-            copy.rets, same = resolve(t.rets, same)
+            copy.args, same = resolve(t.args, same) as (TupleType, boolean)
+            copy.rets, same = resolve(t.rets, same) as (TupleType, boolean)
          elseif is_record_type(t) then
             if t.typeargs then
                copy.typeargs = {}
@@ -6723,7 +6733,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             for i, tf in ipairs(t.types) do
                copy.types[i], same = resolve(tf, same)
             end
-         elseif t.typename == "tuple" then
+         elseif t is TupleType then
+            assert(copy is TupleType)
             copy.is_va = t.is_va
             copy.tuple = {}
             for i, tf in ipairs(t.tuple) do
@@ -6764,7 +6775,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function resolve_tuple(t: Type): Type
-      if t.typename == "tuple" then
+      if t is TupleType then
          t = t.tuple[1]
       end
       if t == nil then
@@ -6783,7 +6794,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       })
    end
 
-   local function invalid_at(where: Where, msg: string, ...:Type): Type
+   local function invalid_at(where: Where, msg: string, ...:Type): InvalidType
       error_at(where, msg, ...)
       return INVALID
    end
@@ -6865,14 +6876,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function type_at(w: Where, t: Type): Type
+   local function type_at<T is Type>(w: Where, t: T): T
       t.x = w.x
       t.y = w.y
       t.filename = filename
       return t
    end
 
-   local function resolve_typevars_at(where: Where, t: Type): Type
+   local function resolve_typevars_at<T is Type>(where: Where, t: T): T
       assert(where)
       local ok, ret, errs = resolve_typevars(t)
       if not ok then
@@ -6885,7 +6896,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return type_at(where, ret)
    end
 
-   local function infer_at(where: Where, t: Type): Type
+   local function infer_at<T is Type>(where: Where, t: T): T
       local ret = resolve_typevars_at(where, t)
       if ret.typename == "invalid" then
          ret = t -- errors are produced by resolve_typevars_at
@@ -7725,9 +7736,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["*"] = compare_false,
       },
       ["tuple"] = {
-         ["tuple"] = function(a: Type, b: Type): boolean, {Error}    -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
-            local at, bt = a.tuple, b.tuple                          -- ──────────────────────────────────
-            if #at ~= #bt then                                       --        a tuple <: b tuple
+         ["tuple"] = function(a: TupleType, b: TupleType): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
+            local at, bt = a.tuple, b.tuple                                  -- ──────────────────────────────────
+            if #at ~= #bt then                                               --        a tuple <: b tuple
                return false
             end
             for i = 1, #at do
@@ -8350,7 +8361,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       orignode.known = saveknown
    end
 
-   local type_check_function_call: function(Node, {Node}, Type, TupleType, Node, boolean, ? integer): TupleType, Type
+   local type InvalidOrTupleType = InvalidType | TupleType
+
+   local type_check_function_call: function(Node, {Node}, Type, TupleType, Node, boolean, ? integer): InvalidOrTupleType, FunctionType
    do
       local function mark_invalid_typeargs(f: FunctionType)
          if f.typeargs then
@@ -8368,10 +8381,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function infer_emptytables(where: Where, wheres: {Where}, xs: Type, ys: Type, delta: integer)
-         assert(xs.typename == "tuple")
-         assert(ys.typename == "tuple")
-
+      local function infer_emptytables(where: Where, wheres: {Where}, xs: TupleType, ys: TupleType, delta: integer)
          local xt, yt = xs.tuple, ys.tuple
          local n_xs = #xt
          local n_ys = #yt
@@ -8390,7 +8400,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local check_args_rets: function(where: Where, where_args: {Node}, f: Type, args: TupleType, expected_rets: TupleType, argdelta: integer): Type, {Error}
+      local check_args_rets: function(where: Where, where_args: {Node}, f: Type, args: TupleType, expected_rets: TupleType, argdelta: integer): TupleType, {Error}
       do
          -- check if a tuple `xs` matches tuple `ys`
          local function check_func_type_list(where: Where, wheres: {Where}, xs: TupleType, ys: TupleType, from: integer, delta: integer, v: VarianceMode, mode: ArgCheckMode): boolean, {Error}
@@ -8417,7 +8427,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return true
          end
 
-         check_args_rets = function(where: Where, where_args: {Node}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): Type, {Error}
+         check_args_rets = function(where: Where, where_args: {Node}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): TupleType, {Error}
             local rets_ok = true
             local rets_errs: {Error}
             local args_ok: boolean
@@ -8476,7 +8486,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function fail_call(where: Where, func: FunctionType | PolyType, nargs: integer, errs: {Error}): Type
+      local function fail_call(where: Where, func: FunctionType | PolyType, nargs: integer, errs: {Error}): TupleType
          if errs then
             -- report the errors from the first match
             for _, err in ipairs(errs) do
@@ -8508,7 +8518,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolve_typevars_at(where, f.rets)
       end
 
-      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, typetype_funcall: boolean, is_method: boolean, argdelta: integer): Type, FunctionType
+      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, typetype_funcall: boolean, is_method: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
          assert(type(func) == "table")
          assert(type(args) == "table")
 
@@ -8587,9 +8597,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return fail_call(where, func, given, first_errs)
       end
 
-      type_check_function_call = function(node: Node, where_args: {Node}, func: Type, args: TupleType, e1: Node, is_method: boolean, argdelta?: integer): TupleType, Type
-         if node.expected and node.expected.typename ~= "tuple" then
-            node.expected = a_tuple { node.expected }
+      type_check_function_call = function(node: Node, where_args: {Node}, func: Type, args: TupleType, e1: Node, is_method: boolean, argdelta?: integer): InvalidOrTupleType, FunctionType
+         local expected = node.expected
+         local expected_rets: TupleType
+         if expected and expected is TupleType then
+            expected_rets = expected
+         else
+            expected_rets = a_tuple { node.expected }
          end
 
          begin_scope()
@@ -8603,7 +8617,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             and node.e1.receiver.resolved.typename == "typetype"
          )
 
-         local ret, f = check_call(node, where_args, func, args, node.expected, typetype_funcall, is_method, argdelta)
+         local ret, f = check_call(node, where_args, func, args, expected_rets, typetype_funcall, is_method, argdelta)
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
@@ -8666,7 +8680,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       tbl = resolve_typetype(tbl)
 
-      if tbl.typename == "union" then
+      if tbl is UnionType then
          local t = same_in_all_union_entries(tbl, function(t: Type): (Type, Type)
             return (match_record_key(t, rec, key))
          end)
@@ -8824,23 +8838,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return st[1][var]
    end
 
-   local get_rets: function(Type): Type
+   local get_rets: function(TupleType): TupleType
    if lax then
-      get_rets = function(rets: Type): Type
+      get_rets = function(rets: TupleType): TupleType
          if #rets.tuple == 0 then
             return a_vararg { UNKNOWN }
          end
          return rets
       end
    else
-      get_rets = function(rets: Type): Type
+      get_rets = function(rets: TupleType): TupleType
          return rets
       end
    end
 
-   local function add_internal_function_variables(node: Node, args: Type)
-      assert(args.typename == "tuple")
-
+   local function add_internal_function_variables(node: Node, args: TupleType)
       add_var(nil, "@is_va", args.is_va and ANY or NIL)
       add_var(nil, "@return", node.rets or a_tuple({}))
 
@@ -8854,11 +8866,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function add_function_definition_for_recursion(node: Node, fnargs: Type)
+   local function add_function_definition_for_recursion(node: Node, fnargs: TupleType)
       assert(fnargs.typename == "tuple")
 
       -- FIXME needs this copy?
-      local args: Type = a_tuple({})
+      local args = a_tuple({})
       args.is_va = fnargs.is_va
       for _, fnarg in ipairs(fnargs.tuple) do
          table.insert(args.tuple, fnarg)
@@ -8906,7 +8918,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t
    end
 
-   local function flatten_tuple(vals: Type): Type
+   local function flatten_tuple(vals: TupleType): TupleType
       local vt = vals.tuple
       local n_vals = #vt
       local ret = a_tuple {}
@@ -8922,7 +8934,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       local last = vt[n_vals]
-      if last.typename == "tuple" then
+      if last is TupleType then
          -- ...then unpack the last tuple
          local lt = last.tuple
          for _, v in ipairs(lt) do
@@ -8937,7 +8949,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return ret
    end
 
-   local function get_assignment_values(vals: Type, wanted: integer): Type
+   local function get_assignment_values(vals: TupleType, wanted: integer): TupleType
       if vals == nil then
          return a_tuple {}
       end
@@ -9553,9 +9565,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local type_check_funcall: function(node: Node, a: Type, b: Type, argdelta?: integer): Type
+   local type_check_funcall: function(node: Node, a: Type, b: Type, argdelta?: integer): InvalidOrTupleType
 
-   local function special_pcall_xpcall(node: Node, _a: Type, b: Type, argdelta: integer): Type
+   local function special_pcall_xpcall(node: Node, _a: Type, b: TupleType, argdelta: integer): Type
       local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
       if #node.e2 < base_nargs then
          error_at(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
@@ -9589,16 +9601,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          e2 = fe2,
       }
       local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
-      if rets == INVALID then
+      if rets is InvalidType then
          return rets
       end
-      assert(rets and rets.typename == "tuple", show_type(rets))
       table.insert(rets.tuple, 1, BOOLEAN)
       return rets
    end
 
-   local special_functions: {string : function(Node,Type,TupleType,integer):TupleType } = {
-      ["pairs"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): TupleType
+   local special_functions: {string : function(Node,Type,TupleType,integer):InvalidOrTupleType } = {
+      ["pairs"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
          if not b.tuple[1] then
             return invalid_at(node, "pairs requires an argument")
          end
@@ -9623,7 +9634,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
       end,
 
-      ["ipairs"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): TupleType
+      ["ipairs"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
          if not b.tuple[1] then
             return invalid_at(node, "ipairs requires an argument")
          end
@@ -9644,7 +9655,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
       end,
 
-      ["rawget"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): TupleType
+      ["rawget"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
          -- TODO should those offsets be fixed by _argdelta?
          if #b.tuple == 2 then
             return a_tuple({ type_check_index(node.e2[1], node.e2[2], b.tuple[1], b.tuple[2]) })
@@ -9653,7 +9664,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end,
 
-      ["print_type"] = function(node: Node, _a: Type, b: Type, _argdelta: integer): TupleType
+      ["print_type"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
          -- TODO should those offsets be fixed by _argdelta?
          if #b.tuple == 0 then
             -- when called with no arguments, print all variables currently in scope and their types.
@@ -9664,7 +9675,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             end
             print("-----------------------------------------")
-            return NONE
+            return a_tuple({})
          else
             local t = show_type(b.tuple[1])
             print(t)
@@ -9673,7 +9684,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end,
 
-      ["require"] = function(node: Node, _a: Type, b: Type, _argdelta: integer): TupleType
+      ["require"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
          if #b.tuple ~= 1 then
             return invalid_at(node, "require expects one literal argument")
          end
@@ -9689,7 +9700,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          if t.typename == "invalid" then
             if lax then
-               return UNKNOWN
+               return a_tuple({ UNKNOWN })
             end
             return invalid_at(node, "no type information for required module: '" .. module_name .. "'")
          end
@@ -9701,7 +9712,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
 
-      ["assert"] = function(node: Node, a: Type, b: Type, argdelta: integer): TupleType
+      ["assert"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
          node.known = FACT_TRUTHY
          local r = type_check_function_call(node, node.e2, a, b, node, false, argdelta)
          apply_facts(node, node.e2[1].known)
@@ -9709,7 +9720,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end,
    }
 
-   type_check_funcall = function(node: Node, a: Type, b: Type, argdelta?: integer): TupleType
+   type_check_funcall = function(node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
       argdelta = argdelta or 0
       if node.e1.kind == "variable" then
          local special = special_functions[node.e1.tk]
@@ -9767,7 +9778,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function set_expected_types_to_decltuple(node: Node, children: {Type})
       local decltuple = node.kind == "assignment" and children[1] or node.decltuple
-      assert(decltuple.typename == "tuple")
+      assert(decltuple is TupleType)
       local decls = decltuple.tuple
       if decls and node.exps then
          local ndecl = #decls
@@ -9879,9 +9890,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if node[i].key_parsed == "implicit" then
-               if i == #children and child.vtype.typename == "tuple" then
+               local cv = child.vtype
+               if i == #children and cv is TupleType then
                   -- need to expand last item in an array (e.g { 1, 2, 3, f() })
-                  for _, c in ipairs(child.vtype.tuple) do
+                  for _, c in ipairs(cv.tuple) do
                      elements = expand_type(node, elements, c)
                      types[last_array_idx] = resolve_tuple(c)
                      last_array_idx = last_array_idx + 1
@@ -10082,7 +10094,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          and node.value.e1.tk == "require"
       then
          local t = special_functions["require"](node.value, find_var_type("require"), a_tuple { STRING }, 0)
-         if t ~= INVALID then
+         if not t is InvalidType then
             return t.tuple[1]
          end
       else
@@ -10248,8 +10260,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_exp = set_expected_types_to_decltuple,
          after = function(node: Node, children: {Type}): Type
+            local valtuple = children[3] as TupleType -- may be nil
+
             local encountered_close = false
-            local infertypes = get_assignment_values(children[3], #node.vars)
+            local infertypes = get_assignment_values(valtuple, #node.vars)
             for i, var in ipairs(node.vars) do
                if var.attribute == "close" then
                   if opts.gen_target == "5.4" then
@@ -10299,7 +10313,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["global_declaration"] = {
          before_exp = set_expected_types_to_decltuple,
          after = function(node: Node, children: {Type}): Type
-            local infertypes = get_assignment_values(children[3], #node.vars)
+            local valtuple = children[3] as TupleType -- may be nil
+
+            local infertypes = get_assignment_values(valtuple, #node.vars)
             for i, var in ipairs(node.vars) do
                local _, t, is_inferred = determine_declaration_type(var, node, infertypes, i)
 
@@ -10317,8 +10333,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["assignment"] = {
          before_exp = set_expected_types_to_decltuple,
          after = function(node: Node, children: {Type}): Type
-            local vartypes = children[1].tuple
-            local valtypes = get_assignment_values(children[3], #vartypes)
+            local vartuple = children[1]
+            assert(vartuple is TupleType)
+            local vartypes = vartuple.tuple
+            local valtuple = children[3]
+            assert(valtuple is TupleType)
+            local valtypes = get_assignment_values(valtuple, #vartypes)
             for i, vartype in ipairs(vartypes) do
                local varnode = node.vars[i]
                local varname = varnode.tk
@@ -10326,13 +10346,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                local rvar, rval, err = check_assignment(varnode, vartype, valtype, varname, varnode.attribute)
                if err == "missing" then
                   if #node.exps == 1 and node.exps[1].kind == "op" and node.exps[1].op.op == "@funcall" then
-                     local rets = children[3]
-                     if rets.typename == "tuple" then
-                        local msg = #rets.tuple == 1
-                                    and "only 1 value is returned by the function"
-                                    or ("only " .. #rets.tuple .. " values are returned by the function")
-                        add_warning("hint", varnode, msg)
-                     end
+                     local msg = #valtuple.tuple == 1
+                                 and "only 1 value is returned by the function"
+                                 or ("only " .. #valtuple.tuple .. " values are returned by the function")
+                     add_warning("hint", varnode, msg)
                   end
                end
 
@@ -10451,7 +10468,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             begin_scope(node)
          end,
          before_statements = function(node: Node, children: {Type})
-            local exptypes = children[2].tuple
+            local exptuple = children[2]
+            assert(exptuple is TupleType)
+            local exptypes = exptuple.tuple
 
             widen_all_unions(node)
             local exp1 = node.exps[1]
@@ -10520,7 +10539,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["return"] = {
          before = function(node: Node)
             local rets = find_var_type("@return")
-            if rets then
+            if rets and rets is TupleType then
                for i, exp in ipairs(node.exps) do
                   exp.expected = rets.tuple[i]
                end
@@ -10528,11 +10547,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          after = function(node: Node, children: {Type}): Type
             local got = children[1]
+            assert(got is TupleType)
             local got_t = got.tuple
             local n_got = #got_t
 
             node.block_returns = true
-            local expected = find_var_type("@return")
+            local expected = find_var_type("@return") as TupleType
             if not expected then
                -- if at the toplevel
                expected = infer_at(node, got)
@@ -10713,9 +10733,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      assert_is_a(node[i], cvtype, dt, in_context(node.expected_context, "in tuple"), "at index " .. tostring(n))
                   end
                elseif is_array and is_number_type(child.ktype) then
-                  if child.vtype.typename == "tuple" and i == #children and node[i].key_parsed == "implicit" then
+                  local cv = child.vtype
+                  if cv is TupleType and i == #children and node[i].key_parsed == "implicit" then
                      -- need to expand last item in an array (e.g { 1, 2, 3, f() })
-                     for ti, tt in ipairs(child.vtype.tuple) do
+                     for ti, tt in ipairs(cv.tuple) do
                         assert_is_a(node[i], tt, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(i + ti - 1))
                      end
                   else
@@ -10796,19 +10817,25 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_statements = function(node: Node, children: {Type})
             local args = children[2]
+            assert(args is TupleType)
+
             add_internal_function_variables(node, args)
             add_function_definition_for_recursion(node, args)
          end,
          after = function(node: Node, children: {Type}): Type
+            local args = children[2]
+            assert(args is TupleType)
+            local rets = children[3]
+            assert(rets is TupleType)
+
             end_function_scope(node)
-            local rets = get_rets(children[3])
 
             local t = ensure_fresh_typeargs(a_function {
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = rets,
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
             })
 
@@ -10825,8 +10852,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             begin_scope(node)
          end,
          after = function(node: Node, children: {Type}): Type
+            local args = children[2]
+            assert(args is TupleType)
+            local rets = children[3]
+            assert(rets is TupleType)
+
             end_function_scope(node)
-            local rets = get_rets(children[3])
 
             check_macroexp_arg_use(node.macrodef)
 
@@ -10834,8 +10865,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = rets,
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
                macroexp = node.macrodef,
             })
@@ -10863,10 +10894,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_statements = function(node: Node, children: {Type})
             local args = children[2]
+            assert(args is TupleType)
+
             add_internal_function_variables(node, args)
             add_function_definition_for_recursion(node, args)
          end,
          after = function(node: Node, children: {Type}): Type
+            local args = children[2]
+            assert(args is TupleType)
+            local rets = children[3]
+            assert(rets is TupleType)
+
             end_function_scope(node)
             if node.is_predeclared_local_function then
                return NONE
@@ -10876,8 +10914,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = get_rets(children[3]),
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
             }))
 
@@ -10904,7 +10942,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_statements = function(node: Node, children: {Type})
             local args = children[3]
-            assert(args.typename == "tuple")
+            assert(args is TupleType)
+            local rets = children[4]
+            assert(rets is TupleType)
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
@@ -10939,7 +10979,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                is_method = node.is_method,
                typeargs = node.typeargs,
                args = args,
-               rets = get_rets(children[4]),
+               rets = get_rets(rets),
                filename = filename,
             })
 
@@ -10997,18 +11037,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_statements = function(node: Node, children: {Type})
             local args = children[1]
+            assert(args is TupleType)
+
             add_internal_function_variables(node, args)
          end,
          after = function(node: Node, children: {Type}): Type
+            local args = children[1]
+            assert(args is TupleType)
+            local rets = children[2]
+            assert(rets is TupleType)
+
             end_function_scope(node)
-            -- children[1] args
-            -- children[2] body
             return ensure_fresh_typeargs(a_function {
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[1],
-               rets = children[2],
+               args = args,
+               rets = rets,
                filename = filename,
             })
          end,
@@ -11020,18 +11065,23 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
          before_exp = function(node: Node, children: {Type})
             local args = children[1]
+            assert(args is TupleType)
+
             add_internal_function_variables(node, args)
          end,
          after = function(node: Node, children: {Type}): Type
+            local args = children[1]
+            assert(args is TupleType)
+            local rets = children[2]
+            assert(rets is TupleType)
+
             end_function_scope(node)
-            -- children[1] args
-            -- children[2] body
             return ensure_fresh_typeargs(a_function {
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[1],
-               rets = children[2],
+               args = args,
+               rets = rets,
                filename = filename,
             })
          end,
@@ -11200,7 +11250,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local t, e = match_record_key(a, node.e1, node.e2.conststr or node.e2.tk)
                if not t then
-                  return invalid_at(node.e2, e, a == INVALID and a or resolve_tuple(orig_a))
+                  return invalid_at(node.e2, e, resolve_tuple(orig_a))
                end
 
                return t
