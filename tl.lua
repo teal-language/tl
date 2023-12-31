@@ -145,6 +145,7 @@ local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {
 
 
 
+
 tl.version = function()
    return VERSION
 end
@@ -1066,6 +1067,14 @@ local table_types = {
    ["none"] = false,
    ["*"] = false,
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -3756,7 +3765,7 @@ local function recurse_type(ast, visit)
       end
    end
 
-   if ast.tuple then
+   if ast.typename == "tuple" then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(child, visit)
       end
@@ -4980,7 +4989,8 @@ local function store_function(trenv, ti, rt)
       table.insert(rets, mark_array({ get_typenum(trenv, fnarg), nil }))
    end
    ti.rets = mark_array(rets)
-   ti.vararg = not not rt.is_va
+   ti.vararg = not not rt.args.is_va
+   ti.varret = not not rt.rets.is_va
 end
 
 get_typenum = function(trenv, t)
@@ -6797,6 +6807,7 @@ tl.type_check = function(ast, opts)
                copy.types[i], same = resolve(tf, same)
             end
          elseif t.typename == "tuple" then
+            assert(copy.typename == "tuple")
             copy.is_va = t.is_va
             copy.tuple = {}
             for i, tf in ipairs(t.tuple) do
@@ -8423,6 +8434,8 @@ a.types[i], b.types[i]), }
       orignode.known = saveknown
    end
 
+
+
    local type_check_function_call
    do
       local function mark_invalid_typeargs(f)
@@ -8442,9 +8455,6 @@ a.types[i], b.types[i]), }
       end
 
       local function infer_emptytables(where, wheres, xs, ys, delta)
-         assert(xs.typename == "tuple")
-         assert(ys.typename == "tuple")
-
          local xt, yt = xs.tuple, ys.tuple
          local n_xs = #xt
          local n_ys = #yt
@@ -8661,8 +8671,12 @@ a.types[i], b.types[i]), }
       end
 
       type_check_function_call = function(node, where_args, func, args, e1, is_method, argdelta)
-         if node.expected and node.expected.typename ~= "tuple" then
-            node.expected = a_type("tuple", { tuple = { node.expected } })
+         local expected = node.expected
+         local expected_rets
+         if expected and expected.typename == "tuple" then
+            expected_rets = expected
+         else
+            expected_rets = a_type("tuple", { tuple = { node.expected } })
          end
 
          begin_scope()
@@ -8676,7 +8690,7 @@ a.types[i], b.types[i]), }
          node.e1.receiver.resolved.typename == "typetype")
 
 
-         local ret, f = check_call(node, where_args, func, args, node.expected, typetype_funcall, is_method, argdelta)
+         local ret, f = check_call(node, where_args, func, args, expected_rets, typetype_funcall, is_method, argdelta)
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
@@ -8916,8 +8930,6 @@ a.types[i], b.types[i]), }
    end
 
    local function add_internal_function_variables(node, args)
-      assert(args.typename == "tuple")
-
       add_var(nil, "@is_va", args.is_va and ANY or NIL)
       add_var(nil, "@return", node.rets or a_type("tuple", { tuple = {} }))
 
@@ -9666,10 +9678,9 @@ a.types[i], b.types[i]), }
          e2 = fe2,
       }
       local rets = type_check_funcall(fnode, ftype, b, argdelta + base_nargs)
-      if rets == INVALID then
+      if rets.typename == "invalid" then
          return rets
       end
-      assert(rets and rets.typename == "tuple", show_type(rets))
       table.insert(rets.tuple, 1, BOOLEAN)
       return rets
    end
@@ -9735,7 +9746,7 @@ a.types[i], b.types[i]), }
             return invalid_at(node, "require expects one literal argument")
          end
          if node.e2[1].kind ~= "string" then
-            return a_type({ typename = "any" })
+            return a_type("tuple", { tuple = { a_type("any", {}) } })
          end
 
          local module_name = assert(node.e2[1].conststr)
@@ -9746,7 +9757,7 @@ a.types[i], b.types[i]), }
 
          if t.typename == "invalid" then
             if lax then
-               return UNKNOWN
+               return a_type("tuple", { tuple = { UNKNOWN } })
             end
             return invalid_at(node, "no type information for required module: '" .. module_name .. "'")
          end
@@ -9936,9 +9947,10 @@ a.types[i], b.types[i]), }
             end
 
             if node[i].key_parsed == "implicit" then
-               if i == #children and child.vtype.typename == "tuple" then
+               local cv = child.vtype
+               if i == #children and cv.typename == "tuple" then
 
-                  for _, c in ipairs(child.vtype.tuple) do
+                  for _, c in ipairs(cv.tuple) do
                      elements = expand_type(node, elements, c)
                      types[last_array_idx] = resolve_tuple(c)
                      last_array_idx = last_array_idx + 1
@@ -9979,8 +9991,8 @@ a.types[i], b.types[i]), }
 
       if is_array and is_map then
          error_at(node, "cannot determine type of table literal")
-         t = a_type("map", { keys = 
-expand_type(node, keys, INTEGER), values = 
+         t = a_type("map", { keys =
+expand_type(node, keys, INTEGER), values =
 
 expand_type(node, values, elements) })
       elseif is_record and is_array then
@@ -10139,7 +10151,7 @@ expand_type(node, values, elements) })
          node.value.e1.tk == "require" then
 
          local t = special_functions["require"](node.value, find_var_type("require"), a_type("tuple", { tuple = { STRING } }), 0)
-         if t ~= INVALID then
+         if not (t.typename == "invalid") then
             return t.tuple[1]
          end
       else
@@ -10305,8 +10317,10 @@ expand_type(node, values, elements) })
          end,
          before_exp = set_expected_types_to_decltuple,
          after = function(node, children)
+            local valtuple = children[3]
+
             local encountered_close = false
-            local infertypes = get_assignment_values(children[3], #node.vars)
+            local infertypes = get_assignment_values(valtuple, #node.vars)
             for i, var in ipairs(node.vars) do
                if var.attribute == "close" then
                   if opts.gen_target == "5.4" then
@@ -10356,7 +10370,9 @@ expand_type(node, values, elements) })
       ["global_declaration"] = {
          before_exp = set_expected_types_to_decltuple,
          after = function(node, children)
-            local infertypes = get_assignment_values(children[3], #node.vars)
+            local valtuple = children[3]
+
+            local infertypes = get_assignment_values(valtuple, #node.vars)
             for i, var in ipairs(node.vars) do
                local _, t, is_inferred = determine_declaration_type(var, node, infertypes, i)
 
@@ -10374,8 +10390,12 @@ expand_type(node, values, elements) })
       ["assignment"] = {
          before_exp = set_expected_types_to_decltuple,
          after = function(node, children)
-            local vartypes = children[1].tuple
-            local valtypes = get_assignment_values(children[3], #vartypes)
+            local vartuple = children[1]
+            assert(vartuple.typename == "tuple")
+            local vartypes = vartuple.tuple
+            local valtuple = children[3]
+            assert(valtuple.typename == "tuple")
+            local valtypes = get_assignment_values(valtuple, #vartypes)
             for i, vartype in ipairs(vartypes) do
                local varnode = node.vars[i]
                local varname = varnode.tk
@@ -10383,13 +10403,10 @@ expand_type(node, values, elements) })
                local rvar, rval, err = check_assignment(varnode, vartype, valtype, varname, varnode.attribute)
                if err == "missing" then
                   if #node.exps == 1 and node.exps[1].kind == "op" and node.exps[1].op.op == "@funcall" then
-                     local rets = children[3]
-                     if rets.typename == "tuple" then
-                        local msg = #rets.tuple == 1 and
-                        "only 1 value is returned by the function" or
-                        ("only " .. #rets.tuple .. " values are returned by the function")
-                        add_warning("hint", varnode, msg)
-                     end
+                     local msg = #valtuple.tuple == 1 and
+                     "only 1 value is returned by the function" or
+                     ("only " .. #valtuple.tuple .. " values are returned by the function")
+                     add_warning("hint", varnode, msg)
                   end
                end
 
@@ -10508,7 +10525,9 @@ expand_type(node, values, elements) })
             begin_scope(node)
          end,
          before_statements = function(node, children)
-            local exptypes = children[2].tuple
+            local exptuple = children[2]
+            assert(exptuple.typename == "tuple")
+            local exptypes = exptuple.tuple
 
             widen_all_unions(node)
             local exp1 = node.exps[1]
@@ -10577,7 +10596,7 @@ expand_type(node, values, elements) })
       ["return"] = {
          before = function(node)
             local rets = find_var_type("@return")
-            if rets then
+            if rets and rets.typename == "tuple" then
                for i, exp in ipairs(node.exps) do
                   exp.expected = rets.tuple[i]
                end
@@ -10585,6 +10604,7 @@ expand_type(node, values, elements) })
          end,
          after = function(node, children)
             local got = children[1]
+            assert(got.typename == "tuple")
             local got_t = got.tuple
             local n_got = #got_t
 
@@ -10770,9 +10790,10 @@ expand_type(node, values, elements) })
                      assert_is_a(node[i], cvtype, dt, in_context(node.expected_context, "in tuple"), "at index " .. tostring(n))
                   end
                elseif is_array and is_number_type(child.ktype) then
-                  if child.vtype.typename == "tuple" and i == #children and node[i].key_parsed == "implicit" then
+                  local cv = child.vtype
+                  if cv.typename == "tuple" and i == #children and node[i].key_parsed == "implicit" then
 
-                     for ti, tt in ipairs(child.vtype.tuple) do
+                     for ti, tt in ipairs(cv.tuple) do
                         assert_is_a(node[i], tt, decltype.elements, in_context(node.expected_context, "expected an array"), "at index " .. tostring(i + ti - 1))
                      end
                   else
@@ -10853,19 +10874,25 @@ expand_type(node, values, elements) })
          end,
          before_statements = function(node, children)
             local args = children[2]
+            assert(args.typename == "tuple")
+
             add_internal_function_variables(node, args)
             add_function_definition_for_recursion(node, args)
          end,
          after = function(node, children)
+            local args = children[2]
+            assert(args.typename == "tuple")
+            local rets = children[3]
+            assert(rets.typename == "tuple")
+
             end_function_scope(node)
-            local rets = get_rets(children[3])
 
             local t = ensure_fresh_typeargs(a_function({
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = rets,
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
             }))
 
@@ -10882,8 +10909,12 @@ expand_type(node, values, elements) })
             begin_scope(node)
          end,
          after = function(node, children)
+            local args = children[2]
+            assert(args.typename == "tuple")
+            local rets = children[3]
+            assert(rets.typename == "tuple")
+
             end_function_scope(node)
-            local rets = get_rets(children[3])
 
             check_macroexp_arg_use(node.macrodef)
 
@@ -10891,8 +10922,8 @@ expand_type(node, values, elements) })
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = rets,
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
                macroexp = node.macrodef,
             }))
@@ -10920,10 +10951,17 @@ expand_type(node, values, elements) })
          end,
          before_statements = function(node, children)
             local args = children[2]
+            assert(args.typename == "tuple")
+
             add_internal_function_variables(node, args)
             add_function_definition_for_recursion(node, args)
          end,
          after = function(node, children)
+            local args = children[2]
+            assert(args.typename == "tuple")
+            local rets = children[3]
+            assert(rets.typename == "tuple")
+
             end_function_scope(node)
             if node.is_predeclared_local_function then
                return NONE
@@ -10933,8 +10971,8 @@ expand_type(node, values, elements) })
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[2],
-               rets = get_rets(children[3]),
+               args = args,
+               rets = get_rets(rets),
                filename = filename,
             })))
 
@@ -10962,6 +11000,8 @@ expand_type(node, values, elements) })
          before_statements = function(node, children)
             local args = children[3]
             assert(args.typename == "tuple")
+            local rets = children[4]
+            assert(rets.typename == "tuple")
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
@@ -10996,7 +11036,7 @@ expand_type(node, values, elements) })
                is_method = node.is_method,
                typeargs = node.typeargs,
                args = args,
-               rets = get_rets(children[4]),
+               rets = get_rets(rets),
                filename = filename,
             }))
 
@@ -11054,18 +11094,23 @@ expand_type(node, values, elements) })
          end,
          before_statements = function(node, children)
             local args = children[1]
+            assert(args.typename == "tuple")
+
             add_internal_function_variables(node, args)
          end,
          after = function(node, children)
+            local args = children[1]
+            assert(args.typename == "tuple")
+            local rets = children[2]
+            assert(rets.typename == "tuple")
+
             end_function_scope(node)
-
-
             return ensure_fresh_typeargs(a_function({
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[1],
-               rets = children[2],
+               args = args,
+               rets = rets,
                filename = filename,
             }))
          end,
@@ -11077,18 +11122,23 @@ expand_type(node, values, elements) })
          end,
          before_exp = function(node, children)
             local args = children[1]
+            assert(args.typename == "tuple")
+
             add_internal_function_variables(node, args)
          end,
          after = function(node, children)
+            local args = children[1]
+            assert(args.typename == "tuple")
+            local rets = children[2]
+            assert(rets.typename == "tuple")
+
             end_function_scope(node)
-
-
             return ensure_fresh_typeargs(a_function({
                y = node.y,
                x = node.x,
                typeargs = node.typeargs,
-               args = children[1],
-               rets = children[2],
+               args = args,
+               rets = rets,
                filename = filename,
             }))
          end,
@@ -11257,7 +11307,7 @@ expand_type(node, values, elements) })
 
                local t, e = match_record_key(a, node.e1, node.e2.conststr or node.e2.tk)
                if not t then
-                  return invalid_at(node.e2, e, a == INVALID and a or resolve_tuple(orig_a))
+                  return invalid_at(node.e2, e, resolve_tuple(orig_a))
                end
 
                return t
