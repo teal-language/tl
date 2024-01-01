@@ -10058,10 +10058,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if ri.typename ~= "map" and ri.typename ~= "record" then
                error_at(var, "attribute <total> only applies to maps and records")
                ok = false
-            elseif not infertype.is_total then
+            elseif not ri.is_total then
                local missing = ""
-               if infertype.missing then
-                  missing = " (missing: " .. table.concat(infertype.missing, ", ") .. ")"
+               if ri.missing then
+                  missing = " (missing: " .. table.concat(ri.missing, ", ") .. ")"
                end
                if ri.typename == "map" then
                   error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
@@ -10071,7 +10071,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   ok = false
                end
             end
-            infertype.is_total = nil
+            ri.is_total = nil
          end
       end
 
@@ -10772,9 +10772,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if decltype.typename == "record" then
-               t.is_total, t.missing = total_record_check(decltype, seen_keys)
+               local rt = resolve_tuple_and_nominal(t)
+               if rt.typename == "record" then
+                  rt.is_total, rt.missing = total_record_check(decltype, seen_keys)
+               end
             elseif decltype is MapType then
-               t.is_total, t.missing = total_map_check(decltype, seen_keys)
+               local rt = resolve_tuple_and_nominal(t)
+               if rt is MapType then
+                  rt.is_total, rt.missing = total_map_check(decltype, seen_keys)
+               end
             end
 
             if constraint then
