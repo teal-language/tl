@@ -1027,7 +1027,6 @@ end
 
 
 
-
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1049,7 +1048,6 @@ local table_types = {
    ["integer"] = false,
    ["union"] = false,
    ["nominal"] = false,
-   ["bad_nominal"] = false,
    ["table_item"] = false,
    ["unresolved_emptytable_value"] = false,
    ["unresolved_typearg"] = false,
@@ -4786,7 +4784,6 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    visit_type.cbs["integer"] = default_type_visitor
    visit_type.cbs["union"] = default_type_visitor
    visit_type.cbs["nominal"] = default_type_visitor
-   visit_type.cbs["bad_nominal"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
    visit_type.cbs["table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
@@ -4849,7 +4846,6 @@ local typename_to_typecode = {
    ["integer"] = tl.typecodes.INTEGER,
    ["union"] = tl.typecodes.IS_UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
-   ["bad_nominal"] = tl.typecodes.NOMINAL,
    ["circular_require"] = tl.typecodes.NOMINAL,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
@@ -5436,8 +5432,6 @@ local function show_type_base(t, short, seen)
       return ""
    elseif is_typetype(t) then
       return "type " .. show(t.def) .. (t.is_alias and " (alias)" or "")
-   elseif t.typename == "bad_nominal" then
-      return table.concat(t.names, ".") .. " (an unknown type)"
    else
       return "<" .. t.typename .. " " .. tostring(t) .. ">"
    end
@@ -7236,29 +7230,32 @@ tl.type_check = function(ast, opts)
          if not typetype then
             error_at(t, "unknown type %s", t)
             return INVALID
-         elseif is_typetype(typetype) then
-            if typetype.is_alias then
-               typetype = typetype.def.found
-               assert(is_typetype(typetype))
-            end
-
-            if typetype.def.typename == "circular_require" then
-
-               return typetype.def
-            end
-
-            if typetype.def.typename == "nominal" then
-               typetype = typetype.def.found
-               assert(is_typetype(typetype))
-            end
-            assert(typetype.def.typename ~= "nominal")
-            resolved = match_typevals(t, typetype.def)
-         else
-            error_at(t, table.concat(t.names, ".") .. " is not a type")
          end
 
+         if not is_typetype(typetype) then
+            error_at(t, table.concat(t.names, ".") .. " is not a type")
+            return INVALID
+         end
+
+         if typetype.is_alias then
+            typetype = typetype.def.found
+            assert(is_typetype(typetype))
+         end
+
+         if typetype.def.typename == "circular_require" then
+
+            return typetype.def
+         end
+
+         if typetype.def.typename == "nominal" then
+            typetype = typetype.def.found
+            assert(is_typetype(typetype))
+         end
+         assert(typetype.def.typename ~= "nominal")
+         resolved = match_typevals(t, typetype.def)
          if not resolved then
-            resolved = a_type("bad_nominal", { names = t.names })
+            error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
+            return INVALID
          end
 
          if not t.filename then
@@ -7439,10 +7436,6 @@ tl.type_check = function(ast, opts)
 
    local function is_self(t)
       return t.typename == "nominal" and t.names[1] == "@self"
-   end
-
-   local function compare_false(_, _)
-      return false
    end
 
    local function compare_true(_, _)
@@ -7647,9 +7640,6 @@ tl.type_check = function(ast, opts)
 
    local eqtype_relations
    eqtype_relations = {
-      ["bad_nominal"] = {
-         ["*"] = compare_false,
-      },
       ["typevar"] = {
          ["typevar"] = function(a, b)
             if a.typevar == b.typevar then
@@ -7723,7 +7713,6 @@ tl.type_check = function(ast, opts)
          end,
       },
       ["*"] = {
-         ["bad_nominal"] = compare_false,
          ["typevar"] = function(a, b)
             return compare_or_infer_typevar(b.typevar, a, nil, same_type)
          end,
@@ -7732,9 +7721,6 @@ tl.type_check = function(ast, opts)
 
    local subtype_relations
    subtype_relations = {
-      ["bad_nominal"] = {
-         ["*"] = compare_false,
-      },
       ["tuple"] = {
          ["tuple"] = function(a, b)
             local at, bt = a.tuple, b.tuple
@@ -8018,7 +8004,6 @@ a.types[i], b.types[i]), }
          end,
       },
       ["*"] = {
-         ["bad_nominal"] = compare_false,
          ["any"] = compare_true,
          ["tuple"] = function(a, b)
             return is_a(a_type("tuple", { tuple = { a } }), b)
@@ -8049,7 +8034,6 @@ a.types[i], b.types[i]), }
 
    local type_priorities = {
 
-      ["bad_nominal"] = 1,
       ["tuple"] = 2,
       ["typevar"] = 3,
       ["nil"] = 4,
@@ -9756,7 +9740,7 @@ a.types[i], b.types[i]), }
             resolved = find_type(names)
             if (not resolved) or (not is_typetype(resolved)) then
                error_at(typetype, "%s is not a type", typetype)
-               resolved = a_type("bad_nominal", { names = names })
+               resolved = INVALID
             end
          end
          return resolved, aliasing
@@ -11899,7 +11883,6 @@ expand_type(node, values, elements) })
    visit_type.cbs["number"] = default_type_visitor
    visit_type.cbs["integer"] = default_type_visitor
    visit_type.cbs["thread"] = default_type_visitor
-   visit_type.cbs["bad_nominal"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
    visit_type.cbs["table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
