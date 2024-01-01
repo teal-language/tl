@@ -1,6 +1,7 @@
 local util = require("spec.util")
 
 local input_file = [[
+#!/usr/bin/env lua
 global type1 = 2
 
 global type type_g = record
@@ -37,6 +38,7 @@ local c = 100
 ]]
 
 local output_file = [[
+
 type1 = 2
 
 type_g = {}
@@ -193,6 +195,16 @@ describe("tl gen", function()
          assert.match("Wrote: " .. lua_name, output, 1, true)
          assert.equal(output_file, util.read_file(lua_name))
       end)
+   end)
+
+   it("*equality test* to confirm preserves hashbang with --keep-hashbang", function()
+      local name = util.write_tmp_file(finally, script_with_hashbang)
+      local pd = io.popen(util.tl_cmd("gen", "--keep-hashbang", name), "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      local lua_name = tl_to_lua(name)
+      assert.match("Wrote: " .. lua_name, output, 1, true)
+      assert.equal(script_with_hashbang, util.read_file(lua_name))
    end)
 
    it("preserves hashbang with --keep-hashbang", function()

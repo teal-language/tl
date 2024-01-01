@@ -4356,7 +4356,10 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
    end
 
    local code: Output
-   if opts.preserve_newlines then
+   if opts.preserve_hashbang and opts.preserve_newlines then
+      code = { y = out.y, h = 0}
+      add_child(code, out)
+   elseif opts.preserve_newlines then
       code = { y = 1, h = 0 }
       add_child(code, out)
    else
