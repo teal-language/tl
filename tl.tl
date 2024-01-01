@@ -5268,6 +5268,35 @@ local function display_typevar(typevar: string): string
    return TL_DEBUG and typevar or (typevar:gsub("@.*", ""))
 end
 
+local function show_fields(t: Type, show: function(Type):(string)): string
+   if t.names then
+      return t.names[1]
+   end
+
+   local out: {string} = {}
+   if t.typeargs then
+      table.insert(out, "<")
+      local typeargs = {}
+      for _, v in ipairs(t.typeargs) do
+         table.insert(typeargs, show(v))
+      end
+      table.insert(out, table.concat(typeargs, ", "))
+      table.insert(out, ">")
+   end
+   table.insert(out, " (")
+   if t.elements then
+      table.insert(out, "{" .. show(t.elements) .. "}")
+   end
+   local fs = {}
+   for _, k in ipairs(t.field_order) do
+      local v = t.fields[k]
+      table.insert(fs, k .. ": " .. show(v))
+   end
+   table.insert(out, table.concat(fs, "; "))
+   table.insert(out, ")")
+   return table.concat(out)
+end
+
 local function show_type_base(t: Type, short: boolean, seen: {Type:string}): string
    -- FIXME this is a control for recursively built types, which should in principle not exist
    if seen[t] then
@@ -5277,38 +5306,6 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
 
    local function show(typ: Type): string
       return show_type(typ, short, seen)
-   end
-
-   local function show_record_type(name: string): string
-      if t.names then
-         return t.names[1]
-      end
-      if short then
-         return name
-      else
-         local out: {string} = {name}
-         if t.typeargs then
-            table.insert(out, "<")
-            local typeargs = {}
-            for _, v in ipairs(t.typeargs) do
-               table.insert(typeargs, show(v))
-            end
-            table.insert(out, table.concat(typeargs, ", "))
-            table.insert(out, ">")
-         end
-         table.insert(out, " (")
-         if t.elements then
-            table.insert(out, "{" .. show(t.elements) .. "}")
-         end
-         local fs = {}
-         for _, k in ipairs(t.field_order) do
-            local v = t.fields[k]
-            table.insert(fs, k .. ": " .. show(v))
-         end
-         table.insert(out, table.concat(fs, "; "))
-         table.insert(out, ")")
-         return table.concat(out)
-      end
    end
 
    if t.typename == "nominal" then
@@ -5365,9 +5362,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
    elseif t.typename == "interface" then
-      return show_record_type("interface")
+      return short and "interface" or "interface" .. show_fields(t, show)
    elseif is_record_type(t) then
-      return show_record_type("record")
+      return short and "record" or "record" .. show_fields(t, show)
    elseif t is FunctionType then
       local out: {string} = {"function"}
       if t.typeargs then

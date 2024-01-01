@@ -5268,6 +5268,35 @@ local function display_typevar(typevar)
    return TL_DEBUG and typevar or (typevar:gsub("@.*", ""))
 end
 
+local function show_fields(t, show)
+   if t.names then
+      return t.names[1]
+   end
+
+   local out = {}
+   if t.typeargs then
+      table.insert(out, "<")
+      local typeargs = {}
+      for _, v in ipairs(t.typeargs) do
+         table.insert(typeargs, show(v))
+      end
+      table.insert(out, table.concat(typeargs, ", "))
+      table.insert(out, ">")
+   end
+   table.insert(out, " (")
+   if t.elements then
+      table.insert(out, "{" .. show(t.elements) .. "}")
+   end
+   local fs = {}
+   for _, k in ipairs(t.field_order) do
+      local v = t.fields[k]
+      table.insert(fs, k .. ": " .. show(v))
+   end
+   table.insert(out, table.concat(fs, "; "))
+   table.insert(out, ")")
+   return table.concat(out)
+end
+
 local function show_type_base(t, short, seen)
 
    if seen[t] then
@@ -5277,38 +5306,6 @@ local function show_type_base(t, short, seen)
 
    local function show(typ)
       return show_type(typ, short, seen)
-   end
-
-   local function show_record_type(name)
-      if t.names then
-         return t.names[1]
-      end
-      if short then
-         return name
-      else
-         local out = { name }
-         if t.typeargs then
-            table.insert(out, "<")
-            local typeargs = {}
-            for _, v in ipairs(t.typeargs) do
-               table.insert(typeargs, show(v))
-            end
-            table.insert(out, table.concat(typeargs, ", "))
-            table.insert(out, ">")
-         end
-         table.insert(out, " (")
-         if t.elements then
-            table.insert(out, "{" .. show(t.elements) .. "}")
-         end
-         local fs = {}
-         for _, k in ipairs(t.field_order) do
-            local v = t.fields[k]
-            table.insert(fs, k .. ": " .. show(v))
-         end
-         table.insert(out, table.concat(fs, "; "))
-         table.insert(out, ")")
-         return table.concat(out)
-      end
    end
 
    if t.typename == "nominal" then
@@ -5365,9 +5362,9 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "enum" then
       return t.names and table.concat(t.names, ".") or "enum"
    elseif t.typename == "interface" then
-      return show_record_type("interface")
+      return short and "interface" or "interface" .. show_fields(t, show)
    elseif is_record_type(t) then
-      return show_record_type("record")
+      return short and "record" or "record" .. show_fields(t, show)
    elseif t.typename == "function" then
       local out = { "function" }
       if t.typeargs then
