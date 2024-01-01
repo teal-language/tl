@@ -330,6 +330,7 @@ describe("local", function()
          it("rejects direct declaration from non-total to total", util.check_type_error([[
             local record Point
                x: number
+               y: number
             end
 
             local p: Point = {
