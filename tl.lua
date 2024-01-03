@@ -4096,7 +4096,9 @@ local function recurse_node(root,
          if ast.y > TL_DEBUG_MAXLINE then
             error("Halting execution at input line " .. ast.y)
          end
-         kprint = kind == "op" and "op " .. ast.op.op or kind
+         kprint = kind == "op" and "op " .. ast.op.op or
+         kind == "identifier" and "identifier " .. ast.tk or
+         kind
          tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
       end
 
