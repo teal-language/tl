@@ -3269,18 +3269,27 @@ parse_newtype = function(ps: ParseState, i: integer): integer, Node
       def = new_type(ps, i, tn)
       i = i + 1
       i = parse_type_body_fns[tn](ps, i, def, node)
+      if not def then
+         return fail(ps, i, "expected a type")
+      end
+
+      node.newtype = new_typetype(ps, itype, def)
+      return i, node
    else
       i, def = parse_type(ps, i)
       if not def then
-         return i
+         return fail(ps, i, "expected a type")
       end
-   end
 
-   if def then
-      node.newtype = new_typetype(ps, itype, def)
+      if def.typename == "nominal" then
+         node.newtype = new_type(ps, itype, "typetype") -- TODO "typealias"
+         node.newtype.def = def -- todo alias_to
+      else
+         node.newtype = new_typetype(ps, itype, def)
+      end
+
       return i, node
    end
-   return fail(ps, i, "expected a type")
 end
 
 local function parse_assignment_expression_list(ps: ParseState, i: integer, asgn: Node): integer, Node
