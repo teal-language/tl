@@ -1086,6 +1086,8 @@ local interface Type
    -- arguments: optional arity
    opt: boolean
 
+   declname: string
+
    -- typetype
    def: Type
    is_alias: boolean
@@ -1484,7 +1486,7 @@ local record Node
 
    -- newtype
    newtype: Type
-   is_alias: boolean
+   is_alias_node: boolean
    elide_type: boolean
 
    -- expressions
@@ -3420,8 +3422,12 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
    if not asgn.value then
       return i
    end
-   if not asgn.value.newtype.def.names then
-      asgn.value.newtype.def.names = { asgn.var.tk }
+
+   local nt = asgn.value.newtype
+   if nt.typename == "typetype" then
+      if not nt.def.declname then
+         nt.def.declname = asgn.var.tk
+      end
    end
 
    return i, asgn
@@ -3440,7 +3446,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    if not asgn.var then
       return fail(ps, i, "expected a type name")
    end
-   def.names = { asgn.var.tk }
+   def.declname = asgn.var.tk
 
    i = parse_body(ps, i, def, nt)
 
@@ -4733,8 +4739,14 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
       ["newtype"] = {
          after = function(node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if node.is_alias then
-               table.insert(out, table.concat(node.newtype.def.names, "."))
+            if node.is_alias_node then
+               local def = node.newtype.def
+               if def.names then
+                  table.insert(out, table.concat(def.names, "."))
+               else
+                  assert(def.declname)
+                  table.insert(out, def.declname)
+               end
             elseif is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
             else
@@ -5278,8 +5290,8 @@ local function display_typevar(typevar: string): string
 end
 
 local function show_fields(t: Type, show: function(Type):(string)): string
-   if t.names then
-      return t.names[1]
+   if t.declname then
+      return " " .. t.declname
    end
 
    local out: {string} = {}
@@ -5369,7 +5381,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t.typename == "array" then
       return "{" .. show(t.elements) .. "}"
    elseif t.typename == "enum" then
-      return t.names and table.concat(t.names, ".") or "enum"
+      return t.declname or "enum"
    elseif t.typename == "interface" then
       return short and "interface" or "interface" .. show_fields(t, show)
    elseif is_record_type(t) then
@@ -6635,7 +6647,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          copy.y = t.y
          copy.yend = t.yend
          copy.xend = t.xend
-         copy.names = t.names -- which types have this, exactly?
+         copy.declname = t.declname -- which types have this, exactly?
 
          if t.typename == "array" then
             copy.elements, same = resolve(t.elements, same)
@@ -6662,6 +6674,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          elseif is_typetype(t) then
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "nominal" then
+            copy.names = t.names
             copy.typevals = {}
             for i, tf in ipairs(t.typevals) do
                copy.typevals[i], same = resolve(tf, same)
@@ -7278,8 +7291,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function are_same_unresolved_global_type(t1: Type, t2: Type): boolean
-      if #t1.names == 1 and #t2.names == 1
-         and t1.names[1] == t2.names[1]
+      if t1.names[1] == t2.names[1]
       then
          local unresolved = get_unresolved()
          if unresolved.global_types[t1.names[1]] then
@@ -7899,7 +7911,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
                return true
             end
-            if not a.names then
+            if not a.declname then
                -- match inferred table (anonymous record) structurally to interface
                return subtype_record(a, b)
             end
@@ -10205,7 +10217,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local var = add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
-               node.value.is_alias = true
+               node.value.is_alias_node = true
             end
          end,
          after = function(node: Node, _children: {Type}): Type
@@ -10223,7 +10235,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.value.newtype = resolved
                if aliasing then
                   added.aliasing = aliasing
-                  node.value.is_alias = true
+                  node.value.is_alias_node = true
                end
 
                if added and unresolved.global_types[name] then
@@ -11706,7 +11718,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      if ftype.is_method then
                         local fargs = ftype.args.tuple
                         if fargs[1] and fargs[1].is_self then
-                           local record_name = typ.names and typ.names[1]
+                           local record_name = typ.declname
                            if record_name then
                               local selfarg = fargs[1]
                               if selfarg.tk ~= record_name or (typ.typeargs and not selfarg.typevals) then
