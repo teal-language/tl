@@ -1027,6 +1027,7 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1036,6 +1037,7 @@ local table_types = {
    ["tupletable"] = true,
 
    ["typetype"] = false,
+   ["typealias"] = false,
    ["typevar"] = false,
    ["typearg"] = false,
    ["function"] = false,
@@ -1062,6 +1064,9 @@ local table_types = {
    ["none"] = false,
    ["*"] = false,
 }
+
+
+
 
 
 
@@ -1538,10 +1543,6 @@ end
 
 local function is_number_type(t)
    return t.typename == "number" or t.typename == "integer"
-end
-
-local function is_typetype(t)
-   return t.typename == "typetype"
 end
 
 
@@ -3180,6 +3181,10 @@ parse_record_body = function(ps, i, def, node)
             return fail(ps, i, "expected a type definition")
          end
 
+         if nt.newtype.typename == "typealias" then
+            nt.newtype.is_nested_alias = true
+         end
+
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
       elseif parse_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
          i = parse_nested_type(ps, i, def, tn, parse_type_body_fns[tn])
@@ -3284,8 +3289,8 @@ parse_newtype = function(ps, i)
       end
 
       if def.typename == "nominal" then
-         node.newtype = new_type(ps, itype, "typetype")
-         node.newtype.def = def
+         node.newtype = new_type(ps, itype, "typealias")
+         node.newtype.alias_to = def
       else
          node.newtype = new_typetype(ps, itype, def)
       end
@@ -3784,6 +3789,9 @@ local function recurse_type(ast, visit)
    end
    if ast.def then
       table.insert(xs, recurse_type(ast.def, visit))
+   end
+   if ast.alias_to then
+      table.insert(xs, recurse_type(ast.alias_to, visit))
    end
    if ast.typename == "map" then
       table.insert(xs, recurse_type(ast.keys, visit))
@@ -4298,7 +4306,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    local function print_record_def(typ)
       local out = { "{" }
       for _, name in ipairs(typ.field_order) do
-         if is_typetype(typ.fields[name]) and is_record_type(typ.fields[name].def) then
+         if typ.fields[name].typename == "typetype" and is_record_type(typ.fields[name].def) then
             table.insert(out, name)
             table.insert(out, " = ")
             table.insert(out, print_record_def(typ.fields[name].def))
@@ -4742,12 +4750,12 @@ function tl.pretty_print_ast(ast, gen_target, mode)
          after = function(node, _children)
             local out = { y = node.y, h = 0 }
             if node.is_alias_node then
-               local def = node.newtype.def
-               if def.names then
-                  table.insert(out, table.concat(def.names, "."))
+               local nt = node.newtype
+               if nt.typename == "typealias" then
+                  table.insert(out, table.concat(nt.alias_to.names, "."))
                else
-                  assert(def.declname)
-                  table.insert(out, def.declname)
+                  assert(nt.typename == "typetype")
+                  table.insert(out, nt.def.declname)
                end
             elseif is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
@@ -4792,6 +4800,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["typetype"] = default_type_visitor
+   visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["typevar"] = default_type_visitor
    visit_type.cbs["typearg"] = default_type_visitor
    visit_type.cbs["function"] = default_type_visitor
@@ -4882,6 +4891,7 @@ local typename_to_typecode = {
    ["table_item"] = tl.typecodes.UNKNOWN,
    ["unresolved"] = tl.typecodes.UNKNOWN,
    ["typetype"] = tl.typecodes.UNKNOWN,
+   ["typealias"] = tl.typecodes.UNKNOWN,
    ["*"] = tl.typecodes.UNKNOWN,
 }
 
@@ -4953,8 +4963,10 @@ get_typenum = function(trenv, t)
    n = trenv.next_num
 
    local rt = t
-   if is_typetype(rt) then
+   if rt.typename == "typetype" then
       rt = rt.def
+   elseif rt.typename == "typealias" then
+      rt = rt.alias_to
    elseif rt.typename == "tuple" and #rt.tuple == 1 then
       rt = rt.tuple[1]
    end
@@ -4976,7 +4988,7 @@ get_typenum = function(trenv, t)
    if t.resolved then
       rt = t
    end
-   assert(not is_typetype(rt))
+   assert(not (rt.typename == "typetype" or rt.typename == "typealias"))
 
    if is_record_type(rt) then
 
@@ -5450,8 +5462,10 @@ local function show_type_base(t, short, seen)
       return "nil"
    elseif t.typename == "none" then
       return ""
-   elseif is_typetype(t) then
-      return "type " .. show(t.def) .. (t.is_alias and " (alias)" or "")
+   elseif t.typename == "typealias" then
+      return "type " .. show(t.alias_to)
+   elseif t.typename == "typetype" then
+      return "type " .. show(t.def)
    else
       return "<" .. t.typename .. " " .. tostring(t) .. ">"
    end
@@ -6441,14 +6455,18 @@ tl.type_check = function(ast, opts)
             return nil
          end
       end
-      if is_typetype(typ) or (accept_typearg and typ.typename == "typearg") then
+      if typ.typename == "typetype" or typ.typename == "typealias" then
+         return typ
+      elseif accept_typearg and typ.typename == "typearg" then
          return typ
       end
    end
 
    local function union_type(t)
-      if is_typetype(t) then
+      if t.typename == "typetype" then
          return union_type(t.def), t.def
+      elseif t.typename == "typealias" then
+         return union_type(t.alias_to), t.alias_to
       elseif t.typename == "tuple" then
          return union_type(t.tuple[1]), t.tuple[1]
       elseif t.typename == "nominal" then
@@ -6574,8 +6592,10 @@ tl.type_check = function(ast, opts)
    end
 
    local function resolve_typetype(t)
-      if is_typetype(t) then
+      if t.typename == "typetype" then
          return t.def
+      elseif t.typename == "typealias" then
+         return t.alias_to
       else
          return t
       end
@@ -6673,8 +6693,11 @@ tl.type_check = function(ast, opts)
             if t.constraint then
                copy.constraint, same = resolve(t.constraint, same)
             end
-         elseif is_typetype(t) then
+         elseif t.typename == "typetype" then
             copy.def, same = resolve(t.def, same)
+         elseif t.typename == "typealias" then
+            copy.alias_to, same = resolve(t.alias_to, same)
+            copy.is_nested_alias = t.is_nested_alias
          elseif t.typename == "nominal" then
             copy.names = t.names
             copy.typevals = {}
@@ -6860,7 +6883,8 @@ tl.type_check = function(ast, opts)
             "unused %s %s: %s",
             var.is_func_arg and "argument" or
             t.typename == "function" and "function" or
-            is_typetype(var.t) and "type" or
+            t.typename == "typetype" and "type" or
+            t.typename == "typealias" and "type" or
             "variable",
             name,
             show_type(var.t))
@@ -7080,7 +7104,7 @@ tl.type_check = function(ast, opts)
 
    local function close_nested_records(t)
       for _, ft in pairs(t.fields) do
-         if is_typetype(ft) then
+         if ft.typename == "typetype" then
             ft.closed = true
             if is_record_type(ft.def) then
                close_nested_records(ft.def)
@@ -7091,10 +7115,11 @@ tl.type_check = function(ast, opts)
 
    local function close_types(vars)
       for _, var in pairs(vars) do
-         if is_typetype(var.t) then
-            var.t.closed = true
-            if is_record_type(var.t.def) then
-               close_nested_records(var.t.def)
+         local t = var.t
+         if t.typename == "typetype" then
+            t.closed = true
+            if is_record_type(t.def) then
+               close_nested_records(t.def)
             end
          end
       end
@@ -7113,16 +7138,17 @@ tl.type_check = function(ast, opts)
       end
       local list = {}
       for name, var in pairs(vars) do
+         local t = var.t
          if var.declared_at and not var.used then
             if var.used_as_type then
                var.declared_at.elide_type = true
             else
-               if is_typetype(var.t) and not is_global then
+               if (t.typename == "typetype" or t.typename == "typealias") and not is_global then
                   var.declared_at.elide_type = true
                end
                table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
             end
-         elseif var.used and is_typetype(var.t) and var.aliasing then
+         elseif var.used and (t.typename == "typetype" or t.typename == "typealias") and var.aliasing then
             var.aliasing.used = true
             var.aliasing.declared_at.elide_type = false
          end
@@ -7214,6 +7240,7 @@ tl.type_check = function(ast, opts)
    end
 
    local resolve_nominal
+   local resolve_typealias
    do
       local function match_typevals(t, def)
          if t.typevals and def.typeargs then
@@ -7245,35 +7272,36 @@ tl.type_check = function(ast, opts)
             return t.resolved
          end
 
-         local resolved
-
          local typetype = t.found or find_type(t.names)
          if not typetype then
             error_at(t, "unknown type %s", t)
             return INVALID
          end
 
-         if not is_typetype(typetype) then
+         local resolved
+
+         if typetype.typename == "typealias" then
+            typetype = typetype.alias_to.found
+         end
+
+         if typetype.typename == "typetype" then
+            if typetype.def.typename == "circular_require" then
+
+               return typetype.def
+            end
+
+            if typetype.def.typename == "nominal" then
+               typetype = typetype.def.found
+               assert(typetype.typename == "typetype")
+            end
+            assert(typetype.def.typename ~= "nominal")
+
+            resolved = match_typevals(t, typetype.def)
+         else
             error_at(t, table.concat(t.names, ".") .. " is not a type")
             return INVALID
          end
 
-         if typetype.is_alias then
-            typetype = typetype.def.found
-            assert(is_typetype(typetype))
-         end
-
-         if typetype.def.typename == "circular_require" then
-
-            return typetype.def
-         end
-
-         if typetype.def.typename == "nominal" then
-            typetype = typetype.def.found
-            assert(is_typetype(typetype))
-         end
-         assert(typetype.def.typename ~= "nominal")
-         resolved = match_typevals(t, typetype.def)
          if not resolved then
             error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
             return INVALID
@@ -7289,6 +7317,36 @@ tl.type_check = function(ast, opts)
          t.found = typetype
          t.resolved = resolved
          return resolved
+      end
+
+      resolve_typealias = function(typealias)
+         local names = typealias.alias_to.names
+         local aliasing = find_var(names[1], "use_type")
+         if not aliasing then
+            return INVALID
+         end
+
+         local t = typealias.alias_to
+         if t.resolved then
+            return t.resolved, aliasing
+         end
+
+         local typetype = t.found or find_type(t.names)
+         if not typetype then
+            error_at(t, "unknown type %s", t)
+            return INVALID
+         end
+
+         if t.typevals then
+            local resolved = match_typevals(t, typetype.def)
+            t.resolved = resolved
+            t.found = typetype
+            typetype = a_type("typetype", { def = resolved })
+         else
+            t.resolved = t
+         end
+
+         return typetype, aliasing
       end
    end
 
@@ -8260,7 +8318,7 @@ a.types[i], b.types[i]), }
             end
          end
 
-         if is_typetype(func) and func.def.typename == "record" then
+         if func.typename == "typetype" and func.def.typename == "record" then
             func = func.def
          end
 
@@ -8678,11 +8736,15 @@ a.types[i], b.types[i]), }
          tbl = find_var_type("string")
       end
 
-      if tbl.is_alias then
-         return nil, "cannot use a nested type alias as a concrete value"
+      if tbl.typename == "typetype" then
+         tbl = tbl.def
+      elseif tbl.typename == "typealias" then
+         if tbl.is_nested_alias then
+            return nil, "cannot use a nested type alias as a concrete value"
+         else
+            tbl = resolve_nominal(tbl.alias_to)
+         end
       end
-
-      tbl = resolve_typetype(tbl)
 
       if tbl.typename == "union" then
          local t = same_in_all_union_entries(tbl, function(t)
@@ -9749,25 +9811,6 @@ a.types[i], b.types[i]), }
       node.exps[i].tk == node.vars[i].tk
    end
 
-   local function resolve_nominal_typetype(typetype)
-      if typetype.def.typename == "nominal" then
-         local names = typetype.def.names
-         local aliasing = find_var(names[1], "use_type")
-         local resolved = typetype
-         if typetype.def.typevals then
-            typetype.def = resolve_nominal(typetype.def)
-         else
-            resolved = find_type(names)
-            if (not resolved) or (not is_typetype(resolved)) then
-               error_at(typetype, "%s is not a type", typetype)
-               resolved = INVALID
-            end
-         end
-         return resolved, aliasing
-      end
-      return typetype, nil
-   end
-
    local function missing_initializer(node, i, name)
       if lax then
          return UNKNOWN
@@ -9938,8 +9981,8 @@ a.types[i], b.types[i]), }
 
       if is_array and is_map then
          error_at(node, "cannot determine type of table literal")
-         t = a_type("map", { keys = 
-expand_type(node, keys, INTEGER), values = 
+         t = a_type("map", { keys =
+expand_type(node, keys, INTEGER), values =
 
 expand_type(node, values, elements) })
       elseif is_record and is_array then
@@ -10091,18 +10134,23 @@ expand_type(node, values, elements) })
       return ok, t, infertype ~= nil
    end
 
-   local function get_type_declaration(node)
-      if node.value.kind == "op" and
-         node.value.op.op == "@funcall" and
-         node.value.e1.kind == "variable" and
-         node.value.e1.tk == "require" then
+   local function get_type_declaration(value)
+      if value.kind == "op" and
+         value.op.op == "@funcall" and
+         value.e1.kind == "variable" and
+         value.e1.tk == "require" then
 
-         local t = special_functions["require"](node.value, find_var_type("require"), a_type("tuple", { tuple = { STRING } }), 0)
+         local t = special_functions["require"](value, find_var_type("require"), a_type("tuple", { tuple = { STRING } }), 0)
          if not (t.typename == "invalid") then
             return t.tuple[1]
          end
       else
-         return resolve_nominal_typetype(node.value.newtype)
+         local newtype = value.newtype
+         if newtype.typename == "typealias" then
+            return resolve_typealias(value.newtype)
+         else
+            return value.newtype, nil
+         end
       end
    end
 
@@ -10123,7 +10171,8 @@ expand_type(node, values, elements) })
       local is_total = true
       local missing
       for _, key in ipairs(t.field_order) do
-         if not is_typetype(t.fields[key]) then
+         local ftype = t.fields[key]
+         if not (ftype.typename == "typetype" or ftype.typename == "typealias") then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -10168,7 +10217,7 @@ expand_type(node, values, elements) })
       end
 
       local var = resolve_tuple_and_nominal(vartype)
-      if is_typetype(var) then
+      if var.typename == "typetype" or var.typename == "typealias" then
          error_at(where, "cannot reassign a type")
          return nil
       end
@@ -10215,7 +10264,7 @@ expand_type(node, values, elements) })
       ["local_type"] = {
          before = function(node)
             local name = node.var.tk
-            local resolved, aliasing = get_type_declaration(node)
+            local resolved, aliasing = get_type_declaration(node.value)
             local var = add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
@@ -10232,7 +10281,7 @@ expand_type(node, values, elements) })
             local name = node.var.tk
             local unresolved = get_unresolved()
             if node.value then
-               local resolved, aliasing = get_type_declaration(node)
+               local resolved, aliasing = get_type_declaration(node.value)
                local added = add_global(node.var, name, resolved)
                node.value.newtype = resolved
                if aliasing then
@@ -10721,7 +10770,7 @@ expand_type(node, values, elements) })
                   if not df then
                      error_at(node[i], in_context(node.expected_context, "unknown field " .. ck))
                   else
-                     if is_typetype(df) then
+                     if df.typename == "typetype" or df.typename == "typealias" then
                         error_at(node[i], in_context(node.expected_context, "cannot reassign a type"))
                      else
                         assert_is_a(node[i], cvtype, df, "in record field", ck)
@@ -11503,7 +11552,7 @@ expand_type(node, values, elements) })
                return invalid_at(node, "unknown variable: " .. node.tk)
             end
 
-            if is_typetype(t) then
+            if t.typename == "typetype" then
                t = typetype_to_nominal(node, node.tk, t, t)
             end
 
@@ -11679,14 +11728,12 @@ expand_type(node, values, elements) })
                begin_scope()
                add_var(nil, "@self", type_at(typ, a_type("typetype", { def = typ })))
 
-               for name, typ2 in fields_of(typ) do
-                  if typ2.typename == "typetype" then
-                     local resolved, is_alias = resolve_nominal_typetype(typ2)
-                     if is_alias then
-                        typ2.is_alias = true
-                        typ2.def.resolved = resolved
-                     end
-                     add_var(nil, name, resolved)
+               for fname, ftype in fields_of(typ) do
+                  if ftype.typename == "typealias" then
+                     resolve_nominal(ftype.alias_to)
+                     add_var(nil, fname, ftype)
+                  elseif ftype.typename == "typetype" then
+                     add_var(nil, fname, ftype)
                   end
                end
             end,
@@ -11808,11 +11855,8 @@ expand_type(node, values, elements) })
                      assert(typ.typename == "typevar")
                      typ.typevar = t.typearg
                      typ.constraint = t.constraint
-                  else
-                     if t.is_alias then
-                        t = t.def.resolved
-                     end
-                     if not (t.def and t.def.typename == "circular_require") then
+                  elseif t.typename == "typetype" then
+                     if t.def.typename ~= "circular_require" then
                         typ.found = t
                      end
                   end
@@ -11895,6 +11939,7 @@ expand_type(node, values, elements) })
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
    visit_type.cbs["typetype"] = default_type_visitor
+   visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["array"] = default_type_visitor
    visit_type.cbs["map"] = default_type_visitor
    visit_type.cbs["enum"] = default_type_visitor
