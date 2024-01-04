@@ -1491,7 +1491,6 @@ local record Node
 
    -- newtype
    newtype: Type
-   is_alias_node: boolean
    elide_type: boolean
 
    -- expressions
@@ -4749,14 +4748,9 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
       ["newtype"] = {
          after = function(node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if node.is_alias_node then
-               local nt = node.newtype
-               if nt.typename == "typealias" then
-                  table.insert(out, table.concat(nt.alias_to.names, "."))
-               else
-                  assert(nt.typename == "typetype")
-                  table.insert(out, nt.def.declname)
-               end
+            local nt = node.newtype
+            if nt.typename == "typealias" then
+               table.insert(out, table.concat(nt.alias_to.names, "."))
             elseif is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
             else
@@ -10268,7 +10262,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local var = add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
-               node.value.is_alias_node = true
             end
          end,
          after = function(node: Node, _children: {Type}): Type
@@ -10286,7 +10279,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                node.value.newtype = resolved
                if aliasing then
                   added.aliasing = aliasing
-                  node.value.is_alias_node = true
                end
 
                if added and unresolved.global_types[name] then
