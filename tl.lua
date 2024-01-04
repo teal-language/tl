@@ -8548,6 +8548,7 @@ a.types[i], b.types[i]), }
       end
 
       add_var(nil, node.name.tk, a_function({
+         typeargs = node.typeargs,
          args = args,
          rets = get_rets(node.rets),
       }))

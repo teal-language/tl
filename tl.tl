@@ -8548,6 +8548,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       add_var(nil, node.name.tk, a_function {
+         typeargs = node.typeargs,
          args = args,
          rets = get_rets(node.rets),
       })
