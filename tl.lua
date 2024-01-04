@@ -1534,7 +1534,6 @@ local Node = {ExpectedContext = {}, }
 
 
 
-
 local function is_array_type(t)
 
    return t.typename == "array" or t.elements ~= nil
@@ -4761,14 +4760,9 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       ["newtype"] = {
          after = function(node, _children)
             local out = { y = node.y, h = 0 }
-            if node.is_alias_node then
-               local nt = node.newtype
-               if nt.typename == "typealias" then
-                  table.insert(out, table.concat(nt.alias_to.names, "."))
-               else
-                  assert(nt.typename == "typetype")
-                  table.insert(out, nt.def.declname)
-               end
+            local nt = node.newtype
+            if nt.typename == "typealias" then
+               table.insert(out, table.concat(nt.alias_to.names, "."))
             elseif is_record_type(node.newtype.def) then
                table.insert(out, print_record_def(node.newtype.def))
             else
@@ -10323,7 +10317,6 @@ expand_type(node, values, elements) })
             local var = add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
-               node.value.is_alias_node = true
             end
          end,
          after = function(node, _children)
@@ -10341,7 +10334,6 @@ expand_type(node, values, elements) })
                node.value.newtype = resolved
                if aliasing then
                   added.aliasing = aliasing
-                  node.value.is_alias_node = true
                end
 
                if added and unresolved.global_types[name] then
