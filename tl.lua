@@ -7918,7 +7918,7 @@ tl.type_check = function(ast, opts)
    end
 
    local function add_function_definition_for_recursion(node)
-      local args = a_type({ typename = "tuple" })
+      local args = a_type({ typename = "tuple", is_va = node.args.type.is_va })
       for _, fnarg in ipairs(node.args) do
          table.insert(args, fnarg.type)
       end
