@@ -1013,7 +1013,7 @@ local enum TypeName
    "union"
    "nominal"
    "emptytable"
-   "table_item"
+   "literal_table_item"
    "unresolved_emptytable_value"
    "unresolved_typearg"
    "unresolvable_typearg"
@@ -1050,7 +1050,7 @@ local table_types <total>: {TypeName:boolean} = {
    ["integer"] = false,
    ["union"] = false,
    ["nominal"] = false,
-   ["table_item"] = false,
+   ["literal_table_item"] = false,
    ["unresolved_emptytable_value"] = false,
    ["unresolved_typearg"] = false,
    ["unresolvable_typearg"] = false,
@@ -1099,11 +1099,17 @@ local interface Type
    -- function argument
    is_self: boolean
 
+
+end
+
+local record LiteralTableItemType
+   is Type
+   where self.typename == "literal_table_item"
+
    -- table items
    kname: string
    ktype: Type
    vtype: Type
-
 end
 
 local record UnresolvedType
@@ -1304,8 +1310,8 @@ local enum NodeKind
    "number"
    "integer"
    "boolean"
-   "table_literal"
-   "table_item"
+   "literal_table"
+   "literal_table_item"
    "function"
    "expression_list"
    "enum_item"
@@ -1813,7 +1819,7 @@ local function parse_table_value(ps: ParseState, i: integer): integer, Node, int
 end
 
 local function parse_table_item(ps: ParseState, i: integer, n?: integer): integer, Node, integer
-   local node = new_node(ps.tokens, i, "table_item")
+   local node = new_node(ps.tokens, i, "literal_table_item")
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
    end
@@ -1940,7 +1946,7 @@ local function parse_bracket_list<T>(ps: ParseState, i: integer, list: {T}, open
 end
 
 local function parse_table_literal(ps: ParseState, i: integer): integer, Node
-   local node = new_node(ps.tokens, i, "table_literal")
+   local node = new_node(ps.tokens, i, "literal_table")
    return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
@@ -3884,18 +3890,19 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
       if ast.elements then
          table.insert(xs, recurse_type(ast.elements, visit))
       end
+   elseif ast is LiteralTableItemType then
+      if ast.ktype then
+         table.insert(xs, recurse_type(ast.ktype, visit))
+      end
+      if ast.vtype then
+         table.insert(xs, recurse_type(ast.vtype, visit))
+      end
    else
       if ast.def then
          table.insert(xs, recurse_type(ast.def, visit))
       end
       if ast.alias_to then
          table.insert(xs, recurse_type(ast.alias_to, visit))
-      end
-      if ast.ktype then
-         table.insert(xs, recurse_type(ast.ktype, visit))
-      end
-      if ast.vtype then
-         table.insert(xs, recurse_type(ast.vtype, visit))
       end
    end
 
@@ -4016,11 +4023,11 @@ local function recurse_node<T>(root: Node,
 
       ["statements"] = walk_children,
       ["argument_list"] = walk_children,
-      ["table_literal"] = walk_children,
+      ["literal_table"] = walk_children,
       ["variable_list"] = walk_children,
       ["expression_list"] = walk_children,
 
-      ["table_item"] = function(ast: Node, xs: {T})
+      ["literal_table_item"] = function(ast: Node, xs: {T})
          xs[1] = recurse(ast.key)
          xs[2] = recurse(ast.value)
          if ast.itemtype then
@@ -4609,7 +4616,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             return out
          end,
       },
-      ["table_literal"] = {
+      ["literal_table"] = {
          before = increment_indent,
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
@@ -4630,7 +4637,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             return out
          end,
       },
-      ["table_item"] = {
+      ["literal_table_item"] = {
          after = function(node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if node.key_parsed ~= "implicit" then
@@ -4875,7 +4882,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
    visit_type.cbs["union"] = default_type_visitor
    visit_type.cbs["nominal"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
-   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["literal_table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
    visit_type.cbs["tuple"] = default_type_visitor
    visit_type.cbs["poly"] = default_type_visitor
@@ -4946,7 +4953,7 @@ local typename_to_typecode <total>: {TypeName:integer} = {
    -- types that should be skipped or not present:
    ["none"] = tl.typecodes.UNKNOWN,
    ["tuple"] = tl.typecodes.UNKNOWN,
-   ["table_item"] = tl.typecodes.UNKNOWN,
+   ["literal_table_item"] = tl.typecodes.UNKNOWN,
    ["unresolved"] = tl.typecodes.UNKNOWN,
    ["typetype"] = tl.typecodes.UNKNOWN,
    ["typealias"] = tl.typecodes.UNKNOWN,
@@ -4955,7 +4962,7 @@ local typename_to_typecode <total>: {TypeName:integer} = {
 
 local skip_types: {TypeName: boolean} = {
    ["none"] = true,
-   ["table_item"] = true,
+   ["literal_table_item"] = true,
    ["unresolved"] = true,
    ["typetype"] = true,
 }
@@ -8360,7 +8367,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["number"] = true,
       ["integer"] = true,
       ["boolean"] = true,
-      ["table_literal"] = true,
+      ["literal_table"] = true,
    }
    local function expr_is_definitely_not_closable(e: Node): boolean
       return definitely_not_closable_exprs[e.kind]
@@ -10009,7 +10016,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function infer_table_literal(node: Node, children: {Type}): Type
+   local function infer_table_literal(node: Node, children: {LiteralTableItemType}): Type
       local is_record = false
       local is_array = false
       local is_map = false
@@ -10033,8 +10040,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local keys, values: Type, Type
 
       for i, child in ipairs(children) do
-         assert(child.typename == "table_item")
-
          local ck = child.kname
          local n = node[i].key.constnum
          local b: boolean = nil
@@ -10795,7 +10800,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return tuple
          end,
       },
-      ["table_literal"] = {
+      ["literal_table"] = {
          before = function(node: Node)
             if node.expected then
                local decltype = resolve_tuple_and_nominal(node.expected)
@@ -10833,7 +10838,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             end
          end,
-         after = function(node: Node, children: {Type}): Type
+         after = function(node: Node, children: {LiteralTableItemType}): Type
             node.known = FACT_TRUTHY
 
             if not node.expected then
@@ -10882,7 +10887,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local seen_keys: {CheckableKey:Where} = {}
 
             for i, child in ipairs(children) do
-               assert(child.typename == "table_item")
                local cvtype = resolve_tuple(child.vtype)
                local ck = child.kname
                local n = node[i].key.constnum
@@ -10969,7 +10973,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return t
          end,
       },
-      ["table_item"] = {
+      ["literal_table_item"] = {
          after = function(node: Node, children: {Type}): Type
             local kname = node.key.conststr
             local ktype = children[1]
@@ -10985,11 +10989,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                vtype = shallow_copy_new_type(vtype)
                vtype.is_method = false
             end
-            return type_at(node, a_type("table_item", {
+            return type_at(node, a_type("literal_table_item", {
                kname = kname,
                ktype = ktype,
                vtype = vtype,
-            }))
+            } as LiteralTableItemType))
          end,
       },
       ["local_function"] = {
@@ -11294,7 +11298,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.e2.expected = node.expected
                elseif node.op.op == "or" then
                   node.e1.expected = node.expected
-                  if not (node.e2.kind == "table_literal" and #node.e2 == 0) then
+                  if not (node.e2.kind == "literal_table" and #node.e2 == 0) then
                      node.e2.expected = node.expected
                   end
                end
@@ -12097,7 +12101,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    visit_type.cbs["integer"] = default_type_visitor
    visit_type.cbs["thread"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
-   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["literal_table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
    visit_type.cbs["tuple"] = default_type_visitor
    visit_type.cbs["poly"] = default_type_visitor

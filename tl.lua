@@ -1050,7 +1050,7 @@ local table_types = {
    ["integer"] = false,
    ["union"] = false,
    ["nominal"] = false,
-   ["table_item"] = false,
+   ["literal_table_item"] = false,
    ["unresolved_emptytable_value"] = false,
    ["unresolved_typearg"] = false,
    ["unresolvable_typearg"] = false,
@@ -1064,6 +1064,12 @@ local table_types = {
    ["none"] = false,
    ["*"] = false,
 }
+
+
+
+
+
+
 
 
 
@@ -1813,7 +1819,7 @@ local function parse_table_value(ps, i)
 end
 
 local function parse_table_item(ps, i, n)
-   local node = new_node(ps.tokens, i, "table_item")
+   local node = new_node(ps.tokens, i, "literal_table_item")
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
    end
@@ -1940,7 +1946,7 @@ local function parse_bracket_list(ps, i, list, open, close, sep, parse_item)
 end
 
 local function parse_table_literal(ps, i)
-   local node = new_node(ps.tokens, i, "table_literal")
+   local node = new_node(ps.tokens, i, "literal_table")
    return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
@@ -3884,18 +3890,19 @@ local function recurse_type(ast, visit)
       if ast.elements then
          table.insert(xs, recurse_type(ast.elements, visit))
       end
+   elseif ast.typename == "literal_table_item" then
+      if ast.ktype then
+         table.insert(xs, recurse_type(ast.ktype, visit))
+      end
+      if ast.vtype then
+         table.insert(xs, recurse_type(ast.vtype, visit))
+      end
    else
       if ast.def then
          table.insert(xs, recurse_type(ast.def, visit))
       end
       if ast.alias_to then
          table.insert(xs, recurse_type(ast.alias_to, visit))
-      end
-      if ast.ktype then
-         table.insert(xs, recurse_type(ast.ktype, visit))
-      end
-      if ast.vtype then
-         table.insert(xs, recurse_type(ast.vtype, visit))
       end
    end
 
@@ -4016,11 +4023,11 @@ local function recurse_node(root,
 
       ["statements"] = walk_children,
       ["argument_list"] = walk_children,
-      ["table_literal"] = walk_children,
+      ["literal_table"] = walk_children,
       ["variable_list"] = walk_children,
       ["expression_list"] = walk_children,
 
-      ["table_item"] = function(ast, xs)
+      ["literal_table_item"] = function(ast, xs)
          xs[1] = recurse(ast.key)
          xs[2] = recurse(ast.value)
          if ast.itemtype then
@@ -4609,7 +4616,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
             return out
          end,
       },
-      ["table_literal"] = {
+      ["literal_table"] = {
          before = increment_indent,
          after = function(node, children)
             local out = { y = node.y, h = 0 }
@@ -4630,7 +4637,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
             return out
          end,
       },
-      ["table_item"] = {
+      ["literal_table_item"] = {
          after = function(node, children)
             local out = { y = node.y, h = 0 }
             if node.key_parsed ~= "implicit" then
@@ -4875,7 +4882,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    visit_type.cbs["union"] = default_type_visitor
    visit_type.cbs["nominal"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
-   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["literal_table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
    visit_type.cbs["tuple"] = default_type_visitor
    visit_type.cbs["poly"] = default_type_visitor
@@ -4946,7 +4953,7 @@ local typename_to_typecode = {
 
    ["none"] = tl.typecodes.UNKNOWN,
    ["tuple"] = tl.typecodes.UNKNOWN,
-   ["table_item"] = tl.typecodes.UNKNOWN,
+   ["literal_table_item"] = tl.typecodes.UNKNOWN,
    ["unresolved"] = tl.typecodes.UNKNOWN,
    ["typetype"] = tl.typecodes.UNKNOWN,
    ["typealias"] = tl.typecodes.UNKNOWN,
@@ -4955,7 +4962,7 @@ local typename_to_typecode = {
 
 local skip_types = {
    ["none"] = true,
-   ["table_item"] = true,
+   ["literal_table_item"] = true,
    ["unresolved"] = true,
    ["typetype"] = true,
 }
@@ -8360,7 +8367,7 @@ a.types[i], b.types[i]), }
       ["number"] = true,
       ["integer"] = true,
       ["boolean"] = true,
-      ["table_literal"] = true,
+      ["literal_table"] = true,
    }
    local function expr_is_definitely_not_closable(e)
       return definitely_not_closable_exprs[e.kind]
@@ -10033,8 +10040,6 @@ a.types[i], b.types[i]), }
       local keys, values
 
       for i, child in ipairs(children) do
-         assert(child.typename == "table_item")
-
          local ck = child.kname
          local n = node[i].key.constnum
          local b = nil
@@ -10795,7 +10800,7 @@ expand_type(node, values, elements) })
             return tuple
          end,
       },
-      ["table_literal"] = {
+      ["literal_table"] = {
          before = function(node)
             if node.expected then
                local decltype = resolve_tuple_and_nominal(node.expected)
@@ -10882,7 +10887,6 @@ expand_type(node, values, elements) })
             local seen_keys = {}
 
             for i, child in ipairs(children) do
-               assert(child.typename == "table_item")
                local cvtype = resolve_tuple(child.vtype)
                local ck = child.kname
                local n = node[i].key.constnum
@@ -10969,7 +10973,7 @@ expand_type(node, values, elements) })
             return t
          end,
       },
-      ["table_item"] = {
+      ["literal_table_item"] = {
          after = function(node, children)
             local kname = node.key.conststr
             local ktype = children[1]
@@ -10985,7 +10989,7 @@ expand_type(node, values, elements) })
                vtype = shallow_copy_new_type(vtype)
                vtype.is_method = false
             end
-            return type_at(node, a_type("table_item", {
+            return type_at(node, a_type("literal_table_item", {
                kname = kname,
                ktype = ktype,
                vtype = vtype,
@@ -11294,7 +11298,7 @@ expand_type(node, values, elements) })
                   node.e2.expected = node.expected
                elseif node.op.op == "or" then
                   node.e1.expected = node.expected
-                  if not (node.e2.kind == "table_literal" and #node.e2 == 0) then
+                  if not (node.e2.kind == "literal_table" and #node.e2 == 0) then
                      node.e2.expected = node.expected
                   end
                end
@@ -12097,7 +12101,7 @@ expand_type(node, values, elements) })
    visit_type.cbs["integer"] = default_type_visitor
    visit_type.cbs["thread"] = default_type_visitor
    visit_type.cbs["emptytable"] = default_type_visitor
-   visit_type.cbs["table_item"] = default_type_visitor
+   visit_type.cbs["literal_table_item"] = default_type_visitor
    visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
    visit_type.cbs["tuple"] = default_type_visitor
    visit_type.cbs["poly"] = default_type_visitor
