@@ -1372,6 +1372,11 @@ local table_types = {
 
 
 
+
+
+
+
+
 local TruthyFact = {}
 
 
@@ -7036,6 +7041,7 @@ tl.type_check = function(ast, opts)
    end
 
    local get_unresolved
+   local find_unresolved
 
    local function add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
       local scope = st[#st]
@@ -7092,7 +7098,11 @@ tl.type_check = function(ast, opts)
 
       local var = add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
 
-      if symbol_list and node and t.typename ~= "unresolved" and t.typename ~= "none" then
+      if t.typename == "unresolved" or t.typename == "none" then
+         return var
+      end
+
+      if symbol_list and node then
          local slot
          if node.symbol_list_slot then
             slot = node.symbol_list_slot
@@ -7258,6 +7268,13 @@ tl.type_check = function(ast, opts)
       return unresolved
    end
 
+   find_unresolved = function(level)
+      local u = st[level or #st]["@unresolved"]
+      if u then
+         return u.t
+      end
+   end
+
    local function begin_scope(node)
       table.insert(st, {})
 
@@ -7271,27 +7288,29 @@ tl.type_check = function(ast, opts)
       local scope = st[#st]
       local unresolved = scope["@unresolved"]
       if unresolved then
+         local unrt = unresolved.t
          local next_scope = st[#st - 1]
          local upper = next_scope["@unresolved"]
          if upper then
-            for name, nodes in pairs(unresolved.t.labels) do
+            local uppert = upper.t
+            for name, nodes in pairs(unrt.labels) do
                for _, n in ipairs(nodes) do
-                  upper.t.labels[name] = upper.t.labels[name] or {}
-                  table.insert(upper.t.labels[name], n)
+                  uppert.labels[name] = uppert.labels[name] or {}
+                  table.insert(uppert.labels[name], n)
                end
             end
-            for name, types in pairs(unresolved.t.nominals) do
+            for name, types in pairs(unrt.nominals) do
                for _, typ in ipairs(types) do
-                  upper.t.nominals[name] = upper.t.nominals[name] or {}
-                  table.insert(upper.t.nominals[name], typ)
+                  uppert.nominals[name] = uppert.nominals[name] or {}
+                  table.insert(uppert.nominals[name], typ)
                end
             end
-            for name, _ in pairs(unresolved.t.global_types) do
-               upper.t.global_types[name] = true
+            for name, _ in pairs(unrt.global_types) do
+               uppert.global_types[name] = true
             end
          else
             next_scope["@unresolved"] = unresolved
-            unresolved.t.narrows = {}
+            unrt.narrows = {}
          end
       end
       close_types(scope)
@@ -8955,9 +8974,9 @@ a.types[i], b.types[i]), }
    local function widen_all_unions(node)
       for i = #st, 1, -1 do
          local scope = st[i]
-         local unr = scope["@unresolved"]
-         if unr and unr.t.narrows then
-            for name, _ in pairs(unr.t.narrows) do
+         local unresolved = find_unresolved(i)
+         if unresolved and unresolved.narrows then
+            for name, _ in pairs(unresolved.narrows) do
                if not node or assigned_anywhere(name, node) then
                   widen_in_scope(scope, name)
                end
@@ -9042,13 +9061,14 @@ a.types[i], b.types[i]), }
       local unresolved = st[#st]["@unresolved"]
       if unresolved then
          st[#st]["@unresolved"] = nil
-         for name, nodes in pairs(unresolved.t.labels) do
+         local unrt = unresolved.t
+         for name, nodes in pairs(unrt.labels) do
             for _, node in ipairs(nodes) do
                error_at(node, "no visible label '" .. name .. "' for goto")
             end
          end
-         for name, types in pairs(unresolved.t.nominals) do
-            if not unresolved.t.global_types[name] then
+         for name, types in pairs(unrt.nominals) do
+            if not unrt.global_types[name] then
                for _, typ in ipairs(types) do
                   assert(typ.x)
                   assert(typ.y)
@@ -9724,13 +9744,14 @@ a.types[i], b.types[i]), }
 
    local function dismiss_unresolved(name)
       for i = #st, 1, -1 do
-         local unresolved = st[i]["@unresolved"]
+         local unresolved = find_unresolved(i)
          if unresolved then
-            if unresolved.t.nominals[name] then
-               for _, t in ipairs(unresolved.t.nominals[name]) do
+            local uses = unresolved.nominals[name]
+            if uses then
+               for _, t in ipairs(uses) do
                   resolve_nominal(t)
                end
-               unresolved.t.nominals[name] = nil
+               unresolved.nominals[name] = nil
                return
             end
          end
@@ -10592,13 +10613,13 @@ expand_type(node, values, elements) })
             if st[#st][label_id] then
                error_at(node, "label '" .. node.label .. "' already defined at " .. filename)
             end
-            local unresolved = st[#st]["@unresolved"]
+            local unresolved = find_unresolved()
             local var = add_var(node, label_id, type_at(node, a_type("none", {})))
             if unresolved then
-               if unresolved.t.labels[node.label] then
+               if unresolved.labels[node.label] then
                   var.used = true
                end
-               unresolved.t.labels[node.label] = nil
+               unresolved.labels[node.label] = nil
             end
          end,
          after = function()
