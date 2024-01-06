@@ -1066,7 +1066,7 @@ local table_types <total>: {TypeName:boolean} = {
 }
 
 local interface Type
-   where self.typename ~= nil
+   where self.typename
 
    y: integer
    x: integer
@@ -1079,16 +1079,11 @@ local interface Type
 
    inferred_at: Where
 
-   is_total: boolean
-   missing: {string}
-
    -- Lua compatibilty
    needs_compat: boolean
 
    -- arguments: optional arity
    opt: boolean
-
-   declname: string
 
    -- typetype
    def: Type
@@ -1096,35 +1091,13 @@ local interface Type
    is_abstract: boolean
 
    -- typealias
-   alias_to: Type
+   alias_to: NominalType
    is_nested_alias: boolean
-
-   -- records
-   interface_list: {Type}
-   interfaces_expanded: boolean
-   typeargs: {TypeArgType}
-   fields: {string: Type}
-   field_order: {string}
-   meta_fields: {string: Type}
-   meta_field_order: {string}
-   is_userdata: boolean
-
-   -- array
-   elements: Type
-   consttypes: {Type}
-   -- tupletable/array
-   inferred_len: integer
 
    typeid: integer
 
    -- function argument
    is_self: boolean
-
-   -- nominal
-   names: {string}
-   typevals: {Type}
-   found: Type    -- type is found but typeargs are not resolved
-   resolved: Type -- type is found and typeargs are resolved
 
    -- table items
    kname: string
@@ -1136,6 +1109,68 @@ local interface Type
    nominals: {string:{Type}}
    global_types: {string:boolean}
    narrows: {string:boolean}
+end
+
+local interface HasTypeArgs
+   where self.typeargs
+
+   typeargs: {TypeArgType}
+end
+
+local interface HasDeclName
+   declname: string
+end
+
+local interface HasIsTotal
+   is_total: boolean
+   missing: {string}
+end
+
+local record NominalType
+   is Type
+   where self.typename == "nominal"
+
+   names: {string}
+   typevals: {Type}
+   found: Type    -- type is found but typeargs are not resolved
+   resolved: Type -- type is found and typeargs are resolved
+end
+
+local interface ArrayLikeType
+   is Type
+   where self.elements
+
+   elements: Type
+   consttypes: {Type}
+   inferred_len: integer
+end
+
+local interface RecordLikeType
+   is Type, HasTypeArgs, HasDeclName, ArrayLikeType
+   where self.fields
+
+   interface_list: {ArrayType | NominalType}
+   interfaces_expanded: boolean
+   fields: {string: Type}
+   field_order: {string}
+   meta_fields: {string: Type}
+   meta_field_order: {string}
+   is_userdata: boolean
+end
+
+local record ArrayType
+   is ArrayLikeType
+   where self.typename == "array"
+end
+
+local record RecordType
+   is RecordLikeType, HasIsTotal
+   where self.typename == "record"
+end
+
+local record InterfaceType
+   is RecordLikeType
+   where self.typename == "interface"
 end
 
 local record InvalidType
@@ -1184,7 +1219,7 @@ local record TypeVarType
 end
 
 local record MapType
-   is Type -- TODO TotalType
+   is Type, HasIsTotal
    where self.typename == "map"
 
    keys: Type
@@ -1208,7 +1243,7 @@ local record UnresolvedEmptyTableValueType
 end
 
 local record FunctionType
-   is Type
+   is Type, HasTypeArgs
    where self.typename == "function"
 
    is_method: boolean
@@ -1242,7 +1277,10 @@ local record PolyType
    types: {FunctionType}
 end
 
-local record EnumType is Type where self.typename == "enum"
+local record EnumType
+   is Type, HasDeclName
+   where self.typename == "enum"
+
    enumset: {string:boolean}
 end
 
@@ -1531,15 +1569,6 @@ local type Where
    = Node
    | Type
 
-local function is_array_type(t:Type): boolean
-   -- checking array interface
-   return t.typename == "array" or t.elements ~= nil
-end
-
-local function is_record_type(t:Type): boolean
-   return t.typename == "record" or t.typename == "interface"
-end
-
 local function is_number_type(t:Type): boolean
    return t.typename == "number" or t.typename == "integer"
 end
@@ -1646,7 +1675,7 @@ end
 local function new_typetype(ps: ParseState, i: integer, def: Type): Type
    local t = new_type(ps, i, "typetype")
    t.def = def
-   if def.typename == "interface" then
+   if def is InterfaceType then
       -- ...or should this be set on traversal, to account for nominal type aliases?
       t.is_abstract = true
    end
@@ -1655,7 +1684,8 @@ end
 
 local macroexp a_typetype(t: Type): Type
 -- FIXME set is_abstract here once standard_library defines interfaces
---   if t.def.typename == "interface" then
+--   local def = t.def
+--   if def is InterfaceType then
 --      t.is_abstract = true
 --   end
 --   return t
@@ -1688,8 +1718,8 @@ local function a_vararg(t: {Type}): TupleType
    return typ
 end
 
-local macroexp an_array(t: Type): Type
-   return a_type("array", { elements = t })
+local macroexp an_array(t: Type): ArrayType
+   return a_type("array", { elements = t } as ArrayType)
 end
 
 local macroexp a_map(k: Type, v: Type): MapType
@@ -2022,7 +2052,7 @@ local function parse_simple_type_or_nominal(ps: ParseState, i: integer): integer
    if st then
       return i + 1, st
    end
-   local typ = new_type(ps, i, "nominal")
+   local typ = new_type(ps, i, "nominal") as NominalType
    typ.names = { tk }
    i = i + 1
    while ps.tokens[i].tk == "." do
@@ -2054,7 +2084,7 @@ local function parse_base_type(ps: ParseState, i: integer): integer, Type, integ
          return i
       end
       if ps.tokens[i].tk == "}" then
-         local decl = new_type(ps, istart, "array")
+         local decl = new_type(ps, istart, "array") as ArrayType
          decl.elements = t
          end_at(decl as Node, ps.tokens[i])
          i = verify_tk(ps, i, "}")
@@ -2974,7 +3004,7 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
    return true
 end
 
-local function parse_nested_type(ps: ParseState, i: integer, def: Type, typename: TypeName, parse_body: ParseBody): integer, boolean
+local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, typename: TypeName, parse_body: ParseBody): integer, boolean
    i = i + 1 -- skip 'record' or 'enum'
    local iv = i
 
@@ -3059,11 +3089,14 @@ end
 
 local function parse_where_clause(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps.tokens, i, "macroexp")
+
+   local selftype = new_type(ps, i, "nominal") as NominalType
+   selftype.names = { "@self" }
+
    node.args = new_node(ps.tokens, i, "argument_list")
    node.args[1] = new_node(ps.tokens, i, "argument")
    node.args[1].tk = "self"
-   node.args[1].argtype = new_type(ps, i, "nominal")
-   node.args[1].argtype.names = { "@self" }
+   node.args[1].argtype = selftype
    node.rets = new_tuple(ps, i)
    node.rets.tuple[1] = BOOLEAN
    i, node.exp = parse_expression(ps, i)
@@ -3075,22 +3108,25 @@ parse_interface_name = function(ps: ParseState, i: integer): integer, Type, inte
    local istart = i
    local typ: Type
    i, typ = parse_simple_type_or_nominal(ps, i)
-   if typ.typename ~= "nominal" then
+   if not typ is NominalType then
       return fail(ps, istart, "expected an interface")
    end
    return i, typ
 end
 
-local function parse_array_interface_type(ps: ParseState, i: integer, def: Type): integer, Type
-   if def.interface_list and def.interface_list[1].typename == "array" then
-      return failskip(ps, i, "duplicated declaration of array element type", parse_type as SkipFunction)
+local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, Type
+   if def.interface_list then
+      local first = def.interface_list[1]
+      if first is ArrayType then
+         return failskip(ps, i, "duplicated declaration of array element type", parse_type as SkipFunction)
+      end
    end
    local t: Type
    i, t = parse_base_type(ps, i)
    if not t then
       return i
    end
-   if t.typename ~= "array" then
+   if not t is ArrayType then
       fail(ps, i, "expected an array declaration")
       return i
    end
@@ -3098,7 +3134,7 @@ local function parse_array_interface_type(ps: ParseState, i: integer, def: Type)
    return i, t
 end
 
-parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node): integer, Node
+parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, node: Node): integer, Node
    local istart = i - 1
    def.fields = {}
    def.field_order = {}
@@ -3141,16 +3177,22 @@ parse_record_body = function(ps: ParseState, i: integer, def: Type, node: Node):
       local where_macroexp: Node
       i, where_macroexp = parse_where_clause(ps, i)
 
-      def.meta_fields = {}
-      def.meta_field_order = {}
-
       local typ = new_type(ps, wstart, "function") as FunctionType
       typ.is_method = true
-      typ.args = a_tuple { a_type("nominal", { y = typ.y, x = typ.x, filename = ps.filename, names = { "@self" } }) }
+      typ.args = a_tuple {
+         a_type("nominal", {
+            y = typ.y,
+            x = typ.x,
+            filename = ps.filename,
+            names = { "@self" }
+         } as NominalType)
+      }
       typ.rets = a_tuple { BOOLEAN }
       typ.macroexp = where_macroexp
       typ.is_abstract = true
 
+      def.meta_fields = {}
+      def.meta_field_order = {}
       store_field_in_record(ps, i, "__is", typ, def.meta_fields, def.meta_field_order)
    end
 
@@ -3287,7 +3329,7 @@ parse_newtype = function(ps: ParseState, i: integer): integer, Node
          return fail(ps, i, "expected a type")
       end
 
-      if def.typename == "nominal" then
+      if def is NominalType then
          node.newtype = new_type(ps, itype, "typealias")
          node.newtype.alias_to = def
       else
@@ -3429,8 +3471,11 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
 
    local nt = asgn.value.newtype
    if nt.typename == "typetype" then
-      if not nt.def.declname then
-         nt.def.declname = asgn.var.tk
+      local def = nt.def
+      if def is RecordLikeType or def is EnumType then
+         if not def.declname then
+            def.declname = asgn.var.tk
+         end
       end
    end
 
@@ -3450,6 +3495,8 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
    if not asgn.var then
       return fail(ps, i, "expected a type name")
    end
+
+   assert(def is RecordType or def is InterfaceType or def is EnumType)
    def.declname = asgn.var.tk
 
    i = parse_body(ps, i, def, nt)
@@ -3666,7 +3713,7 @@ local enum MetaMode
    "meta"
 end
 
-local function fields_of(t: Type, meta?: MetaMode): (function(): string, Type)
+local function fields_of(t: RecordLikeType, meta?: MetaMode): (function(): string, Type)
    local i = 1
    local field_order, fields: {string}, {string:Type}
    if meta then
@@ -3765,51 +3812,47 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
 
    local xs: {T} = {}
 
-   if ast.typeargs then
-      for _, child in ipairs(ast.typeargs) do
-         table.insert(xs, recurse_type(child, visit))
-      end
-   end
-
    if ast is TupleType then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(child, visit)
       end
-   end
-   if ast is AggregateType then
+   elseif ast is AggregateType then
       for _, child in ipairs(ast.types) do
          table.insert(xs, recurse_type(child, visit))
       end
-   end
-   if ast.interface_list then
-      for _, child in ipairs(ast.interface_list) do
-         table.insert(xs, recurse_type(child, visit))
-      end
-   end
-   if ast.def then
-      table.insert(xs, recurse_type(ast.def, visit))
-   end
-   if ast.alias_to then
-      table.insert(xs, recurse_type(ast.alias_to, visit))
-   end
-   if ast is MapType then
+   elseif ast is MapType then
       table.insert(xs, recurse_type(ast.keys, visit))
       table.insert(xs, recurse_type(ast.values, visit))
-   end
-   if ast.elements then
-      table.insert(xs, recurse_type(ast.elements, visit))
-   end
-   if ast.fields then
-      for _, child in fields_of(ast) do
-         table.insert(xs, recurse_type(child, visit))
+   elseif ast is RecordLikeType then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(child, visit))
+         end
       end
-   end
-   if ast.meta_fields then
-      for _, child in fields_of(ast, "meta") do
-         table.insert(xs, recurse_type(child, visit))
+      if ast.interface_list then
+         for _, child in ipairs(ast.interface_list) do
+            table.insert(xs, recurse_type(child, visit))
+         end
       end
-   end
-   if ast is FunctionType then
+      if ast.elements then
+         table.insert(xs, recurse_type(ast.elements, visit))
+      end
+      if ast.fields then
+         for _, child in fields_of(ast) do
+            table.insert(xs, recurse_type(child, visit))
+         end
+      end
+      if ast.meta_fields then
+         for _, child in fields_of(ast, "meta") do
+            table.insert(xs, recurse_type(child, visit))
+         end
+      end
+   elseif ast is FunctionType then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(child, visit))
+         end
+      end
       if ast.args then
          for i, child in ipairs(ast.args.tuple) do
             if i > 1 or not ast.is_method or child.is_self then
@@ -3822,21 +3865,32 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
             table.insert(xs, recurse_type(child, visit))
          end
       end
-   end
-   if ast.typevals then
-      for _, child in ipairs(ast.typevals) do
-         table.insert(xs, recurse_type(child, visit))
+   elseif ast is NominalType then
+      if ast.typevals then
+         for _, child in ipairs(ast.typevals) do
+            table.insert(xs, recurse_type(child, visit))
+         end
       end
-   end
-   if ast.ktype then
-      table.insert(xs, recurse_type(ast.ktype, visit))
-   end
-   if ast.vtype then
-      table.insert(xs, recurse_type(ast.vtype, visit))
-   end
-   if ast is TypeArgType then
+   elseif ast is TypeArgType then
       if ast.constraint then
          table.insert(xs, recurse_type(ast.constraint, visit))
+      end
+   elseif ast is ArrayType then
+      if ast.elements then
+         table.insert(xs, recurse_type(ast.elements, visit))
+      end
+   else
+      if ast.def then
+         table.insert(xs, recurse_type(ast.def, visit))
+      end
+      if ast.alias_to then
+         table.insert(xs, recurse_type(ast.alias_to, visit))
+      end
+      if ast.ktype then
+         table.insert(xs, recurse_type(ast.ktype, visit))
+      end
+      if ast.vtype then
+         table.insert(xs, recurse_type(ast.vtype, visit))
       end
    end
 
@@ -4302,10 +4356,11 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
       return table.concat(out)
    end
 
-   local function print_record_def(typ: Type): string
+   local function print_record_def(typ: RecordLikeType): string
       local out: {string} = { "{" }
       for _, name in ipairs(typ.field_order) do
-         if typ.fields[name].typename == "typetype" and is_record_type(typ.fields[name].def) then
+         local def = typ.fields[name].def
+         if typ.fields[name].typename == "typetype" and def is RecordLikeType then
             table.insert(out, name)
             table.insert(out, " = ")
             table.insert(out, print_record_def(typ.fields[name].def))
@@ -4751,10 +4806,13 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             local nt = node.newtype
             if nt.typename == "typealias" then
                table.insert(out, table.concat(nt.alias_to.names, "."))
-            elseif is_record_type(node.newtype.def) then
-               table.insert(out, print_record_def(node.newtype.def))
-            else
-               table.insert(out, "{}")
+            elseif nt.typename == "typetype" then
+               local def = nt.def
+               if def is RecordLikeType then
+                  table.insert(out, print_record_def(def))
+               else
+                  table.insert(out, "{}")
+               end
             end
             return out
          end,
@@ -4783,10 +4841,11 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
    local default_type_visitor = {
       after = function(typ: Type, _children: {Output}): Output
          local out: Output = { y = typ.y or -1, h = 0 }
-         local r = typ.resolved or typ
-         local lua_type = primitive[r.typename]
-                          or (r.is_userdata and "userdata")
-                          or "table"
+         local r = typ is NominalType and typ.resolved or typ
+         local lua_type = primitive[r.typename] or "table"
+         if r is RecordLikeType and r.is_userdata then
+            lua_type = "userdata"
+         end
          table.insert(out, lua_type)
          return out
       end,
@@ -4976,15 +5035,17 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    trenv.typeid_to_num[t.typeid] = n
    trenv.next_num = trenv.next_num + 1
 
-   if t.found then
-      ti.ref = get_typenum(trenv, t.found)
-   end
-   if t.resolved then
-      rt = t
+   if t is NominalType then
+      if t.found then
+         ti.ref = get_typenum(trenv, t.found)
+      end
+      if t.resolved then
+         rt = t
+      end
    end
    assert(not (rt.typename == "typetype" or rt.typename == "typealias"))
 
-   if is_record_type(rt) then
+   if rt is RecordLikeType then
       -- store record field info
       local r = {}
       for _, k in ipairs(rt.field_order) do
@@ -4994,7 +5055,7 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
       ti.fields = r
    end
 
-   if is_array_type(rt) then
+   if rt is ArrayLikeType then
       ti.elements = get_typenum(trenv, rt.elements)
    end
 
@@ -5050,7 +5111,7 @@ local CIRCULAR_REQUIRE = a_type("circular_require", {})
 
 local FUNCTION = a_function { args = a_vararg { ANY }, rets = a_vararg { ANY } }
 
-local NOMINAL_FILE = a_type("nominal", { names = {"FILE"} })
+local NOMINAL_FILE = a_type("nominal", { names = {"FILE"} } as NominalType)
 local XPCALL_MSGH_FUNCTION = a_function { args = a_tuple { ANY }, rets = a_tuple { } }
 
 local USERDATA = ANY -- Placeholder for maybe having a userdata "primitive" type
@@ -5297,7 +5358,7 @@ local function display_typevar(typevar: string): string
    return TL_DEBUG and typevar or (typevar:gsub("@.*", ""))
 end
 
-local function show_fields(t: Type, show: function(Type):(string)): string
+local function show_fields(t: RecordLikeType, show: function(Type):(string)): string
    if t.declname then
       return " " .. t.declname
    end
@@ -5337,7 +5398,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return show_type(typ, short, seen)
    end
 
-   if t.typename == "nominal" then
+   if t is NominalType then
       if #t.names == 1 and t.names[1] == "@self" then
          return "self"
       end
@@ -5386,14 +5447,12 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return "{}"
    elseif t is MapType then
       return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
-   elseif t.typename == "array" then
+   elseif t is ArrayType then
       return "{" .. show(t.elements) .. "}"
-   elseif t.typename == "enum" then
+   elseif t is EnumType then
       return t.declname or "enum"
-   elseif t.typename == "interface" then
-      return short and "interface" or "interface" .. show_fields(t, show)
-   elseif is_record_type(t) then
-      return short and "record" or "record" .. show_fields(t, show)
+   elseif t is RecordLikeType then
+      return short and t.typename or t.typename .. show_fields(t, show)
    elseif t is FunctionType then
       local out: {string} = {"function"}
       if t.typeargs then
@@ -5712,8 +5771,9 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
       last_typeid = globals_typeid
    end
 
-   local function a_record(t: Type): Type
+   local function a_record(t: RecordType): Type
       t = a_type("record", t)
+      assert(t.fields)
       t.field_order = sorted_keys(t.fields)
       return t
    end
@@ -5734,7 +5794,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    end
 
    local function a_grecord(n: integer, f: function(...: Type): Type): Type
-      local t = a_gfunction(n, f, "record") as Type -- FIXME
+      local t = a_gfunction(n, f, "record") as RecordType -- FIXME
       t.field_order = sorted_keys(t.fields)
       return t
    end
@@ -5817,10 +5877,10 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
 
    local TABLE_SORT_FUNCTION = a_gfunction(1, function(a: Type): FunctionType return { args = a_tuple { a, a }, rets = a_tuple { BOOLEAN } } end)
 
-   local metatable_nominals = {}
+   local metatable_nominals: {NominalType} = {}
 
    local function METATABLE(a: Type): Type
-      local t = a_type("nominal", { names = {"metatable"}, typevals = { a } })
+      local t = a_type("nominal", { names = {"metatable"}, typevals = { a } } as NominalType)
       table.insert(metatable_nominals, t)
       return t
    end
@@ -5901,7 +5961,7 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
          },
       },
       ["metatable"] = a_typetype {
-         def = a_grecord(1, function(a: Type): Type return {
+         def = a_grecord(1, function(a: Type): RecordType return {
             fields = {
                ["__call"] = a_function { args = a_vararg { a, ANY }, rets = a_vararg { ANY } },
                ["__gc"] = a_function { args = a_tuple { a }, rets = a_tuple {} },
@@ -6228,7 +6288,7 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
 
    -- make standard library tables available as modules for require()
    for name, var in pairs(standard_library) do
-      if var.typename == "record" then
+      if var is RecordType then
          env.modules[name] = var
       end
    end
@@ -6316,7 +6376,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function simulate_g(): Type, Attribute
+   local function simulate_g(): RecordType, Attribute
       -- this is a static approximation of _G
       local globals: {string:Type} = {}
       for k, v in pairs(st[1]) do
@@ -6349,8 +6409,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       } as TypeArgType)
    end
 
-   local function ensure_fresh_typeargs(t: Type): Type
-      if not t.typeargs then
+   local function ensure_fresh_typeargs<T is Type>(t: T): T
+      if not t is HasTypeArgs then
          return t
       end
 
@@ -6431,22 +6491,27 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if not typ then
          return nil
       end
-      if typ.found then
+      if typ is NominalType and typ.found then
          typ = typ.found
       end
       for i = 2, #names do
-         local fields = typ.fields or (typ.def and typ.def.fields)
-         if fields then
-            typ = fields[names[i]]
-            if typ == nil then
-               return nil
-            end
-            typ = ensure_fresh_typeargs(typ)
-            if typ.found then
-               typ = typ.found
-            end
-         else
+         if typ.typename == "typetype" then
+            typ = typ.def
+         end
+
+         local fields = typ is RecordLikeType and typ.fields
+         if not fields then
             return nil
+         end
+
+         typ = fields[names[i]]
+         if typ == nil then
+            return nil
+         end
+
+         typ = ensure_fresh_typeargs(typ)
+         if typ is NominalType and typ.found then
+            typ = typ.found
          end
       end
       if typ.typename == "typetype" or typ.typename == "typealias" then
@@ -6463,13 +6528,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return union_type(t.alias_to), t.alias_to
       elseif t is TupleType then
          return union_type(t.tuple[1]), t.tuple[1]
-      elseif t.typename == "nominal" then
+      elseif t is NominalType then
          local typetype = t.found or find_type(t.names)
          if not typetype then
             return "invalid"
          end
          return union_type(typetype)
-      elseif t.typename == "record" then
+      elseif t is RecordLikeType then
          if t.is_userdata then
             return "userdata", t
          end
@@ -6494,6 +6559,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       for _, t in ipairs(typ.types) do
          local ut, rt = union_type(t)
          if ut == "userdata" then -- must be tested before table_types
+            assert(rt is RecordLikeType)
             if rt.meta_fields and rt.meta_fields["__is"] then
                n_userdata_is_types = n_userdata_is_types + 1
                if n_userdata_types > 0 then
@@ -6509,7 +6575,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             end
          elseif ut == "table" then
-            if rt.meta_fields and rt.meta_fields["__is"] then
+            if rt is RecordLikeType and rt.meta_fields and rt.meta_fields["__is"] then
                n_table_is_types = n_table_is_types + 1
                if n_table_types > 0 then
                   return false, "cannot mix table types with and without __is metamethod: %s"
@@ -6625,11 +6691,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       fn_var = fn_var or default_resolve_typevars_callback
 
-      local function resolve(t: Type, all_same: boolean): Type, boolean
+      local function resolve<T is Type>(t: T, all_same: boolean): T, boolean
          local same = true
 
          -- avoid copies of types that do not contain type variables
-         if no_nested_types[t.typename] or (t.typename == "nominal" and not t.typevals) then
+         if no_nested_types[t.typename] or (t is NominalType and not t.typevals) then
             return t, all_same
          end
 
@@ -6642,7 +6708,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local rt = fn_var(t)
             if rt then
                resolved[t.typevar] = true
-               if no_nested_types[rt.typename] or (rt.typename == "nominal" and not rt.typevals) then
+               if no_nested_types[rt.typename] or (rt is NominalType and not rt.typevals) then
                   seen[orig_t] = rt
                   return rt, false
                end
@@ -6655,7 +6721,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          seen[orig_t] = copy
 
          copy.opt = t.opt
-         copy.is_userdata = t.is_userdata
          copy.is_abstract = t.is_abstract
          copy.typename = t.typename
          copy.filename = t.filename
@@ -6663,9 +6728,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          copy.y = t.y
          copy.yend = t.yend
          copy.xend = t.xend
-         copy.declname = t.declname -- which types have this, exactly?
 
-         if t.typename == "array" then
+         if t is ArrayType then
+            assert(copy is ArrayType)
+
             copy.elements, same = resolve(t.elements, same)
             -- inferred_len is not propagated
          elseif t is TypeArgType then
@@ -6692,7 +6758,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          elseif t.typename == "typealias" then
             copy.alias_to, same = resolve(t.alias_to, same)
             copy.is_nested_alias = t.is_nested_alias
-         elseif t.typename == "nominal" then
+         elseif t is NominalType then
+            assert(copy is NominalType)
             copy.names = t.names
             copy.typevals = {}
             for i, tf in ipairs(t.typevals) do
@@ -6700,6 +6767,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
             copy.found = t.found
          elseif t is FunctionType then
+            assert(copy is FunctionType)
+
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
@@ -6708,12 +6777,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             set_min_arity(t)
-            assert(copy is FunctionType)
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
             copy.args, same = resolve(t.args, same) as (TupleType, boolean)
             copy.rets, same = resolve(t.rets, same) as (TupleType, boolean)
-         elseif is_record_type(t) then
+         elseif t is RecordLikeType then
+            assert(copy is RecordType or copy is InterfaceType)
+            copy.declname = t.declname
+
             if t.typeargs then
                copy.typeargs = {}
                for i, tf in ipairs(t.typeargs) do
@@ -6725,6 +6796,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if t.elements then
                copy.elements, same = resolve(t.elements, same)
             end
+
+            copy.is_userdata = t.is_userdata
 
             copy.fields = {}
             copy.field_order = {}
@@ -6782,7 +6855,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if errs then
          return false, INVALID, errs
       end
-      if copy.typeargs and not same then
+
+      if (not same) and
+         (copy is FunctionType or copy is RecordLikeType) and
+         copy.typeargs
+      then
          for i = #copy.typeargs, 1, -1 do
             if resolved[copy.typeargs[i].typearg] then
                table.remove(copy.typeargs, i)
@@ -6923,6 +7000,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          assert(where.y)
          add_errs_prefixing(where, errs, errors, "")
       end
+
       if ret == t or t.typename == "typevar" then
          ret = shallow_copy_table(ret)
       end
@@ -6934,6 +7012,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if ret.typename == "invalid" then
          ret = t -- errors are produced by resolve_typevars_at
       end
+
       if ret == t or t.typename == "typevar" then
          ret = shallow_copy_table(ret)
       end
@@ -7096,12 +7175,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function close_nested_records(t: Type)
+   local function close_nested_records(t: RecordLikeType)
       for _, ft in pairs(t.fields) do
          if ft.typename == "typetype" then
             ft.closed = true
-            if is_record_type(ft.def) then
-               close_nested_records(ft.def)
+            local def = ft.def
+            if def is RecordLikeType then
+               close_nested_records(def)
             end
          end
       end
@@ -7112,8 +7192,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local t = var.t
          if t.typename == "typetype" then
             t.closed = true
-            if is_record_type(t.def) then
-               close_nested_records(t.def)
+            local def = t.def
+            if def is RecordLikeType then
+               close_nested_records(def)
             end
          end
       end
@@ -7236,7 +7317,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local resolve_nominal: function(t: Type): Type
    local resolve_typealias: function(t: Type): Type, Variable
    do
-      local function match_typevals(t: Type, def: Type): Type
+      local function match_typevals(t: NominalType, def: RecordLikeType | FunctionType): Type
          if t.typevals and def.typeargs then
             if #t.typevals ~= #def.typeargs then
                error_at(t, "mismatch in number of type arguments")
@@ -7261,7 +7342,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      resolve_nominal = function(t: Type): Type
+      resolve_nominal = function(t: NominalType): Type
          if t.resolved then
             return t.resolved
          end
@@ -7279,18 +7360,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          if typetype.typename == "typetype" then
-            if typetype.def.typename == "circular_require" then
+            local def = typetype.def
+            if def.typename == "circular_require" then
                -- return, but do not store resolution
                return typetype.def
             end
 
-            if typetype.def.typename == "nominal" then
-               typetype = typetype.def.found
+            -- FIXME is this block still needed?
+            if def is NominalType then
+               typetype = def.found
                assert(typetype.typename == "typetype")
+               def = typetype.def
             end
-            assert(typetype.def.typename ~= "nominal")
+            assert(not def is NominalType)
 
-            resolved = match_typevals(t, typetype.def)
+            resolved = match_typevals(t, def)
          else
             error_at(t, table.concat(t.names, ".") .. " is not a type")
             return INVALID
@@ -7344,9 +7428,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
    end
 
-   local function are_same_unresolved_global_type(t1: Type, t2: Type): boolean
-      if t1.names[1] == t2.names[1]
-      then
+   local function are_same_unresolved_global_type(t1: NominalType, t2: NominalType): boolean
+      if t1.names[1] == t2.names[1] then
          local unresolved = get_unresolved()
          if unresolved.global_types[t1.names[1]] then
             return true
@@ -7371,7 +7454,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return false, { Err(t1, t1name .. " is not a " .. t2name) }
    end
 
-   local function are_same_nominals(t1: Type, t2: Type): boolean, {Error}
+   local function are_same_nominals(t1: NominalType, t2: NominalType): boolean, {Error}
       local same_names: boolean
       if t1.found and t2.found then
          same_names = t1.found.typeid == t2.found.typeid
@@ -7449,7 +7532,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             else
                local typeid = t.typeid
-               if t.typename == "nominal" then
+               if t is NominalType then
                   typeid = resolve_nominal(t).typeid
                end
                if not types_seen[typeid] then
@@ -7482,12 +7565,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       -- Is the type represented concretely as a Lua table?
       is_lua_table_type = function(t: Type): boolean
-         return known_table_types[t.typename] and not t.is_userdata
+         return known_table_types[t.typename]
+                and not (t is RecordLikeType and t.is_userdata)
       end
    end
 
    local expand_type: function(where: Where, old: Type, new: Type): Type
-   local function arraytype_from_tuple(where: Where, tupletype: TupleTableType): Type, {Error}
+   local function arraytype_from_tuple(where: Where, tupletype: TupleTableType): ArrayType, {Error}
       -- first just try a basic union
       local element_type = unite(tupletype.types, true)
       local valid = (not element_type is UnionType) and true or is_valid_union(element_type)
@@ -7498,16 +7582,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       -- failing a basic union, expand the types
       local arr_type = an_array(tupletype.types[1])
       for i = 2, #tupletype.types do
-         arr_type = expand_type(where, arr_type, an_array(tupletype.types[i]))
-         if not arr_type.elements then
+         local expanded = expand_type(where, arr_type, an_array(tupletype.types[i]))
+         if not expanded is ArrayType then
             return nil, { Err(tupletype, "unable to convert tuple %s to array", tupletype) }
          end
+         arr_type = expanded
       end
       return arr_type
    end
 
    local function is_self(t: Type): boolean
-      return t.typename == "nominal" and t.names[1] == "@self"
+      return t is NominalType and t.names[1] == "@self"
    end
 
    local function compare_true(_: Type, _: Type): boolean, {Error}
@@ -7519,8 +7604,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return true
       end
 
-      local ra = a.typename == "nominal" and resolve_nominal(a) or a
-      local rb = b.typename == "nominal" and resolve_nominal(b) or b
+      local ra = a is NominalType and resolve_nominal(a) or a
+      local rb = b is NominalType and resolve_nominal(b) or b
       local ok, errs = is_a(ra, rb)
       if errs and #errs == 1 and errs[1].msg:match("^got ") then
          return false -- translate to got-expected error with unresolved types
@@ -7528,8 +7613,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return ok, errs
    end
 
-   local function subtype_array(a: Type, b: Type): boolean, {Error}
-      -- assert(b.typename == "array")
+   local function subtype_array(a: ArrayLikeType, b: ArrayLikeType): boolean, {Error}
       if (not a.elements) or (not is_a(a.elements, b.elements)) then
          return false
       end
@@ -7544,7 +7628,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local function find_in_interface_list<T>(a: Type, f: function(Type): T): T
+   local function find_in_interface_list<T>(a: RecordLikeType, f: function(Type): T): T
       if not a.interface_list then
          return nil
       end
@@ -7559,7 +7643,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return nil
    end
 
-   local function subtype_record(a: Type, b: Type): boolean, {Error}
+   local function subtype_record(a: RecordLikeType, b: RecordLikeType): boolean, {Error}
       -- assert(b.typename == "record")
       if a.elements and b.elements then
          if not is_a(a.elements, b.elements) then
@@ -7593,7 +7677,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return true
    end
 
-   local eqtype_record = function(a: Type, b: Type): boolean, {Error}
+   local eqtype_record = function(a: RecordType, b: RecordType): boolean, {Error}
       -- checking array interface
       if (a.elements ~= nil) ~= (b.elements ~= nil) then
          return false, { Err(a, "types do not have the same array interface") }
@@ -7700,10 +7784,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["array"] = compare_true,
       ["map"] = compare_true,
       ["tupletable"] = compare_true,
-      ["interface"] = function(_a: Type, b: Type): boolean, {Error}
+      ["interface"] = function(_a: Type, b: InterfaceType): boolean, {Error}
          return not b.is_userdata
       end,
-      ["record"] = function(_a: Type, b: Type): boolean, {Error}
+      ["record"] = function(_a: Type, b: RecordType): boolean, {Error}
          return not b.is_userdata
       end,
    }
@@ -7739,7 +7823,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["array"] = {
-         ["array"] = function(a: Type, b: Type): boolean, {Error}
+         ["array"] = function(a: ArrayType, b: ArrayType): boolean, {Error}
             return same_type(a.elements, b.elements)
          end,
       },
@@ -7862,14 +7946,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["nominal"] = {
-         ["nominal"] = function(a: Type, b: Type): boolean, {Error}
+         ["nominal"] = function(a: NominalType, b: NominalType): boolean, {Error}
             local ok, errs = are_same_nominals(a, b)
             if ok then
                return true
             end
 
             local rb = resolve_nominal(b)
-            if rb.typename == "interface" then
+            if rb is InterfaceType then
                -- match interface subtyping
                return is_a(a, rb)
             end
@@ -7932,12 +8016,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
             return true
          end,
-         ["record"] = function(a: Type, b: Type): boolean, {Error}
+         ["record"] = function(a: Type, b: RecordType): boolean, {Error}
             if b.elements then
                return subtype_relations["tupletable"]["array"](a, b)
             end
          end,
-         ["array"] = function(a: TupleTableType, b: Type): boolean, {Error}
+         ["array"] = function(a: TupleTableType, b: ArrayType): boolean, {Error}
             if b.inferred_len and b.inferred_len > #a.types then
                return false, { Err(a, "incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
             end
@@ -7961,7 +8045,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["record"] = {
          ["record"] = subtype_record,
-         ["interface"] = function(a: Type, b: Type): boolean, {Error}
+         ["interface"] = function(a: RecordType, b: InterfaceType): boolean, {Error}
             if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
                return true
             end
@@ -7971,7 +8055,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end,
          ["array"] = subtype_array,
-         ["map"] = function(a: Type, b: MapType): boolean, {Error}
+         ["map"] = function(a: RecordType, b: MapType): boolean, {Error}
             if not is_a(b.keys, STRING) then
                return false, { Err(a, "can't match a record to a map with non-string keys") }
             end
@@ -7988,7 +8072,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             return true
          end,
-         ["tupletable"] = function(a: Type, b: Type): boolean, {Error}
+         ["tupletable"] = function(a: RecordType, b: Type): boolean, {Error}
             if a.elements then
                return subtype_relations["array"]["tupletable"](a, b)
             end
@@ -7996,15 +8080,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["array"] = {
          ["array"] = subtype_array,
-         ["record"] = function(a: Type, b: Type): boolean, {Error}
+         ["record"] = function(a: ArrayType, b: RecordType): boolean, {Error}
             if b.elements then
                return subtype_array(a, b)
             end
          end,
-         ["map"] = function(a: Type, b: MapType): boolean, {Error}
+         ["map"] = function(a: ArrayType, b: MapType): boolean, {Error}
             return compare_map(INTEGER, b.keys, a.elements, b.values)
          end,
-         ["tupletable"] = function(a: Type, b: TupleTableType): boolean, {Error}
+         ["tupletable"] = function(a: ArrayType, b: TupleTableType): boolean, {Error}
             local alen = a.inferred_len or 0
             if alen > #b.types then
                return false, { Err(a, "incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
@@ -8024,13 +8108,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["map"] = function(a: MapType, b: MapType): boolean, {Error}
             return compare_map(a.keys, b.keys, a.values, b.values)
          end,
-         ["array"] = function(a: MapType, b: Type): boolean, {Error}
+         ["array"] = function(a: MapType, b: ArrayType): boolean, {Error}
             return compare_map(a.keys, INTEGER, a.values, b.elements)
          end,
       },
       ["typetype"] = {
-         ["record"] = function(a: Type, b: Type): boolean, {Error}
-            return subtype_record(a.def, b) -- record as prototype
+         ["record"] = function(a: Type, b: RecordType): boolean, {Error}
+            local def = a.def
+            if def is RecordLikeType then
+               return subtype_record(a.def, b) -- record as prototype
+            end
          end,
       },
       ["function"] = {
@@ -8235,16 +8322,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function type_is_closable(t: Type): boolean
-      if t.typename == "invalid" then
+      if t is InvalidType then
          return false
       end
       if same_type(t, NIL) then
          return true
       end
-      if t.typename ~= "function" then
+      if t is NominalType then
          t = resolve_nominal(t)
       end
-      return t.meta_fields and t.meta_fields["__close"] ~= nil
+      if t is RecordLikeType then
+         return t.meta_fields and t.meta_fields["__close"] ~= nil
+      end
    end
 
    local definitely_not_closable_exprs <const>: {NodeKind:boolean} = {
@@ -8284,13 +8373,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function same_call_mt_in_all_union_entries(u: UnionType): Type
       return same_in_all_union_entries(u, function(t: Type): (Type, Type)
          t = resolve_tuple_and_nominal(t)
-         local call_mt = t.meta_fields and t.meta_fields["__call"]
-         if call_mt is FunctionType then
-            local args_tuple = a_tuple({})
-            for i = 2, #call_mt.args.tuple do
-               table.insert(args_tuple.tuple, call_mt.args.tuple[i])
+         if t is RecordLikeType then
+            local call_mt = t.meta_fields and t.meta_fields["__call"]
+            if call_mt is FunctionType then
+               local args_tuple = a_tuple({})
+               for i = 2, #call_mt.args.tuple do
+                  table.insert(args_tuple.tuple, call_mt.args.tuple[i])
+               end
+               return args_tuple, call_mt
             end
-            return args_tuple, call_mt
          end
       end)
    end
@@ -8312,11 +8403,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
          -- resolve if prototype
-         if func.typename == "typetype" and func.def.typename == "record" then
+         local funcdef = func.def
+         if func.typename == "typetype" and funcdef is RecordType then
             func = func.def
          end
          -- resolve if metatable
-         if func.meta_fields and func.meta_fields["__call"] then
+         if func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
             table.insert(args.tuple, 1, func)
             func = func.meta_fields["__call"]
             func = resolve_tuple_and_nominal(func)
@@ -8574,7 +8666,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolve_typevars_at(where, f.rets)
       end
 
-      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, typetype_funcall: boolean, is_method: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
+      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, is_typetype_funcall: boolean, is_method: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
          assert(type(func) == "table")
          assert(type(args) == "table")
 
@@ -8607,7 +8699,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if f.is_method and not is_method then
                      if args.tuple[1] and is_a(args.tuple[1], fargs[1]) then
                         -- a non-"@funcall" means a synthesized call, e.g. from a metamethod
-                        if not typetype_funcall then
+                        if not is_typetype_funcall then
                            add_warning("hint", where, "invoked method as a regular function: consider using ':' instead of '.'")
                         end
                      else
@@ -8664,16 +8756,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          begin_scope()
 
-         local typetype_funcall = not not (
-            node.kind == "op"
-            and node.op.op == "@funcall"
-            and node.e1
-            and node.e1.receiver
-            and node.e1.receiver.resolved
-            and node.e1.receiver.resolved.typename == "typetype"
-         )
+         local is_typetype_funcall: boolean
+         if node.kind == "op" and node.op.op == "@funcall" and node.e1 and node.e1.receiver then
+            local receiver = node.e1.receiver
+            if receiver is NominalType and receiver.resolved and receiver.resolved.typename == "typetype" then
+               is_typetype_funcall = true
+            end
+         end
 
-         local ret, f = check_call(node, where_args, func, args, expected_rets, typetype_funcall, is_method, argdelta)
+         local ret, f = check_call(node, where_args, func, args, expected_rets, is_typetype_funcall, is_method, argdelta)
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
@@ -8692,17 +8783,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function check_metamethod(node: Node, method_name: string, a: Type, b: Type, orig_a: Type, orig_b: Type): Type, integer
       if lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
          return UNKNOWN, nil
-      elseif not a.meta_fields and not (b and b.meta_fields) then
+      end
+      local ameta = a is RecordLikeType and a.meta_fields
+      local bmeta = b and b is RecordLikeType and b.meta_fields
+
+      if not ameta and not bmeta then
          return nil, nil
       end
 
       local meta_on_operator = 1
       local metamethod: Type
       if method_name ~= "__is" then
-         metamethod = a.meta_fields and a.meta_fields[method_name or ""]
+         metamethod = ameta and ameta[method_name or ""]
       end
       if (not metamethod) and b and method_name ~= "__index" then
-         metamethod = b.meta_fields and b.meta_fields[method_name or ""]
+         metamethod = bmeta and bmeta[method_name or ""]
          meta_on_operator = 2
       end
 
@@ -8758,7 +8853,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      if is_record_type(tbl) then
+      if tbl is RecordLikeType then
          assert(tbl.fields, "record has no fields!?")
 
          if tbl.fields[key] then
@@ -8971,10 +9066,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    resolve_tuple_and_nominal = function(t: Type): Type
       t = resolve_tuple(t)
-      if t.typename == "nominal" then
+      if t is NominalType then
          t = resolve_nominal(t)
       end
-      assert(t.typename ~= "nominal")
+      assert(not t is NominalType)
       return t
    end
 
@@ -9030,7 +9125,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return ret
    end
 
-   local function match_all_record_field_names(node: Node, a: Type, field_names: {string}, errmsg: string): Type
+   local function match_all_record_field_names(node: Node, a: RecordLikeType, field_names: {string}, errmsg: string): Type
       local t: Type
       for _, k in ipairs(field_names) do
          local f = a.fields[k]
@@ -9080,7 +9175,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
          end
-      elseif is_array_type(a) and is_a(b, INTEGER) then
+      elseif a is ArrayLikeType and is_a(b, INTEGER) then
          return a.elements
       elseif a is EmptyTableType then
          if a.keys == nil then
@@ -9110,7 +9205,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          errm, erra = e, orig_a
-      elseif is_record_type(a) then
+      elseif a is RecordLikeType then
          if b is EnumType then
             local field_names: {string} = sorted_keys(b.enumset)
             for _, k in ipairs(field_names) do
@@ -9145,7 +9240,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return new
       else
          if not is_a(new, old) then
-            if old is MapType and is_record_type(new) then
+            if old is MapType and new is RecordLikeType then
                if old.keys.typename == "string" then
                   for _, ftype in fields_of(new) do
                      old.values = expand_type(where, old.values, ftype)
@@ -9154,26 +9249,32 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                else
                   error_at(where, "cannot determine table literal type")
                end
-            elseif is_record_type(old) and is_record_type(new) then
-               edit_type(old, "map")
-               assert(old is MapType)
-               old.keys = STRING
+            elseif old is RecordLikeType and new is RecordLikeType then
+               local values: Type
                for _, ftype in fields_of(old) do
-                  if not old.values then
-                     old.values = ftype
+                  if not values then
+                     values = ftype
                   else
-                     old.values = expand_type(where, old.values, ftype)
+                     values = expand_type(where, values, ftype)
                   end
                end
                for _, ftype in fields_of(new) do
-                  if not old.values then
-                     old.values = ftype
+                  if not values then
+                     values = ftype
                   else
-                     old.values = expand_type(where, old.values, ftype)
+                     values = expand_type(where, values, ftype)
                   end
                end
                old.fields = nil
                old.field_order = nil
+               old.meta_fields = nil
+               old.meta_fields = nil
+               -- FIXME what about meta_fields
+
+               edit_type(old, "map")
+               assert(old is MapType)
+               old.keys = STRING
+               old.values = values
             elseif old is UnionType then
                edit_type(old, "union")
                new.tk = nil
@@ -9208,9 +9309,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if not t then
             return nil, nil, dname
          end
-         t = t and t.fields and t.fields[fname]
+         if not t is RecordLikeType then
+            return nil, nil, dname
+         end
+         t = t.fields[fname]
 
-         return t.def or t, v, dname
+         if t.typename == "typetype" then
+            t = t.def
+         elseif t.typename == "typealias" then
+            t = t.alias_to.resolved
+         end
+
+         return t, v, dname
       end
    end
 
@@ -9218,9 +9328,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       assert(t.typename == "typetype")
 
       local typevals: {Type}
-      if t.def.typeargs then
+      local def = t.def
+      if def is HasTypeArgs then
          typevals = {}
-         for _, a in ipairs(t.def.typeargs) do
+         for _, a in ipairs(def.typeargs) do
             table.insert(typevals, a_type("typevar", {
                typevar = a.typearg,
                constraint = a.constraint,
@@ -9232,7 +9343,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          names = { name },
          found = t,
          resolved = resolved,
-      }))
+      } as NominalType))
    end
 
    local function get_self_type(exp: Node): Type
@@ -9255,12 +9366,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return nil
          end
 
-         if t.typename == "nominal" then
-            if t.found and t.found.def and t.found.def.fields and t.found.def.fields[exp.e2.tk] then
+         if t is NominalType then
+            local def = t.found and t.found.def
+            if def is RecordLikeType and def.fields[exp.e2.tk] then
                table.insert(t.names, exp.e2.tk)
-               t.found = t.found.def.fields[exp.e2.tk]
+               t.found = def.fields[exp.e2.tk]
             end
-         else
+         elseif t is RecordLikeType then
             return t.fields and t.fields[exp.e2.tk]
          end
          return t
@@ -9674,13 +9786,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return invalid_at(node, "pairs requires an argument")
          end
          local t = resolve_tuple_and_nominal(b.tuple[1])
-         if is_array_type(t) then
+         if t is ArrayLikeType then
             add_warning("hint", node, "hint: applying pairs on an array: did you intend to apply ipairs?")
          end
 
          if t.typename ~= "map" then
             if not (lax and is_unknown(t)) then
-               if is_record_type(t) then
+               if t is RecordLikeType then
                   match_all_record_field_names(node.e2, t, t.field_order,
                      "attempting pairs on a record with attributes of different types")
                   local ct = t.typename == "record" and "{string:any}" or "{any:any}"
@@ -9706,7 +9818,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not arr_type then
                return invalid_at(node.e2, "attempting ipairs on tuple that's not a valid array: %s", orig_t)
             end
-         elseif not is_array_type(t) then
+         elseif not t is ArrayLikeType then
             if not (lax and (is_unknown(t) or t is EmptyTableType)) then
                return invalid_at(node.e2, "attempting ipairs on something that's not an array: %s", orig_t)
             end
@@ -9987,7 +10099,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             interface_list = {
                type_at(node, an_array(elements))
             }
-         })
+         } as RecordType)
          -- TODO adopt logic from is_array below when we accept tupletable as an interface
       elseif is_record and is_map then
          if keys.typename == "string" then
@@ -10024,7 +10136,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          t = a_type("record", {
             fields = fields,
             field_order = field_order,
-         })
+         } as RecordType)
       elseif is_map then
          t = a_map(keys, values)
       elseif is_tuple then
@@ -10072,7 +10184,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       else
          if infertype then
-            if infertype.typename == "unresolvable_typearg" then
+            if infertype is UnresolvableTypeArgType then
                error_at(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
                ok = false
                infertype = INVALID
@@ -10096,7 +10208,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             ok = false
          elseif not (node.exps[i] and node.exps[i].attribute == "total") then
             local ri = resolve_tuple_and_nominal(infertype)
-            if ri.typename ~= "map" and ri.typename ~= "record" then
+            if not (ri is MapType or ri is RecordType) then
                error_at(var, "attribute <total> only applies to maps and records")
                ok = false
             elseif not ri.is_total then
@@ -10104,15 +10216,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if ri.missing then
                   missing = " (missing: " .. table.concat(ri.missing, ", ") .. ")"
                end
-               if ri.typename == "map" then
+               if ri is MapType then
                   error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
                   ok = false
-               elseif ri.typename == "record" then
+               elseif ri is RecordType then
                   error_at(var, "record variable declared <total> does not declare values for all fields" .. missing)
                   ok = false
                end
+               ri.is_total = nil
             end
-            ri.is_total = nil
          end
       end
 
@@ -10122,8 +10234,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t is EmptyTableType then
          t.declared_at = node
          t.assigned_to = name
+      elseif t is ArrayLikeType then
+         t.inferred_len = nil
       end
-      t.inferred_len = nil
 
       return ok, t, infertype ~= nil
    end
@@ -10157,7 +10270,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return is_total, missing
    end
 
-   local function total_record_check(t: Type, seen_keys: {CheckableKey:Where}): boolean, {string}
+   local function total_record_check(t: RecordLikeType, seen_keys: {CheckableKey:Where}): boolean, {string}
       if t.meta_field_order then
          return false
       end
@@ -10340,7 +10453,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   local where = node.exps[i] or node.exps
 
                   local rt = resolve_tuple_and_nominal(t)
-                  if rt.typename ~= "enum" and (t.typename ~= "nominal" or rt is UnionType) and not same_type(t, infertype) then
+                  if (not rt is EnumType)
+                     and ((not t is NominalType) or (rt is UnionType))
+                     and not same_type(t, infertype)
+                  then
                      t = infer_at(where, infertype)
                      add_var(where, var.tk, t, "const", "narrowed_declaration")
                   end
@@ -10404,7 +10520,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      widen_all_unions()
                   end
 
-                  if varname and (rvar is UnionType or rvar.typename == "interface") then
+                  if varname and (rvar is UnionType or rvar is InterfaceType) then
                      -- narrow unions and interfaces
                      add_var(varnode, varname, rval, nil, "narrow")
                   end
@@ -10674,7 +10790,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                         child.value.expected = decltype.types[n as integer]
                      end
                   end
-               elseif is_array_type(decltype) then
+               elseif decltype is ArrayLikeType then
                   for _, child in ipairs(node) do
                      if child.key.constnum then
                         child.value.expected = decltype.elements
@@ -10687,7 +10803,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               if is_record_type(decltype) then
+               if decltype is RecordLikeType then
                   for _, child in ipairs(node) do
                      if child.key.conststr then
                         child.value.expected = decltype.fields[child.key.conststr]
@@ -10740,9 +10856,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return infer_table_literal(node, children)
             end
 
-            local is_record = is_record_type(decltype)
-            local is_array = is_array_type(decltype)
-
             local force_array: Type = nil
 
             local seen_keys: {CheckableKey:Where} = {}
@@ -10757,7 +10870,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   b = (node[i].key.tk == "true")
                end
                check_redeclared_key(node[i], node.expected_context, seen_keys, ck or n or b)
-               if is_record and ck then
+               if decltype is RecordLikeType and ck then
                   local df = decltype.fields[ck]
                   if not df then
                      error_at(node[i], in_context(node.expected_context, "unknown field " .. ck))
@@ -10777,7 +10890,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   else
                      assert_is_a(node[i], cvtype, dt, in_context(node.expected_context, "in tuple"), "at index " .. tostring(n))
                   end
-               elseif is_array and is_number_type(child.ktype) then
+               elseif decltype is ArrayLikeType and is_number_type(child.ktype) then
                   local cv = child.vtype
                   if cv is TupleType and i == #children and node[i].key_parsed == "implicit" then
                      -- need to expand last item in an array (e.g { 1, 2, 3, f() })
@@ -10807,18 +10920,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                t = infer_at(node, an_array(force_array))
             else
                t = resolve_typevars_at(node, node.expected)
-               if node.expected == t and t.typename == "nominal" then
+               if node.expected == t and t is NominalType then
                   t = a_type("nominal", {
                      names = t.names,
                      found = t.found,
                      resolved = t.resolved,
-                  })
+                  } as NominalType)
                end
             end
 
-            if decltype.typename == "record" then
+            if decltype is RecordType then
                local rt = resolve_tuple_and_nominal(t)
-               if rt.typename == "record" then
+               if rt is RecordType then
                   rt.is_total, rt.missing = total_record_check(decltype, seen_keys)
                end
             elseif decltype is MapType then
@@ -10982,7 +11095,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
             -- add type arguments from the record implicitly
-            if rtype.typeargs then
+            if rtype is RecordLikeType and rtype.typeargs then
                for _, typ in ipairs(rtype.typeargs) do
                   add_var(nil, typ.typearg, type_at(typ, a_type("typearg", {
                      typearg = typ.typearg,
@@ -10999,18 +11112,19 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             local rtype = resolve_tuple_and_nominal(resolve_typetype(children[1]))
 
-            if rtype is EmptyTableType then
-               edit_type(rtype, "record")
-               rtype.fields = {}
-               rtype.field_order = {}
-            end
-
             if lax and rtype.typename == "unknown" then
                return
             end
 
-            if not is_record_type(rtype) then
-               error_at(node, "not a module: %s", rtype)
+            if rtype is EmptyTableType then
+               edit_type(rtype, "record")
+               local r = rtype as RecordType
+               r.fields = {}
+               r.field_order = {}
+            end
+
+            if not rtype is RecordLikeType then
+               error_at(node, "not a record: %s", rtype)
                return
             end
 
@@ -11483,7 +11597,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               if orig_a.typename == "nominal" and orig_b.typename == "nominal" and not meta_on_operator then
+               if orig_a is NominalType and orig_b is NominalType and not meta_on_operator then
                   if is_a(orig_a, orig_b) then
                      t = resolve_tuple(orig_a)
                   else
@@ -11648,13 +11762,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t
    end
 
-   local expand_interfaces: function(Type): Type
+   local expand_interfaces: function(Type)
    do
-      local function add_interface_fields(what: string, fields: {string:Type}, field_order: {string}, iface: Type, orig_iface: Type, list?: MetaMode)
-         for fname, ftype in fields_of(iface, list) do
+      local function add_interface_fields(what: string, fields: {string:Type}, field_order: {string}, resolved: RecordLikeType, named: NominalType, list?: MetaMode)
+         for fname, ftype in fields_of(resolved, list) do
             if fields[fname] then
                if not is_a(fields[fname], ftype) then
-                  error_at(fields[fname], what .." '" .. fname .. "' does not match definition in interface %s", orig_iface)
+                  error_at(fields[fname], what .." '" .. fname .. "' does not match definition in interface %s", named)
                end
             else
                table.insert(field_order, fname)
@@ -11663,43 +11777,54 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
-      local function expand(t: Type, seen: {Type:boolean}): Type
-         if t.interfaces_expanded then
-            return t
-         end
-         t.interfaces_expanded = true
-         if seen[t] then
-            return
-         end
-         seen[t] = true
-
-         t.fields = t.fields or {}
-         t.meta_fields = t.meta_fields or {}
-         t.field_order = t.field_order or {}
-         t.meta_field_order = t.meta_field_order or {}
-
-         -- FIXME expand and collect interface_list recursively, THEN add fields
-         for _, iface in ipairs(t.interface_list) do
-            local orig_iface = iface
-
-            if iface.typename == "nominal" then
-               iface = resolve_nominal(iface)
-            end
-
-            if iface.typename == "interface" then
-               if iface.interface_list then
-                  iface = expand(iface, seen)
+      local function collect_interfaces(list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}
+         if t.interface_list then
+            for _, iface in ipairs(t.interface_list) do
+               if iface is NominalType then
+                  local ri = resolve_nominal(iface)
+                  if not (ri.typename == "invalid") then
+                     assert(ri is InterfaceType, "nominal resolved to " .. ri.typename)
+                     if not ri.interfaces_expanded and not seen[ri] then
+                        seen[ri] = true
+                        collect_interfaces(list, ri, seen)
+                     end
+                     table.insert(list, iface)
+                  end
+               else
+                  if not seen[iface] then
+                     seen[iface] = true
+                     table.insert(list, iface)
+                  end
                end
-
-               add_interface_fields("field", t.fields, t.field_order, iface, orig_iface)
-               add_interface_fields("metamethod", t.meta_fields, t.meta_field_order, iface, orig_iface, "meta")
             end
          end
-         return t
+         return list
       end
 
-      expand_interfaces = function(t: Type): Type
-         return expand(t, {})
+      expand_interfaces = function(t: RecordLikeType)
+         if t.interfaces_expanded then
+            return
+         end
+         t.interfaces_expanded = true
+
+         t.interface_list = collect_interfaces({}, t, {})
+
+         for _, iface in ipairs(t.interface_list) do
+            if iface is NominalType then
+               local ri = resolve_nominal(iface)
+               assert(ri is InterfaceType)
+               add_interface_fields("field", t.fields, t.field_order, ri, iface)
+               add_interface_fields("metamethod", t.meta_fields, t.meta_field_order, ri, iface, "meta")
+            else
+               if not t.elements then
+                  t.elements = iface
+               else
+                  if not same_type(iface.elements, t.elements) then
+                     error_at(t, "incompatible array interfaces")
+                  end
+               end
+            end
+         end
       end
    end
 
@@ -11729,7 +11854,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
             end,
-            after = function(typ: Type, children: {Type}): Type
+            after = function(typ: RecordType, children: {Type}): Type
                local i = 1
                if typ.typeargs then
                   for _, _ in ipairs(typ.typeargs) do
@@ -11739,7 +11864,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
                if typ.interface_list then
                   for j, _ in ipairs(typ.interface_list) do
-                     typ.interface_list[j] = children[i]
+                     local iface = children[i]
+                     if iface is ArrayType then
+                        typ.interface_list[j] = iface
+                     elseif iface is NominalType then
+                        local ri = resolve_nominal(iface)
+                        if ri is InterfaceType then
+                           typ.interface_list[j] = iface
+                        else
+                           error_at(children[i], "%s is not an interface", children[i])
+                        end
+                     end
                      i = i + 1
                   end
                end
@@ -11761,7 +11896,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                         if fargs[1] and fargs[1].is_self then
                            local record_name = typ.declname
                            if record_name then
-                              local selfarg = fargs[1]
+                              local selfarg = fargs[1] as NominalType
                               if selfarg.tk ~= record_name or (typ.typeargs and not selfarg.typevals) then
                                  ftype.is_method = false
                                  selfarg.is_self = false
@@ -11833,7 +11968,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end,
          },
          ["nominal"] = {
-            after = function(typ: Type, _children: {Type}): Type
+            after = function(typ: NominalType, _children: {Type}): Type
                if typ.found then
                   return typ
                end
@@ -11844,9 +11979,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      -- convert nominal into a typevar
                      typ.names = nil
                      edit_type(typ, "typevar")
-                     assert(typ is TypeVarType)
-                     typ.typevar = t.typearg
-                     typ.constraint = t.constraint
+                     local tv = typ as TypeVarType
+                     tv.typevar = t.typearg
+                     tv.constraint = t.constraint
                   elseif t.typename == "typetype" then
                      if t.def.typename ~= "circular_require" then
                         typ.found = t
