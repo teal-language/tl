@@ -11813,7 +11813,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                local ri = resolve_nominal(iface)
                assert(ri is InterfaceType)
                add_interface_fields("field", t.fields, t.field_order, ri, iface)
-               add_interface_fields("metamethod", t.meta_fields, t.meta_field_order, ri, iface, "meta")
+               if ri.meta_fields then
+                  t.meta_fields = t.meta_fields or {}
+                  t.meta_field_order = t.meta_field_order or {}
+                  add_interface_fields("metamethod", t.meta_fields, t.meta_field_order, ri, iface, "meta")
+               end
             else
                if not t.elements then
                   t.elements = iface
