@@ -9224,7 +9224,7 @@ a.types[i], b.types[i]), }
          end
 
          errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
-      elseif bnode.kind == "string" or bnode.kind == "enum_item" then
+      elseif bnode.kind == "string" then
          local t, e = match_record_key(orig_a, anode, bnode.conststr)
          if t then
             return t
