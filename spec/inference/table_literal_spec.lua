@@ -15,7 +15,7 @@ describe("bidirectional inference for table literals", function()
       }
       print(x)
    ]], {
-      { msg = "in record field: type: string 'who' is not a member of enum" },
+      { msg = "in record field: type: string \"who\" is not a member of enum" },
    }))
 
    it("directed inference produces correct results for incomplete records (regression test for #348)", util.check([[

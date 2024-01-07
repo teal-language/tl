@@ -1388,6 +1388,9 @@ local table_types = {
 
 
 
+
+
+
 local TruthyFact = {}
 
 
@@ -1684,7 +1687,7 @@ local function new_type(ps, i, typename)
       filename = ps.filename,
       y = token.y,
       x = token.x,
-      tk = token.tk,
+
    })
 end
 
@@ -5561,7 +5564,7 @@ local function show_type_base(t, short, seen)
          return "string"
       else
          return t.typename ..
-         (t.tk and " " .. t.tk or "")
+         (t.literal and string.format(" %q", t.literal) or "")
       end
    elseif t.typename == "typevar" then
       return display_typevar(t.typevar)
@@ -7086,12 +7089,12 @@ tl.type_check = function(ast, opts)
    end
 
    local function drop_constant_value(t)
-      if not t.tk then
-         return t
+      if t.typename == "string" and t.literal then
+         local ret = shallow_copy_table(t)
+         ret.literal = nil
+         return ret
       end
-      local ret = shallow_copy_table(t)
-      ret.tk = nil
-      return ret
+      return t
    end
 
    local function reserve_symbol_list_slot(node)
@@ -7605,7 +7608,7 @@ tl.type_check = function(ast, opts)
                table.insert(stack, s)
             end
          else
-            if primitive[t.typename] and (flatten_constants or not t.tk) then
+            if primitive[t.typename] and (flatten_constants or (t.typename == "string" and not t.literal)) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
                   table.insert(ts, t)
@@ -8054,11 +8057,11 @@ tl.type_check = function(ast, opts)
       },
       ["string"] = {
          ["enum"] = function(a, b)
-            if not a.tk then
+            if not a.literal then
                return false, { Err(a, "string is not a %s", b) }
             end
 
-            if b.enumset[unquote(a.tk)] then
+            if b.enumset[a.literal] then
                return true
             end
 
@@ -9284,8 +9287,8 @@ a.types[i], b.types[i]), }
          end
 
          errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
-      elseif bnode.kind == "string" then
-         local t, e = match_record_key(orig_a, anode, bnode.conststr)
+      elseif b.typename == "string" and b.literal then
+         local t, e = match_record_key(orig_a, anode, b.literal)
          if t then
             return t
          end
@@ -9327,7 +9330,8 @@ a.types[i], b.types[i]), }
       else
          if not is_a(new, old) then
             if old.typename == "map" and new.fields then
-               if old.keys.typename == "string" then
+               local old_keys = old.keys
+               if old_keys.typename == "string" then
                   for _, ftype in fields_of(new) do
                      old.values = expand_type(where, old.values, ftype)
                   end
@@ -9356,15 +9360,13 @@ a.types[i], b.types[i]), }
                old.meta_fields = nil
                old.meta_fields = nil
 
-
                edit_type(old, "map")
                assert(old.typename == "map")
                old.keys = STRING
                old.values = values
             elseif old.typename == "union" then
                edit_type(old, "union")
-               new.tk = nil
-               table.insert(old.types, new)
+               table.insert(old.types, drop_constant_value(new))
             else
                return unite({ old, new }, true)
             end
@@ -10169,8 +10171,7 @@ a.types[i], b.types[i]), }
             end
          else
             is_map = true
-            child.ktype.tk = nil
-            keys = expand_type(node, keys, child.ktype)
+            keys = expand_type(node, keys, drop_constant_value(child.ktype))
             values = expand_type(node, values, uvtype)
          end
       end
@@ -10809,8 +10810,7 @@ expand_type(node, values, elements) })
             if not expected then
 
                expected = infer_at(node, got)
-               module_type = resolve_tuple_and_nominal(expected)
-               module_type.tk = nil
+               module_type = drop_constant_value(resolve_tuple_and_nominal(expected))
                st[2]["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
@@ -11451,9 +11451,8 @@ expand_type(node, values, elements) })
                   x = node.e2.x,
                   tk = node.e2.tk,
                   kind = "string",
-                  conststr = node.e2.tk,
                }
-               local btype = type_at(node.e2, a_type("string", { tk = '"' .. node.e2.tk .. '"' }))
+               local btype = type_at(node.e2, a_type("string", { literal = node.e2.tk }))
                local t = type_check_index(node.e1, bnode, orig_a, btype)
 
                if t.needs_compat and opts.gen_compat ~= "off" then
@@ -11561,7 +11560,7 @@ expand_type(node, values, elements) })
                   else
                      t = resolve_tuple(a)
                   end
-                  t.tk = nil
+                  t = drop_constant_value(t)
                end
 
                if t then
@@ -11576,7 +11575,7 @@ expand_type(node, values, elements) })
 
 
                if ra.typename == "enum" and rb.typename == "string" then
-                  if not (rb.tk and ra.enumset[unquote(rb.tk)]) then
+                  if not (rb.literal and ra.enumset[rb.literal]) then
                      return invalid_at(node, "%s is not a member of %s", b, a)
                   end
                elseif ra.typename == "tupletable" and rb.typename == "tupletable" and #ra.types ~= #rb.types then
@@ -11814,12 +11813,13 @@ expand_type(node, values, elements) })
 
    local function after_literal(node)
       node.known = FACT_TRUTHY
-      return type_at(node, a_type(node.kind, { tk = node.tk }))
+      return type_at(node, a_type(node.kind, {}))
    end
 
    visit_node.cbs["string"] = {
       after = function(node, _children)
          local t = after_literal(node)
+         t.literal = node.conststr
 
          local expected = node.expected
          if expected and expected.typename == "enum" and is_a(t, expected) then
@@ -11988,12 +11988,13 @@ expand_type(node, values, elements) })
                            local record_name = typ.declname
                            if record_name then
                               local selfarg = fargs[1]
-                              if selfarg.tk ~= record_name or (typ.typeargs and not selfarg.typevals) then
+                              if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
                                  ftype.is_method = false
                                  selfarg.is_self = false
                               elseif typ.typeargs then
                                  for j = 1, #typ.typeargs do
-                                    if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= typ.typeargs[j].typearg then
+                                    local tv = selfarg.typevals[j]
+                                    if not (tv and tv.typename == "typevar" and tv.typevar == typ.typeargs[j].typearg) then
                                        ftype.is_method = false
                                        selfarg.is_self = false
                                        break
