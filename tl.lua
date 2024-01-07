@@ -1370,9 +1370,6 @@ local table_types = {
 
 
 
-
-
-
 local TruthyFact = {}
 
 
@@ -1449,6 +1446,7 @@ local attributes = {
 local is_attribute = attributes
 
 local Node = {ExpectedContext = {}, }
+
 
 
 
@@ -1675,8 +1673,38 @@ end
 
 
 
-local function c_tuple(t)
-   return a_type("tuple", { tuple = t })
+
+
+
+
+
+
+
+
+local function a_function(t)
+   assert(t.min_arity)
+   return a_type("function", t)
+end
+
+
+
+
+
+
+
+local function OPT(t)
+   return { opttype = t }
+end
+
+
+
+
+
+
+
+local function va_args(args)
+   args.is_va = true
+   return args
 end
 
 
@@ -1687,8 +1715,35 @@ end
 
 
 
-local function a_function(t)
-   return a_type("function", t)
+local function a_fn(f)
+   local args_t = a_type("tuple", { tuple = {} })
+   local tup = args_t.tuple
+   args_t.is_va = f.args.is_va
+   local min_arity = f.args.is_va and -1 or 0
+   for _, a in ipairs(f.args) do
+      if a.opttype then
+         table.insert(tup, a.opttype)
+      else
+         table.insert(tup, a)
+         min_arity = min_arity + 1
+      end
+   end
+
+   local rets_t = a_type("tuple", { tuple = {} })
+   tup = rets_t.tuple
+   rets_t.is_va = f.rets.is_va
+   for _, a in ipairs(f.rets) do
+      assert(a.typename)
+      table.insert(tup, a)
+   end
+
+   return a_type("function", {
+      args = args_t,
+      rets = rets_t,
+      min_arity = min_arity,
+      needs_compat = f.needs_compat,
+      typeargs = f.typeargs,
+   })
 end
 
 local function a_vararg(t)
@@ -1989,7 +2044,7 @@ local function parse_function_type(ps, i)
       i, typ.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
    if ps.tokens[i].tk == "(" then
-      i, typ.args, typ.is_method = parse_argument_type_list(ps, i)
+      i, typ.args, typ.is_method, typ.min_arity = parse_argument_type_list(ps, i)
       i, typ.rets = parse_return_types(ps, i)
    else
       typ.args = a_vararg({ ANY })
@@ -2008,19 +2063,6 @@ local simple_types = {
    ["boolean"] = BOOLEAN,
    ["integer"] = INTEGER,
 }
-
-local memoize_opt_types = {}
-
-local function OPT(t)
-   if memoize_opt_types[t] then
-      return memoize_opt_types[t]
-   end
-
-   local ot = shallow_copy_new_type(t)
-   ot.opt = true
-   memoize_opt_types[t] = ot
-   return ot
-end
 
 local function parse_simple_type_or_nominal(ps, i)
    local tk = ps.tokens[i].tk
@@ -2189,7 +2231,7 @@ local function parse_function_args_rets_body(ps, i, node)
    if ps.tokens[i].tk == "<" then
       i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
-   i, node.args = parse_argument_list(ps, i)
+   i, node.args, node.min_arity = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
    i, node.body = parse_statements(ps, i)
    end_at(node, ps.tokens[i])
@@ -2632,6 +2674,7 @@ parse_argument_list = function(ps, i)
    local node = new_node(ps.tokens, i, "argument_list")
    i, node = parse_bracket_list(ps, i, node, "(", ")", "sep", parse_argument)
    local opts = false
+   local min_arity = 0
    for a, fnarg in ipairs(node) do
       if fnarg.tk == "..." then
          if a ~= #node then
@@ -2642,10 +2685,13 @@ parse_argument_list = function(ps, i)
          opts = true
       elseif opts then
          return fail(ps, i, "non-optional arguments cannot follow optional arguments")
+      else
+         min_arity = min_arity + 1
       end
    end
-   return i, node
+   return i, node, min_arity
 end
+
 
 
 
@@ -2689,16 +2735,12 @@ local function parse_argument_type(ps, i)
          is_va = true
       end
 
-      if opt then
-         typ = OPT(typ)
-      end
-
       if argument_name == "self" then
          is_self = true
       end
    end
 
-   return i, { i = i, type = typ, is_va = is_va, is_self = is_self }, 0
+   return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = opt or is_va }, 0
 end
 
 parse_argument_type_list = function(ps, i)
@@ -2706,16 +2748,20 @@ parse_argument_type_list = function(ps, i)
    i = parse_bracket_list(ps, i, ars, "(", ")", "sep", parse_argument_type)
    local t, list = new_tuple(ps, i)
    local n = #ars
+   local min_arity = 0
    for l, ar in ipairs(ars) do
       list[l] = ar.type
       if ar.is_va and l < n then
          fail(ps, ar.i, "'...' can only be last argument")
       end
+      if not ar.opt then
+         min_arity = min_arity + 1
+      end
    end
    if n > 0 and ars[n].is_va then
       t.is_va = true
    end
-   return i, t, (n > 0 and ars[1].is_self)
+   return i, t, (n > 0 and ars[1].is_self), min_arity
 end
 
 local function parse_identifier(ps, i)
@@ -2772,6 +2818,7 @@ local function parse_function(ps, i, fk)
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method then
       table.insert(fn.args, 1, { x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+      fn.min_arity = fn.min_arity + 1
    end
 
    if not fn.name then
@@ -3055,7 +3102,7 @@ local function parse_macroexp(ps, istart, iargs)
 
    local node = new_node(ps.tokens, istart, "macroexp")
    local i
-   i, node.args = parse_argument_list(ps, iargs)
+   i, node.args, node.min_arity = parse_argument_list(ps, iargs)
    i, node.rets = parse_return_types(ps, i)
    i = verify_tk(ps, i, "return")
    i, node.exp = parse_expression(ps, i)
@@ -3074,6 +3121,7 @@ local function parse_where_clause(ps, i)
    node.args[1] = new_node(ps.tokens, i, "argument")
    node.args[1].tk = "self"
    node.args[1].argtype = selftype
+   node.min_arity = 1
    node.rets = new_tuple(ps, i)
    node.rets.tuple[1] = BOOLEAN
    i, node.exp = parse_expression(ps, i)
@@ -3156,6 +3204,7 @@ parse_record_body = function(ps, i, def, node)
 
       local typ = new_type(ps, wstart, "function")
       typ.is_method = true
+      typ.min_arity = 1
       typ.args = a_type("tuple", { tuple = {
          a_type("nominal", {
             y = typ.y,
@@ -5084,10 +5133,10 @@ local INVALID = a_type("invalid", {})
 local UNKNOWN = a_type("unknown", {})
 local CIRCULAR_REQUIRE = a_type("circular_require", {})
 
-local FUNCTION = a_function({ args = a_vararg({ ANY }), rets = a_vararg({ ANY }) })
+local FUNCTION = a_fn({ args = va_args({ ANY }), rets = va_args({ ANY }) })
 
 local NOMINAL_FILE = a_type("nominal", { names = { "FILE" } })
-local XPCALL_MSGH_FUNCTION = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = {} }) })
+local XPCALL_MSGH_FUNCTION = a_fn({ args = { ANY }, rets = {} })
 
 local USERDATA = ANY
 
@@ -5447,7 +5496,7 @@ local function show_type_base(t, short, seen)
       for i, v in ipairs(t.args.tuple) do
          if not t.is_method or i > 1 then
             table.insert(args, ((i == #t.args.tuple and t.args.is_va) and "...: " or
-            v.opt and "? " or
+            (i > t.min_arity) and "? " or
             "") .. show(v))
          end
       end
@@ -5753,7 +5802,7 @@ local function init_globals(lax)
       return t
    end
 
-   local function a_gfunction(n, f, typename)
+   local function a_generic(n, f)
       local typevars = {}
       local typeargs = {}
       local c = string.byte("A") - 1
@@ -5764,12 +5813,18 @@ local function init_globals(lax)
          typeargs[i] = a_type("typearg", { typearg = name })
       end
       local t = f(_tl_table_unpack(typevars))
-      t.typeargs = typeargs
-      return a_type(typename or "function", t)
+      if t.typename == "function" or t.typename == "record" then
+         t.typeargs = typeargs
+      end
+      return t
+   end
+
+   local function a_gfunction(n, f)
+      return a_generic(n, function(...) return a_fn(f(...)) end)
    end
 
    local function a_grecord(n, f)
-      local t = a_gfunction(n, f, "record")
+      local t = a_generic(n, f)
       t.field_order = sorted_keys(t.fields)
       return t
    end
@@ -5790,12 +5845,16 @@ local function init_globals(lax)
 
 
 
+   local function id(x)
+      return x
+   end
+
    local file_reader_poly_types = {
-      { ctor = a_vararg, args = { a_type("union", { types = { NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L" }) } }) }, rets = { STRING } },
-      { ctor = c_tuple, args = { an_enum({ "*n", "n" }) }, rets = { NUMBER, STRING } },
-      { ctor = a_vararg, args = { a_type("union", { types = { NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L", "*n", "n" }) } }) }, rets = { a_type("union", { types = { STRING, NUMBER } }) } },
-      { ctor = a_vararg, args = { a_type("union", { types = { NUMBER, STRING } }) }, rets = { STRING } },
-      { ctor = a_vararg, args = {}, rets = { STRING } },
+      { ctor = va_args, args = { a_type("union", { types = { NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L" }) } }) }, rets = { STRING } },
+      { ctor = id, args = { an_enum({ "*n", "n" }) }, rets = { NUMBER, STRING } },
+      { ctor = va_args, args = { a_type("union", { types = { NUMBER, an_enum({ "*a", "a", "*l", "l", "*L", "L", "*n", "n" }) } }) }, rets = { a_type("union", { types = { STRING, NUMBER } }) } },
+      { ctor = va_args, args = { a_type("union", { types = { NUMBER, STRING } }) }, rets = { STRING } },
+      { ctor = va_args, args = {}, rets = { STRING } },
    }
 
    local function a_file_reader(fn)
@@ -5808,7 +5867,7 @@ local function init_globals(lax)
       return t
    end
 
-   local LOAD_FUNCTION = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { STRING } }) })
+   local LOAD_FUNCTION = a_fn({ args = {}, rets = { STRING } })
 
    local OS_DATE_TABLE = a_record({
       fields = {
@@ -5845,12 +5904,12 @@ local function init_globals(lax)
 
    local DEBUG_HOOK_EVENT = an_enum({ "call", "tail call", "return", "line", "count" })
 
-   local DEBUG_HOOK_FUNCTION = a_function({
-      args = a_type("tuple", { tuple = { DEBUG_HOOK_EVENT, INTEGER } }),
-      rets = a_type("tuple", { tuple = {} }),
+   local DEBUG_HOOK_FUNCTION = a_fn({
+      args = { DEBUG_HOOK_EVENT, INTEGER },
+      rets = {},
    })
 
-   local TABLE_SORT_FUNCTION = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a, a } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) } end)
+   local TABLE_SORT_FUNCTION = a_gfunction(1, function(a) return { args = { a, a }, rets = { BOOLEAN } } end)
 
    local metatable_nominals = {}
 
@@ -5864,71 +5923,71 @@ local function init_globals(lax)
       ["..."] = a_vararg({ STRING }),
       ["any"] = a_type("typedecl", { def = ANY }),
       ["arg"] = a_type("array", { elements = STRING }),
-      ["assert"] = a_gfunction(2, function(a, b) return { args = a_type("tuple", { tuple = { a, OPT(b) } }), rets = a_type("tuple", { tuple = { a } }) } end),
+      ["assert"] = a_gfunction(2, function(a, b) return { args = { a, OPT(b) }, rets = { a } } end),
       ["collectgarbage"] = a_type("poly", { types = {
-         a_function({ args = a_type("tuple", { tuple = { an_enum({ "collect", "count", "stop", "restart" }) } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-         a_function({ args = a_type("tuple", { tuple = { an_enum({ "step", "setpause", "setstepmul" }), NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-         a_function({ args = a_type("tuple", { tuple = { an_enum({ "isrunning" }) } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-         a_function({ args = a_type("tuple", { tuple = { STRING, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { a_type("union", { types = { BOOLEAN, NUMBER } }) } }) }),
+         a_fn({ args = { an_enum({ "collect", "count", "stop", "restart" }) }, rets = { NUMBER } }),
+         a_fn({ args = { an_enum({ "step", "setpause", "setstepmul" }), NUMBER }, rets = { NUMBER } }),
+         a_fn({ args = { an_enum({ "isrunning" }) }, rets = { BOOLEAN } }),
+         a_fn({ args = { STRING, OPT(NUMBER) }, rets = { a_type("union", { types = { BOOLEAN, NUMBER } }) } }),
       } }),
-      ["dofile"] = a_function({ args = a_type("tuple", { tuple = { OPT(STRING) } }), rets = a_vararg({ ANY }) }),
-      ["error"] = a_function({ args = a_type("tuple", { tuple = { ANY, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = {} }) }),
-      ["getmetatable"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = { METATABLE(a) } }) } end),
-      ["ipairs"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }) } }), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { INTEGER, a } }) }),
-} }), } end),
-      ["load"] = a_function({ args = a_type("tuple", { tuple = { a_type("union", { types = { STRING, LOAD_FUNCTION } }), OPT(STRING), OPT(STRING), OPT(TABLE) } }), rets = a_type("tuple", { tuple = { FUNCTION, STRING } }) }),
-      ["loadfile"] = a_function({ args = a_type("tuple", { tuple = { OPT(STRING), OPT(STRING), OPT(TABLE) } }), rets = a_type("tuple", { tuple = { FUNCTION, STRING } }) }),
+      ["dofile"] = a_fn({ args = { OPT(STRING) }, rets = va_args({ ANY }) }),
+      ["error"] = a_fn({ args = { ANY, OPT(NUMBER) }, rets = {} }),
+      ["getmetatable"] = a_gfunction(1, function(a) return { args = { a }, rets = { METATABLE(a) } } end),
+      ["ipairs"] = a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }) }, rets = {
+   a_fn({ args = {}, rets = { INTEGER, a } }),
+}, } end),
+      ["load"] = a_fn({ args = { a_type("union", { types = { STRING, LOAD_FUNCTION } }), OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = { FUNCTION, STRING } }),
+      ["loadfile"] = a_fn({ args = { OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = { FUNCTION, STRING } }),
       ["next"] = a_type("poly", { types = {
-         a_gfunction(2, function(a, b) return { args = a_type("tuple", { tuple = { a_type("map", { keys = a, values = b }), OPT(a) } }), rets = a_type("tuple", { tuple = { a, b } }) } end),
-         a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), OPT(a) } }), rets = a_type("tuple", { tuple = { INTEGER, a } }) } end),
+         a_gfunction(2, function(a, b) return { args = { a_type("map", { keys = a, values = b }), OPT(a) }, rets = { a, b } } end),
+         a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), OPT(a) }, rets = { INTEGER, a } } end),
       } }),
-      ["pairs"] = a_gfunction(2, function(a, b) return { args = a_type("tuple", { tuple = { a_type("map", { keys = a, values = b }) } }), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { a, b } }) }),
-} }), } end),
-      ["pcall"] = a_function({ args = a_vararg({ FUNCTION, ANY }), rets = a_vararg({ BOOLEAN, ANY }) }),
-      ["xpcall"] = a_function({ args = a_vararg({ FUNCTION, XPCALL_MSGH_FUNCTION, ANY }), rets = a_vararg({ BOOLEAN, ANY }) }),
-      ["print"] = a_function({ args = a_vararg({ ANY }), rets = a_type("tuple", { tuple = {} }) }),
-      ["rawequal"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-      ["rawget"] = a_function({ args = a_type("tuple", { tuple = { TABLE, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["rawlen"] = a_function({ args = a_type("tuple", { tuple = { a_type("union", { types = { TABLE, STRING } }) } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
+      ["pairs"] = a_gfunction(2, function(a, b) return { args = { a_type("map", { keys = a, values = b }) }, rets = {
+   a_fn({ args = {}, rets = { a, b } }),
+}, } end),
+      ["pcall"] = a_fn({ args = va_args({ FUNCTION, ANY }), rets = va_args({ BOOLEAN, ANY }) }),
+      ["xpcall"] = a_fn({ args = va_args({ FUNCTION, XPCALL_MSGH_FUNCTION, ANY }), rets = va_args({ BOOLEAN, ANY }) }),
+      ["print"] = a_fn({ args = va_args({ ANY }), rets = {} }),
+      ["rawequal"] = a_fn({ args = { ANY, ANY }, rets = { BOOLEAN } }),
+      ["rawget"] = a_fn({ args = { TABLE, ANY }, rets = { ANY } }),
+      ["rawlen"] = a_fn({ args = { a_type("union", { types = { TABLE, STRING } }) }, rets = { INTEGER } }),
       ["rawset"] = a_type("poly", { types = {
-         a_gfunction(2, function(a, b) return { args = a_type("tuple", { tuple = { a_type("map", { keys = a, values = b }), a, b } }), rets = a_type("tuple", { tuple = {} }) } end),
-         a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), NUMBER, a } }), rets = a_type("tuple", { tuple = {} }) } end),
-         a_function({ args = a_type("tuple", { tuple = { TABLE, ANY, ANY } }), rets = a_type("tuple", { tuple = {} }) }),
+         a_gfunction(2, function(a, b) return { args = { a_type("map", { keys = a, values = b }), a, b }, rets = {} } end),
+         a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), NUMBER, a }, rets = {} } end),
+         a_fn({ args = { TABLE, ANY, ANY }, rets = {} }),
       } }),
-      ["require"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = {} }) }),
+      ["require"] = a_fn({ args = { STRING }, rets = {} }),
       ["select"] = a_type("poly", { types = {
-         a_gfunction(1, function(a) return { args = a_vararg({ NUMBER, a }), rets = a_type("tuple", { tuple = { a } }) } end),
-         a_function({ args = a_vararg({ NUMBER, ANY }), rets = a_type("tuple", { tuple = { ANY } }) }),
-         a_function({ args = a_vararg({ STRING, ANY }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
+         a_gfunction(1, function(a) return { args = va_args({ NUMBER, a }), rets = { a } } end),
+         a_fn({ args = va_args({ NUMBER, ANY }), rets = { ANY } }),
+         a_fn({ args = va_args({ STRING, ANY }), rets = { INTEGER } }),
       } }),
-      ["setmetatable"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a, METATABLE(a) } }), rets = a_type("tuple", { tuple = { a } }) } end),
+      ["setmetatable"] = a_gfunction(1, function(a) return { args = { a, METATABLE(a) }, rets = { a } } end),
       ["tonumber"] = a_type("poly", { types = {
-         a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-         a_function({ args = a_type("tuple", { tuple = { ANY, NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
+         a_fn({ args = { ANY }, rets = { NUMBER } }),
+         a_fn({ args = { ANY, NUMBER }, rets = { INTEGER } }),
       } }),
-      ["tostring"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-      ["type"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+      ["tostring"] = a_fn({ args = { ANY }, rets = { STRING } }),
+      ["type"] = a_fn({ args = { ANY }, rets = { STRING } }),
       ["FILE"] = a_type("typedecl", { def =
       a_record({
          is_userdata = true,
          fields = {
-            ["close"] = a_function({ args = a_type("tuple", { tuple = { NOMINAL_FILE } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING, INTEGER } }) }),
-            ["flush"] = a_function({ args = a_type("tuple", { tuple = { NOMINAL_FILE } }), rets = a_type("tuple", { tuple = {} }) }),
+            ["close"] = a_fn({ args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING, INTEGER } }),
+            ["flush"] = a_fn({ args = { NOMINAL_FILE }, rets = {} }),
             ["lines"] = a_file_reader(function(ctor, args, rets)
                table.insert(args, 1, NOMINAL_FILE)
-               return a_function({ args = ctor(args), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = {} }), rets = ctor(rets) }),
-} }), })
+               return a_fn({ args = ctor(args), rets = {
+                  a_fn({ args = {}, rets = ctor(rets) }),
+               }, })
             end),
             ["read"] = a_file_reader(function(ctor, args, rets)
                table.insert(args, 1, NOMINAL_FILE)
-               return a_function({ args = ctor(args), rets = ctor(rets) })
+               return a_fn({ args = ctor(args), rets = ctor(rets) })
             end),
-            ["seek"] = a_function({ args = a_type("tuple", { tuple = { NOMINAL_FILE, OPT(STRING), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { INTEGER, STRING } }) }),
-            ["setvbuf"] = a_function({ args = a_type("tuple", { tuple = { NOMINAL_FILE, STRING, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = {} }) }),
-            ["write"] = a_function({ args = a_vararg({ NOMINAL_FILE, a_type("union", { types = { STRING, NUMBER } }) }), rets = a_type("tuple", { tuple = { NOMINAL_FILE, STRING } }) }),
+            ["seek"] = a_fn({ args = { NOMINAL_FILE, OPT(STRING), OPT(NUMBER) }, rets = { INTEGER, STRING } }),
+            ["setvbuf"] = a_fn({ args = { NOMINAL_FILE, STRING, OPT(NUMBER) }, rets = {} }),
+            ["write"] = a_fn({ args = va_args({ NOMINAL_FILE, a_type("union", { types = { STRING, NUMBER } }) }), rets = { NOMINAL_FILE, STRING } }),
 
          },
          meta_fields = { ["__close"] = FUNCTION },
@@ -5936,54 +5995,54 @@ local function init_globals(lax)
       }) }),
 
       ["metatable"] = a_type("typedecl", { def =
-a_grecord(1, function(a) return {
+a_grecord(1, function(a) return a_record({
    fields = {
-      ["__call"] = a_function({ args = a_vararg({ a, ANY }), rets = a_vararg({ ANY }) }),
-      ["__gc"] = a_function({ args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = {} }) }),
+      ["__call"] = a_fn({ args = va_args({ a, ANY }), rets = va_args({ ANY }) }),
+      ["__gc"] = a_fn({ args = { a }, rets = {} }),
       ["__index"] = ANY,
-      ["__len"] = a_function({ args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = { ANY } }) }),
+      ["__len"] = a_fn({ args = { a }, rets = { ANY } }),
       ["__mode"] = an_enum({ "k", "v", "kv" }),
       ["__newindex"] = ANY,
       ["__pairs"] = a_gfunction(2, function(k, v)
          return {
-            args = a_type("tuple", { tuple = { a } }),
-            rets = a_type("tuple", { tuple = { a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { k, v } }) }) } }),
+            args = { a },
+            rets = { a_fn({ args = {}, rets = { k, v } }) },
          }
       end),
-      ["__tostring"] = a_function({ args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+      ["__tostring"] = a_fn({ args = { a }, rets = { STRING } }),
       ["__name"] = STRING,
-      ["__add"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__sub"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__mul"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__div"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__idiv"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__mod"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__pow"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__unm"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__band"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__bor"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__bxor"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__bnot"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__shl"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__shr"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__concat"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-      ["__eq"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-      ["__lt"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-      ["__le"] = a_function({ args = a_type("tuple", { tuple = { ANY, ANY } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-      ["__close"] = a_function({ args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = {} }) }),
+      ["__add"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__sub"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__mul"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__div"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__idiv"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__mod"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__pow"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__unm"] = a_fn({ args = { ANY }, rets = { ANY } }),
+      ["__band"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__bor"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__bxor"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__bnot"] = a_fn({ args = { ANY }, rets = { ANY } }),
+      ["__shl"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__shr"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__concat"] = a_fn({ args = { ANY, ANY }, rets = { ANY } }),
+      ["__eq"] = a_fn({ args = { ANY, ANY }, rets = { BOOLEAN } }),
+      ["__lt"] = a_fn({ args = { ANY, ANY }, rets = { BOOLEAN } }),
+      ["__le"] = a_fn({ args = { ANY, ANY }, rets = { BOOLEAN } }),
+      ["__close"] = a_fn({ args = { a }, rets = {} }),
    },
-} end) }),
+}) end) }),
 
       ["coroutine"] = a_record({
          fields = {
-            ["create"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION } }), rets = a_type("tuple", { tuple = { THREAD } }) }),
-            ["close"] = a_function({ args = a_type("tuple", { tuple = { THREAD } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING } }) }),
-            ["isyieldable"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
-            ["resume"] = a_function({ args = a_vararg({ THREAD, ANY }), rets = a_vararg({ BOOLEAN, ANY }) }),
-            ["running"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { THREAD, BOOLEAN } }) }),
-            ["status"] = a_function({ args = a_type("tuple", { tuple = { THREAD } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["wrap"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION } }), rets = a_type("tuple", { tuple = { FUNCTION } }) }),
-            ["yield"] = a_function({ args = a_vararg({ ANY }), rets = a_vararg({ ANY }) }),
+            ["create"] = a_fn({ args = { FUNCTION }, rets = { THREAD } }),
+            ["close"] = a_fn({ args = { THREAD }, rets = { BOOLEAN, STRING } }),
+            ["isyieldable"] = a_fn({ args = {}, rets = { BOOLEAN } }),
+            ["resume"] = a_fn({ args = va_args({ THREAD, ANY }), rets = va_args({ BOOLEAN, ANY }) }),
+            ["running"] = a_fn({ args = {}, rets = { THREAD, BOOLEAN } }),
+            ["status"] = a_fn({ args = { THREAD }, rets = { STRING } }),
+            ["wrap"] = a_fn({ args = { FUNCTION }, rets = { FUNCTION } }),
+            ["yield"] = a_fn({ args = va_args({ ANY }), rets = va_args({ ANY }) }),
          },
       }),
       ["debug"] = a_record({
@@ -5992,141 +6051,141 @@ a_grecord(1, function(a) return {
             ["Hook"] = a_type("typedecl", { def = DEBUG_HOOK_FUNCTION }),
             ["HookEvent"] = a_type("typedecl", { def = DEBUG_HOOK_EVENT }),
 
-            ["debug"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = {} }) }),
-            ["gethook"] = a_function({ args = a_type("tuple", { tuple = { OPT(THREAD) } }), rets = a_type("tuple", { tuple = { DEBUG_HOOK_FUNCTION, INTEGER } }) }),
+            ["debug"] = a_fn({ args = {}, rets = {} }),
+            ["gethook"] = a_fn({ args = { OPT(THREAD) }, rets = { DEBUG_HOOK_FUNCTION, INTEGER } }),
             ["getlocal"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { THREAD, FUNCTION, NUMBER } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-               a_function({ args = a_type("tuple", { tuple = { THREAD, NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { STRING, ANY } }) }),
-               a_function({ args = a_type("tuple", { tuple = { FUNCTION, NUMBER } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-               a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { STRING, ANY } }) }),
+               a_fn({ args = { THREAD, FUNCTION, NUMBER }, rets = { STRING } }),
+               a_fn({ args = { THREAD, NUMBER, NUMBER }, rets = { STRING, ANY } }),
+               a_fn({ args = { FUNCTION, NUMBER }, rets = { STRING } }),
+               a_fn({ args = { NUMBER, NUMBER }, rets = { STRING, ANY } }),
             } }),
-            ["getmetatable"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a } }), rets = a_type("tuple", { tuple = { METATABLE(a) } }) } end),
-            ["getregistry"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { TABLE } }) }),
-            ["getupvalue"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION, NUMBER } }), rets = a_type("tuple", { tuple = { ANY } }) }),
-            ["getuservalue"] = a_function({ args = a_type("tuple", { tuple = { USERDATA, NUMBER } }), rets = a_type("tuple", { tuple = { ANY } }) }),
+            ["getmetatable"] = a_gfunction(1, function(a) return { args = { a }, rets = { METATABLE(a) } } end),
+            ["getregistry"] = a_fn({ args = {}, rets = { TABLE } }),
+            ["getupvalue"] = a_fn({ args = { FUNCTION, NUMBER }, rets = { ANY } }),
+            ["getuservalue"] = a_fn({ args = { USERDATA, NUMBER }, rets = { ANY } }),
             ["sethook"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { THREAD, DEBUG_HOOK_FUNCTION, STRING, NUMBER } }), rets = a_type("tuple", { tuple = {} }) }),
-               a_function({ args = a_type("tuple", { tuple = { DEBUG_HOOK_FUNCTION, STRING, NUMBER } }), rets = a_type("tuple", { tuple = {} }) }),
+               a_fn({ args = { THREAD, DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} }),
+               a_fn({ args = { DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} }),
             } }),
             ["setlocal"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { THREAD, NUMBER, NUMBER, ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-               a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER, ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+               a_fn({ args = { THREAD, NUMBER, NUMBER, ANY }, rets = { STRING } }),
+               a_fn({ args = { NUMBER, NUMBER, ANY }, rets = { STRING } }),
             } }),
-            ["setmetatable"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a, METATABLE(a) } }), rets = a_type("tuple", { tuple = { a } }) } end),
-            ["setupvalue"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION, NUMBER, ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["setuservalue"] = a_function({ args = a_type("tuple", { tuple = { USERDATA, ANY, NUMBER } }), rets = a_type("tuple", { tuple = { USERDATA } }) }),
+            ["setmetatable"] = a_gfunction(1, function(a) return { args = { a, METATABLE(a) }, rets = { a } } end),
+            ["setupvalue"] = a_fn({ args = { FUNCTION, NUMBER, ANY }, rets = { STRING } }),
+            ["setuservalue"] = a_fn({ args = { USERDATA, ANY, NUMBER }, rets = { USERDATA } }),
             ["traceback"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { OPT(THREAD), OPT(STRING), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-               a_function({ args = a_type("tuple", { tuple = { OPT(STRING), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+               a_fn({ args = { OPT(THREAD), OPT(STRING), OPT(NUMBER) }, rets = { STRING } }),
+               a_fn({ args = { OPT(STRING), OPT(NUMBER) }, rets = { STRING } }),
             } }),
-            ["upvalueid"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION, NUMBER } }), rets = a_type("tuple", { tuple = { USERDATA } }) }),
-            ["upvaluejoin"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION, NUMBER, FUNCTION, NUMBER } }), rets = a_type("tuple", { tuple = {} }) }),
+            ["upvalueid"] = a_fn({ args = { FUNCTION, NUMBER }, rets = { USERDATA } }),
+            ["upvaluejoin"] = a_fn({ args = { FUNCTION, NUMBER, FUNCTION, NUMBER }, rets = {} }),
             ["getinfo"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { DEBUG_GETINFO_TABLE } }) }),
-               a_function({ args = a_type("tuple", { tuple = { ANY, STRING } }), rets = a_type("tuple", { tuple = { DEBUG_GETINFO_TABLE } }) }),
-               a_function({ args = a_type("tuple", { tuple = { ANY, ANY, STRING } }), rets = a_type("tuple", { tuple = { DEBUG_GETINFO_TABLE } }) }),
+               a_fn({ args = { ANY }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_fn({ args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
+               a_fn({ args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } }),
             } }),
          },
       }),
       ["io"] = a_record({
          fields = {
-            ["close"] = a_function({ args = a_type("tuple", { tuple = { OPT(NOMINAL_FILE) } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING } }) }),
-            ["flush"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = {} }) }),
-            ["input"] = a_function({ args = a_type("tuple", { tuple = { OPT(a_type("union", { types = { STRING, NOMINAL_FILE } })) } }), rets = a_type("tuple", { tuple = { NOMINAL_FILE } }) }),
+            ["close"] = a_fn({ args = { OPT(NOMINAL_FILE) }, rets = { BOOLEAN, STRING } }),
+            ["flush"] = a_fn({ args = {}, rets = {} }),
+            ["input"] = a_fn({ args = { OPT(a_type("union", { types = { STRING, NOMINAL_FILE } })) }, rets = { NOMINAL_FILE } }),
             ["lines"] = a_file_reader(function(ctor, args, rets)
-               return a_function({ args = ctor(args), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = {} }), rets = ctor(rets) }),
-} }), })
+               return a_fn({ args = ctor(args), rets = {
+                  a_fn({ args = {}, rets = ctor(rets) }),
+               }, })
             end),
-            ["open"] = a_function({ args = a_type("tuple", { tuple = { STRING, OPT(STRING) } }), rets = a_type("tuple", { tuple = { NOMINAL_FILE, STRING } }) }),
-            ["output"] = a_function({ args = a_type("tuple", { tuple = { OPT(a_type("union", { types = { STRING, NOMINAL_FILE } })) } }), rets = a_type("tuple", { tuple = { NOMINAL_FILE } }) }),
-            ["popen"] = a_function({ args = a_type("tuple", { tuple = { STRING, OPT(STRING) } }), rets = a_type("tuple", { tuple = { NOMINAL_FILE, STRING } }) }),
+            ["open"] = a_fn({ args = { STRING, OPT(STRING) }, rets = { NOMINAL_FILE, STRING } }),
+            ["output"] = a_fn({ args = { OPT(a_type("union", { types = { STRING, NOMINAL_FILE } })) }, rets = { NOMINAL_FILE } }),
+            ["popen"] = a_fn({ args = { STRING, OPT(STRING) }, rets = { NOMINAL_FILE, STRING } }),
             ["read"] = a_file_reader(function(ctor, args, rets)
-               return a_function({ args = ctor(args), rets = ctor(rets) })
+               return a_fn({ args = ctor(args), rets = ctor(rets) })
             end),
             ["stderr"] = NOMINAL_FILE,
             ["stdin"] = NOMINAL_FILE,
             ["stdout"] = NOMINAL_FILE,
-            ["tmpfile"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { NOMINAL_FILE } }) }),
-            ["type"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["write"] = a_function({ args = a_vararg({ a_type("union", { types = { STRING, NUMBER } }) }), rets = a_type("tuple", { tuple = { NOMINAL_FILE, STRING } }) }),
+            ["tmpfile"] = a_fn({ args = {}, rets = { NOMINAL_FILE } }),
+            ["type"] = a_fn({ args = { ANY }, rets = { STRING } }),
+            ["write"] = a_fn({ args = va_args({ a_type("union", { types = { STRING, NUMBER } }) }), rets = { NOMINAL_FILE, STRING } }),
          },
       }),
       ["math"] = a_record({
          fields = {
             ["abs"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { INTEGER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+               a_fn({ args = { INTEGER }, rets = { INTEGER } }),
+               a_fn({ args = { NUMBER }, rets = { NUMBER } }),
             } }),
-            ["acos"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["asin"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["atan"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["atan2"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["ceil"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["cos"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["cosh"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["deg"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["exp"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["floor"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
+            ["acos"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["asin"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["atan"] = a_fn({ args = { NUMBER, OPT(NUMBER) }, rets = { NUMBER } }),
+            ["atan2"] = a_fn({ args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["ceil"] = a_fn({ args = { NUMBER }, rets = { INTEGER } }),
+            ["cos"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["cosh"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["deg"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["exp"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["floor"] = a_fn({ args = { NUMBER }, rets = { INTEGER } }),
             ["fmod"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { INTEGER, INTEGER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+               a_fn({ args = { INTEGER, INTEGER }, rets = { INTEGER } }),
+               a_fn({ args = { NUMBER, NUMBER }, rets = { NUMBER } }),
             } }),
-            ["frexp"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER, NUMBER } }) }),
+            ["frexp"] = a_fn({ args = { NUMBER }, rets = { NUMBER, NUMBER } }),
             ["huge"] = NUMBER,
-            ["ldexp"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["log"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["log10"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+            ["ldexp"] = a_fn({ args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["log"] = a_fn({ args = { NUMBER, OPT(NUMBER) }, rets = { NUMBER } }),
+            ["log10"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
             ["max"] = a_type("poly", { types = {
-               a_function({ args = a_vararg({ INTEGER }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_gfunction(1, function(a) return { args = a_vararg({ a }), rets = a_type("tuple", { tuple = { a } }) } end),
-               a_function({ args = a_vararg({ a_type("union", { types = { NUMBER, INTEGER } }) }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-               a_function({ args = a_vararg({ ANY }), rets = a_type("tuple", { tuple = { ANY } }) }),
+               a_fn({ args = va_args({ INTEGER }), rets = { INTEGER } }),
+               a_gfunction(1, function(a) return { args = va_args({ a }), rets = { a } } end),
+               a_fn({ args = va_args({ a_type("union", { types = { NUMBER, INTEGER } }) }), rets = { NUMBER } }),
+               a_fn({ args = va_args({ ANY }), rets = { ANY } }),
             } }),
             ["maxinteger"] = a_type("integer", { needs_compat = true }),
             ["min"] = a_type("poly", { types = {
-               a_function({ args = a_vararg({ INTEGER }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_gfunction(1, function(a) return { args = a_vararg({ a }), rets = a_type("tuple", { tuple = { a } }) } end),
-               a_function({ args = a_vararg({ a_type("union", { types = { NUMBER, INTEGER } }) }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-               a_function({ args = a_vararg({ ANY }), rets = a_type("tuple", { tuple = { ANY } }) }),
+               a_fn({ args = va_args({ INTEGER }), rets = { INTEGER } }),
+               a_gfunction(1, function(a) return { args = va_args({ a }), rets = { a } } end),
+               a_fn({ args = va_args({ a_type("union", { types = { NUMBER, INTEGER } }) }), rets = { NUMBER } }),
+               a_fn({ args = va_args({ ANY }), rets = { ANY } }),
             } }),
             ["mininteger"] = a_type("integer", { needs_compat = true }),
-            ["modf"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER, NUMBER } }) }),
+            ["modf"] = a_fn({ args = { NUMBER }, rets = { INTEGER, NUMBER } }),
             ["pi"] = NUMBER,
-            ["pow"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["rad"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+            ["pow"] = a_fn({ args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["rad"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
             ["random"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { NUMBER, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+               a_fn({ args = { NUMBER, OPT(NUMBER) }, rets = { INTEGER } }),
+               a_fn({ args = {}, rets = { NUMBER } }),
             } }),
-            ["randomseed"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER, INTEGER } }) }),
-            ["sin"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["sinh"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["sqrt"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["tan"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["tanh"] = a_function({ args = a_type("tuple", { tuple = { NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["tointeger"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["type"] = a_function({ args = a_type("tuple", { tuple = { ANY } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["ult"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }),
+            ["randomseed"] = a_fn({ args = { NUMBER, NUMBER }, rets = { INTEGER, INTEGER } }),
+            ["sin"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["sinh"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["sqrt"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["tan"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["tanh"] = a_fn({ args = { NUMBER }, rets = { NUMBER } }),
+            ["tointeger"] = a_fn({ args = { ANY }, rets = { INTEGER } }),
+            ["type"] = a_fn({ args = { ANY }, rets = { STRING } }),
+            ["ult"] = a_fn({ args = { NUMBER, NUMBER }, rets = { BOOLEAN } }),
          },
       }),
       ["os"] = a_record({
          fields = {
-            ["clock"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
+            ["clock"] = a_fn({ args = {}, rets = { NUMBER } }),
             ["date"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { STRING } }) }),
-               a_function({ args = a_type("tuple", { tuple = { an_enum({ "!*t", "*t" }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { OS_DATE_TABLE } }) }),
-               a_function({ args = a_type("tuple", { tuple = { OPT(STRING), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+               a_fn({ args = {}, rets = { STRING } }),
+               a_fn({ args = { an_enum({ "!*t", "*t" }), OPT(NUMBER) }, rets = { OS_DATE_TABLE } }),
+               a_fn({ args = { OPT(STRING), OPT(NUMBER) }, rets = { STRING } }),
             } }),
-            ["difftime"] = a_function({ args = a_type("tuple", { tuple = { NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { NUMBER } }) }),
-            ["execute"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING, INTEGER } }) }),
-            ["exit"] = a_function({ args = a_type("tuple", { tuple = { OPT(a_type("union", { types = { NUMBER, BOOLEAN } })), OPT(BOOLEAN) } }), rets = a_type("tuple", { tuple = {} }) }),
-            ["getenv"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["remove"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING } }) }),
-            ["rename"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING } }), rets = a_type("tuple", { tuple = { BOOLEAN, STRING } }) }),
-            ["setlocale"] = a_function({ args = a_type("tuple", { tuple = { STRING, OPT(STRING) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["time"] = a_function({ args = a_type("tuple", { tuple = { OPT(OS_DATE_TABLE) } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["tmpname"] = a_function({ args = a_type("tuple", { tuple = {} }), rets = a_type("tuple", { tuple = { STRING } }) }),
+            ["difftime"] = a_fn({ args = { NUMBER, NUMBER }, rets = { NUMBER } }),
+            ["execute"] = a_fn({ args = { STRING }, rets = { BOOLEAN, STRING, INTEGER } }),
+            ["exit"] = a_fn({ args = { OPT(a_type("union", { types = { NUMBER, BOOLEAN } })), OPT(BOOLEAN) }, rets = {} }),
+            ["getenv"] = a_fn({ args = { STRING }, rets = { STRING } }),
+            ["remove"] = a_fn({ args = { STRING }, rets = { BOOLEAN, STRING } }),
+            ["rename"] = a_fn({ args = { STRING, STRING }, rets = { BOOLEAN, STRING } }),
+            ["setlocale"] = a_fn({ args = { STRING, OPT(STRING) }, rets = { STRING } }),
+            ["time"] = a_fn({ args = { OPT(OS_DATE_TABLE) }, rets = { INTEGER } }),
+            ["tmpname"] = a_fn({ args = {}, rets = { STRING } }),
          },
       }),
       ["package"] = a_record({
@@ -6134,75 +6193,75 @@ a_grecord(1, function(a) return {
             ["config"] = STRING,
             ["cpath"] = STRING,
             ["loaded"] = a_type("map", { keys = STRING, values = ANY }),
-            ["loaders"] = a_type("array", { elements = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { ANY, ANY } }) }) }),
-            ["loadlib"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING } }), rets = a_type("tuple", { tuple = { FUNCTION } }) }),
+            ["loaders"] = a_type("array", { elements = a_fn({ args = { STRING }, rets = { ANY, ANY } }) }),
+            ["loadlib"] = a_fn({ args = { STRING, STRING }, rets = { FUNCTION } }),
             ["path"] = STRING,
             ["preload"] = TABLE,
-            ["searchers"] = a_type("array", { elements = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { ANY, ANY } }) }) }),
-            ["searchpath"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING, OPT(STRING), OPT(STRING) } }), rets = a_type("tuple", { tuple = { STRING, STRING } }) }),
+            ["searchers"] = a_type("array", { elements = a_fn({ args = { STRING }, rets = { ANY, ANY } }) }),
+            ["searchpath"] = a_fn({ args = { STRING, STRING, OPT(STRING), OPT(STRING) }, rets = { STRING, STRING } }),
          },
       }),
       ["string"] = a_record({
          fields = {
             ["byte"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { STRING, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, NUMBER, NUMBER } }), rets = a_vararg({ INTEGER }) }),
+               a_fn({ args = { STRING, OPT(NUMBER) }, rets = { INTEGER } }),
+               a_fn({ args = { STRING, NUMBER, NUMBER }, rets = va_args({ INTEGER }) }),
             } }),
-            ["char"] = a_function({ args = a_vararg({ NUMBER }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["dump"] = a_function({ args = a_type("tuple", { tuple = { FUNCTION, OPT(BOOLEAN) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["find"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING, OPT(NUMBER), OPT(BOOLEAN) } }), rets = a_vararg({ INTEGER, INTEGER, STRING }) }),
-            ["format"] = a_function({ args = a_vararg({ STRING, ANY }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["gmatch"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING } }), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = {} }), rets = a_vararg({ STRING }) }),
-} }), }),
+            ["char"] = a_fn({ args = va_args({ NUMBER }), rets = { STRING } }),
+            ["dump"] = a_fn({ args = { FUNCTION, OPT(BOOLEAN) }, rets = { STRING } }),
+            ["find"] = a_fn({ args = { STRING, STRING, OPT(NUMBER), OPT(BOOLEAN) }, rets = va_args({ INTEGER, INTEGER, STRING }) }),
+            ["format"] = a_fn({ args = va_args({ STRING, ANY }), rets = { STRING } }),
+            ["gmatch"] = a_fn({ args = { STRING, STRING }, rets = {
+               a_fn({ args = {}, rets = va_args({ STRING }) }),
+            }, }),
             ["gsub"] = a_type("poly", { types = {
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, a_type("map", { keys = STRING, values = STRING }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, a_function({ args = a_vararg({ STRING }), rets = a_type("tuple", { tuple = { STRING } }) }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, a_function({ args = a_vararg({ STRING }), rets = a_type("tuple", { tuple = { NUMBER } }) }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, a_function({ args = a_vararg({ STRING }), rets = a_type("tuple", { tuple = { BOOLEAN } }) }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, a_function({ args = a_vararg({ STRING }), rets = a_type("tuple", { tuple = {} }) }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
-               a_function({ args = a_type("tuple", { tuple = { STRING, STRING, OPT(STRING), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING, INTEGER } }) }),
+               a_fn({ args = { STRING, STRING, a_type("map", { keys = STRING, values = STRING }), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
+               a_fn({ args = { STRING, STRING, a_fn({ args = va_args({ STRING }), rets = { STRING } }), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
+               a_fn({ args = { STRING, STRING, a_fn({ args = va_args({ STRING }), rets = { NUMBER } }), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
+               a_fn({ args = { STRING, STRING, a_fn({ args = va_args({ STRING }), rets = { BOOLEAN } }), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
+               a_fn({ args = { STRING, STRING, a_fn({ args = va_args({ STRING }), rets = {} }), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
+               a_fn({ args = { STRING, STRING, OPT(STRING), OPT(NUMBER) }, rets = { STRING, INTEGER } }),
 
             } }),
-            ["len"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["lower"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["match"] = a_function({ args = a_type("tuple", { tuple = { STRING, OPT(STRING), OPT(NUMBER) } }), rets = a_vararg({ STRING }) }),
-            ["pack"] = a_function({ args = a_vararg({ STRING, ANY }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["packsize"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["rep"] = a_function({ args = a_type("tuple", { tuple = { STRING, NUMBER, OPT(STRING) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["reverse"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["sub"] = a_function({ args = a_type("tuple", { tuple = { STRING, NUMBER, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
-            ["unpack"] = a_function({ args = a_type("tuple", { tuple = { STRING, STRING, OPT(NUMBER) } }), rets = a_vararg({ ANY }) }),
-            ["upper"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+            ["len"] = a_fn({ args = { STRING }, rets = { INTEGER } }),
+            ["lower"] = a_fn({ args = { STRING }, rets = { STRING } }),
+            ["match"] = a_fn({ args = { STRING, OPT(STRING), OPT(NUMBER) }, rets = va_args({ STRING }) }),
+            ["pack"] = a_fn({ args = va_args({ STRING, ANY }), rets = { STRING } }),
+            ["packsize"] = a_fn({ args = { STRING }, rets = { INTEGER } }),
+            ["rep"] = a_fn({ args = { STRING, NUMBER, OPT(STRING) }, rets = { STRING } }),
+            ["reverse"] = a_fn({ args = { STRING }, rets = { STRING } }),
+            ["sub"] = a_fn({ args = { STRING, NUMBER, OPT(NUMBER) }, rets = { STRING } }),
+            ["unpack"] = a_fn({ args = { STRING, STRING, OPT(NUMBER) }, rets = va_args({ ANY }) }),
+            ["upper"] = a_fn({ args = { STRING }, rets = { STRING } }),
          },
       }),
       ["table"] = a_record({
          fields = {
-            ["concat"] = a_function({ args = a_type("tuple", { tuple = { a_type("array", { elements = a_type("union", { types = { STRING, NUMBER } }) }), OPT(STRING), OPT(NUMBER), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { STRING } }) }),
+            ["concat"] = a_fn({ args = { a_type("array", { elements = a_type("union", { types = { STRING, NUMBER } }) }), OPT(STRING), OPT(NUMBER), OPT(NUMBER) }, rets = { STRING } }),
             ["insert"] = a_type("poly", { types = {
-               a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), NUMBER, a } }), rets = a_type("tuple", { tuple = {} }) } end),
-               a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), a } }), rets = a_type("tuple", { tuple = {} }) } end),
+               a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), NUMBER, a }, rets = {} } end),
+               a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), a }, rets = {} } end),
             } }),
             ["move"] = a_type("poly", { types = {
-               a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), NUMBER, NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { a_type("array", { elements = a }) } }) } end),
-               a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), NUMBER, NUMBER, NUMBER, a_type("array", { elements = a }) } }), rets = a_type("tuple", { tuple = { a_type("array", { elements = a }) } }) } end),
+               a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), NUMBER, NUMBER, NUMBER }, rets = { a_type("array", { elements = a }) } } end),
+               a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), NUMBER, NUMBER, NUMBER, a_type("array", { elements = a }) }, rets = { a_type("array", { elements = a }) } } end),
             } }),
-            ["pack"] = a_function({ args = a_vararg({ ANY }), rets = a_type("tuple", { tuple = { TABLE } }) }),
-            ["remove"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { a } }) } end),
-            ["sort"] = a_gfunction(1, function(a) return { args = a_type("tuple", { tuple = { a_type("array", { elements = a }), OPT(TABLE_SORT_FUNCTION) } }), rets = a_type("tuple", { tuple = {} }) } end),
-            ["unpack"] = a_gfunction(1, function(a) return { needs_compat = true, args = a_type("tuple", { tuple = { a_type("array", { elements = a }), OPT(NUMBER), OPT(NUMBER) } }), rets = a_vararg({ a }) } end),
+            ["pack"] = a_fn({ args = va_args({ ANY }), rets = { TABLE } }),
+            ["remove"] = a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), OPT(NUMBER) }, rets = { a } } end),
+            ["sort"] = a_gfunction(1, function(a) return { args = { a_type("array", { elements = a }), OPT(TABLE_SORT_FUNCTION) }, rets = {} } end),
+            ["unpack"] = a_gfunction(1, function(a) return { needs_compat = true, args = { a_type("array", { elements = a }), OPT(NUMBER), OPT(NUMBER) }, rets = va_args({ a }) } end),
          },
       }),
       ["utf8"] = a_record({
          fields = {
-            ["char"] = a_function({ args = a_vararg({ NUMBER }), rets = a_type("tuple", { tuple = { STRING } }) }),
+            ["char"] = a_fn({ args = va_args({ NUMBER }), rets = { STRING } }),
             ["charpattern"] = STRING,
-            ["codepoint"] = a_function({ args = a_type("tuple", { tuple = { STRING, OPT(NUMBER), OPT(NUMBER) } }), rets = a_vararg({ INTEGER }) }),
-            ["codes"] = a_function({ args = a_type("tuple", { tuple = { STRING } }), rets = a_type("tuple", { tuple = {
-   a_function({ args = a_type("tuple", { tuple = { STRING, OPT(NUMBER) } }), rets = a_type("tuple", { tuple = { NUMBER, NUMBER } }) }),
-} }), }),
-            ["len"] = a_function({ args = a_type("tuple", { tuple = { STRING, NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
-            ["offset"] = a_function({ args = a_type("tuple", { tuple = { STRING, NUMBER, NUMBER } }), rets = a_type("tuple", { tuple = { INTEGER } }) }),
+            ["codepoint"] = a_fn({ args = { STRING, OPT(NUMBER), OPT(NUMBER) }, rets = va_args({ INTEGER }) }),
+            ["codes"] = a_fn({ args = { STRING }, rets = {
+               a_fn({ args = { STRING, OPT(NUMBER) }, rets = { NUMBER, NUMBER } }),
+            }, }),
+            ["len"] = a_fn({ args = { STRING, NUMBER, NUMBER }, rets = { INTEGER } }),
+            ["offset"] = a_fn({ args = { STRING, NUMBER, NUMBER }, rets = { INTEGER } }),
          },
       }),
       ["_VERSION"] = STRING,
@@ -6599,25 +6658,6 @@ tl.type_check = function(ast, opts)
       return u, store_errs and errs
    end
 
-   local function set_min_arity(f)
-      if f.min_arity then
-         return
-      end
-      local tuple = f.args.tuple
-      local n = #tuple
-      if f.args.is_va then
-         n = n - 1
-      end
-      for i = n, 1, -1 do
-         if tuple[i].opt then
-            n = n - 1
-         else
-            break
-         end
-      end
-      f.min_arity = n
-   end
-
    local function show_arity(f)
       local nfargs = #f.args.tuple
       return f.min_arity < nfargs and
@@ -6694,7 +6734,6 @@ tl.type_check = function(ast, opts)
          local copy = {}
          seen[orig_t] = copy
 
-         copy.opt = t.opt
          copy.typename = t.typename
          copy.filename = t.filename
          copy.x = t.x
@@ -6751,7 +6790,6 @@ tl.type_check = function(ast, opts)
                end
             end
 
-            set_min_arity(t)
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
             copy.args, same = resolve(t.args, same)
@@ -8116,8 +8154,6 @@ a.types[i], b.types[i]), }
             local errs = {}
 
             local aa, ba = a.args.tuple, b.args.tuple
-            set_min_arity(a)
-            set_min_arity(b)
             if (not b.args.is_va) and a.min_arity > b.min_arity then
                table.insert(errs, Err(a, "incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", a.args, b.args))
             else
@@ -8380,7 +8416,7 @@ a.types[i], b.types[i]), }
    local function resolve_for_call(func, args, is_method)
 
       if lax and is_unknown(func) then
-         func = a_function({ args = a_vararg({ UNKNOWN }), rets = a_vararg({ UNKNOWN }) })
+         func = a_fn({ args = va_args({ UNKNOWN }), rets = va_args({ UNKNOWN }) })
       end
 
       func = resolve_tuple_and_nominal(func)
@@ -8700,7 +8736,6 @@ a.types[i], b.types[i]), }
                      end
                   end
                   local wanted = #fargs
-                  set_min_arity(f)
 
 
                   if (passes == 1 and ((given <= wanted and given >= f.min_arity) or (f.args.is_va and given > wanted) or (lax and given <= wanted))) or
@@ -9018,20 +9053,12 @@ a.types[i], b.types[i]), }
    end
 
    local function add_function_definition_for_recursion(node, fnargs)
-      assert(fnargs.typename == "tuple")
-
-
-      local args = a_type("tuple", { tuple = {} })
-      args.is_va = fnargs.is_va
-      for _, fnarg in ipairs(fnargs.tuple) do
-         table.insert(args.tuple, fnarg)
-      end
-
-      add_var(nil, node.name.tk, a_function({
+      add_var(nil, node.name.tk, type_at(node, a_function({
+         min_arity = node.min_arity,
          typeargs = node.typeargs,
-         args = args,
+         args = fnargs,
          rets = get_rets(node.rets),
-      }))
+      })))
    end
 
    local function fail_unresolved()
@@ -10993,14 +11020,12 @@ expand_type(node, values, elements) })
 
             end_function_scope(node)
 
-            local t = ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            local t = type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.min_arity,
                typeargs = node.typeargs,
                args = args,
                rets = get_rets(rets),
-               filename = filename,
-            }))
+            })))
 
             add_var(node, node.name.tk, t)
             return t
@@ -11024,15 +11049,13 @@ expand_type(node, values, elements) })
 
             check_macroexp_arg_use(node.macrodef)
 
-            local t = ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            local t = type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.macrodef.min_arity,
                typeargs = node.typeargs,
                args = args,
                rets = get_rets(rets),
-               filename = filename,
                macroexp = node.macrodef,
-            }))
+            })))
 
             add_var(node, node.name.tk, t)
             return t
@@ -11073,14 +11096,12 @@ expand_type(node, values, elements) })
                return NONE
             end
 
-            add_global(node, node.name.tk, ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            add_global(node, node.name.tk, type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.min_arity,
                typeargs = node.typeargs,
                args = args,
                rets = get_rets(rets),
-               filename = filename,
-            })))
+            }))))
 
             return NONE
          end,
@@ -11137,15 +11158,13 @@ expand_type(node, values, elements) })
                add_var(nil, "self", selftype)
             end
 
-            local fn_type = ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            local fn_type = type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.min_arity,
                is_method = node.is_method,
                typeargs = node.typeargs,
                args = args,
                rets = get_rets(rets),
-               filename = filename,
-            }))
+            })))
 
             local open_t, open_v, owner_name = find_record_to_extend(node.fn_owner)
             local open_k = owner_name .. "." .. node.name.tk
@@ -11212,14 +11231,12 @@ expand_type(node, values, elements) })
             assert(rets.typename == "tuple")
 
             end_function_scope(node)
-            return ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            return type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.min_arity,
                typeargs = node.typeargs,
                args = args,
                rets = rets,
-               filename = filename,
-            }))
+            })))
          end,
       },
       ["macroexp"] = {
@@ -11240,14 +11257,12 @@ expand_type(node, values, elements) })
             assert(rets.typename == "tuple")
 
             end_function_scope(node)
-            return ensure_fresh_typeargs(a_function({
-               y = node.y,
-               x = node.x,
+            return type_at(node, ensure_fresh_typeargs(a_function({
+               min_arity = node.min_arity,
                typeargs = node.typeargs,
                args = args,
                rets = rets,
-               filename = filename,
-            }))
+            })))
          end,
       },
       ["cast"] = {
@@ -11687,9 +11702,6 @@ expand_type(node, values, elements) })
             end
             if node.tk == "..." then
                t = a_vararg({ t })
-            end
-            if node.opt then
-               t = OPT(t)
             end
             add_var(node, node.tk, t).is_func_arg = true
             return t
