@@ -1068,27 +1068,30 @@ local table_types <total>: {TypeName:boolean} = {
 local interface Type
    where self.typename
 
+   typename: TypeName   -- discriminator
+   typeid: integer      -- unique identifier
+
    y: integer
    x: integer
-   filename: string
-   typename: TypeName
-   tk: string
-
-   typeid: integer
-
    yend: integer
    xend: integer
+   filename: string
 
    inferred_at: Where
 
    -- Lua compatibilty
    needs_compat: boolean
 
-   -- arguments: optional arity
-   opt: boolean
+   -- markers for arguments:
+   opt: boolean      -- optional arity
+   is_self: boolean  -- used as self
+end
 
-   -- function argument
-   is_self: boolean
+local record StringType
+   is Type
+   where self.typename == "string"
+
+   literal: string
 end
 
 local record TypeDeclType
@@ -1684,7 +1687,7 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
       filename = ps.filename,
       y = token.y,
       x = token.x,
-      tk = token.tk
+      --tk = token.tk
    })
 end
 
@@ -5496,12 +5499,12 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
        or t.typename == "boolean"
        or t.typename == "thread" then
       return t.typename
-   elseif t.typename == "string" then
+   elseif t is StringType then
       if short then
          return "string"
       else
          return t.typename ..
-                (t.tk and " " .. t.tk or "")
+                (t.literal and string.format(" %q", t.literal) or "")
       end
    elseif t is TypeVarType then
       return display_typevar(t.typevar)
@@ -6680,7 +6683,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local rt = find_var_type(t.typevar)
       if not rt then
          return nil
-      elseif rt.typename == "string" then
+      elseif rt is StringType then
          -- tk is not propagated
          return STRING
       end
@@ -7026,12 +7029,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function drop_constant_value(t: Type): Type
-      if not t.tk then
-         return t
+      if t is StringType and t.literal then
+         local ret = shallow_copy_table(t)
+         ret.literal = nil
+         return ret
       end
-      local ret = shallow_copy_table(t)
-      ret.tk = nil
-      return ret
+      return t
    end
 
    local function reserve_symbol_list_slot(node: Node)
@@ -7545,7 +7548,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                table.insert(stack, s)
             end
          else
-            if primitive[t.typename] and (flatten_constants or not t.tk) then
+            if primitive[t.typename] and (flatten_constants or (t is StringType and not t.literal)) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
                   table.insert(ts, t)
@@ -7993,12 +7996,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["string"] = compare_true,
       },
       ["string"] = {
-         ["enum"] = function(a: Type, b: EnumType): boolean, {Error}
-            if not a.tk then
+         ["enum"] = function(a: StringType, b: EnumType): boolean, {Error}
+            if not a.literal then
                return false, { Err(a, "string is not a %s", b) }
             end
 
-            if b.enumset[unquote(a.tk)] then
+            if b.enumset[a.literal] then
                return true
             end
 
@@ -8846,7 +8849,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       tbl = resolve_tuple_and_nominal(tbl)
 
-      if tbl.typename == "string" or tbl is EnumType then
+      if tbl is StringType or tbl is EnumType then
          tbl = find_var_type("string") -- simulate string metatable
       end
 
@@ -9224,8 +9227,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
-      elseif bnode.kind == "string" then
-         local t, e = match_record_key(orig_a, anode, bnode.conststr)
+      elseif b is StringType and b.literal then
+         local t, e = match_record_key(orig_a, anode, b.literal)
          if t then
             return t
          end
@@ -9267,7 +9270,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       else
          if not is_a(new, old) then
             if old is MapType and new is RecordLikeType then
-               if old.keys.typename == "string" then
+               local old_keys = old.keys
+               if old_keys is StringType then
                   for _, ftype in fields_of(new) do
                      old.values = expand_type(where, old.values, ftype)
                   end
@@ -9295,7 +9299,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                old.field_order = nil
                old.meta_fields = nil
                old.meta_fields = nil
-               -- FIXME what about meta_fields
 
                edit_type(old, "map")
                assert(old is MapType)
@@ -9303,8 +9306,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                old.values = values
             elseif old is UnionType then
                edit_type(old, "union")
-               new.tk = nil
-               table.insert(old.types, new)
+               table.insert(old.types, drop_constant_value(new))
             else
                return unite({ old, new }, true)
             end
@@ -10109,8 +10111,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          else
             is_map = true
-            child.ktype.tk = nil
-            keys = expand_type(node, keys, child.ktype)
+            keys = expand_type(node, keys, drop_constant_value(child.ktype))
             values = expand_type(node, values, uvtype)
          end
       end
@@ -10134,7 +10135,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          } as RecordType)
          -- TODO adopt logic from is_array below when we accept tupletable as an interface
       elseif is_record and is_map then
-         if keys.typename == "string" then
+         if keys is StringType then
             for _, fname in ipairs(field_order) do
                values = expand_type(node, values, fields[fname])
             end
@@ -10749,8 +10750,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not expected then
                -- if at the toplevel
                expected = infer_at(node, got)
-               module_type = resolve_tuple_and_nominal(expected)
-               module_type.tk = nil
+               module_type = drop_constant_value(resolve_tuple_and_nominal(expected))
                st[2]["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
@@ -11391,9 +11391,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   x = node.e2.x,
                   tk = node.e2.tk,
                   kind = "string",
-                  conststr = node.e2.tk,
                }
-               local btype = type_at(node.e2, a_type("string", { tk = '"' ..node.e2.tk .. '"' }))
+               local btype = type_at(node.e2, a_type("string", { literal = node.e2.tk } as StringType))
                local t = type_check_index(node.e1, bnode, orig_a, btype)
 
                if t.needs_compat and opts.gen_compat ~= "off" then
@@ -11472,8 +11471,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.known = nil
                   t = a
 
-               elseif ((ra is EnumType and rb.typename == "string" and is_a(rb, ra))
-                  or (ra.typename == "string" and rb is EnumType and is_a(ra, rb))) then
+               elseif ((ra is EnumType and rb is StringType and is_a(rb, ra))
+                  or (ra is StringType and rb is EnumType and is_a(ra, rb))) then
                   node.known = nil
                   t = (ra is EnumType and ra or rb)
 
@@ -11501,7 +11500,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   else
                      t = resolve_tuple(a)
                   end
-                  t.tk = nil
+                  t = drop_constant_value(t)
                end
 
                if t then
@@ -11515,8 +11514,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 --                  check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb)
 --               end
 
-               if ra is EnumType and rb.typename == "string" then
-                  if not (rb.tk and ra.enumset[unquote(rb.tk)]) then
+               if ra is EnumType and rb is StringType then
+                  if not (rb.literal and ra.enumset[rb.literal]) then
                      return invalid_at(node, "%s is not a member of %s", b, a)
                   end
                elseif ra is TupleTableType and rb is TupleTableType and #ra.types ~= #rb.types then
@@ -11754,12 +11753,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function after_literal(node: Node): Type
       node.known = FACT_TRUTHY
-      return type_at(node, a_type(node.kind as TypeName, { tk = node.tk }))
+      return type_at(node, a_type(node.kind as TypeName, {}))
    end
 
    visit_node.cbs["string"] = {
       after = function(node: Node, _children: {Type}): Type
-         local t = after_literal(node)
+         local t = after_literal(node) as StringType
+         t.literal = node.conststr
 
          local expected = node.expected
          if expected and expected is EnumType and is_a(t, expected) then
@@ -11928,12 +11928,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                            local record_name = typ.declname
                            if record_name then
                               local selfarg = fargs[1] as NominalType
-                              if selfarg.tk ~= record_name or (typ.typeargs and not selfarg.typevals) then
+                              if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
                                  ftype.is_method = false
                                  selfarg.is_self = false
                               elseif typ.typeargs then
                                  for j=1,#typ.typeargs do
-                                    if (not selfarg.typevals[j]) or selfarg.typevals[j].tk ~= typ.typeargs[j].typearg then
+                                    local tv = selfarg.typevals[j]
+                                    if not (tv and tv is TypeVarType and tv.typevar == typ.typeargs[j].typearg) then
                                        ftype.is_method = false
                                        selfarg.is_self = false
                                        break
