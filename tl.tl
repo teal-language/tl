@@ -1082,9 +1082,7 @@ local interface Type
    -- Lua compatibilty
    needs_compat: boolean
 
-   -- markers for arguments:
    opt: boolean      -- optional arity
-   is_self: boolean  -- used as self
 end
 
 local record StringType
@@ -1584,7 +1582,7 @@ local parse_expression: function(ParseState, integer): integer, Node, integer
 local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node
-local parse_argument_type_list: function(ParseState, integer): integer, TupleType
+local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean
 local parse_type: function(ParseState, integer): integer, Type, integer
 local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
@@ -1991,14 +1989,11 @@ local function parse_function_type(ps: ParseState, i: integer): integer, Functio
       i, typ.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
    if ps.tokens[i].tk == "(" then
-      i, typ.args = parse_argument_type_list(ps, i)
+      i, typ.args, typ.is_method = parse_argument_type_list(ps, i)
       i, typ.rets = parse_return_types(ps, i)
    else
       typ.args = a_vararg { ANY }
       typ.rets = a_vararg { ANY }
-   end
-   if typ.args.tuple[1] and typ.args.tuple[1].is_self then
-      typ.is_method = true
    end
    return i, typ
 end
@@ -2652,17 +2647,19 @@ parse_argument_list = function(ps: ParseState, i: integer): integer, Node
    return i, node
 end
 
-local record TypeAndVararg
+local record ArgumentInfo
    i: integer
    type: Type
    is_va: boolean
+   is_self: boolean
 end
 
-local function parse_argument_type(ps: ParseState, i: integer): integer, TypeAndVararg, integer
+local function parse_argument_type(ps: ParseState, i: integer): integer, ArgumentInfo, integer
+   local opt = false
    local is_va = false
+   local is_self = false
    local argument_name: string = nil
 
-   local opt = false
    if ps.tokens[i].kind == "identifier" then
       argument_name = ps.tokens[i].tk
       if ps.tokens[i + 1].tk == "?" then
@@ -2697,29 +2694,28 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, TypeAnd
       end
 
       if argument_name == "self" then
-         typ = shallow_copy_new_type(typ)
-         typ.is_self = true
+         is_self = true
       end
    end
 
-   return i, { i = i, type = typ, is_va = is_va }, 0
+   return i, { i = i, type = typ, is_va = is_va, is_self = is_self }, 0
 end
 
-parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type
-   local tvs: {TypeAndVararg} = {}
-   i = parse_bracket_list(ps, i, tvs, "(", ")", "sep", parse_argument_type)
+parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type, boolean
+   local ars: {ArgumentInfo} = {}
+   i = parse_bracket_list(ps, i, ars, "(", ")", "sep", parse_argument_type)
    local t, list = new_tuple(ps, i)
-   local n = #tvs
-   for l, tv in ipairs(tvs) do
-      list[l] = tv.type
-      if tv.is_va and l < n then
-         fail(ps, tv.i, "'...' can only be last argument")
+   local n = #ars
+   for l, ar in ipairs(ars) do
+      list[l] = ar.type
+      if ar.is_va and l < n then
+         fail(ps, ar.i, "'...' can only be last argument")
       end
    end
-   if tvs[n] and tvs[n].is_va then
+   if n > 0 and ars[n].is_va then
       t.is_va = true
    end
-   return i, t
+   return i, t, (n > 0 and ars[1].is_self)
 end
 
 local function parse_identifier(ps: ParseState, i: integer): integer, Node, integer
@@ -7844,7 +7840,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local argdelta = a.is_method and 1 or 0
             local naargs, nbargs = #a.args.tuple, #b.args.tuple
             if naargs ~= nbargs then
-               if a.is_method ~= b.is_method then
+               if (not not a.is_method) ~= (not not b.is_method) then
                   return false, { Err(a, "different number of input arguments: method and non-method are not the same type") }
                end
                return false, { Err(a, "different number of input arguments: got " .. naargs - argdelta .. ", expected " .. nbargs - argdelta) }
@@ -11896,19 +11892,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                      if ftype.is_method then
                         local fargs = ftype.args.tuple
-                        if fargs[1] and fargs[1].is_self then
+                        if fargs[1] then
                            local record_name = typ.declname
                            if record_name then
                               local selfarg = fargs[1] as NominalType
                               if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
                                  ftype.is_method = false
-                                 selfarg.is_self = false
                               elseif typ.typeargs then
                                  for j=1,#typ.typeargs do
                                     local tv = selfarg.typevals[j]
                                     if not (tv and tv is TypeVarType and tv.typevar == typ.typeargs[j].typearg) then
                                        ftype.is_method = false
-                                       selfarg.is_self = false
                                        break
                                     end
                                  end
