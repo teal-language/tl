@@ -1368,43 +1368,23 @@ local enum FactType
    "truthy" -- expression that is either truthy or a runtime error
 end
 
---local record Fact
---   fact: FactType
---   where: Node
---
---   -- is
---   var: string
---   typ: Type
---
---   -- not, and, or
---   f1: Fact
---   f2: Fact
---
---   metamethod __call: function(Fact, Fact): Fact
---end
-
-local type Fact
-   = TruthyFact
-   | NotFact
-   | AndFact
-   | OrFact
-   | IsFact
-   | EqFact
-
-local record TruthyFact
-   where self.fact == "truthy"
+local interface Fact
+   where self.fact
 
    fact: FactType
    where: Where
+end
+
+local record TruthyFact
+   is Fact
+   where self.fact == "truthy"
 
    metamethod __call: function(Fact, Fact): TruthyFact
 end
 
 local record NotFact
+   is Fact
    where self.fact == "not"
-
-   fact: FactType
-   where: Where
 
    f1: Fact
 
@@ -1412,10 +1392,8 @@ local record NotFact
 end
 
 local record AndFact
+   is Fact
    where self.fact == "and"
-
-   fact: FactType
-   where: Where
 
    f1: Fact
    f2: Fact
@@ -1424,10 +1402,8 @@ local record AndFact
 end
 
 local record OrFact
+   is Fact
    where self.fact == "or"
-
-   fact: FactType
-   where: Where
 
    f1: Fact
    f2: Fact
@@ -1436,10 +1412,8 @@ local record OrFact
 end
 
 local record EqFact
+   is Fact
    where self.fact == "=="
-
-   fact: FactType
-   where: Where
 
    var: string
    typ: Type
@@ -1448,10 +1422,8 @@ local record EqFact
 end
 
 local record IsFact
+   is Fact
    where self.fact == "is"
-
-   fact: FactType
-   where: Where
 
    var: string
    typ: Type
@@ -9732,7 +9704,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return eval_not(f.f1)
          elseif f is AndFact then
             return and_facts(eval_fact(f.f1), eval_fact(f.f2))
-         else -- f is OrFact
+         elseif f is OrFact then
             return or_facts(eval_fact(f.f1), eval_fact(f.f2))
          end
       end
