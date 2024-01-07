@@ -4916,7 +4916,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
    else
       code = out
    end
-   return concat_output(code)
+   return (concat_output(code):gsub(" *\n", "\n"))
 end
 
 
