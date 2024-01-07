@@ -1,6 +1,415 @@
 
 local VERSION = "0.15.3+dev"
 
+local stdlib = [=====[
+
+do
+   global type any
+   global type thread
+   global type userdata
+
+   local enum FileStringMode
+      "a" "l" "L" "*a" "*l" "*L"
+   end
+
+   local enum FileNumberMode
+      "n" "*n"
+   end
+
+   local enum FileMode
+      "a" "l" "L" "*a" "*l" "*L" "n" "*n"
+   end
+
+   global record FILE
+      userdata
+
+      enum SeekWhence
+         "set" "cur" "end"
+      end
+
+      enum SetVBufMode
+         "no" "full" "line"
+      end
+
+      close: function(FILE): boolean, string, number
+      flush: function(FILE)
+
+      lines: function(FILE): (function(): (string))
+      lines: function(FILE, FileNumberMode...): (function(): (number...))
+      lines: function(FILE, (number | FileStringMode)...): (function(): (string...))
+      lines: function(FILE, (number | FileMode)...): (function(): ((string | number)...))
+      lines: function(FILE, (number | string)...): (function(): (string...))
+
+      read: function(FILE): string
+      read: function(FILE, FileNumberMode...): number...
+      read: function(FILE, (number | FileStringMode)...): string...
+      read: function(FILE, (number | FileMode)...): ((string | number)...)
+      read: function(FILE, (number | string)...): (string...)
+
+      seek: function(FILE, ? SeekWhence, ? number): integer, string
+      setvbuf: function(FILE, SetVBufMode, ? number)
+
+      write: function(FILE, (string | number)...): FILE, string
+
+      metamethod __close: function(FILE)
+   end
+
+   global record coroutine
+      type Function = function(any...): any...
+
+      create: function(Function): thread
+      close: function(thread): boolean, string
+      isyieldable: function(): boolean
+      resume: function(thread, any...): boolean, any...
+      running: function(): thread, boolean
+      status: function(thread): string
+      wrap: function<F>(F): F
+      yield: function(any...): any...
+   end
+
+   global record debug
+      record GetInfoTable
+         name: string
+         namewhat: string
+         source: string
+         short_src: string
+         linedefined: integer
+         lastlinedefined: integer
+         what: string
+         currentline: integer
+         istailcall: boolean
+         nups: integer
+         nparams: integer
+         isvararg: boolean
+         func: any
+         activelines: {integer:boolean}
+      end
+
+      enum HookEvent
+         "call" "tail call" "return" "line" "count"
+      end
+
+      type HookFunction = function(HookEvent, integer)
+
+      getinfo: function(any): GetInfoTable
+      getinfo: function(any, string): GetInfoTable
+      getinfo: function(thread, any, string): GetInfoTable
+
+      sethook: function(thread, HookFunction, string, number)
+      sethook: function(HookFunction, string, number)
+   end
+
+   global record io
+      enum OpenMode
+         "r" "w" "a" "r+" "w+" "a+"
+         "rb" "wb" "ab" "r+b" "w+b" "a+b"
+         "*r" "*w" "*a" "*r+" "*w+" "*a+"
+         "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
+      end
+
+      close: function(? FILE)
+      input: function(? FILE): FILE
+      flush: function()
+
+      lines: function(? string): (function(): (string))
+      lines: function(? string, FileNumberMode...): (function(): (number...))
+      lines: function(? string, (number | FileStringMode)...): (function(): (string...))
+      lines: function(? string, (number | FileMode)...): (function(): ((string | number)...))
+      lines: function(? string, (number | string)...): (function(): (string...))
+
+      open: function(string, ? OpenMode): FILE, string
+      output: function(? FILE): FILE
+      popen: function(string, ? OpenMode): FILE, string
+
+      read: function(): string
+      read: function(FileNumberMode...): number...
+      read: function((number | FileStringMode)...): string...
+      read: function((number | FileMode)...): ((string | number)...)
+      read: function((number | string)...): (string...)
+
+      stderr: FILE
+      stdin: FILE
+      stdout: FILE
+      tmpfile: function(): FILE
+      type: function(any): string
+      write: function((string | number)...): FILE, string
+   end
+
+   global record math
+      abs: function(integer): integer
+      abs: function(number): number
+
+      acos: function(number): number
+      asin: function(number): number
+      atan: function(number, ? number): number
+      atan2: function(number, number): number
+      ceil: function(number): integer
+      cos: function(number): number
+      cosh: function(number): number
+      deg: function(number): number
+      exp: function(number): number
+      floor: function(number): integer
+
+      fmod: function(integer, integer): integer
+      fmod: function(number, number): number
+
+      frexp: function(number): number, number
+      huge: number
+      ldexp: function(number, number): number
+      log: function(number, ? number): number
+      log10: function(number): number
+
+      max: function(integer...): integer
+      max: function((number | integer)...): number
+      max: function<T>(T...): T
+      max: function(any...): any
+
+      maxinteger: integer --[[needs_compat]]
+
+      min: function(integer...): integer
+      min: function((number | integer)...): number
+      min: function<T>(T...): T
+      min: function(any...): any
+
+      mininteger: integer --[[needs_compat]]
+
+      modf: function(number): integer, number
+      pi: number
+      pow: function(number, number): number
+      rad: function(number): number
+
+      random: function(number, ? number): integer
+      random: function(): number
+
+      randomseed: function(number, number): integer, integer
+      sin: function(number): number
+      sinh: function(number): number
+      sqrt: function(number): number
+      tan: function(number): number
+      tanh: function(number): number
+      tointeger: function(any): integer
+      type: function(any): string
+      ult: function(number, number): boolean
+   end
+
+   global record metatable<T>
+      enum Mode
+         "k" "v" "kv"
+      end
+
+      __call: function(T, any...): any...
+      __mode: Mode
+      __name: string
+      __tostring: function(T): string
+      __pairs: function<K, V>(T): (function(): (K, V))
+
+      __index: any --[[FIXME: function | table | anything with an __index metamethod]]
+      __newindex: any --[[FIXME: function | table | anything with an __index metamethod]]
+
+      __gc: function(T)
+      __close: function(T)
+
+      __add: function(any, any): any
+      __sub: function(any, any): any
+      __mul: function(any, any): any
+      __div: function(any, any): any
+      __idiv: function(any, any): any
+      __mod: function(any, any): any
+      __pow: function(any, any): any
+      __band: function(any, any): any
+      __bor: function(any, any): any
+      __bxor: function(any, any): any
+      __shl: function(any, any): any
+      __shr: function(any, any): any
+      __concat: function(any, any): any
+
+      __len: function(T): any
+      __unm: function(T): any
+      __bnot: function(T): any
+
+      __eq: function(any, any): boolean
+      __lt: function(any, any): boolean
+      __le: function(any, any): boolean
+   end
+
+   global record os
+      record DateTable
+         year: integer
+         month: integer
+         day: integer
+         hour: integer
+         min: integer
+         sec: integer
+         wday: integer
+         yday: integer
+         isdst: boolean
+      end
+
+      enum DateMode
+         "!*t" "*t"
+      end
+
+      clock: function(): number
+
+      date: function(DateMode, ? number): DateTable
+      date: function(? string, ? number): string
+
+      difftime: function(number, number): number
+      execute: function(string): boolean, string, integer
+      exit: function(? (number | boolean), ? boolean)
+      getenv: function(string): string
+      remove: function(string): boolean, string
+      rename: function(string, string): boolean, string
+      setlocale: function(string, ? string): string
+      time: function(? DateTable): integer
+      tmpname: function(): string
+   end
+
+   global record package
+      config: string
+      cpath: string
+      loaded: {string:any}
+      loaders: { function(string): any, any }
+      path: string
+      preload: {any:any}
+      searchers: { function(string): any }
+   end
+
+   global record string
+      char: function(number...): string
+
+      byte: function(string, ? number): integer
+      byte: function(string, number, number): integer...
+
+      dump: function(function(any...): (any), ? boolean): string
+      find: function(string, string, ? number, ? boolean): integer, integer, string
+      format: function(string, any...): string
+      gmatch: function(string, string): (function(): string...)
+
+      gsub: function(string, string, string, ? number): string, integer
+      gsub: function(string, string, {string:string}, ? number): string, integer
+      gsub: function(string, string, function(string...): (string | number | boolean), ? number): string, integer
+
+      len: function(string): integer
+      lower: function(string): string
+      match: function(string, string, ? number): string...
+      pack: function(string, any...): string
+      packsize: function(string): integer
+      rep: function(string, number, ? string): string
+      reverse: function(string): string
+      sub: function(string, number, ? number): string
+      unpack: function(string, string, ? number): any...
+      upper: function(string): string
+   end
+
+   global record table
+      type SortFunction = function<A>(A, A): boolean
+
+      record PackTable<A>
+         is {A}
+
+         n: integer
+      end
+
+      concat: function({(string | number)}, ? string, ? number, ? number): string
+
+      insert: function<A>({A}, number, A)
+      insert: function<A>({A}, A)
+
+      pack: function<T>(T...): PackTable<T>
+      pack: function(any...): {any:any}
+
+      remove: function<A>({A}, ? number): A
+      sort: function<A>({A}, ? SortFunction<A>)
+
+      unpack: function<A>({A}, ? number, ? number): A... --[[needs_compat]]
+   end
+
+   local record StandardLibrary
+      enum CollectGarbageCommand
+         "collect"
+         "count"
+         "stop"
+         "restart"
+      end
+
+      enum CollectGarbageSetValue
+         "step"
+         "setpause"
+         "setstepmul"
+      end
+
+      enum CollectGarbageIsRunning
+         "isrunning"
+      end
+
+      type LoadFunction = function(): string
+
+      enum LoadMode
+         "b" "t" "bt"
+      end
+
+      type XpcallMsghFunction = function(...: any): ()
+
+      arg: {string}
+      assert: function<A, B>(A, ? B): A
+
+      collectgarbage: function(CollectGarbageCommand): number
+      collectgarbage: function(CollectGarbageSetValue, number): number
+      collectgarbage: function(CollectGarbageIsRunning): boolean
+      collectgarbage: function(string, ? number): (boolean | number)
+
+      error: function(? any, ? number)
+      ipairs: function<A>({A}): (function():(integer, A))
+
+      load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
+      load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
+
+      next: function<K, V>({K:V}, ? K): (K, V)
+      next: function<A>({A}, ? integer): (integer, A)
+
+      pairs: function<K, V>({K:V}): (function():(K, V))
+      pcall: function(function(any...):(any...), any...): boolean, any...
+      print: function(any...)
+      require: function(string): any
+
+      select: function<T>(number, T...): T
+      select: function(number, any...): any
+      select: function(string, any...): integer
+
+      setmetatable: function<T>(T, metatable<T>): T
+
+      tonumber: function(any): number
+      tonumber: function(any, number): integer
+
+      tostring: function(any): string
+      type: function(any): string
+      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any...
+      _VERSION: string
+   end
+
+   global arg <const> = StandardLibrary.arg
+   global assert <const> = StandardLibrary.assert
+   global collectgarbage <const> = StandardLibrary.collectgarbage
+   global error <const> = StandardLibrary.error
+   global load <const> = StandardLibrary.load
+   global next <const> = StandardLibrary.next
+   global pairs <const> = StandardLibrary.pairs
+   global pcall <const> = StandardLibrary.pcall
+   global print <const> = StandardLibrary.print
+   global require <const> = StandardLibrary.require
+   global select <const> = StandardLibrary.select
+   global setmetatable <const> = StandardLibrary.setmetatable
+   global tostring <const> = StandardLibrary.tostring
+   global tonumber <const> = StandardLibrary.tonumber
+   global ipairs <const> = StandardLibrary.ipairs
+   global type <const> = StandardLibrary.type
+   global xpcall <const> = StandardLibrary.xpcall
+   global _VERSION <const> = StandardLibrary._VERSION
+end
+
+]=====]
+
 local record tl
    enum LoadMode
       "b"
@@ -1692,10 +2101,10 @@ local macroexp a_union(t: {Type}): UnionType
    return a_type("union", { types = t } as UnionType)
 end
 
-local macroexp a_poly(t: {FunctionType}): PolyType
-   return a_type("poly", { types = t } as PolyType)
-end
-
+--local macroexp a_poly(t: {FunctionType}): PolyType
+--   return a_type("poly", { types = t } as PolyType)
+--end
+--
 local function a_function(t: FunctionType): FunctionType
    assert(t.min_arity)
    return a_type("function", t)
@@ -1707,10 +2116,10 @@ local record Opt
    opttype: Type
 end
 
-local function OPT(t: Type): Opt
-   return { opttype = t }
-end
-
+--local function OPT(t: Type): Opt
+--   return { opttype = t }
+--end
+--
 local record Args
    is {Type|Opt}
 
@@ -4991,7 +5400,6 @@ local skip_types: {TypeName: boolean} = {
    ["none"] = true,
    ["literal_table_item"] = true,
    ["unresolved"] = true,
-   ["typedecl"] = true,
 }
 
 local get_typenum: function(trenv: TypeReportEnv, t: Type): integer
@@ -5055,12 +5463,14 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    n = trenv.next_num
 
    local rt = t
+   if rt is TupleType and #rt.tuple == 1 then
+      rt = rt.tuple[1]
+   end
+
    if rt is TypeDeclType then
       rt = rt.def
    elseif rt is TypeAliasType then
       rt = rt.alias_to
-   elseif rt is TupleType and #rt.tuple == 1 then
-      rt = rt.tuple[1]
    end
 
    local ti: TypeInfo = {
@@ -5150,10 +5560,10 @@ local CIRCULAR_REQUIRE = a_type("circular_require", {})
 
 local FUNCTION = a_fn { args = va_args { ANY }, rets = va_args { ANY } }
 
-local NOMINAL_FILE = a_type("nominal", { names = {"FILE"} } as NominalType)
+--local NOMINAL_FILE = a_type("nominal", { names = {"FILE"} } as NominalType)
 local XPCALL_MSGH_FUNCTION = a_fn { args = { ANY }, rets = { } }
 
-local USERDATA = ANY -- Placeholder for maybe having a userdata "primitive" type
+--local USERDATA = ANY -- Placeholder for maybe having a userdata "primitive" type
 
 local numeric_binop = {
    ["number"] = {
@@ -5793,515 +6203,9 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
    node.e2[4] = e2
 end
 
+local stdlib_globals: {string:Variable} = nil
 local globals_typeid: integer
 local fresh_typevar_ctr = 1
-
-local function init_globals(lax: boolean): {string:Variable}, {string:Type}
-   local globals: {string:Variable} = {}
-   local stdlib_compat = get_stdlib_compat(lax)
-
-   -- ensure globals are always initialized with the same typeids
-   local is_first_init = globals_typeid == nil
-
-   local save_typeid = last_typeid
-   if is_first_init then
-      globals_typeid = new_typeid()
-   else
-      last_typeid = globals_typeid
-   end
-
-   local function a_record(t: RecordType): RecordType
-      t = a_type("record", t)
-      assert(t.fields)
-      t.field_order = sorted_keys(t.fields)
-      return t
-   end
-
-   local function a_generic<T is Type>(n: integer, f: function(...: TypeVarType): (T)): T
-      local typevars = {}
-      local typeargs = {}
-      local c = string.byte("A") - 1
-      fresh_typevar_ctr = fresh_typevar_ctr + 1
-      for i = 1, n do
-         local name = string.char(c + i) .. "@" .. fresh_typevar_ctr
-         typevars[i] = a_type("typevar", { typevar = name } as TypeVarType)
-         typeargs[i] = a_type("typearg", { typearg = name } as TypeArgType)
-      end
-      local t = f(table.unpack(typevars))
-      if t is FunctionType or t is RecordType then
-         t.typeargs = typeargs
-      end
-      return t
-   end
-
-   local function a_gfunction(n: integer, f: function(...: TypeVarType): FuncArgs): FunctionType
-      return a_generic(n, function(...: TypeVarType): FunctionType return a_fn(f(...)) end)
-   end
-
-   local function a_grecord(n: integer, f: function(...: TypeVarType): RecordType): RecordType
-      local t = a_generic(n, f)
-      t.field_order = sorted_keys(t.fields)
-      return t
-   end
-
-   local function an_enum(keys: {string}): EnumType
-      local t = a_type("enum", { enumset = {} } as EnumType)
-      for _, k in ipairs(keys) do
-         t.enumset[k] = true
-      end
-      return t
-   end
-
-   local type TypeConstructor = function({Type}): Args
-
-   local record ArgsRets
-      ctor: TypeConstructor
-      args: {Type}
-      rets: {Type}
-   end
-
-   local function id<T>(x: T): T
-      return x
-   end
-
-   local file_reader_poly_types: {ArgsRets} = {
-      { ctor = va_args, args = { a_union { NUMBER, an_enum { "*a", "a", "*l", "l", "*L", "L" } } }, rets = { STRING } },
-      { ctor = id, args = { an_enum { "*n", "n" } }, rets = { NUMBER, STRING } },
-      { ctor = va_args, args = { a_union { NUMBER, an_enum { "*a", "a", "*l", "l", "*L", "L", "*n", "n" } } }, rets = { a_union { STRING, NUMBER } } },
-      { ctor = va_args, args = { a_union { NUMBER, STRING } }, rets = { STRING } },
-      { ctor = va_args, args = { }, rets = { STRING } },
-   }
-
-   local function a_file_reader(fn: (function(ctor: TypeConstructor, args: {Type}, rets: {Type}): FunctionType)): Type
-      local t = a_poly {}
-      for _, entry in ipairs(file_reader_poly_types) do
-         local args = shallow_copy_table(entry.args)
-         local rets = shallow_copy_table(entry.rets)
-         table.insert(t.types, fn(entry.ctor, args, rets))
-      end
-      return t
-   end
-
-   local LOAD_FUNCTION = a_fn { args = {}, rets = { STRING } }
-
-   local OS_DATE_TABLE = a_record {
-      fields = {
-         ["year"] = INTEGER,
-         ["month"] = INTEGER,
-         ["day"] = INTEGER,
-         ["hour"] = INTEGER,
-         ["min"] = INTEGER,
-         ["sec"] = INTEGER,
-         ["wday"] = INTEGER,
-         ["yday"] = INTEGER,
-         ["isdst"] = BOOLEAN,
-      }
-   }
-
-   local DEBUG_GETINFO_TABLE = a_record {
-      fields = {
-         ["name"] = STRING,
-         ["namewhat"] = STRING,
-         ["source"] = STRING,
-         ["short_src"] = STRING,
-         ["linedefined"] = INTEGER,
-         ["lastlinedefined"] = INTEGER,
-         ["what"] = STRING,
-         ["currentline"] = INTEGER,
-         ["istailcall"] = BOOLEAN,
-         ["nups"] = INTEGER,
-         ["nparams"] = INTEGER,
-         ["isvararg"] = BOOLEAN,
-         ["func"] = ANY,
-         ["activelines"] = a_map(INTEGER, BOOLEAN),
-      }
-   }
-
-   local DEBUG_HOOK_EVENT = an_enum { "call", "tail call", "return", "line", "count" }
-
-   local DEBUG_HOOK_FUNCTION = a_fn {
-      args = { DEBUG_HOOK_EVENT, INTEGER },
-      rets = {},
-   }
-
-   local TABLE_SORT_FUNCTION = a_gfunction(1, function(a: Type): FuncArgs return { args = { a, a }, rets = { BOOLEAN } } end)
-
-   local metatable_nominals: {NominalType} = {}
-
-   local function METATABLE(a: Type): Type
-      local t = a_type("nominal", { names = {"metatable"}, typevals = { a } } as NominalType)
-      table.insert(metatable_nominals, t)
-      return t
-   end
-
-   local standard_library: {string:Type} = {
-      ["..."] = a_vararg { STRING },
-      ["any"] = a_typedecl(ANY),
-      ["arg"] = an_array(STRING),
-      ["assert"] = a_gfunction(2, function(a: Type, b: Type): FuncArgs return { args = { a, OPT(b) }, rets = { a } } end),
-      ["collectgarbage"] = a_poly {
-         a_fn { args = { an_enum { "collect", "count", "stop", "restart" } }, rets = { NUMBER } },
-         a_fn { args = { an_enum { "step", "setpause", "setstepmul" }, NUMBER }, rets = { NUMBER } },
-         a_fn { args = { an_enum { "isrunning" } }, rets = { BOOLEAN } },
-         a_fn { args = { STRING, OPT(NUMBER) }, rets = { a_union { BOOLEAN, NUMBER } } },
-      },
-      ["dofile"] = a_fn { args = { OPT(STRING) }, rets = va_args { ANY } },
-      ["error"] = a_fn { args = { ANY, OPT(NUMBER) }, rets = {} },
-      ["getmetatable"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { a }, rets = { METATABLE(a) } } end),
-      ["ipairs"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a) }, rets = {
-         a_fn { args = {}, rets = { INTEGER, a } },
-      } } end),
-      ["load"] = a_fn { args = { a_union { STRING, LOAD_FUNCTION }, OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = { FUNCTION, STRING } },
-      ["loadfile"] = a_fn { args = { OPT(STRING), OPT(STRING), OPT(TABLE) }, rets = { FUNCTION, STRING } },
-      ["next"] = a_poly {
-         a_gfunction(2, function(a: Type, b: Type): FuncArgs return { args = { a_map(a, b), OPT(a) }, rets = { a, b } } end),
-         a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), OPT(a) }, rets = { INTEGER, a } } end),
-      },
-      ["pairs"] = a_gfunction(2, function(a: Type, b: Type): FuncArgs return { args = { a_map(a, b) }, rets = {
-         a_fn { args = {}, rets = { a, b } },
-      } } end),
-      ["pcall"] = a_fn { args = va_args { FUNCTION, ANY }, rets = va_args { BOOLEAN, ANY } },
-      ["xpcall"] = a_fn { args = va_args { FUNCTION, XPCALL_MSGH_FUNCTION, ANY }, rets = va_args { BOOLEAN, ANY } },
-      ["print"] = a_fn { args = va_args { ANY }, rets = {} },
-      ["rawequal"] = a_fn { args = { ANY, ANY }, rets = { BOOLEAN } },
-      ["rawget"] = a_fn { args = { TABLE, ANY }, rets = { ANY } },
-      ["rawlen"] = a_fn { args = { a_union { TABLE, STRING } }, rets = { INTEGER } },
-      ["rawset"] = a_poly {
-         a_gfunction(2, function(a: Type, b: Type): FuncArgs return { args = { a_map(a, b), a, b }, rets = {} } end),
-         a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), NUMBER, a }, rets = {} } end),
-         a_fn { args = { TABLE, ANY, ANY }, rets = {} },
-      },
-      ["require"] = a_fn { args = { STRING }, rets = {} },
-      ["select"] = a_poly {
-         a_gfunction(1, function(a: Type): FuncArgs return { args = va_args { NUMBER, a }, rets = { a } } end),
-         a_fn { args = va_args { NUMBER, ANY }, rets = { ANY } },
-         a_fn { args = va_args { STRING, ANY }, rets = { INTEGER } },
-      },
-      ["setmetatable"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { a, METATABLE(a) }, rets = { a } } end),
-      ["tonumber"] = a_poly {
-         a_fn { args = { ANY }, rets = { NUMBER } },
-         a_fn { args = { ANY, NUMBER }, rets = { INTEGER } },
-      },
-      ["tostring"] = a_fn { args = { ANY }, rets = { STRING } },
-      ["type"] = a_fn { args = { ANY }, rets = { STRING } },
-      ["FILE"] = a_typedecl(
-         a_record {
-            is_userdata = true,
-            fields = {
-               ["close"] = a_fn { args = { NOMINAL_FILE }, rets = { BOOLEAN, STRING, INTEGER } },
-               ["flush"] = a_fn { args = { NOMINAL_FILE }, rets = {} },
-               ["lines"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
-                  table.insert(args, 1, NOMINAL_FILE)
-                  return a_fn { args = ctor(args), rets = {
-                     a_fn { args = {}, rets = ctor(rets) },
-                  } }
-               end),
-               ["read"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
-                  table.insert(args, 1, NOMINAL_FILE)
-                  return a_fn { args = ctor(args), rets = ctor(rets) }
-               end),
-               ["seek"] = a_fn { args = { NOMINAL_FILE, OPT(STRING), OPT(NUMBER) }, rets = { INTEGER, STRING } },
-               ["setvbuf"] = a_fn { args = { NOMINAL_FILE, STRING, OPT(NUMBER) }, rets = {} },
-               ["write"] = a_fn { args = va_args { NOMINAL_FILE, a_union { STRING, NUMBER } }, rets = { NOMINAL_FILE, STRING } },
-               -- TODO complete...
-            },
-            meta_fields = { ["__close"] = FUNCTION },
-            meta_field_order = { "__close" },
-         }
-      ),
-      ["metatable"] = a_typedecl(
-         a_grecord(1, function(a: Type): RecordType return a_record {
-            fields = {
-               ["__call"] = a_fn { args = va_args { a, ANY }, rets = va_args { ANY } },
-               ["__gc"] = a_fn { args = { a }, rets = {} },
-               ["__index"] = ANY, -- FIXME: function | table | anything with an __index metamethod
-               ["__len"] = a_fn { args = { a }, rets = { ANY } },
-               ["__mode"] = an_enum { "k", "v", "kv" },
-               ["__newindex"] = ANY, -- FIXME: function | table | anything with a __newindex metamethod
-               ["__pairs"] = a_gfunction(2, function(k: Type, v: Type): FuncArgs
-                  return {
-                     args = { a },
-                     rets = { a_fn { args = {}, rets = { k, v } } }
-                  }
-               end),
-               ["__tostring"] = a_fn { args = { a }, rets = { STRING } },
-               ["__name"] = STRING,
-               ["__add"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__sub"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__mul"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__div"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__idiv"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__mod"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__pow"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__unm"] = a_fn { args = { ANY }, rets = { ANY } },
-               ["__band"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__bor"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__bxor"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__bnot"] = a_fn { args = { ANY }, rets = { ANY } },
-               ["__shl"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__shr"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__concat"] = a_fn { args = { ANY, ANY }, rets = { ANY } },
-               ["__eq"] = a_fn { args = { ANY, ANY }, rets = { BOOLEAN } },
-               ["__lt"] = a_fn { args = { ANY, ANY }, rets = { BOOLEAN } },
-               ["__le"] = a_fn { args = { ANY, ANY }, rets = { BOOLEAN } },
-               ["__close"] = a_fn { args = { a }, rets = { } },
-            },
-         } end)
-      ),
-      ["coroutine"] = a_record {
-         fields = {
-            ["create"] = a_fn { args = { FUNCTION }, rets = { THREAD } },
-            ["close"] = a_fn { args = { THREAD }, rets = { BOOLEAN, STRING } },
-            ["isyieldable"] = a_fn { args = {}, rets = { BOOLEAN } },
-            ["resume"] = a_fn { args = va_args { THREAD, ANY }, rets = va_args { BOOLEAN, ANY } },
-            ["running"] = a_fn { args = {}, rets = { THREAD, BOOLEAN } },
-            ["status"] = a_fn { args = { THREAD }, rets = { STRING } },
-            ["wrap"] = a_fn { args = { FUNCTION }, rets = { FUNCTION } },
-            ["yield"] = a_fn { args = va_args { ANY }, rets = va_args { ANY } },
-         }
-      },
-      ["debug"] = a_record {
-         fields = {
-            ["Info"] = a_typedecl(DEBUG_GETINFO_TABLE),
-            ["Hook"] = a_typedecl(DEBUG_HOOK_FUNCTION),
-            ["HookEvent"] = a_typedecl(DEBUG_HOOK_EVENT),
-
-            ["debug"] = a_fn { args = {}, rets = {} },
-            ["gethook"] = a_fn { args = { OPT(THREAD) }, rets = { DEBUG_HOOK_FUNCTION, INTEGER } },
-            ["getlocal"] = a_poly {
-               a_fn { args = { THREAD, FUNCTION, NUMBER }, rets = { STRING } },
-               a_fn { args = { THREAD, NUMBER, NUMBER }, rets = { STRING, ANY } },
-               a_fn { args = { FUNCTION, NUMBER }, rets = { STRING } },
-               a_fn { args = { NUMBER, NUMBER }, rets = { STRING, ANY } },
-            },
-            ["getmetatable"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { a }, rets = { METATABLE(a) } } end),
-            ["getregistry"] = a_fn { args = {}, rets = { TABLE } },
-            ["getupvalue"] = a_fn { args = { FUNCTION, NUMBER }, rets = { ANY } },
-            ["getuservalue"] = a_fn { args = { USERDATA, NUMBER }, rets = { ANY } },
-            ["sethook"] = a_poly {
-               a_fn { args = { THREAD, DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} },
-               a_fn { args = { DEBUG_HOOK_FUNCTION, STRING, NUMBER }, rets = {} },
-            },
-            ["setlocal"] = a_poly {
-               a_fn { args = { THREAD, NUMBER, NUMBER, ANY }, rets = { STRING } },
-               a_fn { args = { NUMBER, NUMBER, ANY }, rets = { STRING } },
-            },
-            ["setmetatable"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { a, METATABLE(a) }, rets = { a } } end),
-            ["setupvalue"] = a_fn { args = { FUNCTION, NUMBER, ANY }, rets = { STRING } },
-            ["setuservalue"] = a_fn { args = { USERDATA, ANY, NUMBER }, rets = { USERDATA } },
-            ["traceback"] = a_poly {
-               a_fn { args = { OPT(THREAD), OPT(STRING), OPT(NUMBER) }, rets = { STRING } },
-               a_fn { args = { OPT(STRING), OPT(NUMBER) }, rets = { STRING } },
-            },
-            ["upvalueid"] = a_fn { args = { FUNCTION, NUMBER }, rets = { USERDATA } },
-            ["upvaluejoin"] = a_fn { args = { FUNCTION, NUMBER, FUNCTION, NUMBER }, rets = {} },
-            ["getinfo"] = a_poly {
-               a_fn { args = { ANY }, rets = { DEBUG_GETINFO_TABLE } },
-               a_fn { args = { ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
-               a_fn { args = { ANY, ANY, STRING }, rets = { DEBUG_GETINFO_TABLE } },
-            },
-         },
-      },
-      ["io"] = a_record {
-         fields = {
-            ["close"] = a_fn { args = { OPT(NOMINAL_FILE) }, rets = { BOOLEAN, STRING } },
-            ["flush"] = a_fn { args = {}, rets = {} },
-            ["input"] = a_fn { args = { OPT(a_union { STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } },
-            ["lines"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
-               return a_fn { args = ctor(args), rets = {
-                  a_fn { args = {}, rets = ctor(rets) },
-               } }
-            end),
-            ["open"] = a_fn { args = { STRING, OPT(STRING) }, rets = { NOMINAL_FILE, STRING } },
-            ["output"] = a_fn { args = { OPT(a_union { STRING, NOMINAL_FILE }) }, rets = { NOMINAL_FILE } },
-            ["popen"] = a_fn { args = { STRING, OPT(STRING) }, rets = { NOMINAL_FILE, STRING } },
-            ["read"] = a_file_reader(function(ctor: TypeConstructor, args: {Type}, rets: {Type}): Type
-               return a_fn { args = ctor(args), rets = ctor(rets) }
-            end),
-            ["stderr"] = NOMINAL_FILE,
-            ["stdin"] = NOMINAL_FILE,
-            ["stdout"] = NOMINAL_FILE,
-            ["tmpfile"] = a_fn { args = {}, rets = { NOMINAL_FILE } },
-            ["type"] = a_fn { args = { ANY }, rets = { STRING } },
-            ["write"] = a_fn { args = va_args { a_union { STRING, NUMBER } }, rets = { NOMINAL_FILE, STRING } },
-         },
-      },
-      ["math"] = a_record {
-         fields = {
-            ["abs"] = a_poly {
-               a_fn { args = { INTEGER }, rets = { INTEGER } },
-               a_fn { args = { NUMBER }, rets = { NUMBER } },
-            },
-            ["acos"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["asin"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["atan"] = a_fn { args = { NUMBER, OPT(NUMBER) }, rets = { NUMBER } },
-            ["atan2"] = a_fn { args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            ["ceil"] = a_fn { args = { NUMBER }, rets = { INTEGER } },
-            ["cos"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["cosh"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["deg"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["exp"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["floor"] = a_fn { args = { NUMBER }, rets = { INTEGER } },
-            ["fmod"] = a_poly {
-               a_fn { args = { INTEGER, INTEGER }, rets = { INTEGER } },
-               a_fn { args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            },
-            ["frexp"] = a_fn { args = { NUMBER }, rets = { NUMBER, NUMBER } },
-            ["huge"] = NUMBER,
-            ["ldexp"] = a_fn { args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            ["log"] = a_fn { args = { NUMBER, OPT(NUMBER) }, rets = { NUMBER } },
-            ["log10"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["max"] = a_poly {
-               a_fn { args = va_args { INTEGER }, rets = { INTEGER } },
-               a_gfunction(1, function(a: Type): FuncArgs return { args = va_args { a }, rets = { a } } end),
-               a_fn { args = va_args { a_union { NUMBER, INTEGER } }, rets = { NUMBER } },
-               a_fn { args = va_args { ANY }, rets = { ANY } },
-            },
-            ["maxinteger"] = a_type("integer", { needs_compat = true }),
-            ["min"] = a_poly {
-               a_fn { args = va_args { INTEGER }, rets = { INTEGER } },
-               a_gfunction(1, function(a: Type): FuncArgs return { args = va_args { a }, rets = { a } } end),
-               a_fn { args = va_args { a_union { NUMBER, INTEGER } }, rets = { NUMBER } },
-               a_fn { args = va_args { ANY }, rets = { ANY } },
-            },
-            ["mininteger"] = a_type("integer", { needs_compat = true }),
-            ["modf"] = a_fn { args = { NUMBER }, rets = { INTEGER, NUMBER } },
-            ["pi"] = NUMBER,
-            ["pow"] = a_fn { args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            ["rad"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["random"] = a_poly {
-               a_fn { args = { NUMBER, OPT(NUMBER) }, rets = { INTEGER } },
-               a_fn { args = {}, rets = { NUMBER } },
-            },
-            ["randomseed"] = a_fn { args = { NUMBER, NUMBER }, rets = { INTEGER, INTEGER } },
-            ["sin"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["sinh"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["sqrt"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["tan"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["tanh"] = a_fn { args = { NUMBER }, rets = { NUMBER } },
-            ["tointeger"] = a_fn { args = { ANY }, rets = { INTEGER } },
-            ["type"] = a_fn { args = { ANY }, rets = { STRING } },
-            ["ult"] = a_fn { args = { NUMBER, NUMBER }, rets = { BOOLEAN } },
-         },
-      },
-      ["os"] = a_record {
-         fields = {
-            ["clock"] = a_fn { args = {}, rets = { NUMBER } },
-            ["date"] = a_poly {
-               a_fn { args = { }, rets = { STRING } },
-               a_fn { args = { an_enum { "!*t", "*t" }, OPT(NUMBER) }, rets = { OS_DATE_TABLE } },
-               a_fn { args = { OPT(STRING), OPT(NUMBER) }, rets = { STRING } },
-            },
-            ["difftime"] = a_fn { args = { NUMBER, NUMBER }, rets = { NUMBER } },
-            ["execute"] = a_fn { args = { STRING }, rets = { BOOLEAN, STRING, INTEGER } },
-            ["exit"] = a_fn { args = { OPT(a_union { NUMBER, BOOLEAN }), OPT(BOOLEAN) }, rets = {} },
-            ["getenv"] = a_fn { args = { STRING }, rets = { STRING } },
-            ["remove"] = a_fn { args = { STRING }, rets = { BOOLEAN, STRING } },
-            ["rename"] = a_fn { args = { STRING, STRING}, rets = { BOOLEAN, STRING } },
-            ["setlocale"] = a_fn { args = { STRING, OPT(STRING) }, rets = { STRING } },
-            ["time"] = a_fn { args = { OPT(OS_DATE_TABLE) }, rets = { INTEGER } },
-            ["tmpname"] = a_fn { args = {}, rets = { STRING } },
-         },
-      },
-      ["package"] = a_record {
-         fields = {
-            ["config"] = STRING,
-            ["cpath"] = STRING,
-            ["loaded"] = a_map(STRING, ANY),
-            ["loaders"] = an_array(a_fn { args = { STRING }, rets = { ANY, ANY } }),
-            ["loadlib"] = a_fn { args = { STRING, STRING }, rets = { FUNCTION } },
-            ["path"] = STRING,
-            ["preload"] = TABLE,
-            ["searchers"] = an_array(a_fn { args = { STRING }, rets = { ANY, ANY } }),
-            ["searchpath"] = a_fn { args = { STRING, STRING, OPT(STRING), OPT(STRING) }, rets = { STRING, STRING } },
-         },
-      },
-      ["string"] = a_record {
-         fields = {
-            ["byte"] = a_poly {
-               a_fn { args = { STRING, OPT(NUMBER) }, rets = { INTEGER } },
-               a_fn { args = { STRING, NUMBER, NUMBER }, rets = va_args { INTEGER } },
-            },
-            ["char"] = a_fn { args = va_args { NUMBER }, rets = { STRING } },
-            ["dump"] = a_fn { args = { FUNCTION, OPT(BOOLEAN) }, rets = { STRING } },
-            ["find"] = a_fn { args = { STRING, STRING, OPT(NUMBER), OPT(BOOLEAN) }, rets = va_args { INTEGER, INTEGER, STRING } },
-            ["format"] = a_fn { args = va_args { STRING, ANY }, rets = { STRING } },
-            ["gmatch"] = a_fn { args = { STRING, STRING }, rets = {
-               a_fn { args = {}, rets = va_args { STRING } },
-            } },
-            ["gsub"] = a_poly {
-               a_fn { args = { STRING, STRING, a_map(STRING, STRING), OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               a_fn { args = { STRING, STRING, a_fn { args = va_args { STRING }, rets = { STRING } }, OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               a_fn { args = { STRING, STRING, a_fn { args = va_args { STRING }, rets = { NUMBER } }, OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               a_fn { args = { STRING, STRING, a_fn { args = va_args { STRING }, rets = { BOOLEAN } }, OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               a_fn { args = { STRING, STRING, a_fn { args = va_args { STRING }, rets = {} }, OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               a_fn { args = { STRING, STRING, OPT(STRING), OPT(NUMBER) }, rets = { STRING, INTEGER } },
-               -- FIXME any other modes
-            },
-            ["len"] = a_fn { args = { STRING }, rets = { INTEGER } },
-            ["lower"] = a_fn { args = { STRING }, rets = { STRING } },
-            ["match"] = a_fn { args = { STRING, OPT(STRING), OPT(NUMBER) }, rets = va_args { STRING } },
-            ["pack"] = a_fn { args = va_args { STRING, ANY }, rets = { STRING } },
-            ["packsize"] = a_fn { args = { STRING }, rets = { INTEGER } },
-            ["rep"] = a_fn { args = { STRING, NUMBER, OPT(STRING) }, rets = { STRING } },
-            ["reverse"] = a_fn { args = { STRING }, rets = { STRING } },
-            ["sub"] = a_fn { args = { STRING, NUMBER, OPT(NUMBER) }, rets = { STRING } },
-            ["unpack"] = a_fn { args = { STRING, STRING, OPT(NUMBER) }, rets = va_args { ANY } },
-            ["upper"] = a_fn { args = { STRING }, rets = { STRING } },
-         },
-      },
-      ["table"] = a_record {
-         fields = {
-            ["concat"] = a_fn { args = { an_array(a_union {STRING, NUMBER }), OPT(STRING), OPT(NUMBER), OPT(NUMBER) }, rets = { STRING } },
-            ["insert"] = a_poly {
-               a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), NUMBER, a }, rets = {} } end),
-               a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), a }, rets = {} } end),
-            },
-            ["move"] = a_poly {
-               a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), NUMBER, NUMBER, NUMBER }, rets = { an_array(a) } }end ),
-               a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), NUMBER, NUMBER, NUMBER, an_array(a) }, rets = { an_array(a) } } end),
-            },
-            ["pack"] = a_fn { args = va_args { ANY }, rets = { TABLE } },
-            ["remove"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), OPT(NUMBER) }, rets = { a } } end),
-            ["sort"] = a_gfunction(1, function(a: Type): FuncArgs return { args = { an_array(a), OPT(TABLE_SORT_FUNCTION) }, rets = {} } end),
-            ["unpack"] = a_gfunction(1, function(a: Type): FuncArgs return { needs_compat = true, args = { an_array(a), OPT(NUMBER), OPT(NUMBER) }, rets = va_args { a } } end),
-         },
-      },
-      ["utf8"] = a_record {
-         fields = {
-            ["char"] = a_fn { args = va_args { NUMBER }, rets = { STRING } },
-            ["charpattern"] = STRING,
-            ["codepoint"] = a_fn { args = { STRING, OPT(NUMBER), OPT(NUMBER) }, rets = va_args { INTEGER } },
-            ["codes"] = a_fn { args = { STRING }, rets = {
-               a_fn { args = { STRING, OPT(NUMBER) }, rets = { NUMBER, NUMBER } },
-            }, },
-            ["len"] = a_fn { args = { STRING, NUMBER, NUMBER }, rets = { INTEGER } },
-            ["offset"] = a_fn { args = { STRING, NUMBER, NUMBER }, rets = { INTEGER } },
-         },
-      },
-      ["_VERSION"] = STRING,
-   }
-
-   NOMINAL_FILE.found = standard_library["FILE"]
-   for _, m in ipairs(metatable_nominals) do
-      m.found = standard_library["metatable"]
-   end
-
-   for name, typ in pairs(standard_library) do
-      globals[name] = { t = typ, needs_compat = stdlib_compat[name], attribute = "const" }
-   end
-
-   -- only global scope and vararg functions accept `...`:
-   -- `@is_va` is an internal sentinel value which is
-   -- `any` if `...` is accepted in this scope or `nil` if it isn't.
-   globals["@is_va"] = { t = ANY }
-
-   if not is_first_init then
-      last_typeid = save_typeid
-   end
-
-   return globals, standard_library
-end
 
 local function set_feat(feat: tl.Feat, default: boolean): boolean
    if feat then
@@ -6342,21 +6246,50 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
       return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
    end
 
-   local globals, standard_library = init_globals(lax)
-
    local env: Env = {
       modules = {},
       loaded = {},
       loaded_order = {},
-      globals = globals,
+      globals = {},
       gen_compat = gen_compat,
       gen_target = gen_target,
    }
 
-   -- make standard library tables available as modules for require()
-   for name, var in pairs(standard_library) do
-      if var is RecordType then
-         env.modules[name] = var
+   if not stdlib_globals then
+      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
+      assert(#syntax_errors == 0)
+      local result = tl.type_check(program, {
+         filename = "@stdlib",
+         env = env
+      })
+      assert(#result.type_errors == 0)
+      stdlib_globals = env.globals;
+
+      -- special cases for compatibility
+      local math_t = (stdlib_globals["math"].t as TypeDeclType).def as RecordType
+      local table_t = (stdlib_globals["table"].t as TypeDeclType).def as RecordType
+      local integer_compat = a_type("integer", { needs_compat = true })
+      math_t.fields["maxinteger"] = integer_compat
+      math_t.fields["mininteger"] = integer_compat
+      table_t.fields["unpack"].needs_compat = true
+
+      -- only global scope and vararg functions accept `...`:
+      -- `@is_va` is an internal sentinel value which is
+      -- `any` if `...` is accepted in this scope or `nil` if it isn't.
+      stdlib_globals["..."] = { t = a_vararg { STRING } }
+      stdlib_globals["@is_va"] = { t = ANY }
+
+      env.globals = {}
+   end
+
+   local stdlib_compat = get_stdlib_compat(lax)
+   for name, var in pairs(stdlib_globals) do
+      env.globals[name] = var
+      var.needs_compat = stdlib_compat[name]
+      local t = var.t
+      if t is TypeDeclType then
+         -- make standard library tables available as modules for require()
+         env.modules[name] = t
       end
    end
 

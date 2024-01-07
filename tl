@@ -186,6 +186,8 @@ do
          for _, err in ipairs(errors) do
             printerr(err.filename .. ":" .. err.y .. ":" .. err.x .. ": " .. (err.msg or ""))
          end
+         printerr("----------------------------------------")
+         printerr(n .. " " .. category .. (n ~= 1 and "s" or ""))
          return true
       end
       return false
@@ -866,6 +868,9 @@ do
       local tr, trenv
       for i, input_file in ipairs(args["file"]) do
          local pok, result = pcall(tl.process, input_file, env)
+         if not pok then
+            die("Internal Compiler Error: " .. result)
+         end
          if pok then
             if result and result.ast then
                tr, trenv = tl.get_types(result, trenv)
