@@ -1383,6 +1383,11 @@ local table_types = {
 
 
 
+
+
+
+
+
 local TruthyFact = {}
 
 
@@ -3233,8 +3238,9 @@ parse_record_body = function(ps, i, def, node)
             return fail(ps, i, "expected a type definition")
          end
 
-         if nt.newtype.typename == "typealias" then
-            nt.newtype.is_nested_alias = true
+         local ntt = nt.newtype
+         if ntt.typename == "typealias" then
+            ntt.is_nested_alias = true
          end
 
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
@@ -3341,8 +3347,9 @@ parse_newtype = function(ps, i)
       end
 
       if def.typename == "nominal" then
-         node.newtype = new_type(ps, itype, "typealias")
-         node.newtype.alias_to = def
+         local typealias = new_type(ps, itype, "typealias")
+         typealias.alias_to = def
+         node.newtype = typealias
       else
          node.newtype = new_typetype(ps, itype, def)
       end
@@ -3895,12 +3902,11 @@ local function recurse_type(ast, visit)
       if ast.vtype then
          table.insert(xs, recurse_type(ast.vtype, visit))
       end
+   elseif ast.typename == "typealias" then
+      table.insert(xs, recurse_type(ast.alias_to, visit))
    else
       if ast.def then
          table.insert(xs, recurse_type(ast.def, visit))
-      end
-      if ast.alias_to then
-         table.insert(xs, recurse_type(ast.alias_to, visit))
       end
    end
 
@@ -6766,6 +6772,7 @@ tl.type_check = function(ast, opts)
          elseif t.typename == "typetype" then
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "typealias" then
+            assert(copy.typename == "typealias")
             copy.alias_to, same = resolve(t.alias_to, same)
             copy.is_nested_alias = t.is_nested_alias
          elseif t.typename == "nominal" then

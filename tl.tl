@@ -1092,14 +1092,19 @@ local interface Type
    closed: boolean
    is_abstract: boolean
 
-   -- typealias
-   alias_to: NominalType
-   is_nested_alias: boolean
 
    -- function argument
    is_self: boolean
 
 
+end
+
+local record TypeAliasType
+   is Type
+   where self.typename == "typealias"
+
+   alias_to: NominalType
+   is_nested_alias: boolean
 end
 
 local record LiteralTableItemType
@@ -3233,8 +3238,9 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, no
             return fail(ps, i, "expected a type definition")
          end
 
-         if nt.newtype.typename == "typealias" then
-            nt.newtype.is_nested_alias = true
+         local ntt = nt.newtype
+         if ntt is TypeAliasType then
+            ntt.is_nested_alias = true
          end
 
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
@@ -3341,8 +3347,9 @@ parse_newtype = function(ps: ParseState, i: integer): integer, Node
       end
 
       if def is NominalType then
-         node.newtype = new_type(ps, itype, "typealias")
-         node.newtype.alias_to = def
+         local typealias = new_type(ps, itype, "typealias") as TypeAliasType
+         typealias.alias_to = def
+         node.newtype = typealias
       else
          node.newtype = new_typetype(ps, itype, def)
       end
@@ -3895,12 +3902,11 @@ local function recurse_type<T>(ast: Type, visit: Visitor<TypeName, Type, T>): T
       if ast.vtype then
          table.insert(xs, recurse_type(ast.vtype, visit))
       end
+   elseif ast is TypeAliasType then
+      table.insert(xs, recurse_type(ast.alias_to, visit))
    else
       if ast.def then
          table.insert(xs, recurse_type(ast.def, visit))
-      end
-      if ast.alias_to then
-         table.insert(xs, recurse_type(ast.alias_to, visit))
       end
    end
 
@@ -4814,7 +4820,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
          after = function(node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             local nt = node.newtype
-            if nt.typename == "typealias" then
+            if nt is TypeAliasType then
                table.insert(out, table.concat(nt.alias_to.names, "."))
             elseif nt.typename == "typetype" then
                local def = nt.def
@@ -5028,7 +5034,7 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    local rt = t
    if rt.typename == "typetype" then
       rt = rt.def
-   elseif rt.typename == "typealias" then
+   elseif rt is TypeAliasType then
       rt = rt.alias_to
    elseif rt is TupleType and #rt.tuple == 1 then
       rt = rt.tuple[1]
@@ -5053,7 +5059,7 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
          rt = t
       end
    end
-   assert(not (rt.typename == "typetype" or rt.typename == "typealias"))
+   assert(not (rt.typename == "typetype" or rt is TypeAliasType))
 
    if rt is RecordLikeType then
       -- store record field info
@@ -5525,7 +5531,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return "nil"
    elseif t.typename == "none" then
       return ""
-   elseif t.typename == "typealias" then
+   elseif t is TypeAliasType then
       return "type " .. show(t.alias_to)
    elseif t.typename == "typetype" then
       return "type " .. show(t.def)
@@ -6524,7 +6530,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             typ = typ.found
          end
       end
-      if typ.typename == "typetype" or typ.typename == "typealias" then
+      if typ.typename == "typetype" or typ is TypeAliasType then
          return typ
       elseif accept_typearg and typ is TypeArgType then
          return typ
@@ -6534,7 +6540,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function union_type(t: Type): string, Type
       if t.typename == "typetype" then
          return union_type(t.def), t.def
-      elseif t.typename == "typealias" then
+      elseif t is TypeAliasType then
          return union_type(t.alias_to), t.alias_to
       elseif t is TupleType then
          return union_type(t.tuple[1]), t.tuple[1]
@@ -6664,7 +6670,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function resolve_typetype(t: Type): Type
       if t.typename == "typetype" then
          return t.def
-      elseif t.typename == "typealias" then
+      elseif t is TypeAliasType then
          return t.alias_to
       else
          return t
@@ -6765,7 +6771,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          elseif t.typename == "typetype" then
             copy.def, same = resolve(t.def, same)
-         elseif t.typename == "typealias" then
+         elseif t is TypeAliasType then
+            assert(copy is TypeAliasType)
             copy.alias_to, same = resolve(t.alias_to, same)
             copy.is_nested_alias = t.is_nested_alias
          elseif t is NominalType then
@@ -6965,7 +6972,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                var.is_func_arg and "argument"
                   or t is FunctionType and "function"
                   or t.typename == "typetype" and "type"
-                  or t.typename == "typealias" and "type"
+                  or t is TypeAliasType and "type"
                   or "variable",
                name,
                show_type(var.t)
@@ -7233,12 +7240,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if var.used_as_type then
                var.declared_at.elide_type = true
             else
-               if (t.typename == "typetype" or t.typename == "typealias") and not is_global then
+               if (t.typename == "typetype" or t is TypeAliasType) and not is_global then
                   var.declared_at.elide_type = true
                end
                table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
             end
-         elseif var.used and (t.typename == "typetype" or t.typename == "typealias") and var.aliasing then
+         elseif var.used and (t.typename == "typetype" or t is TypeAliasType) and var.aliasing then
             var.aliasing.used = true
             var.aliasing.declared_at.elide_type = false
          end
@@ -7379,7 +7386,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          local resolved: Type
 
-         if typetype.typename == "typealias" then
+         if typetype is TypeAliasType then
             typetype = typetype.alias_to.found
          end
 
@@ -7421,7 +7428,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolved
       end
 
-      resolve_typealias = function(typealias: Type): Type, Variable
+      resolve_typealias = function(typealias: TypeAliasType): Type, Variable
          local names = typealias.alias_to.names
          local aliasing = find_var(names[1], "use_type")
          if not aliasing then
@@ -8851,7 +8858,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       if tbl.typename == "typetype" then
          tbl = tbl.def
-      elseif tbl.typename == "typealias" then
+      elseif tbl is TypeAliasType then
          if tbl.is_nested_alias then
             return nil, "cannot use a nested type alias as a concrete value"
          else
@@ -9341,7 +9348,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
          if t.typename == "typetype" then
             t = t.def
-         elseif t.typename == "typealias" then
+         elseif t is TypeAliasType then
             t = t.alias_to.resolved
          end
 
@@ -10277,7 +10284,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       else
          local newtype = value.newtype
-         if newtype.typename == "typealias" then
+         if newtype is TypeAliasType then
             return resolve_typealias(value.newtype)
          else
             return value.newtype, nil
@@ -10303,7 +10310,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local missing: {string}
       for _, key in ipairs(t.field_order) do
          local ftype = t.fields[key]
-         if not (ftype.typename == "typetype" or ftype.typename == "typealias") then
+         if not (ftype.typename == "typetype" or ftype is TypeAliasType) then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -10348,7 +10355,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       local var = resolve_tuple_and_nominal(vartype)
-      if var.typename == "typetype" or var.typename == "typealias" then
+      if var.typename == "typetype" or var is TypeAliasType then
          error_at(where, "cannot reassign a type")
          return nil
       end
@@ -10898,7 +10905,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if not df then
                      error_at(node[i], in_context(node.expected_context, "unknown field " .. ck))
                   else
-                     if df.typename == "typetype" or df.typename == "typealias" then
+                     if df.typename == "typetype" or df is TypeAliasType then
                         error_at(node[i], in_context(node.expected_context, "cannot reassign a type"))
                      else
                         assert_is_a(node[i], cvtype, df, "in record field", ck)
@@ -11869,7 +11876,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                add_var(nil, "@self", type_at(typ, a_typetype({ def = typ })))
 
                for fname, ftype in fields_of(typ) do
-                  if ftype.typename == "typealias" then
+                  if ftype is TypeAliasType then
                      resolve_nominal(ftype.alias_to)
                      add_var(nil, fname, ftype)
                   elseif ftype.typename == "typetype" then
