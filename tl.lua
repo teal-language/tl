@@ -1378,25 +1378,7 @@ local table_types = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local TruthyFact = {}
-
-
 
 
 
@@ -1412,11 +1394,7 @@ local NotFact = {}
 
 
 
-
-
 local AndFact = {}
-
-
 
 
 
@@ -1436,8 +1414,6 @@ local OrFact = {}
 
 
 
-
-
 local EqFact = {}
 
 
@@ -1448,11 +1424,7 @@ local EqFact = {}
 
 
 
-
-
 local IsFact = {}
-
-
 
 
 
@@ -9807,7 +9779,7 @@ a.types[i], b.types[i]), }
             return eval_not(f.f1)
          elseif f.fact == "and" then
             return and_facts(eval_fact(f.f1), eval_fact(f.f2))
-         else
+         elseif f.fact == "or" then
             return or_facts(eval_fact(f.f1), eval_fact(f.f2))
          end
       end
