@@ -137,15 +137,19 @@ local function setup_env(tlconfig, filename)
       lax_mode = false
    end
 
-   local gen_compat = tlconfig["gen_compat"]
-   local gen_target = tlconfig["gen_target"]
-
    tlconfig._init_env_modules = tlconfig._init_env_modules or {}
    if tlconfig.global_env_def then
       table.insert(tlconfig._init_env_modules, 1, tlconfig.global_env_def)
    end
 
-   local env, err = tl.init_env(lax_mode, gen_compat, gen_target, tlconfig._init_env_modules)
+   local opts = {
+      lax_mode = lax_mode,
+      gen_compat = tlconfig["gen_compat"],
+      gen_target = tlconfig["gen_target"],
+      predefined_modules = tlconfig._init_env_modules,
+   }
+
+   local env, err = tl.new_env(opts)
    if not env then
       die(err)
    end
