@@ -1,7 +1,15 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 local VERSION = "0.15.3+dev"
 
-local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
+local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, EnvOptions = {}, }
+
+
+
+
+
+
+
+
 
 
 
@@ -6288,6 +6296,15 @@ a_grecord(1, function(a) return a_record({
    return globals, standard_library
 end
 
+tl.new_env = function(opts)
+   local env, err = tl.init_env(opts.lax_mode, opts.gen_compat, opts.gen_target, opts.predefined_modules)
+   if not env then
+      return nil, err
+   end
+
+   return env
+end
+
 tl.init_env = function(lax, gen_compat, gen_target, predefined)
    if gen_compat == true or gen_compat == nil then
       gen_compat = "optional"
@@ -6311,7 +6328,6 @@ tl.init_env = function(lax, gen_compat, gen_target, predefined)
    local globals, standard_library = init_globals(lax)
 
    local env = {
-      ok = true,
       modules = {},
       loaded = {},
       loaded_order = {},

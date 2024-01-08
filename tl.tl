@@ -131,11 +131,19 @@ local record tl
       tr: TypeReport
    end
 
+   record EnvOptions
+      lax_mode: boolean
+      gen_compat: CompatMode
+      gen_target: TargetMode
+      predefined_modules: {string}
+   end
+
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
    process: function(string, Env, string, FILE): (Result, string)
    process_string: function(string, boolean, Env, ? string, ? string): Result
    gen: function(string, Env, PrettyPrintOptions): string, Result
    type_check: function(Node, TypeCheckOptions): Result, string
+   new_env: function(EnvOptions): Env, string
    init_env: function(? boolean, ? boolean | CompatMode, ? TargetMode, ? {string}): Env, string
    version: function(): string
 
@@ -6288,6 +6296,15 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    return globals, standard_library
 end
 
+tl.new_env = function(opts: tl.EnvOptions): Env, string
+   local env, err = tl.init_env(opts.lax_mode, opts.gen_compat, opts.gen_target, opts.predefined_modules)
+   if not env then
+      return nil, err
+   end
+
+   return env
+end
+
 tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_target?: TargetMode, predefined?: {string}): Env, string
    if gen_compat == true or gen_compat == nil then
       gen_compat = "optional"
@@ -6310,8 +6327,7 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
 
    local globals, standard_library = init_globals(lax)
 
-   local env = {
-      ok = true,
+   local env: Env = {
       modules = {},
       loaded = {},
       loaded_order = {},
