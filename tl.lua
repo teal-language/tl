@@ -91,12 +91,40 @@ do
 
       type HookFunction = function(HookEvent, integer)
 
-      getinfo: function(any): GetInfoTable
-      getinfo: function(any, string): GetInfoTable
-      getinfo: function(thread, any, string): GetInfoTable
+      type AnyFunction = function(any...):any...
 
-      sethook: function(thread, HookFunction, string, number)
-      sethook: function(HookFunction, string, number)
+      debug: function()
+      gethook: function(? thread): HookFunction, integer
+
+      getinfo: function(AnyFunction | number): GetInfoTable
+      getinfo: function(AnyFunction | number, string): GetInfoTable
+      getinfo: function(thread, AnyFunction | number, string): GetInfoTable
+
+      getlocal: function(thread, AnyFunction, number): string
+      getlocal: function(thread, number, number): string, any
+      getlocal: function(AnyFunction, number): string
+      getlocal: function(number, number): string, any
+
+      getmetatable: function<T>(T): metatable<T>
+      getregistry: function(): {any:any}
+      getupvalue: function(AnyFunction, number): any
+      getuservalue: function(userdata, number): any
+
+      sethook: function(thread, HookFunction, string, ? number)
+      sethook: function(HookFunction, string, ? number)
+
+      setlocal: function(thread, number, number, any): string
+      setlocal: function(number, number, any): string
+
+      setmetatable: function<T>(T, metatable<T>): T
+      setupvalue: function(AnyFunction, number, any): string
+      setuservalue: function<U>(U, any, number): U --[[U is userdata]]
+
+      traceback: function(thread, ? string, ? number): string
+      traceback: function(? string, ? number): string
+
+      upvalueid: function(AnyFunction, number): userdata
+      upvaluejoin: function(AnyFunction, number, AnyFunction, number)
    end
 
    global record io
