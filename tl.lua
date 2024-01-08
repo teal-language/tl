@@ -353,6 +353,15 @@ do
       unpack: function<A>({A}, ? number, ? number): A... --[[needs_compat]]
    end
 
+   global record utf8
+      char: function(number...): string
+      charpattern: string
+      codepoint: function(string, ? number, ? number, ? boolean): integer...
+      codes: function(string, ? boolean): (function(string, ? number): (integer, integer))
+      len: function(string, ? number, ? number, ? boolean): integer
+      offset: function(string, number, ? number): integer
+   end
+
    local record StandardLibrary
       enum CollectGarbageCommand
          "collect"
