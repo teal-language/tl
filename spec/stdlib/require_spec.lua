@@ -703,7 +703,7 @@ describe("require", function()
          ["luaunit.d.tl"] = [[
             global type luaunit_runner_t = record
                setOutputType: function(luaunit_runner_t, string)
-               runSuite: function(luaunit_runner_t, any): number
+               runSuite: function(luaunit_runner_t, any): integer
             end
 
             global type luaunit_t = record
