@@ -57,8 +57,8 @@ do
    global record coroutine
       type Function = function(any...): any...
 
-      create: function(Function): thread
       close: function(thread): boolean, string
+      create: function(Function): thread
       isyieldable: function(): boolean
       resume: function(thread, any...): boolean, any...
       running: function(): thread, boolean
@@ -164,9 +164,9 @@ do
    end
 
    global record math
-      abs: function(integer): integer
-      abs: function(number): number
+      type Numeric = number | integer
 
+      abs: function<N is Numeric>(N): N
       acos: function(number): number
       asin: function(number): number
       atan: function(number, ? number): number
@@ -345,6 +345,8 @@ do
       insert: function<A>({A}, integer, A)
       insert: function<A>({A}, A)
 
+      move: function<A>({A}, integer, integer, integer, ? {A}): {A}
+
       pack: function<T>(T...): PackTable<T>
       pack: function(any...): {any:any}
 
@@ -397,11 +399,16 @@ do
       collectgarbage: function(CollectGarbageIsRunning): boolean
       collectgarbage: function(string, ? number): (boolean | number)
 
-      error: function(? any, ? number)
+      dofile: function(? string): any...
+
+      error: function(? any, ? integer)
+      getmetatable: function<T>(T): metatable<T>
       ipairs: function<A>({A}): (function():(integer, A))
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
       load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
+
+      loadfile: function(? string, ? string, ? {any:any}): (function, string)
 
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
@@ -409,6 +416,18 @@ do
       pairs: function<K, V>({K:V}): (function():(K, V))
       pcall: function(function(any...):(any...), any...): boolean, any...
       print: function(any...)
+      rawequal: function(any, any): boolean
+
+      rawget: function<K, V>({K:V}, K): V
+      rawget: function({any:any}, any): any
+      rawget: function(any, any): any
+
+      rawlen: function<A>({A}): integer
+
+      rawset: function<K, V>({K:V}, K, V): {K:V}
+      rawset: function({any:any}, any, any): {any:any}
+      rawset: function(any, any, any): any
+
       require: function(string): any
 
       select: function<T>(integer, T...): T...
@@ -422,6 +441,7 @@ do
 
       tostring: function(any): string
       type: function(any): string
+      warn: function(string, string...)
       xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any...
       _VERSION: string
    end
@@ -429,12 +449,19 @@ do
    global arg <const> = StandardLibrary.arg
    global assert <const> = StandardLibrary.assert
    global collectgarbage <const> = StandardLibrary.collectgarbage
+   global dofile <const> = StandardLibrary.dofile
    global error <const> = StandardLibrary.error
+   global getmetatable <const> = StandardLibrary.getmetatable
    global load <const> = StandardLibrary.load
+   global loadfile <const> = StandardLibrary.loadfile
    global next <const> = StandardLibrary.next
    global pairs <const> = StandardLibrary.pairs
    global pcall <const> = StandardLibrary.pcall
    global print <const> = StandardLibrary.print
+   global rawequal <const> = StandardLibrary.rawequal
+   global rawget <const> = StandardLibrary.rawget
+   global rawlen <const> = StandardLibrary.rawlen
+   global rawset <const> = StandardLibrary.rawset
    global require <const> = StandardLibrary.require
    global select <const> = StandardLibrary.select
    global setmetatable <const> = StandardLibrary.setmetatable
@@ -6373,6 +6400,16 @@ tl.new_env = function(opts: tl.EnvOptions): Env, string
    return env
 end
 
+local function assert_no_stdlib_errors(errors: {Error}, name: string)
+   if #errors ~= 0 then
+      local out = {}
+      for _, err in ipairs(errors) do
+         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
+      end
+      error("Internal Compiler Error: standard library contains " .. name .. ":\n" .. table.concat(out), 2)
+   end
+end
+
 tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_target?: TargetMode, predefined?: {string}): Env, string
    if gen_compat == true or gen_compat == nil then
       gen_compat = "optional"
@@ -6407,12 +6444,13 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
       TL_DEBUG = nil
 
       local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
-      assert(#syntax_errors == 0)
+      assert_no_stdlib_errors(syntax_errors, "syntax errors")
+
       local result = tl.type_check(program, {
          filename = "@stdlib",
          env = env
       })
-      assert(#result.type_errors == 0)
+      assert_no_stdlib_errors(result.type_errors, "type errors")
       stdlib_globals = env.globals
 
       TL_DEBUG = tl_debug
