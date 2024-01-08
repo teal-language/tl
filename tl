@@ -144,6 +144,7 @@ local function setup_env(tlconfig, filename)
 
    local opts = {
       lax_mode = lax_mode,
+      feat_arity = tlconfig["feat_arity"],
       gen_compat = tlconfig["gen_compat"],
       gen_target = tlconfig["gen_target"],
       predefined_modules = tlconfig._init_env_modules,
@@ -292,6 +293,7 @@ local function validate_config(config)
       global_env_def = "string",
       quiet = "boolean",
       skip_compat53 = "boolean",
+      feat_arity = { ["off"] = true, ["on"] = true },
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
@@ -351,6 +353,9 @@ local function get_args_parser()
                              "Use '--werror all' to promote all warnings to errors")
          :argname("<warning>")
          :count("*")
+
+   parser:option("--feat-arity", "Define minimum arities for functions based on optional argument annotations.")
+         :choices({ "off", "on" })
 
    parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
          :choices({ "off", "optional", "required" })
@@ -491,6 +496,8 @@ local function merge_config_and_args(tlconfig, args)
    if args["pretend"] then
       tlconfig["pretend"] = true
    end
+
+   tlconfig["feat_arity"] = args["feat_arity"] or tlconfig["feat_arity"]
 
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
    tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]

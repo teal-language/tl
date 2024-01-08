@@ -151,6 +151,13 @@ local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {
 
 
 
+
+
+
+
+
+
+
 tl.version = function()
    return VERSION
 end
@@ -6296,11 +6303,21 @@ a_grecord(1, function(a) return a_record({
    return globals, standard_library
 end
 
+local function set_feat(feat, default)
+   if feat then
+      return (feat == "on")
+   else
+      return default
+   end
+end
+
 tl.new_env = function(opts)
    local env, err = tl.init_env(opts.lax_mode, opts.gen_compat, opts.gen_target, opts.predefined_modules)
    if not env then
       return nil, err
    end
+
+   env.feat_arity = set_feat(opts.feat_arity, true)
 
    return env
 end
@@ -6353,6 +6370,8 @@ tl.init_env = function(lax, gen_compat, gen_target, predefined)
       end
    end
 
+   env.feat_arity = true
+
    return env
 end
 
@@ -6372,6 +6391,7 @@ tl.type_check = function(ast, opts)
    end
 
    local lax = opts.lax
+   local feat_arity = env.feat_arity
    local filename = opts.filename
 
 
@@ -8752,13 +8772,14 @@ a.types[i], b.types[i]), }
                      end
                   end
                   local wanted = #fargs
+                  local min_arity = feat_arity and f.min_arity or 0
 
 
-                  if (passes == 1 and ((given <= wanted and given >= f.min_arity) or (f.args.is_va and given > wanted) or (lax and given <= wanted))) or
+                  if (passes == 1 and ((given <= wanted and given >= min_arity) or (f.args.is_va and given > wanted) or (lax and given <= wanted))) or
 
                      (passes == 3 and ((pass == 1 and given == wanted) or
 
-                     (pass == 2 and given < wanted and (lax or given >= f.min_arity)) or
+                     (pass == 2 and given < wanted and (lax or given >= min_arity)) or
 
                      (pass == 3 and f.args.is_va and given > wanted))) then
 

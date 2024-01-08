@@ -24,6 +24,11 @@ local record tl
       "5.4"
    end
 
+   enum Feat
+      "on"
+      "off"
+   end
+
    record PrettyPrintOptions
       preserve_indent: boolean
       preserve_newlines: boolean
@@ -50,6 +55,7 @@ local record tl
       gen_target: TargetMode
       keep_going: boolean
       report_types: boolean
+      feat_arity: boolean
    end
 
    record Symbol
@@ -135,6 +141,7 @@ local record tl
       lax_mode: boolean
       gen_compat: CompatMode
       gen_target: TargetMode
+      feat_arity: Feat
       predefined_modules: {string}
    end
 
@@ -6296,11 +6303,21 @@ local function init_globals(lax: boolean): {string:Variable}, {string:Type}
    return globals, standard_library
 end
 
+local function set_feat(feat: tl.Feat, default: boolean): boolean
+   if feat then
+      return (feat == "on")
+   else
+      return default
+   end
+end
+
 tl.new_env = function(opts: tl.EnvOptions): Env, string
    local env, err = tl.init_env(opts.lax_mode, opts.gen_compat, opts.gen_target, opts.predefined_modules)
    if not env then
       return nil, err
    end
+
+   env.feat_arity = set_feat(opts.feat_arity, true)
 
    return env
 end
@@ -6353,6 +6370,8 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
       end
    end
 
+   env.feat_arity = true
+
    return env
 end
 
@@ -6372,6 +6391,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local lax = opts.lax
+   local feat_arity = env.feat_arity
    local filename = opts.filename
 
    local type Scope = {string:Variable}
@@ -8752,13 +8772,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      end
                   end
                   local wanted = #fargs
+                  local min_arity = feat_arity and f.min_arity or 0
 
                   -- simple functions:
-                  if (passes == 1 and ((given <= wanted and given >= f.min_arity) or (f.args.is_va and given > wanted) or (lax and given <= wanted)))
+                  if (passes == 1 and ((given <= wanted and given >= min_arity) or (f.args.is_va and given > wanted) or (lax and given <= wanted)))
                   -- poly, pass 1: try exact arity matches first
                   or (passes == 3 and ((pass == 1 and given == wanted)
                   -- poly, pass 2: then try adjusting with nils to missing arguments or using '...'
-                                    or (pass == 2 and given < wanted and (lax or given >= f.min_arity))
+                                    or (pass == 2 and given < wanted and (lax or given >= min_arity))
                   -- poly, pass 3: then finally try vararg functions
                                     or (pass == 3 and f.args.is_va and given > wanted)))
                   then
