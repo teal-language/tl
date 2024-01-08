@@ -46,8 +46,8 @@ do
       read: function(FILE, (number | FileMode)...): ((string | number)...)
       read: function(FILE, (number | string)...): (string...)
 
-      seek: function(FILE, ? SeekWhence, ? number): integer, string
-      setvbuf: function(FILE, SetVBufMode, ? number)
+      seek: function(FILE, ? SeekWhence, ? integer): integer, string
+      setvbuf: function(FILE, SetVBufMode, ? integer)
 
       write: function(FILE, (string | number)...): FILE, string
 
@@ -96,35 +96,35 @@ do
       debug: function()
       gethook: function(? thread): HookFunction, integer
 
-      getinfo: function(AnyFunction | number): GetInfoTable
-      getinfo: function(AnyFunction | number, string): GetInfoTable
-      getinfo: function(thread, AnyFunction | number, string): GetInfoTable
+      getinfo: function(AnyFunction | integer): GetInfoTable
+      getinfo: function(AnyFunction | integer, string): GetInfoTable
+      getinfo: function(thread, AnyFunction | integer, string): GetInfoTable
 
-      getlocal: function(thread, AnyFunction, number): string
-      getlocal: function(thread, number, number): string, any
-      getlocal: function(AnyFunction, number): string
-      getlocal: function(number, number): string, any
+      getlocal: function(thread, AnyFunction, integer): string
+      getlocal: function(thread, integer, integer): string, any
+      getlocal: function(AnyFunction, integer): string
+      getlocal: function(integer, integer): string, any
 
       getmetatable: function<T>(T): metatable<T>
       getregistry: function(): {any:any}
-      getupvalue: function(AnyFunction, number): any
-      getuservalue: function(userdata, number): any
+      getupvalue: function(AnyFunction, integer): any
+      getuservalue: function(userdata, integer): any
 
-      sethook: function(thread, HookFunction, string, ? number)
-      sethook: function(HookFunction, string, ? number)
+      sethook: function(thread, HookFunction, string, ? integer)
+      sethook: function(HookFunction, string, ? integer)
 
-      setlocal: function(thread, number, number, any): string
-      setlocal: function(number, number, any): string
+      setlocal: function(thread, integer, integer, any): string
+      setlocal: function(integer, integer, any): string
 
       setmetatable: function<T>(T, metatable<T>): T
-      setupvalue: function(AnyFunction, number, any): string
-      setuservalue: function<U>(U, any, number): U --[[U is userdata]]
+      setupvalue: function(AnyFunction, integer, any): string
+      setuservalue: function<U>(U, any, integer): U --[[U is userdata]]
 
-      traceback: function(thread, ? string, ? number): string
-      traceback: function(? string, ? number): string
+      traceback: function(thread, ? string, ? integer): string
+      traceback: function(? string, ? integer): string
 
-      upvalueid: function(AnyFunction, number): userdata
-      upvaluejoin: function(AnyFunction, number, AnyFunction, number)
+      upvalueid: function(AnyFunction, integer): userdata
+      upvaluejoin: function(AnyFunction, integer, AnyFunction, integer)
    end
 
    global record io
@@ -206,10 +206,10 @@ do
       pow: function(number, number): number
       rad: function(number): number
 
-      random: function(number, ? number): integer
+      random: function(integer, ? integer): integer
       random: function(): number
 
-      randomseed: function(number, number): integer, integer
+      randomseed: function(? integer, ? integer): integer, integer
       sin: function(number): number
       sinh: function(number): number
       sqrt: function(number): number
@@ -282,9 +282,9 @@ do
       date: function(DateMode, ? number): DateTable
       date: function(? string, ? number): string
 
-      difftime: function(number, number): number
+      difftime: function(integer, integer): number
       execute: function(string): boolean, string, integer
-      exit: function(? (number | boolean), ? boolean)
+      exit: function(? (integer | boolean), ? boolean)
       getenv: function(string): string
       remove: function(string): boolean, string
       rename: function(string, string): boolean, string
@@ -297,36 +297,37 @@ do
       config: string
       cpath: string
       loaded: {string:any}
+      loadlib: function(string, string): (function)
       loaders: { function(string): any, any }
       path: string
       preload: {any:any}
       searchers: { function(string): any }
+      searchpath: function(string, string, ? string, ? string): string, string
    end
 
    global record string
-      char: function(number...): string
+      byte: function(string, ? integer): integer
+      byte: function(string, integer, ? integer): integer...
 
-      byte: function(string, ? number): integer
-      byte: function(string, number, number): integer...
-
+      char: function(integer...): string
       dump: function(function(any...): (any), ? boolean): string
-      find: function(string, string, ? number, ? boolean): integer, integer, string
+      find: function(string, string, ? integer, ? boolean): integer, integer, string
       format: function(string, any...): string
-      gmatch: function(string, string): (function(): string...)
+      gmatch: function(string, string, ? integer): (function(): string...)
 
-      gsub: function(string, string, string, ? number): string, integer
-      gsub: function(string, string, {string:string}, ? number): string, integer
-      gsub: function(string, string, function(string...): (string | number | boolean), ? number): string, integer
+      gsub: function(string, string, string, ? integer): string, integer
+      gsub: function(string, string, {string:string}, ? integer): string, integer
+      gsub: function(string, string, function(string...): (string | integer | boolean), ? integer): string, integer
 
       len: function(string): integer
       lower: function(string): string
-      match: function(string, string, ? number): string...
+      match: function(string, string, ? integer): string...
       pack: function(string, any...): string
       packsize: function(string): integer
-      rep: function(string, number, ? string): string
+      rep: function(string, integer, ? string): string
       reverse: function(string): string
-      sub: function(string, number, ? number): string
-      unpack: function(string, string, ? number): any...
+      sub: function(string, integer, ? integer): string
+      unpack: function(string, string, ? integer): any...
       upper: function(string): string
    end
 
@@ -339,27 +340,27 @@ do
          n: integer
       end
 
-      concat: function({(string | number)}, ? string, ? number, ? number): string
+      concat: function({(string | number)}, ? string, ? integer, ? integer): string
 
-      insert: function<A>({A}, number, A)
+      insert: function<A>({A}, integer, A)
       insert: function<A>({A}, A)
 
       pack: function<T>(T...): PackTable<T>
       pack: function(any...): {any:any}
 
-      remove: function<A>({A}, ? number): A
+      remove: function<A>({A}, ? integer): A
       sort: function<A>({A}, ? SortFunction<A>)
 
       unpack: function<A>({A}, ? number, ? number): A... --[[needs_compat]]
    end
 
    global record utf8
-      char: function(number...): string
+      char: function(integer...): string
       charpattern: string
-      codepoint: function(string, ? number, ? number, ? boolean): integer...
-      codes: function(string, ? boolean): (function(string, ? number): (integer, integer))
-      len: function(string, ? number, ? number, ? boolean): integer
-      offset: function(string, number, ? number): integer
+      codepoint: function(string, ? integer, ? integer, ? boolean): integer...
+      codes: function(string, ? boolean): (function(string, ? integer): (integer, integer))
+      len: function(string, ? integer, ? integer, ? boolean): integer
+      offset: function(string, integer, ? integer): integer
    end
 
    local record StandardLibrary
@@ -391,12 +392,12 @@ do
       arg: {string}
       assert: function<A, B>(A, ? B): A
 
-      collectgarbage: function(CollectGarbageCommand): number
-      collectgarbage: function(CollectGarbageSetValue, number): number
+      collectgarbage: function(? CollectGarbageCommand): number
+      collectgarbage: function(CollectGarbageSetValue, integer): number
       collectgarbage: function(CollectGarbageIsRunning): boolean
       collectgarbage: function(string, ? number): (boolean | number)
 
-      error: function(? any, ? number)
+      error: function(? any, ? integer)
       ipairs: function<A>({A}): (function():(integer, A))
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
@@ -410,14 +411,14 @@ do
       print: function(any...)
       require: function(string): any
 
-      select: function<T>(number, T...): T...
-      select: function(number, any...): any...
+      select: function<T>(integer, T...): T...
+      select: function(integer, any...): any...
       select: function(string, any...): integer
 
       setmetatable: function<T>(T, metatable<T>): T
 
       tonumber: function(any): number
-      tonumber: function(any, number): integer
+      tonumber: function(any, integer): integer
 
       tostring: function(any): string
       type: function(any): string
