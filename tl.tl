@@ -410,8 +410,8 @@ do
       print: function(any...)
       require: function(string): any
 
-      select: function<T>(number, T...): T
-      select: function(number, any...): any
+      select: function<T>(number, T...): T...
+      select: function(number, any...): any...
       select: function(string, any...): integer
 
       setmetatable: function<T>(T, metatable<T>): T
