@@ -865,22 +865,17 @@ do
       env.keep_going = true
       env.report_types = true
 
-      local tr, trenv
       for i, input_file in ipairs(args["file"]) do
-         local pok, result = pcall(tl.process, input_file, env)
+         local pok, err = pcall(tl.process, input_file, env)
          if not pok then
-            die("Internal Compiler Error: " .. result)
-         end
-         if pok then
-            if result and result.ast then
-               tr, trenv = tl.get_types(result, trenv)
-            end
+            die("Internal Compiler Error: " .. err)
          end
          check_collect(i)
       end
 
       local ok, _, _, w = report_all_errors(tlconfig, env)
 
+      local tr = env.reporter:get_report()
       if tr then
          if w or not ok then
             printerr("")
