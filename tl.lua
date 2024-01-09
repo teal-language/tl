@@ -603,35 +603,23 @@ tl.typecodes = {
    USERDATA = 0x00000040,
    THREAD = 0x00000080,
 
-   IS_TABLE = 0x00000008,
-   IS_NUMBER = 0x00000002,
-   IS_STRING = 0x00000004,
-   LUA_MASK = 0x00000fff,
-
    INTEGER = 0x00010002,
+   ENUM = 0x00010004,
+   EMPTY_TABLE = 0x00000008,
    ARRAY = 0x00010008,
    RECORD = 0x00020008,
    MAP = 0x00040008,
    TUPLE = 0x00080008,
-   EMPTY_TABLE = 0x00000008,
-   ENUM = 0x00010004,
    INTERFACE = 0x00100008,
-
-   IS_ARRAY = 0x00010008,
-   IS_RECORD = 0x00020008,
+   POLY = 0x20000020,
+   UNION = 0x40000000,
 
    NOMINAL = 0x10000000,
    TYPE_VARIABLE = 0x08000000,
 
-   IS_UNION = 0x40000000,
-   IS_POLY = 0x20000020,
-
    ANY = 0xffffffff,
    UNKNOWN = 0x80008000,
    INVALID = 0x80000000,
-
-   IS_SPECIAL = 0x80000000,
-   IS_VALID = 0x00000fff,
 }
 
 
@@ -5377,12 +5365,12 @@ local typename_to_typecode = {
    ["thread"] = tl.typecodes.THREAD,
    ["number"] = tl.typecodes.NUMBER,
    ["integer"] = tl.typecodes.INTEGER,
-   ["union"] = tl.typecodes.IS_UNION,
+   ["union"] = tl.typecodes.UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
    ["circular_require"] = tl.typecodes.NOMINAL,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
-   ["poly"] = tl.typecodes.IS_POLY,
+   ["poly"] = tl.typecodes.POLY,
    ["any"] = tl.typecodes.ANY,
    ["unknown"] = tl.typecodes.UNKNOWN,
    ["invalid"] = tl.typecodes.INVALID,
