@@ -410,6 +410,12 @@ end
 
 ]=====]
 
+
+
+
+
+
+
 local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, }
 
 
@@ -1790,8 +1796,6 @@ local table_types = {
 
 
 
-
-
 local TruthyFact = {}
 
 
@@ -1868,14 +1872,6 @@ local attributes = {
 local is_attribute = attributes
 
 local Node = {ExpectedContext = {}, }
-
-
-
-
-
-
-
-
 
 
 
