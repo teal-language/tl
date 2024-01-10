@@ -410,6 +410,12 @@ end
 
 ]=====]
 
+local interface Where
+   y: integer
+   x: integer
+   filename: string
+end
+
 local record tl
    enum LoadMode
       "b"
@@ -1488,16 +1494,14 @@ local table_types <total>: {TypeName:boolean} = {
 }
 
 local interface Type
+   is Where
    where self.typename
 
    typename: TypeName   -- discriminator
    typeid: integer      -- unique identifier
 
-   y: integer
-   x: integer
    yend: integer
    xend: integer
-   filename: string
 
    inferred_at: Where
 
@@ -1868,17 +1872,13 @@ local attributes <total>: {Attribute: boolean} = {
 local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
 local record Node
-   is {Node}
+   is {Node}, Where
    where self.kind ~= nil
 
    record ExpectedContext
       kind: NodeKind
       name: string
    end
-
-   y: integer
-   x: integer
-   filename: string
 
    tk: string
    kind: NodeKind
@@ -1973,10 +1973,6 @@ local record Node
 
    debug_type: Type
 end
-
-local type Where
-   = Node
-   | Type
 
 local function is_number_type(t:Type): boolean
    return t.typename == "number" or t.typename == "integer"
