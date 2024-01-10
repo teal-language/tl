@@ -1830,12 +1830,6 @@ local table_types = {
 
 
 
-
-
-
-
-
-
 local TruthyFact = {}
 
 
@@ -6928,8 +6922,6 @@ tl.type_check = function(ast, opts)
          copy.filename = t.filename
          copy.x = t.x
          copy.y = t.y
-         copy.yend = t.yend
-         copy.xend = t.xend
 
          if t.typename == "array" then
             assert(copy.typename == "array")
