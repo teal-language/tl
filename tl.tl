@@ -1537,16 +1537,10 @@ local interface Type
    is Where
    where self.typename
 
-   typename: TypeName   -- discriminator
-   typeid: integer      -- unique identifier
-
-   yend: integer
-   xend: integer
-
-   inferred_at: Where
-
-   -- Lua compatibilty
-   needs_compat: boolean
+   typename: TypeName    -- discriminator
+   typeid: integer       -- unique identifier
+   inferred_at: Where    -- for error messages
+   needs_compat: boolean -- for Lua compatibilty
 end
 
 local record StringType
@@ -6928,8 +6922,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          copy.filename = t.filename
          copy.x = t.x
          copy.y = t.y
-         copy.yend = t.yend
-         copy.xend = t.xend
 
          if t is ArrayType then
             assert(copy is ArrayType)
