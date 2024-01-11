@@ -7686,8 +7686,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                end
             else
                local typeid = t.typeid
-               if t is NominalType then
-                  typeid = resolve_nominal(t).typeid
+               if t is NominalType and t.found then
+                  typeid = t.found.typeid
                end
                if not types_seen[typeid] then
                   types_seen[typeid] = true
