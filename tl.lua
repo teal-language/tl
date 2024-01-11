@@ -6799,22 +6799,6 @@ tl.type_check = function(ast, opts)
       return true
    end
 
-   local function validate_union(where, u, store_errs, errs)
-      local valid, err = is_valid_union(u)
-      if err then
-         if store_errs then
-            errs = errs or {}
-         else
-            errs = errors
-         end
-         table.insert(errs, Err(where, err, u))
-      end
-      if not valid then
-         return INVALID, store_errs and errs
-      end
-      return u, store_errs and errs
-   end
-
    local function show_arity(f)
       local nfargs = #f.args.tuple
       return f.min_arity < nfargs and
@@ -6993,7 +6977,11 @@ tl.type_check = function(ast, opts)
                copy.types[i], same = resolve(tf, same)
             end
 
-            copy, errs = validate_union(t, copy, true, errs)
+            local _, err = is_valid_union(copy)
+            if err then
+               errs = errs or {}
+               table.insert(errs, Err(t, err, copy))
+            end
          elseif t.typename == "poly" then
             assert(copy.typename == "poly")
             copy.types = {}
@@ -11612,7 +11600,10 @@ expand_type(node, values, elements) })
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                   local u = unite({ ra, rb }, true)
                   if u.typename == "union" then
-                     u = validate_union(node, u)
+                     local ok, err = is_valid_union(u)
+                     if not ok then
+                        u = err and invalid_at(node, err, u) or INVALID
+                     end
                   end
                   t = u
 
@@ -12160,7 +12151,11 @@ expand_type(node, values, elements) })
          },
          ["union"] = {
             after = function(typ, _children)
-               return (validate_union(typ, typ))
+               local ok, err = is_valid_union(typ)
+               if not ok then
+                  return err and invalid_at(typ, err, typ) or INVALID
+               end
+               return typ
             end,
          },
       },
