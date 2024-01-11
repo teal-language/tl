@@ -6719,7 +6719,7 @@ tl.type_check = function(ast, opts)
       elseif t.typename == "tuple" then
          return union_type(t.tuple[1]), t.tuple[1]
       elseif t.typename == "nominal" then
-         local typedecl = t.found or find_type(t.names)
+         local typedecl = t.found
          if not typedecl then
             return "invalid"
          end

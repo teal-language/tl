@@ -6719,7 +6719,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       elseif t is TupleType then
          return union_type(t.tuple[1]), t.tuple[1]
       elseif t is NominalType then
-         local typedecl = t.found or find_type(t.names)
+         local typedecl = t.found
          if not typedecl then
             return "invalid"
          end
