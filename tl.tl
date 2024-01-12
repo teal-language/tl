@@ -8665,7 +8665,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local type InvalidOrTupleType = InvalidType | TupleType
 
-   local type_check_function_call: function(Node, {Node}, Type, TupleType, Node, boolean, ? integer): InvalidOrTupleType, FunctionType
+   local type_check_function_call: function(Node, Type, TupleType, ? integer, ? Node, ? {Node}): InvalidOrTupleType, FunctionType
    do
       local function mark_invalid_typeargs(f: FunctionType)
          if f.typeargs then
@@ -8828,18 +8828,21 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return resolve_typevars_at(where, f.rets)
       end
 
-      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, is_typedecl_funcall: boolean, is_method: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
+      local function check_call(where: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, is_typedecl_funcall: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
          assert(type(func) == "table")
          assert(type(args) == "table")
 
+         local is_method = (argdelta == -1)
+
          if not (func is FunctionType or func is PolyType) then
             func, is_method = resolve_for_call(func, args, is_method)
+            if is_method then
+               argdelta = -1
+            end
             if not (func is FunctionType or func is PolyType) then
                return invalid_at(where, "not a function: %s", func)
             end
          end
-
-         argdelta = is_method and -1 or argdelta or 0
 
          if is_method and args.tuple[1] then
             add_var(nil, "@self", type_at(where, a_typedecl(args.tuple[1])))
@@ -8907,7 +8910,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return fail_call(where, func, given, first_errs)
       end
 
-      type_check_function_call = function(node: Node, where_args: {Node}, func: Type, args: TupleType, e1: Node, is_method: boolean, argdelta?: integer): InvalidOrTupleType, FunctionType
+      type_check_function_call = function(node: Node, func: Type, args: TupleType, argdelta?: integer, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
+         e1 = e1 or node.e1
+         e2 = e2 or node.e2
+
          local expected = node.expected
          local expected_rets: TupleType
          if expected and expected is TupleType then
@@ -8929,7 +8935,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         local ret, f = check_call(node, where_args, func, args, expected_rets, is_typedecl_funcall, is_method, argdelta)
+         local ret, f = check_call(node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
@@ -8938,7 +8944,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
 
          if f and f.macroexp then
-            expand_macroexp(node, where_args, f.macroexp)
+            expand_macroexp(node, e2, f.macroexp)
          end
 
          return ret, f
@@ -8967,13 +8973,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       if metamethod then
-         local where_args = { node.e1 }
+         local e2 = { node.e1 }
          local args = a_tuple { orig_a }
          if b and method_name ~= "__is" then
-            where_args[2] = node.e2
+            e2[2] = node.e2
             args.tuple[2] = orig_b
          end
-         return to_structural(resolve_tuple((type_check_function_call(node, where_args, metamethod, args, nil, true)))), meta_on_operator
+         return to_structural(resolve_tuple((type_check_function_call(node, metamethod, args, -1, node, e2)))), meta_on_operator
       else
          return nil, nil
       end
@@ -9960,7 +9966,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end,
 
       ["ipairs"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
@@ -9981,7 +9987,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end,
 
       ["rawget"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
@@ -10043,7 +10049,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       ["assert"] = function(node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
          node.known = FACT_TRUTHY
-         local r = type_check_function_call(node, node.e2, a, b, node, false, argdelta)
+         local r = type_check_function_call(node, a, b, argdelta)
          apply_facts(node, node.e2[1].known)
          return r
       end,
@@ -10056,13 +10062,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if special then
             return special(node, a, b, argdelta)
          else
-            return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
+            return (type_check_function_call(node, a, b, argdelta))
          end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
-         return (type_check_function_call(node, node.e2, a, b, node.e1, true))
+         return (type_check_function_call(node, a, b, -1))
       else
-         return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end
    end
 
@@ -10799,7 +10805,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             if exp1type is PolyType then
                local _: Type
-               _, exp1type = type_check_function_call(exp1, {node.exps[2], node.exps[3]}, exp1type, args, exp1, false, 0)
+               _, exp1type = type_check_function_call(exp1, exp1type, args, 0, exp1, {node.exps[2], node.exps[3]})
             end
 
             if exp1type is FunctionType then

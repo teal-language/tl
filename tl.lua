@@ -8828,18 +8828,21 @@ a.types[i], b.types[i]), }
          return resolve_typevars_at(where, f.rets)
       end
 
-      local function check_call(where, where_args, func, args, expected_rets, is_typedecl_funcall, is_method, argdelta)
+      local function check_call(where, where_args, func, args, expected_rets, is_typedecl_funcall, argdelta)
          assert(type(func) == "table")
          assert(type(args) == "table")
 
+         local is_method = (argdelta == -1)
+
          if not (func.typename == "function" or func.typename == "poly") then
             func, is_method = resolve_for_call(func, args, is_method)
+            if is_method then
+               argdelta = -1
+            end
             if not (func.typename == "function" or func.typename == "poly") then
                return invalid_at(where, "not a function: %s", func)
             end
          end
-
-         argdelta = is_method and -1 or argdelta or 0
 
          if is_method and args.tuple[1] then
             add_var(nil, "@self", type_at(where, a_type("typedecl", { def = args.tuple[1] })))
@@ -8907,7 +8910,10 @@ a.types[i], b.types[i]), }
          return fail_call(where, func, given, first_errs)
       end
 
-      type_check_function_call = function(node, where_args, func, args, e1, is_method, argdelta)
+      type_check_function_call = function(node, func, args, argdelta, e1, e2)
+         e1 = e1 or node.e1
+         e2 = e2 or node.e2
+
          local expected = node.expected
          local expected_rets
          if expected and expected.typename == "tuple" then
@@ -8929,7 +8935,7 @@ a.types[i], b.types[i]), }
             end
          end
 
-         local ret, f = check_call(node, where_args, func, args, expected_rets, is_typedecl_funcall, is_method, argdelta)
+         local ret, f = check_call(node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
@@ -8938,7 +8944,7 @@ a.types[i], b.types[i]), }
          end
 
          if f and f.macroexp then
-            expand_macroexp(node, where_args, f.macroexp)
+            expand_macroexp(node, e2, f.macroexp)
          end
 
          return ret, f
@@ -8967,13 +8973,13 @@ a.types[i], b.types[i]), }
       end
 
       if metamethod then
-         local where_args = { node.e1 }
+         local e2 = { node.e1 }
          local args = a_type("tuple", { tuple = { orig_a } })
          if b and method_name ~= "__is" then
-            where_args[2] = node.e2
+            e2[2] = node.e2
             args.tuple[2] = orig_b
          end
-         return to_structural(resolve_tuple((type_check_function_call(node, where_args, metamethod, args, nil, true)))), meta_on_operator
+         return to_structural(resolve_tuple((type_check_function_call(node, metamethod, args, -1, node, e2)))), meta_on_operator
       else
          return nil, nil
       end
@@ -9960,7 +9966,7 @@ a.types[i], b.types[i]), }
             end
          end
 
-         return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end,
 
       ["ipairs"] = function(node, a, b, argdelta)
@@ -9981,7 +9987,7 @@ a.types[i], b.types[i]), }
             end
          end
 
-         return (type_check_function_call(node, node.e2, a, b, node, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end,
 
       ["rawget"] = function(node, _a, b, _argdelta)
@@ -10043,7 +10049,7 @@ a.types[i], b.types[i]), }
 
       ["assert"] = function(node, a, b, argdelta)
          node.known = FACT_TRUTHY
-         local r = type_check_function_call(node, node.e2, a, b, node, false, argdelta)
+         local r = type_check_function_call(node, a, b, argdelta)
          apply_facts(node, node.e2[1].known)
          return r
       end,
@@ -10056,13 +10062,13 @@ a.types[i], b.types[i]), }
          if special then
             return special(node, a, b, argdelta)
          else
-            return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
+            return (type_check_function_call(node, a, b, argdelta))
          end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
-         return (type_check_function_call(node, node.e2, a, b, node.e1, true))
+         return (type_check_function_call(node, a, b, -1))
       else
-         return (type_check_function_call(node, node.e2, a, b, node.e1, false, argdelta))
+         return (type_check_function_call(node, a, b, argdelta))
       end
    end
 
@@ -10799,7 +10805,7 @@ expand_type(node, values, elements) })
 
             if exp1type.typename == "poly" then
                local _
-               _, exp1type = type_check_function_call(exp1, { node.exps[2], node.exps[3] }, exp1type, args, exp1, false, 0)
+               _, exp1type = type_check_function_call(exp1, exp1type, args, 0, exp1, { node.exps[2], node.exps[3] })
             end
 
             if exp1type.typename == "function" then
