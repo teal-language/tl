@@ -7688,6 +7688,13 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local is_lua_table_type: function(t: Type): boolean
    local resolve_tuple_and_nominal: function(t: Type): Type
 
+   local function to_structural(t: Type): Type
+      if t is NominalType then
+         return resolve_nominal(t)
+      end
+      return t
+   end
+
    local function unite(types: {Type}, flatten_constants?: boolean): Type
       if #types == 1 then
          return types[1]
@@ -8826,6 +8833,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end
 
+      local function resolve_function_type(func: FunctionType | PolyType, i: integer): FunctionType
+         if func is PolyType then
+            return func.types[i]
+         else
+            return func
+         end
+      end
+
       local function fail_call(where: Where, func: FunctionType | PolyType, nargs: integer, errs: {Error}): TupleType
          if errs then
             -- report the errors from the first match
@@ -8851,7 +8866,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             error_at(where, "wrong number of arguments (given " .. nargs .. ", expects " .. table.concat(expects, " or ") .. ")")
          end
 
-         local f = func is PolyType and func.types[1] or func
+         local f = resolve_function_type(func, 1)
 
          mark_invalid_typeargs(f)
 
@@ -8886,7 +8901,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          for pass = 1, passes do
             for i = 1, n do
                if (not tried) or not tried[i] then
-                  local f = func is PolyType and func.types[i] or func
+                  local f = resolve_function_type(func, i)
                   local fargs = f.args.tuple
                   if f.is_method and not is_method then
                      if args.tuple[1] and is_a(args.tuple[1], fargs[1]) then
@@ -11616,22 +11631,24 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                   t = u
 
-               elseif is_a(rb, ra) then
-                  node.known = facts_or(node, node.e1.known, node.e2.known)
-                  if expected then
-                     local a_is = is_a(a, node.expected)
-                     local b_is = is_a(b, node.expected)
-                     if a_is and b_is then
-                        t = resolve_typevars_at(node, node.expected)
-                     elseif a_is then
-                        t = resolve_tuple(b)
-                     else
-                        t = resolve_tuple(a)
+               else
+                  local a_ge_b = is_a(rb, ra)
+                  local b_ge_a = is_a(ra, rb)
+                  if a_ge_b or b_ge_a then
+                     node.known = facts_or(node, node.e1.known, node.e2.known)
+                     if expected then
+                        local a_is = is_a(a, node.expected)
+                        local b_is = is_a(b, node.expected)
+                        if a_is and b_is then
+                           t = resolve_typevars_at(node, node.expected)
+                        end
                      end
-                  else
-                     t = resolve_tuple(a)
+                     if not t then
+                        local larger_type = b_ge_a and b or a
+                        t = resolve_tuple(larger_type)
+                     end
+                     t = drop_constant_value(t)
                   end
-                  t = drop_constant_value(t)
                end
 
                if t then
@@ -11889,7 +11906,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local t = after_literal(node) as StringType
          t.literal = node.conststr
 
-         local expected = node.expected
+         local expected = node.expected and to_structural(node.expected)
          if expected and expected is EnumType and is_a(t, expected) then
             return node.expected
          end

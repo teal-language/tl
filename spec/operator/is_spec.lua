@@ -81,7 +81,7 @@ describe("flow analysis with is", function()
          local a: string | Foo
          local _b: Foo = a is string and makeFoo(a) or a
       ]], {
-         { msg = "cannot use operator 'or' for types Foo and string | Foo" },
+         { msg = "got string | Foo, expected Foo" },
       }))
    end)
 

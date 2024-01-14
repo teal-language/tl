@@ -135,4 +135,31 @@ describe("or", function()
           print(v * v)
       end
    ]]))
+
+   it("resolves 'or' to the larger type", util.check_type_error([[
+      local record A
+         where self.tag == "a"
+         b: B
+         tag: string
+      end
+
+      local record B
+         where self.tag == "b"
+         tag: string
+      end
+
+      local function wants_b(my_b: B)
+         print(my_b)
+      end
+
+      local ab: A | B
+
+      local b = ab is A and ab.b or ab -- ab.b may be nil, causing the value of type A to be returned via 'or'
+
+      wants_b(b)
+   ]], {
+      { y = 20, x = 15, msg = "got A | B, expected B" },
+   }))
+
+
 end)
