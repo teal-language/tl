@@ -778,6 +778,122 @@ describe("require", function()
       assert.same({}, result.type_errors)
    end)
 
+   it("does not crash when localizing alias types from other records, a is forwarding b", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["main.tl"] = [[
+            local a = require("a")
+
+            local type MyA = a.AliasA
+            local type MyB = a.AliasB
+
+            local w: a.AliasA
+            local z: a.AliasB
+
+            local ww: MyA
+            local zz: MyB
+
+            print(w.x)
+            print(z.y)
+
+            print(ww.x)
+            print(zz.y)
+         ]],
+         ["a.tl"] = [[
+            local b = require("b")
+            local type BA_in_A = b.AliasA
+            local type BB_in_A = b.AliasB
+
+            return b
+         ]],
+         ["b.tl"] = [[
+            local interface TypeA
+               x: number
+            end
+
+            local interface TypeB
+               y: string
+            end
+
+            local record b
+               type AliasA = TypeA
+               type AliasB = TypeB
+            end
+
+            return b
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("does not crash when localizing alias types from other records, a is aliasing b aliases", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["main.tl"] = [[
+            local a = require("a")
+            local b = require("b")
+
+            local type MyA = a.AAlias
+            local type MyB = a.BAlias
+
+            local w: a.AAlias
+            local z: a.BAlias
+
+            local ww: MyA
+            local zz: MyB
+
+            print(w.x)
+            print(z.y)
+
+            print(ww.x)
+            print(zz.y)
+
+            local www: b.AliasA
+            local zzz: b.AliasB
+
+            www = ww
+            ww = www
+            w = www
+            www = w
+            ww = w
+            w = ww
+         ]],
+         ["a.tl"] = [[
+            local b = require("b")
+
+            local record a
+               type AAlias = b.AliasA
+               type BAlias = b.AliasB
+            end
+
+            return a
+         ]],
+         ["b.tl"] = [[
+            local interface TypeA
+               x: number
+            end
+
+            local interface TypeB
+               y: string
+            end
+
+            local record b
+               type AliasA = TypeA
+               type AliasB = TypeB
+            end
+
+            return b
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
    describe("circular requires", function()
       it("can be made using type-requires in order", function ()
          util.mock_io(finally, {

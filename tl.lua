@@ -7477,6 +7477,8 @@ tl.type_check = function(ast, opts)
       return NONE
    end
 
+
+
    local resolve_nominal
    local resolve_typealias
    do
@@ -7505,7 +7507,7 @@ tl.type_check = function(ast, opts)
          end
       end
 
-      resolve_nominal = function(t)
+      local function find_nominal_type_decl(t)
          if t.resolved then
             return t.resolved
          end
@@ -7516,27 +7518,29 @@ tl.type_check = function(ast, opts)
             return INVALID
          end
 
-         local resolved
-
          if found.typename == "typealias" then
             found = found.alias_to.found
          end
 
-         if found.typename == "typedecl" then
-            local def = found.def
-            if def.typename == "circular_require" then
-
-               return def
-            end
-
-            assert(not (def.typename == "nominal"))
-
-            resolved = match_typevals(t, def)
-         else
+         if not (found.typename == "typedecl") then
             error_at(t, table.concat(t.names, ".") .. " is not a type")
             return INVALID
          end
 
+         local def = found.def
+         if def.typename == "circular_require" then
+
+            return def
+         end
+
+         assert(not (def.typename == "nominal"))
+
+         t.found = found
+         return nil, found
+      end
+
+      local function resolve_decl_into_nominal(t, found)
+         local resolved = match_typevals(t, found.def)
          if not resolved then
             error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
             return INVALID
@@ -7549,41 +7553,37 @@ tl.type_check = function(ast, opts)
                t.y = resolved.y
             end
          end
-         t.found = found
+
          t.resolved = resolved
          return resolved
       end
 
+      resolve_nominal = function(t)
+         local immediate, found = find_nominal_type_decl(t)
+         if immediate then
+            return immediate
+         end
+
+         return resolve_decl_into_nominal(t, found)
+      end
+
       resolve_typealias = function(typealias)
-         local names = typealias.alias_to.names
-         local aliasing = find_var(names[1], "use_type")
-         if not aliasing then
-            return INVALID
-         end
-
          local t = typealias.alias_to
-         if t.resolved then
-            return t.resolved, aliasing
+
+         local immediate, found = find_nominal_type_decl(t)
+         if immediate then
+            return immediate
          end
 
-         local found = t.found or find_type(t.names)
-         if not found then
-            error_at(t, "unknown type %s", t)
-            return INVALID
+         if not t.typevals then
+            return found
          end
 
-         assert(found.typename == "typedecl")
+         local resolved = resolve_decl_into_nominal(t, found)
 
-         if t.typevals then
-            local resolved = match_typevals(t, found.def)
-            t.resolved = resolved
-            t.found = found
-            found = a_type("typedecl", { def = resolved })
-         else
-            t.resolved = t
-         end
-
-         return found, aliasing
+         local typedecl = a_type("typedecl", { def = resolved })
+         t.resolved = typedecl
+         return typedecl
       end
    end
 
@@ -10407,22 +10407,24 @@ expand_type(node, values, elements) })
       return ok, t, infertype ~= nil
    end
 
-   local function get_type_declaration(value)
+   local function get_typedecl(value)
       if value.kind == "op" and
          value.op.op == "@funcall" and
          value.e1.kind == "variable" and
          value.e1.tk == "require" then
 
          local t = special_functions["require"](value, find_var_type("require"), a_type("tuple", { tuple = { STRING } }), 0)
-         if not (t.typename == "invalid") then
-            return t.tuple[1]
-         end
+         local ty = t.typename == "tuple" and t.tuple[1] or t
+         ty = (ty.typename == "typealias") and resolve_typealias(ty) or ty
+         local td = (ty.typename == "typedecl") and ty or a_type("typedecl", { def = ty })
+         return td
       else
          local newtype = value.newtype
          if newtype.typename == "typealias" then
-            return resolve_typealias(value.newtype)
+            local aliasing = find_var(newtype.alias_to.names[1], "use_type")
+            return resolve_typealias(newtype), aliasing
          else
-            return value.newtype, nil
+            return newtype, nil
          end
       end
    end
@@ -10537,7 +10539,7 @@ expand_type(node, values, elements) })
       ["local_type"] = {
          before = function(node)
             local name = node.var.tk
-            local resolved, aliasing = get_type_declaration(node.value)
+            local resolved, aliasing = get_typedecl(node.value)
             local var = add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
@@ -10553,7 +10555,7 @@ expand_type(node, values, elements) })
             local name = node.var.tk
             local unresolved = get_unresolved()
             if node.value then
-               local resolved, aliasing = get_type_declaration(node.value)
+               local resolved, aliasing = get_typedecl(node.value)
                local added = add_global(node.var, name, resolved)
                node.value.newtype = resolved
                if aliasing then
@@ -12070,6 +12072,8 @@ expand_type(node, values, elements) })
                            end
                         end
                      end
+                  elseif ftype.typename == "typealias" then
+                     resolve_typealias(ftype)
                   end
 
                   typ.fields[name] = ftype
