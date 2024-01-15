@@ -1541,7 +1541,7 @@ local record UnresolvedType
    where self.typename == "unresolved"
 
    labels: {string:{Node}}
-   nominals: {string:{Type}}
+   nominals: {string:{NominalType}}
    global_types: {string:boolean}
    narrows: {string:boolean}
 end
@@ -1567,8 +1567,8 @@ local record NominalType
 
    names: {string}
    typevals: {Type}
-   found: Type    -- type is found but typeargs are not resolved
-   resolved: Type -- type is found and typeargs are resolved
+   found: Type          -- type is found but typeargs are not resolved
+   resolved: Type       -- type is found and typeargs are resolved
 end
 
 local interface ArrayLikeType
@@ -7389,7 +7389,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return NONE
    end
 
-   local resolve_nominal: function(t: Type): Type
+   local resolve_nominal: function(t: NominalType): Type
    local resolve_typealias: function(t: Type): Type, Variable
    do
       local function match_typevals(t: NominalType, def: RecordLikeType | FunctionType): Type
@@ -7515,7 +7515,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return false
    end
 
-   local function fail_nominals(t1: Type, t2: Type): boolean, {Error}
+   local function fail_nominals(t1: NominalType, t2: NominalType): boolean, {Error}
       local t1name = show_type(t1)
       local t2name = show_type(t2)
       if t1name == t2name then
@@ -7571,9 +7571,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local is_lua_table_type: function(t: Type): boolean
-   local resolve_tuple_and_nominal: function(t: Type): Type
 
    local function to_structural(t: Type): Type
+      assert(not t is TupleType)
       if t is NominalType then
          return resolve_nominal(t)
       end
@@ -8454,7 +8454,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local function same_call_mt_in_all_union_entries(u: UnionType): Type
       return same_in_all_union_entries(u, function(t: Type): (Type, Type)
-         t = resolve_tuple_and_nominal(t)
+         t = to_structural(t)
          if t is RecordLikeType then
             local call_mt = t.meta_fields and t.meta_fields["__call"]
             if call_mt is FunctionType then
@@ -8474,14 +8474,14 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          func = a_fn { args = va_args { UNKNOWN }, rets = va_args { UNKNOWN } }
       end
       -- unwrap if tuple, resolve if nominal
-      func = resolve_tuple_and_nominal(func)
+      func = to_structural(func)
       if func.typename ~= "function" and func.typename ~= "poly" then
          -- resolve if union
          if func is UnionType then
             local r = same_call_mt_in_all_union_entries(func)
             if r then
                table.insert(args.tuple, 1, func.types[1]) -- FIXME: is this right?
-               return resolve_tuple_and_nominal(r), true
+               return to_structural(r), true
             end
          end
          -- resolve if prototype
@@ -8495,7 +8495,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
             table.insert(args.tuple, 1, func)
             func = func.meta_fields["__call"]
-            func = resolve_tuple_and_nominal(func)
+            func = to_structural(func)
             is_method = true
          end
       end
@@ -8903,7 +8903,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             where_args[2] = node.e2
             args.tuple[2] = orig_b
          end
-         return resolve_tuple_and_nominal((type_check_function_call(node, where_args, metamethod, args, nil, true))), meta_on_operator
+         return to_structural(resolve_tuple((type_check_function_call(node, where_args, metamethod, args, nil, true)))), meta_on_operator
       else
          return nil, nil
       end
@@ -8914,7 +8914,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       assert(type(rec) == "table")
       assert(type(key) == "string")
 
-      tbl = resolve_tuple_and_nominal(tbl)
+      tbl = to_structural(tbl)
 
       if tbl is StringType or tbl is EnumType then
          tbl = find_var_type("string") -- simulate string metatable
@@ -9152,15 +9152,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end_scope(node)
    end
 
-   resolve_tuple_and_nominal = function(t: Type): Type
-      t = resolve_tuple(t)
-      if t is NominalType then
-         t = resolve_nominal(t)
-      end
-      assert(not t is NominalType)
-      return t
-   end
-
    local function flatten_tuple(vals: TupleType): TupleType
       local vt = vals.tuple
       local n_vals = #vt
@@ -9235,10 +9226,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function type_check_index(anode: Node, bnode: Node, a: Type, b: Type): Type
-      local orig_a = a
-      local orig_b = b
-      a = resolve_typedecl(resolve_tuple_and_nominal(a))
-      b = resolve_tuple_and_nominal(b)
+      assert(not a is TupleType)
+      assert(not b is TupleType)
+
+      local ra = resolve_typedecl(to_structural(a))
+      local rb = to_structural(b)
 
       if lax and is_unknown(a) then
          return UNKNOWN
@@ -9248,74 +9240,74 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       local erra: Type
       local errb: Type
 
-      if a is TupleTableType and is_a(b, INTEGER) then
+      if ra is TupleTableType and is_a(rb, INTEGER) then
          if bnode.constnum then
-            if bnode.constnum >= 1 and bnode.constnum <= #a.types and bnode.constnum == math.floor(bnode.constnum) then
-               return a.types[bnode.constnum as integer]
+            if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
+               return ra.types[bnode.constnum as integer]
             end
 
-            errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", a
+            errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
          else
-            local array_type = arraytype_from_tuple(bnode, a)
+            local array_type = arraytype_from_tuple(bnode, ra)
             if array_type then
                return array_type.elements
             end
 
             errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
          end
-      elseif a is ArrayLikeType and is_a(b, INTEGER) then
-         return a.elements
-      elseif a is EmptyTableType then
-         if a.keys == nil then
-            a.keys = infer_at(anode, resolve_tuple(orig_b))
+      elseif ra is ArrayLikeType and is_a(rb, INTEGER) then
+         return ra.elements
+      elseif ra is EmptyTableType then
+         if ra.keys == nil then
+            ra.keys = infer_at(anode, b)
          end
 
-         if is_a(orig_b, a.keys) then
+         if is_a(b, ra.keys) then
             return type_at(anode, a_type("unresolved_emptytable_value", {
-               emptytable_type = a
+               emptytable_type = ra
             } as UnresolvedEmptyTableValueType))
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s (type of keys inferred at "
-                            .. a.keys.inferred_at.filename .. ":"
-                            .. a.keys.inferred_at.y .. ":"
-                            .. a.keys.inferred_at.x .. ": )", orig_b, a.keys
-      elseif a is MapType then
-         if is_a(orig_b, a.keys) then
-            return a.values
+                            .. ra.keys.inferred_at.filename .. ":"
+                            .. ra.keys.inferred_at.y .. ":"
+                            .. ra.keys.inferred_at.x .. ": )", b, ra.keys
+      elseif ra is MapType then
+         if is_a(b, ra.keys) then
+            return ra.values
          end
 
-         errm, erra, errb = "wrong index type: got %s, expected %s", orig_b, a.keys
-      elseif b is StringType and b.literal then
-         local t, e = match_record_key(orig_a, anode, b.literal)
+         errm, erra, errb = "wrong index type: got %s, expected %s", b, ra.keys
+      elseif rb is StringType and rb.literal then
+         local t, e = match_record_key(a, anode, rb.literal)
          if t then
             return t
          end
 
-         errm, erra = e, orig_a
-      elseif a is RecordLikeType then
-         if b is EnumType then
-            local field_names: {string} = sorted_keys(b.enumset)
+         errm, erra = e, a
+      elseif ra is RecordLikeType then
+         if rb is EnumType then
+            local field_names: {string} = sorted_keys(rb.enumset)
             for _, k in ipairs(field_names) do
-               if not a.fields[k] then
-                  errm, erra = "enum value '" .. k .. "' is not a field in %s", a
+               if not ra.fields[k] then
+                  errm, erra = "enum value '" .. k .. "' is not a field in %s", ra
                   break
                end
             end
             if not errm then
-               return match_all_record_field_names(bnode, a, field_names,
+               return match_all_record_field_names(bnode, ra, field_names,
                          "cannot index, not all enum values map to record fields of the same type")
             end
-         elseif is_a(b, STRING) then
-            errm, erra = "cannot index object of type %s with a string, consider using an enum", orig_a
+         elseif is_a(rb, STRING) then
+            errm, erra = "cannot index object of type %s with a string, consider using an enum", a
          else
-            errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
+            errm, erra, errb = "cannot index object of type %s with %s", a, b
          end
       else
-         errm, erra, errb = "cannot index object of type %s with %s", orig_a, orig_b
+         errm, erra, errb = "cannot index object of type %s with %s", a, b
       end
 
-      local meta_t = check_metamethod(anode, "__index", a, orig_b, orig_a, orig_b)
+      local meta_t = check_metamethod(anode, "__index", ra, b, a, b)
       if meta_t then
          return meta_t
       end
@@ -9610,7 +9602,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       local function resolve_if_union(t: Type): Type
-         local rt = resolve_tuple_and_nominal(t)
+         local rt = to_structural(t)
          if rt is UnionType then
             return rt
          end
@@ -9880,7 +9872,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          if not b.tuple[1] then
             return invalid_at(node, "pairs requires an argument")
          end
-         local t = resolve_tuple_and_nominal(b.tuple[1])
+         local t = to_structural(b.tuple[1])
          if t is ArrayLikeType then
             add_warning("hint", node, "hint: applying pairs on an array: did you intend to apply ipairs?")
          end
@@ -9906,7 +9898,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return invalid_at(node, "ipairs requires an argument")
          end
          local orig_t = b.tuple[1]
-         local t = resolve_tuple_and_nominal(orig_t)
+         local t = to_structural(orig_t)
 
          if t is TupleTableType then
             local arr_type = arraytype_from_tuple(node.e2, t)
@@ -10267,7 +10259,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       local decltype = node.decltuple and node.decltuple.tuple[i]
       if decltype then
-         if resolve_tuple_and_nominal(decltype) == INVALID then
+         if to_structural(decltype) == INVALID then
             decltype = INVALID
          end
 
@@ -10291,7 +10283,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       if var.attribute == "total" then
-         local rd = decltype and resolve_tuple_and_nominal(decltype)
+         local rd = decltype and to_structural(decltype)
          if rd and (rd.typename ~= "map" and rd.typename ~= "record") then
             error_at(var, "attribute <total> only applies to maps and records")
             ok = false
@@ -10299,7 +10291,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             error_at(var, "variable declared <total> does not declare an initialization value")
             ok = false
          elseif not (node.exps[i] and node.exps[i].attribute == "total") then
-            local ri = resolve_tuple_and_nominal(infertype)
+            local ri = to_structural(infertype)
             if not (ri is MapType or ri is RecordType) then
                error_at(var, "attribute <total> only applies to maps and records")
                ok = false
@@ -10379,7 +10371,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function total_map_check(t: MapType, seen_keys: {CheckableKey:Where}): boolean, {string}
-      local k = resolve_tuple_and_nominal(t.keys)
+      local k = to_structural(t.keys)
       local is_total = true
       local missing: {string}
       if k is EnumType then
@@ -10415,7 +10407,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return nil
       end
 
-      local var = resolve_tuple_and_nominal(vartype)
+      local var = to_structural(vartype)
       if var is TypeDeclType or var is TypeAliasType then
          error_at(where, "cannot reassign a type")
          return nil
@@ -10428,7 +10420,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
       assert_is_a(where, valtype, vartype, "in assignment")
 
-      local val = resolve_tuple_and_nominal(valtype)
+      local val = to_structural(valtype)
 
       return var, val
    end
@@ -10544,7 +10536,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if ok and infertype then
                   local where = node.exps[i] or node.exps
 
-                  local rt = resolve_tuple_and_nominal(t)
+                  local rt = to_structural(t)
                   if (not rt is EnumType)
                      and ((not t is NominalType) or (rt is UnionType))
                      and not same_type(t, infertype)
@@ -10777,9 +10769,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          before_statements = function(node: Node, children: {Type})
             widen_all_unions(node)
             begin_scope(node)
-            local from_t = resolve_tuple_and_nominal(children[2])
-            local to_t = resolve_tuple_and_nominal(children[3])
-            local step_t = children[4] and resolve_tuple_and_nominal(children[4])
+            local from_t = to_structural(resolve_tuple(children[2]))
+            local to_t = to_structural(resolve_tuple(children[3]))
+            local step_t = children[4] and to_structural(children[4])
             local t = (from_t.typename == "integer" and
                        to_t.typename == "integer" and
                        (not step_t or step_t.typename == "integer"))
@@ -10809,7 +10801,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             if not expected then
                -- if at the toplevel
                expected = infer_at(node, got)
-               module_type = drop_constant_value(resolve_tuple_and_nominal(expected))
+               module_type = drop_constant_value(to_structural(resolve_tuple(expected)))
                st[2]["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
@@ -10868,10 +10860,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["literal_table"] = {
          before = function(node: Node)
             if node.expected then
-               local decltype = resolve_tuple_and_nominal(node.expected)
+               local decltype = to_structural(node.expected)
 
                if decltype is TypeVarType and decltype.constraint then
-                  decltype = resolve_typedecl(resolve_tuple_and_nominal(decltype.constraint))
+                  decltype = resolve_typedecl(to_structural(decltype.constraint))
                end
 
                if decltype is TupleTableType then
@@ -10910,12 +10902,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return infer_table_literal(node, children)
             end
 
-            local decltype = resolve_tuple_and_nominal(node.expected)
+            local decltype = to_structural(node.expected)
 
             local constraint: Type
             if decltype is TypeVarType and decltype.constraint then
                constraint = resolve_typedecl(decltype.constraint)
-               decltype = resolve_tuple_and_nominal(constraint)
+               decltype = to_structural(constraint)
             end
 
             if decltype is UnionType then
@@ -10923,7 +10915,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                local single_table_rt: Type
 
                for _, t in ipairs(decltype.types) do
-                  local rt = resolve_tuple_and_nominal(t)
+                  local rt = to_structural(t)
                   if is_lua_table_type(rt) then
                      if single_table_type then
                         -- multiple table types in union, give up
@@ -11020,12 +11012,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if decltype is RecordType then
-               local rt = resolve_tuple_and_nominal(t)
+               local rt = to_structural(t)
                if rt is RecordType then
                   rt.is_total, rt.missing = total_record_check(decltype, seen_keys)
                end
             elseif decltype is MapType then
-               local rt = resolve_tuple_and_nominal(t)
+               local rt = to_structural(t)
                if rt is MapType then
                   rt.is_total, rt.missing = total_map_check(decltype, seen_keys)
                end
@@ -11176,7 +11168,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             begin_scope(node)
          end,
          before_arguments = function(_node: Node, children: {Type})
-            local rtype = resolve_tuple_and_nominal(resolve_typedecl(children[1]))
+            local rtype = to_structural(resolve_typedecl(children[1]))
 
             -- add type arguments from the record implicitly
             if rtype is RecordLikeType and rtype.typeargs then
@@ -11194,7 +11186,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local rets = children[4]
             assert(rets is TupleType)
 
-            local rtype = resolve_tuple_and_nominal(resolve_typedecl(children[1]))
+            local rtype = to_structural(resolve_typedecl(children[1]))
 
             if lax and rtype.typename == "unknown" then
                return
@@ -11234,7 +11226,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             local open_k = owner_name .. "." .. node.name.tk
             local rfieldtype = rtype.fields[node.name.tk]
             if rfieldtype then
-               rfieldtype = resolve_tuple_and_nominal(rfieldtype)
+               rfieldtype = to_structural(rfieldtype)
 
                if open_v and open_v.implemented and open_v.implemented[open_k] then
                   redeclaration_warning(node)
@@ -11394,35 +11386,47 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          after = function(node: Node, children: {Type}): Type
             end_scope()
 
-            local a: Type = children[1]
-            local b: Type = children[3]
+            -- given a and b: may be TupleType
+            local ga: Type = children[1]
+            local gb: Type = children[3]
 
-            local orig_a = a
-            local orig_b = b
-            local ra = a and resolve_tuple_and_nominal(a)
-            local rb = b and resolve_tuple_and_nominal(b)
+            -- unary a and b: not TupleType
+            local ua = resolve_tuple(ga)
+            local ub: Type
 
-            local expected = node.expected and resolve_tuple_and_nominal(node.expected)
+            -- resolved a and b: not NominalType
+            local ra: Type = to_structural(ua)
+            local rb: Type
 
             if ra.typename == "circular_require" or (ra is TypeDeclType and ra.def and ra.def.typename == "circular_require") then
                return invalid_at(node, "cannot dereference a type from a circular require")
             end
 
             if node.op.op == "@funcall" then
-               if lax and is_unknown(a) then
+               if lax and is_unknown(ua) then
                   if node.e1.op and node.e1.op.op == ":" and node.e1.e1.kind == "variable" then
                      add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                   end
                end
-               local t = type_check_funcall(node, a, b)
+               local t = type_check_funcall(node, ua, gb)
                return t
+
+            elseif node.op.op == "as" then
+               return gb
             end
+
+            local expected = node.expected and to_structural(resolve_tuple(node.expected))
 
             ensure_not_abstract(node.e1, ra)
             if ra is TypeDeclType and ra.def.typename == "record" then
                ra = ra.def
             end
-            if rb then
+
+            -- "@funcall" and "as" are the only operators that use tuples, and always in the b position;
+            -- after they are handled above, we can resolve b's tuple and only use that instead.
+            if gb then
+               ub = resolve_tuple(gb)
+               rb = to_structural(ub)
                ensure_not_abstract(node.e2, rb)
                if rb is TypeDeclType and rb.def.typename == "record" then
                   rb = rb.def
@@ -11430,7 +11434,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if node.op.op == "." then
-               node.receiver = a
+               node.receiver = ua
 
                assert(node.e2.kind == "identifier")
                local bnode: Node = {
@@ -11440,7 +11444,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   kind = "string",
                }
                local btype = type_at(node.e2, a_type("string", { literal = node.e2.tk } as StringType))
-               local t = type_check_index(node.e1, bnode, orig_a, btype)
+               local t = type_check_index(node.e1, bnode, ua, btype)
 
                if t.needs_compat and opts.gen_compat ~= "off" then
                   -- only apply to a literal use, not a propagated type
@@ -11456,11 +11460,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if node.op.op == "@index" then
-               return type_check_index(node.e1, node.e2, a, b)
-            end
-
-            if node.op.op == "as" then
-               return b
+               return type_check_index(node.e1, node.e2, ua, ub)
             end
 
             if node.op.op == "is" then
@@ -11470,8 +11470,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if ra is TypeDeclType then
                   error_at(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
-                  check_metamethod(node, "__is", ra, resolve_typedecl(rb), orig_a, orig_b)
-                  node.known = IsFact { var = node.e1.tk, typ = b, where = node }
+                  check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
+                  node.known = IsFact { var = node.e1.tk, typ = ub, where = node }
                else
                   error_at(node, "can only use 'is' on variables")
                end
@@ -11479,20 +11479,20 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
 
             if node.op.op == ":" then
-               node.receiver = a
+               node.receiver = ua
 
                -- we handle ':' separately from '.' because ':' is specific to records,
                -- so we produce different error messages
-               if lax and (is_unknown(a) or a.typename == "typevar") then
+               if lax and (is_unknown(ua) or ua.typename == "typevar") then
                   if node.e1.kind == "variable" then
                      add_unknown_dot(node.e1, node.e1.tk .. "." .. node.e2.tk)
                   end
                   return UNKNOWN
                end
 
-               local t, e = match_record_key(a, node.e1, node.e2.conststr or node.e2.tk)
+               local t, e = match_record_key(ra, node.e1, node.e2.conststr or node.e2.tk)
                if not t then
-                  return invalid_at(node.e2, e, resolve_tuple(orig_a))
+                  return invalid_at(node.e2, e, ua)
                end
 
                return t
@@ -11505,18 +11505,18 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
             if node.op.op == "and" then
                node.known = facts_and(node, node.e1.known, node.e2.known)
-               return discard_tuple(node, b, b)
+               return discard_tuple(node, ub, gb)
             end
 
             if node.op.op == "or" then
                local t: Type
-               if b.typename == "nil" then
+               if ub.typename == "nil" then
                   node.known = nil
-                  t = a
+                  t = ua
 
-               elseif is_lua_table_type(ra) and b is EmptyTableType then
+               elseif is_lua_table_type(ra) and rb is EmptyTableType then
                   node.known = nil
-                  t = a
+                  t = ua
 
                elseif ((ra is EnumType and rb is StringType and is_a(rb, ra))
                   or (ra is StringType and rb is EnumType and is_a(ra, rb))) then
@@ -11538,22 +11538,22 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   if a_ge_b or b_ge_a then
                      node.known = facts_or(node, node.e1.known, node.e2.known)
                      if expected then
-                        local a_is = is_a(a, node.expected)
-                        local b_is = is_a(b, node.expected)
+                        local a_is = is_a(ua, expected)
+                        local b_is = is_a(ub, expected)
                         if a_is and b_is then
-                           t = resolve_typevars_at(node, node.expected)
+                           t = resolve_typevars_at(node, expected)
                         end
                      end
                      if not t then
-                        local larger_type = b_ge_a and b or a
-                        t = resolve_tuple(larger_type)
+                        local larger_type = b_ge_a and ub or ua
+                        t = larger_type
                      end
                      t = drop_constant_value(t)
                   end
                end
 
                if t then
-                  return discard_tuple(node, t, b)
+                  return discard_tuple(node, t, gb)
                end
                -- else fallthrough to general binop handler
             end
@@ -11565,39 +11565,38 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                if ra is EnumType and rb is StringType then
                   if not (rb.literal and ra.enumset[rb.literal]) then
-                     return invalid_at(node, "%s is not a member of %s", b, a)
+                     return invalid_at(node, "%s is not a member of %s", ub, ua)
                   end
                elseif ra is TupleTableType and rb is TupleTableType and #ra.types ~= #rb.types then
                   return invalid_at(node, "tuples are not the same size")
-               elseif is_a(b, a) or a.typename == "typevar" then
+               elseif is_a(ub, ua) or ua.typename == "typevar" then
                   if node.op.op == "==" and node.e1.kind == "variable" then
-                     node.known = EqFact { var = node.e1.tk, typ = b, where = node }
+                     node.known = EqFact { var = node.e1.tk, typ = ub, where = node }
                   end
-               elseif is_a(a, b) or b.typename == "typevar" then
+               elseif is_a(ua, ub) or ub.typename == "typevar" then
                   if node.op.op == "==" and node.e2.kind == "variable" then
-                     node.known = EqFact { var = node.e2.tk, typ = a, where = node }
+                     node.known = EqFact { var = node.e2.tk, typ = ua, where = node }
                   end
-               elseif lax and (is_unknown(a) or is_unknown(b)) then
+               elseif lax and (is_unknown(ua) or is_unknown(ub)) then
                   return UNKNOWN
                else
-                  return invalid_at(node, "types are not comparable for equality: %s and %s", a, b)
+                  return invalid_at(node, "types are not comparable for equality: %s and %s", ua, ub)
                end
 
                return BOOLEAN
             end
 
             if node.op.arity == 1 and unop_types[node.op.op] then
-               a = ra
-               if a is UnionType then
-                  a = unite(a.types, true) -- squash unions of string constants
+               if ra is UnionType then
+                  ra = unite(ra.types, true) -- squash unions of string constants
                end
 
                local types_op = unop_types[node.op.op]
 
-               local t = types_op[a.typename]
+               local t = types_op[ra.typename]
 
                if not t then
-                  t = find_in_interface_list(a, function(ty: Type): Type
+                  t = find_in_interface_list(ra, function(ty: Type): Type
                      return types_op[ty.typename]
                   end)
                end
@@ -11606,16 +11605,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                if not t then
                   local mt_name = unop_to_metamethod[node.op.op]
                   if mt_name then
-                     t, meta_on_operator = check_metamethod(node, mt_name, a, nil, orig_a, nil)
+                     t, meta_on_operator = check_metamethod(node, mt_name, ra, nil, ua, nil)
                   end
                   if not t then
-                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", resolve_tuple(orig_a))
+                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
                      t = INVALID
                   end
                end
 
-               if a is MapType then
-                  if a.keys.typename == "number" or a.keys.typename == "integer" then
+               if ra is MapType then
+                  if ra.keys.typename == "number" or ra.keys.typename == "integer" then
                       add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
                   else
                       error_at(node, "using the '#' operator on this map will always return 0")
@@ -11644,31 +11643,28 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                end
 
-               a = ra
-               b = rb
-
-               if a is UnionType then
-                  a = unite(a.types, true) -- squash unions of string constants
+               if ra is UnionType then
+                  ra = unite(ra.types, true) -- squash unions of string constants
                end
-               if b is UnionType then
-                  b = unite(b.types, true) -- squash unions of string constants
+               if rb is UnionType then
+                  rb = unite(rb.types, true) -- squash unions of string constants
                end
 
                local types_op = binop_types[node.op.op]
 
-               local t = types_op[a.typename] and types_op[a.typename][b.typename]
+               local t = types_op[ra.typename] and types_op[ra.typename][rb.typename]
 
                local meta_on_operator: integer
                if not t then
                   local mt_name = binop_to_metamethod[node.op.op]
                   if mt_name then
-                     t, meta_on_operator = check_metamethod(node, mt_name, a, b, orig_a, orig_b)
+                     t, meta_on_operator = check_metamethod(node, mt_name, ra, rb, ua, ub)
                   end
                   if not t then
-                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
                      t = INVALID
                      if node.op.op == "or" then
-                        local u = unite({orig_a, orig_b})
+                        local u = unite({ua, ub})
                         if u is UnionType and is_valid_union(u) then
                            add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
                         end
@@ -11676,11 +11672,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               if orig_a is NominalType and orig_b is NominalType and not meta_on_operator then
-                  if is_a(orig_a, orig_b) then
-                     t = resolve_tuple(orig_a)
+               if ua is NominalType and ub is NominalType and not meta_on_operator then
+                  if is_a(ua, ub) then
+                     t = ua
                   else
-                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for distinct nominal types %s and %s", resolve_tuple(orig_a), resolve_tuple(orig_b))
+                     error_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for distinct nominal types %s and %s", ua, ub)
                   end
                end
 
