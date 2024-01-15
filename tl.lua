@@ -621,7 +621,6 @@ local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Result = {
 
 
 
-
 local TypeReporter = {}
 
 
@@ -6258,26 +6257,6 @@ local function search_for(module_name, suffix, path, tried)
    return nil, nil, tried
 end
 
-local function filename_to_module_name(filename)
-   local path = os.getenv("TL_PATH") or package.path
-   for entry in path:gmatch("[^;]+") do
-      entry = entry:gsub("%.", "%%.")
-      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
-      local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
-      local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
-
-      for _, pat in ipairs({ tl_pat, d_tl_pat, lua_pat }) do
-         local cap = filename:match(pat)
-         if cap then
-            return (cap:gsub("[/\\]", "."))
-         end
-      end
-   end
-
-
-   return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
-end
-
 function tl.search_module(module_name, search_dtl)
    local found
    local fd
@@ -6308,8 +6287,13 @@ local function require_module(module_name, lax, env)
 
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$")) then
-      local found_result, err = tl.process(found, env, module_name, fd)
+
+      env.modules[module_name] = a_type("typedecl", { def = CIRCULAR_REQUIRE })
+
+      local found_result, err = tl.process(found, env, fd)
       assert(found_result, err)
+
+      env.modules[module_name] = found_result.type
 
       return found_result.type, true
    elseif fd then
@@ -6568,10 +6552,6 @@ tl.type_check = function(ast, opts)
       if err then
          return nil, err
       end
-   end
-
-   if opts.module_name then
-      env.modules[opts.module_name] = a_type("typedecl", { def = CIRCULAR_REQUIRE })
    end
 
    local lax = opts.lax
@@ -12332,10 +12312,6 @@ expand_type(node, values, elements) })
    env.loaded[filename] = result
    table.insert(env.loaded_order, filename)
 
-   if opts.module_name then
-      env.modules[opts.module_name] = result.type
-   end
-
    if tc then
       env.reporter:store_result(tc, env.globals)
    end
@@ -12396,7 +12372,9 @@ local function read_full_file(fd)
    return content, err
 end
 
-tl.process = function(filename, env, module_name, fd)
+tl.process = function(filename, env, fd)
+   assert((not fd or type(fd) ~= "string"), "fd must be a file")
+
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -12428,14 +12406,10 @@ tl.process = function(filename, env, module_name, fd)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n")
    end
 
-   return tl.process_string(input, is_lua, env, filename, module_name)
+   return tl.process_string(input, is_lua, env, filename)
 end
 
-function tl.process_string(input, is_lua, env, filename, module_name)
-   if filename and not module_name then
-      module_name = filename_to_module_name(filename)
-   end
-
+function tl.process_string(input, is_lua, env, filename)
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -12448,7 +12422,6 @@ function tl.process_string(input, is_lua, env, filename, module_name)
       local result = {
          ok = false,
          filename = filename,
-         module_name = module_name,
          type = BOOLEAN,
          type_errors = {},
          syntax_errors = syntax_errors,
@@ -12461,7 +12434,6 @@ function tl.process_string(input, is_lua, env, filename, module_name)
 
    local opts = {
       filename = filename,
-      module_name = module_name,
       lax = is_lua,
       gen_compat = env.gen_compat,
       gen_target = env.gen_target,
@@ -12507,13 +12479,16 @@ local function tl_package_loader(module_name)
          env = tl.package_loader_env
       end
 
-      tl.type_check(program, {
+      env.modules[module_name] = a_type("typedecl", { def = CIRCULAR_REQUIRE })
+
+      local result = tl.type_check(program, {
          lax = lax,
          filename = found_filename,
-         module_name = module_name,
          env = env,
          run_internal_compiler_checks = false,
       })
+
+      env.modules[module_name] = result.type
 
 
 
