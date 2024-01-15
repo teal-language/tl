@@ -6313,7 +6313,7 @@ local function convert_node_to_compat_mt_call(node, mt_name, which_self, e1, e2)
 end
 
 local stdlib_globals = nil
-local globals_typeid
+local globals_typeid = new_typeid()
 local fresh_typevar_ctr = 1
 
 local function set_feat(feat, default)
