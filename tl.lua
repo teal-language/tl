@@ -5930,11 +5930,14 @@ local function display_typevar(typevar)
 end
 
 local function show_fields(t, show)
-   if t.declname then
+   if t.declname and not t.typeargs then
       return " " .. t.declname
    end
 
    local out = {}
+   if t.declname and not t.typeargs then
+      table.insert(out, " " .. t.declname)
+   end
    if t.typeargs then
       table.insert(out, "<")
       local typeargs = {}
@@ -5944,6 +5947,10 @@ local function show_fields(t, show)
       table.insert(out, table.concat(typeargs, ", "))
       table.insert(out, ">")
    end
+   if t.declname then
+      return table.concat(out)
+   end
+
    table.insert(out, " (")
    if t.elements then
       table.insert(out, "{" .. show(t.elements) .. "}")
@@ -6358,6 +6365,9 @@ tl.init_env = function(lax, gen_compat, gen_target, predefined)
    }
 
    if not stdlib_globals then
+      local tl_debug = TL_DEBUG
+      TL_DEBUG = nil
+
       local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
       assert(#syntax_errors == 0)
       local result = tl.type_check(program, {
@@ -6365,7 +6375,9 @@ tl.init_env = function(lax, gen_compat, gen_target, predefined)
          env = env,
       })
       assert(#result.type_errors == 0)
-      stdlib_globals = env.globals;
+      stdlib_globals = env.globals
+
+      TL_DEBUG = tl_debug
 
 
       local math_t = (stdlib_globals["math"].t).def
