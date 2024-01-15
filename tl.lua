@@ -7441,12 +7441,6 @@ tl.type_check = function(ast, opts)
                return def
             end
 
-
-            if def.typename == "nominal" then
-               found = def.found
-               assert(found.typename == "typedecl")
-               def = found.def
-            end
             assert(not (def.typename == "nominal"))
 
             resolved = match_typevals(t, def)

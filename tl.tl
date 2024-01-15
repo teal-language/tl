@@ -7441,12 +7441,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                return def
             end
 
-            -- FIXME is this block still needed?
-            if def is NominalType then
-               found = def.found
-               assert(found is TypeDeclType)
-               def = found.def
-            end
             assert(not def is NominalType)
 
             resolved = match_typevals(t, def)
