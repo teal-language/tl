@@ -518,7 +518,6 @@ local record tl
    record TypeCheckOptions
       lax: boolean
       filename: string
-      module_name: string
       gen_compat: CompatMode
       gen_target: TargetMode
       env: Env
@@ -610,8 +609,8 @@ local record tl
    end
 
    load: function(string, string, LoadMode, {any:any}): LoadFunction, string
-   process: function(string, Env, string, FILE): (Result, string)
-   process_string: function(string, boolean, Env, ? string, ? string): Result
+   process: function(string, Env, ? FILE): (Result, string)
+   process_string: function(string, boolean, Env, ? string): Result
    gen: function(string, Env, PrettyPrintOptions): string, Result
    type_check: function(Node, TypeCheckOptions): Result, string
    new_env: function(EnvOptions): Env, string
@@ -6198,26 +6197,6 @@ local function search_for(module_name: string, suffix: string, path: string, tri
    return nil, nil, tried
 end
 
-local function filename_to_module_name(filename: string): string
-   local path = os.getenv("TL_PATH") or package.path
-   for entry in path:gmatch("[^;]+") do
-      entry = entry:gsub("%.", "%%.")
-      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
-      local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
-      local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
-
-      for _, pat in ipairs({ tl_pat, d_tl_pat, lua_pat }) do
-         local cap = filename:match(pat)
-         if cap then
-            return (cap:gsub("[/\\]", "."))
-         end
-      end
-   end
-
-   -- fallback:
-   return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
-end
-
 function tl.search_module(module_name: string, search_dtl: boolean): string, FILE, {string}
    local found: string
    local fd: FILE
@@ -6248,8 +6227,13 @@ local function require_module(module_name: string, lax: boolean, env: Env): Type
 
    local found, fd = tl.search_module(module_name, true)
    if found and (lax or found:match("tl$") as boolean) then
-      local found_result, err: Result, string = tl.process(found, env, module_name, fd)
+
+      env.modules[module_name] = a_typedecl(CIRCULAR_REQUIRE)
+
+      local found_result, err: Result, string = tl.process(found, env, fd)
       assert(found_result, err)
+
+      env.modules[module_name] = found_result.type
 
       return found_result.type, true
    elseif fd then
@@ -6508,10 +6492,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       if err then
          return nil, err
       end
-   end
-
-   if opts.module_name then
-      env.modules[opts.module_name] = a_typedecl(CIRCULAR_REQUIRE)
    end
 
    local lax = opts.lax
@@ -12272,10 +12252,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    env.loaded[filename] = result
    table.insert(env.loaded_order, filename)
 
-   if opts.module_name then
-      env.modules[opts.module_name] = result.type
-   end
-
    if tc then
       env.reporter:store_result(tc, env.globals)
    end
@@ -12336,7 +12312,9 @@ local function read_full_file(fd: FILE): string, string
    return content, err
 end
 
-tl.process = function(filename: string, env: Env, module_name: string, fd: FILE): Result, string
+tl.process = function(filename: string, env: Env, fd?: FILE): Result, string
+   assert((not fd or type(fd) ~= "string"), "fd must be a file")
+
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -12368,14 +12346,10 @@ tl.process = function(filename: string, env: Env, module_name: string, fd: FILE)
       is_lua = input:match("^#![^\n]*lua[^\n]*\n") as boolean
    end
 
-   return tl.process_string(input, is_lua, env, filename, module_name)
+   return tl.process_string(input, is_lua, env, filename)
 end
 
-function tl.process_string(input: string, is_lua: boolean, env: Env, filename?: string, module_name?: string): Result
-   if filename and not module_name then
-      module_name = filename_to_module_name(filename)
-   end
-
+function tl.process_string(input: string, is_lua: boolean, env: Env, filename?: string): Result
    env = env or tl.init_env(is_lua)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -12388,7 +12362,6 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename?: 
       local result = {
          ok = false,
          filename = filename,
-         module_name = module_name,
          type = BOOLEAN,
          type_errors = {},
          syntax_errors = syntax_errors,
@@ -12401,7 +12374,6 @@ function tl.process_string(input: string, is_lua: boolean, env: Env, filename?: 
 
    local opts: TypeCheckOptions = {
       filename = filename,
-      module_name = module_name,
       lax = is_lua,
       gen_compat = env.gen_compat,
       gen_target = env.gen_target,
@@ -12447,13 +12419,16 @@ local function tl_package_loader(module_name: string): any, any
          env = tl.package_loader_env
       end
 
-      tl.type_check(program, {
+      env.modules[module_name] = a_typedecl(CIRCULAR_REQUIRE)
+
+      local result = tl.type_check(program, {
          lax = lax,
          filename = found_filename,
-         module_name = module_name,
          env = env,
          run_internal_compiler_checks = false,
       })
+
+      env.modules[module_name] = result.type
 
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it

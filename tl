@@ -119,6 +119,26 @@ local function find_file_in_parent_dirs(fname)
    end
 end
 
+local function filename_to_module_name(filename)
+   local path = os.getenv("TL_PATH") or package.path
+   for entry in path:gmatch("[^;]+") do
+      entry = entry:gsub("%.", "%%.")
+      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
+      local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
+      local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
+
+      for _, pat in ipairs({ tl_pat, d_tl_pat, lua_pat }) do
+         local cap = filename:match(pat)
+         if cap then
+            return (cap:gsub("[/\\]", "."))
+         end
+      end
+   end
+
+   -- fallback:
+   return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
+end
+
 --------------------------------------------------------------------------------
 -- Common driver backend
 --------------------------------------------------------------------------------
@@ -212,9 +232,18 @@ do
    end
 end
 
+local function process_module(filename, env)
+   local module_name = filename_to_module_name(filename)
+   local result, err = tl.process(filename, env)
+   if result then
+      env.modules[module_name] = result.type
+   end
+   return result, err
+end
+
 local function type_check_and_load(tlconfig, filename)
    local env = setup_env(tlconfig, filename)
-   local result, err = tl.process(filename, env)
+   local result, err = process_module(filename, env)
    if err then
       die(err)
    end
@@ -705,7 +734,7 @@ commands["check"] = function(tlconfig, args)
          env = setup_env(tlconfig, input_file)
       end
       if not already_loaded(env, input_file) then
-         local _, err = tl.process(input_file, env)
+         local _, err = process_module(input_file, env)
          if err then
             die(err)
          end
@@ -766,7 +795,7 @@ commands["gen"] = function(tlconfig, args)
          output_file = get_output_filename(input_file)
       }
 
-      res.tl_result, err = tl.process(input_file, env)
+      res.tl_result, err = process_module(input_file, env)
       if err then
          die(err)
       end
@@ -866,7 +895,7 @@ do
       env.report_types = true
 
       for i, input_file in ipairs(args["file"]) do
-         local pok, err = pcall(tl.process, input_file, env)
+         local pok, err = pcall(process_module, input_file, env)
          if not pok then
             die("Internal Compiler Error: " .. err)
          end
