@@ -7101,14 +7101,15 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    end
 
    local function add_errs_prefixing(where: Where, src: {Error}, dst: {Error}, prefix: string)
+      assert(where == nil or where.y ~= nil)
+
       if not src then
          return
       end
       for _, err in ipairs(src) do
          err.msg = prefix .. err.msg
 
-         -- where.y may be nil because not all types have .y set
-         if where and where.y and (
+         if where and (
             (err.filename ~= filename)
             or (not err.y)
             or (where.y > err.y or (where.y == err.y and where.x > err.x))

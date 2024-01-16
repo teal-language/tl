@@ -7101,14 +7101,15 @@ tl.type_check = function(ast, opts)
    end
 
    local function add_errs_prefixing(where, src, dst, prefix)
+      assert(where == nil or where.y ~= nil)
+
       if not src then
          return
       end
       for _, err in ipairs(src) do
          err.msg = prefix .. err.msg
 
-
-         if where and where.y and (
+         if where and (
             (err.filename ~= filename) or
             (not err.y) or
             (where.y > err.y or (where.y == err.y and where.x > err.x))) then
