@@ -866,7 +866,8 @@ end
 
 The `<total>` annotation is specific to Teal. It declares a const variable
 assigned to a table value in which all possible keys need to be explicitly
-declared.
+declared. Note that you can only use `<total>` when assigning to a literal
+table value, that is, when you are spelling out a table using a `{}` block.
 
 Of course, not all types allow you to enumerate all possible keys: there is an
 infinite number (well, not infinite because we're talking about computers, but
