@@ -315,7 +315,7 @@ describe("local", function()
             }
          ]]))
 
-         it("accepts direct declaration from total to total", util.check([[
+         it("does not accept direct declaration from total to total", util.check_type_error([[
             local record Point
                x: number
             end
@@ -325,7 +325,9 @@ describe("local", function()
             }
 
             local p2 <total>: Point = p
-         ]]))
+         ]], {
+            { y = 9, msg = "attribute <total> only applies to literal tables" },
+         }))
 
          it("rejects direct declaration from non-total to total", util.check_type_error([[
             local record Point
@@ -339,7 +341,7 @@ describe("local", function()
 
             local p2 <total>: Point = p
          ]], {
-            { msg = "record variable declared <total> does not declare values for all fields" },
+            { y = 10, msg = "attribute <total> only applies to literal tables" },
          }))
 
          it("cannot reassign a total", util.check_type_error([[
