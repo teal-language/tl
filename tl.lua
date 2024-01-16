@@ -1849,11 +1849,6 @@ local table_types = {
 
 
 
-
-
-
-
-
 local TruthyFact = {}
 
 
@@ -1930,6 +1925,8 @@ local attributes = {
 local is_attribute = attributes
 
 local Node = {ExpectedContext = {}, }
+
+
 
 
 
@@ -10347,24 +10344,26 @@ expand_type(node, values, elements) })
          elseif not infertype then
             error_at(var, "variable declared <total> does not declare an initialization value")
             ok = false
-         elseif not (node.exps[i] and node.exps[i].attribute == "total") then
-            local ri = to_structural(infertype)
-            if not (ri.typename == "map" or ri.typename == "record") then
-               error_at(var, "attribute <total> only applies to maps and records")
+         else
+            local valnode = node.exps[i]
+            if not valnode or valnode.kind ~= "literal_table" then
+               error_at(var, "attribute <total> only applies to literal tables")
                ok = false
-            elseif not ri.is_total then
-               local missing = ""
-               if ri.missing then
-                  missing = " (missing: " .. table.concat(ri.missing, ", ") .. ")"
+            else
+               if not valnode.is_total then
+                  local missing = ""
+                  if valnode.missing then
+                     missing = " (missing: " .. table.concat(valnode.missing, ", ") .. ")"
+                  end
+                  local ri = to_structural(infertype)
+                  if ri.typename == "map" then
+                     error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
+                     ok = false
+                  elseif ri.typename == "record" then
+                     error_at(var, "record variable declared <total> does not declare values for all fields" .. missing)
+                     ok = false
+                  end
                end
-               if ri.typename == "map" then
-                  error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
-                  ok = false
-               elseif ri.typename == "record" then
-                  error_at(var, "record variable declared <total> does not declare values for all fields" .. missing)
-                  ok = false
-               end
-               ri.is_total = nil
             end
          end
       end
@@ -11061,24 +11060,17 @@ expand_type(node, values, elements) })
                t = infer_at(node, a_type("array", { elements = force_array }))
             else
                t = resolve_typevars_at(node, node.expected)
-               if node.expected == t and t.typename == "nominal" then
-                  t = a_type("nominal", {
-                     names = t.names,
-                     found = t.found,
-                     resolved = t.resolved,
-                  })
-               end
             end
 
             if decltype.typename == "record" then
                local rt = to_structural(t)
                if rt.typename == "record" then
-                  rt.is_total, rt.missing = total_record_check(decltype, seen_keys)
+                  node.is_total, node.missing = total_record_check(decltype, seen_keys)
                end
             elseif decltype.typename == "map" then
                local rt = to_structural(t)
                if rt.typename == "map" then
-                  rt.is_total, rt.missing = total_map_check(decltype, seen_keys)
+                  node.is_total, node.missing = total_map_check(decltype, seen_keys)
                end
             end
 

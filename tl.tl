@@ -1620,11 +1620,6 @@ local interface HasDeclName
    declname: string
 end
 
-local interface HasIsTotal
-   is_total: boolean
-   missing: {string}
-end
-
 local record NominalType
    is Type
    where self.typename == "nominal"
@@ -1663,7 +1658,7 @@ local record ArrayType
 end
 
 local record RecordType
-   is RecordLikeType, HasIsTotal
+   is RecordLikeType
    where self.typename == "record"
 end
 
@@ -1717,7 +1712,7 @@ local record TypeVarType
 end
 
 local record MapType
-   is Type, HasIsTotal
+   is Type
    where self.typename == "map"
 
    keys: Type
@@ -2010,6 +2005,8 @@ local record Node
 
    -- table literal
    array_len: integer
+   is_total: boolean
+   missing: {string}
 
    -- goto
    label: string
@@ -10347,24 +10344,26 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          elseif not infertype then
             error_at(var, "variable declared <total> does not declare an initialization value")
             ok = false
-         elseif not (node.exps[i] and node.exps[i].attribute == "total") then
-            local ri = to_structural(infertype)
-            if not (ri is MapType or ri is RecordType) then
-               error_at(var, "attribute <total> only applies to maps and records")
+         else
+            local valnode = node.exps[i]
+            if not valnode or valnode.kind ~= "literal_table" then
+               error_at(var, "attribute <total> only applies to literal tables")
                ok = false
-            elseif not ri.is_total then
-               local missing = ""
-               if ri.missing then
-                  missing = " (missing: " .. table.concat(ri.missing, ", ") .. ")"
+            else
+               if not valnode.is_total then
+                  local missing = ""
+                  if valnode.missing then
+                     missing = " (missing: " .. table.concat(valnode.missing, ", ") .. ")"
+                  end
+                  local ri = to_structural(infertype)
+                  if ri is MapType then
+                     error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
+                     ok = false
+                  elseif ri is RecordType then
+                     error_at(var, "record variable declared <total> does not declare values for all fields" .. missing)
+                     ok = false
+                  end
                end
-               if ri is MapType then
-                  error_at(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
-                  ok = false
-               elseif ri is RecordType then
-                  error_at(var, "record variable declared <total> does not declare values for all fields" .. missing)
-                  ok = false
-               end
-               ri.is_total = nil
             end
          end
       end
@@ -11061,24 +11060,17 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                t = infer_at(node, an_array(force_array))
             else
                t = resolve_typevars_at(node, node.expected)
-               if node.expected == t and t is NominalType then
-                  t = a_type("nominal", {
-                     names = t.names,
-                     found = t.found,
-                     resolved = t.resolved,
-                  } as NominalType)
-               end
             end
 
             if decltype is RecordType then
                local rt = to_structural(t)
                if rt is RecordType then
-                  rt.is_total, rt.missing = total_record_check(decltype, seen_keys)
+                  node.is_total, node.missing = total_record_check(decltype, seen_keys)
                end
             elseif decltype is MapType then
                local rt = to_structural(t)
                if rt is MapType then
-                  rt.is_total, rt.missing = total_map_check(decltype, seen_keys)
+                  node.is_total, node.missing = total_map_check(decltype, seen_keys)
                end
             end
 
