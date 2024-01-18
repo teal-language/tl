@@ -1574,6 +1574,8 @@ local record StringType
    literal: string
 end
 
+local type TypeType = TypeAliasType | TypeDeclType
+
 local record TypeDeclType
    is Type
    where self.typename == "typedecl"
@@ -1611,6 +1613,7 @@ local record UnresolvedType
 end
 
 local interface HasTypeArgs
+   is Type
    where self.typeargs
 
    typeargs: {TypeArgType}
@@ -1626,7 +1629,7 @@ local record NominalType
 
    names: {string}
    typevals: {Type}
-   found: Type          -- type is found but typeargs are not resolved
+   found: TypeType      -- type is found but typeargs are not resolved
    resolved: Type       -- type is found and typeargs are resolved
 end
 
@@ -1990,7 +1993,7 @@ local record Node
    exps: Node
 
    -- newtype
-   newtype: TypeAliasType | TypeDeclType
+   newtype: TypeType
    elide_type: boolean
 
    -- expressions
@@ -6904,7 +6907,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   seen[orig_t] = rt
                   return rt, false
                end
-               same = false
+               all_same = false
                t = rt
             end
          end
@@ -7040,7 +7043,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end
          end
 
-         copy.typeid = same and orig_t.typeid or new_typeid()
+         copy.typeid = same and t.typeid or new_typeid()
          return copy, same and all_same
       end
 
@@ -7566,10 +7569,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       end
 
       local function resolve_decl_into_nominal(t: NominalType, found: TypeDeclType): Type
-         local resolved = match_typevals(t, found.def)
-         if not resolved then
-            error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
-            return INVALID
+         local def = found.def
+         local resolved: Type
+         if def is RecordType or def is FunctionType then
+            resolved = match_typevals(t, def)
+            if not resolved then
+               error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
+               return INVALID
+            end
+         else
+            resolved = def
          end
 
          if not t.filename then
@@ -8036,6 +8045,11 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["record"] = {
          ["record"] = eqtype_record,
       },
+      ["interface"] = {
+         ["interface"] = function(a: InterfaceType, b: InterfaceType): boolean, {Error}
+            return a.typeid == b.typeid
+         end,
+      },
       ["function"] = {
          ["function"] = function(a: FunctionType, b: FunctionType): boolean, {Error}
             local argdelta = a.is_method and 1 or 0
@@ -8130,7 +8144,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end,
       },
       ["poly"] = {
-         ["*"] = function(a: Type, b: Type): boolean, {Error}        -- ∃ t ∈ a, t <: b
+         ["*"] = function(a: PolyType, b: Type): boolean, {Error}    -- ∃ t ∈ a, t <: b
             if exists_supertype_in(b, a) then                        -- ───────────────
                return true                                           --   a poly <: b
             end
@@ -8181,7 +8195,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["number"] = compare_true,
       },
       ["interface"] = {
-         ["interface"] = function(a: Type, b: Type): boolean, {Error}
+         ["interface"] = function(a: InterfaceType, b: InterfaceType): boolean, {Error}
             if find_in_interface_list(a, function(t: Type): boolean return (is_a(t, b)) end) then
                return true
             end
@@ -8308,7 +8322,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ["record"] = function(a: TypeDeclType, b: RecordType): boolean, {Error}
             local def = a.def
             if def is RecordLikeType then
-               return subtype_record(a.def, b) -- record as prototype
+               return subtype_record(def, b) -- record as prototype
             end
          end,
       },
@@ -9466,9 +9480,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                old.meta_fields = nil
 
                edit_type(old, "map")
-               assert(old is MapType)
-               old.keys = STRING
-               old.values = values
+               local map = old as MapType
+               map.keys = STRING
+               map.values = values
             elseif old is UnionType then
                edit_type(old, "union")
                table.insert(old.types, drop_constant_value(new))
@@ -9568,7 +9582,12 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   local def = found.def
                   if def is RecordLikeType and def.fields[exp.e2.tk] then
                      table.insert(t.names, exp.e2.tk)
-                     t.found = def.fields[exp.e2.tk]
+                     local ft = def.fields[exp.e2.tk]
+                     if ft is TypeType then
+                        t.found = ft
+                     else
+                        return nil
+                     end
                   end
                end
             end
@@ -11689,7 +11708,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
                local t = types_op[ra.typename]
 
-               if not t then
+               if not t and ra is RecordLikeType then
                   t = find_in_interface_list(ra, function(ty: Type): Type
                      return types_op[ty.typename]
                   end)
@@ -12012,7 +12031,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             end,
          },
          ["record"] = {
-            before = function(typ: Type)
+            before = function(typ: RecordType)
                begin_scope()
                add_var(nil, "@self", type_at(typ, a_typedecl(typ)))
 

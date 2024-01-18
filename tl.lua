@@ -1849,6 +1849,9 @@ local table_types = {
 
 
 
+
+
+
 local TruthyFact = {}
 
 
@@ -6904,7 +6907,7 @@ tl.type_check = function(ast, opts)
                   seen[orig_t] = rt
                   return rt, false
                end
-               same = false
+               all_same = false
                t = rt
             end
          end
@@ -7040,7 +7043,7 @@ tl.type_check = function(ast, opts)
             end
          end
 
-         copy.typeid = same and orig_t.typeid or new_typeid()
+         copy.typeid = same and t.typeid or new_typeid()
          return copy, same and all_same
       end
 
@@ -7566,10 +7569,16 @@ tl.type_check = function(ast, opts)
       end
 
       local function resolve_decl_into_nominal(t, found)
-         local resolved = match_typevals(t, found.def)
-         if not resolved then
-            error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
-            return INVALID
+         local def = found.def
+         local resolved
+         if def.typename == "record" or def.typename == "function" then
+            resolved = match_typevals(t, def)
+            if not resolved then
+               error_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
+               return INVALID
+            end
+         else
+            resolved = def
          end
 
          if not t.filename then
@@ -8036,6 +8045,11 @@ tl.type_check = function(ast, opts)
       ["record"] = {
          ["record"] = eqtype_record,
       },
+      ["interface"] = {
+         ["interface"] = function(a, b)
+            return a.typeid == b.typeid
+         end,
+      },
       ["function"] = {
          ["function"] = function(a, b)
             local argdelta = a.is_method and 1 or 0
@@ -8308,7 +8322,7 @@ a.types[i], b.types[i]), }
          ["record"] = function(a, b)
             local def = a.def
             if def.fields then
-               return subtype_record(a.def, b)
+               return subtype_record(def, b)
             end
          end,
       },
@@ -9466,9 +9480,9 @@ a.types[i], b.types[i]), }
                old.meta_fields = nil
 
                edit_type(old, "map")
-               assert(old.typename == "map")
-               old.keys = STRING
-               old.values = values
+               local map = old
+               map.keys = STRING
+               map.values = values
             elseif old.typename == "union" then
                edit_type(old, "union")
                table.insert(old.types, drop_constant_value(new))
@@ -9568,7 +9582,12 @@ a.types[i], b.types[i]), }
                   local def = found.def
                   if def.fields and def.fields[exp.e2.tk] then
                      table.insert(t.names, exp.e2.tk)
-                     t.found = def.fields[exp.e2.tk]
+                     local ft = def.fields[exp.e2.tk]
+                     if type(ft) == "table" then
+                        t.found = ft
+                     else
+                        return nil
+                     end
                   end
                end
             end
@@ -11689,7 +11708,7 @@ expand_type(node, values, elements) })
 
                local t = types_op[ra.typename]
 
-               if not t then
+               if not t and ra.fields then
                   t = find_in_interface_list(ra, function(ty)
                      return types_op[ty.typename]
                   end)
