@@ -8663,26 +8663,6 @@ tl.type_check = function(ast, opts)
          end
       end,
 
-      ["print_type"] = function(node, _a, b, _argdelta)
-
-         if #b == 0 then
-
-            print("-----------------------------------------")
-            for i, scope in ipairs(st) do
-               for s, v in pairs(scope) do
-                  print(("%2d %-14s %-11s %s"):format(i, s, v.t.typename, show_type(v.t):sub(1, 50)))
-               end
-            end
-            print("-----------------------------------------")
-            return NONE
-         else
-            local t = show_type(b[1])
-            print(t)
-            node_warning("debug", node.e2[1], "type is: %s", t)
-            return b
-         end
-      end,
-
       ["require"] = function(node, _a, b, _argdelta)
          if #b ~= 1 then
             return node_error(node, "require expects one literal argument")
@@ -10833,13 +10813,6 @@ function tl.symbols_in_scope(tr, y, x)
    end
 
    local ret = {}
-
-
-
-
-
-
-
 
    local n = find(tr.symbols, y, x)
 
