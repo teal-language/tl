@@ -113,8 +113,8 @@ describe("xpcall", function()
 
       local pok = xpcall(f, msgh, 123, "hello")
    ]], {
-      { msg = "in message handler: incompatible number of arguments" },
-      { msg = "argument 3: got integer, expected string" },
+      { y = 6, x = 29, msg = "in message handler: incompatible number of arguments" },
+      { y = 6, x = 35, msg = "argument 3: got integer, expected string" },
    }))
 
    it("does not warn when passed a method as the first argument", util.check_warnings([[
@@ -138,7 +138,7 @@ describe("xpcall", function()
       local record Text
          text: string
       end
-      
+
       local function msgh(err: nil) print(err) end
 
       function Text:print(): nil
