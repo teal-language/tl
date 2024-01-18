@@ -9977,26 +9977,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          end
       end,
 
-      ["print_type"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
-         -- TODO should those offsets be fixed by _argdelta?
-         if #b.tuple == 0 then
-            -- when called with no arguments, print all variables currently in scope and their types.
-            print("-----------------------------------------")
-            for i, scope in ipairs(st) do
-               for s, v in pairs(scope) do
-                  print(("%2d %-14s %-11s %s"):format(i, s, v.t.typename, show_type(v.t):sub(1, 50)))
-               end
-            end
-            print("-----------------------------------------")
-            return a_tuple({})
-         else
-            local t = show_type(b.tuple[1])
-            print(t)
-            add_warning("debug", node.e2[1], "type is: %s", t)
-            return b
-         end
-      end,
-
       ["require"] = function(node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
          if #b.tuple ~= 1 then
             return invalid_at(node, "require expects one literal argument")
@@ -12266,13 +12246,6 @@ function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer): {string:in
    end
 
    local ret: {string:integer} = {}
-
-   -- local a, b = 0, 0
-   -- for i, s in ipairs(tr.symbols) do
-   --    print("["..i.."]", (a < s[1] or (a == s[1] and b <= s[2])) and " " or "x", s[1], s[2], s[3], s[4])
-   --    a, b = s[1], s[2]
-   -- end
-   -- print()
 
    local n = find(tr.symbols, y, x)
 
