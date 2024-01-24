@@ -163,10 +163,12 @@ local function setup_env(tlconfig, filename)
    end
 
    local opts = {
-      lax_mode = lax_mode,
-      feat_arity = tlconfig["feat_arity"],
-      gen_compat = tlconfig["gen_compat"],
-      gen_target = tlconfig["gen_target"],
+      defaults = {
+         feat_lax = lax_mode and "on" or "off",
+         feat_arity = tlconfig["feat_arity"],
+         gen_compat = tlconfig["gen_compat"],
+         gen_target = tlconfig["gen_target"],
+      },
       predefined_modules = tlconfig._init_env_modules,
    }
 

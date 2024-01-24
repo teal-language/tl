@@ -435,7 +435,7 @@ local function check(lax, code, unknowns, gen_target)
       if gen_target == "5.4" then
          gen_compat = "off"
       end
-      local result = tl.type_check(ast, { filename = "foo.lua", lax = lax, gen_target = gen_target, gen_compat = gen_compat })
+      local result = tl.type_check(ast, "foo.lua", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
       batch:add(assert.same, {}, result.type_errors)
 
       if unknowns then
@@ -456,7 +456,7 @@ local function check_type_error(lax, code, type_errors, gen_target)
       if gen_target == "5.4" then
          gen_compat = "off"
       end
-      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target, gen_compat = gen_compat })
+      local result = tl.type_check(ast, "foo.tl", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
       local result_type_errors = combine_result(result, "type_errors")
 
       batch_compare(batch, "type errors", type_errors, result_type_errors)
@@ -525,7 +525,7 @@ function util.check_syntax_error(code, syntax_errors)
       local batch = batch_assertions()
       batch_compare(batch, "syntax errors", syntax_errors, errors)
       batch:assert()
-      tl.type_check(ast, { filename = "foo.tl", lax = false })
+      tl.type_check(ast, "foo.tl", { feat_lax = "off" })
    end
 end
 
@@ -564,7 +564,7 @@ function util.check_types(code, types)
       local batch = batch_assertions()
       local env = tl.init_env()
       env.report_types = true
-      local result = tl.type_check(ast, { filename = "foo.tl", env = env, lax = false })
+      local result = tl.type_check(ast, "foo.tl", { feat_lax = "off" }, env)
       batch:add(assert.same, {}, result.type_errors, "Code was not expected to have type errors")
 
       local tr = env.reporter:get_report()
@@ -596,7 +596,8 @@ local function gen(lax, code, expected, gen_target)
    return function()
       local ast, syntax_errors = tl.parse(code, "foo.tl")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local result = assert(tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target, gen_compat = gen_target == "5.4" and "off" or nil }))
+      local gen_compat = gen_target == "5.4" and "off" or nil
+      local result = tl.type_check(ast, "foo.tl", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
       assert.same({}, result.type_errors)
       local output_code = tl.pretty_print_ast(ast, gen_target)
 

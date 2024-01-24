@@ -8,7 +8,7 @@ describe("tl.get_types", function()
          local function a()
             ::continue::
          end
-      ]], false, env))
+      ]], env))
 
       local tr, trenv = tl.get_types(result)
       assert(tr)
@@ -25,7 +25,7 @@ describe("tl.get_types", function()
          end
 
          R.f("hello")
-      ]], false, env))
+      ]], env))
 
       local tr, trenv = tl.get_types(result)
       local y = 6

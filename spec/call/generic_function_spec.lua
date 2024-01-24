@@ -370,7 +370,7 @@ describe("generic function", function()
          recurse_node(ast, visit_node, visit_type)
       end
    ]], {
-      { x = 40, msg = "argument 3: in map value: type parameter <T>: got number, expected string" }
+      { y = 16, x = 40, msg = "argument 3: in map value: type parameter <T>: got number, expected string" }
    }))
 
    it("inference trickles down to function arguments, pass", util.check([[
