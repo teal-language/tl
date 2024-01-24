@@ -199,7 +199,6 @@ describe("tl types works like check", function()
          local by_pos = types.by_pos[next(types.by_pos)]
          assert(by_pos["1"])
          assert(by_pos["1"]["13"]) -- require
-         assert(by_pos["1"]["20"]) -- (
          assert(by_pos["1"]["21"]) -- "os"
          assert(by_pos["1"]["26"]) -- .
       end)
@@ -217,18 +216,17 @@ describe("tl types works like check", function()
          assert(types.by_pos)
          local by_pos = types.by_pos[next(types.by_pos)]
          assert.same({
-            ["19"] = 2,
-            ["20"] = 5,
-            ["22"] = 2,
-            ["39"] = 6,
-            ["41"] = 2,
+            ["19"] = 8,
+            ["22"] = 8,
+            ["23"] = 6,
+            ["30"] = 2,
+            ["41"] = 8,
          }, by_pos["1"])
          assert.same({
-            ["17"] = 3,
-            ["20"] = 4,
-            ["25"] = 17,
-            ["30"] = 16,
-            ["31"] = 2,
+            ["17"] = 6,
+            ["20"] = 2,
+            ["25"] = 9,
+            ["31"] = 8,
          }, by_pos["2"])
       end)
    end)

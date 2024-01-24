@@ -239,8 +239,8 @@ describe("record method", function()
          return "hello"
       end
    ]], {
-      { msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
-      { msg = "excess return values, expected 0 (), got 1 (string \"hello\")" },
+      { y = 5, msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
+      { y = 6, msg = "excess return values, expected 0 (), got 1 (string \"hello\")" },
    }))
 
    it("allows functions declared on method tables (#27)", function()

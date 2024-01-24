@@ -69,7 +69,7 @@ describe("tl.gen", function()
          print(math.floor(2))
       ]]
 
-      local env = tl.init_env(true, true)
+      local env = tl.init_env(true, false)
       local output, result = tl.gen(input, env)
 
       assert.equal('print(math.floor(2))', output)
@@ -83,7 +83,7 @@ describe("tl.gen", function()
 
 print(math.floor(2))]]
 
-      local env = tl.init_env(true, true)
+      local env = tl.init_env(true, false)
       local output, result = tl.gen(input, env)
 
       assert.equal(input, output)
