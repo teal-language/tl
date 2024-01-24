@@ -105,7 +105,7 @@ describe("xpcall", function()
       { msg = "xyz: got boolean, expected number" }
    }))
 
-   it("type checks the message handler", util.check_type_error([[
+   it("#only type checks the message handler", util.check_type_error([[
       local function f(a: string, b: number)
       end
 
