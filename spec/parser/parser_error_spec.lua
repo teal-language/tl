@@ -2,7 +2,7 @@ local tl = require("tl")
 
 describe("parser errors", function()
    it("parse errors include filename", function ()
-      local result = tl.process_string("local x 1", false, nil, "foo.tl")
+      local result = tl.process_string("local x 1", nil, "foo.tl")
       assert.same("foo.tl", result.syntax_errors[1].filename, "parse errors should contain .filename property")
    end)
 
@@ -30,7 +30,7 @@ describe("parser errors", function()
       local code = [[
          local bar = require "bar"
       ]]
-      local result = tl.process_string(code, true, nil, "foo.tl")
+      local result = tl.process_string(code, nil, "foo.tl")
       assert.is_not_nil(string.match(result.env.loaded["./bar.tl"].syntax_errors[1].filename, "bar.tl$"), "errors should contain .filename property")
    end)
 end)
