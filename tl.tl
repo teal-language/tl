@@ -8563,7 +8563,7 @@ do
    function TypeChecker:assert_is_a(w: Where, t1: Type, t2: Type, ctx?: string | Node, name?: string): boolean
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
-      if self.feat_lax and (is_unknown(t1) or is_unknown(t2)) then
+      if self.feat_lax and (is_unknown(t1) or t2 is UnknownType) then
          return true
       end
 
