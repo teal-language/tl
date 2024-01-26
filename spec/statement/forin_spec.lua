@@ -188,6 +188,16 @@ describe("forin", function()
    }))
 
    describe("regression tests", function()
+      it("catches if iterator function does not return values (#736)", util.check_type_error([[
+         local function f()
+         end
+
+         for k, v in f() do
+         end
+      ]], {
+         { y = 4, msg = "expression in 'for' statement does not return any values" },
+      }))
+
       it("does not accept annotations (#701)", util.check_syntax_error([[
          for k <const>, v <const> in pairs(table as {string:any}) do
              k = "hello"
