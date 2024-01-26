@@ -43,4 +43,17 @@ describe("lax mode", function()
       { msg = "x" },
       { msg = "y" },
    }))
+
+   it("performs emptytable key-value inference as normal", util.lax_check([[
+      local t = {}
+
+      local s = "str"
+
+      t[s] = 9
+
+      for k, v in pairs(t) do
+         print(k, v)
+      end
+   ]], {}))
+
 end)
