@@ -11459,7 +11459,7 @@ self:expand_type(node, values, elements) })
                min_arity = node.min_arity,
                typeargs = node.typeargs,
                args = args,
-               rets = rets,
+               rets = self.get_rets(rets),
             }))
          end,
       },
