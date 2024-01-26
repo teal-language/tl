@@ -8585,7 +8585,7 @@ a.types[i], b.types[i]), }
    function TypeChecker:assert_is_a(w, t1, t2, ctx, name)
       t1 = resolve_tuple(t1)
       t2 = resolve_tuple(t2)
-      if self.feat_lax and (is_unknown(t1) or is_unknown(t2)) then
+      if self.feat_lax and (is_unknown(t1) or t2.typename == "unknown") then
          return true
       end
 
