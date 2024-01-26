@@ -10855,8 +10855,14 @@ do
             assert(exptuple is TupleType)
             local exptypes = exptuple.tuple
 
-            self:widen_all_unions(node)
             local exp1 = node.exps[1]
+            if #exptypes < 1 then
+               self.errs:invalid_at(exp1, "expression in 'for' statement does not return any values")
+               return
+            end
+
+            self:widen_all_unions(node)
+
             local args = a_tuple(node.exps, {
                node.exps[2] and exptypes[2],
                node.exps[3] and exptypes[3]
