@@ -19,9 +19,7 @@ describe("parser", function()
       assert.same({
          kind = "statements",
          tk = "$EOF$",
-         type = {
-            typename = "none",
-         },
+         f = "",
          x = 1,
          y = 1,
          xend = 5,
@@ -63,8 +61,8 @@ describe("parser", function()
       assert.same({}, result.syntax_errors)
       assert.same("statements", result.ast.kind)
       assert.same("return", result.ast[1].kind)
-      assert.same("table_literal", result.ast[1].exps[1].kind)
-      assert.same("table_item", result.ast[1].exps[1][1].kind)
+      assert.same("literal_table", result.ast[1].exps[1].kind)
+      assert.same("literal_table_item", result.ast[1].exps[1][1].kind)
       assert.same("implicit", result.ast[1].exps[1][1].key_parsed)
    end)
 

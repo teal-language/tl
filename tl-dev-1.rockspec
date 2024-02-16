@@ -17,10 +17,6 @@ dependencies = {
 
    -- needed for the cli tool
    "argparse",
-
-   -- needed for build options
-   -- --build-dir, --source-dir, etc.
-   "luafilesystem",
 }
 test_dependencies = {
    "dkjson",

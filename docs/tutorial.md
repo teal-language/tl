@@ -155,7 +155,6 @@ Finally, there are types that must be declared and referred to using names:
 * enum
 * record
   * userdata
-  * arrayrecord
 
 Here is an example declaration of each. Again, we'll go into more detail below,
 but this should give you an overview:
@@ -180,9 +179,8 @@ local record File
    close: function(File): boolean, string
 end
 
--- an arrayrecord: a record which doubles as a record and an array
-local record TreeNode<T>
-   {TreeNode<T>}
+-- a record can doubles as a record and an array, by declaring an array interface
+local record TreeNode<T> is {TreeNode<T>}
    item: T
 end
 ```
@@ -489,13 +487,12 @@ local record Obj
 end
 ```
 
-A record can also have an array part, making it an "arrayrecord". The
-following is an arrayrecord. You can use it both as a record, accessing its
-fields by name, and as an array, accessing its entries by number.
+A record can also store array data, by declaring an array interface. You can
+use it both as a record, accessing its fields by name, and as an array,
+accessing its entries by number. A record can have only one array interface.
 
 ```
-local record Node
-   {Node}
+local record Node is {Node}
    weight: number
    name: string
 end
@@ -869,7 +866,8 @@ end
 
 The `<total>` annotation is specific to Teal. It declares a const variable
 assigned to a table value in which all possible keys need to be explicitly
-declared.
+declared. Note that you can only use `<total>` when assigning to a literal
+table value, that is, when you are spelling out a table using a `{}` block.
 
 Of course, not all types allow you to enumerate all possible keys: there is an
 infinite number (well, not infinite because we're talking about computers, but

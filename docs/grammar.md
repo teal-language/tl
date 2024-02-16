@@ -31,12 +31,14 @@ precedence, see below.
 +      ‘local’ attnamelist [‘:’ typelist] [‘=’ explist] |
        ‘local’ ‘function’ Name funcbody |
 *      ‘local’ ‘record’ Name recordbody |
+*      ‘local’ ‘interface’ Name recordbody |
 *      ‘local’ ‘enum’ Name enumbody |
 *      ‘local’ ‘type’ Name ‘=’ newtype |
 *      ‘global’ attnamelist ‘:’ typelist [‘=’ explist] |
 *      ‘global’ attnamelist ‘=’ explist |
 *      ‘global’ ‘function’ Name funcbody |
 *      ‘global’ ‘record’ Name recordbody |
+*      ‘global’ ‘interface’ Name recordbody |
 *      ‘global’ ‘enum’ Name enumbody |
 *      ‘global’ ‘type’ Name [‘=’ newtype]
 
@@ -93,9 +95,11 @@ precedence, see below.
 
 *  type ::= ‘(’ type ‘)’ | basetype {‘|’ basetype}
 
+*  nominal ::= Name {{‘.’ Name }} [typeargs]
+
 *  basetype ::= ‘string’ | ‘boolean’ | ‘nil’ | ‘number’ |
 *      ‘{’ type {',' type} ‘}’ | ‘{’ type ‘:’ type ‘}’ | functiontype
-*      | Name {{‘.’ Name }} [typeargs]
+*      | nominal
 
 *  typelist ::= type {‘,’ type}
 
@@ -105,9 +109,13 @@ precedence, see below.
 
 *  newtype ::= ‘record’ recordbody | ‘enum’ enumbody | type
 
-*  recordbody ::= [typeargs] {recordentry} ‘end’
+*  interfacelist ::= nominal {‘,’ nominal} |
+*     ‘{’ type ‘}’ {‘,’ nominal}
 
-*  recordentry ::= ‘userdata’ | ‘{’ type ‘}’ |
+*  recordbody ::= [typeargs] [‘is’ interfacelist]
+*     [‘where’ exp] {recordentry} ‘end’
+
+*  recordentry ::= ‘userdata’ |
 *      ‘type’ Name ‘=’ newtype | [‘metamethod’] recordkey ‘:’ type |
 *      ‘record’ recordbody | ‘enum’ enumbody
 
@@ -119,11 +127,11 @@ precedence, see below.
 
 *  partypelist ::= partype {‘,’ partype}
 
-*  partype ::= [Name ‘:’] type
+*  partype ::= Name [‘?’] ‘:’ type | [‘?’] type
 
 *  parnamelist ::= parname {‘,’ parname}
 
-*  parname ::= Name [‘:’ type]
+*  parname ::= Name [‘?’] [‘:’ type]
 ```
 
 ## Operator precedence

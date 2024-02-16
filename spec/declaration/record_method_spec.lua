@@ -239,8 +239,8 @@ describe("record method", function()
          return "hello"
       end
    ]], {
-      { msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
-      { msg = "excess return values, expected 0 (), got 1 (string \"hello\")" },
+      { y = 5, msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
+      { y = 6, msg = "excess return values, expected 0 (), got 1 (string \"hello\")" },
    }))
 
    it("allows functions declared on method tables (#27)", function()
@@ -349,15 +349,15 @@ describe("record method", function()
    }))
 
    it("does not fail when declaring methods on untyped self (regression test for #427)", util.check([[
-      local record T<A, B>
-        method: function(T<A, B>, function(A)): T<A, B>
+      local record Rec<A, B>
+        my_method: function(Rec<A, B>, function(A)): Rec<A, B>
       end
 
       local t = { }
 
-      function t.new<A, B>(): T<A, B>
+      function t.new<A, B>(): Rec<A, B>
         local self = { }
-        function self:method(callback: function(A)): T<A, B>
+        function self:my_method(callback: function(A)): Rec<A, B>
           return self
         end
         return self
@@ -397,7 +397,7 @@ describe("record method", function()
       local record Point
       end
 
-      function Point:new(x: number, y: number): Point
+      function Point:new(x?: number, y?: number): Point
       end
 
       function Point:move(dx: number, dy: number)

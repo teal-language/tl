@@ -9,6 +9,14 @@ describe("assignment to multiple variables", function()
       print(b .. " right!")
    ]]))
 
+   it("adjusts arity of tuple", util.check([[
+      local function foo(): boolean, string
+         return true, "yeah!"
+      end
+      local a, b, c = 2, foo()
+      print(c .. " right!")
+   ]]))
+
    it("reports unsufficient rvalues as an error, simple", util.check_type_error([[
       local a, b = 1, 2
       a, b = 3
