@@ -395,7 +395,10 @@ local function declare_modules(out, basename, files)
    ]])
    for _, filename in ipairs(files) do
       if filename:match("%.lua$") then
-         local name = filename:gsub("^" .. basename .. "/", "")
+         local name = filename
+         if filename:sub(1, #basename + 1) == basename .. "/" then
+            name = filename:sub(#basename + 2)
+         end
          local modname = name:gsub("%.lua$", ""):gsub("/", ".")
          table.insert(out, ("/* %s */"):format(modname))
          table.insert(out, ("{"))
