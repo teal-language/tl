@@ -1614,6 +1614,7 @@ local record TypeDeclType
    is Type
    where self.typename == "typedecl"
 
+   typeargs: {TypeArgType}
    def: Type
    closed: boolean
 end
@@ -3615,13 +3616,16 @@ local metamethod_names: {string:boolean} = {
 }
 
 local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): integer, Node
--- TODO: generic macroexp
---   if ps.tokens[i].tk == "<" then
---      i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
---   end
    local node = new_node(ps, istart, "macroexp")
+
    local i: integer
-   i, node.args, node.min_arity = parse_argument_list(ps, iargs)
+   if ps.tokens[istart + 1].tk == "<" then
+      i, node.typeargs = parse_anglebracket_list(ps, istart + 1, parse_typearg)
+   else
+      i = iargs
+   end
+
+   i, node.args, node.min_arity = parse_argument_list(ps, i)
    i, node.rets = parse_return_types(ps, i)
    i = verify_tk(ps, i, "return")
    i, node.exp = parse_expression(ps, i)
@@ -3630,12 +3634,22 @@ local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): 
    return i, node
 end
 
-local function parse_where_clause(ps: ParseState, i: integer): integer, Node
+local function parse_where_clause(ps: ParseState, i: integer, typeargs: {TypeArgType}): integer, Node
    local node = new_node(ps, i, "macroexp")
+
+   local selftype = new_nominal(ps, i, "@self")
+   if typeargs then
+      selftype.typevals = {}
+      for a, t in ipairs(typeargs) do
+         selftype.typevals[a] = a_nominal(node, { t.typearg })
+      end
+   end
+
+   node.is_method = true
    node.args = new_node(ps, i, "argument_list")
    node.args[1] = new_node(ps, i, "argument")
    node.args[1].tk = "self"
-   node.args[1].argtype = new_nominal(ps, i, "@self")
+   node.args[1].argtype = selftype
    node.min_arity = 1
    node.rets = new_tuple(ps, i)
    node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3673,6 +3687,17 @@ local function parse_array_interface_type(ps: ParseState, i: integer, def: Recor
    def.elements = t.elements
    return i, t
 end
+
+local function clone_typeargs(ps: ParseState, i: integer, typeargs: {TypeArgType}): {TypeArgType}
+   local copy = {}
+   for a, ta in ipairs(typeargs) do
+      local cta = new_type(ps, i, "typearg") as TypeArgType
+      cta.typearg = ta.typearg
+      copy[a] = cta
+   end
+   return copy
+end
+
 
 parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, node: Node): integer, Node
    local istart = i - 1
@@ -3715,9 +3740,12 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, no
       local wstart = i
       i = i + 1
       local where_macroexp: Node
-      i, where_macroexp = parse_where_clause(ps, i)
+      i, where_macroexp = parse_where_clause(ps, i, def.typeargs)
 
       local typ = new_type(ps, wstart, "function") as FunctionType
+      if def.typeargs then
+         typ.typeargs = clone_typeargs(ps, i, def.typeargs)
+      end
       typ.is_method = true
       typ.min_arity = 1
       typ.args = new_tuple(ps, wstart, {
@@ -3978,10 +4006,17 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
    i = i + 2 -- skip `local` or `global`, and `type`
 
    local asgn: Node = new_node(ps, i, node_name)
-   i, asgn.var = parse_variable_name(ps, i)
-   if not asgn.var then
+   local var: Node
+
+   i, var = verify_kind(ps, i, "identifier")
+   if not var then
       return fail(ps, i, "expected a type name")
    end
+   local typeargs: {TypeArgType}
+   if ps.tokens[i].tk == "<" then
+      i, typeargs = parse_anglebracket_list(ps, i, parse_typearg)
+   end
+   asgn.var = var
 
    if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
       return i, asgn
@@ -4005,6 +4040,10 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
 
    local nt = asgn.value.newtype
    if nt is TypeDeclType then
+      if typeargs then
+         nt.typeargs = typeargs
+      end
+
       local def = nt.def
       if def is RecordLikeType or def is EnumType then
          if not def.declname then
@@ -4399,6 +4438,11 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
    elseif ast is TypeAliasType then
       table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast is TypeDeclType then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
 
@@ -7146,8 +7190,17 @@ do
       local errs: {Error}
       local seen: {Type:Type} = {}
       local resolved: {string:boolean} = {}
+      local resolve: function<T is Type>(t: T, all_same: boolean): T, boolean
 
-      local function resolve<T is Type>(t: T, all_same: boolean): T, boolean
+      local function copy_typeargs(t: {TypeArgType}, same: boolean): {TypeArgType}, boolean
+         local copy = {}
+         for i, tf in ipairs(t) do
+            copy[i], same = resolve(tf, same) as (TypeArgType, boolean)
+         end
+         return copy, same
+      end
+
+      resolve = function<T is Type>(t: T, all_same: boolean): T, boolean
          local same = true
 
          -- avoid copies of types that do not contain type variables
@@ -7207,6 +7260,11 @@ do
             end
          elseif t is TypeDeclType then
             assert(copy is TypeDeclType)
+
+            if t.typeargs then
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
+            end
+
             copy.def, same = resolve(t.def, same)
          elseif t is TypeAliasType then
             assert(copy is TypeAliasType)
@@ -7224,12 +7282,10 @@ do
             assert(copy is FunctionType)
 
             if t.typeargs then
-               copy.typeargs = {}
-               for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same) as (TypeArgType, boolean)
-               end
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
             end
 
+            copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
             copy.args, same = resolve(t.args, same) as (TupleType, boolean)
@@ -7239,10 +7295,7 @@ do
             copy.declname = t.declname
 
             if t.typeargs then
-               copy.typeargs = {}
-               for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same) as (TypeArgType, boolean)
-               end
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
             end
 
             -- checking array interface
@@ -7679,6 +7732,7 @@ do
          assert(not def is NominalType)
 
          t.found = found
+
          return nil, found
       end
 
@@ -9066,6 +9120,7 @@ do
          end
 
          local ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
+
          ret = self:resolve_typevars_at(node, ret)
          self:end_scope()
 
@@ -12274,10 +12329,10 @@ do
    }
 
    visit_type.cbs["interface"] = visit_type.cbs["record"]
+   visit_type.cbs["typedecl"] = visit_type.cbs["function"]
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
-   visit_type.cbs["typedecl"] = default_type_visitor
    visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["array"] = default_type_visitor
    visit_type.cbs["map"] = default_type_visitor
