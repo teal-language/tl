@@ -1890,6 +1890,7 @@ end
 
 
 
+
 local TruthyFact = {}
 
 
@@ -3604,13 +3605,16 @@ do
    }
 
    local function parse_macroexp(ps, istart, iargs)
-
-
-
-
       local node = new_node(ps, istart, "macroexp")
+
       local i
-      i, node.args, node.min_arity = parse_argument_list(ps, iargs)
+      if ps.tokens[istart + 1].tk == "<" then
+         i, node.typeargs = parse_anglebracket_list(ps, istart + 1, parse_typearg)
+      else
+         i = iargs
+      end
+
+      i, node.args, node.min_arity = parse_argument_list(ps, i)
       i, node.rets = parse_return_types(ps, i)
       i = verify_tk(ps, i, "return")
       i, node.exp = parse_expression(ps, i)
@@ -3619,12 +3623,22 @@ do
       return i, node
    end
 
-   local function parse_where_clause(ps, i)
+   local function parse_where_clause(ps, i, typeargs)
       local node = new_node(ps, i, "macroexp")
+
+      local selftype = new_nominal(ps, i, "@self")
+      if typeargs then
+         selftype.typevals = {}
+         for a, t in ipairs(typeargs) do
+            selftype.typevals[a] = a_nominal(node, { t.typearg })
+         end
+      end
+
+      node.is_method = true
       node.args = new_node(ps, i, "argument_list")
       node.args[1] = new_node(ps, i, "argument")
       node.args[1].tk = "self"
-      node.args[1].argtype = new_nominal(ps, i, "@self")
+      node.args[1].argtype = selftype
       node.min_arity = 1
       node.rets = new_tuple(ps, i)
       node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3662,6 +3676,17 @@ do
       def.elements = t.elements
       return i, t
    end
+
+   local function clone_typeargs(ps, i, typeargs)
+      local copy = {}
+      for a, ta in ipairs(typeargs) do
+         local cta = new_type(ps, i, "typearg")
+         cta.typearg = ta.typearg
+         copy[a] = cta
+      end
+      return copy
+   end
+
 
    parse_record_body = function(ps, i, def, node)
       local istart = i - 1
@@ -3704,9 +3729,12 @@ do
          local wstart = i
          i = i + 1
          local where_macroexp
-         i, where_macroexp = parse_where_clause(ps, i)
+         i, where_macroexp = parse_where_clause(ps, i, def.typeargs)
 
          local typ = new_type(ps, wstart, "function")
+         if def.typeargs then
+            typ.typeargs = clone_typeargs(ps, i, def.typeargs)
+         end
          typ.is_method = true
          typ.min_arity = 1
          typ.args = new_tuple(ps, wstart, {
@@ -3967,10 +3995,17 @@ do
       i = i + 2
 
       local asgn = new_node(ps, i, node_name)
-      i, asgn.var = parse_variable_name(ps, i)
-      if not asgn.var then
+      local var
+
+      i, var = verify_kind(ps, i, "identifier")
+      if not var then
          return fail(ps, i, "expected a type name")
       end
+      local typeargs
+      if ps.tokens[i].tk == "<" then
+         i, typeargs = parse_anglebracket_list(ps, i, parse_typearg)
+      end
+      asgn.var = var
 
       if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
          return i, asgn
@@ -3994,6 +4029,10 @@ do
 
       local nt = asgn.value.newtype
       if nt.typename == "typedecl" then
+         if typeargs then
+            nt.typeargs = typeargs
+         end
+
          local def = nt.def
          if def.fields or def.typename == "enum" then
             if not def.declname then
@@ -4388,6 +4427,11 @@ local function recurse_type(s, ast, visit)
    elseif ast.typename == "typealias" then
       table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast.typename == "typedecl" then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
 
@@ -7124,8 +7168,17 @@ do
       local errs
       local seen = {}
       local resolved = {}
+      local resolve
 
-      local function resolve(t, all_same)
+      local function copy_typeargs(t, same)
+         local copy = {}
+         for i, tf in ipairs(t) do
+            copy[i], same = resolve(tf, same)
+         end
+         return copy, same
+      end
+
+      resolve = function(t, all_same)
          local same = true
 
 
@@ -7185,6 +7238,11 @@ do
             end
          elseif t.typename == "typedecl" then
             assert(copy.typename == "typedecl")
+
+            if t.typeargs then
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
+            end
+
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "typealias" then
             assert(copy.typename == "typealias")
@@ -7202,12 +7260,10 @@ do
             assert(copy.typename == "function")
 
             if t.typeargs then
-               copy.typeargs = {}
-               for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same)
-               end
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
             end
 
+            copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
             copy.args, same = resolve(t.args, same)
@@ -7217,10 +7273,7 @@ do
             copy.declname = t.declname
 
             if t.typeargs then
-               copy.typeargs = {}
-               for i, tf in ipairs(t.typeargs) do
-                  copy.typeargs[i], same = resolve(tf, same)
-               end
+               copy.typeargs, same = copy_typeargs(t.typeargs, same)
             end
 
 
@@ -7657,6 +7710,7 @@ do
          assert(not (def.typename == "nominal"))
 
          t.found = found
+
          return nil, found
       end
 
@@ -9044,6 +9098,7 @@ a.types[i], b.types[i]), }
          end
 
          local ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
+
          ret = self:resolve_typevars_at(node, ret)
          self:end_scope()
 
@@ -12248,10 +12303,10 @@ self:expand_type(node, values, elements) })
    }
 
    visit_type.cbs["interface"] = visit_type.cbs["record"]
+   visit_type.cbs["typedecl"] = visit_type.cbs["function"]
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
-   visit_type.cbs["typedecl"] = default_type_visitor
    visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["array"] = default_type_visitor
    visit_type.cbs["map"] = default_type_visitor
