@@ -438,6 +438,47 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          end
       ]]))
 
+      it("can use where with generic types", util.check([[
+         local type Success = ]]..statement..[[<T> ]]..array(i, "is {integer}")..[[
+            where self.error == false
+
+            error: boolean
+            value: T
+         end
+
+         local type Failure = ]]..statement..[[<T> ]]..array(i, "is {integer}")..[[
+            where self.error == true
+
+            error: boolean
+            value: T
+         end
+
+         local function ok<T>(value: T): Success<T>
+            return {
+               error = false,
+               value = value,
+            }
+         end
+
+         local function fail<T>(value: T): Failure<T>
+            return {
+               error = true,
+               value = value,
+            }
+         end
+
+         local type Maybe<T> = Success<T> | Failure<T>
+
+         local function call_me<T>(maybe: Maybe<T>)
+            if maybe is Success<T> then
+               print("hello, " .. tostring(maybe.value))
+            end
+         end
+
+         call_me(ok(8675309))
+         call_me(fail(911))
+      ]]))
+
       if statement == "record" then
          it("does not produce an esoteric type error (#167)", util.check_type_error([[
             local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
