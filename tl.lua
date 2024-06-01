@@ -1891,6 +1891,7 @@ end
 
 
 
+
 local TruthyFact = {}
 
 
@@ -10533,7 +10534,7 @@ self:expand_type(node, values, elements) })
       local missing
       for _, key in ipairs(t.field_order) do
          local ftype = t.fields[key]
-         if not (ftype.typename == "typedecl" or ftype.typename == "typealias") then
+         if not (ftype.typename == "typedecl" or ftype.typename == "typealias" or (ftype.typename == "function" and ftype.is_record_function)) then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -11417,6 +11418,7 @@ self:expand_type(node, values, elements) })
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
+               is_record_function = true,
             }))
 
             local open_t, open_v, owner_name = self:find_record_to_extend(node.fn_owner)

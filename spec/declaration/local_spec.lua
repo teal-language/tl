@@ -412,6 +412,18 @@ describe("local", function()
                likes = {name='orange'}
             }
          ]]))
+
+         it("does not consider a record function to be a missing field", util.check([[
+            local record A
+               v: number
+            end
+
+            function A:echo()
+               print('A:', self.v)
+            end
+
+            local b <total>: A = { v = 10 }
+         ]]))
       end)
 
       describe("<close>", function()

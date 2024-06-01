@@ -1781,6 +1781,7 @@ local record FunctionType
    where self.typename == "function"
 
    is_method: boolean
+   is_record_function: boolean
    min_arity: integer
    args: TupleType
    rets: TupleType
@@ -10533,7 +10534,7 @@ do
       local missing: {string}
       for _, key in ipairs(t.field_order) do
          local ftype = t.fields[key]
-         if not (ftype is TypeDeclType or ftype is TypeAliasType) then
+         if not (ftype is TypeDeclType or ftype is TypeAliasType or (ftype is FunctionType and ftype.is_record_function)) then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -11417,6 +11418,7 @@ do
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
+               is_record_function = true,
             }))
 
             local open_t, open_v, owner_name = self:find_record_to_extend(node.fn_owner)
