@@ -12001,16 +12001,14 @@ do
             for _, iface in ipairs(t.interface_list) do
                if iface is NominalType then
                   local ri = self:resolve_nominal(iface)
-                  if not (ri.typename == "invalid") then
-                     if ri is InterfaceType then
-                        if not ri.interfaces_expanded and not seen[ri] then
-                           seen[ri] = true
-                           collect_interfaces(self, list, ri, seen)
-                        end
-                        table.insert(list, iface)
-                     else
-                        self.errs:add(iface, "attempted to use %s as interface, but its type is %s", iface, ri)
+                  if ri is InterfaceType then
+                     if ri.interfaces_expanded and not seen[ri] then
+                        seen[ri] = true
+                        collect_interfaces(self, list, ri, seen)
                      end
+                     table.insert(list, iface)
+                  else
+                     self.errs:add(iface, "attempted to use %s as interface, but its type is %s", iface, ri)
                   end
                else
                   if not seen[iface] then
