@@ -2973,6 +2973,12 @@ do
 
             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif tkop.tk == "(" then
+            local prev_tk = ps.tokens[i - 1]
+            if tkop.y > prev_tk.y then
+               table.insert(ps.tokens, i, { y = prev_tk.y, x = prev_tk.x + #prev_tk.tk, tk = ";", kind = ";" })
+               break
+            end
+
             local op: Operator = new_operator(tkop, 2, "@funcall")
 
             local prev_i = i
