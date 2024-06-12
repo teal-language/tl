@@ -10552,10 +10552,6 @@ do
    end
 
    local function total_record_check(t: RecordLikeType, seen_keys: {CheckableKey:Where}): boolean, {string}
-      if t.meta_field_order then
-         return false
-      end
-
       local is_total = true
       local missing: {string}
       for _, key in ipairs(t.field_order) do
