@@ -10532,10 +10532,6 @@ self:expand_type(node, values, elements) })
    end
 
    local function total_record_check(t, seen_keys)
-      if t.meta_field_order then
-         return false
-      end
-
       local is_total = true
       local missing
       for _, key in ipairs(t.field_order) do
