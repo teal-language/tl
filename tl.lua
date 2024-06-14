@@ -6435,6 +6435,11 @@ local binop_to_metamethod = {
    ["is"] = "__is",
 }
 
+local flip_binop_to_metamethod = {
+   [">"] = "__lt",
+   [">="] = "__le",
+}
+
 local function is_unknown(t)
    return t.typename == "unknown" or
    t.typename == "unresolved_emptytable_value"
@@ -11889,6 +11894,13 @@ self:expand_type(node, values, elements) })
                local meta_on_operator
                if not t then
                   local mt_name = binop_to_metamethod[node.op.op]
+                  if not mt_name then
+                     mt_name = flip_binop_to_metamethod[node.op.op]
+                     if mt_name then
+                        ra, rb = rb, ra
+                        ua, ub = ub, ua
+                     end
+                  end
                   if mt_name then
                      t, meta_on_operator = self:check_metamethod(node, mt_name, ra, rb, ua, ub)
                   end
