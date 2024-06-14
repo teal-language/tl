@@ -18,25 +18,17 @@ return {
 
 ## List of compiler options
 
-| Command line option  | Config key                 | Type       | Relevant Commands           | Description |
-| -------------------- | -------------------------- | ---------- | --------------------------- | ----------- |
-| `-l --require`       |                            | `{string}` | `run`                       | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
-| `-I --include-dir`   | `include_dir`              | `{string}` | `build` `check` `gen` `run` | Prepend this directory to the module search path.
-| `--gen-compat`       | `gen_compat`               | `string`   | `build` `gen` `run`         | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
-| `--gen-target`       | `gen_target`               | `string`   | `build` `gen` `run`         | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
-|                      | `include`                  | `{string}` | `build`                     | The set of files to compile/check. See below for details on patterns.
-|                      | `exclude`                  | `{string}` | `build`                     | The set of files to exclude. See below for details on patterns.
-| `--keep-hashbang`    |                            |            | `gen`                       | Preserve hashbang line (`#!`) at the top of file if present.
-| `-s --source-dir`    | `source_dir`               | `string`   | `build`                     | Set the directory to be searched for files. `build` will compile every .tl file in every subdirectory by default.
-| `-b --build-dir`     | `build_dir`                | `string`   | `build`                     | Set the directory for generated files, mimicking the file structure of the source files.
-|                      | `files`                    | `{string}` | `build`                     | The names of files to be compiled. Does not accept patterns like `include`.
-| `-p --pretend`       |                            |            | `build` `gen`               | Don't compile/write to any files, but type check and log what files would be written to.
-| `--wdisable`         | `disable_warnings`         | `{string}` | `build` `check` `run`       | Disable the given warnings.
-| `--werror`           | `warning_error`            | `{string}` | `build` `check` `run`       | Promote the given warnings to errors.
-| `--run-build-script` | `run_build_script`         | `boolean`  | `run` `check` `gen`         | Runs the build script as if `tl build` was being run
-|                      | `build_file_output_dir`    | `string`   | `run` `check` `gen` `build` | Folder where the generated files from the build script will be accessible in
-|                      | `internal_compiler_output` | `string`   | `run` `check` `gen` `build` | Folder to store cache files for use by the compiler
-| `--global-env-def`   | `global_env_def`           | `string`   | `build` `check` `gen` `run` | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
+| Command line option  | Config key                 | Type       | Relevant Commands    | Description |
+| -------------------- | -------------------------- | ---------- | -------------------- | ----------- |
+| `-l --require`       |                            | `{string}` | `run`                | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
+| `-I --include-dir`   | `include_dir`              | `{string}` | `check` `gen` `run`  | Prepend this directory to the module search path.
+| `--gen-compat`       | `gen_compat`               | `string`   | `gen` `run`          | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
+| `--gen-target`       | `gen_target`               | `string`   | `gen` `run`          | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
+| `--keep-hashbang`    |                            |            | `gen`                | Preserve hashbang line (`#!`) at the top of file if present.
+| `-p --pretend`       |                            |            | `gen`                | Don't compile/write to any files, but type check and log what files would be written to.
+| `--wdisable`         | `disable_warnings`         | `{string}` | `check` `run`        | Disable the given warnings.
+| `--werror`           | `warning_error`            | `{string}` | `check` `run`        | Promote the given warnings to errors.
+| `--global-env-def`   | `global_env_def`           | `string`   | `check` `gen` `run`  | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
 
 ### Generated code
 
@@ -138,76 +130,3 @@ you may pass a declaration module to the compiler using the `--global-env-def` f
 in the CLI or the `global_env_def` string in `tlconfig.lua`.
 
 For more information, see the [declaration files](declaration_files.md#global-environment-definition) page.
-
-### Include/Exclude patterns
-
-The `include` and `exclude` fields can have glob-like patterns in them:
-- `*`: Matches any number of characters (excluding directory separators)
-- `**/`: Matches any number subdirectories
-
-In addition
-- setting the `source_dir` has the effect of prepending `source_dir` to all patterns.
-- currently, `include` will only include `.tl` files even if the extension isn't specified
-
-For example:
-If our project was laid out as such:
-```
-tlconfig.lua
-src/
-| foo/
-| | bar.tl
-| | baz.tl
-| bar/
-| | a/
-| | | foo.tl
-| | b/
-| | | foo.tl
-```
-
-and our tlconfig.lua contained the following:
-```lua
-return {
-   source_dir = "src",
-   build_dir = "build",
-   include = {
-      "foo/*.tl",
-      "bar/**/*.tl"
-   },
-   exclude = {
-      "foo/bar.tl"
-   }
-}
-```
-
-Running `tl build -p` will type check the `include`d files and show what would be written to.
-Running `tl build` will produce the following files.
-```
-tlconfig.lua
-src/
-| foo/
-| | bar.tl
-| | baz.tl
-| bar/
-| | a/
-| | | foo.tl
-| | b/
-| | | foo.tl
-build/
-| foo/
-| | baz.lua
-| bar/
-| | a/
-| | | foo.lua
-| | b/
-| | | foo.lua
-```
-
-Additionally, complex patterns can be used for whatever convoluted file structure we need.
-```lua
-return {
-   include = {
-      "foo/**/bar/**/baz/**/*.tl"
-   }
-}
-```
-This will compile any `.tl` file with a sequential `foo`, `bar`, and `baz` directory in its path.

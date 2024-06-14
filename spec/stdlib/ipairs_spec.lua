@@ -13,7 +13,17 @@ describe("ipairs", function()
       for i, v in ipairs(my_tuple) do
       end
    ]], {
-      { msg = [[attempting ipairs loop on tuple that's not a valid array: ({{integer}, {string "a"}})]] },
-      { msg = [[argument 1: unable to convert tuple {{integer}, {string "a"}} to array]] },
+      { msg = [[attempting ipairs on tuple that's not a valid array: {{integer}, {string "a"}}]] },
+   }))
+
+   it("reports a nominal type in error message", util.check_type_error([[
+      local record Rec
+         x: integer
+      end
+      local r: Rec
+      for i, v in ipairs(r) do
+      end
+   ]], {
+      { msg = [[attempting ipairs on something that's not an array: Rec]] },
    }))
 end)

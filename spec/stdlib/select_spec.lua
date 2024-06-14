@@ -13,7 +13,6 @@ describe("select", function()
    it("rejects an invalid first argument", util.check_type_error([[
       select({}, "hi", "hello")
    ]], {
-      -- FIXME not ideal message, but it fails on failure cases
-      { msg = "got {}, expected number" },
+      { msg = "got {}, expected integer" },
    }))
 end)

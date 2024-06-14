@@ -64,4 +64,11 @@ describe("assignment to array", function()
       { msg = "unused variable b: Alias" },
    }))
 
+   it("catches an incompatible tupletable", util.check_type_error([[
+      local a: {string}
+      local t: {string, number} = { "hello", 123 }
+      a = t
+   ]], {
+      { y = 3, msg = "in assignment: got {string | number} (from {string, number}), expected {string}" },
+   }))
 end)

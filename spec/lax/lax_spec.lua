@@ -20,4 +20,40 @@ describe("lax mode", function()
       { msg = "three" },
       { msg = "data" },
    }))
+
+   it("defines lax arity of returns in function literals (#736)", util.lax_check([[
+      -- f: function(unknown...):unknown...
+      local f = function()
+          return function() end
+      end
+
+      for a, b in f() do
+      end
+
+      -- g: function(unknown...):unknown...
+      local function g()
+          return function() end
+      end
+
+      for x, y in g() do
+      end
+   ]], {
+      { msg = "a" },
+      { msg = "b" },
+      { msg = "x" },
+      { msg = "y" },
+   }))
+
+   it("performs emptytable key-value inference as normal", util.lax_check([[
+      local t = {}
+
+      local s = "str"
+
+      t[s] = 9
+
+      for k, v in pairs(t) do
+         print(k, v)
+      end
+   ]], {}))
+
 end)

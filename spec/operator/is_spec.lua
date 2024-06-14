@@ -81,7 +81,7 @@ describe("flow analysis with is", function()
          local a: string | Foo
          local _b: Foo = a is string and makeFoo(a) or a
       ]], {
-         { msg = "cannot use operator 'or' for types Foo and string | Foo" },
+         { msg = "got string | Foo, expected Foo" },
       }))
    end)
 
@@ -254,7 +254,7 @@ describe("flow analysis with is", function()
 
          local function f(d: any): any
             if d is string and func(d, "a") then
-               local d = func(d)
+               local d = func(d, d)
             elseif d is string and func(d, "b") then
                return d .. "???"
             else
@@ -271,7 +271,7 @@ describe("flow analysis with is", function()
          local function f(d: any): any
             local d = d as (number | string | function)
             if d is string and func(d, "a") then
-               local d = func(d)
+               local d = func(d, d)
             elseif d is string and func(d, "b") then
                return d .. "???"
             else
@@ -356,6 +356,79 @@ describe("flow analysis with is", function()
          { y = 9, msg = "cannot index key 'upper' in union 'a' of type string | number" },
          { y = 10, msg = "got boolean | thread, expected boolean" },
       }))
+
+
+      it("does not crash on invalid variables", util.check_type_error([[
+         local t: number | string
+         if x is number then
+            print("foo")
+         else
+            print("hello")
+         end
+      ]], {
+         { y = 2, x = 13, msg = "unknown variable: x" },
+         { y = 2, x = 15, msg = "cannot resolve a type for x here" },
+         { y = 4, x = 10, msg = "cannot resolve a type for x here" },
+      }))
+
+      it("can resolve on else block even if it can't on if block (#210)", util.check([[
+         local function foo(v: any)
+            if not v is string then
+               print("foo")
+            else
+               print(v:upper())
+            end
+         end
+      ]]))
+
+      it("attempting to use a type as a value produces sensible messages (#210)", util.check_type_error([[
+         local record MyRecord
+           my_record_field: number
+         end
+         local type a = string | number | MyRecord
+
+         if a is string then
+            print("Hello, " .. a)
+         elseif a is number then      --  8
+            print(a + 10)
+         else
+            print(a.my_record_field)  --  11
+         end
+      ]], {
+         { msg = "can only use 'is' on variables, not types" },
+         { msg = "cannot use operator '..'" },
+         { msg = "can only use 'is' on variables, not types" },
+         { msg = "cannot use operator '+'" },
+         { msg = "cannot index" },
+      }))
+
+      it("produces no errors or warnings for checks on unions of records", util.check_warnings([[
+         local record R1
+            metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
+               return true
+            end
+         end
+
+         local record R2
+            metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
+               return false
+            end
+         end
+
+         local type RS = R1 | R2
+
+         local rs1 : RS
+
+         if rs1 is R1 then
+            print("yes")
+         end
+
+         local rs2 : R1 | R2
+
+         if rs2 is R2 then
+            print("yes")
+         end
+      ]], {}, {}))
 
       it("gen cleaner checking codes for nil", util.gen([[
          local record R
@@ -456,50 +529,6 @@ end]]))
             end
          end
       ]]))
-
-      it("does not crash on invalid variables", util.check_type_error([[
-         local t: number | string
-         if x is number then
-            print("foo")
-         else
-            print("hello")
-         end
-      ]], {
-         { y = 2, x = 13, msg = "unknown variable: x" },
-         { y = 2, x = 15, msg = "cannot resolve a type for x here" },
-         { y = 4, x = 10, msg = "cannot resolve a type for x here" },
-      }))
-
-      it("can resolve on else block even if it can't on if block (#210)", util.check([[
-         local function foo(v: any)
-            if not v is string then
-               print("foo")
-            else
-               print(v:upper())
-            end
-         end
-      ]]))
-
-      it("attempting to use a type as a value produces sensible messages (#210)", util.check_type_error([[
-         local record MyRecord
-           my_record_field: number
-         end
-         local type a = string | number | MyRecord
-
-         if a is string then
-            print("Hello, " .. a)
-         elseif a is number then      --  8
-            print(a + 10)
-         else
-            print(a.my_record_field)  --  11
-         end
-      ]], {
-         { msg = "can only use 'is' on variables, not types" },
-         { msg = "cannot use operator '..'" },
-         { msg = "can only use 'is' on variables, not types" },
-         { msg = "cannot use operator '+'" },
-         { msg = "cannot index" },
-      }))
    end)
 
    describe("code gen", function()

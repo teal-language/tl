@@ -127,7 +127,7 @@ describe("local", function()
       it("catches unknown types", util.check_type_error([[
          local type MyType = UnknownType
       ]], {
-         { msg = "UnknownType is not a type" }
+         { msg = "unknown type UnknownType" }
       }))
 
       it("nominal types can take type arguments", util.check([[
@@ -315,7 +315,7 @@ describe("local", function()
             }
          ]]))
 
-         it("accepts direct declaration from total to total", util.check([[
+         it("does not accept direct declaration from total to total", util.check_type_error([[
             local record Point
                x: number
             end
@@ -325,11 +325,14 @@ describe("local", function()
             }
 
             local p2 <total>: Point = p
-         ]]))
+         ]], {
+            { y = 9, msg = "attribute <total> only applies to literal tables" },
+         }))
 
          it("rejects direct declaration from non-total to total", util.check_type_error([[
             local record Point
                x: number
+               y: number
             end
 
             local p: Point = {
@@ -338,7 +341,7 @@ describe("local", function()
 
             local p2 <total>: Point = p
          ]], {
-            { msg = "record variable declared <total> does not declare values for all fields" },
+            { y = 10, msg = "attribute <total> only applies to literal tables" },
          }))
 
          it("cannot reassign a total", util.check_type_error([[
@@ -408,6 +411,18 @@ describe("local", function()
                },
                likes = {name='orange'}
             }
+         ]]))
+
+         it("does not consider a record function to be a missing field", util.check([[
+            local record A
+               v: number
+            end
+
+            function A:echo()
+               print('A:', self.v)
+            end
+
+            local b <total>: A = { v = 10 }
          ]]))
       end)
 
