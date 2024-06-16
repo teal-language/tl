@@ -43,8 +43,8 @@ local test_cases = {
                status = 1,
                match = {
                   "2 errors:",
-                  ":9:22: wrong number of arguments (given 3, expects 2)",
-                  ":19:22: wrong number of arguments (given 3, expects at least 1 and at most 2)",
+                  ":9:22: wrong number of arguments (given 3, expects at most 2)",
+                  ":19:22: wrong number of arguments (given 3, expects at most 2)",
                }
             }
          }

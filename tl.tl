@@ -785,6 +785,8 @@ local enum TokenKind
    "identifier"
    "number"
    "integer"
+   "pragma"
+   "pragma_identifier"
    "$ERR unfinished_comment$"
    "$ERR invalid_string$"
    "$ERR invalid_number$"
@@ -832,6 +834,9 @@ do
       "number hexfloat"
       "number power"
       "number powersign"
+      "pragma"
+      "pragma word"
+      "pragma any"
    end
 
    local last_token_kind <total>: {LexState:TokenKind} = {
@@ -866,6 +871,9 @@ do
       ["number hexfloat"] = "number",
       ["number power"] = "number",
       ["number powersign"] = "$ERR invalid_number$",
+      ["pragma"] = "pragma",
+      ["pragma any"] = nil, -- never in a token
+      ["pragma word"] = "pragma_identifier", -- never in a token
    }
 
    local keywords: {string:boolean} = {
@@ -1009,6 +1017,10 @@ do
          return 0, false
       end
    end
+
+   local valid_pragma: {string:boolean} = {
+      ["--#pragma"] = true
+   }
 
    function tl.lex(input: string, filename: string): {Token}, {Error}
       local tokens: {Token} = {}
@@ -1259,10 +1271,38 @@ do
          elseif state == "got --" then
             if c == "[" then
                state = "got --["
+            elseif c == "#" then
+               state = "pragma"
             else
                fwd = false
                state = "comment short"
                drop_token()
+            end
+         elseif state == "pragma" then
+            if not lex_word[c] then
+               end_token_prev("pragma")
+               if not valid_pragma[tokens[nt].tk] then
+                  add_syntax_error()
+               end
+               fwd = false
+               state = "pragma any"
+            end
+         elseif state == "pragma any" then
+            if c == "\n" then
+               state = "any"
+            elseif lex_word[c] then
+               state = "pragma word"
+               begin_token()
+            elseif not lex_space[c] then
+               begin_token()
+               end_token_here("$ERR invalid$")
+               add_syntax_error()
+            end
+         elseif state == "pragma word" then
+            if not lex_word[c] then
+               end_token_prev("pragma_identifier")
+               fwd = false
+               state = (c == "\n") and "any" or "pragma any"
             end
          elseif state == "got 0" then
             if c == "x" or c == "X" then
@@ -1872,6 +1912,7 @@ local enum NodeKind
    "macroexp"
    "local_macroexp"
    "interface"
+   "pragma"
    "error_node"
 end
 
@@ -2069,6 +2110,10 @@ local record Node
    argtype: Type
    itemtype: Type
    decltuple: TupleType
+
+   -- pragma
+   pkey: string
+   pvalue: string
 
    opt: boolean
 
@@ -4123,7 +4168,27 @@ local function parse_record_function(ps: ParseState, i: integer): integer, Node
    return parse_function(ps, i, "record")
 end
 
+local function parse_pragma(ps: ParseState, i: integer): integer, Node
+   i = i + 1 -- skip "--#pragma"
+   local pragma = new_node(ps, i, "pragma")
+
+   if ps.tokens[i].kind ~= "pragma_identifier" then
+      return fail(ps, i, "expected pragma name")
+   end
+   pragma.pkey = ps.tokens[i].tk
+   i = i + 1
+
+   if ps.tokens[i].kind ~= "pragma_identifier" then
+      return fail(ps, i, "expected pragma value")
+   end
+   pragma.pvalue = ps.tokens[i].tk
+   i = i + 1
+
+   return i, pragma
+end
+
 local parse_statement_fns: {string : function(ParseState, integer):(integer, Node)} = {
+   ["--#pragma"] = parse_pragma,
    ["::"] = parse_label,
    ["do"] = parse_do,
    ["if"] = parse_if,
@@ -4489,6 +4554,7 @@ local no_recurse_node: {NodeKind : boolean} = {
    ["break"] = true,
    ["label"] = true,
    ["number"] = true,
+   ["pragma"] = true,
    ["string"] = true,
    ["boolean"] = true,
    ["integer"] = true,
@@ -5384,6 +5450,8 @@ function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode: boolean | P
             table.insert(out, "::")
             return out
          end,
+      },
+      ["pragma"] = {
       },
    }
 
@@ -6599,20 +6667,32 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
-local function require_module(w: Where, module_name: string, feat_lax: boolean, env: Env): Type, string
+local function require_module(w: Where, module_name: string, opts: TypeCheckOptions, env: Env): Type, string
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local found, fd = tl.search_module(module_name, true)
-   if found and (feat_lax or found:match("tl$") as boolean) then
+   if found and (opts.feat_lax == "on" or found:match("tl$") as boolean) then
 
       env.module_filenames[module_name] = found
       env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
 
+      local save_defaults = env.defaults
+      local defaults <total>: TypeCheckOptions = {
+         feat_lax = opts.feat_lax or save_defaults.feat_lax,
+         feat_arity = opts.feat_arity or save_defaults.feat_arity,
+         gen_compat = opts.gen_compat or save_defaults.gen_compat,
+         gen_target = opts.gen_target or save_defaults.gen_target,
+         run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
+      }
+      env.defaults = defaults
+
       local found_result, err: Result, string = tl.process(found, env, fd)
       assert(found_result, err)
+
+      env.defaults = save_defaults
 
       env.modules[module_name] = found_result.type
 
@@ -6816,7 +6896,11 @@ tl.new_env = function(opts?: EnvOptions): Env, string
 
    if opts.predefined_modules then
       for _, name in ipairs(opts.predefined_modules) do
-         local module_type = require_module(w, name, env.defaults.feat_lax == "on", env)
+         local tc_opts = {
+            feat_lax = env.defaults.feat_lax,
+            feat_arity = env.defaults.feat_arity,
+         }
+         local module_type = require_module(w, name, tc_opts, env)
 
          if module_type is InvalidType then
             return nil, string.format("Error: could not predefine module '%s'", name)
@@ -7089,9 +7173,15 @@ do
 
    local function show_arity(f: FunctionType): string
       local nfargs = #f.args.tuple
-      return f.min_arity < nfargs
-             and "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. nfargs)
-             or  tostring(nfargs or 0)
+      if f.min_arity < nfargs then
+         if f.min_arity > 0 then
+            return "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. nfargs)
+         else
+            return (f.args.is_va and "any number" or "at most " .. nfargs)
+         end
+      else
+         return tostring(nfargs or 0)
+      end
    end
 
    local function resolve_typedecl(t: Type): Type
@@ -8661,7 +8751,11 @@ do
       -- resolve unknown in lax mode, produce a general unknown function
       if self.feat_lax and is_unknown(func) then
          local unk = func
-         func = a_function(func, { min_arity = 0, args = a_vararg(func, { unk }), rets = a_vararg(func, { unk }) })
+         func = a_function(func, {
+            min_arity = 0,
+            args = a_vararg(func, { unk }),
+            rets = a_vararg(func, { unk })
+         })
       end
       -- unwrap if tuple, resolve if nominal
       func = self:to_structural(func)
@@ -9299,9 +9393,9 @@ do
       end
    end
 
-   function TypeChecker:add_function_definition_for_recursion(node: Node, fnargs: TupleType)
+   function TypeChecker:add_function_definition_for_recursion(node: Node, fnargs: TupleType, feat_arity: boolean)
       self:add_var(nil, node.name.tk, a_function(node, {
-         min_arity = node.min_arity,
+         min_arity = feat_arity and node.min_arity or 0,
          typeargs = node.typeargs,
          args = fnargs,
          rets = self.get_rets(node.rets),
@@ -10008,7 +10102,7 @@ do
          local arg2 = node.e2[2]
          local msgh = table.remove(b.tuple, 1)
          local msgh_type = a_function(arg2, {
-            min_arity = 1,
+            min_arity = self.feat_arity and 1 or 0,
             args = a_tuple(arg2, { a_type(arg2, "any", {}) }),
             rets = a_tuple(arg2, {})
          })
@@ -10096,7 +10190,11 @@ do
          end
 
          local module_name = assert(node.e2[1].conststr)
-         local t, module_filename = require_module(node, module_name, self.feat_lax, self.env)
+         local tc_opts: TypeCheckOptions = {
+            feat_lax = self.feat_lax and "on" or "off",
+            feat_arity = self.feat_arity and "on" or "off",
+         }
+         local t, module_filename = require_module(node, module_name, tc_opts, self.env)
 
          if t.typename == "invalid" then
             if not module_filename then
@@ -11211,7 +11309,7 @@ do
             assert(args is TupleType)
 
             self:add_internal_function_variables(node, args)
-            self:add_function_definition_for_recursion(node, args)
+            self:add_function_definition_for_recursion(node, args, self.feat_arity)
          end,
          after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local args = children[2]
@@ -11222,7 +11320,7 @@ do
             self:end_function_scope(node)
 
             local t = self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.min_arity,
+               min_arity = self.feat_arity and node.min_arity or 0,
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
@@ -11251,7 +11349,7 @@ do
             self:check_macroexp_arg_use(node.macrodef)
 
             local t = self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.macrodef.min_arity,
+               min_arity = self.feat_arity and node.macrodef.min_arity or 0,
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
@@ -11284,7 +11382,7 @@ do
             assert(args is TupleType)
 
             self:add_internal_function_variables(node, args)
-            self:add_function_definition_for_recursion(node, args)
+            self:add_function_definition_for_recursion(node, args, self.feat_arity)
          end,
          after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local args = children[2]
@@ -11298,7 +11396,7 @@ do
             end
 
             self:add_global(node, node.name.tk, self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.min_arity,
+               min_arity = self.feat_arity and node.min_arity or 0,
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
@@ -11360,7 +11458,7 @@ do
             end
 
             local fn_type = self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.min_arity,
+               min_arity = self.feat_arity and node.min_arity or 0,
                is_method = node.is_method,
                typeargs = node.typeargs,
                args = args,
@@ -11434,7 +11532,7 @@ do
 
             self:end_function_scope(node)
             return self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.min_arity,
+               min_arity = self.feat_arity and node.min_arity or 0,
                typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
@@ -11460,7 +11558,7 @@ do
 
             self:end_function_scope(node)
             return self:ensure_fresh_typeargs(a_function(node, {
-               min_arity = node.min_arity,
+               min_arity = self.feat_arity and node.min_arity or 0,
                typeargs = node.typeargs,
                args = args,
                rets = rets,
@@ -11940,6 +12038,22 @@ do
       ["newtype"] = {
          after = function(_self: TypeChecker, node: Node, _children: {Type}): Type
             return node.newtype
+         end,
+      },
+      ["pragma"] = {
+         after = function(self: TypeChecker, node: Node, _children: {Type}): Type
+            if node.pkey == "arity" then
+               if node.pvalue == "on" then
+                  self.feat_arity = true
+               elseif node.pvalue == "off" then
+                  self.feat_arity = false
+               else
+                  return self.errs:invalid_at(node, "invalid value for pragma 'arity': " .. node.pvalue)
+               end
+            else
+               return self.errs:invalid_at(node, "invalid pragma: " .. node.pkey)
+            end
+            return NONE
          end,
       },
       ["error_node"] = {
