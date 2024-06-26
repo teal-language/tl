@@ -55,7 +55,7 @@ available now!
 Let's start with a simple example, which declares a type-safe function. Let's
 call this example `add.tl`:
 
-```
+```lua
 local function add(a: number, b: number): number
    return a + b
 end
@@ -85,7 +85,7 @@ tl run add.tl
 We can also write modules in Teal which we can load from Lua. Let's create our
 first module:
 
-```
+```lua
 local addsub = {}
 
 function addsub.add(a: number, b: number): number
@@ -109,7 +109,7 @@ and then require the addsub module from Lua normally. Or we can load the Teal
 package loader, which will allow require to load .tl files directly, without
 having to run `tl gen` first:
 
-```
+```sh
 $ rm addsub.lua
 $ lua
 > tl = require("tl")
@@ -160,7 +160,7 @@ Finally, there are types that must be declared and referred to using names:
 Here is an example declaration of each. Again, we'll go into more detail below,
 but this should give you an overview:
 
-```
+```lua
 -- an enum: a set of accepted strings
 local enum State
    "open"
@@ -194,7 +194,7 @@ keyword, you need to provide enough information so that the type can be determin
 For this reason, it is not valid in Teal to declare a variable with no type at all
 like this:
 
-```
+```lua
 local x -- Error! What is this?
 ```
 
@@ -206,7 +206,7 @@ There are two ways, however, to give a variable a type:
 Declaration is done writing a colon and a type. When declaring multiple
 variables at once, each variable should have its own type:
 
-```
+```lua
 local s: string
 local r, g, b: number, number, number
 ```
@@ -214,7 +214,7 @@ local r, g, b: number, number, number
 You don't need to write the type if you are initializing the variable on
 creation:
 
-```
+```lua
 local s = "hello"
 local r, g, b = 0, 128, 128
 local ok = true
@@ -244,7 +244,7 @@ like the # operator and the use of the `table` standard library.
 Arrays are described with curly brace notation, and can be denoted via
 declaration or initialization:
 
-```
+```lua
 local values: {number}
 local names = {"John", "Paul", "George", "Ringo"}
 ```
@@ -252,7 +252,7 @@ local names = {"John", "Paul", "George", "Ringo"}
 Note that values was initialized to nil. To initialize it with an empty table,
 you have to do so explicitly:
 
-```
+```lua
 local prices: {number} = {}
 ```
 
@@ -261,7 +261,7 @@ inference logic to support determining the type of empty tables with no
 declaration. The first array assignment to an empty table, reading the code
 top-to-bottom, determines its type. So this works:
 
-```
+```lua
 local lengths = {}
 for i, n in ipairs(names) do
    table.insert(lengths, #n) -- this makes the  lengths table a {number}
@@ -286,7 +286,7 @@ need to deal with heterogeneous arrays, you will have to use the cast operator
 use `as`, Teal will accept whatever type you use, meaning that it can also hide
 incorrect usage of data:
 
-```
+```lua
 local sizes: {number} = {34, 36, 38}
 sizes[#sizes + 1] = true as number -- this does not perform a conversion! it will just stop tl from complaining!
 local sum = 0
@@ -300,7 +300,7 @@ end
 Another common usage of tables in Lua are tuples: tables containing an ordered set
 of elements of known types assigned to its integer keys.
 
-```
+```lua
 -- Tuples of type {string, integer} containing names and ages
 local p1 = { "Anna", 15 }
 local p2 = { "Bob", 37 }
@@ -310,7 +310,7 @@ local p3 = { "Chris", 65 }
 When indexing into tuples with number constants, their type is correctly
 inferred, and trying to go out of range will produce an error.
 
-```
+```lua
 local age_of_p1: number = p1[2] -- no type errors here
 local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2:
 integer}
@@ -320,7 +320,7 @@ When indexing with a `number` variable, Teal will do its best by making a
 [union](#union-types) of all the types in the tuple (following the
 restrictions on unions detailed below)
 
-```
+```lua
 local my_number = math.random(1, 2)
 local x = p1[my_number] -- => x is a string | number union
 if x is string then
@@ -334,7 +334,7 @@ Tuples will additionally help you keep track of accidentally adding more
 elements than they expect (as long as their length is explicitly annotated and not
 inferred).
 
-```
+```lua
 local p4: {string, integer} = { "Delilah", 32, false } -- error! expected maximum length of 2, got 3
 ```
 
@@ -344,14 +344,14 @@ if all of its elements are the same type, and as a tuple if any of its types
 aren't the same. So if you want an array of a union type instead of a tuple,
 explicitly annotate it as such:
 
-```
+```lua
 local array_of_union: {string | number} = {1, 2, "hello", "hi"}
 ```
 
 And if you want a tuple where all elements have the same type, annotate that
 as well:
 
-```
+```lua
 local tuple_of_nums: {number, number} = {1, 2}
 ```
 
@@ -362,7 +362,7 @@ given type, and all values are of another given type, which may or may not be
 the same as that of the keys. Maps are notated with curly brackets and a
 colon:
 
-```
+```lua
 local populations: {string:number}
 local complicated: {Object:{string:{Point}}} = {}
 local modes = { -- this is {boolean:number}
@@ -381,7 +381,7 @@ wouldn't have to annotate the type to get a correct program, but the
 annotation will help the compiler produce better error messages if any errors
 occur involving this variable:
 
-```
+```lua
 local is_vowel: {string:boolean} = {
    a = true,
    e = true,
@@ -409,7 +409,7 @@ The type describes the set of valid fields (keys of type string and their values
 specific types) this record can take. You can declare types using `local type`
 and global types using `global type`.
 
-```
+```lua
 local type Point = record
    x: number
    y: number
@@ -423,7 +423,7 @@ Just like with functions in Lua, which can be declared either with `local f =
 function()` or with `local function f()`, there is also a shorthand syntax
 available for the declaration of record types:
 
-```
+```lua
 local record Point
    x: number
    y: number
@@ -433,13 +433,13 @@ end
 Tables that match the shape of the record type will be accepted as an
 initializer of variables declared with the record type:
 
-```
+```lua
 local p: Point = { x = 100, y = 100 }
 ```
 
 This, however, won't work:
 
-```
+```lua
 local p1 = { x = 100, y = 100 }
 local p2: Point = p1 -- Error!
 ```
@@ -450,7 +450,7 @@ distance is not a point.
 
 You can always force a type, though, using the `as` operator:
 
-```
+```lua
 local p2 = p1 as Point -- Ok, I'll trust you...
 ```
 
@@ -461,7 +461,7 @@ You can also declare record functions after the record definition using the
 regular Lua colon or dot syntax, as long as you do it in the same scope block
 where the record type is defined:
 
-```
+```lua
 function Point.new(x: number, y: number): Point
    local self: Point = setmetatable({}, { __index = Point })
    self.x = x or 0
@@ -482,7 +482,7 @@ If you want to define the function in a later scope (for example, if it is a
 callback to be defined by users of a module you are creating), you can declare
 the type of the function field in the record and fill it later from anywhere:
 
-```
+```lua
 local record Obj
    location: Point
    draw: function(Obj)
@@ -493,7 +493,7 @@ A record can also have an array part, making it an "arrayrecord". The
 following is an arrayrecord. You can use it both as a record, accessing its
 fields by name, and as an array, accessing its entries by number.
 
-```
+```lua
 local record Node
    {Node}
    weight: number
@@ -508,7 +508,7 @@ Finally, records can contain nested record type definitions. This is useful
 when exporting a module as a record, so that the types created in the module
 can be used by the client code which requires the module.
 
-```
+```lua
 local record http
 
    record Response
@@ -524,7 +524,7 @@ return http
 You can then refer to nested types with the normal dot notation, and use
 it across required modules as well:
 
-```
+```lua
 local http = require("http")
 
 local x: http.Response = http.get("http://example.com")
@@ -539,7 +539,7 @@ collections and algorithms that operate over abstract data types.
 You can use type variables wherever a type is used, and you can declare them
 in both functions and records. Here's an example of a generic function:
 
-```
+```lua
 local function keys<K,V>(xs: {K:V}):{K}
    local ks = {}
    for k, v in pairs(xs) do
@@ -554,7 +554,7 @@ local s = keys({ a = 1, b = 2 }) -- s is {string}
 we declare the type variables in angle brackets and use them as types. Generic
 records are declared and used like this:
 
-```
+```lua
 local type Tree = record<X>
    {Tree<X>}
    item: X
@@ -581,7 +581,7 @@ in records you need to do two things:
 Here is a complete example, showing the `metamethod` declarations in the
 `record` block and the `setmetatable` declarations attaching the metatable.
 
-```
+```lua
 local type Rec = record
    x: number
    metamethod __call: function(Rec, string, number): string
@@ -627,7 +627,7 @@ enumeration of possible values.
 
 You describe an enum like this:
 
-```
+```lua
 local type Direction = enum
    "north"
    "south"
@@ -638,7 +638,7 @@ end
 
 or like this:
 
-```
+```lua
 local enum Direction
    "north"
    "south"
@@ -661,7 +661,7 @@ longwinded type declarations, especially when declaring functions that take
 callbacks. This is done with using `function` types, and they can be generic as
 well:
 
-```
+```lua
 local type Comparator = function<T>(T, T): boolean
 
 local function mysort<A>(arr: {A}, cmp: Comparator<A>)
@@ -673,7 +673,7 @@ Another thing to know about function declarations is that you can parenthesize
 the declaration of return types, to avoid ambiguities when using nested
 declarations and multiple returns:
 
-```
+```lua
 f: function(function():(number, number), number)
 ```
 
@@ -681,7 +681,7 @@ You can declare functions that generate iterators which can be used in
 `for` statements: the function needs to produce another function that iterates.
 This is an example [taken the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
 
-```
+```lua
 local function allwords(): (function(): string)
    local line = io.read()
    local pos = 1
@@ -712,7 +712,7 @@ in both function declarations.
 
 Just like in Lua, some functions in Teal may receive a variable amount of arguments. Variadic functions can be declared by specifying `...` as the last argument of the function:
 
-```
+```lua
 local function test(...: number)
    print(...)
 end
@@ -722,7 +722,7 @@ test(1, 2, 3)
 
 In case your function returns a variable amount of values, you may also declare variadic return types by using the `type...` syntax:
 
-```
+```lua
 local function test(...: number): number...
    return ...
 end
@@ -737,7 +737,7 @@ types of the expected returns, given the arguments that were passed. To set
 the types of these dynamic returns, you can use the `as` operator over
 multiple values, using a parenthesized list of types:
 
-```
+```lua
 local s = { 1234, "ola" }
 local a, b = table.unpack(s) as (number, string)
 
@@ -753,7 +753,7 @@ types, and you can discriminate them at runtime.
 
 You can declare union types like this:
 
-```
+```lua
 local a: string | number | MyRecord
 local b: {boolean} | MyEnum
 local c: number | {string:number}
@@ -762,7 +762,7 @@ local c: number | {string:number}
 To use a value of this type, you need to discriminate the variable, using
 the `is` operator, which takes a variable of a union type and one of its types:
 
-```
+```lua
 local a: string | number | MyRecord
 
 if a is string then
@@ -780,7 +780,7 @@ respective block.
 
 The flow analysis of `is` also takes effect within expressions:
 
-```
+```lua
 local a: string | number
 
 local x: number = a is number and a + 1 or 0
@@ -801,7 +801,7 @@ only discriminates across primitive types and at most one table type.
 
 This means that these unions not accepted:
 
-```
+```lua
 local invalid1: MyRecord | MyOtherRecord
 local invalid2: {string} | {number}
 local invalid3: {string} | {string:string}
@@ -812,7 +812,7 @@ Also, since `is` checks for enums currently also translate into
 `type()` checks, this means they are indistinguishable from strings
 at runtime. So, for now this is also not accepted:
 
-```
+```lua
 local invalid5: string | MyEnum
 ```
 
@@ -843,7 +843,7 @@ compile time, even if you're running a different version of Lua). Do note
 however that this is annotation for variables, and not values: the contents
 of a value set to a const variable are not constant.
 
-```
+```lua
 local xs <const> = {1,2,3}
 xs[1] = 999 -- ok! the array is not frozen
 xs = {} -- Error! can't replace the array in variable xs
@@ -856,7 +856,7 @@ code generation target is Lua 5.4 (see the [compiler options](compiler_options.m
 documentation for details on code generation targets). These work just
 [like they do in Lua 5.4](https://www.lua.org/manual/5.4/manual.html#3.3.8).
 
-```
+```lua
 local contents = {}
 for _, name in ipairs(filenames) do
    local f <close> = assert(io.open(name, "r"))
@@ -884,7 +884,7 @@ each of these cases. By declaring that map `<total>` you can be sure that
 you won't forget to add handlers for the new cases as you add new entries
 to the enum.
 
-```
+```lua
 local degrees <total>: {Direction:number} = {
    ["north"] = 0,
    ["west"] = 90,
@@ -902,7 +902,7 @@ Another example of types that have a finite set of valid keys are records. By
 marking a record variable as `<total>`, you make it so it becomes mandatory to
 declare all its fields in the given initialization table.
 
-```
+```lua
 local record Color
    red: integer
    green: integer
@@ -927,7 +927,7 @@ as a valid declaration. The rationale is that an explicit `nil` entry
 means that the programmer did consider that case, and chose to keep
 it empty. Therefore, something like this works:
 
-```
+```lua
 local vertical_only <total>: {Direction:MotionCallback} = {
    ["north"] = move_up,
    ["west"] = nil,
@@ -953,7 +953,7 @@ global that happens to be nil.
 You declare global variables in Teal using `global`, like this, doing
 declaration and/or assignment:
 
-```
+```lua
 global n: number
 
 global m: {string:boolean} = {}
@@ -970,7 +970,7 @@ end
 You can also declare global types, which are visible across modules, as long
 as their definition has been previously required:
 
-```
+```lua
 -- mymod.tl
 local mymod = {}
 
@@ -982,7 +982,7 @@ end
 return mymod
 ```
 
-```
+```lua
 -- main.tl
 local mymod = require("mymod")
 
@@ -994,7 +994,7 @@ end
 If you have circular type dependencies that span multiple files, you can
 forward-declare a global type by specifying its name but not its implementation:
 
-```
+```lua
 -- person.tl
 local person = {}
 
@@ -1007,7 +1007,7 @@ end
 return person
 ```
 
-```
+```lua
 -- building.tl
 local building = {}
 
@@ -1020,7 +1020,7 @@ end
 return building
 ```
 
-```
+```lua
 -- main.tl
 local person = require("person")
 local building = require("building")
@@ -1100,4 +1100,3 @@ loader is installed by calling tl.loader().
 
 You can also create declaration files to annotate the types of third-party Lua
 modules, including C Lua modules. For more information, see the [declaration files](declaration_files.md) page.
-
