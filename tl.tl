@@ -3851,6 +3851,14 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
       ["total"] = " <const>",
    }
 
+   local function emit_exactly(node: Node, _children: {Output}): Output
+      local out: Output = { y = node.y, h = 0 }
+      add_string(out, node.tk)
+      return out
+   end
+
+   local emit_exactly_visitor_cbs <const>: VisitorCallbacks<Node, Output> = { after = emit_exactly }
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(node: Node, children: {Output}): Output
@@ -4259,13 +4267,6 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             return out
          end,
       },
-      ["variable"] = {
-         after = function(node: Node, _children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            add_string(out, node.tk)
-            return out
-         end,
-      },
       ["newtype"] = {
          after = function(node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
@@ -4296,6 +4297,17 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             return out
          end,
       },
+
+      ["variable"] = emit_exactly_visitor_cbs,
+      ["identifier"] = emit_exactly_visitor_cbs,
+      ["number"] = emit_exactly_visitor_cbs,
+      ["integer"] = emit_exactly_visitor_cbs,
+      ["string"] = emit_exactly_visitor_cbs,
+      ["nil"] = emit_exactly_visitor_cbs,
+      ["boolean"] = emit_exactly_visitor_cbs,
+      ["..."] = emit_exactly_visitor_cbs,
+      ["argument"] = emit_exactly_visitor_cbs,
+      ["type_identifier"] = emit_exactly_visitor_cbs,
    }
 
    local visit_type: Visitor<TypeName, Type, Output> = {}
@@ -4343,15 +4355,6 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
 
    visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
    visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
-   visit_node.cbs["identifier"] = visit_node.cbs["variable"]
-   visit_node.cbs["number"] = visit_node.cbs["variable"]
-   visit_node.cbs["integer"] = visit_node.cbs["variable"]
-   visit_node.cbs["string"] = visit_node.cbs["variable"]
-   visit_node.cbs["nil"] = visit_node.cbs["variable"]
-   visit_node.cbs["boolean"] = visit_node.cbs["variable"]
-   visit_node.cbs["..."] = visit_node.cbs["variable"]
-   visit_node.cbs["argument"] = visit_node.cbs["variable"]
-   visit_node.cbs["type_identifier"] = visit_node.cbs["variable"]
 
    local out = recurse_node(ast, visit_node, visit_type)
    if err then
