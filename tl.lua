@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 local VERSION = "0.15.3+dev"
 
 local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, TypeReportEnv = {}, }
@@ -4297,12 +4297,69 @@ function tl.pretty_print_ast(ast, gen_target, mode)
             return out
          end,
       },
+      ["string"] = {
+         after = function(node, children)
+
+
+
+
+
+
+            if node.tk:sub(1, 1) == "[" then
+               return emit_exactly(node, children)
+            end
+
+            local out = { y = node.y, h = 0 }
+
+            local replaced = node.tk
+            for _ in replaced:gmatch("\n") do
+               out.h = out.h + 1
+            end
+
+            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise, ws)
+               local index = index_in_disguise - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\z" .. ws
+               end
+               for _ in ws:gmatch("\n") do
+                  out.h = out.h - 1
+               end
+               return ""
+            end)
+
+            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise, digits)
+               local index = index_in_disguise - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\x" .. digits
+               end
+               local byte = tonumber(digits, 16)
+               return byte and string.format("\\%03d", byte) or "\\x" .. digits
+            end)
+
+            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise, hex_digits)
+               local index = index_in_disguise - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\u{" .. hex_digits .. "}"
+               end
+               local codepoint = tonumber(hex_digits, 16)
+               if not codepoint then
+                  return "\\000"
+               end
+               local sequence = utf8.char(codepoint)
+               return (sequence:gsub(".", function(c)
+                  return ("\\%03d"):format(string.byte(c))
+               end))
+            end)
+
+            out[1] = replaced
+            return out
+         end,
+      },
 
       ["variable"] = emit_exactly_visitor_cbs,
       ["identifier"] = emit_exactly_visitor_cbs,
       ["number"] = emit_exactly_visitor_cbs,
       ["integer"] = emit_exactly_visitor_cbs,
-      ["string"] = emit_exactly_visitor_cbs,
       ["nil"] = emit_exactly_visitor_cbs,
       ["boolean"] = emit_exactly_visitor_cbs,
       ["..."] = emit_exactly_visitor_cbs,

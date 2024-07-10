@@ -4297,12 +4297,69 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             return out
          end,
       },
+      ["string"] = {
+         after = function(node: Node, children: {Output}): Output
+            -- translate escape sequences not supported by Lua 5.1
+            -- in particular:
+            --  - \z : removes trailing whitespace
+            --  - \xXX : hex byte
+            --  - \u{} : unicode
+
+            if node.tk:sub(1, 1) == "[" then
+               return emit_exactly(node, children)
+            end
+
+            local out <const>: Output = { y = node.y, h = 0 }
+
+            local replaced = node.tk
+            for _ in replaced:gmatch("\n") do
+               out.h = out.h + 1
+            end
+
+            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string, ws: string): string
+               local index <const> = index_in_disguise as integer - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\z" .. ws
+               end
+               for _ in ws:gmatch("\n") do
+                  out.h = out.h - 1
+               end
+               return ""
+            end)
+
+            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string, digits: string): string
+               local index <const> = index_in_disguise as integer - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\x" .. digits
+               end
+               local byte <const> = tonumber(digits, 16)
+               return byte and string.format("\\%03d", byte) or "\\x" .. digits
+            end)
+
+            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string, hex_digits: string): string
+               local index <const> = index_in_disguise as integer - 1
+               if replaced:sub(index, index) == "\\" then
+                  return "\\u{" .. hex_digits .. "}"
+               end
+               local codepoint <const> = tonumber(hex_digits, 16)
+               if not codepoint then
+                  return "\\000"
+               end
+               local sequence <const> = utf8.char(codepoint)
+               return (sequence:gsub(".", function(c: string): string
+                  return ("\\%03d"):format(string.byte(c))
+               end))
+            end)
+
+            out[1] = replaced
+            return out
+         end,
+      },
 
       ["variable"] = emit_exactly_visitor_cbs,
       ["identifier"] = emit_exactly_visitor_cbs,
       ["number"] = emit_exactly_visitor_cbs,
       ["integer"] = emit_exactly_visitor_cbs,
-      ["string"] = emit_exactly_visitor_cbs,
       ["nil"] = emit_exactly_visitor_cbs,
       ["boolean"] = emit_exactly_visitor_cbs,
       ["..."] = emit_exactly_visitor_cbs,
