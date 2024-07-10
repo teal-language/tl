@@ -10792,7 +10792,7 @@ end
 
 
 local function read_full_file(fd)
-   local bom = "\xEF\xBB\xBF"
+   local bom = "\239\187\191"
    local content, err = fd:read("*a")
    if content:sub(1, bom:len()) == bom then
       content = content:sub(bom:len() + 1)
