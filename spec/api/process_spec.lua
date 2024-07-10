@@ -38,7 +38,7 @@ describe("tl.process", function()
       end)
       it("should strip BOM from files", function()
 
-         local bom = "\xEF\xBB\xBF"
+         local bom = "\239\187\191"
          local current_dir = lfs.currentdir()
          local dir_name = util.write_tmp_dir(finally, {
             ["main.tl"] = bom .. [[
