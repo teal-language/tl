@@ -98,6 +98,11 @@ describe("local", function()
          { msg = "b" },
       }))
 
+      it("local type can declare a type alias for table", util.check([[
+         local type PackTable = table.PackTable
+         local args: table.PackTable<integer> = table.pack(1, 2, 3)
+      ]]))
+
       it("local type can declare a nominal type alias (regression test for #238)", function ()
          util.mock_io(finally, {
             ["module.tl"] = [[
