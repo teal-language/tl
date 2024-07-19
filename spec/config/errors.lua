@@ -1,13 +1,12 @@
 describe("config", function()
-   it("should report unknown keys in tlconfig.lua", function()
+   it("should not report unknown keys in tlconfig.lua", function()
       util.run_mock_project(finally, {
          dir_structure = {
             ["tlconfig.lua"] = [[return { foo = "hello" }]],
          },
          cmd = "check",
          args = { "tlconfig.lua" },
-         cmd_output = [[* in key "foo": unknown config key 'foo'
-========================================
+         cmd_output = [[========================================
 Type checked tlconfig.lua
 0 errors detected -- you can use:
 
