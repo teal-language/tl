@@ -2577,6 +2577,8 @@ local function parse_function_type(ps: ParseState, i: integer): integer, Functio
    else
       typ.args = new_tuple(ps, i, { new_type(ps, i, "any") }, true)
       typ.rets = new_tuple(ps, i, { new_type(ps, i, "any") }, true)
+      typ.is_method = false
+      typ.min_arity = 0
    end
    return i, typ
 end
