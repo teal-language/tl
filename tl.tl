@@ -2586,7 +2586,7 @@ local function parse_simple_type_or_nominal(ps: ParseState, i: integer): integer
    local st = simple_types[tk as TypeName]
    if st then
       return i + 1, new_type(ps, i, tk as TypeName)
-   elseif tk == "table" then
+   elseif tk == "table" and ps.tokens[i + 1].tk ~= "."  then
       local typ = new_type(ps, i, "map") as MapType
       typ.keys = new_type(ps, i, "any")
       typ.values = new_type(ps, i, "any")

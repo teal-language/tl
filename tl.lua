@@ -2586,7 +2586,7 @@ do
       local st = simple_types[tk]
       if st then
          return i + 1, new_type(ps, i, tk)
-      elseif tk == "table" then
+      elseif tk == "table" and ps.tokens[i + 1].tk ~= "." then
          local typ = new_type(ps, i, "map")
          typ.keys = new_type(ps, i, "any")
          typ.values = new_type(ps, i, "any")
