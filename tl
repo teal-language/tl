@@ -337,7 +337,7 @@ local function validate_config(config)
       if k == "preload_modules" then
          fail(k, "this key is no longer supported. To load a definition globally into the environment, use global_env_def.")
       elseif not valid_keys[k] then
-         warning(k, "unknown config key '" .. k .. "'")
+         -- skip invalid keys, to be used by other tools
       elseif type(valid_keys[k]) == "table" then
          if not valid_keys[k][v] then
             fail(k, "expected one of: %s", table.concat(keys(valid_keys[k][v]), ", "))
