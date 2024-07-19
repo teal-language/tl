@@ -10844,6 +10844,9 @@ self:expand_type(node, values, elements) })
             if node.if_block_n > 1 then
                self:infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
             end
+            if node.exp then
+               node.exp.expected = a_type(node, "boolean", {})
+            end
          end,
          before_statements = function(self, node)
             if node.exp then
@@ -10864,6 +10867,7 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
 
             self:widen_all_unions(node)
+            node.exp.expected = a_type(node, "boolean", {})
          end,
          before_statements = function(self, node)
             self:begin_scope(node)
@@ -10927,6 +10931,7 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
 
             self:widen_all_unions(node)
+            node.exp.expected = a_type(node, "boolean", {})
          end,
 
          after = end_scope_and_none_type,
@@ -11786,6 +11791,10 @@ self:expand_type(node, values, elements) })
                         t = larger_type
                      end
                      t = drop_constant_value(t)
+                  end
+
+                  if expected and expected.typename == "boolean" then
+                     t = a_type(node, "boolean", {})
                   end
                end
 

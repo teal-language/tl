@@ -10844,6 +10844,9 @@ do
             if node.if_block_n > 1 then
                self:infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
             end
+            if node.exp then
+               node.exp.expected = a_type(node, "boolean", {})
+            end
          end,
          before_statements = function(self: TypeChecker, node: Node)
             if node.exp then
@@ -10864,6 +10867,7 @@ do
          before = function(self: TypeChecker, node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
             self:widen_all_unions(node)
+            node.exp.expected = a_type(node, "boolean", {})
          end,
          before_statements = function(self: TypeChecker, node: Node)
             self:begin_scope(node)
@@ -10927,6 +10931,7 @@ do
          before = function(self: TypeChecker, node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
             self:widen_all_unions(node)
+            node.exp.expected = a_type(node, "boolean", {})
          end,
          -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
          after = end_scope_and_none_type,
@@ -11786,6 +11791,10 @@ do
                         t = larger_type
                      end
                      t = drop_constant_value(t)
+                  end
+
+                  if expected and expected is BooleanType then
+                     t = a_type(node, "boolean", {})
                   end
                end
 
