@@ -548,13 +548,13 @@ local function gen(lax, code, expected, gen_target)
    return function()
       local ast, syntax_errors = tl.parse(code, "foo.tl")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local result = tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target })
+      local result = assert(tl.type_check(ast, { filename = "foo.tl", lax = lax, gen_target = gen_target, gen_compat = gen_target == "5.4" and "off" or nil }))
       assert.same({}, result.type_errors)
-      local output_code = tl.pretty_print_ast(ast)
+      local output_code = tl.pretty_print_ast(ast, gen_target)
 
       local expected_ast, expected_errors = tl.parse(expected, "foo.tl")
       assert.same({}, expected_errors, "Code was not expected to have syntax errors")
-      local expected_code = tl.pretty_print_ast(expected_ast)
+      local expected_code = tl.pretty_print_ast(expected_ast, gen_target)
 
       assert.same(expected_code, output_code)
    end
