@@ -4305,7 +4305,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
 
 
 
-            if node.tk:sub(1, 1) == "[" or gen_target ~= "5.1" then
+            if node.tk:sub(1, 1) == "[" or gen_target ~= "5.1" or not node.tk:find("\\", 1, true) then
                return emit_exactly(node, children)
             end
 
