@@ -15,7 +15,7 @@ describe("string literal code generation", function()
 
 
       local _source_new_lines_get_preserved = 0
-   ]]))
+   ]], "5.1"))
 
    it("does not substitute escape sequences in [[strings]]", util.gen([==[
       local _literal_string = [[
@@ -29,5 +29,18 @@ describe("string literal code generation", function()
          \000\xee\u{ffffff}
          bar
       ]]
-   ]==]))
+   ]==], "5.1"))
+
+   for _, version in ipairs { "5.1", "5.3", "5.4" } do
+      local source = [[local _hex = "\xaa\xbb\xcc"]]
+      local expected = version == "5.1"
+         and [[local _hex = "\170\187\204"]]
+         or source
+      it(
+         version == "5.1"
+            and "does not make substitutions when target is 5.1"
+            or "does make substitutions when target is not 5.1",
+         util.gen(source, expected, version)
+      )
+   end
 end)
