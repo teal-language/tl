@@ -4305,7 +4305,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: TargetMode, mode: boolean | 
             --  - \xXX : hex byte
             --  - \u{} : unicode
 
-            if node.tk:sub(1, 1) == "[" then
+            if node.tk:sub(1, 1) == "[" or gen_target ~= "5.1" then
                return emit_exactly(node, children)
             end
 
