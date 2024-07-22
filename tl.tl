@@ -9215,7 +9215,11 @@ do
          end
 
          if rec.kind == "variable" then
-            return nil, "invalid key '" .. key .. "' in record '" .. rec.tk .. "' of type %s"
+            if tbl is InterfaceType then
+               return nil, "invalid key '" .. key .. "' in '" .. rec.tk .. "' of interface type %s"
+            else
+               return nil, "invalid key '" .. key .. "' in record '" .. rec.tk .. "' of type %s"
+            end
          else
             return nil, "invalid key '" .. key .. "' in type %s"
          end

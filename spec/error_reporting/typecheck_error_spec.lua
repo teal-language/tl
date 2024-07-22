@@ -11,11 +11,11 @@ describe("typecheck errors", function()
       util.mock_io(finally, {
          ["bar.tl"] = "local x: string = 1",
       })
-      util.check_type_error([[
+      util.run_check_type_error([[
          local bar = require "bar"
       ]], {
          { filename = "./bar.tl" }
-      })()
+      })
    end)
 
    it("unknowns include filename", util.lax_check([[
@@ -28,11 +28,11 @@ describe("typecheck errors", function()
       util.mock_io(finally, {
          ["bar.lua"] = "local x: string = b"
       })
-      util.lax_check([[
+      util.run_lax_check([[
          local bar = require "bar"
       ]], {
          { msg = "b", filename = "./bar.lua" }
-      })()
+      })
    end)
 
    it("type mismatches across modules report their module names", function ()
@@ -54,7 +54,7 @@ describe("typecheck errors", function()
             return bbb
          ]]
       })
-      util.check_type_error([[
+      util.run_check_type_error([[
          local aaa = require("aaa")
          local bbb = require("bbb")
 
@@ -67,7 +67,7 @@ describe("typecheck errors", function()
          myfunc(b)
       ]], {
          { msg = "bbb.Thing is not a aaa.Thing" }
-      })()
+      })
    end)
 
    it("localized type mismatches across module report their filenames", function ()
@@ -96,7 +96,7 @@ describe("typecheck errors", function()
             return bbb
          ]]
       })
-      util.check_type_error([[
+      util.run_check_type_error([[
          local aaa = require("aaa")
          local bbb = require("bbb")
 
@@ -107,7 +107,7 @@ describe("typecheck errors", function()
          aaa.myfunc(b)
       ]], {
          { msg = "argument 1: Thing (defined in ./bbb.tl:4) is not a Thing (defined in ./aaa.tl:1)" }
-      })()
+      })
    end)
 
    it("type mismatches across local type names report their provenance", function ()
@@ -141,7 +141,7 @@ describe("typecheck errors", function()
             return bbb
          ]]
       })
-      util.check_type_error([[
+      util.run_check_type_error([[
          local aaa = require("aaa")
          local bbb = require("bbb")
 
@@ -150,7 +150,7 @@ describe("typecheck errors", function()
          aaa.myfunc(b)
       ]], {
          { msg = "argument 1: Thing (defined in ./bbb.tl:1) is not a Thing (defined in ./aaa.tl:1)" }
-      })()
+      })
    end)
 
 end)

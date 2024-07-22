@@ -246,7 +246,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       it("can be nested", function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
+               local type requests = record
 
                   type RequestOpts = ]]..statement..[[ --
                      {string}
@@ -265,21 +265,24 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                return requests
             ]],
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local req = require("req")
 
             local r = req.get("http://example.com")
             print(r.status_code)
             print(r.status_coda)
          ]], {
-            { msg = "invalid key 'status_coda' in "..statement.." 'r' of type Response" }
+            { msg = (statement == "interface")
+                    and "invalid key 'status_coda' in 'r' of interface type Response"
+                    or  "invalid key 'status_coda' in record 'r' of type Response"
+            }
          })
       end)
 
       it("can be nested with shorthand syntax", function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
+               local type requests = record
 
                   ]]..statement..[[ RequestOpts
                      {string}
@@ -298,14 +301,17 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                return requests
             ]],
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local req = require("req")
 
             local r = req.get("http://example.com")
             print(r.status_code)
             print(r.status_coda)
          ]], {
-            { msg = "invalid key 'status_coda' in "..statement.." 'r' of type Response" }
+            { msg = (statement == "interface")
+                    and "invalid key 'status_coda' in 'r' of interface type Response"
+                    or  "invalid key 'status_coda' in record 'r' of type Response"
+            }
          })
       end)
 
@@ -519,7 +525,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       it("can export types as nested " .. name, function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
+               local record requests
 
                   type RequestOpts = ]]..statement..[[
                      {string}
@@ -538,7 +544,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                return requests
             ]],
          })
-         util.check([[
+         return util.check([[
             local req = require("req")
 
             local function f(): req.Response
@@ -546,7 +552,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
             end
 
             print(f().status_code)
-         ]])
+         ]])()
       end)
 
       it("resolves aliasing of nested " .. name .. " (see #400)", util.check([[
