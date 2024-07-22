@@ -568,4 +568,16 @@ function util.gen(code, expected, gen_target)
    return gen(false, code, expected, gen_target)
 end
 
+function util.run_check_type_error(...)
+   return util.check_type_error(...)()
+end
+
+function util.run_check(...)
+   return util.check(...)()
+end
+
+function util.run_lax_check(...)
+   return util.lax_check(...)()
+end
+
 return util

@@ -137,7 +137,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x: number = 1"
          })
-         util.check([[
+         util.run_check([[
             local foo = require("foo")
             global x: number
             x = 2
@@ -148,7 +148,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x <const>: number = 1"
          })
-         util.check([[
+         util.run_check([[
             local foo = require("foo")
             global x <const>: number
          ]])
@@ -158,7 +158,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x <const>: number = 1"
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local foo = require("foo")
             global x <const>: number = 9
          ]], {
@@ -170,7 +170,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x: number"
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local foo = require("foo")
             global x <const>: number
          ]], {
@@ -182,7 +182,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x <const>: number"
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local foo = require("foo")
             global x: number
          ]], {
@@ -194,7 +194,7 @@ describe("global", function()
          util.mock_io(finally, {
             ["foo.tl"] = "global x, y: number, string = 1, 'hello'"
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local foo = require("foo")
             global x: string
             x = 2
@@ -213,7 +213,7 @@ describe("global", function()
 
                global type Building
 
-               global type Person
+               global record Person
                   residence: Building
                end
 
@@ -224,14 +224,14 @@ describe("global", function()
 
                global type Person
 
-               global type Building
+               global record Building
                   owner: Person
                end
 
                return building
             ]],
          })
-         util.check([[
+         util.run_check([[
             local person = require("person")
             local building = require("building")
             local b: Building = {}

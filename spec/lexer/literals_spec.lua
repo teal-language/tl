@@ -55,6 +55,6 @@ describe("lexer", function()
       end
       local input = table.concat(code, "\n")
 
-      util.check(input)
+      util.run_check(input)
    end)
 end)

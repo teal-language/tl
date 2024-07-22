@@ -227,7 +227,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       it("can be nested", function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = record ]]..pick(i, "", "{requests}")..[[
+               local type requests = record
 
                   type RequestOpts = record
                      {string}
@@ -246,7 +246,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
                return requests
             ]],
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local req = require("req")
 
             local r = req.get("http://example.com")
@@ -260,7 +260,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       it("can be nested with shorthand syntax", function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = record ]]..pick(i, "", "{requests}")..[[
+               local type requests = record
 
                   record RequestOpts
                      {string}
@@ -279,7 +279,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
                return requests
             ]],
          })
-         util.check_type_error([[
+         util.run_check_type_error([[
             local req = require("req")
 
             local r = req.get("http://example.com")
@@ -437,7 +437,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
       it("can export types as nested " .. name, function()
          util.mock_io(finally, {
             ["req.d.tl"] = [[
-               local type requests = record ]]..pick(i, "", "{requests}")..[[
+               local record requests
 
                   type RequestOpts = record
                      {string}
@@ -456,7 +456,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
                return requests
             ]],
          })
-         util.check([[
+         return util.check([[
             local req = require("req")
 
             local function f(): req.Response
@@ -464,7 +464,7 @@ for i, name in ipairs({"records", "arrayrecords"}) do
             end
 
             print(f().status_code)
-         ]])
+         ]])()
       end)
 
       it("resolves aliasing of nested " .. name .. " (see #400)", util.check([[
