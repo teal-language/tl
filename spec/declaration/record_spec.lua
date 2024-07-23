@@ -555,6 +555,40 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ]])()
       end)
 
+      it("can reexport types as nested " .. name, function()
+         util.mock_io(finally, {
+            ["inner.tl"] = [[
+               local record inner
+                  ]]..statement..[[ SubType<K> ]]..array(i, "{integer}")..[[
+                     item: K
+                  end
+               end
+
+               return inner
+            ]],
+            ["outer.tl"] = [[
+               local core = require("inner")
+
+               local record mod
+                  f: string
+                  type SubType<K> = core.SubType<K>
+               end
+
+               return mod
+            ]],
+         })
+         util.run_check_type_error([[
+            local mod = require("outer")
+
+            print(mod.f)
+            local v: mod.SubType<integer> = {
+               item = "hello"
+            }
+         ]], {
+            { msg = 'in record field: item: got string "hello", expected integer' }
+         })
+      end)
+
       it("resolves aliasing of nested " .. name .. " (see #400)", util.check([[
          local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
             ]]..statement..[[ Bar ]]..array(i, "{Bar}")..[[

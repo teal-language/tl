@@ -1607,17 +1607,23 @@ local record BooleanType
    where self.typename == "boolean"
 end
 
-local record TypeDeclType
+local interface HasTypeArgs
    is Type
-   where self.typename == "typedecl"
+   where self.typeargs
 
    typeargs: {TypeArgType}
+end
+
+local record TypeDeclType
+   is Type, HasTypeArgs
+   where self.typename == "typedecl"
+
    def: Type
    closed: boolean
 end
 
 local record TypeAliasType
-   is Type
+   is Type, HasTypeArgs
    where self.typename == "typealias"
 
    alias_to: NominalType
@@ -1643,13 +1649,6 @@ local record Scope
    pending_nominals: {string:{NominalType}}
    pending_global_types: {string:boolean}
    narrows: {string:boolean}
-end
-
-local interface HasTypeArgs
-   is Type
-   where self.typeargs
-
-   typeargs: {TypeArgType}
 end
 
 local interface HasDeclName
@@ -2216,6 +2215,7 @@ local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, Type, integer
+local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
 local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
 
@@ -3771,14 +3771,19 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, no
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
          i = i + 1
          local iv = i
-         local v: Node
-         i, v = verify_kind(ps, i, "identifier", "type_identifier")
+
+         local lt: Node
+         i, lt = parse_type_declaration(ps, i, "local_type") -- local_type Node will be discarded
+         if not lt then
+            return fail(ps, i, "expected a type definition")
+         end
+
+         local v = lt.var
          if not v then
             return fail(ps, i, "expected a variable name")
          end
-         i = verify_tk(ps, i, "=")
-         local nt: Node
-         i, nt = parse_newtype(ps, i)
+
+         local nt = lt.value
          if not nt or not nt.newtype then
             return fail(ps, i, "expected a type definition")
          end
@@ -4000,9 +4005,7 @@ local function parse_variable_declarations(ps: ParseState, i: integer, node_name
    return i, asgn
 end
 
-local function parse_type_declaration(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
-   i = i + 2 -- skip `local` or `global`, and `type`
-
+parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
    local asgn: Node = new_node(ps, i, node_name)
    local var: Node
 
@@ -4048,6 +4051,10 @@ local function parse_type_declaration(ps: ParseState, i: integer, node_name: Nod
             def.declname = asgn.var.tk
          end
       end
+   elseif nt is TypeAliasType then
+      if typeargs then
+         nt.typeargs = typeargs
+      end
    end
 
    return i, asgn
@@ -4078,7 +4085,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
 end
 
 local function skip_type_declaration(ps: ParseState, i: integer): integer, Node
-   return parse_type_declaration(ps, i - 1, "local_type")
+   return parse_type_declaration(ps, i + 1, "local_type")
 end
 
 local function parse_local_macroexp(ps: ParseState, i: integer): integer, Node
@@ -4096,8 +4103,8 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
    local tn = ntk as TypeName
    if ntk == "function" then
       return parse_local_function(ps, i)
-   elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_declaration(ps, i, "local_type")
+   elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
+      return parse_type_declaration(ps, i + 2, "local_type")
    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
       return parse_local_macroexp(ps, i)
    elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
@@ -4111,8 +4118,8 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
    local tn = ntk as TypeName
    if ntk == "function" then
       return parse_function(ps, i + 1, "global")
-   elseif ntk == "type" and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_declaration(ps, i, "global_type")
+   elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
+      return parse_type_declaration(ps, i + 2, "global_type")
    elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
       return parse_type_constructor(ps, i, "global_type", tn, parse_type_body_fns[tn])
    elseif ps.tokens[i+1].kind == "identifier" then
@@ -4434,6 +4441,11 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
          table.insert(xs, recurse_type(s, ast.vtype, visit))
       end
    elseif ast is TypeAliasType then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
       table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast is TypeDeclType then
       if ast.typeargs then
@@ -6998,7 +7010,7 @@ do
       fresh_typevar_ctr = fresh_typevar_ctr + 1
       local ok: boolean
       ok, t = typevar_resolver(nil, t, fresh_typevar, fresh_typearg)
-      assert(ok, "Internal Compiler Error: error creating fresh type variables")
+      assert(ok and t, "Internal Compiler Error: error creating fresh type variables")
       return t
    end
 
@@ -7711,6 +7723,10 @@ do
             found = found.alias_to.found
          end
 
+         if not found then
+            return self.errs:invalid_at(t, table.concat(t.names, ".") .. " is not a resolved type")
+         end
+
          if not found is TypeDeclType then
             return self.errs:invalid_at(t, table.concat(t.names, ".") .. " is not a type")
          end
@@ -7731,7 +7747,7 @@ do
       local function resolve_decl_into_nominal(self: TypeChecker, t: NominalType, found: TypeDeclType): Type
          local def = found.def
          local resolved: Type
-         if def is RecordType or def is FunctionType then
+         if def is RecordLikeType or def is FunctionType then
             resolved = match_typevals(self, t, def)
             if not resolved then
                return self.errs:invalid_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
@@ -7757,7 +7773,7 @@ do
          local t = typealias.alias_to
 
          local immediate, found = find_nominal_type_decl(self, t)
-         if immediate then
+         if immediate is InvalidOrTypeDeclType then
             return immediate
          end
 
@@ -8131,6 +8147,16 @@ do
       end
    end
 
+   -- ∀ x ∈ xs, x <: t
+   function TypeChecker:forall_are_subtype_of(xs: AggregateType, t: Type): boolean
+      for _, x in ipairs(xs.types) do
+         if not self:is_a(x, t) then
+            return false
+         end
+      end
+      return true
+   end
+
    -- emptytable rules are the same in eqtype_relations and subtype_relations
    local emptytable_relations: {TypeName:CompareTypes} = {
       ["array"] = compare_true,
@@ -8263,6 +8289,15 @@ do
          ["*"] = compare_true,
       },
       ["union"] = {
+         ["nominal"] = function(self: TypeChecker, a: UnionType, b: NominalType): boolean, {Error}
+            -- match unions structurally
+            local rb = self:resolve_nominal(b)
+            if rb.typename == "union" then
+               return self:is_a(a, rb)
+            end
+
+            return self:forall_are_subtype_of(a, b)
+         end,
          ["union"] = function(self: TypeChecker, a: UnionType, b: UnionType): boolean, {Error} -- ∀ t ∈ a. ∃ u ∈ b. t <: u
             local used = {}                                                 -- ────────────────────────
             for _, t in ipairs(a.types) do                                  --    a union <: b union
@@ -8281,14 +8316,7 @@ do
             end
             return true
          end,
-         ["*"] = function(self: TypeChecker, a: UnionType, b: Type): boolean, {Error}   -- ∀ t ∈ a, t <: b
-            for _, t in ipairs(a.types) do                                              -- ────────────────
-               if not self:is_a(t, b) then                                              --   a union <: b
-                  return false
-               end
-            end
-            return true
-         end,
+         ["*"] = TypeChecker.forall_are_subtype_of as CompareTypes,
       },
       ["poly"] = {
          ["*"] = function(self: TypeChecker, a: PolyType, b: Type): boolean, {Error}    -- ∃ t ∈ a, t <: b
@@ -8305,20 +8333,35 @@ do
                return true
             end
 
+            -- match unions structurally
+            local ra = self:resolve_nominal(a)
             local rb = self:resolve_nominal(b)
-            if rb is InterfaceType then
-               -- match interface subtyping
+            if ra is UnionType and rb is UnionType then
+               return self:is_a(ra, rb)
+            end
+            if ra is UnionType then
+               return self:is_a(ra, b)
+            end
+            if rb is UnionType then
                return self:is_a(a, rb)
             end
 
-            local ra = self:resolve_nominal(a)
-            if ra is UnionType or rb is UnionType then
-               -- match unions structurally
-               return self:is_a(ra, rb)
+            -- match interface subtyping
+            if rb is InterfaceType then
+               return self:is_a(a, rb)
             end
 
             -- all other types nominally
             return ok, errs
+         end,
+         ["union"] = function(self: TypeChecker, a: NominalType, b: UnionType): boolean, {Error}
+            -- match unions structurally
+            local ra = self:resolve_nominal(a)
+            if ra.typename == "union" then
+               return self:is_a(ra, b)
+            end
+
+            return not not self:exists_supertype_in(a, b)
          end,
          ["*"] = TypeChecker.subtype_nominal,
       },
@@ -10511,14 +10554,17 @@ do
       return ok, t, infertype ~= nil
    end
 
-   function TypeChecker:get_typedecl(value: Node): TypeDeclType, Variable
+   function TypeChecker:get_typedecl(value: Node): InvalidOrTypeDeclType, Variable
       if value.kind == "op"
          and value.op.op == "@funcall"
          and value.e1.kind == "variable"
          and value.e1.tk == "require"
       then
          local t = special_functions["require"](self, value, self:find_var_type("require"), a_tuple(value.e2, { a_type(value.e2[1], "string", {}) }), 0)
-         local ty = t is TupleType and t.tuple[1] or t
+
+         -- FIXME why is this ': Type' annotation needed?
+         local ty: Type = t is TupleType and t.tuple[1] or t
+
          ty = (ty is TypeAliasType) and self:resolve_typealias(ty) or ty
          local td = (ty is TypeDeclType) and ty or a_type(value, "typedecl", { def = ty } as TypeDeclType)
          return td
@@ -10660,6 +10706,9 @@ do
             if node.value then
                local resolved, aliasing = self:get_typedecl(node.value)
                local added = self:add_global(node.var, name, resolved)
+               if resolved is InvalidType then
+                  return
+               end
                node.value.newtype = resolved
                if aliasing then
                   added.aliasing = aliasing
@@ -12143,18 +12192,19 @@ do
       end
    end
 
+   local visit_type_with_typeargs = {
+      before = function(self: TypeChecker, _typ: Type)
+         self:begin_scope()
+      end,
+      after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+         self:end_scope()
+         return self:ensure_fresh_typeargs(typ)
+      end,
+   }
+
    local visit_type: Visitor<TypeChecker, TypeName,Type,Type>
    visit_type = {
       cbs = {
-         ["function"] = {
-            before = function(self: TypeChecker, _typ: Type)
-               self:begin_scope()
-            end,
-            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
-               self:end_scope()
-               return self:ensure_fresh_typeargs(typ)
-            end,
-         },
          ["record"] = {
             before = function(self: TypeChecker, typ: RecordType)
                self:begin_scope()
@@ -12332,11 +12382,13 @@ do
    }
 
    visit_type.cbs["interface"] = visit_type.cbs["record"]
-   visit_type.cbs["typedecl"] = visit_type.cbs["function"]
+
+   visit_type.cbs["function"] = visit_type_with_typeargs
+   visit_type.cbs["typedecl"] = visit_type_with_typeargs
+   visit_type.cbs["typealias"] = visit_type_with_typeargs
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
-   visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["array"] = default_type_visitor
    visit_type.cbs["map"] = default_type_visitor
    visit_type.cbs["enum"] = default_type_visitor

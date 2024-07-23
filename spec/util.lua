@@ -436,6 +436,12 @@ local function check(lax, code, unknowns, gen_target)
          gen_compat = "off"
       end
       local result = tl.type_check(ast, "foo.lua", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
+
+      for _, mname in pairs(result.env.loaded_order) do
+         local mresult = result.env.loaded[mname]
+         batch:add(assert.same, {}, mresult.syntax_errors or {}, "Code was not expected to have syntax errors")
+      end
+
       batch:add(assert.same, {}, result.type_errors)
 
       if unknowns then
