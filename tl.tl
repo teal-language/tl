@@ -4827,7 +4827,7 @@ local primitive: {TypeName:string} = {
    ["thread"] = "thread",
 }
 
-function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode: boolean | PrettyPrintOptions): string, string
+function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode?: boolean | PrettyPrintOptions): string, string
    local err: string
    local indent = 0
 
