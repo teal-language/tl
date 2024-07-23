@@ -8541,7 +8541,11 @@ do
                table.insert(errs, Err("incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", a.args, b.args))
             else
                for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
-                  self:arg_check(nil, errs, aa[i], ba[i] or ba[#ba], "bivariant", "argument", i)
+                  local ai = aa[i]
+                  local bi = ba[i] or ba[#ba]
+                  if bi then
+                     self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
+                  end
                end
             end
 

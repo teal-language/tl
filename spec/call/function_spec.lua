@@ -97,5 +97,12 @@ describe("function calls", function()
       ]], {
          { y = 5, msg = "wrong number of arguments (given 3, expects at least 1 and at most 2)" },
       }))
+
+      it("with insufficient arguments (regression test)", util.check_type_error([[
+         local chunk: function()
+         chunk = load()
+      ]], {
+         { y = 2, msg = "wrong number of arguments (given 0, expects at least 1 and at most 4)" },
+      }))
    end)
 end)
