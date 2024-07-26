@@ -145,7 +145,7 @@ do
       lines: function(? string, (number | FileMode)...): (function(): ((string | number)...))
       lines: function(? string, (number | string)...): (function(): (string...))
 
-      open: function(string, ? OpenMode): FILE, string
+      open: function(string, ? OpenMode): FILE, string, integer
       output: function(? FILE): FILE
       popen: function(string, ? OpenMode): FILE, string
 
