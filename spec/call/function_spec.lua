@@ -104,5 +104,15 @@ describe("function calls", function()
       ]], {
          { y = 2, msg = "wrong number of arguments (given 0, expects at least 1 and at most 4)" },
       }))
+
+      it("with insufficient arguments (regression test)", util.check_type_error([[
+         local function a(f: (function(): any), ...: any): (function():any)
+            return function(...): (function():any)
+                  return f(a, ...)
+            end
+         end
+      ]], {
+         { y = 3, msg = "wrong number of arguments (given 2, expects 0)" },
+      }))
    end)
 end)
