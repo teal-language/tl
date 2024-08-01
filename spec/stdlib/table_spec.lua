@@ -10,6 +10,18 @@ describe("table", function()
          local b = b as string
          local c = c as number
       ]]))
+
+      -- standard library definition has special cases
+      -- for tuples of sizes up to 5
+      it("can unpack some tuples", util.check([[
+         local s = { 1234, "5678", 4566, "foo", 123 }
+         local a, b, c, d, e = table.unpack(s)
+         a = a + 1 -- number
+         b = b .. "!" -- string
+         c = c + 2 -- number
+         d = d .. "!" -- string
+         e = e + 3 -- number
+      ]]))
    end)
 
    describe("concat", function()
