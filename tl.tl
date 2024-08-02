@@ -8674,7 +8674,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
             return node_error(node, "require expects one literal argument")
          end
          if node.e2[1].kind ~= "string" then
-            return node_error(node, "don't know how to resolve a dynamic require")
+            return ANY
          end
 
          local module_name = assert(node.e2[1].conststr)
