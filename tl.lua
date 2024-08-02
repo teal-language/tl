@@ -10067,6 +10067,8 @@ tl.type_check = function(ast, opts)
                end
                node.type = BOOLEAN
             elseif node.op.op == ":" then
+
+
                if lax and (is_unknown(a) or a.typename == "typevar") then
                   if node.e1.kind == "variable" then
                      add_unknown_dot(node.e1, node.e1.tk .. "." .. node.e2.tk)
