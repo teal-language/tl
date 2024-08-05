@@ -898,14 +898,22 @@ do
       env.report_types = true
 
       for i, input_file in ipairs(args["file"]) do
-         local pok, err = pcall(process_module, input_file, env)
+         local pok, perr, err = pcall(process_module, input_file, env)
          if not pok then
-            die("Internal Compiler Error: " .. err)
+            die("Internal Compiler Error: " .. perr)
          end
+         if err then
+            printerr(err)
+         end
+
          check_collect(i)
       end
 
       local ok, _, _, w = report_all_errors(tlconfig, env)
+
+      if not env.reporter then
+         os.exit(1)
+      end
 
       local tr = env.reporter:get_report()
       if tr then
