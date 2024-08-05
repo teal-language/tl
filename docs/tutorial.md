@@ -179,7 +179,7 @@ local record File
    close: function(File): boolean, string
 end
 
--- a record can doubles as a record and an array, by declaring an array interface
+-- a record can double as a record and an array, by declaring an array interface
 local record TreeNode<T> is {TreeNode<T>}
    item: T
 end
