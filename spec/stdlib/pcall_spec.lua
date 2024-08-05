@@ -2,6 +2,12 @@ local tl = require("tl")
 local util = require("spec.util")
 
 describe("pcall", function()
+   it("can't use pcall in local type", util.check_syntax_error([[
+      local type bla = pcall("require", "something")
+   ]], {
+      { msg = "pcall() cannot be used in type declarations" }
+   }))
+
    it("can't pcall nothing", util.check_type_error([[
       local pok = pcall()
    ]], {

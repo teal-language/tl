@@ -1172,4 +1172,101 @@ describe("require", function()
          { y = 14, msg = "got <any type>, expected Mod" },
       }))
    end)
+
+   it("in 'local type' accepts dots for extracting nested types", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+                  fn: function(): Foo<K>
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+            local function f(v: Foo<integer>)
+               print(v.something)
+               -- check that aliasing works:
+               local x = v.fn()
+               x = v
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("in 'local type' with dots fails if not a record", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            return 123
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         { filename = "main.tl", x = 37, y = 1, msg = "type is not a record" },
+         { filename = "main.tl", x = 45, y = 1, msg = "cannot index key 'Foo' in type integer" },
+      }, result.type_errors)
+   end)
+
+   it("in 'local type' with dots fails if not a record", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Bar
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         { filename = "main.tl", x = 45, y = 1, msg = "nested type 'Foo' not found in record" },
+      }, result.type_errors)
+   end)
+
+   it("in 'local type' does not accept arbitrary expressions", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod") + "hello"
+            local function f(v: Foo)
+               print(v.something)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({
+         { filename = "main.tl", x = 30, y = 1, msg = "require() in type declarations cannot be part of larger expressions" }
+      }, result.syntax_errors)
+   end)
 end)

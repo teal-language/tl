@@ -211,6 +211,17 @@ describe("tl types works like check", function()
          util.assert_popen_close(0, pd:close())
          -- TODO check json output
       end)
+
+      it("does not crash when a require() expression does not resolve (#778)", function()
+         local name = util.write_tmp_file(finally, [[
+            local type Foo = require("missingmodule").baz
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name, "--gen-target=5.1") .. "2>&1 1>" .. util.os_null, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(1, pd:close())
+         assert.match("1 error:", output, 1, true)
+         -- TODO check json output
+      end)
    end)
 
    describe("on .lua files", function()
