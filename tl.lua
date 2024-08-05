@@ -2808,22 +2808,37 @@ do
    end
 
    local function node_is_require_call(n)
-      if n.e1 and n.e2 and
-         n.e1.kind == "variable" and n.e1.tk == "require" and
+      if not (n.e1 and n.e2) then
+         return nil
+      end
+      if n.op and n.op.op == "." then
+
+         return node_is_require_call(n.e1)
+      elseif n.e1.kind == "variable" and n.e1.tk == "require" and
          n.e2.kind == "expression_list" and #n.e2 == 1 and
          n.e2[1].kind == "string" then
 
+
          return n.e2[1].conststr
-      elseif n.op and n.op.op == "@funcall" and
+      end
+      return nil
+   end
+
+   local function node_is_require_call_or_pcall(n)
+      local r = node_is_require_call(n)
+      if r then
+         return r
+      end
+      if n.op and n.op.op == "@funcall" and
          n.e1 and n.e1.tk == "pcall" and
          n.e2 and #n.e2 == 2 and
          n.e2[1].kind == "variable" and n.e2[1].tk == "require" and
          n.e2[2].kind == "string" and n.e2[2].conststr then
 
+
          return n.e2[2].conststr
-      else
-         return nil
       end
+      return nil
    end
 
    do
@@ -2999,7 +3014,7 @@ do
 
                e1 = { f = ps.filename, y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
 
-               table.insert(ps.required_modules, node_is_require_call(e1))
+               table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
             elseif tkop.tk == "[" then
                local op = new_operator(tkop, 2, "@index")
 
@@ -3042,7 +3057,7 @@ do
                table.insert(args, argument)
                e1 = { f = ps.filename, y = args.y, x = args.x, kind = "op", op = op, e1 = e1, e2 = args }
 
-               table.insert(ps.required_modules, node_is_require_call(e1))
+               table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
             elseif tkop.tk == "as" or tkop.tk == "is" then
                local op = new_operator(tkop, 2, tkop.tk)
 
@@ -4029,13 +4044,27 @@ do
 
       i = verify_tk(ps, i, "=")
 
-      if ps.tokens[i].kind == "identifier" and ps.tokens[i].tk == "require" then
-         local istart = i
-         i, asgn.value = parse_call_or_assignment(ps, i)
-         if asgn.value and not node_is_require_call(asgn.value) then
-            fail(ps, istart, "require() for type declarations must have a literal argument")
+      if ps.tokens[i].kind == "identifier" then
+         if ps.tokens[i].tk == "require" then
+            local istart = i
+            i, asgn.value = parse_expression(ps, i)
+            if asgn.value then
+               if asgn.value.op and asgn.value.op.op ~= "@funcall" and asgn.value.op.op ~= "." then
+                  fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
+                  return i
+               end
+               if not node_is_require_call(asgn.value) then
+                  fail(ps, istart, "require() for type declarations must have a literal argument")
+                  return i
+               end
+               return i, asgn
+            else
+               return i
+            end
+         elseif ps.tokens[i].tk == "pcall" then
+            fail(ps, i, "pcall() cannot be used in type declarations")
+            return i
          end
-         return i, asgn
       end
 
       i, asgn.value = parse_newtype(ps, i)
@@ -10577,6 +10606,24 @@ self:expand_type(node, values, elements) })
          ty = (ty.typename == "typealias") and self:resolve_typealias(ty) or ty
          local td = (ty.typename == "typedecl") and ty or a_type(value, "typedecl", { def = ty })
          return td
+      elseif value.kind == "op" and
+         value.op.op == "." then
+
+         local ty = self:get_typedecl(value.e1)
+         if ty.typename == "typedecl" then
+            local def = ty.def
+            if def.typename == "record" then
+               local t = def.fields[value.e2.tk]
+               if t then
+                  return a_type(value, "typedecl", { def = t })
+               else
+                  return self.errs:invalid_at(value.e2, "type not found")
+               end
+            else
+               return self.errs:invalid_at(value.e2, "type is not a record")
+            end
+         end
+         return ty
       else
          local newtype = value.newtype
          if newtype.typename == "typealias" then

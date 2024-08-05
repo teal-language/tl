@@ -1152,4 +1152,55 @@ describe("require", function()
          assert.same({}, result.env.loaded["./types/person.tl"].type_errors)
       end)
    end)
+
+   it("in 'local type' accepts dots for extracting nested types", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+            local function f(v: Foo)
+               print(v.something)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("in 'local type' does not accept arbitrary expressions", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod") + "hello"
+            local function f(v: Foo)
+               print(v.something)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({
+         { filename = "main.tl", x = 30, y = 1, msg = "require() in type declarations cannot be part of larger expressions" }
+      }, result.syntax_errors)
+   end)
 end)
