@@ -4,6 +4,13 @@ local util = require("spec.util")
 
 describe("tl types works like check", function()
    describe("on .tl files", function()
+      it("reports missing files", function()
+         local pd = io.popen(util.tl_cmd("types", "nonexistent_file") .. "2>&1 1>" .. util.os_null, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(1, pd:close())
+         assert.match("could not open nonexistent_file", output, 1, true)
+      end)
+
       it("works on empty files", function()
          local name = util.write_tmp_file(finally, [[]])
          local pd = io.popen(util.tl_cmd("types", name) .. " 2>" .. util.os_null, "r")
