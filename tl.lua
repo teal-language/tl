@@ -2552,12 +2552,12 @@ do
    local function parse_typearg(ps, i)
       local name = ps.tokens[i].tk
       local constraint
+      local t = new_type(ps, i, "typearg")
       i = verify_kind(ps, i, "identifier")
       if ps.tokens[i].tk == "is" then
          i = i + 1
          i, constraint = parse_interface_name(ps, i)
       end
-      local t = new_type(ps, i, "typearg")
       t.typearg = name
       t.constraint = constraint
       return i, t
@@ -6084,21 +6084,14 @@ function Errors:add_unknown(node, name)
    self:add_warning("unknown", node, "unknown variable: %s", name)
 end
 
-function Errors:redeclaration_warning(node, old_var)
-   if node.tk:sub(1, 1) == "_" then return end
+function Errors:redeclaration_warning(at, var_name, var_kind, old_var)
+   if var_name:sub(1, 1) == "_" then return end
 
-   local var_kind = "variable"
-   local var_name = node.tk
-   if node.kind == "local_function" or node.kind == "record_function" then
-      var_kind = "function"
-      var_name = node.name.tk
-   end
-
-   local short_error = "redeclaration of " .. var_kind .. " '%s'"
+   local short_error = var_kind .. " shadows previous declaration of '%s'"
    if old_var and old_var.declared_at then
-      self:add_warning("redeclaration", node, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
+      self:add_warning("redeclaration", at, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
    else
-      self:add_warning("redeclaration", node, short_error, var_name)
+      self:add_warning("redeclaration", at, short_error, var_name)
    end
 end
 
@@ -7482,10 +7475,16 @@ do
    end
 
 
-   function TypeChecker:check_if_redeclaration(new_name, at)
+   function TypeChecker:check_if_redeclaration(new_name, node)
       local old = self:find_var(new_name, "check_only")
-      if old then
-         self.errs:redeclaration_warning(at, old)
+      if old or simple_types[new_name] then
+         local var_name = node.tk
+         local var_kind = "variable"
+         if node.kind == "local_function" or node.kind == "record_function" then
+            var_kind = "function"
+            var_name = node.name.tk
+         end
+         self.errs:redeclaration_warning(node, var_name, var_kind, old)
       end
    end
 
@@ -11575,7 +11574,7 @@ self:expand_type(node, values, elements) })
                rfieldtype = self:to_structural(rfieldtype)
 
                if open_v and open_v.implemented and open_v.implemented[open_k] then
-                  self.errs:redeclaration_warning(node)
+                  self.errs:redeclaration_warning(node, node.name.tk, "function")
                end
 
                local ok, err = self:same_type(fn_type, rfieldtype)
@@ -12398,8 +12397,17 @@ self:expand_type(node, values, elements) })
          },
          ["typearg"] = {
             after = function(self, typ, _children)
-               self:add_var(nil, typ.typearg, a_type(typ, "typearg", {
-                  typearg = typ.typearg,
+               local name = typ.typearg
+               local old = self:find_var(name, "check_only")
+               if old then
+                  self.errs:redeclaration_warning(typ, name, "type argument", old)
+               end
+               if simple_types[name] then
+                  self.errs:add(typ, "cannot use base type name '" .. name .. "' as a type variable")
+               end
+
+               self:add_var(nil, name, a_type(typ, "typearg", {
+                  typearg = name,
                   constraint = typ.constraint,
                }))
                return typ

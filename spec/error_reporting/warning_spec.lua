@@ -8,7 +8,7 @@ describe("warnings", function()
          local a = 2
          print(a)
       ]], {
-         { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:16)" },
+         { y = 3, msg = "variable shadows previous declaration of 'a' (originally declared at 1:16)" },
       }))
 
       it("reports redefined variables in for loops", util.check_warnings([[
@@ -25,9 +25,9 @@ describe("warnings", function()
             print(k, v)
          end
       ]], {
-         { y = 3, msg = "redeclaration of variable 'i' (originally declared at 1:14)" },
-         { y = 9, msg = "redeclaration of variable 'k' (originally declared at 7:14)" },
-         { y = 10, msg = "redeclaration of variable 'v' (originally declared at 7:17)" },
+         { y = 3, msg = "variable shadows previous declaration of 'i' (originally declared at 1:14)" },
+         { y = 9, msg = "variable shadows previous declaration of 'k' (originally declared at 7:14)" },
+         { y = 10, msg = "variable shadows previous declaration of 'v' (originally declared at 7:17)" },
       }))
 
       it("reports use of pairs on arrays", util.check_warnings([[
@@ -56,7 +56,7 @@ describe("warnings", function()
          { y = 1, msg = [[unused variable foo: string]] }
       }))
 
-      it("does not report redeclaration of variables prefixed with '_'", util.check_warnings([[
+      it("does not report variable shadows previous declaration ofs prefixed with '_'", util.check_warnings([[
          local _ = 1
          print(_) -- ensure usage
          local _ = 2
@@ -78,7 +78,7 @@ describe("warnings", function()
             print(a)
          end
       ]], {
-         { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:16)" },
+         { y = 3, msg = "variable shadows previous declaration of 'a' (originally declared at 1:16)" },
          { y = 1, msg = "unused variable a: integer" },
       }))
 
@@ -122,7 +122,7 @@ describe("warnings", function()
             print(i)
          end
       ]], {
-         { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:16)" },
+         { y = 2, msg = "variable shadows previous declaration of 'i' (originally declared at 1:16)" },
          { y = 1, msg = "unused variable i: integer" },
       }))
 
@@ -132,7 +132,7 @@ describe("warnings", function()
             print(i)
          end
       ]], {
-         { y = 2, msg = "redeclaration of variable 'i' (originally declared at 1:16)" },
+         { y = 2, msg = "variable shadows previous declaration of 'i' (originally declared at 1:16)" },
          { y = 1, msg = "unused variable i: integer" },
       }))
 
@@ -143,7 +143,7 @@ describe("warnings", function()
          local function a() end
          a()
       ]], {
-         { y = 3, msg = "redeclaration of function 'a' (originally declared at 1:10)" },
+         { y = 3, msg = "function shadows previous declaration of 'a' (originally declared at 1:10)" },
       }))
 
       it("reports local functions redefined as variables", util.check_warnings([[
@@ -152,7 +152,7 @@ describe("warnings", function()
          local a = 3
          print(a)
       ]], {
-         { y = 3, msg = "redeclaration of variable 'a' (originally declared at 1:10)" },
+         { y = 3, msg = "variable shadows previous declaration of 'a' (originally declared at 1:10)" },
       }))
 
       it("reports local variables redefined as functions", util.check_warnings([[
@@ -161,7 +161,7 @@ describe("warnings", function()
          local function a() end
          a()
       ]], {
-         { y = 3, msg = "redeclaration of function 'a' (originally declared at 1:16)" },
+         { y = 3, msg = "function shadows previous declaration of 'a' (originally declared at 1:16)" },
       }))
    end)
 

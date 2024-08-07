@@ -543,7 +543,7 @@ describe("record method", function()
              return a - b
          end
       ]], {
-         { y = 8, msg = "redeclaration of function 'do_x'" },
+         { y = 8, msg = "function shadows previous declaration of 'do_x'" },
       }))
 
       it("a type signature does not count as a redeclaration", util.check_warnings([[
