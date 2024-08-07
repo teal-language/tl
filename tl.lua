@@ -9346,7 +9346,7 @@ a.types[i], b.types[i]), }
       local v = scope.vars[var]
       assert(v, "no " .. var .. " in scope")
       local narrow_mode = scope.vars[var].is_narrowed
-      if (not narrow_mode) or narrow_mode == "declaration" then
+      if (not narrow_mode) or narrow_mode == "localizing" then
          return false
       end
 
@@ -10845,7 +10845,7 @@ self:expand_type(node, values, elements) })
                end
 
                assert(var)
-               self:add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "declaration")
+               self:add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "localizing")
 
                local infertype = infertypes.tuple[i]
                if ok and infertype then
