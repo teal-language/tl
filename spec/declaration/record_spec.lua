@@ -434,16 +434,79 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          })[i]
       }))
 
-      it("can extend generic functions", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+      it("only records can have record methods", util.check_type_error([[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         end
+
+         function Foo:example(data: string)
+            print(data)
+         end
+      ]], {
+         ({
+            nil,
+            nil,
+            { msg = "interfaces are abstract" },
+            { msg = "interfaces are abstract" },
+         })[i]
+      }))
+
+      it("only records can have record functions", util.check_type_error([[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         end
+
+         function Foo.example(data: string)
+            print(data)
+         end
+      ]], {
+         ({
+            nil,
+            nil,
+            { msg = "interfaces are abstract" },
+            { msg = "interfaces are abstract" },
+         })[i]
+      }))
+
+      it("functions can be implemented in instances", util.check([[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+            example: function(string)
+         end
+
+         local my_f: Foo = {}
+
+         function my_f.example(data: string)
+            print(data)
+         end
+      ]]))
+
+      it("methods can be implemented in instances", util.check([[
+         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+            example: function(Foo, string)
+         end
+
+         local my_f: Foo = {}
+
+         function my_f:example(data: string)
+            print(data)
+         end
+      ]]))
+
+      it("with implement generic functions", util.check_type_error([[
+         local type Foo = ]]..statement..[[ ]]..array(i, "{Foo}")..[[
             type bar = function<T>(T)
             example: bar<string>
          end
 
-         function foo.example(data: string)
+         function Foo.example(data: string)
             print(data)
          end
-      ]]))
+      ]], {
+         ({
+            nil,
+            nil,
+            { msg = "interfaces are abstract" },
+            { msg = "interfaces are abstract" },
+         })[i]
+      }))
 
       it("can use where with generic types", util.check([[
          local type Success = ]]..statement..[[<T> ]]..array(i, "is {integer}")..[[

@@ -11534,7 +11534,15 @@ self:expand_type(node, values, elements) })
             local rets = children[4]
             assert(rets.typename == "tuple")
 
-            local rtype = self:to_structural(resolve_typedecl(children[1]))
+            local t = children[1]
+            local rtype = self:to_structural(resolve_typedecl(t))
+
+            do
+               local ok, err = ensure_not_abstract(t)
+               if not ok then
+                  self.errs:add(node, err)
+               end
+            end
 
             if self.feat_lax and rtype.typename == "unknown" then
                return
