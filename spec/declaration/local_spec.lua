@@ -461,17 +461,29 @@ describe("local", function()
             local b <total>: A = { v = 10 }
          ]]))
 
-         it("localizing a record does not make the new local a type (#759)", util.check([[
-            local record k
+         it("does not consider a metamethod to be a missing field (regression test for #749", util.check([[
+            local interface Op
+               op: string
             end
 
-            local kk: k = {}
+            local interface Binary
+               is Op
+               left: number
+               right: number
+            end
 
-            local k = k
+            local record Add
+               is Binary
+               where self.op == '+' -- removing the comment triggers an error
+            end
 
-            k = {}
+            local sum <total>: Add = {
+               op = '+',
+               left = 10,
+               right = 20
+            }
 
-            kk = {}
+            print(sum.op, sum.left, sum.right)
          ]]))
       end)
 
@@ -515,4 +527,17 @@ describe("local", function()
          ]]))
       end)
    end)
+
+   it("localizing a record does not make the new local a type (#759)", util.check([[
+      local record k
+      end
+
+      local kk: k = {}
+
+      local k = k
+
+      k = {}
+
+      kk = {}
+   ]]))
 end)
