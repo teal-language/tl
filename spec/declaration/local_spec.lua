@@ -129,6 +129,37 @@ describe("local", function()
          }, result.type_errors)
       end)
 
+      it("local type can resolve a nominal with generics (regression test for #777)", function ()
+         util.mock_io(finally, {
+            ["module.tl"] = [[
+               local record module
+                 record Foo<K>
+                   something: K
+                 end
+               end
+               return module
+            ]],
+            ["main.tl"] = [[
+               local module = require "module"
+
+               local record Boo
+                  field: MyFoo<string>
+               end
+
+               local type MyFoo<Z> = module.Foo<Z>
+
+               local b: Boo = { field = { something = "hi" } }
+               local c: Boo = { field = { something = 123 } }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 10, x = 55, filename = "main.tl", msg = "in record field: something: got integer, expected string" },
+         }, result.type_errors)
+      end)
+
       it("catches unknown types", util.check_type_error([[
          local type MyType = UnknownType
       ]], {

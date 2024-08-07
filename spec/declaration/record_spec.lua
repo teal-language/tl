@@ -894,6 +894,25 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          { y = 1, msg = "unknown type Bongo" },
          { y = 1, msg = "unknown type Bingo" },
       }))
+
+
+      it("reports error on unexpected generics", util.check_type_error([[
+         local ]]..statement..[[ Foo ]]..array(i, "is {number}")..[[
+         end
+
+         local x: Foo<integer>
+      ]], {
+         { y = 4, x = 19, msg = "unexpected type argument" },
+      }))
+
+      it("reports error on unexpected generics", util.check_type_error([[
+         local ]]..statement..[[ Foo<K> ]]..array(i, "is {number}")..[[
+         end
+
+         local x: Foo<integer, string>
+      ]], {
+         { y = 4, x = 19, msg = "mismatch in number of type arguments" },
+      }))
    end)
 end
 
