@@ -340,6 +340,13 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          f.example = { x = "hello" }
       ]]))
 
+      it("cannot use base type as a type variable", util.check_type_error([[
+         local ]]..statement..[[ Foo<integer>
+         end
+      ]], {
+         { y = 1, msg = "cannot use base type name 'integer' as a type variable" },
+      }))
+
       it("can have nested enums", util.check([[
          local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             enum Direction
@@ -912,6 +919,27 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          local x: Foo<integer, string>
       ]], {
          { y = 4, x = 19, msg = "mismatch in number of type arguments" },
+      }))
+
+      it("reports on type variables that shadow other variables (#764)", util.check_warnings([[
+         local record Foos
+         end
+
+         local record test
+             record Foo<Foos>
+                 userdata
+                 bar : function(self:Foo<Foos>):(string)
+                 bar2: function<Foos>(self:Foo<Foos>):(string)
+             end
+         end
+
+         local x: test.Foo<number>
+         x:bar()
+         x:bar2()
+      ]], {
+         { y = 5, x = 25, type = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
+         { y = 8, x = 33, type = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
+         { y = 1, x = 23, type = "unused", msg = "unused type Foos" },
       }))
    end)
 end
