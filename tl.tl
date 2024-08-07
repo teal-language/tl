@@ -6995,7 +6995,7 @@ do
          local scope = self.st[i]
          local var = scope.vars[name]
          if var then
-            if use == "lvalue" and var.is_narrowed then
+            if use == "lvalue" and var.is_narrowed and var.is_narrowed ~= "localizing" then
                if var.narrowed_from then
                   var.used = true
                   return { t = var.narrowed_from, attribute = var.attribute }, i, var.attribute
@@ -10611,6 +10611,10 @@ do
          t.inferred_len = nil
       elseif t is NominalType then
          self:resolve_nominal(t)
+         local rt = t.resolved
+         if rt is TypeDeclType then
+            t.resolved = rt.def
+         end
       end
 
       return ok, t, infertype ~= nil

@@ -204,8 +204,9 @@ describe("record method call", function()
          end
          m.a.add(first)
       ]], {
-         -- FIXME this warning needs to go away when we detect that "m.a" and "first" are not the same
-         { y = 14, msg = "invoked method as a regular function: consider using ':' instead of '.'" }
+         -- FIXME these warnings need to go away when we detect that the arities are correct
+         { y = 10, msg = "invoked method as a regular function: consider using ':' instead of '.'" },
+         { y = 14, msg = "invoked method as a regular function: consider using ':' instead of '.'" },
       }, {}))
 
       it("for function declared in record body with self as different type from receiver", util.check_warnings([[

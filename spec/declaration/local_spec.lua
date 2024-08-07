@@ -460,6 +460,19 @@ describe("local", function()
 
             local b <total>: A = { v = 10 }
          ]]))
+
+         it("localizing a record does not make the new local a type (#759)", util.check([[
+            local record k
+            end
+
+            local kk: k = {}
+
+            local k = k
+
+            k = {}
+
+            kk = {}
+         ]]))
       end)
 
       describe("<close>", function()
