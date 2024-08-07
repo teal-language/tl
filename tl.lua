@@ -4577,11 +4577,6 @@ local function recurse_node(s, root,
       end
    end
 
-   local function walk_var_value(ast, xs)
-      xs[1] = recurse(ast.var)
-      xs[2] = recurse(ast.value)
-   end
-
    local function walk_named_function(ast, xs)
       recurse_typeargs(s, ast, visit_type)
       xs[1] = recurse(ast.name)
@@ -4628,8 +4623,16 @@ local function recurse_node(s, root,
       ["local_declaration"] = walk_vars_exps,
       ["global_declaration"] = walk_vars_exps,
 
-      ["local_type"] = walk_var_value,
+      ["local_type"] = function(ast, xs)
+
+
+         xs[1] = recurse(ast.var)
+         xs[2] = recurse(ast.value)
+      end,
+
       ["global_type"] = function(ast, xs)
+
+
          xs[1] = recurse(ast.var)
          if ast.value then
             xs[2] = recurse(ast.value)
@@ -7270,7 +7273,7 @@ do
          if t.typename == "typevar" then
             local rt = fn_var(self, t)
             if rt then
-               resolved[t.typevar] = true
+               resolved[t.typevar] = rt
                if no_nested_types[rt.typename] or (rt.typename == "nominal" and not rt.typevals) then
                   seen[orig_t] = rt
                   return rt, false
@@ -7426,8 +7429,14 @@ do
          copy.typeargs then
 
          for i = #copy.typeargs, 1, -1 do
-            if resolved[copy.typeargs[i].typearg] then
-               table.remove(copy.typeargs, i)
+            local r = resolved[copy.typeargs[i].typearg]
+            if r then
+
+               if r.typename == "nominal" and #r.names == 1 then
+                  copy.typeargs[i].typearg = r.names[1]
+               else
+                  table.remove(copy.typeargs, i)
+               end
             end
          end
          if not copy.typeargs[1] then
@@ -7749,7 +7758,7 @@ do
             self:end_scope()
             return ret
          elseif t.typevals then
-            self.errs:add(t, "spurious type arguments")
+            self.errs:add(t, "unexpected type argument")
             return nil
          elseif def.typeargs then
             self.errs:add(t, "missing type arguments in %s", def)
