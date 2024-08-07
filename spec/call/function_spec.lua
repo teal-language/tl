@@ -32,4 +32,87 @@ describe("function calls", function()
           return foo("hi there", select(2, ...))
       end
    ]]))
+
+   describe("check the arity of functions:", function()
+      it("when excessive", util.check_type_error([[
+         local function f(n: number, m: number): number
+            return n + m
+         end
+
+         local x = f(1, 2, 3)
+      ]], {
+         { y = 5, msg = "wrong number of arguments (given 3, expects 2)" },
+      }))
+
+      it("when insufficient", util.check_type_error([[
+         local function f(n: number, m: number): number
+            return n + m
+         end
+
+         local x = f(1)
+      ]], {
+         { y = 5, msg = "wrong number of arguments (given 1, expects 2)" },
+      }))
+
+      it("when using optional", util.check([[
+         local function f(n: number, m?: number): number
+            return n + (m or 0)
+         end
+
+         local x = f(1)
+      ]]))
+
+      it("when insufficient with optionals", util.check_type_error([[
+         local function f(n: number, m?: number): number
+            return n + (m or 0)
+         end
+
+         local x = f()
+      ]], {
+         { y = 5, msg = "wrong number of arguments (given 0, expects at least 1 and at most 2)" },
+      }))
+
+      it("when using all optionals", util.check([[
+         local function f(n?: number, m?: number): number
+            return (n or 0) + (m or 0)
+         end
+
+         local x = f()
+      ]]))
+
+      it("when using all optionals", util.check([[
+         local function f(n?: number, m?: number): number
+            return (n or 0) + (m or 0)
+         end
+
+         local x = f(1, 2)
+      ]]))
+
+      it("when excessive with optionals", util.check_type_error([[
+         local function f(n: number, m?: number): number
+            return (n or 0) + (m or 0)
+         end
+
+         local x = f(1, 2, 3)
+      ]], {
+         { y = 5, msg = "wrong number of arguments (given 3, expects at least 1 and at most 2)" },
+      }))
+
+      it("with insufficient arguments (regression test)", util.check_type_error([[
+         local chunk: function()
+         chunk = load()
+      ]], {
+         { y = 2, msg = "wrong number of arguments (given 0, expects at least 1 and at most 4)" },
+      }))
+
+      it("with insufficient arguments (regression test)", util.check_type_error([[
+         local function a(f: (function(): any), ...: any): (function():any)
+            return function(...): (function():any)
+                  return f(a, ...)
+            end
+         end
+      ]], {
+         { y = 3, msg = "wrong number of arguments (given 2, expects 0)" },
+      }))
+   end)
 end)

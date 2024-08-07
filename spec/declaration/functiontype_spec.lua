@@ -9,6 +9,15 @@ describe("functiontype declaration", function()
       end
    ]]))
 
+   it("cannot use base type as a type variable", util.check_type_error([[
+      local record Foo<K>
+      end
+
+      local f: function<integer>(self:Foo<integer>):(string)
+   ]], {
+      { y = 4, x = 25, msg = "cannot use base type name 'integer' as a type variable" },
+   }))
+
    it("produces a nice error when declared with the old syntax", util.check_syntax_error([[
       local t = functiontype(number, number): string
 

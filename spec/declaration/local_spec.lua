@@ -98,6 +98,11 @@ describe("local", function()
          { msg = "b" },
       }))
 
+      it("local type can declare a type alias for table", util.check([[
+         local type PackTable = table.PackTable
+         local args: table.PackTable<integer> = table.pack(1, 2, 3)
+      ]]))
+
       it("local type can declare a nominal type alias (regression test for #238)", function ()
          util.mock_io(finally, {
             ["module.tl"] = [[
@@ -124,10 +129,41 @@ describe("local", function()
          }, result.type_errors)
       end)
 
+      it("local type can resolve a nominal with generics (regression test for #777)", function ()
+         util.mock_io(finally, {
+            ["module.tl"] = [[
+               local record module
+                 record Foo<K>
+                   something: K
+                 end
+               end
+               return module
+            ]],
+            ["main.tl"] = [[
+               local module = require "module"
+
+               local record Boo
+                  field: MyFoo<string>
+               end
+
+               local type MyFoo<Z> = module.Foo<Z>
+
+               local b: Boo = { field = { something = "hi" } }
+               local c: Boo = { field = { something = 123 } }
+            ]],
+         })
+         local result, err = tl.process("main.tl")
+
+         assert.same({}, result.syntax_errors)
+         assert.same({
+            { y = 10, x = 55, filename = "main.tl", msg = "in record field: something: got integer, expected string" },
+         }, result.type_errors)
+      end)
+
       it("catches unknown types", util.check_type_error([[
          local type MyType = UnknownType
       ]], {
-         { msg = "UnknownType is not a type" }
+         { msg = "unknown type UnknownType" }
       }))
 
       it("nominal types can take type arguments", util.check([[
@@ -315,7 +351,7 @@ describe("local", function()
             }
          ]]))
 
-         it("accepts direct declaration from total to total", util.check([[
+         it("does not accept direct declaration from total to total", util.check_type_error([[
             local record Point
                x: number
             end
@@ -325,11 +361,14 @@ describe("local", function()
             }
 
             local p2 <total>: Point = p
-         ]]))
+         ]], {
+            { y = 9, msg = "attribute <total> only applies to literal tables" },
+         }))
 
          it("rejects direct declaration from non-total to total", util.check_type_error([[
             local record Point
                x: number
+               y: number
             end
 
             local p: Point = {
@@ -338,7 +377,7 @@ describe("local", function()
 
             local p2 <total>: Point = p
          ]], {
-            { msg = "record variable declared <total> does not declare values for all fields" },
+            { y = 10, msg = "attribute <total> only applies to literal tables" },
          }))
 
          it("cannot reassign a total", util.check_type_error([[
@@ -409,6 +448,43 @@ describe("local", function()
                likes = {name='orange'}
             }
          ]]))
+
+         it("does not consider a record function to be a missing field", util.check([[
+            local record A
+               v: number
+            end
+
+            function A:echo()
+               print('A:', self.v)
+            end
+
+            local b <total>: A = { v = 10 }
+         ]]))
+
+         it("does not consider a metamethod to be a missing field (regression test for #749", util.check([[
+            local interface Op
+               op: string
+            end
+
+            local interface Binary
+               is Op
+               left: number
+               right: number
+            end
+
+            local record Add
+               is Binary
+               where self.op == '+' -- removing the comment triggers an error
+            end
+
+            local sum <total>: Add = {
+               op = '+',
+               left = 10,
+               right = 20
+            }
+
+            print(sum.op, sum.left, sum.right)
+         ]]))
       end)
 
       describe("<close>", function()
@@ -451,4 +527,17 @@ describe("local", function()
          ]]))
       end)
    end)
+
+   it("localizing a record does not make the new local a type (#759)", util.check([[
+      local record k
+      end
+
+      local kk: k = {}
+
+      local k = k
+
+      k = {}
+
+      kk = {}
+   ]]))
 end)

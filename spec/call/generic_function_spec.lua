@@ -73,6 +73,24 @@ describe("generic function", function()
       print(use_conv("123", convert_str_num) + 123.0)
    ]]))
 
+   it("accepts correct typevars, does not mix up multiple uses", util.check([[
+      local type Convert = function<a, b>(a): b
+
+      local function convert_num_str(n: number): string
+         return tostring(n)
+      end
+
+      local function convert_str_num(s: string): number
+         return tonumber(s)
+      end
+
+      local function use_conv<X,Y>(x: X, cvt: Convert<X, Y>, tvc: Convert<Y, X>): Y -- tvc is flipped!
+         return cvt(tvc(cvt(x)))
+      end
+
+      print(use_conv(122.0, convert_num_str, convert_str_num) .. "!")
+   ]]))
+
    it("catches incorrect typevars, does not mix up multiple uses", util.check_type_error([[
       local type Convert = function<a, b>(a): b
 
@@ -90,7 +108,9 @@ describe("generic function", function()
 
       print(use_conv(122.0, convert_num_str, convert_str_num) .. "!")
    ]], {
-      { y = 15, x = 46, msg = "argument 3: argument 1: got string, expected number" }
+      { y = 12, x = 24, msg = "argument 1: got Y, expected X" },
+      { y = 12, x = 28, msg = "argument 1: got Y, expected X" },
+      { y = 15, x = 46, msg = "argument 3: argument 1: got string, expected number" },
    }))
 
    it("will catch if resolved typevar does not match", util.check_type_error([[
@@ -350,7 +370,7 @@ describe("generic function", function()
          recurse_node(ast, visit_node, visit_type)
       end
    ]], {
-      { x = 40, msg = "argument 3: in map value: type parameter <T>: got number, expected string" }
+      { y = 16, x = 40, msg = "argument 3: in map value: type parameter <T>: got number, expected string" }
    }))
 
    it("inference trickles down to function arguments, pass", util.check([[
@@ -474,9 +494,9 @@ describe("generic function", function()
    ]]))
 
    it("generic function definitions do not leak type variables (#322)", util.check([[
-      local function my_unpack<T>(_list: {T}, _x: number, _y: number): T...
+      local function my_move<T>(_list: {T}, _a: integer, _b: integer, _c: integer, _t?: {T}): {T}
       end
-      local _tbl_unpack = my_unpack or table.unpack
+      local _tbl_move = my_move or table.move
       local _map: {string:number} = setmetatable(assert({}), { __mode = "k" })
    ]]))
 

@@ -81,7 +81,7 @@ describe("flow analysis with is", function()
          local a: string | Foo
          local _b: Foo = a is string and makeFoo(a) or a
       ]], {
-         { msg = "cannot use operator 'or' for types Foo and string | Foo" },
+         { msg = "got string | Foo, expected Foo" },
       }))
    end)
 
@@ -254,7 +254,7 @@ describe("flow analysis with is", function()
 
          local function f(d: any): any
             if d is string and func(d, "a") then
-               local d = func(d)
+               local d = func(d, d)
             elseif d is string and func(d, "b") then
                return d .. "???"
             else
@@ -271,7 +271,7 @@ describe("flow analysis with is", function()
          local function f(d: any): any
             local d = d as (number | string | function)
             if d is string and func(d, "a") then
-               local d = func(d)
+               local d = func(d, d)
             elseif d is string and func(d, "b") then
                return d .. "???"
             else
@@ -401,6 +401,34 @@ describe("flow analysis with is", function()
          { msg = "cannot use operator '+'" },
          { msg = "cannot index" },
       }))
+
+      it("produces no errors or warnings for checks on unions of records", util.check_warnings([[
+         local record R1
+            metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
+               return true
+            end
+         end
+
+         local record R2
+            metamethod __is: function(self: R1|R2): boolean = macroexp(_self: R1|R2): boolean
+               return false
+            end
+         end
+
+         local type RS = R1 | R2
+
+         local rs1 : RS
+
+         if rs1 is R1 then
+            print("yes")
+         end
+
+         local rs2 : R1 | R2
+
+         if rs2 is R2 then
+            print("yes")
+         end
+      ]], {}, {}))
 
       it("gen cleaner checking codes for nil", util.gen([[
          local record R

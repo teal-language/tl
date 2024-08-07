@@ -16,6 +16,15 @@ describe("if", function()
       end
    ]]))
 
+   it("if expression propagates a boolean context", util.check([[
+      local n = 123
+      local s = "hello"
+      if n or s then
+         local ns: number | string = n or s
+         print(ns)
+      end
+   ]]))
+
    it("accepts boolean expressions", util.check([[
       local s = "Hallo, Welt"
       if string.match(s, "world") or s == "Hallo, Welt" then

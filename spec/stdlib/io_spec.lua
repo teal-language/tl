@@ -76,17 +76,17 @@ describe("io", function()
       ]]))
 
       it("with a numeric format", util.check([[
-         for a in io.lines("n") do
+         for a in io.lines("filename.txt", "n") do
             print(a * 2)
          end
 
-         for a in io.lines("*n") do
+         for a in io.lines("filename.txt", "*n") do
             print(a * 2)
          end
       ]]))
 
       it("resolves the type of mixed numeric/string formats as unions for now", util.check([[
-         for a, b in io.lines("n", 12) do
+         for a, b in io.lines("filename.txt", "n", 12) do
             if a is number then
                print(a * 2)
             end
@@ -174,7 +174,7 @@ describe("io", function()
          ]]))
 
          it("with a bytes format argument", util.check([[
-            for c in io.popen("ls"):lines("filename.txt", 1) do
+            for c in io.popen("ls"):lines(1) do
                print(c:upper())
             end
          ]]))
@@ -196,7 +196,7 @@ describe("io", function()
          ]]))
 
          it("with multiple formats", util.check([[
-            for a, b, c in io.popen("ls"):lines("filename.txt", "l", 12, 13) do
+            for a, b, c in io.popen("ls"):lines("l", 12, 13) do
                print(a:upper())
                print(b:upper())
                print(c:upper())

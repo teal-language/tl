@@ -140,7 +140,7 @@ describe("require", function()
                Point = Point,
             }
 
-            function Point:move(x: number, y: number)
+            function Point:move(x: number, y: number): Point
                self.x = self.x + x
                self.y = self.y + y
             end
@@ -203,7 +203,7 @@ describe("require", function()
                Point = Point,
             }
 
-            function Point:move(x: number, y: number)
+            function Point:move(x: number, y: number): Point
                self.x = self.x + x
                self.y = self.y + y
             end
@@ -246,6 +246,71 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
+   end)
+
+   it("return types of exported functions are checked", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["point.tl"] = [[
+            local type Point = record
+               x: number
+               y: number
+            end
+
+            local point = {
+               Point = Point,
+            }
+
+            function Point:move(x: number, y: number)
+               self.x = self.x + x
+               self.y = self.y + y
+            end
+
+            return point
+         ]],
+         ["bar.tl"] = [[
+            local mypoint = require "point"
+
+            local type rec = record
+               xx: number
+               yy: number
+            end
+
+            local function get_point(): mypoint.Point
+               return { x = 100, y = 100 }
+            end
+
+            return {
+               get_point = get_point,
+               rec = rec,
+            }
+         ]],
+         ["foo.tl"] = [[
+            local pnt = require "point"
+            local bar = require "bar"
+
+            global function use_point(p: pnt.Point)
+               print(p.x, p.y)
+            end
+
+            use_point(bar.get_point():move(5, 5))
+            local r: bar.rec = {
+               xx = 10,
+               yy = 20,
+            }
+         ]],
+      })
+      local result, err = tl.process("foo.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         {
+            filename = "foo.tl",
+            msg = "wrong number of arguments (given 0, expects 1)",
+            x = 22,
+            y = 8,
+         },
+      }, result.type_errors)
    end)
 
    it("equality of nominal types does not depend on module names", function ()
@@ -336,7 +401,7 @@ describe("require", function()
       local result, err = tl.process("foo.tl")
 
       assert.same(0, #result.syntax_errors)
-      assert.same(0, #result.env.loaded["foo.tl"].type_errors)
+      assert.same({}, result.env.loaded["foo.tl"].type_errors)
       assert.same(1, #result.env.loaded["./box.tl"].type_errors)
       assert.match("cannot use operator ..", result.env.loaded["./box.tl"].type_errors[1].msg)
    end)
@@ -547,6 +612,7 @@ describe("require", function()
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
+      assert.same(1, #result.type_errors)
       assert.match("cannot add undeclared function 'draws' outside of the scope where 'love' was originally declared", result.type_errors[1].msg)
    end)
 
@@ -637,7 +703,7 @@ describe("require", function()
          ["luaunit.d.tl"] = [[
             global type luaunit_runner_t = record
                setOutputType: function(luaunit_runner_t, string)
-               runSuite: function(luaunit_runner_t, any): number
+               runSuite: function(luaunit_runner_t, any): integer
             end
 
             global type luaunit_t = record
@@ -708,6 +774,122 @@ describe("require", function()
       local result, err = tl.process("minimal/proof.tl")
 
       assert.same(nil, err)
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("does not crash when localizing alias types from other records, a is forwarding b", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["main.tl"] = [[
+            local a = require("a")
+
+            local type MyA = a.AliasA
+            local type MyB = a.AliasB
+
+            local w: a.AliasA
+            local z: a.AliasB
+
+            local ww: MyA
+            local zz: MyB
+
+            print(w.x)
+            print(z.y)
+
+            print(ww.x)
+            print(zz.y)
+         ]],
+         ["a.tl"] = [[
+            local b = require("b")
+            local type BA_in_A = b.AliasA
+            local type BB_in_A = b.AliasB
+
+            return b
+         ]],
+         ["b.tl"] = [[
+            local interface TypeA
+               x: number
+            end
+
+            local interface TypeB
+               y: string
+            end
+
+            local record b
+               type AliasA = TypeA
+               type AliasB = TypeB
+            end
+
+            return b
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("does not crash when localizing alias types from other records, a is aliasing b aliases", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["main.tl"] = [[
+            local a = require("a")
+            local b = require("b")
+
+            local type MyA = a.AAlias
+            local type MyB = a.BAlias
+
+            local w: a.AAlias
+            local z: a.BAlias
+
+            local ww: MyA
+            local zz: MyB
+
+            print(w.x)
+            print(z.y)
+
+            print(ww.x)
+            print(zz.y)
+
+            local www: b.AliasA
+            local zzz: b.AliasB
+
+            www = ww
+            ww = www
+            w = www
+            www = w
+            ww = w
+            w = ww
+         ]],
+         ["a.tl"] = [[
+            local b = require("b")
+
+            local record a
+               type AAlias = b.AliasA
+               type BAlias = b.AliasB
+            end
+
+            return a
+         ]],
+         ["b.tl"] = [[
+            local interface TypeA
+               x: number
+            end
+
+            local interface TypeB
+               y: string
+            end
+
+            local record b
+               type AliasA = TypeA
+               type AliasB = TypeB
+            end
+
+            return b
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
    end)
@@ -970,4 +1152,128 @@ describe("require", function()
          assert.same({}, result.env.loaded["./types/person.tl"].type_errors)
       end)
    end)
+
+   it("in 'local type' accepts dots for extracting nested types", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+                  fn: function(): Foo<K>
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+            local function f(v: Foo<integer>)
+               print(v.something)
+               -- check that aliasing works:
+               local x = v.fn()
+               x = v
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("in 'local type' with dots fails if not a record", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            return 123
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         { filename = "main.tl", x = 37, y = 1, msg = "type is not a record" },
+         { filename = "main.tl", x = 45, y = 1, msg = "cannot index key 'Foo' in type integer" },
+      }, result.type_errors)
+   end)
+
+   it("in 'local type' with dots fails if not a record", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Bar
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod").Foo
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         { filename = "main.tl", x = 45, y = 1, msg = "nested type 'Foo' not found in record" },
+      }, result.type_errors)
+   end)
+
+   it("in 'local type' does not accept arbitrary expressions", function ()
+      -- ok
+      util.mock_io(finally, {
+         ["mod.tl"] = [[
+            local record mod
+               record Foo<K>
+                  something: K
+               end
+            end
+
+            return mod
+         ]],
+         ["main.tl"] = [[
+            local type Foo = require("mod") + "hello"
+            local function f(v: Foo)
+               print(v.something)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({
+         { filename = "main.tl", x = 30, y = 1, msg = "require() in type declarations cannot be part of larger expressions" }
+      }, result.syntax_errors)
+   end)
+
+   it("can localize a record and load and alternative implementation (#759)", function ()
+      util.mock_io(finally, {
+         ["my-lua-utf8.tl"] = [[
+            local record my_lua_utf8
+            end
+
+            return my_lua_utf8
+         ]],
+         ["main.tl"] = [[
+            local type Utf8 = utf8
+            local utf8: Utf8 = utf8
+            if not utf8 then
+               local ok, lutf8 = pcall(require, 'my-lua-utf8') as (boolean, Utf8)
+               if ok then
+                  utf8 = lutf8
+               end
+            end
+            print(utf8.charpattern)
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
 end)

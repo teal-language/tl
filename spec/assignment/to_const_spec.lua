@@ -35,7 +35,7 @@ describe("assignment to const", function()
       local b <close> = setmetatable
    ]], {
       { y = 2, x = 13, msg = "to-be-closed variable a has a non-closable type function()" },
-      { y = 3, x = 13, msg = "to-be-closed variable b has a non-closable type function<A>(A, metatable<A>): A" },
+      { y = 3, x = 13, msg = "to-be-closed variable b has a non-closable type function<T>(T, metatable<T>): T" },
    }, "5.4"))
 end)
 

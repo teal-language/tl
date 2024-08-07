@@ -27,7 +27,7 @@ describe("==", function()
          print("unreachable")
       end
    ]], {
-      { msg = "not comparable for equality" }
+      { msg = "string \"hello\" is not a member of MyEnum" }
    }))
 end)
 

@@ -45,9 +45,12 @@ describe("forin", function()
             end
          end
       ]], {
-         { msg = "attempting ipairs loop" },
-         { y = 3, msg = "argument 1: got A (unresolved generic), expected {A}" },
-         { y = 4, msg = "cannot use operator '..' for types string \"value: \" and A (unresolved generic)" },
+         { msg = "attempting ipairs" },
+         { y = 3, msg = "expression in for loop does not return an iterator" },
+         { y = 3, msg = "unknown variable: a" },
+         { y = 4, msg = "unknown variable: i" },
+         { y = 4, msg = "unknown variable: j" },
+         { y = 4, msg = "unknown variable: b" },
       }))
    end)
 
@@ -66,7 +69,7 @@ describe("forin", function()
             end
          end
       ]], {
-         { msg = "attempting pairs loop" },
+         { msg = "attempting pairs" },
          { msg = "not all fields have the same type" },
          { msg = "cannot index object of type Rec" },
       }))
@@ -185,6 +188,16 @@ describe("forin", function()
    }))
 
    describe("regression tests", function()
+      it("catches if iterator function does not return values (#736)", util.check_type_error([[
+         local function f()
+         end
+
+         for k, v in f() do
+         end
+      ]], {
+         { y = 4, msg = "expression in 'for' statement does not return any values" },
+      }))
+
       it("does not accept annotations (#701)", util.check_syntax_error([[
          for k <const>, v <const> in pairs(table as {string:any}) do
              k = "hello"

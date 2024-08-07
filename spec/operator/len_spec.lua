@@ -5,6 +5,20 @@ describe("#", function()
       local x: integer = #({1, 2, 3})
    ]]))
 
+   it("can run on a string", util.check([[
+      local s = "hello"
+      local len = #s
+   ]]))
+
+   it("can run on an enum value", util.check([[
+      local enum Enum
+         "hello"
+      end
+
+      local s: Enum = "hello"
+      local len = #s
+   ]]))
+
    it("returns an integer when used on tuple", util.check([[
       local x: integer = #({1, "hi"})
    ]]))
