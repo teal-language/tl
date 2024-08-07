@@ -1269,4 +1269,31 @@ describe("require", function()
          { filename = "main.tl", x = 30, y = 1, msg = "require() in type declarations cannot be part of larger expressions" }
       }, result.syntax_errors)
    end)
+
+   it("can localize a record and load and alternative implementation (#759)", function ()
+      util.mock_io(finally, {
+         ["my-lua-utf8.tl"] = [[
+            local record my_lua_utf8
+            end
+
+            return my_lua_utf8
+         ]],
+         ["main.tl"] = [[
+            local type Utf8 = utf8
+            local utf8: Utf8 = utf8
+            if not utf8 then
+               local ok, lutf8 = pcall(require, 'my-lua-utf8') as (boolean, Utf8)
+               if ok then
+                  utf8 = lutf8
+               end
+            end
+            print(utf8.charpattern)
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
 end)
