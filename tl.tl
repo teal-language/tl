@@ -2081,12 +2081,24 @@ local record Node
    debug_type: Type
 end
 
+local show_type: function(Type, ? boolean, ? {Type:string}): string
+
+local type_mt: metatable<Type> = {
+   __tostring = function(t: Type): string
+      return show_type(t)
+   end
+}
+
 local function a_type<T is Type>(w: Where, typename: TypeName, t: T): T
    t.typeid = new_typeid()
    t.f = w.f
    t.x = w.x
    t.y = w.y
    t.typename = typename
+   do
+      local ty: Type = t
+      setmetatable(ty, type_mt)
+   end
    return t
 end
 
@@ -2096,6 +2108,7 @@ local function edit_type(w: Where, t: Type, typename: TypeName): Type
    t.x = w.x
    t.y = w.y
    t.typename = typename
+   setmetatable(t, type_mt)
    return t
 end
 
@@ -2150,6 +2163,10 @@ local function shallow_copy_new_type<T is Type>(t: T): T
       copy[k] = v
    end
    copy.typeid = new_typeid()
+   do
+      local ty: Type = copy as T
+      setmetatable(ty, type_mt)
+   end
    return copy as T
 end
 
@@ -2286,6 +2303,7 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    t.x = token.x
    t.y = token.y
    t.typename = typename
+   setmetatable(t, type_mt)
    return t
 end
 
@@ -4328,8 +4346,6 @@ local function fields_of(t: RecordLikeType, meta?: MetaMode): (function(): strin
       return name, fields[name]
    end
 end
-
-local show_type: function(Type, ? boolean, ? {Type:string}): string
 
 local tl_debug_indent = 0
 local record DebugEntry
@@ -6662,7 +6678,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t is TypeDeclType then
       return "type " .. show(t.def)
    else
-      return "<" .. t.typename .. " " .. tostring(t) .. ">"
+      return "<" .. t.typename .. ">" -- TODO add string.format("%p", t) with compat-5.4
    end
 end
 
@@ -7288,6 +7304,7 @@ do
          local copy: Type = {}
          seen[orig_t] = copy
 
+         setmetatable(copy, type_mt)
          copy.typename = t.typename
          copy.f = t.f
          copy.x = t.x
@@ -7509,7 +7526,7 @@ do
       end
 
       if ret == t or t is TypeVarType then
-         ret = shallow_copy_table(ret)
+         ret = shallow_copy_new_type(ret)
       end
       return type_at(w, ret)
    end
@@ -7521,7 +7538,7 @@ do
       end
 
       if ret == t or t is TypeVarType then
-         ret = shallow_copy_table(ret)
+         ret = shallow_copy_new_type(ret)
       end
       assert(w.f)
       ret.inferred_at = w
