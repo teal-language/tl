@@ -687,6 +687,7 @@ tl.typecodes = {
    MAP = 0x00040008,
    TUPLE = 0x00080008,
    INTERFACE = 0x00100008,
+   SELF = 0x00200008,
    POLY = 0x20000020,
    UNION = 0x40000000,
 
@@ -1539,11 +1540,13 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
    ["record"] = true,
    ["interface"] = true,
+   ["self"] = true,
    ["emptytable"] = true,
    ["tupletable"] = true,
 
@@ -1598,6 +1601,11 @@ local table_types = {
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
+
+
+
+
+
 
 
 
@@ -2213,6 +2221,7 @@ local simple_types = {
    ["thread"] = true,
    ["boolean"] = true,
    ["integer"] = true,
+   ["self"] = true,
 }
 
 do
@@ -5614,6 +5623,7 @@ local typename_to_typecode = {
    ["map"] = tl.typecodes.MAP,
    ["tupletable"] = tl.typecodes.TUPLE,
    ["interface"] = tl.typecodes.INTERFACE,
+   ["self"] = tl.typecodes.SELF,
    ["record"] = tl.typecodes.RECORD,
    ["enum"] = tl.typecodes.ENUM,
    ["boolean"] = tl.typecodes.BOOLEAN,
@@ -6592,6 +6602,8 @@ local function show_type_base(t, short, seen)
          ret = "nominal " .. ret
       end
       return ret
+   elseif t.typename == "self" then
+      return "self"
    elseif t.typename == "tuple" then
       local out = {}
       for _, v in ipairs(t.tuple) do
@@ -6643,15 +6655,10 @@ local function show_type_base(t, short, seen)
       end
       table.insert(out, "(")
       local args = {}
-      if t.is_method then
-         table.insert(args, "self")
-      end
       for i, v in ipairs(t.args.tuple) do
-         if not t.is_method or i > 1 then
-            table.insert(args, ((i == #t.args.tuple and t.args.is_va) and "...: " or
-            (i > t.min_arity) and "? " or
-            "") .. show(v))
-         end
+         table.insert(args, ((i == #t.args.tuple and t.args.is_va) and "...: " or
+         (i > t.min_arity) and "? " or
+         "") .. show(v))
       end
       table.insert(out, table.concat(args, ", "))
       table.insert(out, ")")
@@ -8051,7 +8058,7 @@ do
    end
 
    local function is_self(t)
-      return t.typename == "nominal" and t.names[1] == "@self"
+      return t.typename == "self" or (t.typename == "nominal" and t.names[1] == "@self")
    end
 
    local function compare_true(_, _, _)
@@ -8229,6 +8236,19 @@ do
       end
    end
 
+   function TypeChecker:type_of_self(w)
+      local t = self:find_var_type("@self")
+      if not t then
+         return a_type(w, "invalid", {})
+      end
+
+      if t.typename == "typedecl" then
+         t = t.def
+      end
+
+      return t
+   end
+
 
    function TypeChecker:exists_supertype_in(t, xs)
       for _, x in ipairs(xs.types) do
@@ -8339,7 +8359,18 @@ do
             return any_errors(errs)
          end,
       },
+      ["self"] = {
+         ["self"] = function(_self, _a, _b)
+            return true
+         end,
+         ["*"] = function(self, a, b)
+            return self:same_type(self:type_of_self(a), b)
+         end,
+      },
       ["*"] = {
+         ["self"] = function(self, a, b)
+            return self:same_type(a, self:type_of_self(b))
+         end,
          ["typevar"] = function(self, a, b)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
          end,
@@ -8641,6 +8672,14 @@ a.types[i], b.types[i]), }
             return any_errors(errs)
          end,
       },
+      ["self"] = {
+         ["self"] = function(_self, _a, _b)
+            return true
+         end,
+         ["*"] = function(self, a, b)
+            return self:is_a(self:type_of_self(a), b)
+         end,
+      },
       ["typearg"] = {
          ["typearg"] = function(_self, a, b)
             return a.typearg == b.typearg
@@ -8653,6 +8692,9 @@ a.types[i], b.types[i]), }
       },
       ["*"] = {
          ["any"] = compare_true,
+         ["self"] = function(self, a, b)
+            return self:is_a(a, self:type_of_self(b))
+         end,
          ["tuple"] = function(self, a, b)
             return self:is_a(a_type(a, "tuple", { tuple = { a } }), b)
          end,
@@ -9620,6 +9662,8 @@ a.types[i], b.types[i]), }
 
             errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
          end
+      elseif ra.typename == "self" then
+         return self:type_check_index(anode, bnode, self:type_of_self(a), b)
       elseif ra.elements and rb.typename == "integer" then
          return ra.elements
       elseif ra.typename == "emptytable" then
@@ -9643,6 +9687,15 @@ a.types[i], b.types[i]), }
       elseif rb.typename == "string" and rb.literal then
          local t, e = self:match_record_key(a, anode, rb.literal)
          if t then
+
+            if t.typename == "function" then
+               for i, p in ipairs(t.args.tuple) do
+                  if p.typename == "self" then
+                     t.args.tuple[i] = a
+                  end
+               end
+            end
+
             return t
          end
 
@@ -11613,6 +11666,7 @@ self:expand_type(node, values, elements) })
                end
                args.tuple[1] = selftype
                self:add_var(nil, "self", selftype)
+               self:add_var(nil, "@self", a_type(node, "typedecl", { def = selftype }))
             end
 
             local fn_type = self:ensure_fresh_typeargs(a_function(node, {
@@ -12416,14 +12470,16 @@ self:expand_type(node, values, elements) })
                            local record_name = typ.declname
                            if record_name then
                               local selfarg = fargs[1]
-                              if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
-                                 ftype.is_method = false
-                              elseif typ.typeargs then
-                                 for j = 1, #typ.typeargs do
-                                    local tv = selfarg.typevals[j]
-                                    if not (tv and tv.typename == "typevar" and tv.typevar == typ.typeargs[j].typearg) then
-                                       ftype.is_method = false
-                                       break
+                              if selfarg.typename == "nominal" then
+                                 if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
+                                    ftype.is_method = false
+                                 elseif typ.typeargs then
+                                    for j = 1, #typ.typeargs do
+                                       local tv = selfarg.typevals[j]
+                                       if not (tv and tv.typename == "typevar" and tv.typevar == typ.typeargs[j].typearg) then
+                                          ftype.is_method = false
+                                          break
+                                       end
                                     end
                                  end
                               end
@@ -12551,6 +12607,7 @@ self:expand_type(node, values, elements) })
    visit_type.cbs["typedecl"] = visit_type_with_typeargs
    visit_type.cbs["typealias"] = visit_type_with_typeargs
 
+   visit_type.cbs["self"] = default_type_visitor
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
    visit_type.cbs["array"] = default_type_visitor
