@@ -12134,7 +12134,9 @@ do
          after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local t = children[1]
             if not t then
-               t = an_unknown(node)
+               t = self.feat_lax
+                   and an_unknown(node)
+                   or a_type(node, "any", {})
             end
             if node.tk == "..." then
                t = a_vararg(node, { t })

@@ -109,7 +109,7 @@ describe("metamethod __call", function()
       }
 
       local Rec_class_mt = {
-         __call = function(_: Rec, x, y): Rec.Type
+         __call = function(_: Rec, x: number, y: number): Rec.Type
             return setmetatable({ x = x, y = y } as Rec.Type, Rec_instance_mt)
          end
       }
