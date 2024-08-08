@@ -335,17 +335,17 @@ describe("tl types works like check", function()
          assert(types.by_pos)
          local by_pos = types.by_pos[next(types.by_pos)]
          assert.same({
-            ["19"] = 8,
-            ["22"] = 8,
-            ["23"] = 6,
+            ["19"] = 9,
+            ["22"] = 9,
+            ["23"] = 7,
             ["30"] = 2,
-            ["41"] = 8,
+            ["41"] = 9,
          }, by_pos["1"])
          assert.same({
-            ["17"] = 6,
+            ["17"] = 7,
             ["20"] = 2,
-            ["25"] = 9,
-            ["31"] = 8,
+            ["25"] = 10,
+            ["31"] = 9,
          }, by_pos["2"])
       end)
    end)
