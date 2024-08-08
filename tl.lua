@@ -2081,12 +2081,24 @@ local Node = {ExpectedContext = {}, }
 
 
 
+local show_type
+
+local type_mt = {
+   __tostring = function(t)
+      return show_type(t)
+   end,
+}
+
 local function a_type(w, typename, t)
    t.typeid = new_typeid()
    t.f = w.f
    t.x = w.x
    t.y = w.y
    t.typename = typename
+   do
+      local ty = t
+      setmetatable(ty, type_mt)
+   end
    return t
 end
 
@@ -2096,6 +2108,7 @@ local function edit_type(w, t, typename)
    t.x = w.x
    t.y = w.y
    t.typename = typename
+   setmetatable(t, type_mt)
    return t
 end
 
@@ -2150,6 +2163,10 @@ local function shallow_copy_new_type(t)
       copy[k] = v
    end
    copy.typeid = new_typeid()
+   do
+      local ty = copy
+      setmetatable(ty, type_mt)
+   end
    return copy
 end
 
@@ -2286,6 +2303,7 @@ do
       t.x = token.x
       t.y = token.y
       t.typename = typename
+      setmetatable(t, type_mt)
       return t
    end
 
@@ -4328,8 +4346,6 @@ local function fields_of(t, meta)
       return name, fields[name]
    end
 end
-
-local show_type
 
 local tl_debug_indent = 0
 
@@ -6662,7 +6678,7 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "typedecl" then
       return "type " .. show(t.def)
    else
-      return "<" .. t.typename .. " " .. tostring(t) .. ">"
+      return "<" .. t.typename .. ">"
    end
 end
 
@@ -7288,6 +7304,7 @@ do
          local copy = {}
          seen[orig_t] = copy
 
+         setmetatable(copy, type_mt)
          copy.typename = t.typename
          copy.f = t.f
          copy.x = t.x
@@ -7509,7 +7526,7 @@ do
       end
 
       if ret == t or t.typename == "typevar" then
-         ret = shallow_copy_table(ret)
+         ret = shallow_copy_new_type(ret)
       end
       return type_at(w, ret)
    end
@@ -7521,7 +7538,7 @@ do
       end
 
       if ret == t or t.typename == "typevar" then
-         ret = shallow_copy_table(ret)
+         ret = shallow_copy_new_type(ret)
       end
       assert(w.f)
       ret.inferred_at = w
