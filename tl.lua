@@ -3790,7 +3790,7 @@ do
          typ.is_method = true
          typ.min_arity = 1
          typ.args = new_tuple(ps, wstart, {
-            a_nominal(where_macroexp, { "@self" }),
+            a_type(where_macroexp, "self", {}),
          })
          typ.rets = new_tuple(ps, wstart, { new_type(ps, wstart, "boolean") })
          typ.macroexp = where_macroexp
@@ -6573,10 +6573,6 @@ local function show_type_base(t, short, seen)
    end
 
    if t.typename == "nominal" then
-      if #t.names == 1 and t.names[1] == "@self" then
-         return "self"
-      end
-
       local ret
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
@@ -8049,19 +8045,11 @@ do
       return arr_type
    end
 
-   local function is_self(t)
-      return t.typename == "self" or (t.typename == "nominal" and t.names[1] == "@self")
-   end
-
    local function compare_true(_, _, _)
       return true
    end
 
    function TypeChecker:subtype_nominal(a, b)
-      if is_self(a) and is_self(b) then
-         return true
-      end
-
       local ra = a.typename == "nominal" and self:resolve_nominal(a) or a
       local rb = b.typename == "nominal" and self:resolve_nominal(b) or b
       local ok, errs = self:is_a(ra, rb)
@@ -9092,7 +9080,8 @@ a.types[i], b.types[i]), }
             if argdelta == -1 then
                from = 2
                local errs = {}
-               if (not is_self(fargs[1])) and not self:arg_check(w, errs, fargs[1], args.tuple[1], "contravariant", "self") then
+               local first = fargs[1]
+               if (not (first.typename == "self")) and not self:arg_check(w, errs, first, args.tuple[1], "contravariant", "self") then
                   return nil, errs
                end
             end
