@@ -640,7 +640,7 @@ local record TypeReporter
    next_num: integer
    tr: TypeReport
 
-   get_typenum: function(TypeReporter, Type): integer
+   get_typenum: function(self, Type): integer
 end
 
 tl.version = function(): string
@@ -3683,22 +3683,14 @@ local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): 
    return i, node
 end
 
-local function parse_where_clause(ps: ParseState, i: integer, typeargs: {TypeArgType}): integer, Node
+local function parse_where_clause(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps, i, "macroexp")
-
-   local selftype = new_nominal(ps, i, "@self")
-   if typeargs then
-      selftype.typevals = {}
-      for a, t in ipairs(typeargs) do
-         selftype.typevals[a] = a_nominal(node, { t.typearg })
-      end
-   end
 
    node.is_method = true
    node.args = new_node(ps, i, "argument_list")
    node.args[1] = new_node(ps, i, "argument")
    node.args[1].tk = "self"
-   node.args[1].argtype = selftype
+   node.args[1].argtype = new_type(ps, i, "self")
    node.min_arity = 1
    node.rets = new_tuple(ps, i)
    node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3789,7 +3781,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType, no
       local wstart = i
       i = i + 1
       local where_macroexp: Node
-      i, where_macroexp = parse_where_clause(ps, i, def.typeargs)
+      i, where_macroexp = parse_where_clause(ps, i)
 
       local typ = new_type(ps, wstart, "function") as FunctionType
       if def.typeargs then
@@ -7015,8 +7007,8 @@ do
       feat_arity: boolean
       feat_lax: boolean
 
-      same_type: function(TypeChecker, Type, Type): boolean, {Error}
-      is_a: function(TypeChecker, Type, Type): boolean, {Error}
+      same_type: function(self, Type, Type): boolean, {Error}
+      is_a: function(self, Type, Type): boolean, {Error}
 
       type_check_funcall: function(TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
 
@@ -8724,6 +8716,7 @@ do
    -- evaluation strategy
    TypeChecker.type_priorities = {
       -- types that have catch-all rules evaluate first
+      ["self"] = 1,
       ["tuple"] = 2,
       ["typevar"] = 3,
       ["nil"] = 4,
@@ -11664,7 +11657,7 @@ do
                   self.errs:add(node, "could not resolve type of self")
                   return
                end
-               args.tuple[1] = selftype
+               args.tuple[1] = a_type(node, "self", {})
                self:add_var(nil, "self", selftype)
                self:add_var(nil, "@self", a_typedecl(node, selftype))
             end
@@ -12483,6 +12476,9 @@ do
                                     end
                                  end
                               end
+                           end
+                           if ftype.is_method then
+                              fargs[1] = a_type(fargs[1], "self", {})
                            end
                         end
                      end

@@ -3683,22 +3683,14 @@ do
       return i, node
    end
 
-   local function parse_where_clause(ps, i, typeargs)
+   local function parse_where_clause(ps, i)
       local node = new_node(ps, i, "macroexp")
-
-      local selftype = new_nominal(ps, i, "@self")
-      if typeargs then
-         selftype.typevals = {}
-         for a, t in ipairs(typeargs) do
-            selftype.typevals[a] = a_nominal(node, { t.typearg })
-         end
-      end
 
       node.is_method = true
       node.args = new_node(ps, i, "argument_list")
       node.args[1] = new_node(ps, i, "argument")
       node.args[1].tk = "self"
-      node.args[1].argtype = selftype
+      node.args[1].argtype = new_type(ps, i, "self")
       node.min_arity = 1
       node.rets = new_tuple(ps, i)
       node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3789,7 +3781,7 @@ do
          local wstart = i
          i = i + 1
          local where_macroexp
-         i, where_macroexp = parse_where_clause(ps, i, def.typeargs)
+         i, where_macroexp = parse_where_clause(ps, i)
 
          local typ = new_type(ps, wstart, "function")
          if def.typeargs then
@@ -8724,6 +8716,7 @@ a.types[i], b.types[i]), }
 
    TypeChecker.type_priorities = {
 
+      ["self"] = 1,
       ["tuple"] = 2,
       ["typevar"] = 3,
       ["nil"] = 4,
@@ -11664,7 +11657,7 @@ self:expand_type(node, values, elements) })
                   self.errs:add(node, "could not resolve type of self")
                   return
                end
-               args.tuple[1] = selftype
+               args.tuple[1] = a_type(node, "self", {})
                self:add_var(nil, "self", selftype)
                self:add_var(nil, "@self", a_type(node, "typedecl", { def = selftype }))
             end
@@ -12483,6 +12476,9 @@ self:expand_type(node, values, elements) })
                                     end
                                  end
                               end
+                           end
+                           if ftype.is_method then
+                              fargs[1] = a_type(fargs[1], "self", {})
                            end
                         end
                      end
