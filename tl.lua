@@ -12309,7 +12309,7 @@ self:expand_type(node, values, elements) })
    }
 
    function TypeChecker:begin_temporary_record_types(typ)
-      self:add_var(nil, "@self", type_at(typ, a_type(typ, "typedecl", { def = typ })))
+      self:add_var(nil, "@self", a_type(typ, "typedecl", { def = typ }))
 
       for fname, ftype in fields_of(typ) do
          if ftype.typename == "typealias" then
