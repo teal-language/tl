@@ -12309,7 +12309,7 @@ do
    }
 
    function TypeChecker:begin_temporary_record_types(typ: RecordType)
-      self:add_var(nil, "@self", type_at(typ, a_typedecl(typ, typ)))
+      self:add_var(nil, "@self", a_typedecl(typ, typ))
 
       for fname, ftype in fields_of(typ) do
          if ftype is TypeAliasType then
