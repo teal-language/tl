@@ -10164,8 +10164,8 @@ a.types[i], b.types[i]), }
 
 
       local ftype = table.remove(b.tuple, 1)
-      ftype = shallow_copy_new_type(ftype)
       if ftype.typename == "function" then
+         ftype = shallow_copy_new_type(ftype)
          ftype.is_method = false
       end
 

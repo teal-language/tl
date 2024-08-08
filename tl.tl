@@ -10164,8 +10164,8 @@ do
       -- so we wish to avoid incorrect error messages / unnecessary warning messages
       -- associated with calling methods as functions
       local ftype = table.remove(b.tuple, 1)
-      ftype = shallow_copy_new_type(ftype)
       if ftype is FunctionType then
+         ftype = shallow_copy_new_type(ftype)
          ftype.is_method = false
       end
 
