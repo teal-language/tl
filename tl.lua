@@ -12134,7 +12134,9 @@ self:expand_type(node, values, elements) })
          after = function(self, node, children)
             local t = children[1]
             if not t then
-               t = a_type(node, "unknown", {})
+               t = self.feat_lax and
+               a_type(node, "unknown", {}) or
+               a_type(node, "any", {})
             end
             if node.tk == "..." then
                t = a_vararg(node, { t })

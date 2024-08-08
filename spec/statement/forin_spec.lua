@@ -76,7 +76,7 @@ describe("forin", function()
    end)
 
    it("with an explicit iterator", util.check([[
-      local function iter(t): number
+      local function iter<T>(t: T): number
       end
       local t = { 1, 2, 3 }
       for i in iter, t do
