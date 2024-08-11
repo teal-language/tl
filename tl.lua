@@ -7475,9 +7475,9 @@ do
    end
 
 
-   function TypeChecker:check_if_redeclaration(new_name, node)
+   function TypeChecker:check_if_redeclaration(new_name, node, t)
       local old = self:find_var(new_name, "check_only")
-      if old or simple_types[new_name] then
+      if old or (t.typename == "typedecl" and simple_types[new_name]) then
          local var_name = node.tk
          local var_kind = "variable"
          if node.kind == "local_function" or node.kind == "record_function" then
@@ -7562,7 +7562,7 @@ do
          name ~= "..." and
          name:sub(1, 1) ~= "@" then
 
-         self:check_if_redeclaration(name, node)
+         self:check_if_redeclaration(name, node, t)
       end
 
       if var and not var.used then

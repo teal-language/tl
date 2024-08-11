@@ -540,4 +540,15 @@ describe("local", function()
 
       kk = {}
    ]]))
+
+   it("using a base type name in a regular variable produces no warnings", util.check_warnings([[
+      local any = true
+      print(any)
+
+      local record integer
+      end
+   ]], {
+      { tag = "redeclaration", msg = "variable shadows previous declaration of 'integer'" },
+      { tag = "unused", msg = "unused type integer" },
+   }))
 end)
