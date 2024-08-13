@@ -107,5 +107,25 @@ describe("record function", function()
       ]], {}, {
          { y = 7, msg = "different number of return values: got 1, expected 0" },
       }))
+
+      it("does not close nested types too early (regression test for #775)", util.check([[
+         -- declare a nested record
+         local record mul
+            record Fil
+               mime: function(Fil)
+            end
+         end
+
+         -- declare an alias
+         local type Fil = mul.Fil
+
+         -- this works
+         function mul.Fil:new_method1(self: Fil)
+         end
+
+         -- should work as well for alias
+         function Fil:new_method2(self: Fil)
+         end
+      ]]))
    end)
 end)
