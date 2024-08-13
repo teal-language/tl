@@ -12293,22 +12293,38 @@ do
       end,
    }
 
+   function TypeChecker:begin_temporary_record_types(typ: RecordType)
+      self:add_var(nil, "@self", type_at(typ, a_typedecl(typ, typ)))
+
+      for fname, ftype in fields_of(typ) do
+         if ftype is TypeAliasType then
+            self:resolve_nominal(ftype.alias_to)
+            self:add_var(nil, fname, ftype)
+         elseif ftype is TypeDeclType then
+            self:add_var(nil, fname, ftype)
+         end
+      end
+   end
+
+   function TypeChecker:end_temporary_record_types(typ: RecordType)
+      -- drop @self and nested records from scope
+      -- to avoid closing them prematurely in end_scope()
+      local scope = self.st[#self.st]
+      scope.vars["@self"] = nil
+      for fname, ftype in fields_of(typ) do
+         if ftype is TypeAliasType or ftype is TypeDeclType then
+            scope.vars[fname] = nil
+         end
+      end
+   end
+
    local visit_type: Visitor<TypeChecker, TypeName,Type,Type>
    visit_type = {
       cbs = {
          ["record"] = {
             before = function(self: TypeChecker, typ: RecordType)
                self:begin_scope()
-               self:add_var(nil, "@self", type_at(typ, a_typedecl(typ, typ)))
-
-               for fname, ftype in fields_of(typ) do
-                  if ftype is TypeAliasType then
-                     self:resolve_nominal(ftype.alias_to)
-                     self:add_var(nil, fname, ftype)
-                  elseif ftype is TypeDeclType then
-                     self:add_var(nil, fname, ftype)
-                  end
-               end
+               self:begin_temporary_record_types(typ)
             end,
             after = function(self: TypeChecker, typ: RecordType, children: {Type}): Type
                local i = 1
@@ -12402,6 +12418,7 @@ do
                   end
                end
 
+               self:end_temporary_record_types(typ)
                self:end_scope()
 
                return typ
