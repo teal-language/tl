@@ -10612,7 +10612,7 @@ self:expand_type(node, values, elements) })
       elseif t.typename == "nominal" then
          self:resolve_nominal(t)
          local rt = t.resolved
-         if rt.typename == "typedecl" then
+         if rt and rt.typename == "typedecl" then
             t.resolved = rt.def
          end
       end
