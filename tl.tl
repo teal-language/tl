@@ -10612,7 +10612,7 @@ do
       elseif t is NominalType then
          self:resolve_nominal(t)
          local rt = t.resolved
-         if rt is TypeDeclType then
+         if rt and rt is TypeDeclType then
             t.resolved = rt.def
          end
       end
