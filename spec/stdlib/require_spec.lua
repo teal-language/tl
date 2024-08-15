@@ -969,5 +969,25 @@ describe("require", function()
          assert.same({}, result.env.loaded["./types/house.tl"].type_errors)
          assert.same({}, result.env.loaded["./types/person.tl"].type_errors)
       end)
+
+      it("dynamic require resolves to 'any', which can then be casted", util.check_type_error([[
+         local record Mod
+            f: function()
+         end
+
+         local m1 = require("module_nr_" .. tostring(math.random(10))) as Mod
+
+         local pok1, m2 = pcall(require, "module_nr_" .. tostring(math.random(10))) as (boolean, Mod)
+
+         local n1 = require("module_nr_" .. tostring(math.random(10)))
+
+         local pok2, n2 = pcall(require, "module_nr_" .. tostring(math.random(10)))
+
+         local x: Mod = n1
+         local y: Mod = n2
+      ]], {
+         { y = 13, msg = "got <any type>, expected Mod" },
+         { y = 14, msg = "got <any type>, expected Mod" },
+      }))
    end)
 end)
