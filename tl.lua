@@ -7214,6 +7214,15 @@ do
       tostring(nfargs or 0)
    end
 
+   local function drop_constant_value(t)
+      if t.typename == "string" and t.literal then
+         local ret = shallow_copy_new_type(t)
+         ret.literal = nil
+         return ret
+      end
+      return t
+   end
+
    local function resolve_typedecl(t)
       if t.typename == "typedecl" then
          return t.def
@@ -7443,14 +7452,10 @@ do
       local rt = tc:find_var_type(t.typevar)
       if not rt then
          return nil
-      elseif rt.typename == "string" then
-
-         return a_type(rt, "string", {})
       end
-      return rt
+
+      return drop_constant_value(rt)
    end
-
-
 
    function TypeChecker:infer_emptytable(emptytable, fresh_t)
       local is_global = (emptytable.declared_at and emptytable.declared_at.kind == "global_declaration")
@@ -7521,15 +7526,6 @@ do
       assert(w.f)
       ret.inferred_at = w
       return ret
-   end
-
-   local function drop_constant_value(t)
-      if t.typename == "string" and t.literal then
-         local ret = shallow_copy_table(t)
-         ret.literal = nil
-         return ret
-      end
-      return t
    end
 
    function TypeChecker:add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
