@@ -4056,6 +4056,7 @@ do
          return fail(ps, i, "expected a type name")
       end
       local typeargs
+      local itypeargs = i
       if ps.tokens[i].tk == "<" then
          i, typeargs = parse_anglebracket_list(ps, i, parse_typearg)
       end
@@ -4097,11 +4098,22 @@ do
 
       local nt = asgn.value.newtype
       if nt.typename == "typedecl" then
+         local def = nt.def
+
          if typeargs then
-            nt.typeargs = typeargs
+            if def.typeargs then
+               if def.typeargs then
+                  fail(ps, itypeargs, "cannot declare type arguments twice in type declaration")
+               else
+                  def.typeargs = typeargs
+               end
+            else
+
+
+               nt.typeargs = typeargs
+            end
          end
 
-         local def = nt.def
          if def.fields or def.typename == "enum" then
             if not def.declname then
                def.declname = asgn.var.tk

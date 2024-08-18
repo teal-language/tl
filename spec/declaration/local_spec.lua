@@ -551,4 +551,11 @@ describe("local", function()
       { tag = "redeclaration", msg = "variable shadows previous declaration of 'integer'" },
       { tag = "unused", msg = "unused type integer" },
    }))
+
+   it("does not accept type arguments declared twice", util.check_syntax_error([[
+      local type Foo<T> = record<T>
+      end
+   ]], {
+      { y = 1, msg = "cannot declare type arguments twice in type declaration" },
+   }))
 end)

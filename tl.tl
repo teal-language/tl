@@ -4056,6 +4056,7 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
       return fail(ps, i, "expected a type name")
    end
    local typeargs: {TypeArgType}
+   local itypeargs = i
    if ps.tokens[i].tk == "<" then
       i, typeargs = parse_anglebracket_list(ps, i, parse_typearg)
    end
@@ -4097,11 +4098,22 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
 
    local nt = asgn.value.newtype
    if nt is TypeDeclType then
+      local def = nt.def
+
       if typeargs then
-         nt.typeargs = typeargs
+         if def is HasTypeArgs then
+            if def.typeargs then
+               fail(ps, itypeargs, "cannot declare type arguments twice in type declaration")
+            else
+               def.typeargs = typeargs
+            end
+         else
+            -- FIXME how to resolve type arguments in unions properly
+            -- fail(ps, itypeargs, def.typename .. " does not accept type arguments")
+            nt.typeargs = typeargs
+         end
       end
 
-      local def = nt.def
       if def is RecordLikeType or def is EnumType then
          if not def.declname then
             def.declname = asgn.var.tk
