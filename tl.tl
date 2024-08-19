@@ -12407,6 +12407,9 @@ do
    local function ensure_is_method_self(typ: RecordLikeType, fargs: {Type}): boolean
       assert(typ.declname)
       local selfarg = fargs[1]
+      if selfarg is SelfType then
+         return true
+      end
       if not selfarg is NominalType then
          return false
       end
