@@ -6517,8 +6517,10 @@ local function is_unknown(t: Type): boolean
        or t.typename == "unresolved_emptytable_value"
 end
 
-local function display_typevar(typevar: string): string
-   return TL_DEBUG and typevar or (typevar:gsub("@.*", ""))
+local function display_typevar(typevar: string, what: TypeName): string
+   return TL_DEBUG
+      and (what .. " " .. typevar)
+      or typevar:gsub("@.*", "")
 end
 
 local function show_fields(t: RecordLikeType, show: function(Type):(string)): string
@@ -6573,6 +6575,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          return "self"
       end
 
+      local ret: string
       if t.typevals then
          local out = { table.concat(t.names, "."), "<" }
          local vals: {string} = {}
@@ -6581,10 +6584,14 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          end
          table.insert(out, table.concat(vals, ", "))
          table.insert(out, ">")
-         return table.concat(out)
+         ret = table.concat(out)
       else
-         return table.concat(t.names, ".")
+         ret = table.concat(t.names, ".")
       end
+      if TL_DEBUG then
+         ret = "nominal " .. ret
+      end
+      return ret
    elseif t is TupleType then
       local out: {string} = {}
       for _, v in ipairs(t.tuple) do
@@ -6670,11 +6677,11 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
                 (t.literal and string.format(" %q", t.literal) or "")
       end
    elseif t is TypeVarType then
-      return display_typevar(t.typevar)
+      return display_typevar(t.typevar, "typevar")
    elseif t is TypeArgType then
-      return display_typevar(t.typearg)
+      return display_typevar(t.typearg, "typearg")
    elseif t is UnresolvableTypeArgType then
-      return display_typevar(t.typearg) .. " (unresolved generic)"
+      return display_typevar(t.typearg, "typearg") .. " (unresolved generic)"
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t.typename == "invalid" then
@@ -8198,7 +8205,7 @@ do
          -- but check interface constraint first if present
          if constraint then
             if not self:is_a(other, constraint) then
-               return false, { Err("given type %s does not satisfy %s constraint in type variable " .. display_typevar(typevar), other, constraint) }
+               return false, { Err("given type %s does not satisfy %s constraint in type variable " .. display_typevar(typevar, "typevar"), other, constraint) }
             end
 
             if self:same_type(other, constraint) then
