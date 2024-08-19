@@ -7067,7 +7067,7 @@ do
    end
 
    local type ResolveType = function<S>(S, Type): Type
-   local typevar_resolver: function<S>(s: S, typ: Type, fn_var?: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
+   local typevar_resolver: function<S>(s: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
 
    local function fresh_typevar(_: nil, t: TypeVarType): Type, Type, boolean
       return a_type(t, "typevar", {
@@ -7280,7 +7280,25 @@ do
       ["unknown"] = true,
    }
 
-   typevar_resolver = function<S>(self: S, typ: Type, fn_var?: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
+   local function clear_resolved_typeargs(copy: Type, resolved: {string:Type})
+      if not copy is HasTypeArgs then
+         return
+      end
+
+      for i = #copy.typeargs, 1, -1 do
+         local r = resolved[copy.typeargs[i].typearg]
+         if r then
+            table.remove(copy.typeargs, i)
+         end
+      end
+      if not copy.typeargs[1] then
+         copy.typeargs = nil
+      end
+
+      return
+   end
+
+   typevar_resolver = function<S>(self: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}, {string:Type}
       local errs: {Error}
       local seen: {Type:Type} = {}
       local resolved: {string:Type} = {}
@@ -7457,31 +7475,14 @@ do
          return copy, same and all_same
       end
 
-      local copy, same = resolve(typ, true)
+      local copy = resolve(typ, true)
       if errs then
          return false, an_invalid(typ), errs
       end
 
-      if (not same) and
-         (copy is FunctionType or copy is RecordLikeType) and
-         copy.typeargs
-      then
-         for i = #copy.typeargs, 1, -1 do
-            local r = resolved[copy.typeargs[i].typearg]
-            if r then
-               -- FIXME HACK!!!
-               if r is NominalType and #r.names == 1 then
-                  copy.typeargs[i].typearg = r.names[1]
-               else
-                  table.remove(copy.typeargs, i)
-               end
-            end
-         end
-         if not copy.typeargs[1] then
-            copy.typeargs = nil
-         end
-      end
-      return true, copy
+      clear_resolved_typeargs(copy, resolved)
+
+      return true, copy, nil, resolved
    end
 
    local function resolve_typevar(tc: TypeChecker, t: TypeVarType): Type
@@ -10804,6 +10805,18 @@ do
          before = function(self: TypeChecker, node: Node)
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
+            local nt = node.value.newtype
+            if nt and nt is TypeAliasType and resolved is TypeDeclType then
+               if nt.typeargs then
+                  local def = resolved.def
+                  -- FIXME ideally we'd like to use `if def is HasTypeArgs`
+                  -- here, but if def.typeargs happens to be nil, the `is`
+                  -- check won't work
+                  if def is RecordType or def is FunctionType or def is InterfaceType then
+                     def.typeargs = nt.typeargs
+                  end
+               end
+            end
             local var = self:add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing

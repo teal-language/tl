@@ -7280,6 +7280,24 @@ do
       ["unknown"] = true,
    }
 
+   local function clear_resolved_typeargs(copy, resolved)
+      if not copy.typeargs then
+         return
+      end
+
+      for i = #copy.typeargs, 1, -1 do
+         local r = resolved[copy.typeargs[i].typearg]
+         if r then
+            table.remove(copy.typeargs, i)
+         end
+      end
+      if not copy.typeargs[1] then
+         copy.typeargs = nil
+      end
+
+      return
+   end
+
    typevar_resolver = function(self, typ, fn_var, fn_arg)
       local errs
       local seen = {}
@@ -7457,31 +7475,14 @@ do
          return copy, same and all_same
       end
 
-      local copy, same = resolve(typ, true)
+      local copy = resolve(typ, true)
       if errs then
          return false, a_type(typ, "invalid", {}), errs
       end
 
-      if (not same) and
-         (copy.typename == "function" or copy.fields) and
-         copy.typeargs then
+      clear_resolved_typeargs(copy, resolved)
 
-         for i = #copy.typeargs, 1, -1 do
-            local r = resolved[copy.typeargs[i].typearg]
-            if r then
-
-               if r.typename == "nominal" and #r.names == 1 then
-                  copy.typeargs[i].typearg = r.names[1]
-               else
-                  table.remove(copy.typeargs, i)
-               end
-            end
-         end
-         if not copy.typeargs[1] then
-            copy.typeargs = nil
-         end
-      end
-      return true, copy
+      return true, copy, nil, resolved
    end
 
    local function resolve_typevar(tc, t)
@@ -10804,6 +10805,18 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
+            local nt = node.value.newtype
+            if nt and nt.typename == "typealias" and resolved.typename == "typedecl" then
+               if nt.typeargs then
+                  local def = resolved.def
+
+
+
+                  if def.typename == "record" or def.typename == "function" or def.typename == "interface" then
+                     def.typeargs = nt.typeargs
+                  end
+               end
+            end
             local var = self:add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing

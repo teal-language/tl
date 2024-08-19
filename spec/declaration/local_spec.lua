@@ -558,4 +558,26 @@ describe("local", function()
    ]], {
       { y = 1, msg = "cannot declare type arguments twice in type declaration" },
    }))
+
+   it("propagates type arguments correctly", util.check_type_error([[
+      local record module
+        record Foo<A, B>
+          first: A
+          second: B
+        end
+      end
+
+      -- note inverted arguments
+      local type MyFoo<X, Y> = module.Foo<Y, X>
+
+      local record Boo
+         field: MyFoo<string, integer>
+      end
+
+      local b: Boo = { field = { first = "first", second = 2 } } -- bad, not inverted!
+      local c: Boo = { field = { first = 1, second = "second" } } -- good, inverted!
+   ]], {
+      { y = 15, x = 42, msg = 'in record field: first: got string "first", expected integer' },
+      { y = 15, x = 60, msg = 'in record field: second: got integer, expected string' },
+   }))
 end)
