@@ -3612,6 +3612,9 @@ do
       local iok = parse_body(ps, i, ndef, nt)
       if iok then
          i = iok
+         if ndef.fields then
+            ndef.declname = v.tk
+         end
          nt.newtype = new_typedecl(ps, itype, ndef)
       end
 
@@ -12401,6 +12404,26 @@ self:expand_type(node, values, elements) })
       end
    end
 
+   local function ensure_is_method_self(typ, fargs)
+      assert(typ.declname)
+      local selfarg = fargs[1]
+      if not (selfarg.typename == "nominal") then
+         return false
+      end
+      if selfarg.names[1] ~= typ.declname or (typ.typeargs and not selfarg.typevals) then
+         return false
+      end
+      if typ.typeargs then
+         for j = 1, #typ.typeargs do
+            local tv = selfarg.typevals[j]
+            if not (tv and tv.typename == "typevar" and tv.typevar == typ.typeargs[j].typearg) then
+               return false
+            end
+         end
+      end
+      return true
+   end
+
    local visit_type
    visit_type = {
       cbs = {
@@ -12449,23 +12472,7 @@ self:expand_type(node, values, elements) })
                      if ftype.is_method then
                         local fargs = ftype.args.tuple
                         if fargs[1] then
-                           local record_name = typ.declname
-                           if record_name then
-                              local selfarg = fargs[1]
-                              if selfarg.typename == "nominal" then
-                                 if selfarg.names[1] ~= record_name or (typ.typeargs and not selfarg.typevals) then
-                                    ftype.is_method = false
-                                 elseif typ.typeargs then
-                                    for j = 1, #typ.typeargs do
-                                       local tv = selfarg.typevals[j]
-                                       if not (tv and tv.typename == "typevar" and tv.typevar == typ.typeargs[j].typearg) then
-                                          ftype.is_method = false
-                                          break
-                                       end
-                                    end
-                                 end
-                              end
-                           end
+                           ftype.is_method = ensure_is_method_self(typ, fargs)
                            if ftype.is_method then
                               fargs[1] = a_type(fargs[1], "self", {})
                            end
