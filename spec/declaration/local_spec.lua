@@ -552,6 +552,22 @@ describe("local", function()
       { tag = "unused", msg = "unused type integer" },
    }))
 
+   it("catches bad assignments of record tables (regression test for #752)", util.check_type_error([[
+      local record Foo
+         qux: integer
+      end
+
+      local record Bar
+         gorp: number
+      end
+
+      local _bar1: Bar = 0.0
+      local _bar2: Bar = Foo
+   ]], {
+      { y = 9, msg = "_bar1: got number, expected Bar" },
+      { y = 10, msg = "_bar2: Foo is not a Bar" },
+   }))
+
    it("does not accept type arguments declared twice", util.check_syntax_error([[
       local type Foo<T> = record<T>
       end
