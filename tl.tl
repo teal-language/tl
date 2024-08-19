@@ -12822,6 +12822,10 @@ end
 local function read_full_file(fd: FILE): string, string
    local bom <const> = "\239\187\191" -- "\xEF\xBB\xBF"
    local content, err = fd:read("*a")
+   if not content then
+      return nil, err
+   end
+
    if content:sub(1, bom:len()) == bom then
       content = content:sub(bom:len() + 1)
    end
