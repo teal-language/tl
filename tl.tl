@@ -1642,7 +1642,7 @@ local function parse_table_literal(ps: ParseState, i: integer): integer, Node
    return parse_bracket_list(ps, i, node, "{", "}", "term", parse_table_item)
 end
 
-local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse_item: ParseItem<T>): integer, {T}
+local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse_item: ParseItem<T>, ret_lookahead: boolean): integer, {T}
    local try_ps: ParseState = {
       filename = ps.filename,
       tokens = ps.tokens,
@@ -1658,12 +1658,14 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
    end
    i = tryi
    table.insert(list, item)
-   if ps.tokens[i].tk == "," then
-      while ps.tokens[i].tk == "," do
-         i = i + 1
-         i, item = parse_item(ps, i)
-         table.insert(list, item)
-      end
+   while ps.tokens[i].tk == ","
+   and (not ret_lookahead
+        or (not (ps.tokens[i + 1].kind == "identifier"
+                 and ps.tokens[i + 2] and ps.tokens[i + 2].tk == ":")))
+   do
+      i = i + 1
+      i, item = parse_item(ps, i)
+      table.insert(list, item)
    end
    return i, list
 end
@@ -1866,7 +1868,7 @@ parse_type_list = function(ps: ParseState, i: integer, mode: ParseTypeListMode):
    end
 
    local prev_i = i
-   i = parse_trying_list(ps, i, list, parse_type)
+   i = parse_trying_list(ps, i, list, parse_type, mode == "rets")
    if i == prev_i and ps.tokens[i].tk ~= ")" then
       fail(ps, i - 1, "expected a type list")
    end

@@ -169,8 +169,8 @@ describe("local function", function()
    ]]))
 
    describe("with function arguments", function()
-      it("has ambiguity without parentheses in function type return", util.check_syntax_error([[
-         local function map(f: function(a):b, xs: {a}): {b}
+      it("has no ambiguity without parentheses in function type return", util.check([[
+         local function map<a, b>(f: function(a):b, xs: {a}): {b}
             local r = {}
             for i, x in ipairs(xs) do
                r[i] = f(x)
@@ -182,12 +182,7 @@ describe("local function", function()
          end
 
          print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
-      ]], {
-         { y = 1, x = 49, msg = "syntax error" },
-         { y = 1 },
-         { y = 1 },
-         { y = 1 },
-      }))
+      ]]))
 
       it("has no ambiguity with parentheses in function type return", util.check([[
          local function map<a,b>(f: function(a):(b), xs: {a}): {b}

@@ -131,7 +131,7 @@ describe("global function", function()
          ]]))
 
          describe("with function arguments", function()
-            it("has ambiguity without parentheses in function type return", mode.check_syntax_error([[
+            it("has no ambiguity without parentheses in function type return", mode.check([[
                ]] .. mode.fn .. [[ map<a, b>(f: function(a):b, xs: {a}): {b}
                   local r = {}
                   for i, x in ipairs(xs) do
@@ -144,12 +144,7 @@ describe("global function", function()
                end
 
                print(table.concat(map(quoted, {"red", "green", "blue"}), ", "))
-            ]], {
-               { y = 1, x = 47 + #mode.fn, msg = "syntax error" },
-               { y = 1 },
-               { y = 1 },
-               { y = 1 },
-            }))
+            ]]))
 
             it("has no ambiguity with parentheses in function type return", mode.check([[
                ]] .. mode.fn .. [[ map<a,b>(f: function(a):(b), xs: {a}): {b}
