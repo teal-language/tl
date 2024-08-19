@@ -12407,6 +12407,9 @@ self:expand_type(node, values, elements) })
    local function ensure_is_method_self(typ, fargs)
       assert(typ.declname)
       local selfarg = fargs[1]
+      if selfarg.typename == "self" then
+         return true
+      end
       if not (selfarg.typename == "nominal") then
          return false
       end
