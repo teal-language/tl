@@ -496,21 +496,12 @@ local record tl
       modules: {string:Type}
       loaded: {string:Result}
       loaded_order: {string}
-      trenv: TypeReportEnv
+      reporter: TypeReporter
       gen_compat: CompatMode
       gen_target: TargetMode
       keep_going: boolean
       report_types: boolean
       feat_arity: boolean
-   end
-
-   record Symbol
-      x: integer
-      y: integer
-      name: string
-      typ: Type
-      other: integer
-      skip: boolean
    end
 
    record Result
@@ -521,7 +512,6 @@ local record tl
       type_errors: {Error}
       gen_error: string
       warnings: {Error}
-      symbol_list: {Symbol}
       env: Env
       dependencies: {string:string} -- module name, file found
    end
@@ -580,12 +570,6 @@ local record tl
       globals: {string: integer}
    end
 
-   record TypeReportEnv
-      typeid_to_num: {integer: integer}
-      next_num: integer
-      tr: TypeReport
-   end
-
    record EnvOptions
       lax_mode: boolean
       gen_compat: CompatMode
@@ -605,6 +589,14 @@ local record tl
 
    package_loader_env: Env
    load_envs: { {any:any} : Env }
+end
+
+local record TypeReporter
+   typeid_to_num: {integer: integer}
+   next_num: integer
+   tr: TypeReport
+
+   get_typenum: function(TypeReporter, Type): integer
 end
 
 tl.version = function(): string
@@ -673,8 +665,26 @@ local type LoadFunction = tl.LoadFunction
 local type TargetMode = tl.TargetMode
 local type TypeInfo = tl.TypeInfo
 local type TypeReport = tl.TypeReport
-local type TypeReportEnv = tl.TypeReportEnv
-local type Symbol = tl.Symbol
+
+local enum Narrow
+   "narrow"
+   "narrowed_declaration"
+   "declaration"
+end
+
+local record Variable
+   t: Type
+   attribute: Attribute
+   needs_compat: boolean
+   narrowed_from: Type
+   is_narrowed: Narrow
+   declared_at: Node
+   is_func_arg: boolean
+   used: boolean
+   used_as_type: boolean
+   aliasing: Variable
+   implemented: {string:boolean}
+end
 
 --------------------------------------------------------------------------------
 -- Compiler debugging
@@ -5498,9 +5508,6 @@ local skip_types: {TypeName: boolean} = {
    ["unresolved"] = true,
 }
 
-local get_typenum: function(trenv: TypeReportEnv, t: Type): integer
-local type StoreType = function(y: integer, x: integer, typ: Type)
-
 local function sorted_keys<A,B>(m: {A:B}):{A}
    local keys = {}
    for k, _ in pairs(m) do
@@ -5517,8 +5524,8 @@ local function mark_array<T>(x: T): T
    return x
 end
 
-function tl.init_type_report(): TypeReportEnv
-   return {
+function tl.new_type_reporter(): TypeReporter
+   local self: TypeReporter = {
       next_num = 1,
       typeid_to_num = {},
       tr = {
@@ -5528,35 +5535,36 @@ function tl.init_type_report(): TypeReportEnv
          globals = {},
       },
    }
+   return setmetatable(self, { __index = TypeReporter })
 end
 
-local function store_function(trenv: TypeReportEnv, ti: TypeInfo, rt: FunctionType)
+function TypeReporter:store_function(ti: TypeInfo, rt: FunctionType)
    local args: {{integer, string}} = {}
    for _, fnarg in ipairs(rt.args.tuple) do
-      table.insert(args, mark_array { get_typenum(trenv, fnarg), nil })
+      table.insert(args, mark_array { self:get_typenum(fnarg), nil })
    end
    ti.args = mark_array(args)
    local rets: {{integer, string}} = {}
    for _, fnarg in ipairs(rt.rets.tuple) do
-      table.insert(rets, mark_array { get_typenum(trenv, fnarg), nil })
+      table.insert(rets, mark_array { self:get_typenum(fnarg), nil })
    end
    ti.rets = mark_array(rets)
    ti.vararg = not not rt.args.is_va
    ti.varret = not not rt.rets.is_va
 end
 
-get_typenum = function(trenv: TypeReportEnv, t: Type): integer
+function TypeReporter:get_typenum(t: Type): integer
    assert(t.typeid)
    -- try by typeid
-   local n = trenv.typeid_to_num[t.typeid]
+   local n = self.typeid_to_num[t.typeid]
    if n then
       return n
    end
 
-   local tr = trenv.tr
+   local tr = self.tr
 
    -- it's a new entry: store and increment
-   n = trenv.next_num
+   n = self.next_num
 
    local rt = t
    if rt is TupleType and #rt.tuple == 1 then
@@ -5577,12 +5585,12 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
       x = t.x,
    }
    tr.types[n] = ti
-   trenv.typeid_to_num[t.typeid] = n
-   trenv.next_num = trenv.next_num + 1
+   self.typeid_to_num[t.typeid] = n
+   self.next_num = self.next_num + 1
 
    if t is NominalType then
       if t.found then
-         ti.ref = get_typenum(trenv, t.found)
+         ti.ref = self:get_typenum(t.found)
       end
       if t.resolved then
          rt = t
@@ -5595,26 +5603,26 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
       local r = {}
       for _, k in ipairs(rt.field_order) do
          local v = rt.fields[k]
-         r[k] = get_typenum(trenv, v)
+         r[k] = self:get_typenum(v)
       end
       ti.fields = r
    end
 
    if rt is ArrayLikeType then
-      ti.elements = get_typenum(trenv, rt.elements)
+      ti.elements = self:get_typenum(rt.elements)
    end
 
    if rt is MapType then
-      ti.keys = get_typenum(trenv, rt.keys)
-      ti.values = get_typenum(trenv, rt.values)
+      ti.keys = self:get_typenum(rt.keys)
+      ti.values = self:get_typenum(rt.values)
    elseif rt is EnumType then
       ti.enums = mark_array(sorted_keys(rt.enumset))
    elseif rt is FunctionType then
-      store_function(trenv, ti, rt)
+      self:store_function(ti, rt)
    elseif rt is AggregateType then
       local tis = {}
       for _, pt in ipairs(rt.types) do
-         table.insert(tis, get_typenum(trenv, pt))
+         table.insert(tis, self:get_typenum(pt))
       end
       ti.types = mark_array(tis)
    end
@@ -5622,13 +5630,38 @@ get_typenum = function(trenv: TypeReportEnv, t: Type): integer
    return n
 end
 
-local function make_type_reporter(filename: string, trenv: TypeReportEnv): StoreType
---   local filename = result.filename or "?"
+local record TypeCollector
+   record Symbol
+      x: integer
+      y: integer
+      name: string
+      typ: Type
+      skip: boolean
+   end
+
+   filename: string
+   symbol_list: {Symbol}
+
+   store_type: function(y: integer, x: integer, typ: Type)
+   reserve_symbol_list_slot: function(Node)
+   add_to_symbol_list: function(node: Node, name: string, t: Type)
+   begin_symbol_list_scope: function(node: Node)
+   end_symbol_list_scope: function(node: Node)
+end
+
+function TypeReporter:get_collector(filename: string): TypeCollector
+   local tc: TypeCollector = {
+      filename = filename,
+      symbol_list = {},
+   }
 
    local ft: {integer:{integer:integer}} = {}
-   trenv.tr.by_pos[filename] = ft
+   self.tr.by_pos[filename] = ft
 
-   local function store_type(y: integer, x: integer, typ: Type)
+   local symbol_list = tc.symbol_list
+   local symbol_list_n = 0
+
+   tc.store_type = function(y: integer, x: integer, typ: Type)
       if not typ or skip_types[typ.typename] then
          return
       end
@@ -5639,10 +5672,128 @@ local function make_type_reporter(filename: string, trenv: TypeReportEnv): Store
          ft[y] = yt
       end
 
-      yt[x] = get_typenum(trenv, typ)
+      yt[x] = self:get_typenum(typ)
    end
 
-   return store_type
+   tc.reserve_symbol_list_slot = function(node: Node)
+      symbol_list_n = symbol_list_n + 1
+      node.symbol_list_slot = symbol_list_n
+   end
+
+   tc.add_to_symbol_list = function(node: Node, name: string, t: Type)
+      if not node then
+         return
+      end
+      local slot: integer
+      if node.symbol_list_slot then
+         slot = node.symbol_list_slot
+      else
+         symbol_list_n = symbol_list_n + 1
+         slot = symbol_list_n
+      end
+      symbol_list[slot] = { y = node.y, x = node.x, name = name, typ = t }
+   end
+
+   tc.begin_symbol_list_scope = function(node: Node)
+      symbol_list_n = symbol_list_n + 1
+      symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
+   end
+
+   tc.end_symbol_list_scope = function(node: Node)
+      if symbol_list[symbol_list_n].name == "@{" then
+         symbol_list[symbol_list_n] = nil
+         symbol_list_n = symbol_list_n - 1
+      else
+         symbol_list_n = symbol_list_n + 1
+         symbol_list[symbol_list_n] = { y = assert(node.yend), x = assert(node.xend), name = "@}" }
+      end
+   end
+
+   return tc
+end
+
+function TypeReporter:store_result(tc: TypeCollector, globals: {string:Variable})
+   local tr = self.tr
+
+   local filename = tc.filename
+   local symbol_list = tc.symbol_list
+
+   tr.by_pos[filename][0] = nil
+
+   -- mark unneeded scope blocks to be skipped
+   do
+      local n = 0 -- number of symbols in current scope
+      local p = 0 -- opening position of current scope block
+      local n_stack, p_stack = {}, {}
+      local level = 0
+      for i, s in ipairs(symbol_list) do
+         if s.typ then
+            n = n + 1
+         elseif s.name == "@{" then
+            level = level + 1
+            n_stack[level], p_stack[level] = n, p -- push current scope
+            n, p = 0, i -- begin new scope
+         else
+            if n == 0 then -- nothing declared in this scope
+               symbol_list[p].skip = true -- skip @{
+               s.skip = true -- skip @}
+            end
+            n, p = n_stack[level], p_stack[level] -- pop previous scope
+            level = level - 1
+         end
+      end
+   end
+
+   local symbols: {TypeReport.Symbol} = mark_array {}
+   tr.symbols_by_file[filename] = symbols
+
+   -- resolve scope cross references, skipping unneeded scope blocks
+   do
+      local stack = {}
+      local level = 0
+      local i = 0
+      for _, s in ipairs(symbol_list) do
+         if not s.skip then
+            i = i + 1
+            local id: integer
+            if s.typ then
+               id = self:get_typenum(s.typ)
+            elseif s.name == "@{" then
+               level = level + 1
+               stack[level] = i
+               id = -1 -- will be overwritten
+            else
+               local other = stack[level]
+               level = level - 1
+               symbols[other][4] = i -- overwrite id from @{
+               id = other - 1
+            end
+            local sym = mark_array({ s.y, s.x, s.name, id })
+            table.insert(symbols, sym)
+         end
+      end
+   end
+
+   local gkeys = sorted_keys(globals)
+   for _, name in ipairs(gkeys) do
+      if name:sub(1, 1) ~= "@" then
+         local var = globals[name]
+         tr.globals[name] = self:get_typenum(var.t)
+      end
+   end
+
+   if not tr.symbols then
+      tr.symbols = tr.symbols_by_file[filename]
+   end
+end
+
+function TypeReporter:get_report(): TypeReport
+   return self.tr
+end
+
+-- backwards compatibility
+function tl.get_types(result: Result): TypeReport, TypeReporter
+   return result.env.reporter:get_report(), result.env.reporter
 end
 
 --------------------------------------------------------------------------------
@@ -6142,26 +6293,6 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
-local enum Narrow
-   "narrow"
-   "narrowed_declaration"
-   "declaration"
-end
-
-local record Variable
-   t: Type
-   attribute: Attribute
-   needs_compat: boolean
-   narrowed_from: Type
-   is_narrowed: Narrow
-   declared_at: Node
-   is_func_arg: boolean
-   used: boolean
-   used_as_type: boolean
-   aliasing: Variable
-   implemented: {string:boolean}
-end
-
 local function require_module(module_name: string, lax: boolean, env: Env): Type, boolean
    local mod = env.modules[module_name]
    if mod then
@@ -6405,6 +6536,7 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | CompatMode, gen_tar
 end
 
 tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
+
    opts = opts or {}
    local env = opts.env
    if not env then
@@ -6434,13 +6566,10 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
 
    local module_type: Type
 
-   local symbol_list: {Symbol}
-   local symbol_list_n = 0
-   local store_type: StoreType
+   local tc: TypeCollector
    if env.report_types then
-      symbol_list = {}
-      env.trenv = env.trenv or tl.init_type_report()
-      store_type = make_type_reporter(filename or "?", env.trenv)
+      env.reporter = env.reporter or tl.new_type_reporter()
+      tc = env.reporter:get_collector(filename or "?")
    end
 
    local enum VarUse
@@ -7108,11 +7237,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       return t
    end
 
-   local function reserve_symbol_list_slot(node: Node)
-      symbol_list_n = symbol_list_n + 1
-      node.symbol_list_slot = symbol_list_n
-   end
-
    local get_unresolved: function(scope?: Scope): UnresolvedType
    local find_unresolved: function(level?: integer): UnresolvedType
 
@@ -7175,15 +7299,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          return var
       end
 
-      if symbol_list and node then
-         local slot: integer
-         if node.symbol_list_slot then
-            slot = node.symbol_list_slot
-         else
-            symbol_list_n = symbol_list_n + 1
-            slot = symbol_list_n
-         end
-         symbol_list[slot] = { y = node.y, x = node.x, name = name, typ = t }
+      if tc and node then
+         tc.add_to_symbol_list(node, name, t)
       end
 
       return var
@@ -7351,9 +7468,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
    local function begin_scope(node?: Node)
       table.insert(st, {})
 
-      if symbol_list and node then
-         symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
+      if tc and node then
+         tc.begin_symbol_list_scope(node)
       end
    end
 
@@ -7390,14 +7506,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       check_for_unused_vars(scope)
       table.remove(st)
 
-      if symbol_list and node then
-         if symbol_list[symbol_list_n].name == "@{" then
-            symbol_list[symbol_list_n] = nil
-            symbol_list_n = symbol_list_n - 1
-         else
-            symbol_list_n = symbol_list_n + 1
-            symbol_list[symbol_list_n] = { y = assert(node.yend), x = assert(node.xend), name = "@}" }
-         end
+      if tc and node then
+         tc.end_symbol_list_scope(node)
       end
    end
 
@@ -8865,8 +8975,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          ret = resolve_typevars_at(node, ret)
          end_scope()
 
-         if store_type and e1 then
-            store_type(e1.y, e1.x, f)
+         if tc and e1 then
+            tc.store_type(e1.y, e1.x, f)
          end
 
          if f and f.macroexp then
@@ -10488,9 +10598,9 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       },
       ["local_declaration"] = {
          before = function(node: Node)
-            if symbol_list then
+            if tc then
                for _, var in ipairs(node.vars) do
-                  reserve_symbol_list_slot(var)
+                  tc.reserve_symbol_list_slot(var)
                end
             end
          end,
@@ -10540,8 +10650,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                end
 
-               if store_type then
-                  store_type(var.y, var.x, t)
+               if tc then
+                  tc.store_type(var.y, var.x, t)
                end
 
                dismiss_unresolved(var.tk)
@@ -10603,8 +10713,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                      add_var(varnode, varname, rval, nil, "narrow")
                   end
 
-                  if store_type then
-                     store_type(varnode.y, varnode.x, valtype)
+                  if tc then
+                     tc.store_type(varnode.y, varnode.x, valtype)
                   end
                end
             end
@@ -10739,8 +10849,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
                   end
                   add_var(v, v.tk, r)
 
-                  if store_type then
-                     store_type(v.y, v.x, r)
+                  if tc then
+                     tc.store_type(v.y, v.x, r)
                   end
 
                   last = r
@@ -11050,8 +11160,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["local_function"] = {
          before = function(node: Node)
             widen_all_unions()
-            if symbol_list then
-               reserve_symbol_list_slot(node)
+            if tc then
+               tc.reserve_symbol_list_slot(node)
             end
             begin_scope(node)
          end,
@@ -11084,8 +11194,8 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       ["local_macroexp"] = {
          before = function(node: Node)
             widen_all_unions()
-            if symbol_list then
-               reserve_symbol_list_slot(node)
+            if tc then
+               tc.reserve_symbol_list_slot(node)
             end
             begin_scope(node)
          end,
@@ -12090,7 +12200,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
          local where = w as Where
 
          if where.y then
-            store_type(where.y, where.x, t)
+            tc.store_type(where.y, where.x, t)
          end
 
          return t
@@ -12110,7 +12220,7 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       visit_type.after = internal_compiler_check(visit_type.after)
    end
 
-   if store_type then
+   if tc then
       visit_node.after = store_type_after(visit_node.after)
       visit_type.after = store_type_after(visit_type.after)
    end
@@ -12167,7 +12277,6 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       filename = filename,
       warnings = warnings,
       type_errors = errors,
-      symbol_list = symbol_list,
       dependencies = dependencies,
    }
 
@@ -12178,93 +12287,16 @@ tl.type_check = function(ast: Node, opts: TypeCheckOptions): Result, string
       env.modules[opts.module_name] = result.type
    end
 
+   if tc then
+      env.reporter:store_result(tc, env.globals)
+   end
+
    return result
 end
 
 --------------------------------------------------------------------------------
 -- Report types
 --------------------------------------------------------------------------------
-
-function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeReportEnv
-   local filename = result.filename or "?"
-   trenv = trenv or result.env.trenv
-
-   if not trenv then
-      error("result must have been generated with env.report_types = true", 2)
-   end
-
-   local tr = trenv.tr
-
-   tr.by_pos[filename][0] = nil
-
-   -- mark unneeded scope blocks to be skipped
-   do
-      local n = 0 -- number of symbols in current scope
-      local p = 0 -- opening position of current scope block
-      local n_stack, p_stack = {}, {}
-      local level = 0
-      for i, s in ipairs(result.symbol_list) do
-         if s.typ then
-            n = n + 1
-         elseif s.name == "@{" then
-            level = level + 1
-            n_stack[level], p_stack[level] = n, p -- push current scope
-            n, p = 0, i -- begin new scope
-         else
-            if n == 0 then -- nothing declared in this scope
-               result.symbol_list[p].skip = true -- skip @{
-               s.skip = true -- skip @}
-            end
-            n, p = n_stack[level], p_stack[level] -- pop previous scope
-            level = level - 1
-         end
-      end
-   end
-
-   local symbols: {TypeReport.Symbol} = mark_array {}
-   tr.symbols_by_file[filename] = symbols
-
-   -- resolve scope cross references, skipping unneeded scope blocks
-   do
-      local stack = {}
-      local level = 0
-      local i = 0
-      for _, s in ipairs(result.symbol_list) do
-         if not s.skip then
-            i = i + 1
-            local id: integer
-            if s.typ then
-               id = get_typenum(trenv, s.typ)
-            elseif s.name == "@{" then
-               level = level + 1
-               stack[level] = i
-               id = -1 -- will be overwritten
-            else
-               local other = stack[level]
-               level = level - 1
-               symbols[other][4] = i -- overwrite id from @{
-               id = other - 1
-            end
-            local sym = mark_array({ s.y, s.x, s.name, id })
-            table.insert(symbols, sym)
-         end
-      end
-   end
-
-   local gkeys = sorted_keys(result.env.globals)
-   for _, name in ipairs(gkeys) do
-      if name:sub(1, 1) ~= "@" then
-         local var = result.env.globals[name]
-         tr.globals[name] = get_typenum(trenv, var.t)
-      end
-   end
-
-   if not tr.symbols then
-      tr.symbols = tr.symbols_by_file[filename]
-   end
-
-   return tr, trenv
-end
 
 function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer): {string:integer}
    local function find(symbols: {{integer, integer, string, integer}}, at_y: integer, at_x: integer): integer

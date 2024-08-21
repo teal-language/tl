@@ -567,7 +567,7 @@ function util.check_types(code, types)
       local result = tl.type_check(ast, { filename = "foo.tl", env = env, lax = false })
       batch:add(assert.same, {}, result.type_errors, "Code was not expected to have type errors")
 
-      local tr = tl.get_types(result, env.trenv)
+      local tr = env.reporter:get_report()
       for i, e in ipairs(types) do
          assert(e.x, "[" .. i .. "] missing 'x' key in test specification")
          assert(e.y, "[" .. i .. "] missing 'y' key in test specification")
