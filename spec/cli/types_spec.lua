@@ -64,7 +64,52 @@ describe("tl types works like check", function()
          util.assert_popen_close(1, pd:close())
          assert.match(name1 .. ":", output, 1, true)
          assert.match(name2 .. ":", output, 1, true)
-         -- TODO check json output
+      end)
+
+      it("scans multiple files; symbols reports only the first one; symbols_by_file reports all", function()
+         local name1 = util.write_tmp_file(finally, [[
+            local function add1(a: number, b: number): number
+               return a + b
+            end
+
+            print(add1(10, 20))
+         ]])
+         local name2 = util.write_tmp_file(finally, [[
+            local function add2(a: number, b: number): number
+               return a + b
+            end
+
+            print(add2(10, 20))
+         ]])
+         local pd = io.popen(util.tl_cmd("types", name1, name2), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         local types = json.decode(output)
+         -- "symbols" reports a single file
+         assert(types.symbols)
+         local y, x = 1, 1
+         for _, s in ipairs(types.symbols) do
+            local sy, sx = s[1], s[2]
+            assert(sy > y or (sy == y and sx >= x), "symbols list is not sorted")
+            y, x = sy, sx
+         end
+         -- "symbols_by_file" reports each file
+         assert(types.symbols_by_file)
+         for _name, symbols in pairs(types.symbols_by_file) do
+            y, x = 1, 1
+            for _, s in ipairs(symbols) do
+               local sy, sx = s[1], s[2]
+               assert(sy > y or (sy == y and sx >= x), "symbols list is not sorted")
+               y, x = sy, sx
+            end
+         end
+         -- "symbols" matches the first file
+         local first = types.symbols_by_file[name1]
+         assert(#first == #types.symbols)
+         for i, s in ipairs(types.symbols) do
+            local f = first[i]
+            assert(s[1] == f[1] and s[2] == f[2] and s[3] == f[3] and s[4] == f[4])
+         end
       end)
 
       it("reports number of errors in stderr and code 1 on syntax errors", function()
