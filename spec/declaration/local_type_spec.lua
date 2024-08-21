@@ -212,4 +212,23 @@ describe("local type", function()
       { y = 15, x = 42, msg = 'in record field: first: got string "first", expected integer' },
       { y = 15, x = 60, msg = 'in record field: second: got integer, expected string' },
    }))
+
+   it("resolves type arguments in nested types correctly (#754)", util.check_type_error([[
+      local record MyNamespace
+          record MyGenericRecord<T>
+              Data: T
+          end
+      end
+
+      local enum MyEnum
+          "foo"
+          "bar"
+      end
+
+      local type MyAlias = MyNamespace.MyGenericRecord<MyEnum>
+
+      local t: MyAlias = { Data = "invalid" }
+   ]], {
+      { y = 14, msg = 'in record field: Data: string "invalid" is not a member of MyEnum' }
+   }))
 end)
