@@ -112,6 +112,32 @@ describe("tl types works like check", function()
          end
       end)
 
+      it("reports symbols in scope for a position", function()
+         local name1 = util.write_tmp_file(finally, [[
+            local function add1(a: number, b: number): number
+               return a + b
+            end
+
+            print(add1(10, 20))
+         ]])
+         local name2 = util.write_tmp_file(finally, [[
+            local function add2(a: number, b: number): number
+               return a + b
+            end
+
+            print(add2(10, 20))
+         ]])
+         local pd = io.popen(util.tl_cmd("types", "-p", "2:23", name1, name2), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         local types = json.decode(output)
+         assert.same({
+            ["a"] = 1,
+            ["add2"] = 370,
+            ["b"] = 1,
+         }, types)
+      end)
+
       it("reports number of errors in stderr and code 1 on syntax errors", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
