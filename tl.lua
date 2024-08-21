@@ -140,6 +140,9 @@ local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Symbol = {
 
 
 
+
+
+
 tl.version = function()
    return VERSION
 end
@@ -10621,7 +10624,7 @@ function tl.get_types(result, trenv)
          tr = {
             by_pos = {},
             types = {},
-            symbols = mark_array({}),
+            symbols_by_file = {},
             globals = {},
          },
       }
@@ -10773,6 +10776,9 @@ function tl.get_types(result, trenv)
       end
    end
 
+   local symbols = mark_array({})
+   tr.symbols_by_file[filename] = symbols
+
 
    do
       local stack = {}
@@ -10791,11 +10797,11 @@ function tl.get_types(result, trenv)
             else
                local other = stack[level]
                level = level - 1
-               tr.symbols[other][4] = i
+               symbols[other][4] = i
                id = other - 1
             end
             local sym = mark_array({ s.y, s.x, s.name, id })
-            table.insert(tr.symbols, sym)
+            table.insert(symbols, sym)
          end
       end
    end
@@ -10807,6 +10813,8 @@ function tl.get_types(result, trenv)
          tr.globals[name] = get_typenum(var.t)
       end
    end
+
+   tr.symbols = tr.symbols_by_file[filename]
 
    return tr, trenv
 end

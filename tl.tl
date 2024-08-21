@@ -116,9 +116,12 @@ local record tl
    end
 
    record TypeReport
+      type Symbol = {integer, integer, string, integer}
+
       by_pos: {string: {integer: {integer: integer}}}
       types: {integer: TypeInfo}
-      symbols: {{integer, integer, string, integer}}
+      symbols: {Symbol}
+      symbols_by_file: {string: {Symbol}}
       globals: {string: integer}
    end
 
@@ -10621,7 +10624,7 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
          tr = {
             by_pos = {},
             types = {},
-            symbols = mark_array {},
+            symbols_by_file = {},
             globals = {},
          },
       }
@@ -10773,6 +10776,9 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
       end
    end
 
+   local symbols: {TypeReport.Symbol} = mark_array {}
+   tr.symbols_by_file[filename] = symbols
+
    -- resolve scope cross references, skipping unneeded scope blocks
    do
       local stack = {}
@@ -10791,11 +10797,11 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
             else
                local other = stack[level]
                level = level - 1
-               tr.symbols[other][4] = i -- overwrite id from @{
+               symbols[other][4] = i -- overwrite id from @{
                id = other - 1
             end
             local sym = mark_array({ s.y, s.x, s.name, id })
-            table.insert(tr.symbols, sym)
+            table.insert(symbols, sym)
          end
       end
    end
@@ -10807,6 +10813,8 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
          tr.globals[name] = get_typenum(var.t)
       end
    end
+
+   tr.symbols = tr.symbols_by_file[filename]
 
    return tr, trenv
 end

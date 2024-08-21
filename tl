@@ -1339,7 +1339,8 @@ do
       tlconfig["quiet"] = true
       tlconfig["gen_compat"] = "off"
 
-      local env = setup_env(tlconfig, args["file"][1])
+      local filename = args["file"][1]
+      local env = setup_env(tlconfig, filename)
       env.keep_going = true
 
       local tr, trenv
@@ -1367,6 +1368,7 @@ do
             x = tonumber(x) or 1
             json_out_table(io.stdout, tl.symbols_in_scope(tr, y, x))
          else
+            tr.symbols = tr.symbols_by_file[filename]
             json_out_table(io.stdout, tr)
          end
 
