@@ -10814,7 +10814,9 @@ function tl.get_types(result: Result, trenv: TypeReportEnv): TypeReport, TypeRep
       end
    end
 
-   tr.symbols = tr.symbols_by_file[filename]
+   if not tr.symbols then
+      tr.symbols = tr.symbols_by_file[filename]
+   end
 
    return tr, trenv
 end

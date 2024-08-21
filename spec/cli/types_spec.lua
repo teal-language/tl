@@ -121,8 +121,8 @@ describe("tl types works like check", function()
             print(add1(10, 20))
          ]])
          local name2 = util.write_tmp_file(finally, [[
-            local function add2(a: number, b: number): number
-               return a + b
+            local function add2(x: number, y: number): number
+               return x + y
             end
 
             print(add2(10, 20))
@@ -131,11 +131,17 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
-         assert.same({
-            ["a"] = 1,
-            ["add2"] = 370,
-            ["b"] = 1,
-         }, types)
+         local n = 0
+         for _ in pairs(types) do
+            n = n + 1
+         end
+         assert(n == 3)
+         assert(type(types["a"]) == "number")
+         assert(type(types["add1"]) == "number")
+         assert(type(types["b"]) == "number")
+         assert(type(types["x"]) == "nil")
+         assert(type(types["add2"]) == "nil")
+         assert(type(types["y"]) == "nil")
       end)
 
       it("reports number of errors in stderr and code 1 on syntax errors", function()
