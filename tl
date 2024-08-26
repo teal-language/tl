@@ -897,10 +897,15 @@ do
       env.keep_going = true
       env.report_types = true
 
+      local pcalls_ok = true
       for i, input_file in ipairs(args["file"]) do
-         local pok, perr, err = pcall(process_module, input_file, env)
+         -- we run the type-checker even on files that produce
+         -- syntax errors; this means we run it on incomplete and
+         -- potentially inconsistent trees which may crash the
+         -- type-checker; hence, we wrap it with a pcall here.
+         local pok, _, err = pcall(process_module, input_file, env)
          if not pok then
-            die("Internal Compiler Error: " .. perr)
+            pcalls_ok = false
          end
          if err then
             printerr(err)
@@ -910,6 +915,9 @@ do
       end
 
       local ok, _, _, w = report_all_errors(tlconfig, env)
+      if not pcalls_ok then
+         ok = false
+      end
 
       if not env.reporter then
          os.exit(1)
@@ -928,7 +936,7 @@ do
             x = tonumber(x) or 1
             json_out_table(io.stdout, tl.symbols_in_scope(tr, y, x, filename))
          else
-            tr.symbols = tr.symbols_by_file[filename]
+            tr.symbols = tr.symbols_by_file[filename] or { [0] = false }
             json_out_table(io.stdout, tr)
          end
 
