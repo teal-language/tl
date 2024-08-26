@@ -1541,6 +1541,7 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1569,6 +1570,7 @@ local table_types = {
    ["unresolved_typearg"] = false,
    ["unresolvable_typearg"] = false,
    ["circular_require"] = false,
+   ["boolean_context"] = false,
    ["tuple"] = false,
    ["poly"] = false,
    ["any"] = false,
@@ -1601,6 +1603,20 @@ local table_types = {
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5630,6 +5646,7 @@ local typename_to_typecode = {
    ["union"] = tl.typecodes.UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
    ["circular_require"] = tl.typecodes.NOMINAL,
+   ["boolean_context"] = tl.typecodes.BOOLEAN,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
    ["poly"] = tl.typecodes.POLY,
@@ -6688,6 +6705,8 @@ local function show_type_base(t, short, seen)
       return "<any type>"
    elseif t.typename == "nil" then
       return "nil"
+   elseif t.typename == "boolean_context" then
+      return "boolean"
    elseif t.typename == "none" then
       return ""
    elseif t.typename == "typealias" then
@@ -8350,7 +8369,11 @@ do
             return self:same_type(self:type_of_self(a), b)
          end,
       },
+      ["boolean_context"] = {
+         ["boolean"] = compare_true,
+      },
       ["*"] = {
+         ["boolean_context"] = compare_true,
          ["self"] = function(self, a, b)
             return self:same_type(a, self:type_of_self(b))
          end,
@@ -8673,8 +8696,12 @@ a.types[i], b.types[i]), }
             end
          end,
       },
+      ["boolean_context"] = {
+         ["boolean"] = compare_true,
+      },
       ["*"] = {
          ["any"] = compare_true,
+         ["boolean_context"] = compare_true,
          ["self"] = function(self, a, b)
             return self:is_a(a, self:type_of_self(b))
          end,
@@ -8712,6 +8739,7 @@ a.types[i], b.types[i]), }
       ["typevar"] = 3,
       ["nil"] = 4,
       ["any"] = 5,
+      ["boolean_context"] = 5,
       ["union"] = 6,
       ["poly"] = 7,
 
@@ -11044,7 +11072,7 @@ self:expand_type(node, values, elements) })
                self:infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
             end
             if node.exp then
-               node.exp.expected = a_type(node, "boolean", {})
+               node.exp.expected = a_type(node, "boolean_context", {})
             end
          end,
          before_statements = function(self, node)
@@ -11066,7 +11094,7 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
 
             self:widen_all_unions(node)
-            node.exp.expected = a_type(node, "boolean", {})
+            node.exp.expected = a_type(node, "boolean_context", {})
          end,
          before_statements = function(self, node)
             self:begin_scope(node)
@@ -11130,7 +11158,7 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
 
             self:widen_all_unions(node)
-            node.exp.expected = a_type(node, "boolean", {})
+            node.exp.expected = a_type(node, "boolean_context", {})
          end,
 
          after = end_scope_and_none_type,
@@ -12001,7 +12029,7 @@ self:expand_type(node, values, elements) })
                      t = drop_constant_value(t)
                   end
 
-                  if expected and expected.typename == "boolean" then
+                  if expected and expected.typename == "boolean_context" then
                      t = a_type(node, "boolean", {})
                   end
                end
