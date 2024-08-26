@@ -1532,11 +1532,12 @@ local enum TypeName
    "unresolved_typearg"
    "unresolvable_typearg"
    "circular_require"
+   "boolean_context"
    "tuple"
-   "poly" -- intersection types, currently restricted to polymorphic functions defined inside records
+   "poly"
    "any"
-   "unknown" -- to be used in lax mode only
-   "invalid" -- producing a new value of this type (not propagating) must always produce a type error
+   "unknown"
+   "invalid"
    "none"
    "*"
 end
@@ -1569,6 +1570,7 @@ local table_types <total>: {TypeName:boolean} = {
    ["unresolved_typearg"] = false,
    ["unresolvable_typearg"] = false,
    ["circular_require"] = false,
+   ["boolean_context"] = false,
    ["tuple"] = false,
    ["poly"] = false,
    ["any"] = false,
@@ -1615,6 +1617,14 @@ end
 local record BooleanType
    is Type
    where self.typename == "boolean"
+end
+
+-- This is a special internal type, to be used only as the node.expected
+-- type in boolean contexts such as `if _ then`. It behaves exactly like
+-- boolean except that type variables do not infer to it.
+local record BooleanContextType
+   is Type
+   where self.typename == "boolean_context"
 end
 
 local interface HasTypeArgs
@@ -1717,11 +1727,15 @@ local record InterfaceType
    where self.typename == "interface"
 end
 
+-- producing a new value of this type (not propagating)
+-- must always produce a type error
 local record InvalidType
    is Type
    where self.typename == "invalid"
 end
 
+-- To be used in lax mode only:
+-- this represents non-annotated types in .lua files.
 local record UnknownType
    is Type
    where self.typename == "unknown"
@@ -1819,6 +1833,8 @@ local record TupleTableType
    where self.typename == "tupletable"
 end
 
+-- Intersection types, currently restricted to polymorphic functions
+-- defined inside records, representing polymorphic Lua APIs.
 local record PolyType
    is AggregateType
    where self.typename == "poly"
@@ -5630,6 +5646,7 @@ local typename_to_typecode <total>: {TypeName:integer} = {
    ["union"] = tl.typecodes.UNION,
    ["nominal"] = tl.typecodes.NOMINAL,
    ["circular_require"] = tl.typecodes.NOMINAL,
+   ["boolean_context"] = tl.typecodes.BOOLEAN,
    ["emptytable"] = tl.typecodes.EMPTY_TABLE,
    ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
    ["poly"] = tl.typecodes.POLY,
@@ -6688,6 +6705,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return "<any type>"
    elseif t.typename == "nil" then
       return "nil"
+   elseif t.typename == "boolean_context" then
+      return "boolean"
    elseif t.typename == "none" then
       return ""
    elseif t is TypeAliasType then
@@ -8350,7 +8369,11 @@ do
             return self:same_type(self:type_of_self(a), b)
          end,
       },
+      ["boolean_context"] = {
+         ["boolean"] = compare_true,
+      },
       ["*"] = {
+         ["boolean_context"] = compare_true,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
             return self:same_type(a, self:type_of_self(b))
          end,
@@ -8673,8 +8696,12 @@ do
             end
          end,
       },
+      ["boolean_context"] = {
+         ["boolean"] = compare_true,
+      },
       ["*"] = {
          ["any"] = compare_true,
+         ["boolean_context"] = compare_true,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
             return self:is_a(a, self:type_of_self(b))
          end,
@@ -8712,6 +8739,7 @@ do
       ["typevar"] = 3,
       ["nil"] = 4,
       ["any"] = 5,
+      ["boolean_context"] = 5,
       ["union"] = 6,
       ["poly"] = 7,
       -- then typeargs
@@ -11044,7 +11072,7 @@ do
                self:infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
             end
             if node.exp then
-               node.exp.expected = a_type(node, "boolean", {})
+               node.exp.expected = a_type(node, "boolean_context", {})
             end
          end,
          before_statements = function(self: TypeChecker, node: Node)
@@ -11066,7 +11094,7 @@ do
          before = function(self: TypeChecker, node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
             self:widen_all_unions(node)
-            node.exp.expected = a_type(node, "boolean", {})
+            node.exp.expected = a_type(node, "boolean_context", {})
          end,
          before_statements = function(self: TypeChecker, node: Node)
             self:begin_scope(node)
@@ -11130,7 +11158,7 @@ do
          before = function(self: TypeChecker, node: Node)
             -- widen all narrowed variables because we don't calculate a fixpoint yet
             self:widen_all_unions(node)
-            node.exp.expected = a_type(node, "boolean", {})
+            node.exp.expected = a_type(node, "boolean_context", {})
          end,
          -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
          after = end_scope_and_none_type,
@@ -12001,7 +12029,7 @@ do
                      t = drop_constant_value(t)
                   end
 
-                  if expected and expected is BooleanType then
+                  if expected and expected is BooleanContextType then
                      t = a_type(node, "boolean", {})
                   end
                end
