@@ -67,12 +67,21 @@ describe("tl types works like check", function()
       end)
 
       it("scans multiple files; symbols reports only the first one; symbols_by_file reports all", function()
+         local name0 = util.write_tmp_file(finally, [[
+            local function add0(a: number, b: number): number
+               return a + b
+            end
+
+            return add0
+         ]])
+         local dirname, modname = name0:match("^(.*[/\\])([^.]+).tl$")
          local name1 = util.write_tmp_file(finally, [[
+            local mod = require("]] .. modname .. [[")
             local function add1(a: number, b: number): number
                return a + b
             end
 
-            print(add1(10, 20))
+            print(add1(10, 20), mod(30, 40))
          ]])
          local name2 = util.write_tmp_file(finally, [[
             local function add2(a: number, b: number): number
@@ -81,7 +90,7 @@ describe("tl types works like check", function()
 
             print(add2(10, 20))
          ]])
-         local pd = io.popen(util.tl_cmd("types", name1, name2), "r")
+         local pd = io.popen(util.tl_cmd("types", "-I", dirname, name1, name2), "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
@@ -106,28 +115,42 @@ describe("tl types works like check", function()
          -- "symbols" matches the first file
          local first = types.symbols_by_file[name1]
          assert(#first == #types.symbols)
+         local found_add1 = false
          for i, s in ipairs(types.symbols) do
             local f = first[i]
+            if s[3] == "add1" then
+               found_add1 = true
+            end
             assert(s[1] == f[1] and s[2] == f[2] and s[3] == f[3] and s[4] == f[4])
          end
+         assert(found_add1)
       end)
 
       it("reports symbols in scope for a position", function()
+         local name0 = util.write_tmp_file(finally, [[
+            local function add0(a: number, b: number): number
+               return a + b
+            end
+
+            return add0
+         ]])
+         local dirname, modname = name0:match("^(.*[/\\])([^.]+).tl$")
          local name1 = util.write_tmp_file(finally, [[
+            local mod = require("]] .. modname .. [[")
             local function add1(a: number, b: number): number
                return a + b
             end
 
-            print(add1(10, 20))
+            print(add1(10, 20), mod(30, 40))
          ]])
          local name2 = util.write_tmp_file(finally, [[
-            local function add2(x: number, y: number): number
-               return x + y
+            local function add2(a: number, b: number): number
+               return a + b
             end
 
             print(add2(10, 20))
          ]])
-         local pd = io.popen(util.tl_cmd("types", "-p", "2:23", name1, name2), "r")
+         local pd = io.popen(util.tl_cmd("types", "-I", dirname, "-p", "3:23", name1, name2), "r")
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
@@ -135,9 +158,10 @@ describe("tl types works like check", function()
          for _ in pairs(types) do
             n = n + 1
          end
-         assert(n == 3)
+         assert(n == 4)
          assert(type(types["a"]) == "number")
          assert(type(types["add1"]) == "number")
+         assert(type(types["mod"]) == "number")
          assert(type(types["b"]) == "number")
          assert(type(types["x"]) == "nil")
          assert(type(types["add2"]) == "nil")
