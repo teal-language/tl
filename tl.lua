@@ -347,17 +347,17 @@ do
 
       move: function<A>({A}, integer, integer, integer, ? {A}): {A}
 
-      pack: function<T>(T...): PackTable<T>
-      pack: function(any...): {any:any}
+      pack: function<T>(T...): PackTable<T> --[[needs_compat]]
+      pack: function(any...): {any:any} --[[needs_compat]]
 
       remove: function<A>({A}, ? integer): A
       sort: function<A>({A}, ? SortFunction<A>)
 
-      unpack: function<A1, A2, A3, A4, A5>({A1, A2, A3, A4, A5}): A1, A2, A3, A4, A5 --[[needs_compat]]
-      unpack: function<A1, A2, A3, A4>({A1, A2, A3, A4}): A1, A2, A3, A4 --[[needs_compat]]
-      unpack: function<A1, A2, A3>({A1, A2, A3}): A1, A2, A3 --[[needs_compat]]
-      unpack: function<A1, A2>({A1, A2}): A1, A2 --[[needs_compat]]
       unpack: function<A>({A}, ? number, ? number): A... --[[needs_compat]]
+      unpack: function<A1, A2>({A1, A2}): A1, A2 --[[needs_compat]]
+      unpack: function<A1, A2, A3>({A1, A2, A3}): A1, A2, A3 --[[needs_compat]]
+      unpack: function<A1, A2, A3, A4>({A1, A2, A3, A4}): A1, A2, A3, A4 --[[needs_compat]]
+      unpack: function<A1, A2, A3, A4, A5>({A1, A2, A3, A4, A5}): A1, A2, A3, A4, A5 --[[needs_compat]]
    end
 
    global record utf8
@@ -6833,6 +6833,8 @@ local function add_compat_entries(program, used_set, gen_compat)
    for _, name in ipairs(used_list) do
       if name == "table.unpack" then
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
+      elseif name == "table.pack" then
+         load_code(name, [[local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end]])
       elseif name == "bit32" then
          load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
       elseif name == "mt" then
@@ -6964,6 +6966,7 @@ tl.new_env = function(opts)
       local table_t = (stdlib_globals["table"].t).def
       math_t.fields["maxinteger"].needs_compat = true
       math_t.fields["mininteger"].needs_compat = true
+      table_t.fields["pack"].needs_compat = true
       table_t.fields["unpack"].needs_compat = true
 
 
