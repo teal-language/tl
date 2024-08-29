@@ -76,7 +76,7 @@ You can convert it to Lua with
 tl gen add.tl
 ```
 
-This will produce add.lua. But you can also run it directly with
+This will produce `add.lua`. But you can also run it directly with
 
 ```
 tl run add.tl
@@ -99,7 +99,7 @@ end
 return addsub
 ```
 
-We can generate addsub.lua with
+We can generate `addsub.lua` with
 
 ```
 tl gen addsub.tl
@@ -209,6 +209,7 @@ variables at once, each variable should have its own type:
 ```lua
 local s: string
 local r, g, b: number, number, number
+local ok: boolean
 ```
 
 You don't need to write the type if you are initializing the variable on
@@ -276,7 +277,7 @@ an array of that incompatible type.
 Note also that we didn't need to declare the types of i and n in the above
 example: the for statement can infer those from the return type of the
 iterator function produced by the ipairs call. Feeding ipairs with a {string}
-means that the iteration variables of the ipairs loop will be number and
+means that the iteration variables of the `ipairs` loop will be number and
 string. For an example of a custom user-written iterator, see the [Functions](#functions)
 section below.
 
@@ -312,8 +313,7 @@ inferred, and trying to go out of range will produce an error.
 
 ```lua
 local age_of_p1: number = p1[2] -- no type errors here
-local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2:
-integer}
+local nonsense = p1[3] -- error! index 3 out of range for tuple {1: string, 2: integer}
 ```
 
 When indexing with a `number` variable, Teal will do its best by making a
@@ -405,9 +405,9 @@ tradition from which Lua gets much of the feel of its syntax) can be used
 to represent objects, "structs", etc.
 
 To declare a record variable, you need to create a record type first.
-The type describes the set of valid fields (keys of type string and their values of
-specific types) this record can take. You can declare types using `local type`
-and global types using `global type`.
+The type describes the set of valid fields (keys of type string and their values
+of specific types) this record can take. You can declare types using `local
+type` and global types using `global type`.
 
 ```lua
 local type Point = record
@@ -416,8 +416,8 @@ local type Point = record
 end
 ```
 
-Types are constant: you cannot reassign them, and they must be initialized
-with a type on declaration.
+Types are constant: you cannot reassign them, and they must be initialized with
+a type on declaration.
 
 Just like with functions in Lua, which can be declared either with `local f =
 function()` or with `local function f()`, there is also a shorthand syntax
@@ -575,8 +575,8 @@ in records you need to do two things:
 
 * declare the metamethods in the record type using the `metamethod` word to
   benefit from static type checking;
-* and assign the metatable with `setmetatable` as you would normally do in Lua to
-  get the dynamic metatable behavior.
+* and assign the metatable with `setmetatable` as you would normally do in Lua
+  to get the dynamic metatable behavior.
 
 Here is a complete example, showing the `metamethod` declarations in the
 `record` block and the `setmetatable` declarations attaching the metatable.
@@ -710,7 +710,9 @@ in both function declarations.
 
 ### Variadic functions
 
-Just like in Lua, some functions in Teal may receive a variable amount of arguments. Variadic functions can be declared by specifying `...` as the last argument of the function:
+Just like in Lua, some functions in Teal may receive a variable amount of
+arguments. Variadic functions can be declared by specifying `...` as the last
+argument of the function:
 
 ```lua
 local function test(...: number)
@@ -720,7 +722,8 @@ end
 test(1, 2, 3)
 ```
 
-In case your function returns a variable amount of values, you may also declare variadic return types by using the `type...` syntax:
+In case your function returns a variable amount of values, you may also declare
+variadic return types by using the `type...` syntax:
 
 ```lua
 local function test(...: number): number...
@@ -747,9 +750,9 @@ print(b:upper())  -- `b` has type string
 
 ## Union types
 
-The language supports a basic form of union types. You can register a type
-that is a logical "or" of multiple types: it will accept values from multiple
-types, and you can discriminate them at runtime.
+The language supports a basic form of union types. You can register a type that
+is a logical "or" of multiple types: it will accept values from multiple types,
+and you can discriminate them at runtime.
 
 You can declare union types like this:
 
@@ -759,8 +762,8 @@ local b: {boolean} | MyEnum
 local c: number | {string:number}
 ```
 
-To use a value of this type, you need to discriminate the variable, using
-the `is` operator, which takes a variable of a union type and one of its types:
+To use a value of this type, you need to discriminate the variable, using the
+`is` operator, which takes a variable of a union type and one of its types:
 
 ```lua
 local a: string | number | MyRecord
@@ -792,12 +795,11 @@ In the current version, there are two main limitations regarding support
 for union types in Teal.
 
 The first one is that the `is` operator always matches a variable, not arbitrary
-expressions. This limitation is there to avoid aliasing
+expressions. This limitation is there to avoid aliasing.
 
-
-Since code generation for the `is` operator used for
-discrimination of union types translates into a runtime `type()` check, we can
-only discriminates across primitive types and at most one table type.
+Since code generation for the `is` operator used for discrimination of union
+types translates into a runtime `type()` check, we can only discriminate
+across primitive types and at most one table type.
 
 This means that these unions not accepted:
 
@@ -808,24 +810,23 @@ local invalid3: {string} | {string:string}
 local invalid4: {string} | MyRecord
 ```
 
-Also, since `is` checks for enums currently also translate into
-`type()` checks, this means they are indistinguishable from strings
-at runtime. So, for now this is also not accepted:
+Also, since `is` checks for enums currently also translate into `type()` checks,
+this means they are indistinguishable from strings at runtime. So, for now this
+is also not accepted:
 
 ```lua
 local invalid5: string | MyEnum
 ```
 
-This restriction between strings and enums may be removed in the future.
-The restriction on records may also be lifted in the future.
+This restriction between strings and enums may be removed in the future. The
+restriction on records may also be lifted in the future.
 
 ## The type `any`
 
-The type `any`, as it name implies, accepts any value, like a
-dynamically-typed Lua variable. However, since Teal doesn't know anything
-about this value, there isn't much you can do with it, besides comparing for
-equality and against nil, and casting it into other values using the `as`
-operator.
+The type `any`, as it name implies, accepts any value, like a dynamically-typed
+Lua variable. However, since Teal doesn't know anything about this value, there
+isn't much you can do with it, besides comparing for equality and against nil,
+and casting it into other values using the `as` operator.
 
 Some Lua libraries use complex dynamic types that can't be easily represented
 in Teal. In those cases, using `any` and making explicit casts is our last
@@ -840,8 +841,8 @@ from Lua 5.4. They are:
 
 The `<const>` annotation works in Teal like it does in Lua 5.4 (it works at
 compile time, even if you're running a different version of Lua). Do note
-however that this is annotation for variables, and not values: the contents
-of a value set to a const variable are not constant.
+however that this is annotation for variables, and not values: the contents of a
+value set to a const variable are not constant.
 
 ```lua
 local xs <const> = {1,2,3}
@@ -851,8 +852,8 @@ xs = {} -- Error! can't replace the array in variable xs
 
 ### To-be-closed variables
 
-The `<close>` annotation from Lua 5.4 is only supported in Teal if your
-code generation target is Lua 5.4 (see the [compiler options](compiler_options.md)
+The `<close>` annotation from Lua 5.4 is only supported in Teal if your code
+generation target is Lua 5.4 (see the [compiler options](compiler_options.md)
 documentation for details on code generation targets). These work just
 [like they do in Lua 5.4](https://www.lua.org/manual/5.4/manual.html#3.3.8).
 
@@ -874,15 +875,14 @@ declared.
 Of course, not all types allow you to enumerate all possible keys: there is an
 infinite number (well, not infinite because we're talking about computers, but
 an impractically large number!) of possible strings and numbers, so maps keyed
-by these types can't ever be total. Examples of valid key types for a total
-map are booleans (for which there are only two possible values) and, most
-usefully, enums.
+by these types can't ever be total. Examples of valid key types for a total map
+are booleans (for which there are only two possible values) and, most usefully,
+enums.
 
-Enums are the prime case for total variables: it is common to declare a
-number of cases in an enum and then to have a map of values that handle
-each of these cases. By declaring that map `<total>` you can be sure that
-you won't forget to add handlers for the new cases as you add new entries
-to the enum.
+Enums are the prime case for total variables: it is common to declare a number
+of cases in an enum and then to have a map of values that handle each of these
+cases. By declaring that map `<total>` you can be sure that you won't forget to
+add handlers for the new cases as you add new entries to the enum.
 
 ```lua
 local degrees <total>: {Direction:number} = {
@@ -921,11 +921,11 @@ local teal_color <total>: Color = {
 -- is no longer total!
 ```
 
-Note however that the totality check refers only to the presence of
-explicit declarations: it will still accept an assignment to `nil`
-as a valid declaration. The rationale is that an explicit `nil` entry
-means that the programmer did consider that case, and chose to keep
-it empty. Therefore, something like this works:
+Note however that the totality check refers only to the presence of explicit
+declarations: it will still accept an assignment to `nil` as a valid
+declaration. The rationale is that an explicit `nil` entry means that the
+programmer did consider that case, and chose to keep it empty. Therefore,
+something like this works:
 
 ```lua
 local vertical_only <total>: {Direction:MotionCallback} = {
@@ -939,9 +939,9 @@ local vertical_only <total>: {Direction:MotionCallback} = {
 -- explicitly mentioning which cases are left empty in it.
 ```
 
-(Side note: the name "total" comes from the concept of a "total relation"
-in mathematics, which is a relation where, given a set of "keys" mapping
-to a set of "values", the keys fully cover the domain of their type).
+*(Side note: the name "total" comes from the concept of a "total relation" in
+mathematics, which is a relation where, given a set of "keys" mapping to a set
+of "values", the keys fully cover the domain of their type).*
 
 ## Global variables
 
@@ -1049,10 +1049,10 @@ using the bit32 library, which is also included in compat-5.3 for Lua 5.1.
 
 You can explicitly disable the use of compat-5.3 with the `--skip-compat53`
 flag and equivalent option in `tlconfig.lua`. However, if you do so, the Lua
-code generated by your Teal program may not behave consistently across
-different target Lua versions, and differences in behavior across Lua standard
-libraries will reflect in Teal. In particular, the operator support described
-above may not work.
+code generated by your Teal program may not behave consistently across different
+target Lua versions, and differences in behavior across Lua standard libraries
+will reflect in Teal. In particular, the operator support described above may
+not work.
 
 ## Using tl with Lua
 
@@ -1065,19 +1065,19 @@ type-checker adds support for an extra type:
 which is the type of all non-type-annotated variables. This means that in a
 Lua file you can declare untyped variables as usual:
 
-```
+```lua
 local x -- invalid in .tl, valid but unknown in .lua
 ```
 
 When processing .lua files, tl will report no errors involving unknown
-variables. Anything pertaining unknown variables is, well, unknown. Think of
-.tl files as the safer, "strict mode", and .lua files as the looser "lax
-mode". However, even a Lua file with no annotations whatsoever will still have
-a bunch of types: every literal value (numbers, strings, arrays, etc.) has a
-type. Variables initialized on declaration are also assumed to keep consistent
-types like in Teal. The types of the Lua standard library are also known to tl:
-for example, the compiler knows that if you run table.concat on a table, the
-only valid output is a string.
+variables. Anything pertaining unknown variables is, well, unknown. Think of .tl
+files as the safer, "strict mode", and .lua files as the looser "lax mode".
+However, even a Lua file with no annotations whatsoever will still have a bunch
+of types: every literal value (numbers, strings, arrays, etc.) has a type.
+Variables initialized on declaration are also assumed to keep consistent types
+like in Teal. The types of the Lua standard library are also known to tl: for
+example, the compiler knows that if you run `table.concat` on a table, the only
+valid output is a string.
 
 Plus, requiring type-annotated modules from your untyped Lua program will also
 help tl catch errors: tl can check the types of calls from Lua to functions
@@ -1086,17 +1086,18 @@ are not of type unknown.
 
 Having unknown variables in a Lua program is not an error, but it may hide
 errors. Running `tl check` on a Lua file will report every unknown variable in
-a separate list from errors. This allows you to see which parts of your
-program tl is helpless about and help you incrementally add type annotations
-to your code.
+a separate list from errors. This allows you to see which parts of your program
+tl is helpless about and help you incrementally add type annotations to your
+code.
 
 Note that even though adding type annotations to .lua files makes it invalid
 Lua, you can still do so and load them from the Lua VM once the Teal package
-loader is installed by calling tl.loader().
+loader is installed by calling `tl.loader()`.
 
 ### Further reading
 
 #### Type definitions for third party libraries
 
 You can also create declaration files to annotate the types of third-party Lua
-modules, including C Lua modules. For more information, see the [declaration files](declaration_files.md) page.
+modules, including C Lua modules.
+For more information, see the [declaration files](declaration_files.md) page.
