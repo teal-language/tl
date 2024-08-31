@@ -22,7 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@master
 
-    - uses: leafo/gh-actions-lua@master
+    - uses: hishamhm/gh-actions-lua@master
       with:
         luaVersion: ${{ matrix.lua-version }}
 
