@@ -672,6 +672,14 @@ local tl = {GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Erro
 
 
 
+
+
+
+
+
+
+
+
 local TypeReporter = {}
 
 
@@ -811,6 +819,8 @@ if TL_DEBUG then
       end, "cr", 100)
    end
 end
+
+
 
 
 
