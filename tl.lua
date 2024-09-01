@@ -6774,7 +6774,7 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "none" then
       return ""
    elseif t.typename == "typealias" then
-      return "type " .. show(t.alias_to)
+      return "type alias to " .. show(t.alias_to)
    elseif t.typename == "typedecl" then
       return "type " .. show(t.def)
    else
@@ -12713,6 +12713,8 @@ self:expand_type(node, values, elements) })
                      local tv = typ
                      tv.typevar = t.typearg
                      tv.constraint = t.constraint
+                  elseif t.typename == "typealias" then
+                     typ.found = t.alias_to.found
                   elseif t.typename == "typedecl" then
                      if t.def.typename ~= "circular_require" then
                         typ.found = t
