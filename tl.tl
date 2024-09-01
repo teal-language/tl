@@ -619,6 +619,34 @@ local record tl
       predefined_modules: {string}
    end
 
+   -- abstract type
+   interface Node
+   end
+
+   enum TokenKind
+      "hashbang"
+      "keyword"
+      "op"
+      "string"
+      "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
+      "::"
+      "..."
+      "identifier"
+      "number"
+      "integer"
+      "pragma"
+      "pragma_identifier"
+      "$ERR$"
+      "$EOF$"
+   end
+
+   record Token
+      x: integer
+      y: integer
+      tk: string
+      kind: TokenKind
+   end
+
    -----------------------------------------------------------------------------
    -- Public API
    -----------------------------------------------------------------------------
@@ -744,6 +772,8 @@ local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
 local type Result = tl.Result
 local type CheckOptions = tl.CheckOptions
+local type Token = tl.Token
+local type TokenKind = tl.TokenKind
 local type TypeInfo = tl.TypeInfo
 local type TypeReport = tl.TypeReport
 local type WarningKind = tl.WarningKind
@@ -820,30 +850,6 @@ end
 --------------------------------------------------------------------------------
 -- Lexer
 --------------------------------------------------------------------------------
-
-local enum TokenKind
-   "hashbang"
-   "keyword"
-   "op"
-   "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
-   "::"
-   "..."
-   "identifier"
-   "number"
-   "integer"
-   "pragma"
-   "pragma_identifier"
-   "$ERR$"
-   "$EOF$"
-end
-
-local record Token
-   x: integer
-   y: integer
-   tk: string
-   kind: TokenKind
-end
 
 do
    local enum LexState
@@ -2063,7 +2069,7 @@ local attributes <total>: {Attribute: boolean} = {
 local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
 local record Node
-   is {Node}, Where
+   is {Node}, tl.Node, Where
    where self.kind ~= nil
 
    record ExpectedContext
@@ -4404,10 +4410,10 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl.Node, {string}
    errs = errs or {}
    local ps: ParseState = {
-      tokens = tokens,
+      tokens = tokens as {Token},
       errs = errs,
       filename = filename or "",
       required_modules = {},
@@ -4427,7 +4433,7 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): No
    return node, ps.required_modules
 end
 
-function tl.parse(input: string, filename: string): Node, {Error}, {string}
+function tl.parse(input: string, filename: string): tl.Node, {Error}, {string}
    local tokens, errs = tl.lex(input, filename)
    local node, required_modules = tl.parse_program(tokens, errs, filename)
    return node, errs, required_modules
@@ -4695,7 +4701,7 @@ local no_recurse_node: {NodeKind : boolean} = {
    ["type_identifier"] = true,
 }
 
-local function recurse_node<S, T>(s: S, root: Node,
+local function recurse_node<S, T>(s: S, root: tl.Node,
                                   visit_node: Visitor<S, NodeKind, Node, T>,
                                   visit_type: Visitor<S, TypeName, Type, T>): T
    if not root then
@@ -4703,7 +4709,7 @@ local function recurse_node<S, T>(s: S, root: Node,
       return
    end
 
-   local recurse: function(Node): T
+   local recurse: function(tl.Node): T
 
    local function walk_children(ast: Node, xs: {T})
       for i, child in ipairs(ast) do
@@ -5008,7 +5014,7 @@ local primitive: {TypeName:string} = {
    ["thread"] = "thread",
 }
 
-function tl.generate(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
+function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
    local err: string
    local indent = 0
 
@@ -6911,7 +6917,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         code = tl.parse(text, "@internal")
+         code = tl.parse(text, "@internal") as Node
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
