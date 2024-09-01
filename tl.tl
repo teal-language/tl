@@ -5075,7 +5075,7 @@ function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode?: boolean | 
       for fname, ftype in fields_of(typ) do
          if ftype is TypeDeclType then
             local def = ftype.def
-            if def is RecordLikeType then
+            if def is RecordType then
                table.insert(out, fname)
                table.insert(out, " = ")
                table.insert(out, print_record_def(def))
