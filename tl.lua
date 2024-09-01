@@ -492,7 +492,45 @@ local Errors = {}
 
 
 
-local tl = {PrettyPrintOptions = {}, TypeCheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, }
+local tl = {GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, TypeCheckOptions = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -642,10 +680,6 @@ local TypeReporter = {}
 
 
 
-
-tl.version = function()
-   return VERSION
-end
 
 local wk = {
    ["unknown"] = true,
@@ -1028,7 +1062,7 @@ do
       end
    end
 
-   function tl.lex(input, filename)
+   tl.lex = function(input, filename)
       local tokens = {}
 
       local state = "any"
@@ -1518,7 +1552,7 @@ local function binary_search(list, item, cmp)
    end
 end
 
-function tl.get_token_at(tks, y, x)
+tl.get_token_at = function(tks, y, x)
    local _, found = binary_search(
    tks, nil,
    function(tk)
@@ -4951,13 +4985,13 @@ local spaced_op = {
 }
 
 
-local default_pretty_print_ast_opts = {
+local default_generate_opts = {
    preserve_indent = true,
    preserve_newlines = true,
    preserve_hashbang = false,
 }
 
-local fast_pretty_print_ast_opts = {
+local fast_generate_opts = {
    preserve_indent = false,
    preserve_newlines = true,
    preserve_hashbang = false,
@@ -4974,18 +5008,11 @@ local primitive = {
    ["thread"] = "thread",
 }
 
-function tl.pretty_print_ast(ast, gen_target, mode)
+function tl.generate(ast, gen_target, opts)
    local err
    local indent = 0
 
-   local opts
-   if type(mode) == "table" then
-      opts = mode
-   elseif mode == true then
-      opts = fast_pretty_print_ast_opts
-   else
-      opts = default_pretty_print_ast_opts
-   end
+   opts = opts or default_generate_opts
 
 
 
@@ -6807,7 +6834,7 @@ local function search_for(module_name, suffix, path, tried)
    return nil, nil, tried
 end
 
-function tl.search_module(module_name, search_dtl)
+tl.search_module = function(module_name, search_dtl)
    local found
    local fd
    local tried = {}
@@ -6851,7 +6878,7 @@ local function require_module(w, module_name, opts, env)
       }
       env.defaults = defaults
 
-      local found_result, err = tl.process(found, env, fd)
+      local found_result, err = tl.check_file(found, env, fd)
       assert(found_result, err)
 
       env.defaults = save_defaults
@@ -6885,7 +6912,7 @@ local function add_compat_entries(program, used_set, gen_compat)
       local code = compat_code_cache[name]
       if not code then
          code = tl.parse(text, "@internal")
-         tl.type_check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
+         tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
@@ -7025,7 +7052,7 @@ tl.new_env = function(opts)
 
       local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
       assert_no_stdlib_errors(syntax_errors, "syntax errors")
-      local result = tl.type_check(program, "@stdlib", {}, env)
+      local result = tl.check(program, "@stdlib", {}, env)
       assert_no_stdlib_errors(result.type_errors, "type errors")
       stdlib_globals = env.globals
 
@@ -12918,10 +12945,7 @@ self:expand_type(node, values, elements) })
       end
    end
 
-   tl.type_check = function(ast, filename, opts, env)
-      assert(type(filename) == "string", "tl.type_check signature has changed, pass filename separately")
-      assert((not opts) or (not (opts).env), "tl.type_check signature has changed, pass env separately")
-
+   tl.check = function(ast, filename, opts, env)
       filename = filename or "?"
 
       opts = opts or {}
@@ -13080,7 +13104,7 @@ local function feat_lax_heuristic(filename, input)
    return "off"
 end
 
-tl.process = function(filename, env, fd)
+tl.check_file = function(filename, env, fd)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -13100,7 +13124,7 @@ tl.process = function(filename, env, fd)
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   return tl.process_string(input, env, filename)
+   return tl.check_string(input, env, filename)
 end
 
 function tl.target_from_lua_version(str)
@@ -13127,9 +13151,7 @@ local function default_env_opts(runtime, filename, input)
    }
 end
 
-function tl.process_string(input, env, filename)
-   assert(type(env) ~= "boolean", "tl.process_string signature has changed")
-
+function tl.check_string(input, env, filename)
    env = env or tl.new_env(default_env_opts(false, filename, input))
 
    if env.loaded and env.loaded[filename] then
@@ -13153,23 +13175,23 @@ function tl.process_string(input, env, filename)
       return result
    end
 
-   local result = tl.type_check(program, filename, env.defaults, env)
+   local result = tl.check(program, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
 
    return result
 end
 
-tl.gen = function(input, env, pp)
+tl.gen = function(input, env, opts)
    env = env or assert(tl.new_env(default_env_opts(false, nil, input)), "Default environment initialization failed")
-   local result = tl.process_string(input, env)
+   local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
 
    local code
-   code, result.gen_error = tl.pretty_print_ast(result.ast, env.defaults.gen_target, pp)
+   code, result.gen_error = tl.generate(result.ast, env.defaults.gen_target, opts)
    return code, result
 end
 
@@ -13197,13 +13219,13 @@ local function tl_package_loader(module_name)
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 
-      local result = tl.type_check(program, found_filename, opts.defaults, env)
+      local result = tl.check(program, found_filename, opts.defaults, env)
 
       env.modules[module_name] = result.type
 
 
 
-      local code = assert(tl.pretty_print_ast(program, opts.defaults.gen_target, true))
+      local code = assert(tl.generate(program, opts.defaults.gen_target, fast_generate_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname, loader_data)
@@ -13258,7 +13280,7 @@ tl.load = function(input, chunkname, mode, ...)
    end
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = tl.type_check(program, filename, opts.defaults, env_for(opts, ...))
+   local result = tl.check(program, filename, opts.defaults, env_for(opts, ...))
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -13272,12 +13294,16 @@ tl.load = function(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code, err = tl.pretty_print_ast(program, opts.defaults.gen_target, true)
+   local code, err = tl.generate(program, opts.defaults.gen_target, fast_generate_opts)
    if not code then
       return nil, err
    end
 
    return load(code, chunkname, mode, ...)
+end
+
+tl.version = function()
+   return VERSION
 end
 
 
@@ -13303,6 +13329,38 @@ tl.init_env = function(lax, gen_compat, gen_target, predefined)
    }
 
    return tl.new_env(opts)
+end
+
+tl.type_check = function(ast, tc_opts)
+   local opts = {
+      feat_lax = tc_opts.lax and "on" or "off",
+      feat_arity = tc_opts.env and tc_opts.env.defaults.feat_arity or "on",
+      gen_compat = tc_opts.gen_compat,
+      gen_target = tc_opts.gen_target,
+      run_internal_compiler_checks = tc_opts.run_internal_compiler_checks,
+   }
+   return tl.check(ast, tc_opts.filename, opts, tc_opts.env)
+end
+
+tl.pretty_print_ast = function(ast, gen_target, mode)
+   local opts
+   if type(mode) == "table" then
+      opts = mode
+   elseif mode == true then
+      opts = fast_generate_opts
+   else
+      opts = default_generate_opts
+   end
+
+   return tl.generate(ast, gen_target, opts)
+end
+
+tl.process = function(filename, env, fd)
+   return tl.check_file(filename, env, fd)
+end
+
+tl.process_string = function(input, is_lua, env, filename, _module_name)
+   return tl.check_string(input, env or tl.init_env(is_lua), filename)
 end
 
 return tl

@@ -520,13 +520,13 @@ local record tl
       "off"
    end
 
-   record PrettyPrintOptions
+   record GenerateOptions
       preserve_indent: boolean
       preserve_newlines: boolean
       preserve_hashbang: boolean
    end
 
-   record TypeCheckOptions
+   record CheckOptions
       feat_lax: Feat
       feat_arity: Feat
       gen_compat: GenCompat
@@ -543,7 +543,7 @@ local record tl
       reporter: TypeReporter
       keep_going: boolean
       report_types: boolean
-      defaults: TypeCheckOptions
+      defaults: CheckOptions
    end
 
    record Result
@@ -615,20 +615,58 @@ local record tl
    end
 
    record EnvOptions
-      defaults: TypeCheckOptions
+      defaults: CheckOptions
       predefined_modules: {string}
    end
 
-   load: function(string, string, LoadMode, {any:any}): LoadFunction, string
-   process: function(string, Env, ? FILE): (Result, string)
-   process_string: function(string, Env, ? string): Result
-   gen: function(string, Env, PrettyPrintOptions): string, Result
-   type_check: function(Node, string, TypeCheckOptions, ? Env): Result, string
+   -----------------------------------------------------------------------------
+   -- Public API
+   -----------------------------------------------------------------------------
+
+   check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
+   gen: function(string, ? Env, ? GenerateOptions): string, Result
+   generate: function(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
+   get_token_at: function(tks: {Token}, y: integer, x: integer): string
+   lex: function(input: string, filename: string): {Token}, {Error}
+   load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
+   loader: function()
    new_env: function(? EnvOptions): Env, string
+   parse: function(input: string, filename: string): Node, {Error}, {string}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
+   check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
+   check_string: function(input: string, env?: Env, filename?: string): Result
+   search_module: function(module_name: string, search_dtl: boolean): string, FILE, {string}
+   symbols_in_scope: function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
+   target_from_lua_version: function(str: string): GenTarget
    version: function(): string
 
-   -- Backwards compatibility
-   init_env: function(? boolean, ? boolean | GenCompat, ? GenTarget, ? {string}): Env, string
+   -----------------------------------------------------------------------------
+   -- Deprecated, mantained for backwards compatibility:
+   -----------------------------------------------------------------------------
+
+   type CompatMode = GenCompat
+   type PrettyPrintOptions = GenerateOptions
+   type TargetMode = GenTarget
+
+   record TypeCheckOptions
+      lax: boolean
+      filename: string
+      module_name: string
+      gen_compat: tl.CompatMode
+      gen_target: tl.TargetMode
+      env: Env
+      run_internal_compiler_checks: boolean
+   end
+
+   init_env: function(? boolean, ? boolean | tl.CompatMode, ? tl.TargetMode, ? {string}): Env, string
+   pretty_print_ast: function(ast: Node, gen_target?: tl.TargetMode, mode?: boolean | tl.PrettyPrintOptions): string, string
+   process: function(filename: string, env?: Env, fd?: FILE): Result, string
+   process_string: function(input: string, is_lua: boolean, env: Env, filename: string, _module_name: string): Result
+   type_check: function(Node, TypeCheckOptions): Result, string
+
+   -----------------------------------------------------------------------------
+   -- Private data:
+   -----------------------------------------------------------------------------
 
    package_loader_env: Env
    load_envs: { {any:any} : Env }
@@ -641,10 +679,6 @@ local record TypeReporter
    tr: TypeReport
 
    get_typenum: function(self, Type): integer
-end
-
-tl.version = function(): string
-   return VERSION
 end
 
 local wk <total>: {tl.WarningKind:boolean} = {
@@ -707,9 +741,9 @@ local type GenCompat = tl.GenCompat
 local type GenTarget = tl.GenTarget
 local type LoadFunction = tl.LoadFunction
 local type LoadMode = tl.LoadMode
-local type PrettyPrintOptions = tl.PrettyPrintOptions
+local type GenerateOptions = tl.GenerateOptions
 local type Result = tl.Result
-local type TypeCheckOptions = tl.TypeCheckOptions
+local type CheckOptions = tl.CheckOptions
 local type TypeInfo = tl.TypeInfo
 local type TypeReport = tl.TypeReport
 local type WarningKind = tl.WarningKind
@@ -1028,7 +1062,7 @@ do
       end
    end
 
-   function tl.lex(input: string, filename: string): {Token}, {Error}
+   tl.lex = function(input: string, filename: string): {Token}, {Error}
       local tokens: {Token} = {}
 
       local state: LexState = "any"
@@ -1518,7 +1552,7 @@ local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): bool
    end
 end
 
-function tl.get_token_at(tks: {Token}, y: integer, x: integer): string
+tl.get_token_at = function(tks: {Token}, y: integer, x: integer): string
    local _, found <const> = binary_search(
       tks, nil,
       function(tk: Token): boolean
@@ -4370,7 +4404,7 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename: string): Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens,
@@ -4906,7 +4940,7 @@ local function recurse_node<S, T>(s: S, root: Node,
 end
 
 --------------------------------------------------------------------------------
--- Pretty-print AST
+-- Lua code generation
 --------------------------------------------------------------------------------
 
 local tight_op: {integer:{string:boolean}} = {
@@ -4951,13 +4985,13 @@ local spaced_op: {integer:{string:boolean}} = {
 }
 
 
-local default_pretty_print_ast_opts: PrettyPrintOptions = {
+local default_generate_opts: GenerateOptions = {
    preserve_indent = true,
    preserve_newlines = true,
    preserve_hashbang = false,
 }
 
-local fast_pretty_print_ast_opts: PrettyPrintOptions = {
+local fast_generate_opts: GenerateOptions = {
    preserve_indent = false,
    preserve_newlines = true,
    preserve_hashbang = false,
@@ -4974,18 +5008,11 @@ local primitive: {TypeName:string} = {
    ["thread"] = "thread",
 }
 
-function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode?: boolean | PrettyPrintOptions): string, string
+function tl.generate(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
    local err: string
    local indent = 0
 
-   local opts: PrettyPrintOptions
-   if mode is PrettyPrintOptions then
-      opts = mode
-   elseif mode == true then
-      opts = fast_pretty_print_ast_opts
-   else
-      opts = default_pretty_print_ast_opts
-   end
+   opts = opts or default_generate_opts
 
    local record Output
       {string}
@@ -6807,7 +6834,7 @@ local function search_for(module_name: string, suffix: string, path: string, tri
    return nil, nil, tried
 end
 
-function tl.search_module(module_name: string, search_dtl: boolean): string, FILE, {string}
+tl.search_module = function(module_name: string, search_dtl: boolean): string, FILE, {string}
    local found: string
    local fd: FILE
    local tried: {string} = {}
@@ -6829,7 +6856,7 @@ function tl.search_module(module_name: string, search_dtl: boolean): string, FIL
    return nil, nil, tried
 end
 
-local function require_module(w: Where, module_name: string, opts: TypeCheckOptions, env: Env): Type, string
+local function require_module(w: Where, module_name: string, opts: CheckOptions, env: Env): Type, string
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
@@ -6842,7 +6869,7 @@ local function require_module(w: Where, module_name: string, opts: TypeCheckOpti
       env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
 
       local save_defaults = env.defaults
-      local defaults <total>: TypeCheckOptions = {
+      local defaults <total>: CheckOptions = {
          feat_lax = opts.feat_lax or save_defaults.feat_lax,
          feat_arity = opts.feat_arity or save_defaults.feat_arity,
          gen_compat = opts.gen_compat or save_defaults.gen_compat,
@@ -6851,7 +6878,7 @@ local function require_module(w: Where, module_name: string, opts: TypeCheckOpti
       }
       env.defaults = defaults
 
-      local found_result, err: Result, string = tl.process(found, env, fd)
+      local found_result, err: Result, string = tl.check_file(found, env, fd)
       assert(found_result, err)
 
       env.defaults = save_defaults
@@ -6885,7 +6912,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       local code: Node = compat_code_cache[name]
       if not code then
          code = tl.parse(text, "@internal")
-         tl.type_check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
+         tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
@@ -7025,7 +7052,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
 
       local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
       assert_no_stdlib_errors(syntax_errors, "syntax errors")
-      local result = tl.type_check(program, "@stdlib", {}, env)
+      local result = tl.check(program, "@stdlib", {}, env)
       assert_no_stdlib_errors(result.type_errors, "type errors")
       stdlib_globals = env.globals
 
@@ -10512,7 +10539,7 @@ do
          end
 
          local module_name = assert(node.e2[1].conststr)
-         local tc_opts: TypeCheckOptions = {
+         local tc_opts: CheckOptions = {
             feat_lax = self.feat_lax and "on" or "off",
             feat_arity = self.feat_arity and "on" or "off",
          }
@@ -12918,10 +12945,7 @@ do
       end
    end
 
-   tl.type_check = function(ast: Node, filename: string, opts: TypeCheckOptions, env?: Env): Result, string
-      assert(filename is string, "tl.type_check signature has changed, pass filename separately")
-      assert((not opts) or (not (opts as {any:any}).env), "tl.type_check signature has changed, pass env separately")
-
+   tl.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
       filename = filename or "?"
 
       opts = opts or {}
@@ -13080,7 +13104,7 @@ local function feat_lax_heuristic(filename?: string, input?: string): Feat
    return "off"
 end
 
-tl.process = function(filename: string, env: Env, fd?: FILE): Result, string
+tl.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
@@ -13100,7 +13124,7 @@ tl.process = function(filename: string, env: Env, fd?: FILE): Result, string
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   return tl.process_string(input, env, filename)
+   return tl.check_string(input, env, filename)
 end
 
 function tl.target_from_lua_version(str: string): GenTarget
@@ -13127,9 +13151,7 @@ local function default_env_opts(runtime: boolean, filename?: string, input?: str
    }
 end
 
-function tl.process_string(input: string, env?: Env, filename?: string): Result
-   assert(type(env) ~= "boolean", "tl.process_string signature has changed")
-
+function tl.check_string(input: string, env?: Env, filename?: string): Result
    env = env or tl.new_env(default_env_opts(false, filename, input))
 
    if env.loaded and env.loaded[filename] then
@@ -13153,23 +13175,23 @@ function tl.process_string(input: string, env?: Env, filename?: string): Result
       return result
    end
 
-   local result = tl.type_check(program, filename, env.defaults, env)
+   local result = tl.check(program, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
 
    return result
 end
 
-tl.gen = function(input: string, env: Env, pp: PrettyPrintOptions): string, Result
+tl.gen = function(input: string, env?: Env, opts?: GenerateOptions): string, Result
    env = env or assert(tl.new_env(default_env_opts(false, nil, input)), "Default environment initialization failed")
-   local result = tl.process_string(input, env)
+   local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
 
    local code: string
-   code, result.gen_error = tl.pretty_print_ast(result.ast, env.defaults.gen_target, pp)
+   code, result.gen_error = tl.generate(result.ast, env.defaults.gen_target, opts)
    return code, result
 end
 
@@ -13197,13 +13219,13 @@ local function tl_package_loader(module_name: string): any, any
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
 
-      local result = tl.type_check(program, found_filename, opts.defaults, env)
+      local result = tl.check(program, found_filename, opts.defaults, env)
 
       env.modules[module_name] = result.type
 
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
-      local code = assert(tl.pretty_print_ast(program, opts.defaults.gen_target, true))
+      local code = assert(tl.generate(program, opts.defaults.gen_target, fast_generate_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname: string, loader_data: string): any
@@ -13245,7 +13267,7 @@ local function env_for(opts: EnvOptions, env_tbl: {any:any}): Env
    return tl.load_envs[env_tbl]
 end
 
-tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:any}): LoadFunction, string
+tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
    local program, errs = tl.parse(input, chunkname)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
@@ -13258,7 +13280,7 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:a
    end
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = tl.type_check(program, filename, opts.defaults, env_for(opts, ...))
+   local result = tl.check(program, filename, opts.defaults, env_for(opts, ...))
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -13272,12 +13294,16 @@ tl.load = function(input: string, chunkname: string, mode: LoadMode, ...: {any:a
       mode = mode:gsub("c", "") as LoadMode
    end
 
-   local code, err = tl.pretty_print_ast(program, opts.defaults.gen_target, true)
+   local code, err = tl.generate(program, opts.defaults.gen_target, fast_generate_opts)
    if not code then
       return nil, err
    end
 
    return load(code, chunkname, mode, ...)
+end
+
+tl.version = function(): string
+   return VERSION
 end
 
 --------------------------------------------------------------------------------
@@ -13303,6 +13329,38 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | GenCompat, gen_targ
    }
 
    return tl.new_env(opts)
+end
+
+tl.type_check = function(ast: Node, tc_opts?: tl.TypeCheckOptions): Result, string
+   local opts: CheckOptions = {
+      feat_lax = tc_opts.lax and "on" or "off",
+      feat_arity = tc_opts.env and tc_opts.env.defaults.feat_arity or "on",
+      gen_compat = tc_opts.gen_compat,
+      gen_target = tc_opts.gen_target,
+      run_internal_compiler_checks = tc_opts.run_internal_compiler_checks,
+   }
+   return tl.check(ast, tc_opts.filename, opts, tc_opts.env)
+end
+
+tl.pretty_print_ast = function(ast: Node, gen_target?: tl.TargetMode, mode?: boolean | tl.PrettyPrintOptions): string, string
+   local opts: GenerateOptions
+   if mode is tl.PrettyPrintOptions then
+      opts = mode
+   elseif mode == true then
+      opts = fast_generate_opts
+   else
+      opts = default_generate_opts
+   end
+
+   return tl.generate(ast, gen_target, opts)
+end
+
+tl.process = function(filename: string, env?: Env, fd?: FILE): Result, string
+   return tl.check_file(filename, env, fd)
+end
+
+tl.process_string = function(input: string, is_lua: boolean, env: Env, filename: string, _module_name: string): Result
+   return tl.check_string(input, env or tl.init_env(is_lua), filename)
 end
 
 return tl
