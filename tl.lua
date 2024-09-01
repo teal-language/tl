@@ -5075,7 +5075,7 @@ function tl.pretty_print_ast(ast, gen_target, mode)
       for fname, ftype in fields_of(typ) do
          if ftype.typename == "typedecl" then
             local def = ftype.def
-            if def.fields then
+            if def.typename == "record" then
                table.insert(out, fname)
                table.insert(out, " = ")
                table.insert(out, print_record_def(def))
