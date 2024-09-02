@@ -23,7 +23,7 @@ wrong number of arguments (given 2, expects 4)
 
 This is because, up to Teal 0.15.x, the language was lenient on the _arity_ of
 function calls (the number of expressions passed as arguments in the call). It
-would just assumed that any missing arguments were intended to be `nil` on
+would just assume that any missing arguments were intended to be `nil` on
 purpose. More often than not, this is not the case, and a missing argument is
 does not mean that the argument was option, but rather than the programmer
 forgot about it (this is common when adding new arguments during a code
