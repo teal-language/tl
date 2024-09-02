@@ -965,11 +965,11 @@ do
    end
 
    local lex_any_char_kinds = {}
-   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", "#", ";", "?" }
+   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", ";", "?" }
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
-   for _, c in ipairs({ "+", "*", "|", "&", "%", "^" }) do
+   for _, c in ipairs({ "#", "+", "*", "|", "&", "%", "^" }) do
       lex_any_char_kinds[c] = "op"
    end
 

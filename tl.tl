@@ -787,7 +787,7 @@ local enum TokenKind
    "keyword"
    "op"
    "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "#" "." ";" "?"
+   "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
    "::"
    "..."
    "identifier"
@@ -965,11 +965,11 @@ do
    end
 
    local lex_any_char_kinds: {string:TokenKind} = {}
-   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", "#", ";", "?"}
+   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", ";", "?"}
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
-   for _, c in ipairs({"+", "*", "|", "&", "%", "^"}) do
+   for _, c in ipairs({"#", "+", "*", "|", "&", "%", "^"}) do
       lex_any_char_kinds[c] = "op"
    end
 
