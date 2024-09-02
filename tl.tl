@@ -795,10 +795,7 @@ local enum TokenKind
    "integer"
    "pragma"
    "pragma_identifier"
-   "$ERR unfinished_comment$"
-   "$ERR invalid_string$"
-   "$ERR invalid_number$"
-   "$ERR invalid$"
+   "$ERR$"
    "$EOF$"
 end
 
@@ -864,21 +861,21 @@ do
       ["got /"] = "op",
       ["got :"] = "op",
       ["got --["] = nil, -- drop comment
-      ["string single"] = "$ERR invalid_string$",
-      ["string single got \\"] = "$ERR invalid_string$",
-      ["string double"] = "$ERR invalid_string$",
-      ["string double got \\"] = "$ERR invalid_string$",
-      ["string long"] = "$ERR invalid_string$",
-      ["string long got ]"] = "$ERR invalid_string$",
+      ["string single"] = "$ERR$",
+      ["string single got \\"] = "$ERR$",
+      ["string double"] = "$ERR$",
+      ["string double got \\"] = "$ERR$",
+      ["string long"] = "$ERR$",
+      ["string long got ]"] = "$ERR$",
       ["comment short"] = nil, -- drop comment
-      ["comment long"] = "$ERR unfinished_comment$",
-      ["comment long got ]"] = "$ERR unfinished_comment$",
+      ["comment long"] = "$ERR$",
+      ["comment long got ]"] = "$ERR$",
       ["number dec"] = "integer",
       ["number decfloat"] = "number",
       ["number hex"] = "integer",
       ["number hexfloat"] = "number",
       ["number power"] = "number",
-      ["number powersign"] = "$ERR invalid_number$",
+      ["number powersign"] = "$ERR$",
       ["pragma"] = nil, -- drop comment
       ["pragma any"] = nil, -- never in a token
       ["pragma word"] = "pragma_identifier", -- never in a token
@@ -1104,23 +1101,13 @@ do
          in_token = false
       end
 
-      local function add_syntax_error()
+      local function add_syntax_error(msg?: string)
          local t = tokens[nt]
-         local msg: string
-         if t.kind == "$ERR invalid_string$" then
-            msg = "malformed string"
-         elseif t.kind == "$ERR invalid_number$" then
-            msg = "malformed number"
-         elseif t.kind == "$ERR unfinished_comment$" then
-            msg = "unfinished long comment"
-         else
-            msg = "invalid token '" .. t.tk .. "'"
-         end
          table.insert(errs, {
             filename = filename,
             y = t.y,
             x = t.x,
-            msg = msg,
+            msg = msg or "invalid token '" .. t.tk .. "'",
          })
       end
 
@@ -1170,7 +1157,7 @@ do
                   end_token(k, c)
                elseif not lex_space[c] then
                   begin_token()
-                  end_token_here("$ERR invalid$")
+                  end_token_here("$ERR$")
                   add_syntax_error()
                end
             end
@@ -1303,7 +1290,7 @@ do
                begin_token()
             elseif not lex_space[c] then
                begin_token()
-               end_token_here("$ERR invalid$")
+               end_token_here("$ERR$")
                add_syntax_error()
             end
          elseif state == "pragma word" then
@@ -1357,8 +1344,8 @@ do
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
-               end_token_here("$ERR invalid_string$")
-               add_syntax_error()
+               end_token_here("$ERR$")
+               add_syntax_error("malformed string")
             end
             x = x + skip
             state = "string double"
@@ -1373,8 +1360,8 @@ do
             local skip, valid = lex_string_escape(input, i, c)
             i = i + skip
             if not valid then
-               end_token_here("$ERR invalid_string$")
-               add_syntax_error()
+               end_token_here("$ERR$")
+               add_syntax_error("malformed string")
             end
             x = x + skip
             state = "string single"
@@ -1462,8 +1449,8 @@ do
             elseif lex_decimals[c] then
                state = "number power"
             else
-               end_token_here("$ERR invalid_number$")
-               add_syntax_error()
+               end_token_here("$ERR$")
+               add_syntax_error("malformed number")
                state = "any"
             end
          elseif state == "number power" then
@@ -1478,8 +1465,17 @@ do
       if in_token then
          if last_token_kind[state] then
             end_token_prev(last_token_kind[state])
-            if last_token_kind[state]:sub(1, 4) == "$ERR" then
-               add_syntax_error()
+            if last_token_kind[state] == "$ERR$" then
+               local state_type = state:sub(1, 6)
+               if state_type == "string" then
+                  add_syntax_error("malformed string")
+               elseif state_type == "number" then
+                  add_syntax_error("malformed number")
+               elseif state_type == "commen" then
+                  add_syntax_error("unfinished long comment")
+               else
+                  add_syntax_error()
+               end
             elseif keywords[tokens[nt].tk] then
                tokens[nt].kind = "keyword"
             end
@@ -2892,10 +2888,8 @@ local function parse_literal(ps: ParseState, i: integer): integer, Node
       return parse_table_literal(ps, i)
    elseif kind == "..." then
       return verify_kind(ps, i, "...")
-   elseif kind == "$ERR invalid_string$" then
-      return fail(ps, i, "malformed string")
-   elseif kind == "$ERR invalid_number$" then
-      return fail(ps, i, "malformed number")
+   elseif kind == "$ERR$" then
+      return fail(ps, i, "invalid token")
    end
    return fail(ps, i, "syntax error")
 end
