@@ -879,7 +879,7 @@ do
       ["number hexfloat"] = "number",
       ["number power"] = "number",
       ["number powersign"] = "$ERR invalid_number$",
-      ["pragma"] = "pragma",
+      ["pragma"] = nil,
       ["pragma any"] = nil,
       ["pragma word"] = "pragma_identifier",
    }
@@ -1285,11 +1285,15 @@ do
          elseif state == "pragma" then
             if not lex_word[c] then
                end_token_prev("pragma")
-               if tokens[nt].tk ~= "--#pragma" then
-                  add_syntax_error()
+               if tokens[nt].tk == "--#pragma" then
+                  state = "pragma any"
+               else
+                  state = "comment short"
+                  table.remove(tokens)
+                  nt = nt - 1
+                  drop_token()
                end
                fwd = false
-               state = "pragma any"
             end
          elseif state == "pragma any" then
             if c == "\n" then
