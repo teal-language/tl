@@ -33,7 +33,7 @@ Teal now features _optional function arguments_. if an argument can be
 optionally elided, you now can, or rather, have to, annotate it explicitly
 adding a `?` to its name:
 
-```
+```lua
 local function greet(greeting: string, name?: string)
    if name then
       print(string.format("%s, %s!", greeting, name))
@@ -58,7 +58,7 @@ function arity checks.
 You can enable or disable arity checks using the `arity` pragma. Let's first
 assume we have an old library written for older versions of Teal:
 
-```
+```lua
 -- old_library.tl
 local record old_library
 end
@@ -79,7 +79,7 @@ Now we want to use this library with the current version of Teal, but we don't
 want to lose arity checks in our own code. We can temporarily disable arity
 checks, require the library, then re-enable them:
 
-```
+```lua
 --#pragma arity off
 local old_library = require("old_library)
 --#pragma arity on
