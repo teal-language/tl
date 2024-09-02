@@ -492,7 +492,27 @@ local Errors = {}
 
 
 
-local tl = {GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, TypeCheckOptions = {}, }
+local tl = {GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -756,6 +776,8 @@ tl.typecodes = {
 
 
 
+
+
 local DEFAULT_GEN_COMPAT = "optional"
 local DEFAULT_GEN_TARGET = "5.3"
 
@@ -819,32 +841,6 @@ if TL_DEBUG then
       end, "cr", 100)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

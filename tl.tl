@@ -623,8 +623,28 @@ local record tl
    interface Node
    end
 
-   -- abstract type
-   interface Token
+   enum TokenKind
+      "hashbang"
+      "keyword"
+      "op"
+      "string"
+      "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
+      "::"
+      "..."
+      "identifier"
+      "number"
+      "integer"
+      "pragma"
+      "pragma_identifier"
+      "$ERR$"
+      "$EOF$"
+   end
+
+   record Token
+      x: integer
+      y: integer
+      tk: string
+      kind: TokenKind
    end
 
    -----------------------------------------------------------------------------
@@ -752,6 +772,8 @@ local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
 local type Result = tl.Result
 local type CheckOptions = tl.CheckOptions
+local type Token = tl.Token
+local type TokenKind = tl.TokenKind
 local type TypeInfo = tl.TypeInfo
 local type TypeReport = tl.TypeReport
 local type WarningKind = tl.WarningKind
@@ -823,32 +845,6 @@ end
 --------------------------------------------------------------------------------
 -- Lexer
 --------------------------------------------------------------------------------
-
-local enum TokenKind
-   "hashbang"
-   "keyword"
-   "op"
-   "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
-   "::"
-   "..."
-   "identifier"
-   "number"
-   "integer"
-   "pragma"
-   "pragma_identifier"
-   "$ERR$"
-   "$EOF$"
-end
-
-local record Token
-   is tl.Token
-
-   x: integer
-   y: integer
-   tk: string
-   kind: TokenKind
-end
 
 do
    local enum LexState
@@ -1067,7 +1063,7 @@ do
       end
    end
 
-   tl.lex = function(input: string, filename: string): {tl.Token}, {Error}
+   tl.lex = function(input: string, filename: string): {Token}, {Error}
       local tokens: {Token} = {}
 
       local state: LexState = "any"
@@ -4397,7 +4393,7 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function tl.parse_program(tokens: {tl.Token}, errs: {Error}, filename?: string): tl.Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl.Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
