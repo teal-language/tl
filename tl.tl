@@ -10091,6 +10091,9 @@ do
       FACT_TRUTHY = TruthyFact {}
 
       facts_and = function(w: Where, f1: Fact, f2: Fact): Fact
+         if not f1 and not f2 then
+            return
+         end
          return AndFact { f1 = f1, f2 = f2, w = w }
       end
 
