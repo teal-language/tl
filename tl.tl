@@ -4518,6 +4518,14 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
 
    local xs: {T} = {}
 
+   if ast is HasTypeArgs then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
+   end
+
    if ast is TupleType then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -4530,11 +4538,6 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
       table.insert(xs, recurse_type(s, ast.keys, visit))
       table.insert(xs, recurse_type(s, ast.values, visit))
    elseif ast is RecordLikeType then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       if ast.interface_list then
          for _, child in ipairs(ast.interface_list) do
             table.insert(xs, recurse_type(s, child, visit))
@@ -4554,11 +4557,6 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
          end
       end
    elseif ast is FunctionType then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
             table.insert(xs, recurse_type(s, child, visit))
@@ -4591,18 +4589,8 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
          table.insert(xs, recurse_type(s, ast.vtype, visit))
       end
    elseif ast is TypeAliasType then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast is TypeDeclType then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
 
@@ -7461,6 +7449,10 @@ do
          copy.x = t.x
          copy.y = t.y
 
+         if t is HasTypeArgs then
+            (copy as HasTypeArgs).typeargs, same = copy_typeargs(t.typeargs, same)
+         end
+
          if t is ArrayType then
             assert(copy is ArrayType)
 
@@ -7487,11 +7479,6 @@ do
             end
          elseif t is TypeDeclType then
             assert(copy is TypeDeclType)
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
-
             copy.def, same = resolve(t.def, same)
          elseif t is TypeAliasType then
             assert(copy is TypeAliasType)
@@ -7507,11 +7494,6 @@ do
             copy.found = t.found
          elseif t is FunctionType then
             assert(copy is FunctionType)
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
-
             copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
@@ -7520,10 +7502,6 @@ do
          elseif t is RecordLikeType then
             assert(copy is RecordType or copy is InterfaceType)
             copy.declname = t.declname
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
 
             -- checking array interface
             if t.elements then
@@ -7889,7 +7867,7 @@ do
    local type InvalidOrTypeDeclType = InvalidType | TypeDeclType
 
    do
-      local function match_typevals(self: TypeChecker, t: NominalType, def: RecordLikeType | FunctionType): Type
+      local function match_typevals(self: TypeChecker, t: NominalType, def: HasTypeArgs): Type
          if t.typevals and def.typeargs then
             if #t.typevals ~= #def.typeargs then
                self.errs:add(t, "mismatch in number of type arguments")

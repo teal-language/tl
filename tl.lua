@@ -4518,6 +4518,14 @@ local function recurse_type(s, ast, visit)
 
    local xs = {}
 
+   if ast.typeargs then
+      if ast.typeargs then
+         for _, child in ipairs(ast.typeargs) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
+   end
+
    if ast.typename == "tuple" then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -4530,11 +4538,6 @@ local function recurse_type(s, ast, visit)
       table.insert(xs, recurse_type(s, ast.keys, visit))
       table.insert(xs, recurse_type(s, ast.values, visit))
    elseif ast.fields then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       if ast.interface_list then
          for _, child in ipairs(ast.interface_list) do
             table.insert(xs, recurse_type(s, child, visit))
@@ -4554,11 +4557,6 @@ local function recurse_type(s, ast, visit)
          end
       end
    elseif ast.typename == "function" then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
             table.insert(xs, recurse_type(s, child, visit))
@@ -4591,18 +4589,8 @@ local function recurse_type(s, ast, visit)
          table.insert(xs, recurse_type(s, ast.vtype, visit))
       end
    elseif ast.typename == "typealias" then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast.typename == "typedecl" then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
 
@@ -7461,6 +7449,10 @@ do
          copy.x = t.x
          copy.y = t.y
 
+         if t.typeargs then
+            (copy).typeargs, same = copy_typeargs(t.typeargs, same)
+         end
+
          if t.typename == "array" then
             assert(copy.typename == "array")
 
@@ -7487,11 +7479,6 @@ do
             end
          elseif t.typename == "typedecl" then
             assert(copy.typename == "typedecl")
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
-
             copy.def, same = resolve(t.def, same)
          elseif t.typename == "typealias" then
             assert(copy.typename == "typealias")
@@ -7507,11 +7494,6 @@ do
             copy.found = t.found
          elseif t.typename == "function" then
             assert(copy.typename == "function")
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
-
             copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
@@ -7520,10 +7502,6 @@ do
          elseif t.fields then
             assert(copy.typename == "record" or copy.typename == "interface")
             copy.declname = t.declname
-
-            if t.typeargs then
-               copy.typeargs, same = copy_typeargs(t.typeargs, same)
-            end
 
 
             if t.elements then
