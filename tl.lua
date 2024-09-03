@@ -10091,6 +10091,9 @@ a.types[i], b.types[i]), }
       FACT_TRUTHY = TruthyFact({})
 
       facts_and = function(w, f1, f2)
+         if not f1 and not f2 then
+            return
+         end
          return AndFact({ f1 = f1, f2 = f2, w = w })
       end
 
