@@ -51,7 +51,7 @@ describe("binary metamethod __lt using <", function()
    it("can be used via the second argument", util.check([[
       local type Rec = record
          x: number
-         metamethod __lt: function(number, Rec): Rec
+         metamethod __lt: function(number, Rec): boolean
       end
 
       local rec_mt: metatable<Rec>
@@ -153,7 +153,7 @@ describe("binary metamethod __lt using >", function()
    it("can be used via the second argument", util.check([[
       local type Rec = record
          x: number
-         metamethod __lt: function(number, Rec): Rec
+         metamethod __lt: function(number, Rec): boolean
       end
 
       local rec_mt: metatable<Rec>

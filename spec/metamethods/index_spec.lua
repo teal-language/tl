@@ -8,8 +8,8 @@ describe("metamethod __index", function()
       end
 
       local rec_mt: metatable<Rec> = {
-         __index = function(self: Rec, s: string, n: number): string
-            return tostring(self.x + n) .. s
+         __index = function(self: Rec, s: string): string
+            return tostring(self.x) .. s
          end
       }
 

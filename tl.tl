@@ -229,7 +229,7 @@ do
       __mode: Mode
       __name: string
       __tostring: function(T): string
-      __pairs: function<K, V>(T): (function(): (K, V))
+      __pairs: function<K, V>(T): function(): (K, V)
 
       __index: any --[[FIXME: function | table | anything with an __index metamethod]]
       __newindex: any --[[FIXME: function | table | anything with an __index metamethod]]
@@ -237,27 +237,27 @@ do
       __gc: function(T)
       __close: function(T)
 
-      __add: function(any, any): any
-      __sub: function(any, any): any
-      __mul: function(any, any): any
-      __div: function(any, any): any
-      __idiv: function(any, any): any
-      __mod: function(any, any): any
-      __pow: function(any, any): any
-      __band: function(any, any): any
-      __bor: function(any, any): any
-      __bxor: function(any, any): any
-      __shl: function(any, any): any
-      __shr: function(any, any): any
-      __concat: function(any, any): any
+      __add: function<A, B, C>(A, B): C
+      __sub: function<A, B, C>(A, B): C
+      __mul: function<A, B, C>(A, B): C
+      __div: function<A, B, C>(A, B): C
+      __idiv: function<A, B, C>(A, B): C
+      __mod: function<A, B, C>(A, B): C
+      __pow: function<A, B, C>(A, B): C
+      __band: function<A, B, C>(A, B): C
+      __bor: function<A, B, C>(A, B): C
+      __bxor: function<A, B, C>(A, B): C
+      __shl: function<A, B, C>(A, B): C
+      __shr: function<A, B, C>(A, B): C
+      __concat: function<A, B, C>(A, B): C
 
-      __len: function(T): any
-      __unm: function(T): any
-      __bnot: function(T): any
+      __len: function<A>(T): A
+      __unm: function<A>(T): A
+      __bnot: function<A>(T): A
 
-      __eq: function(any, any): boolean
-      __lt: function(any, any): boolean
-      __le: function(any, any): boolean
+      __eq: function<A, B>(A, B): boolean
+      __lt: function<A, B>(A, B): boolean
+      __le: function<A, B>(A, B): boolean
    end
 
    global record os
@@ -6330,7 +6330,7 @@ end
 function Errors:fail_unresolved_nominals(scope: Scope, global_scope: Scope)
    if global_scope and scope.pending_nominals then
       for name, types in pairs(scope.pending_nominals) do
-         if not global_scope.pending_global_types[name] then
+         if not global_scope.pending_global_types[name] and name ~= "metatable" then
             for _, typ in ipairs(types) do
                assert(typ.x)
                assert(typ.y)
@@ -7101,6 +7101,8 @@ do
       dependencies: {string:string}
       collector: TypeCollector
 
+      cache_std_metatable_type: Type
+
       gen_compat: GenCompat
       gen_target: GenTarget
       feat_arity: boolean
@@ -7220,6 +7222,9 @@ do
    function TypeChecker:find_type(names: {string}, accept_typearg?: boolean): Type
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
+         if #names == 1 and names[1] == "metatable" then
+            return self:find_type({"_metatable"})
+         end
          return nil
       end
       if typ is NominalType and typ.found then
@@ -7891,6 +7896,27 @@ do
                self:add_var(nil, def.typeargs[i].typearg, tt)
             end
             local ret = self:resolve_typevars_at(t, def)
+
+            if def == self.cache_std_metatable_type then
+               local tv = t.typevals[1]
+               if tv is NominalType then
+                  local found = tv.found
+                  if found and found is TypeDeclType then
+                     local rec = found.def
+                     if rec is RecordLikeType and rec.meta_fields and ret is RecordLikeType then
+                        for fname, ftype in pairs(rec.meta_fields) do
+                           if ret.fields[fname] then
+                              if not self:is_a(ftype, ret.fields[fname]) then
+                                 self.errs:add(ftype, fname .. " does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
+                              end
+                           end
+                           ret.fields[fname] = ftype
+                        end
+                     end
+                  end
+               end
+            end
+
             self:end_scope()
             return ret
          elseif t.typevals then
@@ -9440,7 +9466,12 @@ do
             e2[2] = node.e2
             args.tuple[2] = orig_b
          end
-         return self:to_structural(resolve_tuple((self:type_check_function_call(node, metamethod, args, -1, node, e2)))), meta_on_operator
+
+         local mtdelta = metamethod is FunctionType and metamethod.is_method and -1 or 0
+         local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, node, e2)
+         local ret_unary <const> = resolve_tuple(ret_call)
+         local ret <const> = self:to_structural(ret_unary)
+         return ret, meta_on_operator
       else
          return nil, nil
       end
@@ -12566,6 +12597,20 @@ do
       return true
    end
 
+   local metamethod_is_method: {string: boolean} = {
+      ["__bnot"] = true,
+      ["__call"] = true,
+      ["__close"] = true,
+      ["__gc"] = true,
+      ["__index"] = true,
+      ["__is"] = true,
+      ["__len"] = true,
+      ["__newindex"] = true,
+      ["__pairs"] = true,
+      ["__tostring"] = true,
+      ["__unm"] = true,
+   }
+
    local visit_type: Visitor<TypeChecker, TypeName,Type,Type>
    visit_type = {
       cbs = {
@@ -12643,6 +12688,7 @@ do
                         fmacros = fmacros or {}
                         table.insert(fmacros, ftype)
                      end
+                     ftype.is_method = metamethod_is_method[name]
                   end
                   typ.meta_fields[name] = ftype
                   i = i + 1
@@ -12873,6 +12919,8 @@ do
          eqtype_relations = TypeChecker.eqtype_relations,
          type_priorities = TypeChecker.type_priorities,
       }
+
+      self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
 
       setmetatable(self, { __index = TypeChecker })
 
