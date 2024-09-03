@@ -742,7 +742,12 @@ end
 --------------------------------------------------------------------------------
 
 local TL_DEBUG = os.getenv("TL_DEBUG")
+local TL_DEBUG_FACTS = os.getenv("TL_DEBUG_FACTS")
 local TL_DEBUG_MAXLINE = math.maxinteger
+
+if TL_DEBUG_FACTS and not TL_DEBUG then
+   TL_DEBUG="1"
+end
 
 if TL_DEBUG then
    local max <const> = assert(tonumber(TL_DEBUG), "TL_DEBUG was defined, but not a number")
@@ -10359,6 +10364,27 @@ do
                t.inferred_at = nil
             end
             self:add_var(nil, v, t, "const", "narrow")
+         end
+      end
+
+      if TL_DEBUG_FACTS then
+         local eval_indent = -1
+         local real_eval_fact = eval_fact
+         eval_fact = function(self: TypeChecker, known: Fact): {string: IsFact|EqFact}
+            eval_indent = eval_indent + 1
+            io.stderr:write(("   "):rep(eval_indent))
+            io.stderr:write("eval fact: ", tostring(known), "\n")
+            local facts = real_eval_fact(self, known)
+            if facts then
+               for _, k in ipairs(sorted_keys(facts)) do
+                  local f = facts[k]
+                  io.stderr:write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
+               end
+            else
+               io.stderr:write(("   "):rep(eval_indent), "=> .\n")
+            end
+            eval_indent = eval_indent - 1
+            return facts
          end
       end
    end
