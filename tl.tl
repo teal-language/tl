@@ -1548,7 +1548,6 @@ end
 
 local enum TypeName
    "typedecl"
-   "typealias"
    "typevar"
    "typearg"
    "function"
@@ -1593,7 +1592,6 @@ local table_types <total>: {TypeName:boolean} = {
    ["tupletable"] = true,
 
    ["typedecl"] = false,
-   ["typealias"] = false,
    ["typevar"] = false,
    ["typearg"] = false,
    ["function"] = false,
@@ -1681,17 +1679,9 @@ local record TypeDeclType
 
    def: Type
    closed: boolean
-end
-
-local record TypeAliasType
-   is Type, HasTypeArgs
-   where self.typename == "typealias"
-
-   alias_to: NominalType
+   is_alias: boolean
    is_nested_alias: boolean
 end
-
-local type TypeType = TypeDeclType | TypeAliasType
 
 local record LiteralTableItemType
    is Type
@@ -1722,7 +1712,7 @@ local record NominalType
 
    names: {string}
    typevals: {Type}
-   found: TypeType      -- type is found but typeargs are not resolved
+   found: TypeDeclType      -- type is found but typeargs are not resolved
    resolved: Type       -- type is found and typeargs are resolved
 end
 
@@ -2104,7 +2094,7 @@ local record Node
    exps: Node
 
    -- newtype
-   newtype: TypeType
+   newtype: TypeDeclType
    elide_type: boolean
 
    -- expressions
@@ -2389,12 +2379,6 @@ local function new_tuple(ps: ParseState, i: integer, types?: {Type}, is_va?: boo
    t.is_va = is_va
    t.tuple = types or {}
    return t, t.tuple
-end
-
-local function new_typealias(ps: ParseState, i: integer, alias_to: NominalType): TypeAliasType
-   local t = new_type(ps, i, "typealias") as TypeAliasType
-   t.alias_to = alias_to
-   return t
 end
 
 local function new_nominal(ps: ParseState, i: integer, name?: string): NominalType
@@ -3925,7 +3909,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
          end
 
          local ntt = nt.newtype
-         if ntt is TypeAliasType then
+         if ntt.is_alias then
             ntt.is_nested_alias = true
          end
 
@@ -4020,17 +4004,16 @@ parse_newtype = function(ps: ParseState, i: integer): integer, Node
    else
       i, def = parse_type(ps, i)
    end
-
    if not def then
       return fail(ps, i, "expected a type")
    end
 
+   node.newtype = new_typedecl(ps, istart, def)
+
    if def is NominalType then
-      node.newtype = new_typealias(ps, istart, def)
-      return i, node
+      node.newtype.is_alias = true
    end
 
-   node.newtype = new_typedecl(ps, istart, def)
    return i, node
 end
 
@@ -4214,10 +4197,6 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
       end
 
       set_declname(def, asgn.var.tk)
-   elseif nt is TypeAliasType then
-      if typeargs then
-         nt.typeargs = typeargs
-      end
    end
 
    return i, asgn
@@ -4621,8 +4600,6 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
       if ast.vtype then
          table.insert(xs, recurse_type(s, ast.vtype, visit))
       end
-   elseif ast is TypeAliasType then
-      table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast is TypeDeclType then
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
@@ -5545,12 +5522,12 @@ function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode?: boolean | 
          after = function(_: nil, node: Node, _children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             local nt = node.newtype
-            if nt is TypeAliasType then
-               table.insert(out, table.concat(nt.alias_to.names, "."))
-            elseif nt is TypeDeclType then
+            if nt is TypeDeclType then
                local def = nt.def
                if def is RecordLikeType then
                   table.insert(out, print_record_def(def))
+               elseif def is NominalType then
+                  table.insert(out, table.concat(def.names, "."))
                else
                   table.insert(out, "{}")
                end
@@ -5664,7 +5641,6 @@ function tl.pretty_print_ast(ast: Node, gen_target: GenTarget, mode?: boolean | 
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["typedecl"] = default_type_visitor
-   visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["typevar"] = default_type_visitor
    visit_type.cbs["typearg"] = default_type_visitor
    visit_type.cbs["function"] = default_type_visitor
@@ -5746,7 +5722,6 @@ local typename_to_typecode <total>: {TypeName:integer} = {
    ["tuple"] = tl.typecodes.UNKNOWN,
    ["literal_table_item"] = tl.typecodes.UNKNOWN,
    ["typedecl"] = tl.typecodes.UNKNOWN,
-   ["typealias"] = tl.typecodes.UNKNOWN,
    ["*"] = tl.typecodes.UNKNOWN,
 }
 
@@ -5846,8 +5821,6 @@ function TypeReporter:get_typenum(t: Type): integer
 
    if rt is TypeDeclType then
       rt = rt.def
-   elseif rt is TypeAliasType then
-      rt = rt.alias_to
    end
 
    local ti: TypeInfo = {
@@ -5869,7 +5842,7 @@ function TypeReporter:get_typenum(t: Type): integer
          rt = t
       end
    end
-   assert(not (rt is TypeDeclType or rt is TypeAliasType))
+   assert(not (rt is TypeDeclType))
 
    if rt is RecordLikeType then
       -- store record field info
@@ -6248,7 +6221,6 @@ function Errors:unused_warning(name: string, var: Variable)
          var.is_func_arg and "argument"
             or t is FunctionType and "function"
             or t is TypeDeclType and "type"
-            or t is TypeAliasType and "type"
             or "variable",
          name,
          show_type(var.t)
@@ -6300,13 +6272,13 @@ local function check_for_unused_vars(scope: Scope, is_global?: boolean): {Unused
          if var.used_as_type then
             var.declared_at.elide_type = true
          else
-            if (t is TypeDeclType or t is TypeAliasType) and not is_global then
+            if t is TypeDeclType and not is_global then
                var.declared_at.elide_type = true
             end
             list = list or {}
             table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
          end
-      elseif var.used and (t is TypeDeclType or t is TypeAliasType) and var.aliasing then
+      elseif var.used and t is TypeDeclType and var.aliasing then
          var.aliasing.used = true
          var.aliasing.declared_at.elide_type = false
       end
@@ -6797,10 +6769,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return "boolean"
    elseif t.typename == "none" then
       return ""
-   elseif t is TypeAliasType then
-      return "type alias to " .. show(t.alias_to)
    elseif t is TypeDeclType then
-      return "type " .. show(t.def)
+      return (t.is_alias and "type alias to " or "type ") .. show(t.def)
    else
       return "<" .. t.typename .. ">" -- TODO add string.format("%p", t) with compat-5.4
    end
@@ -7276,7 +7246,7 @@ do
             typ = typ.found
          end
       end
-      if typ is TypeDeclType or typ is TypeAliasType then
+      if typ is TypeDeclType then
          return typ
       elseif accept_typearg and typ is TypeArgType then
          return typ
@@ -7286,8 +7256,6 @@ do
    local function type_for_union(t: Type): string, Type
       if t is TypeDeclType then
          return type_for_union(t.def), t.def
-      elseif t is TypeAliasType then
-         return type_for_union(t.alias_to), t.alias_to
       elseif t is TupleType then
          return type_for_union(t.tuple[1]), t.tuple[1]
       elseif t is NominalType then
@@ -7396,8 +7364,6 @@ do
    local function resolve_typedecl(t: Type): Type
       if t is TypeDeclType then
          return t.def
-      elseif t is TypeAliasType then
-         return t.alias_to
       else
          return t
       end
@@ -7513,9 +7479,7 @@ do
          elseif t is TypeDeclType then
             assert(copy is TypeDeclType)
             copy.def, same = resolve(t.def, same)
-         elseif t is TypeAliasType then
-            assert(copy is TypeAliasType)
-            copy.alias_to, same = resolve(t.alias_to, same)
+            copy.is_alias = t.is_alias
             copy.is_nested_alias = t.is_nested_alias
          elseif t is NominalType then
             assert(copy is NominalType)
@@ -7956,8 +7920,10 @@ do
             return self.errs:invalid_at(t, "unknown type %s", t)
          end
 
-         if found is TypeAliasType then
-            found = found.alias_to.found
+         if found is TypeDeclType and found.is_alias then
+            local def = found.def
+            assert(def is NominalType)
+            found = def.found
          end
 
          if not found then
@@ -8006,23 +7972,34 @@ do
          return resolve_decl_into_nominal(self, t, found)
       end
 
-      function TypeChecker:resolve_typealias(typealias: TypeAliasType): InvalidOrTypeDeclType
-         local t = typealias.alias_to
+      function TypeChecker:resolve_typealias(ta: TypeDeclType): InvalidOrTypeDeclType
+         -- given a typealias that points to a nominal,
+         local nom = ta.def
+         assert(nom is NominalType)
 
-         local immediate, found = find_nominal_type_decl(self, t)
+         local immediate, found = find_nominal_type_decl(self, nom)
+         -- if it was previously resolved (or a circular require, or an error), return that;
          if immediate is InvalidOrTypeDeclType then
             return immediate
          end
 
-         if not t.typevals then
+         -- if nominal has no type arguments, resolve alias to that;
+         if not nom.typevals then
+            nom.resolved = found
             return found
          end
 
-         local resolved = resolve_decl_into_nominal(self, t, found)
+         -- otherwise, this can't be an alias.
 
-         local typedecl = a_type(typealias, "typedecl", { def = resolved } as TypeDeclType)
-         t.resolved = typedecl
-         return typedecl
+         -- resolve the nominal into a structural type
+         local struc = resolve_decl_into_nominal(self, nom, found)
+
+         -- wrap it into a new non-alias typedecl
+         local td = a_type(ta, "typedecl", { def = struc } as TypeDeclType)
+         nom.resolved = td
+
+         -- and return it
+         return td
       end
    end
 
@@ -9505,12 +9482,15 @@ do
       end
 
       if tbl is TypeDeclType then
-         tbl = tbl.def
-      elseif tbl is TypeAliasType then
          if tbl.is_nested_alias then
             return nil, "cannot use a nested type alias as a concrete value"
+         end
+         local def = tbl.def
+         if def is NominalType then
+            assert(tbl.is_alias)
+            tbl = self:resolve_nominal(def)
          else
-            tbl = self:resolve_nominal(tbl.alias_to)
+            tbl = def
          end
       end
 
@@ -9964,9 +9944,13 @@ do
          t = t.fields[fname]
 
          if t is TypeDeclType then
-            t = t.def
-         elseif t is TypeAliasType then
-            t = t.alias_to.resolved
+            local def = t.def
+            if def is NominalType then
+               assert(t.is_alias)
+               t = def.resolved
+            else
+               t = def
+            end
          end
 
          return t, v, dname
@@ -10020,7 +10004,7 @@ do
                   if def is RecordLikeType and def.fields[exp.e2.tk] then
                      table.insert(t.names, exp.e2.tk)
                      local ft = def.fields[exp.e2.tk]
-                     if ft is TypeType then
+                     if ft is TypeDeclType then
                         t.found = ft
                      else
                         return nil
@@ -10894,9 +10878,10 @@ do
          local ty = resolve_tuple(special_functions["require"](self, value,
                                                                self:find_var_type("require"),
                                                                a_tuple(value.e2, { a_type(value.e2[1], "string", {}) })))
-         if ty is TypeAliasType then
-            return self:resolve_typealias(ty)
-         elseif ty is TypeDeclType then
+         if ty is TypeDeclType then
+            if ty.is_alias then
+               return self:resolve_typealias(ty)
+            end
             return ty
          end
          return a_type(value, "typedecl", { def = ty } as TypeDeclType)
@@ -10920,12 +10905,13 @@ do
          return ty
       else
          local newtype = value.newtype
-         if newtype is TypeAliasType then
-            local aliasing = self:find_var(newtype.alias_to.names[1], "use_type")
+         if newtype.is_alias then
+            local def = newtype.def
+            assert(def is NominalType)
+            local aliasing = self:find_var(def.names[1], "use_type")
             return self:resolve_typealias(newtype), aliasing
-         elseif newtype is TypeDeclType then
-            return newtype, nil
          end
+         return newtype, nil
       end
    end
 
@@ -10943,7 +10929,7 @@ do
       local missing: {string}
       for _, key in ipairs(t.field_order) do
          local ftype = t.fields[key]
-         if not (ftype is TypeDeclType or ftype is TypeAliasType or (ftype is FunctionType and ftype.is_record_function)) then
+         if not (ftype is TypeDeclType or (ftype is FunctionType and ftype.is_record_function)) then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -10990,7 +10976,7 @@ do
       end
 
       local var = self:to_structural(vartype)
-      if var is TypeDeclType or var is TypeAliasType then
+      if var is TypeDeclType then
          self.errs:add(varnode, "cannot reassign a type")
          return nil
       end
@@ -11040,12 +11026,12 @@ do
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
             local nt = node.value.newtype
-            if nt and nt is TypeAliasType and resolved is TypeDeclType then
+            if nt and nt.is_alias and resolved is TypeDeclType then
                if nt.typeargs then
                   local def = resolved.def
-                  -- FIXME ideally we'd like to use `if def is HasTypeArgs`
-                  -- here, but if def.typeargs happens to be nil, the `is`
-                  -- check won't work
+                  -- FIXME this looks sketchy; not sure if just overwriting the
+                  -- type variables in a resolved alias won't have bad side-effects.
+                  -- also global types need to propagate type variables as well.
                   if def is RecordType or def is FunctionType or def is InterfaceType then
                      def.typeargs = nt.typeargs
                   end
@@ -11590,7 +11576,7 @@ do
                   if not df then
                      self.errs:add_in_context(node[i], node, "unknown field " .. ck)
                   else
-                     if df is TypeDeclType or df is TypeAliasType then
+                     if df is TypeDeclType then
                         self.errs:add_in_context(node[i], node, "cannot reassign a type")
                      else
                         self:assert_is_a(node[i], cvtype, df, "in record field", ck)
@@ -12595,10 +12581,12 @@ do
       self:add_var(nil, "@self", a_typedecl(typ, typ))
 
       for fname, ftype in fields_of(typ) do
-         if ftype is TypeAliasType then
-            self:resolve_nominal(ftype.alias_to)
-            self:add_var(nil, fname, ftype)
-         elseif ftype is TypeDeclType then
+         if ftype is TypeDeclType then
+            local def = ftype.def
+            if def is NominalType then
+               assert(ftype.is_alias)
+               self:resolve_nominal(def)
+            end
             self:add_var(nil, fname, ftype)
          end
       end
@@ -12610,7 +12598,7 @@ do
       local scope = self.st[#self.st]
       scope.vars["@self"] = nil
       for fname, ftype in fields_of(typ) do
-         if ftype is TypeAliasType or ftype is TypeDeclType then
+         if ftype is TypeDeclType then
             scope.vars[fname] = nil
          end
       end
@@ -12716,7 +12704,7 @@ do
                            end
                         end
                      end
-                  elseif ftype is TypeAliasType then
+                  elseif ftype is TypeDeclType and ftype.is_alias then
                      self:resolve_typealias(ftype)
                   end
 
@@ -12799,10 +12787,12 @@ do
                      local tv = typ as TypeVarType
                      tv.typevar = t.typearg
                      tv.constraint = t.constraint
-                  elseif t is TypeAliasType then
-                     typ.found = t.alias_to.found
                   elseif t is TypeDeclType then
-                     if t.def.typename ~= "circular_require" then
+                     local def = t.def
+                     if t.is_alias then
+                        assert(def is NominalType)
+                        typ.found = def.found
+                     elseif def.typename ~= "circular_require" then
                         typ.found = t
                      end
                   end
@@ -12837,7 +12827,6 @@ do
    visit_type.cbs["interface"] = visit_type.cbs["record"]
 
    visit_type.cbs["typedecl"] = visit_type_with_typeargs
-   visit_type.cbs["typealias"] = visit_type_with_typeargs
 
    visit_type.cbs["self"] = default_type_visitor
    visit_type.cbs["string"] = default_type_visitor
