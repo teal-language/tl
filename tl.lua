@@ -2430,11 +2430,39 @@ do
       return skip_i
    end
 
+   local function parse_type_body(ps, i, istart, node, tn)
+      local typeargs
+      local def
+      i, typeargs = parse_typeargs_if_any(ps, i)
+
+      def = new_type(ps, istart, tn)
+
+      if typeargs then
+         if def.typename == "record" or def.typename == "interface" then
+            def.typeargs = typeargs
+         end
+      end
+
+      local ok
+      i, ok = parse_type_body_fns[tn](ps, i, def)
+      if not ok then
+         return fail(ps, i, "expected a type")
+      end
+
+      i = verify_end(ps, i, istart, node)
+
+
+
+
+      return i, def
+   end
+
    local function skip_type_body(ps, i)
       local tn = ps.tokens[i].tk
       i = i + 1
       assert(parse_type_body_fns[tn], tn .. " has no parse body function")
-      return parse_type_body_fns[tn](ps, i, {}, { kind = "function" })
+      local ii, tt = parse_type_body(ps, i, i - 1, {}, tn)
+      return ii, not not tt
    end
 
    local function parse_table_value(ps, i)
@@ -3668,7 +3696,8 @@ do
       end
    end
 
-   local function parse_nested_type(ps, i, def, typename, parse_body)
+   local function parse_nested_type(ps, i, def, typename)
+      local istart = i
       i = i + 1
       local iv = i
 
@@ -3678,22 +3707,23 @@ do
          return fail(ps, i, "expected a variable name")
       end
 
-      local nt = new_node(ps, i - 2, "newtype")
-      local ndef = new_type(ps, i, typename)
-      local itype = i
-      local iok = parse_body(ps, i, ndef, nt)
-      if iok then
-         i = iok
-         set_declname(ndef, v.tk)
-         nt.newtype = new_typedecl(ps, itype, ndef)
+      local nt = new_node(ps, istart, "newtype")
+
+      local ndef
+      i, ndef = parse_type_body(ps, i, istart, nt, typename)
+      if not ndef then
+         return i
       end
+
+      set_declname(ndef, v.tk)
+
+      nt.newtype = new_typedecl(ps, istart, ndef)
 
       store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
       return i
    end
 
-   parse_enum_body = function(ps, i, def, node)
-      local istart = i - 1
+   parse_enum_body = function(ps, i, def)
       def.enumset = {}
       while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
          local item
@@ -3702,8 +3732,7 @@ do
             def.enumset[unquote(item.tk)] = true
          end
       end
-      i = verify_end(ps, i, istart, node)
-      return i, node
+      return i, true
    end
 
    local metamethod_names = {
@@ -3812,14 +3841,9 @@ do
    end
 
 
-   parse_record_body = function(ps, i, def, node)
-      local istart = i - 1
+   parse_record_body = function(ps, i, def)
       def.fields = {}
       def.field_order = {}
-
-      if ps.tokens[i].tk == "<" then
-         i, def.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
-      end
 
       if ps.tokens[i].tk == "{" then
          local atype
@@ -3910,7 +3934,7 @@ do
 
             store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
          elseif parse_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
-            i = parse_nested_type(ps, i, def, tn, parse_type_body_fns[tn])
+            i = parse_nested_type(ps, i, def, tn)
          else
             local is_metamethod = false
             if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
@@ -3979,8 +4003,7 @@ do
             end
          end
       end
-      i = verify_end(ps, i, istart, node)
-      return i, node
+      return i, true
    end
 
    parse_type_body_fns = {
@@ -3993,31 +4016,25 @@ do
       local node = new_node(ps, i, "newtype")
       local def
       local tn = ps.tokens[i].tk
-      local itype = i
-      if parse_type_body_fns[tn] then
-         def = new_type(ps, i, tn)
-         i = i + 1
-         i = parse_type_body_fns[tn](ps, i, def, node)
-         if not def then
-            return fail(ps, i, "expected a type")
-         end
+      local istart = i
 
-         node.newtype = new_typedecl(ps, itype, def)
-         return i, node
+      if parse_type_body_fns[tn] then
+         i, def = parse_type_body(ps, i + 1, istart, node, tn)
       else
          i, def = parse_type(ps, i)
-         if not def then
-            return fail(ps, i, "expected a type")
-         end
+      end
 
-         if def.typename == "nominal" then
-            node.newtype = new_typealias(ps, itype, def)
-         else
-            node.newtype = new_typedecl(ps, itype, def)
-         end
+      if not def then
+         return fail(ps, i, "expected a type")
+      end
 
+      if def.typename == "nominal" then
+         node.newtype = new_typealias(ps, istart, def)
          return i, node
       end
+
+      node.newtype = new_typedecl(ps, istart, def)
+      return i, node
    end
 
    local function parse_assignment_expression_list(ps, i, asgn)
@@ -4213,8 +4230,8 @@ do
       local asgn = new_node(ps, i, node_name)
       local nt = new_node(ps, i, "newtype")
       asgn.value = nt
-      local itype = i
-      local def = new_type(ps, i, tn)
+      local istart = i
+      local def
 
       i = i + 2
 
@@ -4223,11 +4240,14 @@ do
          return fail(ps, i, "expected a type name")
       end
 
+      i, def = parse_type_body(ps, i, istart, nt, tn)
+      if not def then
+         return i
+      end
+
       set_declname(def, asgn.var.tk)
 
-      i = parse_type_body_fns[tn](ps, i, def, nt)
-
-      nt.newtype = new_typedecl(ps, itype, def)
+      nt.newtype = new_typedecl(ps, istart, def)
 
       return i, asgn
    end

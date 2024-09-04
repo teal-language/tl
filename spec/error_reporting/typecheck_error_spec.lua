@@ -106,7 +106,7 @@ describe("typecheck errors", function()
 
          aaa.myfunc(b)
       ]], {
-         { msg = "argument 1: Thing (defined in ./bbb.tl:4) is not a Thing (defined in ./aaa.tl:1)" }
+         { msg = "argument 1: Thing (defined in ./bbb.tl:3) is not a Thing (defined in ./aaa.tl:1)" }
       })
    end)
 
