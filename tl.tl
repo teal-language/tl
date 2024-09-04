@@ -4209,12 +4209,12 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    return i, asgn
 end
 
-local function parse_type_constructor(ps: ParseState, i: integer, node_name: NodeKind, type_name: TypeName, parse_body: ParseBody): integer, Node
+local function parse_type_constructor(ps: ParseState, i: integer, node_name: NodeKind, tn: TypeName): integer, Node
    local asgn: Node = new_node(ps, i, node_name)
    local nt: Node = new_node(ps, i, "newtype")
    asgn.value = nt
    local itype = i
-   local def = new_type(ps, i, type_name)
+   local def = new_type(ps, i, tn)
 
    i = i + 2 -- skip `local` or `global`, and the constructor name
 
@@ -4225,7 +4225,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
 
    set_declname(def, asgn.var.tk)
 
-   i = parse_body(ps, i, def, nt)
+   i = parse_type_body_fns[tn](ps, i, def, nt)
 
    nt.newtype = new_typedecl(ps, itype, def)
 
@@ -4256,7 +4256,7 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
       return parse_local_macroexp(ps, i)
    elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "local_type", tn, parse_type_body_fns[tn])
+      return parse_type_constructor(ps, i, "local_type", tn)
    end
    return parse_variable_declarations(ps, i + 1, "local_declaration")
 end
@@ -4269,7 +4269,7 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return parse_type_declaration(ps, i + 2, "global_type")
    elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "global_type", tn, parse_type_body_fns[tn])
+      return parse_type_constructor(ps, i, "global_type", tn)
    elseif ps.tokens[i+1].kind == "identifier" then
       return parse_variable_declarations(ps, i + 1, "global_declaration")
    end
