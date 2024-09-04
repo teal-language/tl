@@ -3660,6 +3660,14 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
    return true
 end
 
+local function set_declname(def: Type, declname: string)
+   if def is RecordType or def is InterfaceType or def is EnumType then
+      if not def.declname then
+         def.declname = declname
+      end
+   end
+end
+
 local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, typename: TypeName, parse_body: ParseBody): integer, boolean
    i = i + 1 -- skip 'record' or 'enum'
    local iv = i
@@ -3676,9 +3684,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
    local iok = parse_body(ps, i, ndef, nt)
    if iok then
       i = iok
-      if ndef is RecordLikeType then
-         ndef.declname = v.tk
-      end
+      set_declname(ndef, v.tk)
       nt.newtype = new_typedecl(ps, itype, ndef)
    end
 
@@ -4193,11 +4199,7 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
          end
       end
 
-      if def is RecordLikeType or def is EnumType then
-         if not def.declname then
-            def.declname = asgn.var.tk
-         end
-      end
+      set_declname(def, asgn.var.tk)
    elseif nt is TypeAliasType then
       if typeargs then
          nt.typeargs = typeargs
@@ -4221,8 +4223,7 @@ local function parse_type_constructor(ps: ParseState, i: integer, node_name: Nod
       return fail(ps, i, "expected a type name")
    end
 
-   assert(def is RecordType or def is InterfaceType or def is EnumType)
-   def.declname = asgn.var.tk
+   set_declname(def, asgn.var.tk)
 
    i = parse_body(ps, i, def, nt)
 
