@@ -2303,6 +2303,7 @@ do
 
 
    local parse_type_list
+   local parse_typeargs_if_any
    local parse_expression
    local parse_expression_and_tk
    local parse_statements
@@ -2662,12 +2663,18 @@ do
       return i, t
    end
 
+   parse_typeargs_if_any = function(ps, i)
+      if ps.tokens[i].tk == "<" then
+         return parse_anglebracket_list(ps, i, parse_typearg)
+      end
+      return i
+   end
+
    local function parse_function_type(ps, i)
       local typ = new_type(ps, i, "function")
       i = i + 1
-      if ps.tokens[i].tk == "<" then
-         i, typ.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
-      end
+
+      i, typ.typeargs = parse_typeargs_if_any(ps, i)
       if ps.tokens[i].tk == "(" then
          i, typ.args, typ.is_method, typ.min_arity = parse_argument_type_list(ps, i)
          i, typ.rets = parse_return_types(ps, i)
@@ -2838,9 +2845,7 @@ do
 
    local function parse_function_args_rets_body(ps, i, node)
       local istart = i - 1
-      if ps.tokens[i].tk == "<" then
-         i, node.typeargs = parse_anglebracket_list(ps, i, parse_typearg)
-      end
+      i, node.typeargs = parse_typeargs_if_any(ps, i)
       i, node.args, node.min_arity = parse_argument_list(ps, i)
       i, node.rets = parse_return_types(ps, i)
       i, node.body = parse_statements(ps, i)
