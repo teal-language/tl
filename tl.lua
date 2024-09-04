@@ -1963,7 +1963,6 @@ end
 
 
 
-
 local TruthyFact = {}
 
 
@@ -3687,9 +3686,8 @@ do
       def.enumset = {}
       while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
          local item
-         i, item = verify_kind(ps, i, "string", "enum_item")
+         i, item = verify_kind(ps, i, "string", "string")
          if item then
-            table.insert(node, item)
             def.enumset[unquote(item.tk)] = true
          end
       end
