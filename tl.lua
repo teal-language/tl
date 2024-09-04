@@ -4209,12 +4209,12 @@ do
       return i, asgn
    end
 
-   local function parse_type_constructor(ps, i, node_name, type_name, parse_body)
+   local function parse_type_constructor(ps, i, node_name, tn)
       local asgn = new_node(ps, i, node_name)
       local nt = new_node(ps, i, "newtype")
       asgn.value = nt
       local itype = i
-      local def = new_type(ps, i, type_name)
+      local def = new_type(ps, i, tn)
 
       i = i + 2
 
@@ -4225,7 +4225,7 @@ do
 
       set_declname(def, asgn.var.tk)
 
-      i = parse_body(ps, i, def, nt)
+      i = parse_type_body_fns[tn](ps, i, def, nt)
 
       nt.newtype = new_typedecl(ps, itype, def)
 
@@ -4256,7 +4256,7 @@ do
       elseif ntk == "macroexp" and ps.tokens[i + 2].kind == "identifier" then
          return parse_local_macroexp(ps, i)
       elseif parse_type_body_fns[tn] and ps.tokens[i + 2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "local_type", tn, parse_type_body_fns[tn])
+         return parse_type_constructor(ps, i, "local_type", tn)
       end
       return parse_variable_declarations(ps, i + 1, "local_declaration")
    end
@@ -4269,7 +4269,7 @@ do
       elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
          return parse_type_declaration(ps, i + 2, "global_type")
       elseif parse_type_body_fns[tn] and ps.tokens[i + 2].kind == "identifier" then
-         return parse_type_constructor(ps, i, "global_type", tn, parse_type_body_fns[tn])
+         return parse_type_constructor(ps, i, "global_type", tn)
       elseif ps.tokens[i + 1].kind == "identifier" then
          return parse_variable_declarations(ps, i + 1, "global_declaration")
       end
