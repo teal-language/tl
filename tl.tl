@@ -4109,6 +4109,33 @@ local function parse_variable_declarations(ps: ParseState, i: integer, node_name
    return i, asgn
 end
 
+local function parse_type_require(ps: ParseState, i: integer, asgn: Node): integer, Node
+   local istart = i
+   i, asgn.value = parse_expression(ps, i)
+   if not asgn.value then
+      return i
+   end
+   if asgn.value.op and asgn.value.op.op ~= "@funcall" and asgn.value.op.op ~= "." then
+      fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
+      return i
+   end
+   if not node_is_require_call(asgn.value) then
+      fail(ps, istart, "require() for type declarations must have a literal argument")
+      return i
+   end
+   return i, asgn
+end
+
+local function parse_special_type_declaration(ps: ParseState, i: integer, asgn: Node): boolean, integer, Node
+   if ps.tokens[i].tk == "require" then
+      return true, parse_type_require(ps, i, asgn)
+   elseif ps.tokens[i].tk == "pcall" then
+      fail(ps, i, "pcall() cannot be used in type declarations")
+      return true, i
+   end
+   return false, i, asgn
+end
+
 parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
    local asgn: Node = new_node(ps, i, node_name)
    local var: Node
@@ -4131,25 +4158,10 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    i = verify_tk(ps, i, "=")
 
    if ps.tokens[i].kind == "identifier" then
-      if ps.tokens[i].tk == "require" then
-         local istart = i
-         i, asgn.value = parse_expression(ps, i)
-         if asgn.value then
-            if asgn.value.op and asgn.value.op.op ~= "@funcall" and asgn.value.op.op ~= "." then
-               fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
-               return i
-            end
-            if not node_is_require_call(asgn.value) then
-               fail(ps, istart, "require() for type declarations must have a literal argument")
-               return i
-            end
-            return i, asgn
-         else
-            return i
-         end
-      elseif ps.tokens[i].tk == "pcall" then
-         fail(ps, i, "pcall() cannot be used in type declarations")
-         return i
+      local done: boolean
+      done, i, asgn = parse_special_type_declaration(ps, i, asgn)
+      if done then
+         return i, asgn
       end
    end
 
