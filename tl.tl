@@ -10417,7 +10417,7 @@ do
       end
    end
 
-   local function special_pcall_xpcall(self: TypeChecker, node: Node, _a: Type, b: TupleType, argdelta: integer): Type
+   local function special_pcall_xpcall(self: TypeChecker, node: Node, _a: Type, b: TupleType, argdelta?: integer): Type
       local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
       local bool = a_type(node, "boolean", {})
       if #node.e2 < base_nargs then
@@ -10463,8 +10463,8 @@ do
       return rets
    end
 
-   local special_functions: {string : function(TypeChecker, Node,Type,TupleType,integer):InvalidOrTupleType } = {
-      ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
+   local special_functions: {string : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
+      ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
             return self.errs:invalid_at(node, "pairs requires an argument")
          end
@@ -10489,7 +10489,7 @@ do
          return (self:type_check_function_call(node, a, b, argdelta))
       end,
 
-      ["ipairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
+      ["ipairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
             return self.errs:invalid_at(node, "ipairs requires an argument")
          end
@@ -10510,7 +10510,7 @@ do
          return (self:type_check_function_call(node, a, b, argdelta))
       end,
 
-      ["rawget"] = function(self: TypeChecker, node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
+      ["rawget"] = function(self: TypeChecker, node: Node, _a: Type, b: TupleType, _argdelta?: integer): InvalidOrTupleType
          -- TODO should those offsets be fixed by _argdelta?
          if #b.tuple == 2 then
             return a_tuple(node, { self:type_check_index(node.e2[1], node.e2[2], b.tuple[1], b.tuple[2]) })
@@ -10519,7 +10519,7 @@ do
          end
       end,
 
-      ["require"] = function(self: TypeChecker, node: Node, _a: Type, b: TupleType, _argdelta: integer): InvalidOrTupleType
+      ["require"] = function(self: TypeChecker, node: Node, _a: Type, b: TupleType, _argdelta?: integer): InvalidOrTupleType
          if #b.tuple ~= 1 then
             return self.errs:invalid_at(node, "require expects one literal argument")
          end
@@ -10552,7 +10552,7 @@ do
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
 
-      ["assert"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta: integer): InvalidOrTupleType
+      ["assert"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          node.known = FACT_TRUTHY
          local r = self:type_check_function_call(node, a, b, argdelta)
          self:apply_facts(node, node.e2[1].known)
@@ -10891,13 +10891,15 @@ do
          and value.e1.kind == "variable"
          and value.e1.tk == "require"
       then
-         local t = special_functions["require"](self, value, self:find_var_type("require"), a_tuple(value.e2, { a_type(value.e2[1], "string", {}) }), 0)
-
-         -- FIXME why is this ': Type' annotation needed?
-         local ty: Type = t is TupleType and t.tuple[1] or t
-
-         ty = (ty is TypeAliasType) and self:resolve_typealias(ty) or ty
-         return (ty is TypeDeclType) and ty or (a_type(value, "typedecl", { def = ty } as TypeDeclType))
+         local ty = resolve_tuple(special_functions["require"](self, value,
+                                                               self:find_var_type("require"),
+                                                               a_tuple(value.e2, { a_type(value.e2[1], "string", {}) })))
+         if ty is TypeAliasType then
+            return self:resolve_typealias(ty)
+         elseif ty is TypeDeclType then
+            return ty
+         end
+         return a_type(value, "typedecl", { def = ty } as TypeDeclType)
       elseif value.kind == "op"
          and value.op.op == "."
       then

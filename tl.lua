@@ -2451,9 +2451,6 @@ do
 
       i = verify_end(ps, i, istart, node)
 
-
-
-
       return i, def
    end
 
@@ -10894,13 +10891,15 @@ self:expand_type(node, values, elements) })
          value.e1.kind == "variable" and
          value.e1.tk == "require" then
 
-         local t = special_functions["require"](self, value, self:find_var_type("require"), a_type(value.e2, "tuple", { tuple = { a_type(value.e2[1], "string", {}) } }), 0)
-
-
-         local ty = t.typename == "tuple" and t.tuple[1] or t
-
-         ty = (ty.typename == "typealias") and self:resolve_typealias(ty) or ty
-         return (ty.typename == "typedecl") and ty or (a_type(value, "typedecl", { def = ty }))
+         local ty = resolve_tuple(special_functions["require"](self, value,
+         self:find_var_type("require"),
+         a_type(value.e2, "tuple", { tuple = { a_type(value.e2[1], "string", {}) } })))
+         if ty.typename == "typealias" then
+            return self:resolve_typealias(ty)
+         elseif ty.typename == "typedecl" then
+            return ty
+         end
+         return a_type(value, "typedecl", { def = ty })
       elseif value.kind == "op" and
          value.op.op == "." then
 
