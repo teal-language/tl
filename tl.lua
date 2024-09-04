@@ -1582,7 +1582,6 @@ end
 
 
 
-
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1593,7 +1592,6 @@ local table_types = {
    ["tupletable"] = true,
 
    ["typedecl"] = false,
-   ["typealias"] = false,
    ["typevar"] = false,
    ["typearg"] = false,
    ["function"] = false,
@@ -1644,14 +1642,6 @@ local table_types = {
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
-
-
-
-
-
-
-
-
 
 
 
@@ -2389,12 +2379,6 @@ do
       t.is_va = is_va
       t.tuple = types or {}
       return t, t.tuple
-   end
-
-   local function new_typealias(ps, i, alias_to)
-      local t = new_type(ps, i, "typealias")
-      t.alias_to = alias_to
-      return t
    end
 
    local function new_nominal(ps, i, name)
@@ -3925,7 +3909,7 @@ do
             end
 
             local ntt = nt.newtype
-            if ntt.typename == "typealias" then
+            if ntt.is_alias then
                ntt.is_nested_alias = true
             end
 
@@ -4020,17 +4004,16 @@ do
       else
          i, def = parse_type(ps, i)
       end
-
       if not def then
          return fail(ps, i, "expected a type")
       end
 
+      node.newtype = new_typedecl(ps, istart, def)
+
       if def.typename == "nominal" then
-         node.newtype = new_typealias(ps, istart, def)
-         return i, node
+         node.newtype.is_alias = true
       end
 
-      node.newtype = new_typedecl(ps, istart, def)
       return i, node
    end
 
@@ -4214,10 +4197,6 @@ do
          end
 
          set_declname(def, asgn.var.tk)
-      elseif nt.typename == "typealias" then
-         if typeargs then
-            nt.typeargs = typeargs
-         end
       end
 
       return i, asgn
@@ -4621,8 +4600,6 @@ local function recurse_type(s, ast, visit)
       if ast.vtype then
          table.insert(xs, recurse_type(s, ast.vtype, visit))
       end
-   elseif ast.typename == "typealias" then
-      table.insert(xs, recurse_type(s, ast.alias_to, visit))
    elseif ast.typename == "typedecl" then
       table.insert(xs, recurse_type(s, ast.def, visit))
    end
@@ -5545,12 +5522,12 @@ function tl.pretty_print_ast(ast, gen_target, mode)
          after = function(_, node, _children)
             local out = { y = node.y, h = 0 }
             local nt = node.newtype
-            if nt.typename == "typealias" then
-               table.insert(out, table.concat(nt.alias_to.names, "."))
-            elseif nt.typename == "typedecl" then
+            if nt.typename == "typedecl" then
                local def = nt.def
                if def.fields then
                   table.insert(out, print_record_def(def))
+               elseif def.typename == "nominal" then
+                  table.insert(out, table.concat(def.names, "."))
                else
                   table.insert(out, "{}")
                end
@@ -5664,7 +5641,6 @@ function tl.pretty_print_ast(ast, gen_target, mode)
 
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["typedecl"] = default_type_visitor
-   visit_type.cbs["typealias"] = default_type_visitor
    visit_type.cbs["typevar"] = default_type_visitor
    visit_type.cbs["typearg"] = default_type_visitor
    visit_type.cbs["function"] = default_type_visitor
@@ -5746,7 +5722,6 @@ local typename_to_typecode = {
    ["tuple"] = tl.typecodes.UNKNOWN,
    ["literal_table_item"] = tl.typecodes.UNKNOWN,
    ["typedecl"] = tl.typecodes.UNKNOWN,
-   ["typealias"] = tl.typecodes.UNKNOWN,
    ["*"] = tl.typecodes.UNKNOWN,
 }
 
@@ -5846,8 +5821,6 @@ function TypeReporter:get_typenum(t)
 
    if rt.typename == "typedecl" then
       rt = rt.def
-   elseif rt.typename == "typealias" then
-      rt = rt.alias_to
    end
 
    local ti = {
@@ -5869,7 +5842,7 @@ function TypeReporter:get_typenum(t)
          rt = t
       end
    end
-   assert(not (rt.typename == "typedecl" or rt.typename == "typealias"))
+   assert(not (rt.typename == "typedecl"))
 
    if rt.fields then
 
@@ -6248,7 +6221,6 @@ function Errors:unused_warning(name, var)
       var.is_func_arg and "argument" or
       t.typename == "function" and "function" or
       t.typename == "typedecl" and "type" or
-      t.typename == "typealias" and "type" or
       "variable",
       name,
       show_type(var.t))
@@ -6300,13 +6272,13 @@ local function check_for_unused_vars(scope, is_global)
          if var.used_as_type then
             var.declared_at.elide_type = true
          else
-            if (t.typename == "typedecl" or t.typename == "typealias") and not is_global then
+            if t.typename == "typedecl" and not is_global then
                var.declared_at.elide_type = true
             end
             list = list or {}
             table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
          end
-      elseif var.used and (t.typename == "typedecl" or t.typename == "typealias") and var.aliasing then
+      elseif var.used and t.typename == "typedecl" and var.aliasing then
          var.aliasing.used = true
          var.aliasing.declared_at.elide_type = false
       end
@@ -6797,10 +6769,8 @@ local function show_type_base(t, short, seen)
       return "boolean"
    elseif t.typename == "none" then
       return ""
-   elseif t.typename == "typealias" then
-      return "type alias to " .. show(t.alias_to)
    elseif t.typename == "typedecl" then
-      return "type " .. show(t.def)
+      return (t.is_alias and "type alias to " or "type ") .. show(t.def)
    else
       return "<" .. t.typename .. ">"
    end
@@ -7276,7 +7246,7 @@ do
             typ = typ.found
          end
       end
-      if typ.typename == "typedecl" or typ.typename == "typealias" then
+      if typ.typename == "typedecl" then
          return typ
       elseif accept_typearg and typ.typename == "typearg" then
          return typ
@@ -7286,8 +7256,6 @@ do
    local function type_for_union(t)
       if t.typename == "typedecl" then
          return type_for_union(t.def), t.def
-      elseif t.typename == "typealias" then
-         return type_for_union(t.alias_to), t.alias_to
       elseif t.typename == "tuple" then
          return type_for_union(t.tuple[1]), t.tuple[1]
       elseif t.typename == "nominal" then
@@ -7396,8 +7364,6 @@ do
    local function resolve_typedecl(t)
       if t.typename == "typedecl" then
          return t.def
-      elseif t.typename == "typealias" then
-         return t.alias_to
       else
          return t
       end
@@ -7513,9 +7479,7 @@ do
          elseif t.typename == "typedecl" then
             assert(copy.typename == "typedecl")
             copy.def, same = resolve(t.def, same)
-         elseif t.typename == "typealias" then
-            assert(copy.typename == "typealias")
-            copy.alias_to, same = resolve(t.alias_to, same)
+            copy.is_alias = t.is_alias
             copy.is_nested_alias = t.is_nested_alias
          elseif t.typename == "nominal" then
             assert(copy.typename == "nominal")
@@ -7956,8 +7920,10 @@ do
             return self.errs:invalid_at(t, "unknown type %s", t)
          end
 
-         if found.typename == "typealias" then
-            found = found.alias_to.found
+         if found.typename == "typedecl" and found.is_alias then
+            local def = found.def
+            assert(def.typename == "nominal")
+            found = def.found
          end
 
          if not found then
@@ -8006,23 +7972,34 @@ do
          return resolve_decl_into_nominal(self, t, found)
       end
 
-      function TypeChecker:resolve_typealias(typealias)
-         local t = typealias.alias_to
+      function TypeChecker:resolve_typealias(ta)
 
-         local immediate, found = find_nominal_type_decl(self, t)
+         local nom = ta.def
+         assert(nom.typename == "nominal")
+
+         local immediate, found = find_nominal_type_decl(self, nom)
+
          if type(immediate) == "table" then
             return immediate
          end
 
-         if not t.typevals then
+
+         if not nom.typevals then
+            nom.resolved = found
             return found
          end
 
-         local resolved = resolve_decl_into_nominal(self, t, found)
 
-         local typedecl = a_type(typealias, "typedecl", { def = resolved })
-         t.resolved = typedecl
-         return typedecl
+
+
+         local struc = resolve_decl_into_nominal(self, nom, found)
+
+
+         local td = a_type(ta, "typedecl", { def = struc })
+         nom.resolved = td
+
+
+         return td
       end
    end
 
@@ -9505,12 +9482,15 @@ a.types[i], b.types[i]), }
       end
 
       if tbl.typename == "typedecl" then
-         tbl = tbl.def
-      elseif tbl.typename == "typealias" then
          if tbl.is_nested_alias then
             return nil, "cannot use a nested type alias as a concrete value"
+         end
+         local def = tbl.def
+         if def.typename == "nominal" then
+            assert(tbl.is_alias)
+            tbl = self:resolve_nominal(def)
          else
-            tbl = self:resolve_nominal(tbl.alias_to)
+            tbl = def
          end
       end
 
@@ -9964,9 +9944,13 @@ a.types[i], b.types[i]), }
          t = t.fields[fname]
 
          if t.typename == "typedecl" then
-            t = t.def
-         elseif t.typename == "typealias" then
-            t = t.alias_to.resolved
+            local def = t.def
+            if def.typename == "nominal" then
+               assert(t.is_alias)
+               t = def.resolved
+            else
+               t = def
+            end
          end
 
          return t, v, dname
@@ -10020,7 +10004,7 @@ a.types[i], b.types[i]), }
                   if def.fields and def.fields[exp.e2.tk] then
                      table.insert(t.names, exp.e2.tk)
                      local ft = def.fields[exp.e2.tk]
-                     if type(ft) == "table" then
+                     if ft.typename == "typedecl" then
                         t.found = ft
                      else
                         return nil
@@ -10894,9 +10878,10 @@ self:expand_type(node, values, elements) })
          local ty = resolve_tuple(special_functions["require"](self, value,
          self:find_var_type("require"),
          a_type(value.e2, "tuple", { tuple = { a_type(value.e2[1], "string", {}) } })))
-         if ty.typename == "typealias" then
-            return self:resolve_typealias(ty)
-         elseif ty.typename == "typedecl" then
+         if ty.typename == "typedecl" then
+            if ty.is_alias then
+               return self:resolve_typealias(ty)
+            end
             return ty
          end
          return a_type(value, "typedecl", { def = ty })
@@ -10920,12 +10905,13 @@ self:expand_type(node, values, elements) })
          return ty
       else
          local newtype = value.newtype
-         if newtype.typename == "typealias" then
-            local aliasing = self:find_var(newtype.alias_to.names[1], "use_type")
+         if newtype.is_alias then
+            local def = newtype.def
+            assert(def.typename == "nominal")
+            local aliasing = self:find_var(def.names[1], "use_type")
             return self:resolve_typealias(newtype), aliasing
-         elseif newtype.typename == "typedecl" then
-            return newtype, nil
          end
+         return newtype, nil
       end
    end
 
@@ -10943,7 +10929,7 @@ self:expand_type(node, values, elements) })
       local missing
       for _, key in ipairs(t.field_order) do
          local ftype = t.fields[key]
-         if not (ftype.typename == "typedecl" or ftype.typename == "typealias" or (ftype.typename == "function" and ftype.is_record_function)) then
+         if not (ftype.typename == "typedecl" or (ftype.typename == "function" and ftype.is_record_function)) then
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
       end
@@ -10990,7 +10976,7 @@ self:expand_type(node, values, elements) })
       end
 
       local var = self:to_structural(vartype)
-      if var.typename == "typedecl" or var.typename == "typealias" then
+      if var.typename == "typedecl" then
          self.errs:add(varnode, "cannot reassign a type")
          return nil
       end
@@ -11040,7 +11026,7 @@ self:expand_type(node, values, elements) })
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
             local nt = node.value.newtype
-            if nt and nt.typename == "typealias" and resolved.typename == "typedecl" then
+            if nt and nt.is_alias and resolved.typename == "typedecl" then
                if nt.typeargs then
                   local def = resolved.def
 
@@ -11590,7 +11576,7 @@ self:expand_type(node, values, elements) })
                   if not df then
                      self.errs:add_in_context(node[i], node, "unknown field " .. ck)
                   else
-                     if df.typename == "typedecl" or df.typename == "typealias" then
+                     if df.typename == "typedecl" then
                         self.errs:add_in_context(node[i], node, "cannot reassign a type")
                      else
                         self:assert_is_a(node[i], cvtype, df, "in record field", ck)
@@ -12595,10 +12581,12 @@ self:expand_type(node, values, elements) })
       self:add_var(nil, "@self", a_type(typ, "typedecl", { def = typ }))
 
       for fname, ftype in fields_of(typ) do
-         if ftype.typename == "typealias" then
-            self:resolve_nominal(ftype.alias_to)
-            self:add_var(nil, fname, ftype)
-         elseif ftype.typename == "typedecl" then
+         if ftype.typename == "typedecl" then
+            local def = ftype.def
+            if def.typename == "nominal" then
+               assert(ftype.is_alias)
+               self:resolve_nominal(def)
+            end
             self:add_var(nil, fname, ftype)
          end
       end
@@ -12610,7 +12598,7 @@ self:expand_type(node, values, elements) })
       local scope = self.st[#self.st]
       scope.vars["@self"] = nil
       for fname, ftype in fields_of(typ) do
-         if ftype.typename == "typealias" or ftype.typename == "typedecl" then
+         if ftype.typename == "typedecl" then
             scope.vars[fname] = nil
          end
       end
@@ -12716,7 +12704,7 @@ self:expand_type(node, values, elements) })
                            end
                         end
                      end
-                  elseif ftype.typename == "typealias" then
+                  elseif ftype.typename == "typedecl" and ftype.is_alias then
                      self:resolve_typealias(ftype)
                   end
 
@@ -12799,10 +12787,12 @@ self:expand_type(node, values, elements) })
                      local tv = typ
                      tv.typevar = t.typearg
                      tv.constraint = t.constraint
-                  elseif t.typename == "typealias" then
-                     typ.found = t.alias_to.found
                   elseif t.typename == "typedecl" then
-                     if t.def.typename ~= "circular_require" then
+                     local def = t.def
+                     if t.is_alias then
+                        assert(def.typename == "nominal")
+                        typ.found = def.found
+                     elseif def.typename ~= "circular_require" then
                         typ.found = t
                      end
                   end
@@ -12837,7 +12827,6 @@ self:expand_type(node, values, elements) })
    visit_type.cbs["interface"] = visit_type.cbs["record"]
 
    visit_type.cbs["typedecl"] = visit_type_with_typeargs
-   visit_type.cbs["typealias"] = visit_type_with_typeargs
 
    visit_type.cbs["self"] = default_type_visitor
    visit_type.cbs["string"] = default_type_visitor
