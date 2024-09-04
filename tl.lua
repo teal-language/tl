@@ -3660,6 +3660,14 @@ do
       return true
    end
 
+   local function set_declname(def, declname)
+      if def.typename == "record" or def.typename == "interface" or def.typename == "enum" then
+         if not def.declname then
+            def.declname = declname
+         end
+      end
+   end
+
    local function parse_nested_type(ps, i, def, typename, parse_body)
       i = i + 1
       local iv = i
@@ -3676,9 +3684,7 @@ do
       local iok = parse_body(ps, i, ndef, nt)
       if iok then
          i = iok
-         if ndef.fields then
-            ndef.declname = v.tk
-         end
+         set_declname(ndef, v.tk)
          nt.newtype = new_typedecl(ps, itype, ndef)
       end
 
@@ -4193,11 +4199,7 @@ do
             end
          end
 
-         if def.fields or def.typename == "enum" then
-            if not def.declname then
-               def.declname = asgn.var.tk
-            end
-         end
+         set_declname(def, asgn.var.tk)
       elseif nt.typename == "typealias" then
          if typeargs then
             nt.typeargs = typeargs
@@ -4221,8 +4223,7 @@ do
          return fail(ps, i, "expected a type name")
       end
 
-      assert(def.typename == "record" or def.typename == "interface" or def.typename == "enum")
-      def.declname = asgn.var.tk
+      set_declname(def, asgn.var.tk)
 
       i = parse_body(ps, i, def, nt)
 

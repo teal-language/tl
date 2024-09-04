@@ -15,7 +15,7 @@ describe("bidirectional inference for table literals", function()
       }
       print(x)
    ]], {
-      { msg = "in record field: type: string \"who\" is not a member of enum" },
+      { msg = "in record field: type: string \"who\" is not a member of TypeEnum" },
    }))
 
    it("directed inference produces correct results for incomplete records (regression test for #348)", util.check([[
@@ -48,7 +48,7 @@ describe("bidirectional inference for table literals", function()
 
       f:bar({ "a", "b" })
    ]], {
-      { msg = 'expected an array: at index 2: string "b" is not a member of enum' }
+      { msg = 'expected an array: at index 2: string "b" is not a member of Eno' }
    }))
 
    it("resolves nominals across nested generics (regression test for #499)", util.check_type_error([[
