@@ -9336,21 +9336,9 @@ do
          return f.rets
       end
 
-      local function check_call(self: TypeChecker, w: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, is_typedecl_funcall: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
+      local function check_call(self: TypeChecker, w: Where, where_args: {Node}, func: FunctionType | PolyType, args: TupleType, expected_rets: TupleType, is_typedecl_funcall: boolean, argdelta: integer, is_method: boolean): InvalidOrTupleType, FunctionType
          assert(type(func) == "table")
          assert(type(args) == "table")
-
-         local is_method = (argdelta == -1)
-
-         if not (func is FunctionType or func is PolyType) then
-            func, is_method = self:resolve_for_call(func, args, is_method)
-            if is_method then
-               argdelta = -1
-            end
-            if not (func is FunctionType or func is PolyType) then
-               return self.errs:invalid_at(w, "not a function: %s", func)
-            end
-         end
 
          if is_method and args.tuple[1] then
             self:add_var(nil, "@self", a_typedecl(w, args.tuple[1]))
@@ -9443,7 +9431,21 @@ do
             end
          end
 
-         local ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
+         local is_method = (argdelta == -1)
+
+         if not (func is FunctionType or func is PolyType) then
+            func, is_method = self:resolve_for_call(func, args, is_method)
+            if is_method then
+               argdelta = -1
+            end
+         end
+
+         local ret, f: InvalidOrTupleType, FunctionType
+         if func is FunctionType or func is PolyType then
+            ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0, is_method)
+         else
+            ret = self.errs:invalid_at(node, "not a function: %s", func)
+         end
 
          if f then
             mark_invalid_typeargs(self, f)
