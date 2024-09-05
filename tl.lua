@@ -9371,11 +9371,11 @@ a.types[i], b.types[i]), }
                   local min_arity = self.feat_arity and f.min_arity or 0
 
 
-                  if (passes == 1 and ((given <= wanted and given >= min_arity) or (f.args.is_va and given > wanted) or (self.feat_lax and given <= wanted))) or
+                  if (passes == 1 and ((given <= wanted and given >= min_arity) or (f.args.is_va and given > wanted))) or
 
                      (passes == 3 and ((pass == 1 and given == wanted) or
 
-                     (pass == 2 and given < wanted and (self.feat_lax or given >= min_arity)) or
+                     (pass == 2 and given < wanted and given >= min_arity) or
 
                      (pass == 3 and f.args.is_va and given > wanted))) then
 
@@ -12991,6 +12991,10 @@ self:expand_type(node, values, elements) })
       self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
       self.gen_compat = opts.gen_compat or env.defaults.gen_compat or DEFAULT_GEN_COMPAT
       self.gen_target = opts.gen_target or env.defaults.gen_target or DEFAULT_GEN_TARGET
+
+      if self.feat_lax then
+         self.feat_arity = false
+      end
 
       if self.gen_target == "5.4" and self.gen_compat ~= "off" then
          return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
