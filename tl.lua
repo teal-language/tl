@@ -9277,9 +9277,7 @@ a.types[i], b.types[i]), }
 
             infer_emptytables(self, w, where_args, args, f.args, argdelta)
 
-            mark_invalid_typeargs(self, f)
-
-            return self:resolve_typevars_at(w, f.rets)
+            return f.rets
          end
       end
 
@@ -9335,9 +9333,7 @@ a.types[i], b.types[i]), }
 
          local f = resolve_function_type(func, 1)
 
-         mark_invalid_typeargs(self, f)
-
-         return self:resolve_typevars_at(w, f.rets)
+         return f.rets
       end
 
       local function check_call(self, w, where_args, func, args, expected_rets, is_typedecl_funcall, argdelta)
@@ -9448,6 +9444,10 @@ a.types[i], b.types[i]), }
          end
 
          local ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
+
+         if f then
+            mark_invalid_typeargs(self, f)
+         end
 
          ret = self:resolve_typevars_at(node, ret)
          self:end_scope()

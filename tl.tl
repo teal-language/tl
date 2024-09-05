@@ -9277,9 +9277,7 @@ do
 
             infer_emptytables(self, w, where_args, args, f.args, argdelta)
 
-            mark_invalid_typeargs(self, f)
-
-            return self:resolve_typevars_at(w, f.rets)
+            return f.rets
          end
       end
 
@@ -9335,9 +9333,7 @@ do
 
          local f = resolve_function_type(func, 1)
 
-         mark_invalid_typeargs(self, f)
-
-         return self:resolve_typevars_at(w, f.rets)
+         return f.rets
       end
 
       local function check_call(self: TypeChecker, w: Where, where_args: {Node}, func: Type, args: TupleType, expected_rets: TupleType, is_typedecl_funcall: boolean, argdelta: integer): InvalidOrTupleType, FunctionType
@@ -9448,6 +9444,10 @@ do
          end
 
          local ret, f = check_call(self, node, e2, func, args, expected_rets, is_typedecl_funcall, argdelta or 0)
+
+         if f then
+            mark_invalid_typeargs(self, f)
+         end
 
          ret = self:resolve_typevars_at(node, ret)
          self:end_scope()
