@@ -7432,7 +7432,7 @@ do
       return
    end
 
-   typevar_resolver = function<S>(self: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}, {string:Type}
+   typevar_resolver = function<S>(self: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
       local resolved: {string:Type} = {}
@@ -7604,7 +7604,7 @@ do
 
       clear_resolved_typeargs(copy, resolved)
 
-      return true, copy, nil, resolved
+      return true, copy, nil
    end
 
    local function resolve_typevar(tc: TypeChecker, t: TypeVarType): Type
