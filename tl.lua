@@ -7604,7 +7604,7 @@ do
 
       clear_resolved_typeargs(copy, resolved)
 
-      return true, copy, nil, resolved
+      return true, copy, nil
    end
 
    local function resolve_typevar(tc, t)
