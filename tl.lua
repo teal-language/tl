@@ -11677,12 +11677,8 @@ self:expand_type(node, values, elements) })
                end
             end
 
-            local t
-            if force_array then
-               t = self:infer_at(node, a_type(node, "array", { elements = force_array }))
-            else
-               t = self:resolve_typevars_at(node, node.expected)
-            end
+            local t = force_array and a_type(node, "array", { elements = force_array }) or node.expected
+            t = self:infer_at(node, t)
 
             if decltype.typename == "record" then
                local rt = self:to_structural(t)
@@ -12234,7 +12230,7 @@ self:expand_type(node, values, elements) })
                         local a_is = self:is_a(ua, expected)
                         local b_is = self:is_a(ub, expected)
                         if a_is and b_is then
-                           t = self:resolve_typevars_at(node, expected)
+                           t = self:infer_at(node, expected)
                         end
                      end
                      if not t then
