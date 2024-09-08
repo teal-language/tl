@@ -7261,7 +7261,7 @@ do
       return true
    end
 
-   function TypeChecker:find_type(names, accept_typearg)
+   function TypeChecker:find_type(names)
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
          if #names == 1 and names[1] == "metatable" then
@@ -7294,8 +7294,8 @@ do
       end
       if typ.typename == "typedecl" then
          return typ
-      elseif accept_typearg and typ.typename == "typearg" then
-         return typ
+      elseif typ.typename == "typearg" then
+         return nil, typ
       end
    end
 
@@ -12835,24 +12835,22 @@ self:expand_type(node, values, elements) })
                   return typ
                end
 
-               local t = self:find_type(typ.names, true)
+               local t, typearg = self:find_type(typ.names)
                if t then
-                  if t.typename == "typearg" then
-
-                     typ.names = nil
-                     edit_type(typ, typ, "typevar")
-                     local tv = typ
-                     tv.typevar = t.typearg
-                     tv.constraint = t.constraint
-                  elseif t.typename == "typedecl" then
-                     local def = t.def
-                     if t.is_alias then
-                        assert(def.typename == "nominal")
-                        typ.found = def.found
-                     elseif def.typename ~= "circular_require" then
-                        typ.found = t
-                     end
+                  local def = t.def
+                  if t.is_alias then
+                     assert(def.typename == "nominal")
+                     typ.found = def.found
+                  elseif def.typename ~= "circular_require" then
+                     typ.found = t
                   end
+               elseif typearg then
+
+                  typ.names = nil
+                  edit_type(typ, typ, "typevar")
+                  local tv = typ
+                  tv.typevar = typearg.typearg
+                  tv.constraint = typearg.constraint
                else
                   local name = typ.names[1]
                   local scope = self.st[#self.st]
