@@ -7261,7 +7261,7 @@ do
       return true
    end
 
-   function TypeChecker:find_type(names: {string}, accept_typearg?: boolean): Type
+   function TypeChecker:find_type(names: {string}): TypeDeclType, TypeArgType
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
          if #names == 1 and names[1] == "metatable" then
@@ -7294,8 +7294,8 @@ do
       end
       if typ is TypeDeclType then
          return typ
-      elseif accept_typearg and typ is TypeArgType then
-         return typ
+      elseif typ is TypeArgType then
+         return nil, typ
       end
    end
 
@@ -12835,24 +12835,22 @@ do
                   return typ
                end
 
-               local t = self:find_type(typ.names, true)
+               local t, typearg = self:find_type(typ.names)
                if t then
-                  if t is TypeArgType then
-                     -- convert nominal into a typevar
-                     typ.names = nil
-                     edit_type(typ, typ, "typevar")
-                     local tv = typ as TypeVarType
-                     tv.typevar = t.typearg
-                     tv.constraint = t.constraint
-                  elseif t is TypeDeclType then
-                     local def = t.def
-                     if t.is_alias then
-                        assert(def is NominalType)
-                        typ.found = def.found
-                     elseif def.typename ~= "circular_require" then
-                        typ.found = t
-                     end
+                  local def = t.def
+                  if t.is_alias then
+                     assert(def is NominalType)
+                     typ.found = def.found
+                  elseif def.typename ~= "circular_require" then
+                     typ.found = t
                   end
+               elseif typearg then
+                  -- convert nominal into a typevar
+                  typ.names = nil
+                  edit_type(typ, typ, "typevar")
+                  local tv = typ as TypeVarType
+                  tv.typevar = typearg.typearg
+                  tv.constraint = typearg.constraint
                else
                   local name = typ.names[1]
                   local scope = self.st[#self.st]
