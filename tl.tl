@@ -7261,6 +7261,15 @@ do
       return true
    end
 
+   local function ensure_not_method(t: Type): Type
+
+      if t is FunctionType and t.is_method then
+         t = shallow_copy_new_type(t)
+         t.is_method = false
+      end
+      return t
+   end
+
    function TypeChecker:find_type(names: {string}): TypeDeclType, TypeArgType
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
@@ -10470,14 +10479,12 @@ do
          return a_tuple(node, { bool })
       end
 
+      local ftype = table.remove(b.tuple, 1)
+
       -- The function called by pcall/xpcall is invoked as a regular function,
       -- so we wish to avoid incorrect error messages / unnecessary warning messages
       -- associated with calling methods as functions
-      local ftype = table.remove(b.tuple, 1)
-      if ftype is FunctionType then
-         ftype = shallow_copy_new_type(ftype)
-         ftype.is_method = false
-      end
+      ftype = ensure_not_method(ftype)
 
       local fe2: Node = node_at(node.e2, {})
       if node.e1.tk == "xpcall" then
@@ -10869,12 +10876,11 @@ do
             if infertype is UnresolvableTypeArgType then
                ok = false
                infertype = self.errs:invalid_at(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
-            elseif infertype is FunctionType and infertype.is_method then
+            else
                -- If we assign a method to a variable, e.g:
                -- `local myfunc = myobj.dothing`,
                -- the variable should not be treated as a method
-               infertype = shallow_copy_new_type(infertype)
-               infertype.is_method = false
+               infertype = ensure_not_method(infertype)
             end
          end
       end
@@ -11709,13 +11715,10 @@ do
                vtype = node.itemtype
                self:assert_is_a(node.value, children[2], node.itemtype, node)
             end
-            if vtype is FunctionType and vtype.is_method then
-               -- If we assign a method to a table item, e.g.
-               -- `local a = { myfunc = myobj.dothing }`
-               -- the table item should not be treated as a method
-               vtype = shallow_copy_new_type(vtype)
-               vtype.is_method = false
-            end
+            -- If we assign a method to a table item, e.g.
+            -- `local a = { myfunc = myobj.dothing }`
+            -- the table item should not be treated as a method
+            vtype = ensure_not_method(vtype)
             return a_type(node, "literal_table_item", {
                kname = kname,
                ktype = ktype,

@@ -7261,6 +7261,15 @@ do
       return true
    end
 
+   local function ensure_not_method(t)
+
+      if t.typename == "function" and t.is_method then
+         t = shallow_copy_new_type(t)
+         t.is_method = false
+      end
+      return t
+   end
+
    function TypeChecker:find_type(names)
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
@@ -10470,14 +10479,12 @@ a.types[i], b.types[i]), }
          return a_type(node, "tuple", { tuple = { bool } })
       end
 
-
-
-
       local ftype = table.remove(b.tuple, 1)
-      if ftype.typename == "function" then
-         ftype = shallow_copy_new_type(ftype)
-         ftype.is_method = false
-      end
+
+
+
+
+      ftype = ensure_not_method(ftype)
 
       local fe2 = node_at(node.e2, {})
       if node.e1.tk == "xpcall" then
@@ -10869,12 +10876,11 @@ self:expand_type(node, values, elements) })
             if infertype.typename == "unresolvable_typearg" then
                ok = false
                infertype = self.errs:invalid_at(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
-            elseif infertype.typename == "function" and infertype.is_method then
+            else
 
 
 
-               infertype = shallow_copy_new_type(infertype)
-               infertype.is_method = false
+               infertype = ensure_not_method(infertype)
             end
          end
       end
@@ -11709,13 +11715,10 @@ self:expand_type(node, values, elements) })
                vtype = node.itemtype
                self:assert_is_a(node.value, children[2], node.itemtype, node)
             end
-            if vtype.typename == "function" and vtype.is_method then
 
 
 
-               vtype = shallow_copy_new_type(vtype)
-               vtype.is_method = false
-            end
+            vtype = ensure_not_method(vtype)
             return a_type(node, "literal_table_item", {
                kname = kname,
                ktype = ktype,
