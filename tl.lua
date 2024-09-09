@@ -9393,10 +9393,13 @@ a.types[i], b.types[i]), }
             local given = #args.tuple
 
             local tried = {}
+            local first_rets
             local first_errs
 
             for pass = 1, 3 do
                for i, f in ipairs(p.types) do
+                  first_rets = first_rets or f.rets
+
                   local wanted = #f.args.tuple
                   local min_arity = self.feat_arity and f.min_arity or 0
 
@@ -9410,7 +9413,7 @@ a.types[i], b.types[i]), }
 
                      local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta)
                      if ok then
-                        return f
+                        return f, f.rets
                      elseif expected_rets then
 
                         infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
@@ -9425,10 +9428,10 @@ a.types[i], b.types[i]), }
             end
 
             if not first_errs then
-               return nil, fail_poly_call_arity(w, p, given)
+               return nil, first_rets, fail_poly_call_arity(w, p, given)
             end
 
-            return nil, first_errs
+            return nil, first_rets, first_errs
          end
       end
 
@@ -9477,12 +9480,7 @@ a.types[i], b.types[i]), }
          self:begin_scope()
 
          if func.typename == "poly" then
-            f, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
-            if f then
-               ret = f.rets
-            else
-               ret = func.types[1].rets
-            end
+            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
          elseif func.typename == "function" then
             ok, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
             f, ret = func, func.rets
