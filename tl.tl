@@ -9373,7 +9373,7 @@ do
          end
       end
 
-      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, {Error}
+      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
       do
          local function fail_poly_call_arity(w: Where, p: PolyType, given: integer): {Error}
             local expects: {string} = {}
@@ -9389,14 +9389,17 @@ do
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
          end
 
-         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, {Error}
+         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
             local given = #args.tuple
 
             local tried: {integer:boolean} = {}
+            local first_rets: TupleType
             local first_errs: {Error}
 
             for pass = 1, 3 do
                for i, f in ipairs(p.types) do
+                  first_rets = first_rets or f.rets
+
                   local wanted = #f.args.tuple
                   local min_arity = self.feat_arity and f.min_arity or 0
 
@@ -9410,7 +9413,7 @@ do
                   then
                      local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta)
                      if ok then
-                        return f
+                        return f, f.rets
                      elseif expected_rets then
                         -- revert inferred returns
                         infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
@@ -9425,10 +9428,10 @@ do
             end
 
             if not first_errs then
-               return nil, fail_poly_call_arity(w, p, given)
+               return nil, first_rets, fail_poly_call_arity(w, p, given)
             end
 
-            return nil, first_errs
+            return nil, first_rets, first_errs
          end
       end
 
@@ -9477,12 +9480,7 @@ do
          self:begin_scope()
 
          if func is PolyType then
-            f, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
-            if f then
-               ret = f.rets
-            else
-               ret = func.types[1].rets
-            end
+            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
          elseif func is FunctionType then
             ok, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
             f, ret = func, func.rets
