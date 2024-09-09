@@ -8085,35 +8085,45 @@ do
          return false, { Err(t1name .. " is not a " .. t2name) }
       end
 
-      function TypeChecker:are_same_nominals(t1, t2)
-         local same_names
-         if t1.found and t2.found then
-            same_names = t1.found.typeid == t2.found.typeid
-         else
-            local ft1 = t1.found or self:find_type(t1.names)
-            local ft2 = t2.found or self:find_type(t2.names)
-            if ft1 and ft2 then
-               same_names = ft1.typeid == ft2.typeid
-            else
-               if are_same_unresolved_global_type(self, t1, t2) then
-                  return true
-               end
-
-               if not ft1 then
-                  self.errs:add(t1, "unknown type %s", t1)
-               end
-               if not ft2 then
-                  self.errs:add(t2, "unknown type %s", t2)
-               end
-               return false, {}
+      local function nominal_found_type(self, nom)
+         local typedecl = nom.found
+         if not typedecl then
+            typedecl = self:find_type(nom.names)
+            if not typedecl then
+               return nil
             end
          end
+         local t = typedecl.def
 
-         if not same_names then
+         return t
+      end
+
+      function TypeChecker:are_same_nominals(t1, t2)
+         local t1f = nominal_found_type(self, t1)
+         local t2f = nominal_found_type(self, t2)
+         if (not t1f or not t2f) then
+            if are_same_unresolved_global_type(self, t1, t2) then
+               return true
+            end
+
+            if not t1f then
+               self.errs:add(t1, "unknown type %s", t1)
+            end
+            if not t2f then
+               self.errs:add(t2, "unknown type %s", t2)
+            end
+            return false, {}
+         end
+
+         if t1f.typeid ~= t2f.typeid then
             return fail_nominals(self, t1, t2)
-         elseif t1.typevals == nil and t2.typevals == nil then
+         end
+
+         if t1.typevals == nil and t2.typevals == nil then
             return true
-         elseif t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
+         end
+
+         if t1.typevals and t2.typevals and #t1.typevals == #t2.typevals then
             local errs = {}
             for i = 1, #t1.typevals do
                local _, typeval_errs = self:same_type(t1.typevals[i], t2.typevals[i])
@@ -8121,6 +8131,8 @@ do
             end
             return any_errors(errs)
          end
+
+
          return true
       end
    end
