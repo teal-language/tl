@@ -1,7 +1,7 @@
 local assert = require("luassert")
 local util = require("spec.util")
 
-describe("tl check", function()
+describe("#cli tl check", function()
    describe("on .tl files", function()
       it("reports if file does not exist", function()
          local pd = io.popen(util.tl_cmd("check", "file_that_does_not_exist.tl") .. " 2>&1", "r")
