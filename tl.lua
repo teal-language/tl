@@ -7525,6 +7525,9 @@ do
          elseif t.typename == "unresolvable_typearg" then
             assert(copy.typename == "unresolvable_typearg")
             copy.typearg = t.typearg
+         elseif t.typename == "unresolved_emptytable_value" then
+            assert(copy.typename == "unresolved_emptytable_value")
+            copy.emptytable_type = t.emptytable_type
          elseif t.typename == "typevar" then
             assert(copy.typename == "typevar")
             copy.typevar = t.typevar
@@ -8443,6 +8446,18 @@ do
       return true
    end
 
+   local function compare_true_inferring_emptytable(self, a, b)
+      self:infer_emptytable(b, self:infer_at(b, a))
+      return true
+   end
+
+   local function compare_true_inferring_emptytable_if_not_userdata(self, a, b)
+      if a.is_userdata then
+         return false, { Err("{} cannot be used with userdata type %s", a) }
+      end
+      return compare_true_inferring_emptytable(self, a, b)
+   end
+
 
    local emptytable_relations = {
       ["array"] = compare_true,
@@ -8482,16 +8497,19 @@ do
             end
             return true
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["array"] = {
          ["array"] = function(self, a, b)
             return self:same_type(a.elements, b.elements)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
          ["map"] = function(self, a, b)
             return compare_map(self, a.keys, b.keys, a.values, b.values, true)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["union"] = {
          ["union"] = function(self, a, b)
@@ -8504,11 +8522,13 @@ do
       },
       ["record"] = {
          ["record"] = TypeChecker.eqtype_record,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["interface"] = {
          ["interface"] = function(_self, a, b)
             return a.typeid == b.typeid
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["function"] = {
          ["function"] = function(self, a, b)
@@ -8557,6 +8577,9 @@ do
    }
 
    TypeChecker.subtype_relations = {
+      ["nil"] = {
+         ["*"] = compare_true,
+      },
       ["tuple"] = {
          ["tuple"] = function(self, a, b)
             local at, bt = a.tuple, b.tuple
@@ -8585,9 +8608,6 @@ do
          ["*"] = function(self, a, b)
             return self:compare_or_infer_typevar(a.typevar, nil, b, self.is_a)
          end,
-      },
-      ["nil"] = {
-         ["*"] = compare_true,
       },
       ["union"] = {
          ["nominal"] = function(self, a, b)
@@ -8697,6 +8717,7 @@ do
          ["tupletable"] = function(self, a, b)
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["emptytable"] = emptytable_relations,
       ["tupletable"] = {
@@ -8739,6 +8760,7 @@ a.types[i], b.types[i]), }
 
             return compare_map(self, a_type(a, "integer", {}), b.keys, aa.elements, b.values)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["record"] = {
          ["record"] = TypeChecker.subtype_record,
@@ -8774,6 +8796,7 @@ a.types[i], b.types[i]), }
                return self.subtype_relations["array"]["tupletable"](self, a, b)
             end
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["array"] = {
          ["array"] = TypeChecker.subtype_array,
@@ -8800,6 +8823,7 @@ a.types[i], b.types[i]), }
             end
             return true
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
          ["map"] = function(self, a, b)
@@ -8808,6 +8832,7 @@ a.types[i], b.types[i]), }
          ["array"] = function(self, a, b)
             return compare_map(self, a.keys, a_type(b, "integer", {}), a.values, b.elements)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["typedecl"] = {
          ["record"] = function(self, a, b)
@@ -8875,6 +8900,19 @@ a.types[i], b.types[i]), }
       ["*"] = {
          ["any"] = compare_true,
          ["boolean_context"] = compare_true,
+         ["emptytable"] = function(_self, a, _b)
+            return false, { Err("assigning %s to a variable declared with {}", a) }
+         end,
+         ["unresolved_emptytable_value"] = function(self, a, b)
+            local bt = b.emptytable_type
+            assert(bt.typename == "emptytable", b.typename)
+            local bkeys = bt.keys
+            local infer_to = is_numeric_type(bkeys) and
+            a_type(b, "array", { elements = a }) or
+            a_type(b, "map", { keys = bkeys, values = a })
+            self:infer_emptytable(bt, self:infer_at(b, infer_to))
+            return true
+         end,
          ["self"] = function(self, a, b)
             return self:is_a(a, self:type_of_self(b))
          end,
@@ -8907,29 +8945,29 @@ a.types[i], b.types[i]), }
 
    TypeChecker.type_priorities = {
 
-      ["self"] = 1,
-      ["tuple"] = 2,
-      ["typevar"] = 3,
-      ["nil"] = 4,
-      ["any"] = 5,
-      ["boolean_context"] = 5,
-      ["union"] = 6,
-      ["poly"] = 7,
+      ["nil"] = 0,
+      ["unresolved_emptytable_value"] = 1,
+      ["emptytable"] = 2,
+      ["self"] = 3,
+      ["tuple"] = 4,
+      ["typevar"] = 5,
+      ["any"] = 6,
+      ["boolean_context"] = 7,
+      ["union"] = 8,
+      ["poly"] = 9,
 
-      ["typearg"] = 8,
+      ["typearg"] = 10,
 
-      ["nominal"] = 9,
+      ["nominal"] = 11,
 
-      ["enum"] = 10,
-      ["string"] = 10,
-      ["integer"] = 10,
-      ["boolean"] = 10,
+      ["enum"] = 12,
+      ["string"] = 12,
+      ["integer"] = 12,
+      ["boolean"] = 12,
 
-      ["interface"] = 11,
+      ["interface"] = 13,
 
-      ["emptytable"] = 12,
-      ["tupletable"] = 13,
-
+      ["tupletable"] = 14,
       ["record"] = 14,
       ["array"] = 14,
       ["map"] = 14,
@@ -9000,25 +9038,8 @@ a.types[i], b.types[i]), }
          return true
       end
 
-
-      if t1.typename == "nil" then
-         return true
-      elseif t2.typename == "unresolved_emptytable_value" then
-         local t2keys = t2.emptytable_type.keys
-         if is_numeric_type(t2keys) then
-            self:infer_emptytable(t2.emptytable_type, self:infer_at(w, a_type(w, "array", { elements = t1 })))
-         else
-            self:infer_emptytable(t2.emptytable_type, self:infer_at(w, a_type(w, "map", { keys = t2keys, values = t1 })))
-         end
-         return true
-      elseif t2.typename == "emptytable" then
-         if is_lua_table_type(t1) then
-            self:infer_emptytable(t2, self:infer_at(w, t1))
-         elseif not (t1.typename == "emptytable") then
-            self.errs:add(w, self.errs:get_context(ctx, name) .. "assigning %s to a variable declared with {}", t1)
-            return false
-         end
-         return true
+      if t2.typename == "emptytable" then
+         t2 = type_at(w, t2)
       end
 
       local ok, match_errs = self:is_a(t1, t2)

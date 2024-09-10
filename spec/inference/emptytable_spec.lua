@@ -19,7 +19,7 @@ describe("empty table without type annotation", function()
 
       t.foo = "bar"
    ]], {
-      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:3:11)]] },
+      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:3:10)]] },
    }))
 
    it("first use can be a function call", util.check([[
