@@ -3690,24 +3690,28 @@ do
       return i, node
    end
 
-   local function store_field_in_record(ps, i, field_name, t, fields, field_order)
+   local function store_field_in_record(ps, i, field_name, newt, fields, field_order)
       if not fields[field_name] then
-         fields[field_name] = t
+         fields[field_name] = newt
          table.insert(field_order, field_name)
-      else
-         local prev_t = fields[field_name]
-         if t.typename == "function" and prev_t.typename == "function" then
+         return true
+      end
+
+      local oldt = fields[field_name]
+
+      if newt.typename == "function" then
+         if oldt.typename == "function" then
             local p = new_type(ps, i, "poly")
-            p.types = { prev_t, t }
+            p.types = { oldt, newt }
             fields[field_name] = p
-         elseif t.typename == "function" and prev_t.typename == "poly" then
-            table.insert(prev_t.types, t)
-         else
-            fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
-            return false
+            return true
+         elseif oldt.typename == "poly" then
+            table.insert(oldt.types, newt)
+            return true
          end
       end
-      return true
+      fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
+      return false
    end
 
    local function set_declname(def, declname)
