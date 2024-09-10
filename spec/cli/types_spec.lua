@@ -2,7 +2,7 @@ local assert = require("luassert")
 local json = require("dkjson")
 local util = require("spec.util")
 
-describe("tl types works like check", function()
+describe("#cli tl types works like check", function()
    describe("on .tl files", function()
       it("reports missing files", function()
          local pd = io.popen(util.tl_cmd("types", "nonexistent_file") .. "2>&1 1>" .. util.os_null, "r")

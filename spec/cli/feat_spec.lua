@@ -52,7 +52,7 @@ local test_cases = {
    }
 }
 
-describe("feat flags", function()
+describe("#cli feat flags", function()
    for flag, tests in pairs(test_cases) do
       describe(flag, function()
          for _, case in ipairs(tests) do

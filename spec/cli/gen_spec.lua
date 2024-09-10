@@ -102,7 +102,7 @@ local function tl_to_lua(name)
    return (name:gsub("%.tl$", ".lua"):gsub("^" .. util.os_tmp .. util.os_sep, ""))
 end
 
-describe("tl gen", function()
+describe("#cli tl gen", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
    describe("on .tl files", function()

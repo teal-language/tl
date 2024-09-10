@@ -1,6 +1,6 @@
 local util = require("spec.util")
 
-describe("-q --quiet flag", function()
+describe("#cli -q --quiet flag", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
    it("silences warnings from tlconfig.lua", function()
