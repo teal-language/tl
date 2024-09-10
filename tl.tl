@@ -7525,6 +7525,9 @@ do
          elseif t is UnresolvableTypeArgType then
             assert(copy is UnresolvableTypeArgType)
             copy.typearg = t.typearg
+         elseif t is UnresolvedEmptyTableValueType then
+            assert(copy is UnresolvedEmptyTableValueType)
+            copy.emptytable_type = t.emptytable_type
          elseif t is TypeVarType then
             assert(copy is TypeVarType)
             copy.typevar = t.typevar
@@ -8443,6 +8446,18 @@ do
       return true
    end
 
+   local function compare_true_inferring_emptytable(self: TypeChecker, a: Type, b: EmptyTableType): boolean, {Error}
+      self:infer_emptytable(b, self:infer_at(b, a))
+      return true
+   end
+
+   local function compare_true_inferring_emptytable_if_not_userdata(self: TypeChecker, a: RecordLikeType, b: EmptyTableType): boolean, {Error}
+      if a.is_userdata then
+         return false, { Err("{} cannot be used with userdata type %s", a) }
+      end
+      return compare_true_inferring_emptytable(self, a, b)
+   end
+
    -- emptytable rules are the same in eqtype_relations and subtype_relations
    local emptytable_relations: {TypeName:CompareTypes} = {
       ["array"] = compare_true,
@@ -8482,16 +8497,19 @@ do
             end
             return true
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["array"] = {
          ["array"] = function(self: TypeChecker, a: ArrayType, b: ArrayType): boolean, {Error}
             return self:same_type(a.elements, b.elements)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
          ["map"] = function(self: TypeChecker, a: MapType, b: MapType): boolean, {Error}
             return compare_map(self, a.keys, b.keys, a.values, b.values, true)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["union"] = {
          ["union"] = function(self: TypeChecker, a: UnionType, b: UnionType): boolean, {Error}
@@ -8504,11 +8522,13 @@ do
       },
       ["record"] = {
          ["record"] = TypeChecker.eqtype_record,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["interface"] = {
          ["interface"] = function(_self:TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
             return a.typeid == b.typeid
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["function"] = {
          ["function"] = function(self:TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
@@ -8557,6 +8577,9 @@ do
    }
 
    TypeChecker.subtype_relations = {
+      ["nil"] = {
+         ["*"] = compare_true,
+      },
       ["tuple"] = {
          ["tuple"] = function(self: TypeChecker, a: TupleType, b: TupleType): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
             local at, bt = a.tuple, b.tuple                                  -- ──────────────────────────────────
@@ -8585,9 +8608,6 @@ do
          ["*"] = function(self: TypeChecker, a: TypeVarType, b: Type): boolean, {Error}
             return self:compare_or_infer_typevar(a.typevar, nil, b, self.is_a)
          end,
-      },
-      ["nil"] = {
-         ["*"] = compare_true,
       },
       ["union"] = {
          ["nominal"] = function(self: TypeChecker, a: UnionType, b: NominalType): boolean, {Error}
@@ -8697,6 +8717,7 @@ do
          ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["emptytable"] = emptytable_relations,
       ["tupletable"] = {
@@ -8739,6 +8760,7 @@ do
 
             return compare_map(self, a_type(a, "integer", {}), b.keys, aa.elements, b.values)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["record"] = {
          ["record"] = TypeChecker.subtype_record,
@@ -8774,6 +8796,7 @@ do
                return self.subtype_relations["array"]["tupletable"](self, a, b)
             end
          end,
+         ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["array"] = {
          ["array"] = TypeChecker.subtype_array,
@@ -8800,6 +8823,7 @@ do
             end
             return true
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
          ["map"] = function(self: TypeChecker, a: MapType, b: MapType): boolean, {Error}
@@ -8808,6 +8832,7 @@ do
          ["array"] = function(self: TypeChecker, a: MapType, b: ArrayType): boolean, {Error}
             return compare_map(self, a.keys, a_type(b, "integer", {}), a.values, b.elements)
          end,
+         ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["typedecl"] = {
          ["record"] = function(self: TypeChecker, a: TypeDeclType, b: RecordType): boolean, {Error}
@@ -8875,6 +8900,19 @@ do
       ["*"] = {
          ["any"] = compare_true,
          ["boolean_context"] = compare_true,
+         ["emptytable"] = function(_self: TypeChecker, a: Type, _b: EmptyTableType): boolean, {Error}
+            return false, { Err("assigning %s to a variable declared with {}", a) }
+         end,
+         ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
+            local bt = b.emptytable_type
+            assert(bt is EmptyTableType, b.typename)
+            local bkeys = bt.keys
+            local infer_to = bkeys is NumericType -- ideally integer only
+                             and an_array(b, a)
+                             or  a_map(b, bkeys, a)
+            self:infer_emptytable(bt, self:infer_at(b, infer_to))
+            return true
+         end,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
             return self:is_a(a, self:type_of_self(b))
          end,
@@ -8907,29 +8945,29 @@ do
    -- evaluation strategy
    TypeChecker.type_priorities = {
       -- types that have catch-all rules evaluate first
-      ["self"] = 1,
-      ["tuple"] = 2,
-      ["typevar"] = 3,
-      ["nil"] = 4,
-      ["any"] = 5,
-      ["boolean_context"] = 5,
-      ["union"] = 6,
-      ["poly"] = 7,
+      ["nil"] = 0,
+      ["unresolved_emptytable_value"] = 1,
+      ["emptytable"] = 2,
+      ["self"] = 3,
+      ["tuple"] = 4,
+      ["typevar"] = 5,
+      ["any"] = 6,
+      ["boolean_context"] = 7,
+      ["union"] = 8,
+      ["poly"] = 9,
       -- then typeargs
-      ["typearg"] = 8,
+      ["typearg"] = 10,
       -- then nominals
-      ["nominal"] = 9,
+      ["nominal"] = 11,
       -- then base types
-      ["enum"] = 10,
-      ["string"] = 10,
-      ["integer"] = 10,
-      ["boolean"] = 10,
+      ["enum"] = 12,
+      ["string"] = 12,
+      ["integer"] = 12,
+      ["boolean"] = 12,
       -- then interfaces
-      ["interface"] = 11,
+      ["interface"] = 13,
       -- then special cases of tables
-      ["emptytable"] = 12,
-      ["tupletable"] = 13,
-      -- then other recursive types
+      ["tupletable"] = 14,
       ["record"] = 14,
       ["array"] = 14,
       ["map"] = 14,
@@ -9000,25 +9038,8 @@ do
          return true
       end
 
-      -- some flow-based inference
-      if t1.typename == "nil" then
-         return true
-      elseif t2 is UnresolvedEmptyTableValueType then
-         local t2keys = t2.emptytable_type.keys
-         if t2keys is NumericType then -- ideally integer only
-            self:infer_emptytable(t2.emptytable_type, self:infer_at(w, an_array(w, t1)))
-         else
-            self:infer_emptytable(t2.emptytable_type, self:infer_at(w, a_map(w, t2keys, t1)))
-         end
-         return true
-      elseif t2 is EmptyTableType then
-         if is_lua_table_type(t1) then
-            self:infer_emptytable(t2, self:infer_at(w, t1))
-         elseif not t1 is EmptyTableType then
-            self.errs:add(w, self.errs:get_context(ctx, name) .. "assigning %s to a variable declared with {}", t1)
-            return false
-         end
-         return true
+      if t2 is EmptyTableType then
+         t2 = type_at(w, t2) -- minor hack: tweak point of inference
       end
 
       local ok, match_errs = self:is_a(t1, t2)
