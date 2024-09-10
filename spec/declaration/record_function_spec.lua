@@ -94,6 +94,26 @@ describe("record function", function()
          { y = 5, msg = "different number of input arguments: got 2, expected 3" },
       }))
 
+      pending("detect mismatch in function generics", util.check_type_error([[
+         local type List2 = record<T>
+             new: function<U>(initialItems: {T}, u: U): List2<T>
+         end
+
+         function List2.new<U>(initialItems: {T}, u: U): List2<U> -- mismatched return type
+         end
+
+         local type Fruit2 = enum
+            "apple"
+            "peach"
+            "banana"
+         end
+
+         local type L2 = List2<Fruit2>
+         local lunchbox = L2.new({"apple", "peach"}, true)
+      ]], {
+         { msg = "type signature does not match declaration" }
+      }))
+
       it("report error in return args correctly (regression test for #618)", util.check_warnings([[
          local record R
            _current: R
