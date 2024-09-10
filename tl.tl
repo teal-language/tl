@@ -3690,24 +3690,28 @@ local function parse_return(ps: ParseState, i: integer): integer, Node
    return i, node
 end
 
-local function store_field_in_record(ps: ParseState, i: integer, field_name: string, t: Type, fields: {string: Type}, field_order: {string}): boolean
+local function store_field_in_record(ps: ParseState, i: integer, field_name: string, newt: Type, fields: {string: Type}, field_order: {string}): boolean
    if not fields[field_name] then
-      fields[field_name] = t
+      fields[field_name] = newt
       table.insert(field_order, field_name)
-   else
-      local prev_t = fields[field_name]
-      if t is FunctionType and prev_t is FunctionType then
+      return true
+   end
+
+   local oldt = fields[field_name]
+
+   if newt is FunctionType then
+      if oldt is FunctionType then
          local p = new_type(ps, i, "poly") as PolyType
-         p.types = { prev_t, t }
+         p.types = { oldt, newt }
          fields[field_name] = p
-      elseif t is FunctionType and prev_t is PolyType then
-         table.insert(prev_t.types, t)
-      else
-         fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
-         return false
+         return true
+      elseif oldt is PolyType then
+         table.insert(oldt.types, newt)
+         return true
       end
    end
-   return true
+   fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
+   return false
 end
 
 local function set_declname(def: Type, declname: string)
