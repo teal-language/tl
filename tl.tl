@@ -317,7 +317,7 @@ do
 
       gsub: function(string, string, string, ? integer): string, integer
       gsub: function(string, string, {string:string}, ? integer): string, integer
-      gsub: function(string, string, function(string...): (string | integer | boolean), ? integer): string, integer
+      gsub: function(string, string, function(string...): ((string | integer | number)...), ? integer): string, integer
 
       len: function(string): integer
       lower: function(string): string
