@@ -9275,26 +9275,6 @@ a.types[i], b.types[i]), }
          end
       end
 
-      local function push_typeargs(self, func)
-         if func.typeargs then
-            for _, fnarg in ipairs(func.typeargs) do
-               self:add_var(nil, fnarg.typearg, a_type(fnarg, "unresolved_typearg", {
-                  constraint = fnarg.constraint,
-               }))
-            end
-         end
-      end
-
-      local function pop_typeargs(self, func)
-         if func.typeargs then
-            for _, fnarg in ipairs(func.typeargs) do
-               if self.st[#self.st].vars[fnarg.typearg] then
-                  self.st[#self.st].vars[fnarg.typearg] = nil
-               end
-            end
-         end
-      end
-
 
 
 
@@ -9373,6 +9353,16 @@ a.types[i], b.types[i]), }
             return false
          end
 
+         local function add_call_typeargs(self, func)
+            if func.typeargs then
+               for _, fnarg in ipairs(func.typeargs) do
+                  self:add_var(nil, fnarg.typearg, a_type(fnarg, "unresolved_typearg", {
+                     constraint = fnarg.constraint,
+                  }))
+               end
+            end
+         end
+
          check_call = function(self, w, wargs, f, args, expected_rets, cm, argdelta)
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
@@ -9392,7 +9382,7 @@ a.types[i], b.types[i]), }
                return nil, { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. show_arity(f) .. ")") }
             end
 
-            push_typeargs(self, f)
+            add_call_typeargs(self, f)
 
             return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta)
          end
@@ -9412,6 +9402,13 @@ a.types[i], b.types[i]), }
                end
             end
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
+         end
+
+         local function reset_scope(self)
+            local vars = self.st[#self.st].vars
+            for k, _ in pairs(vars) do
+               vars[k] = nil
+            end
          end
 
          check_poly_call = function(self, w, wargs, p, args, expected_rets, cm, argdelta)
@@ -9444,7 +9441,7 @@ a.types[i], b.types[i]), }
                         infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
                      end
 
-                     pop_typeargs(self, f)
+                     reset_scope(self)
 
                      first_errs = first_errs or errs
                      tried[i] = true

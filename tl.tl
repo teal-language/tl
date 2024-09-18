@@ -9275,26 +9275,6 @@ do
          end
       end
 
-      local function push_typeargs(self: TypeChecker, func: FunctionType)
-         if func.typeargs then
-            for _, fnarg in ipairs(func.typeargs) do
-               self:add_var(nil, fnarg.typearg, a_type(fnarg, "unresolved_typearg", {
-                  constraint = fnarg.constraint,
-               } as UnresolvedTypeArgType))
-            end
-         end
-      end
-
-      local function pop_typeargs(self: TypeChecker, func: FunctionType)
-         if func.typeargs then
-            for _, fnarg in ipairs(func.typeargs) do
-               if self.st[#self.st].vars[fnarg.typearg] then
-                  self.st[#self.st].vars[fnarg.typearg] = nil
-               end
-            end
-         end
-      end
-
       local enum CallMode
          "method"   -- a method colon-call, e.g. `my_object:my_method()`
          "plain"    -- a plain call or a dot-call, e.g `my_func()` or `my_object.my_func()`
@@ -9373,6 +9353,16 @@ do
             return false
          end
 
+         local function add_call_typeargs(self: TypeChecker, func: FunctionType)
+            if func.typeargs then
+               for _, fnarg in ipairs(func.typeargs) do
+                  self:add_var(nil, fnarg.typearg, a_type(fnarg, "unresolved_typearg", {
+                     constraint = fnarg.constraint,
+                  } as UnresolvedTypeArgType))
+               end
+            end
+         end
+
          check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
@@ -9392,7 +9382,7 @@ do
                return nil, { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. show_arity(f) .. ")") }
             end
 
-            push_typeargs(self, f)
+            add_call_typeargs(self, f)
 
             return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta)
          end
@@ -9412,6 +9402,13 @@ do
                end
             end
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
+         end
+
+         local function reset_scope(self: TypeChecker)
+            local vars = self.st[#self.st].vars
+            for k, _ in pairs(vars) do
+               vars[k] = nil
+            end
          end
 
          check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
@@ -9444,7 +9441,7 @@ do
                         infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
                      end
 
-                     pop_typeargs(self, f)
+                     reset_scope(self)
 
                      first_errs = first_errs or errs
                      tried[i] = true
