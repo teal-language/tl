@@ -8462,6 +8462,18 @@ do
       return compare_true_inferring_emptytable(self, a, b)
    end
 
+   local function infer_emptytable_from_unresolved_value(self, w, u, values)
+      local et = u.emptytable_type
+      assert(et.typename == "emptytable", u.typename)
+      local keys = et.keys
+      if not (values.typename == "emptytable" or values.typename == "unresolved_emptytable_value") then
+         local infer_to = is_numeric_type(keys) and
+         a_type(w, "array", { elements = values }) or
+         a_type(w, "map", { keys = keys, values = values })
+         self:infer_emptytable(et, self:infer_at(w, infer_to))
+      end
+   end
+
 
    local emptytable_relations = {
       ["array"] = compare_true,
@@ -8908,13 +8920,7 @@ a.types[i], b.types[i]), }
             return false, { Err("assigning %s to a variable declared with {}", a) }
          end,
          ["unresolved_emptytable_value"] = function(self, a, b)
-            local bt = b.emptytable_type
-            assert(bt.typename == "emptytable", b.typename)
-            local bkeys = bt.keys
-            local infer_to = is_numeric_type(bkeys) and
-            a_type(b, "array", { elements = a }) or
-            a_type(b, "map", { keys = bkeys, values = a })
-            self:infer_emptytable(bt, self:infer_at(b, infer_to))
+            infer_emptytable_from_unresolved_value(self, b, b, a)
             return true
          end,
          ["self"] = function(self, a, b)
@@ -9911,6 +9917,12 @@ a.types[i], b.types[i]), }
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s" .. inferred_msg(ra.keys, "type of keys "), b, ra.keys
+      elseif ra.typename == "unresolved_emptytable_value" then
+         local et = a_type(ra, "emptytable", { keys = b })
+         infer_emptytable_from_unresolved_value(self, a, ra, et)
+         return a_type(anode, "unresolved_emptytable_value", {
+            emptytable_type = et,
+         })
       elseif ra.typename == "map" then
          if self:is_a(b, ra.keys) then
             return ra.values
