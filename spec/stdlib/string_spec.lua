@@ -22,4 +22,75 @@ describe("string", function()
       ]]))
    end)
 
+   describe("gsub", function()
+      it("accepts a string, returns a string", util.check([[
+         local s = "hello"
+         local hi: string = s:gsub("ello", "i")
+      ]]))
+
+      it("accepts a string, returns a string and integer", util.check([[
+         local s = "hello world"
+         local wordword, count: string, integer = s:gsub("%w+", "word")
+      ]]))
+
+      it("accepts a string and integer, returns a string and integer", util.check([[
+         local s = "hello world"
+         local helloword, count: string, integer = s:gsub("%w+", "word", 6)
+      ]]))
+
+      it("accepts a map, returns a string and integer", util.check([[
+         local s = "hello world"
+         local map = {
+            ["hello"] = "hola",
+            ["world"] = "mundo",
+         }
+         local holamundo, count: string, integer = s:gsub("%w+", map)
+      ]]))
+
+      it("accepts a map and integer, returns a string and integer", util.check([[
+         local s = "hello world"
+         local map = {
+            ["hello"] = "hola",
+            ["world"] = "mundo",
+         }
+         local hellomundo, count: string, integer = s:gsub("%w+", map, 6)
+      ]]))
+
+      it("accepts a function to strings, returns a string", util.check([[
+         local s = "hello world"
+         local function f(x: string): string
+            return x:upper()
+         end
+         local ret: string = s:gsub("%w+", f)
+      ]]))
+
+      it("accepts a function to integers, returns a string", util.check([[
+         local s = "hello world"
+         local function f(x: string): integer
+            return #x
+         end
+         local ret: string = s:gsub("%w+", f)
+      ]]))
+
+      it("accepts a function to numbers, returns a string", util.check([[
+         local s = "hello world"
+         local function f(x: string): number
+            return #x * 1.5
+         end
+         local ret: string = s:gsub("%w+", f)
+      ]]))
+
+      it("accepts a function that returns nothing", util.check([[
+         local function parse_integers(s: string, i0: integer) : {integer}
+             local t, p = {}, i0 or 1
+             local function f(x: string)
+                 t[p] = math.tointeger(x)
+                 p = p + 1
+             end
+             s:gsub("[-%d]+", f)
+             return t
+         end
+      ]]))
+   end)
+
 end)
