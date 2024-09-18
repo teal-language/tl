@@ -17,4 +17,9 @@ describe("assert", function()
       { y = 9, msg = "cannot use operator '..' for types string | boolean and string" },
       { y = 11, msg = "cannot use operator '..' for types string | boolean and string" },
    }))
+
+   it("ignores additional arguments", util.check([[
+      local f = assert(io.open("nonexistent.txt"))
+   ]]))
+
 end)
