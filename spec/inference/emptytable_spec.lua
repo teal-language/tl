@@ -150,4 +150,50 @@ describe("empty table without type annotation", function()
          print(x)
       end
    ]]))
+
+   it("does not fail when resolving nested emptytables", util.check([[
+      local function parse_input() : {string: {string: boolean}}
+         local m = {}
+         for line in io.lines("input.txt") do
+            local c1, c2 = line:match("^(%w+)-(%w+)$")
+            if not m[c1] then m[c1] = {} end
+            if not m[c2] then m[c2] = {} end
+
+            -- Summary of the emptytable propagation (desired) behavior:
+
+            local x = m[c1]
+            -- infer x to { typename = "unresolved_emptytable_value", emptytable_type = m, keys = STRING }
+
+            local y = x[c2]
+            -- here we want to:
+            -- declare a new_emptytable
+            -- infer m to { typename = "map", keys = STRING, values = new_emptytable }
+            -- infer y to { typename = "unresolved_emptytable_value", emptytable_type = new_emptytable, keys = "string" }
+
+            y = true
+            -- here we want to:
+            -- infer y to boolean
+            -- infer emptytable_type to { typename = "map", keys = "string", values = "boolean" }
+            -- by propagation, infer m to { typename = "map", keys = STRING, values = { typename = "map", keys = "string", values = "boolean" } }
+            -- FIXME: this is not propagating backwards correctly (probably because table objects are copied)
+
+            -- same thing as the above, but written in the
+            -- idiomatic style as it first appeared in @catwell's code:
+            m[c1][c2] = true
+            m[c2][c1] = true
+         end
+         return m
+      end
+   ]]))
+
+   it("does not fail when resolving nested emptytables, three levels deep", util.check([[
+      local function f(a: string, b: string, c: string) : {string: {string: {string: boolean}}}
+          local m = {}
+          if not m[a] then m[a] = {} end
+          if not m[a][b] then m[a][b] = {} end
+          m[a][b][c] = true
+          return m
+       end
+   ]]))
+
 end)

@@ -8462,6 +8462,18 @@ do
       return compare_true_inferring_emptytable(self, a, b)
    end
 
+   local function infer_emptytable_from_unresolved_value(self: TypeChecker, w: Where, u: UnresolvedEmptyTableValueType, values: Type)
+      local et = u.emptytable_type
+      assert(et is EmptyTableType, u.typename)
+      local keys = et.keys
+      if not (values is EmptyTableType or values is UnresolvedEmptyTableValueType) then
+         local infer_to = keys is NumericType -- ideally integer only
+                          and an_array(w, values)
+                          or  a_map(w, keys, values)
+         self:infer_emptytable(et, self:infer_at(w, infer_to))
+      end
+   end
+
    -- emptytable rules are the same in eqtype_relations and subtype_relations
    local emptytable_relations: {TypeName:CompareTypes} = {
       ["array"] = compare_true,
@@ -8908,13 +8920,7 @@ do
             return false, { Err("assigning %s to a variable declared with {}", a) }
          end,
          ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
-            local bt = b.emptytable_type
-            assert(bt is EmptyTableType, b.typename)
-            local bkeys = bt.keys
-            local infer_to = bkeys is NumericType -- ideally integer only
-                             and an_array(b, a)
-                             or  a_map(b, bkeys, a)
-            self:infer_emptytable(bt, self:infer_at(b, infer_to))
+            infer_emptytable_from_unresolved_value(self, b, b, a)
             return true
          end,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
@@ -9911,6 +9917,12 @@ do
          end
 
          errm, erra, errb = "inconsistent index type: got %s, expected %s" .. inferred_msg(ra.keys, "type of keys "), b, ra.keys
+      elseif ra is UnresolvedEmptyTableValueType then
+         local et = a_type(ra, "emptytable", { keys = b } as EmptyTableType)
+         infer_emptytable_from_unresolved_value(self, a, ra, et)
+         return a_type(anode, "unresolved_emptytable_value", {
+            emptytable_type = et
+         } as UnresolvedEmptyTableValueType)
       elseif ra is MapType then
          if self:is_a(b, ra.keys) then
             return ra.values
