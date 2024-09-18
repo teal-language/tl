@@ -396,7 +396,7 @@ do
       type XpcallMsghFunction = function(...: any): ()
 
       arg: {string}
-      assert: function<A, B>(A, ? B): A
+      assert: function<A, B>(A, ? B, ...: any): A
 
       collectgarbage: function(? CollectGarbageCommand): number
       collectgarbage: function(CollectGarbageSetValue, integer): number
