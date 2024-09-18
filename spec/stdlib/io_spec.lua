@@ -25,6 +25,12 @@ describe("io", function()
          print(n + m)
       ]]))
 
+      it("with a string format, in assert", util.check([[
+         local f = assert(io.open("file.txt", "rb"))
+         local r = assert(f:read("a"))
+         f:close()
+      ]]))
+
       it("with multiple formats", util.check([[
          local a, b, c = io.read("l", 12, 13)
          print(a:upper())
