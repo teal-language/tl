@@ -3531,7 +3531,6 @@ do
       if not block.body then
          return i
       end
-      end_at(block.body, ps.tokens[i - 1])
       block.yend, block.xend = block.body.yend, block.body.xend
       table.insert(node.if_blocks, block)
       return i, node
