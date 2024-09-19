@@ -196,4 +196,17 @@ describe("empty table without type annotation", function()
        end
    ]]))
 
+   it("can assign an emptytable to an emptytable", util.check([[
+      local x = {}
+
+      for i = 1, 20 do
+         if math.random(2) == 1 then
+            x = {}
+         else
+            x = {"hello"}
+         end
+         print(#x)
+      end
+   ]]))
+
 end)

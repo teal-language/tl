@@ -8476,6 +8476,7 @@ do
 
 
    local emptytable_relations = {
+      ["emptytable"] = compare_true,
       ["array"] = compare_true,
       ["map"] = compare_true,
       ["tupletable"] = compare_true,
