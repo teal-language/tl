@@ -11527,7 +11527,13 @@ do
             if not expected then
                -- if at the toplevel
                expected = self:infer_at(node, got)
-               self.module_type = drop_constant_value(self:to_structural(resolve_tuple(expected)))
+               local module_type = resolve_tuple(expected)
+               if module_type is NominalType then
+                  self:resolve_nominal(module_type)
+                  self.module_type = module_type.found
+               else
+                  self.module_type = drop_constant_value(module_type)
+               end
                self.st[2].vars["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
