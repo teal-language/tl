@@ -175,6 +175,39 @@ describe("#cli tl types works like check", function()
          assert(type(types["y"]) == "nil")
       end)
 
+      it("reports end of if-block correctly", function()
+         local filename = util.write_tmp_file(finally, [[
+            -- test.tl
+
+            local function hello(): number
+                return 1
+            end
+
+            if 1 == 1 then
+                local abc = hello()
+                local def = abc
+
+
+
+
+
+                def = abc
+            end
+         ]])
+         local pd = io.popen(util.tl_cmd("types", "-p", "12:1", filename), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         local types = json.decode(output)
+         local n = 0
+         for _ in pairs(types) do
+            n = n + 1
+         end
+         assert(n == 3)
+         assert(type(types["abc"]) == "number")
+         assert(type(types["def"]) == "number")
+         assert(type(types["hello"]) == "number")
+      end)
+
       it("reports number of errors in stderr and code 1 on syntax errors", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
