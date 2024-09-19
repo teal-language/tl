@@ -153,6 +153,94 @@ describe("return", function()
          assert.same({}, result.syntax_errors)
          assert.same({}, result.type_errors)
       end)
+
+      it("when exporting a generic (regression test for #804)", function ()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               local record Foo<T>
+                  bar: T
+               end
+               return Foo
+            ]],
+            ["main.tl"] = [[
+               local Foo = require("foo")
+
+               local foo: Foo<integer>
+
+               foo = {
+                  bar = 5
+               }
+
+               print(string.format("bar: %d", foo.bar + 1))
+            ]],
+         })
+
+         local tl = require("tl")
+         local result, err = tl.process("main.tl", assert(tl.init_env()))
+
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("when exporting a typealias (variation on regression test for #804)", function ()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               local record Foo<T>
+                  bar: T
+               end
+               local type FooInteger = Foo<integer>
+               return FooInteger
+            ]],
+            ["main.tl"] = [[
+               local Foo = require("foo")
+
+               local foo: Foo
+
+               foo = {
+                  bar = 5
+               }
+
+               print(string.format("bar: %d", foo.bar + 1))
+            ]],
+         })
+
+         local tl = require("tl")
+         local result, err = tl.process("main.tl", assert(tl.init_env()))
+
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("when exporting a non-generic (variation on regression test for #804)", function ()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               local record Foo
+                  bar: integer
+               end
+               return Foo
+            ]],
+            ["main.tl"] = [[
+               local Foo = require("foo")
+
+               local foo: Foo
+
+               foo = {
+                  bar = 5
+               }
+
+               print(string.format("bar: %d", foo.bar + 1))
+            ]],
+         })
+
+         local tl = require("tl")
+         local result, err = tl.process("main.tl", assert(tl.init_env()))
+
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
    end)
 
    it("when exporting type alias through multiple levels", function ()
