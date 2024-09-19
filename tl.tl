@@ -8476,6 +8476,7 @@ do
 
    -- emptytable rules are the same in eqtype_relations and subtype_relations
    local emptytable_relations: {TypeName:CompareTypes} = {
+      ["emptytable"] = compare_true,
       ["array"] = compare_true,
       ["map"] = compare_true,
       ["tupletable"] = compare_true,

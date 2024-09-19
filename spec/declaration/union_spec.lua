@@ -139,4 +139,12 @@ describe("union declaration", function()
       { msg = "cannot discriminate a union between multiple function types" },
    }))
 
+   it("collapses multiple emptytables on declaration", util.check([[
+      local function count_sea_monsters(image: {string})
+         local c, m, n = 0, {{}, {}}, 0
+         for row = 1, #image - 2 do
+            m[row + 2] = {}
+         end
+      end
+   ]]))
 end)
