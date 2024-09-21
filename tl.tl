@@ -5860,7 +5860,7 @@ function TypeReporter:get_typenum(t: Type): integer
    end
 
    if rt is TypeDeclType then
-      rt = rt.def
+      return self:get_typenum(rt.def)
    end
 
    local ti: TypeInfo = {
@@ -5914,6 +5914,13 @@ function TypeReporter:get_typenum(t: Type): integer
    end
 
    return n
+end
+
+function TypeReporter:add_field(rtype: RecordLikeType, fname: string, ftype: Type)
+   local n = self:get_typenum(rtype)
+   local ti = self.tr.types[n]
+   assert(ti.fields)
+   ti.fields[fname] = self:get_typenum(ftype)
 end
 
 local record TypeCollector
@@ -6758,7 +6765,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t is EnumType then
       return t.declname or "enum"
    elseif t is RecordLikeType then
-      return short and t.typename or t.typename .. show_fields(t, show)
+      return short and (t.declname or t.typename) or t.typename .. show_fields(t, show)
    elseif t is FunctionType then
       local out: {string} = {"function"}
       if t.typeargs then
@@ -11981,6 +11988,10 @@ do
                if self.feat_lax or rtype == open_t then
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
+
+                  if self.collector then
+                     self.env.reporter:add_field(rtype, node.name.tk, fn_type)
+                  end
                else
                   self.errs:add(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. owner_name .. "' was originally declared")
                   return
