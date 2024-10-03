@@ -147,5 +147,24 @@ describe("record function", function()
          function Fil:new_method2(self: Fil)
          end
       ]]))
+
+      it("method assignment does not corrupt internal record data structure", util.check([[
+         local interface MAI
+            x: integer
+            my_func: function(self, integer)
+         end
+
+         local obj: MAI = { x = 20 }
+
+         local record MR is MAI
+            b: string
+         end
+
+         obj.my_func = function(self: MAI, n: integer)
+         end
+
+         function MR:my_func(n: integer)
+         end
+      ]]))
    end)
 end)
