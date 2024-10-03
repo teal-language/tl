@@ -3865,6 +3865,18 @@ do
       return copy
    end
 
+   local function extract_userdata_from_interface_list(ps, i, def)
+      for j = #def.interface_list, 1, -1 do
+         local iface = def.interface_list[j]
+         if iface.typename == "nominal" and #iface.names == 1 and iface.names[1] == "userdata" then
+            table.remove(def.interface_list, j)
+            if def.is_userdata then
+               fail(ps, i, "duplicated 'userdata' declaration")
+            end
+            def.is_userdata = true
+         end
+      end
+   end
 
    parse_record_body = function(ps, i, def)
       def.fields = {}
@@ -3895,6 +3907,10 @@ do
             end
          else
             i, def.interface_list = parse_trying_list(ps, i, {}, parse_interface_name)
+         end
+
+         if def.interface_list then
+            extract_userdata_from_interface_list(ps, i, def)
          end
       end
 

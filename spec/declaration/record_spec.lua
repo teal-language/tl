@@ -857,10 +857,28 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          end
       ]]))
 
+      it("can be declared as userdata with 'is'", util.check([[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            is userdata
+            x: number
+            y: number
+         end
+      ]]))
+
       it("cannot be declared as userdata twice", util.check_syntax_error([[
          local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
             userdata
             userdata
+            x: number
+            y: number
+         end
+      ]], {
+         { msg = "duplicated 'userdata' declaration" },
+      }))
+
+      it("cannot be declared as userdata with 'is' twice", util.check_syntax_error([[
+         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            is userdata, userdata
             x: number
             y: number
          end
