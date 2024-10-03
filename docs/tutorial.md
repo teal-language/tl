@@ -152,9 +152,9 @@ list with a few examples of each; we'll discuss them in more detail below:
 
 Finally, there are types that must be declared and referred to using names:
 
-* enum
-* record
-  * userdata
+* enums
+* records
+* interfaces
 
 Here is an example declaration of each. Again, we'll go into more detail below,
 but this should give you an overview:
@@ -172,16 +172,34 @@ local record Point
    y: number
 end
 
--- a userdata record: a record which is implemented as a userdata
-local record File
-   userdata
-   status: function(): State
-   close: function(File): boolean, string
+-- an interface: an abstract record type
+local interface Character
+   sprite: Image
+   position: Point
+   kind: string
 end
 
--- a record can double as a record and an array, by declaring an array interface
-local record TreeNode<T> is {TreeNode<T>}
+-- records can implement interfaces, using a type-identifying `where` clause
+local record Spaceship
+   is Character
+   where self.kind == "spaceship"
+
+   weapon: Weapons
+end
+
+-- a record can also declare an array interface, making it double as a record and an array
+local record TreeNode<T>
+   is {TreeNode<T>}
+
    item: T
+end
+
+-- a userdata record: a record which is implemented as a userdata
+local record File
+   is userdata
+
+   status: function(): State
+   close: function(File): boolean, string
 end
 ```
 
@@ -528,6 +546,75 @@ local x: http.Response = http.get("http://example.com")
 print(x.status_code)
 ```
 
+## Interfaces
+
+Interfaces are, in essence, abstract records.
+
+A concrete record is a type declared with `record`, which can be used
+both as a Lua table and as a type. In object-oriented terms, the record
+itself works as class whose fields work as class attributes,
+while other tables declared with the record type are objects whose
+fields are object atributes. For example:
+
+```lua
+local record MyConcreteRecord
+   a: string
+   x: integer
+   y: integer
+end
+
+MyConcreteRecord.a = "this works"
+
+local obj: MyConcreteRecord = { x = 10, y = 20 } -- this works too
+```
+
+An interface is abstract. It can declare fields, including those of
+`function` type, but they cannot hold concrete values on their own.
+Instances of an interface can hold values.
+
+```lua
+local interface MyAbstractInterface
+   a: string
+   x: integer
+   y: integer
+   my_func: function(self, integer)
+end
+
+MyAbstractInterface.a = "this doesn't work" -- error!
+
+local obj: MyAbstractInterface = { x = 10, y = 20 } -- this works
+
+-- error! this doesn't work
+function MyAbstractInterface:my_func(n: integer)
+end
+
+-- however, this works
+obj.my_func = function(self: MyAbstractInterface, n: integer)
+end
+```
+
+What is most useful about interfaces is that records can inherit
+interfaces, using `is`:
+
+```lua
+local record MyRecord is MyAbstractInterface
+   b: string
+end
+
+local r: MyRecord = {}
+r.b = "this works"
+r.a = "this works too because 'a' comes from MyAbstractInterface"
+```
+
+Note that this refers strictly to subtyping of interfaces, not
+inheritance of implementations. You cannot use `is` to do
+`local MyRecord is AnotherRecord`, as Teal does not implement
+a class/object model of its own, as it aims to be compatible
+with the multiple class/object models that exist in the Lua
+ecosystem.
+
+
+
 ## Generics
 
 Teal supports a simple form of generics that is useful enough for dealing
@@ -563,6 +650,33 @@ local t: Tree<number> = {
    { item = 3, { item = 4 } },
 }
 ```
+
+A type variable can be constrained by an interface, using `is`:
+
+```lua
+local function largest_shape<S is Shape>(shapes: {S}): S
+   local max = 0
+   local largest: S
+   for _, s in ipairs(shapes) do
+      if s.area >= max then
+         max = s.area
+         largest = s
+      end
+   end
+   return largest
+end
+```
+
+The benefit of doing this instead of `largest_shape(shapes: {Shape}): Shape`
+is that, if you call this function passing, say, an array `{Circle}`
+(assuming that `record Circle is Shape`, Teal will infer `S` to `Circle`,
+and that will be the type of the return value, while still allowing you
+to use the specifics of the `Shape` interface within the implementation of
+`largest_shape`.
+
+Keep in mind though, the type variables are inferred upon their first match,
+so, especially when using constraints, that might demand [additional
+care](type_variables.md).
 
 ## Metamethods
 
@@ -661,18 +775,30 @@ well:
 ```lua
 local type Comparator = function<T>(T, T): boolean
 
-local function mysort<A>(arr: {A}, cmp: Comparator<A>)
+local function mysort<A>(arr: {A}, cmp?: Comparator<A>)
    -- ...
 end
 ```
+
+Note that functions can have optional arguments, as in the `cmp?` example above.
+This only affects the _arity_ of the functions (that is, the number of arguments
+passed to a function), not their types. Note that the question mark is assigned
+to the argument name, not its type. If an argument is not optional, it may still
+be given explicitly as `nil`.
 
 Another thing to know about function declarations is that you can parenthesize
 the declaration of return types, to avoid ambiguities when using nested
 declarations and multiple returns:
 
 ```lua
-f: function(function():(number, number), number)
+f: function(function(? string):(number, number), number)
 ```
+
+Note also that in this example the string argument of the return function type
+is optional. When declaring optional arguments in function type declarations
+which do not use argument names, The question mark is placed ahead of the
+type. Again, this is an attribute of the argument position, not of the
+argument type itself.
 
 You can declare functions that generate iterators which can be used in
 `for` statements: the function needs to produce another function that iterates.
@@ -797,29 +923,60 @@ for union types in Teal.
 The first one is that the `is` operator always matches a variable, not arbitrary
 expressions. This limitation is there to avoid aliasing.
 
-Since code generation for the `is` operator used for discrimination of union
-types translates into a runtime `type()` check, we can only discriminate
-across primitive types and at most one table type.
+The second one is that Teal only accepts unions over a set of types that
+it can discriminate at runtime, so that it can generate code for the
+`is` operator properly. That means we can either only use one table
+type in a union, or, if we want to use multiple table types in a union,
+they need to be records or interfaces that were declared with a `where`
+annotation to discriminate them.
 
 This means that these unions not accepted:
 
 ```lua
-local invalid1: MyRecord | MyOtherRecord
-local invalid2: {string} | {number}
-local invalid3: {string} | {string:string}
-local invalid4: {string} | MyRecord
+local invalid1: {string} | {number}
+local invalid2: {string} | {string:string}
+local invalid3: {string} | MyRecord
 ```
 
-Also, since `is` checks for enums currently also translate into `type()` checks,
-this means they are indistinguishable from strings at runtime. So, for now this
-is also not accepted:
+However, the following union can be accepted, if we declare the record
+types with `where` annotations:
+
+```
+local interface Named
+   name: string
+end
+
+local record MyRecord is Named
+   where self.name == "MyRecord"
+end
+
+local record AnotherRecord is Named
+   where self.name == "AnotherRecord"
+end
+
+local valid: MyRecord | MyOtherRecord
+```
+
+A `where` clause is any Teal expression that uses the identifier `self`
+at most once (if you need to use it multiple times, you can always write
+a function that implements the discriminator expression and call that
+in the `where` clause passing `self` as an argument).
+
+Note that Teal has no way of proving at compile time that the set of `where`
+clauses in the union is actually disjoint and can discriminate the values
+correctly at runtime. Like the other aspects of setting up a Lua-based
+object model, that is up to you.
+
+Another limitation on `is` checks comes up with enums, since these also
+translate into `type()` checks. This means they are indistinguishable from
+strings at runtime. So, for now these are also not accepted:
 
 ```lua
-local invalid5: string | MyEnum
+local invalid4: string | MyEnum
+local invalid5: MyEnum | AnotherEnum
 ```
 
-This restriction between strings and enums may be removed in the future. The
-restriction on records may also be lifted in the future.
+This restriction on enums may be removed in the future.
 
 ## The type `any`
 
