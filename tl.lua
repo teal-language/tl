@@ -9940,12 +9940,16 @@ a.types[i], b.types[i]), }
          local t, e = self:match_record_key(a, anode, rb.literal)
          if t then
 
-            if t.typename == "function" then
-               for i, p in ipairs(t.args.tuple) do
+            if t.typename == "function" and t.is_method then
+               local t2 = shallow_copy_new_type(t)
+               t2.args = shallow_copy_new_type(t.args)
+               t2.args.tuple = shallow_copy_table(t2.args.tuple)
+               for i, p in ipairs(t2.args.tuple) do
                   if p.typename == "self" then
-                     t.args.tuple[i] = a
+                     t2.args.tuple[i] = a
                   end
                end
+               return t2
             end
 
             return t
