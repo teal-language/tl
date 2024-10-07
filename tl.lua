@@ -9555,7 +9555,21 @@ a.types[i], b.types[i]), }
          end
 
          if f and f.macroexp then
-            expand_macroexp(node, e2, f.macroexp)
+            local argexps
+            if is_method then
+               argexps = {}
+               if e1.kind == "op" then
+                  table.insert(argexps, e1.e1)
+               else
+                  table.insert(argexps, e1)
+               end
+               for _, e in ipairs(e2) do
+                  table.insert(argexps, e)
+               end
+            else
+               argexps = e2
+            end
+            expand_macroexp(node, argexps, f.macroexp)
          end
 
          return ret, f

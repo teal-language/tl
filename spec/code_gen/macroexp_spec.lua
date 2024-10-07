@@ -80,5 +80,39 @@ describe("macroexp code generation", function()
       call_me(ok(8675309))
       call_me(fail(911))
    ]]))
+
+   it("can resolve self for methods", util.gen([[
+      local record R
+         x: number
+
+         metamethod __call: function(self) = macroexp(self: R)
+            return print("R is " .. tostring(self.x) .. "!")
+         end
+
+         get_x: function(self): number = macroexp(self: R): number
+            return self.x
+         end
+      end
+
+      local r: R = { x = 10 }
+      print(r:get_x())
+      r()
+   ]], [[
+
+
+
+
+
+
+
+
+
+
+
+
+      local r: R = { x = 10 }
+      print(r.x)
+      print("R is " .. tostring(r.x) .. "!")
+   ]]))
 end)
 
