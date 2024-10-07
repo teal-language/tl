@@ -1,3 +1,123 @@
+# 0.24.0 - Teal Spring '24
+
+2024-10-07
+
+This a big release! It is a culmination of work that has spanned multiple
+years, and it would not be possible without the amazing feedback given by
+the community on the `next` branch, where this was developed. This release
+does include that "lot of new code" that I wanted to merge in the "near
+future", as stated in the previous release's changelog.
+
+The main feature is the addition of interfaces, which introduces a model for
+subtyping table types in the language. That should allow for representing the
+various kinds of object models that are used across the Lua ecosystem, without
+promoting any particular class/object system over the others.
+
+This release features commits by François Perrad, Victor Ilchev and Hisham
+Muhammad.
+
+## What's New
+
+### Language
+
+* **Interfaces**: you can now declare abstract interfaces, and record types
+  can implement them. This allows you to declare subtyping relations, and
+  better support inheritance models (e.g. `local record Circle is Shape`).
+  * Records and interfaces may declare a `where` clause with an expression
+    over `self`, which allows the `is` operator to discriminate the type.
+  * With discriminated record types, it is now possible to declare unions
+    over multiple record types.
+  * "Arrayrecords" are no longer a distinct type: they are just records
+    that implement an array interface (e.g. `local record R is {T}`)
+  * Type variables in functions can now have constraints on interfaces
+    (e.g. `function my_func<F is MyInterface>(...)`)
+  * `self` is now a valid type that can be used when declaring arguments
+    in functions declared in interfaces and records
+    * When a record is declared to be a subtype of an interface using `is`,
+      any function arguments using `self` in the parent interface type will
+      then resolve to the child record's type.
+* **Optional/required arguments in function calls** - functions may declare
+  arguments as optional, affecting the required arity of function calls.
+  The rightmost arguments of a function can have their variable names
+  annotated with a `?` sign, indicating that the argument does not need
+  to be passed in a function call. This refers only to the presence of the
+  argument in a call, and not to its type or nullability: a required
+  argument may still be called with an explicit `null`, but an optional
+  argument may be elided.
+  * In previous versions of Teal, all function arguments were effectively
+    optional. This means that Teal is now stricter which checking for
+    function calls. You can use `--feat-arity=off` in the command line
+    or `feat_arity = "off"` in `tlconfig.lua` to obtain the previous
+    behavior.
+  * To convert code that uses the old arity checking rules to the new
+    behavior, you can also use compiler pragmas in the code,
+    `--#pragma arity off` and `--#pragma arity off` to disable or enable
+    stricter arity checks.
+* **Macro expressions**: you can declare a restricted form of function called
+  a `macroexp`, which is always expanded inline. These can also be used
+  to declare compile-time metamethods, which expand without requiring
+  a metatable at runtime. The `where` clauses used in interfaces and
+  records are syntax sugar for macro expressions that implement a
+  pseudo-metamethod `__is`.
+* Dynamic `require` calls that do not take a module name as a literal
+  string are now allowed, and return `any`; you can load a static type
+  definition using `local type MyType = require("...")` and then cast
+  your dynamic require like so: `local my_mod = require(var) as MyType`
+* The type system is more nominal: all named types are now treated nominally,
+  except for unions, which are always type aliases. Previously record types
+  were nominal, but a named typed that resolved to a primitive such as
+  `integer` was structural. There are still subleties on the rules for when
+  a `local type` produces a new distinct type or an alias; they are
+  [explained in the docs](docs/aliasing.md).
+* The `<total>` attribute for variables can now only be applied when
+  initializing variables with literal tables. This is a minor breaking change,
+  but the usefulness of this attribute in other cases was very limited,
+  and it also produced misleading results.
+* Improved type signatures in the standard library
+  * `select` produces variadic returns
+
+### API
+
+* Simplified API in the `tl` module.
+  * The 0.15 API is still supported for backwards compatibility.
+
+### Tooling
+
+* `tl build` was removed. [Cyan](https://github.com/teal-language/cyan)
+  should be used instead as the build tool for Teal projects.
+
+### Fixes
+
+* Fix commits included in this release refer both to bugs present
+  in the `master` branch as well as fixes specific to the 0.24 series,
+  reported by the community during the beta testing of this release.
+  The Git history and the GitHub issues list contain a more detailed
+  accounting of the bugfixes that went into this release.
+  Some of the fixes include:
+  * `tl check` now reports if the input file does not exist.
+  * Reporting location of the end of an `if` block correctly.
+  * No longer crash if a `require()` epression fails to resolve (#778).
+  * `tl types` now reports the types of variables in `for` loops.
+  * Improved error message when calling functions with insufficient
+    arguments.
+  * Disallowing using a base type as a type variable name.
+  * Type arguments resolving correctly in recursive functions.
+  * Type arguments resolving correctly in nested records (#754).
+  * `or` type inference between types with a subtyping relation
+    resolves to whichever is the larger type.
+  * Reporting an error if an iterator used in a generic `for` does not
+    declare a return value type (#736).
+  * When checking `<total>` values, no longer reporting record
+    function and metamethods as missing fields (#749).
+  * Localizing a record no longer makes the local a type (#759).
+  * Bad assignments of record tables are reported (#752).
+  * Nominal type alias declarations work as expected (#238).
+  * Nominals with generics can be resolved correcty (#777).
+  * Nested types are not closed too early (#775).
+  * Not failing when resolving nested empty tables.
+  * Exporting generics and type aliases from modules correctly
+    using `return` at the toplevel (#804).
+
 # 0.15.3
 
 2023-11-05
