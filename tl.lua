@@ -9576,7 +9576,7 @@ a.types[i], b.types[i]), }
       end
    end
 
-   function TypeChecker:check_metamethod(node, method_name, a, b, orig_a, orig_b)
+   function TypeChecker:check_metamethod(node, method_name, a, b, orig_a, orig_b, flipped)
       if self.feat_lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
          return a_type(node, "unknown", {}), nil
       end
@@ -9603,6 +9603,9 @@ a.types[i], b.types[i]), }
          if b and method_name ~= "__is" then
             e2[2] = node.e2
             args.tuple[2] = orig_b
+         end
+         if flipped then
+            e2[2], e2[1] = e2[1], e2[2]
          end
 
          local mtdelta = metamethod.typename == "function" and metamethod.is_method and -1 or 0
@@ -12450,15 +12453,17 @@ self:expand_type(node, values, elements) })
                local meta_on_operator
                if not t then
                   local mt_name = binop_to_metamethod[node.op.op]
+                  local flipped = false
                   if not mt_name then
                      mt_name = flip_binop_to_metamethod[node.op.op]
                      if mt_name then
+                        flipped = true
                         ra, rb = rb, ra
                         ua, ub = ub, ua
                      end
                   end
                   if mt_name then
-                     t, meta_on_operator = self:check_metamethod(node, mt_name, ra, rb, ua, ub)
+                     t, meta_on_operator = self:check_metamethod(node, mt_name, ra, rb, ua, ub, flipped)
                   end
                   if not t then
                      t = self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
