@@ -5939,6 +5939,12 @@ function TypeReporter:add_field(rtype, fname, ftype)
    ti.fields[fname] = self:get_typenum(ftype)
 end
 
+function TypeReporter:set_ref(nom, resolved)
+   local n = self:get_typenum(nom)
+   local ti = self.tr.types[n]
+   ti.ref = self:get_typenum(resolved)
+end
+
 
 
 
@@ -8028,6 +8034,10 @@ do
 
          t.found = found
 
+         if self.collector then
+            self.env.reporter:set_ref(t, found)
+         end
+
          return nil, found
       end
 
@@ -8044,6 +8054,7 @@ do
          end
 
          t.resolved = resolved
+
          return resolved
       end
 
