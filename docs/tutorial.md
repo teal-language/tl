@@ -705,6 +705,9 @@ end
 The only changes made to the code above were the addition of type signatures
 in both function declarations.
 
+Teal also supports [macro expressions](macroexp.md), which are a restricted
+form of function whose contents are expanded inline when generating Lua code.
+
 ### Variadic functions
 
 Just like in Lua, some functions in Teal may receive a variable amount of
