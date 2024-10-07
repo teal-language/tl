@@ -9,10 +9,8 @@ set -e
 # To build a Windows executable, install the w64-mingw32
 # cross compiler toolchain and run `extras/binary.sh --windows`.
 
-lua_version="5.4.4"
+lua_version="5.4.7"
 argparse_version="0.7.1"
-inspect_version="3.1.1"
-luafilesystem_version="1.8.0"
 export executable="tl"
 
 export MAKE="${MAKE:-make}"
@@ -127,8 +125,6 @@ function download() {
    cd "${root}/downloads"
    download "https://www.lua.org/ftp/lua-${lua_version}.tar.gz"
    download "https://github.com/luarocks/argparse/archive/${argparse_version}.tar.gz" "argparse-${argparse_version}.tar.gz"
-   download "https://github.com/kikito/inspect.lua/archive/v${inspect_version}.tar.gz" "inspect.lua-${inspect_version}.tar.gz"
-   download "https://github.com/keplerproject/luafilesystem/archive/v${luafilesystem_version//./_}.tar.gz" "luafilesystem-${luafilesystem_version}.tar.gz"
 )
 
 # Let's extract our dependencies
@@ -137,9 +133,6 @@ function download() {
    cd "${root}/deps"
    tar zxvpf "../downloads/lua-${lua_version}.tar.gz"
    tar zxvpf "../downloads/argparse-${argparse_version}.tar.gz"
-   tar zxvpf "../downloads/inspect.lua-${inspect_version}.tar.gz"
-   tar zxvpf "../downloads/luafilesystem-${luafilesystem_version}.tar.gz"
-   mv "luafilesystem-${luafilesystem_version//./_}" "luafilesystem-$luafilesystem_version"
 )
 
 # Let's build our dependencies:
@@ -160,31 +153,15 @@ function check() {
 )
 
 (
-   cd "${root}/deps/luafilesystem-${luafilesystem_version}"
-   "${CC}" -c -o "lfs.o" -I "../lua-${lua_version}/src" "src/lfs.c"
-   "${AR}" rcu -o "lfs.a" "lfs.o"
-   check "lfs.a"
-)
-
-(
    cd "${root}/deps/argparse-${argparse_version}"
    check "src/argparse.lua"
 )
 
-(
-   cd "${root}/deps/inspect.lua-${inspect_version}"
-   check "inspect.lua"
-)
-
 LIBLUA_A="${root}/deps/lua-${lua_version}/src/liblua.a"
-LFS_A="${root}/deps/luafilesystem-${luafilesystem_version}/lfs.a"
 ARGPARSE_LUA="${root}/deps/argparse-${argparse_version}/src/argparse.lua"
-INSPECT_LUA="${root}/deps/inspect.lua-${inspect_version}/inspect.lua"
 
 check "${LIBLUA_A}"
-check "${LFS_A}"
 check "${ARGPARSE_LUA}"
-check "${INSPECT_LUA}"
 
 # Let's prepare our sources
 
@@ -494,7 +471,6 @@ cp "${sourcedir}/tl.lua" "${root}/src/"
 # Copy our dependency Lua sources to src/ ...
 
 cp "${ARGPARSE_LUA}" "${root}/src/"
-cp "${INSPECT_LUA}" "${root}/src/"
 
 # Run the generator passing the output file, main Lua script, base Lua source dir, Lua source files and static libraries
 
@@ -503,9 +479,7 @@ ${LUA} "${root}/src/gen.lua" \
    "${sourcedir}/tl" \
    "${root}/src" \
    "${root}/src/tl.lua" \
-   "${root}/src/argparse.lua" \
-   "${root}/src/inspect.lua" \
-   "${LFS_A}"
+   "${root}/src/argparse.lua"
 
 check "${root}/src/tl.c"
 
@@ -513,7 +487,7 @@ check "${root}/src/tl.c"
 
 exe_pathname="${root}/build/${executable}"
 
-${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" "${LFS_A}" $MYCFLAGS
+${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" $MYCFLAGS
 
 set +x
 

@@ -20,6 +20,7 @@ dependencies = {
 }
 test_dependencies = {
    "dkjson",
+   "lfs",
 }
 build = {
    modules = {
