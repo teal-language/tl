@@ -578,6 +578,7 @@ local interface MyAbstractInterface
    x: integer
    y: integer
    my_func: function(self, integer)
+   another_func: function(self, integer, self)
 end
 
 MyAbstractInterface.a = "this doesn't work" -- error!
@@ -606,14 +607,26 @@ r.b = "this works"
 r.a = "this works too because 'a' comes from MyAbstractInterface"
 ```
 
-Note that this refers strictly to subtyping of interfaces, not
-inheritance of implementations. You cannot use `is` to do
-`local MyRecord is AnotherRecord`, as Teal does not implement
-a class/object model of its own, as it aims to be compatible
-with the multiple class/object models that exist in the Lua
-ecosystem.
+Keep in mind that this refers strictly to subtyping of interfaces, not
+inheritance of implementations. You cannot use `is` to do `local MyRecord is
+AnotherRecord`, as Teal does not implement a class/object model of its own, as
+it aims to be compatible with the multiple class/object models that exist in
+the Lua ecosystem.
 
+Note also that the definition of `my_func` used `self` as a type name. `self`
+is a valid type that can be used when declaring arguments in functions
+declared in interfaces and records. When a record is declared to be a subtype
+of an interface using `is`, any function arguments using `self` in the parent
+interface type will then resolve to the child record's type. The type signature
+of `another_func` makes it even more evident:
 
+```lua
+-- the following function complies to the type declared for `another_func`
+-- in MyAbstractInterface, because MyRecord is the `self` type in this context
+function MyRecord:another_func(n: integer, another: MyRecord)
+   print(n + self.x, another.b)
+end
+```
 
 ## Generics
 
