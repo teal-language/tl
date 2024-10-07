@@ -114,5 +114,35 @@ describe("macroexp code generation", function()
       print(r.x)
       print("R is " .. tostring(r.x) .. "!")
    ]]))
+
+   it("can resolve metamethods", util.gen([[
+      local record R
+         x: number
+
+         metamethod __lt: function(a: R, b: R): boolean = macroexp(a: R, b: R): boolean
+            return a.x < b.x
+         end
+      end
+
+      local r: R = { x = 10 }
+      local s: R = { x = 20 }
+      if r > s then
+         print("yes")
+      end
+   ]], [[
+
+
+
+
+
+
+
+
+      local r = { x = 10 }
+      local s = { x = 20 }
+      if s.x < r.x then
+         print("yes")
+      end
+   ]]))
 end)
 
