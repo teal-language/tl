@@ -28,4 +28,21 @@ describe("improved line break heuristics", function()
          (t):meth1()
       end
    ]]))
+   it("break line correctly in multiline method declarations (regression test for #807)", util.gen([[
+      local record Foo
+      end
+
+      function Foo:greet(
+            greeting:string)
+         print(greeting)
+      end
+   ]], [[
+      local Foo = {}
+
+
+      function Foo:greet(
+            greeting)
+         print(greeting)
+      end
+   ]]))
 end)

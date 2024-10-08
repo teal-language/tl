@@ -5478,7 +5478,9 @@ function tl.generate(ast, gen_target, opts)
                table.remove(children[3], 1)
                if children[3][1] == "," then
                   table.remove(children[3], 1)
-                  table.remove(children[3], 1)
+                  if children[3][1] == " " then
+                     table.remove(children[3], 1)
+                  end
                end
             end
             add_child(out, children[3])
