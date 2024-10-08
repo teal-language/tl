@@ -2,16 +2,28 @@
 
 2024-10-07
 
-This a big release! It is a culmination of work that has spanned multiple
-years, and it would not be possible without the amazing feedback given by
-the community on the `next` branch, where this was developed. This release
-does include that "lot of new code" that I wanted to merge in the "near
-future", as stated in the previous release's changelog.
+This a big release! Teal 0.24.0, codenamed "Teal Spring '24" as a nod to
+the coolest language release name ever ("Clipper Summer '87"), is a
+culmination of work that has spanned multiple years, and it would not be
+possible without the amazing feedback given by the community on the `next`
+branch, where this was developed. This release does include that "lot of
+new code" that I wanted to merge in the "near future", which I referred
+to in the changelog entry for the previous release. It is nice to see it
+all coming together!
 
 The main feature is the addition of interfaces, which introduces a model for
 subtyping table types in the language. That should allow for representing the
 various kinds of object models that are used across the Lua ecosystem, without
-promoting any particular class/object system over the others.
+promoting any particular class/object system over the others. Most of the
+other changes, such as macro expressions, came along as related features built
+to support this. The support for optional argument markers is a stop towards
+stricter type safety, and the addition of pragma markers to control this
+feature is a statement of intent for allowing gradual transitions as the
+language evolves. All in all, the goal is to make the 2024 edition of Teal
+a safer and more pleasant language to use.
+
+And yes, an October release is called Spring because it is now spring in
+the southern hemisphere. :)
 
 This release features commits by François Perrad, Victor Ilchev and Hisham
 Muhammad.
