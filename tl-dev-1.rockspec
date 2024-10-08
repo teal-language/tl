@@ -20,7 +20,7 @@ dependencies = {
 }
 test_dependencies = {
    "dkjson",
-   "lfs",
+   "luafilesystem",
 }
 build = {
    modules = {
