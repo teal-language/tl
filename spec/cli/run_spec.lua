@@ -1,6 +1,6 @@
 local util = require("spec.util")
 
-describe("#cli tl run", function()
+describe("tl run", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
    describe("on .tl files", function()

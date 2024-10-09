@@ -1,6 +1,6 @@
 local util = require("spec.util")
 
-describe("#cli -o --output", function()
+describe("-o --output", function()
    it("should gen in the current directory when not provided", function()
       util.run_mock_project(finally, {
          dir_structure = {

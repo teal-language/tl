@@ -1,7 +1,7 @@
 local assert = require("luassert")
 local util = require("spec.util")
 
-describe("#cli -I --include-dir argument", function()
+describe("-I --include-dir argument", function()
    it("adds a directory to package.path", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {

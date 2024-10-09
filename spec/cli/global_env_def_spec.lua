@@ -1,7 +1,7 @@
 local assert = require("luassert")
 local util = require("spec.util")
 
-describe("#cli --global-env-def argument", function()
+describe("--global-env-def argument", function()
    it("exports globals from a module", function()
       util.do_in(util.write_tmp_dir(finally, {
          mod = {
