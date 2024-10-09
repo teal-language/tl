@@ -292,7 +292,7 @@ describe("flow analysis with is", function()
          end
       ]], {
          { y = 6, msg = "got boolean | thread (inferred at" },
-         { y = 8, msg = "got boolean | number, expected" },
+         { y = 8, msg = "got boolean | number (inferred at" },
       }))
 
       it("else narrows the negation of the pure side of 'or'", util.check_type_error([[
@@ -307,7 +307,7 @@ describe("flow analysis with is", function()
          end
       ]], {
          { y = 6, msg = "got boolean | thread (inferred at" },
-         { y = 8, msg = "got boolean | number, " },
+         { y = 8, msg = "got boolean | number (inferred at" },
       }))
 
       it("else narrows the negation of the pure side of 'or' (reverse)", util.check_type_error([[

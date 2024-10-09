@@ -171,4 +171,54 @@ describe("or", function()
       end
    ]]))
 
+   it("resolves the negation of 'or' when 'if' returns, error case", util.check_type_error([[
+      local function f(b: boolean, u: string | number)
+         if not b or u is number then
+            return
+         end
+
+         print(u + 1)
+      end
+   ]], {
+      { y = 6, msg = "cannot use operator '+' for types string" }
+   }))
+
+   it("resolves the negation of 'or' with negations when 'if' returns", util.check([[
+      local interface Type
+         t: string
+      end
+
+      local record NominalType is Type where self.t == "nominal"
+         name: string
+      end
+
+      local function f(b: boolean, u: Type)
+         if not b or not u is NominalType then
+            return
+         end
+
+         print(u.name)
+      end
+   ]]))
+
+   it("resolves the negation of 'or' when 'if' returns, error case with interface", util.check_type_error([[
+      local interface Type
+         t: string
+      end
+
+      local record NominalType is Type where self.t == "nominal"
+         name: string
+      end
+
+      local function f(b: boolean, u: Type)
+         if not b or u is NominalType then
+            return
+         end
+
+         print(u.name)
+      end
+   ]], {
+      { y = 14, msg = "invalid key 'name' in 'u' of interface type Type" }
+   }))
+
 end)

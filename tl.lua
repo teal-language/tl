@@ -10424,9 +10424,9 @@ a.types[i], b.types[i]), }
          elseif f.fact == "or" and f.f2 and f.f2.fact == "truthy" then
             return eval_fact(self, f.f1)
          elseif f.fact == "and" then
-            return or_facts(self, not_facts(self, eval_fact(self, f.f1)), not_facts(self, eval_fact(self, f.f2)))
+            return or_facts(self, eval_not(self, f.f1), eval_not(self, f.f2))
          elseif f.fact == "or" then
-            return and_facts(self, not_facts(self, eval_fact(self, f.f1)), not_facts(self, eval_fact(self, f.f2)))
+            return and_facts(self, eval_not(self, f.f1), eval_not(self, f.f2))
          else
             return not_facts(self, eval_fact(self, f))
          end
