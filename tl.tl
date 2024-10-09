@@ -7957,10 +7957,7 @@ do
 
    do
       local function check_metatable_contract(self: TypeChecker, tv: Type, ret: Type)
-         if not ret then
-            return
-         end
-         if not tv is NominalType then
+         if not ret or not tv is NominalType then
             return
          end
          local found = tv.found

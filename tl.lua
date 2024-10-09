@@ -7957,10 +7957,7 @@ do
 
    do
       local function check_metatable_contract(self, tv, ret)
-         if not ret then
-            return
-         end
-         if not (tv.typename == "nominal") then
+         if not ret or not (tv.typename == "nominal") then
             return
          end
          local found = tv.found
