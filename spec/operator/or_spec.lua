@@ -161,5 +161,14 @@ describe("or", function()
       { y = 20, x = 15, msg = "got A | B, expected B" },
    }))
 
+   it("resolves the negation of 'or' when 'if' returns", util.check([[
+      local function f(b: boolean, u: string | number)
+         if not b or u is string then
+            return
+         end
+
+         print(u + 1)
+      end
+   ]]))
 
 end)

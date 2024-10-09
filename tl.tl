@@ -10294,11 +10294,7 @@ do
       end
 
       facts_or = function(w: Where, f1: Fact, f2: Fact): Fact
-         if f1 and f2 then
-            return OrFact { f1 = f1, f2 = f2, w = w }
-         else
-            return nil
-         end
+         return OrFact({ f1 = f1 or FACT_TRUTHY, f2 = f2 or FACT_TRUTHY, w = w })
       end
 
       facts_not = function(w: Where, f1: Fact): Fact
@@ -12356,8 +12352,8 @@ do
                else
                   local a_ge_b = self:is_a(rb, ra)
                   local b_ge_a = self:is_a(ra, rb)
+                  node.known = facts_or(node, node.e1.known, node.e2.known)
                   if a_ge_b or b_ge_a then
-                     node.known = facts_or(node, node.e1.known, node.e2.known)
                      if expected then
                         local a_is = self:is_a(ua, expected)
                         local b_is = self:is_a(ub, expected)
