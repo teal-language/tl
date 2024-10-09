@@ -15,7 +15,8 @@ selfbuild:
 	diff tl.lua.1 tl.lua.2
 
 suite:
-	${BUSTED} -v $(TESTFLAGS)
+	${BUSTED} -v $(TESTFLAGS) --exclude-tags cli
+	${BUSTED} -v $(TESTFLAGS) --tags cli
 
 cov:
 	rm -f luacov.stats.out luacov.report.out
