@@ -370,4 +370,15 @@ describe("tl run", function()
      end)
    end)
 
+   it("compilation errors should be caught when loading modules", function()
+      util.run_mock_project(finally, {
+         dir_structure = {
+            ["my_module.tl"] = [[todo, write module :)]],
+            ["my_script.tl"] = [[local mod = require("my_module"); mod.do_things()]],
+         },
+         cmd = "run",
+         args = { "my_script.tl" },
+         exit_code = 1,
+      })
+   end)
 end)
