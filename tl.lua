@@ -11037,50 +11037,72 @@ self:expand_type(node, values, elements) })
       return ok, t, infertype ~= nil
    end
 
-   function TypeChecker:get_typedecl(value)
-      if value.kind == "op" and
-         value.op.op == "@funcall" and
-         value.e1.kind == "variable" and
-         value.e1.tk == "require" then
+   local function aliasing_variable(self, def)
+      if def.typename == "nominal" then
+         return (self:find_var(def.names[1], "use_type"))
+      end
+   end
 
-         local ty = resolve_tuple(special_functions["require"](self, value,
-         self:find_var_type("require"),
-         a_type(value.e2, "tuple", { tuple = { a_type(value.e2[1], "string", {}) } })))
-         if ty.typename == "typedecl" then
+   local function recurse_type_declaration(self, n)
+      if n.kind == "op" then
+
+         if n.op.op == "." then
+            local ty = recurse_type_declaration(self, n.e1)
+            if not (ty.typename == "typedecl") then
+               return ty
+            end
+            local def = ty.def
+            if not (def.typename == "record") then
+               return self.errs:invalid_at(n.e1, "type is not a record")
+            end
+            local t = def.fields[n.e2.tk]
+            if t and t.typename == "typedecl" then
+               return t
+            end
+            return self.errs:invalid_at(n.e2, "nested type '" .. n.e2.tk .. "' not found in record")
+
+         elseif n.op.op == "@funcall" and
+            n.e1.kind == "variable" and
+            n.e1.tk == "require" then
+
+            local ty = resolve_tuple(
+            special_functions["require"](
+            self, n, self:find_var_type("require"),
+            a_type(n.e2, "tuple", { tuple = { a_type(n.e2[1], "string", {}) } })))
+
+
+            if not (ty.typename == "typedecl") then
+               return a_type(n, "typedecl", { def = ty })
+            end
             if ty.is_alias then
                return self:resolve_typealias(ty)
             end
             return ty
          end
-         return a_type(value, "typedecl", { def = ty })
-      elseif value.kind == "op" and
-         value.op.op == "." then
+      end
 
-         local ty = self:get_typedecl(value.e1)
-         if ty.typename == "typedecl" then
-            local def = ty.def
-            if def.typename == "record" then
-               local t = def.fields[value.e2.tk]
-               if t and t.typename == "typedecl" then
-                  return t
-               else
-                  return self.errs:invalid_at(value.e2, "nested type '" .. value.e2.tk .. "' not found in record")
-               end
-            else
-               return self.errs:invalid_at(value.e1, "type is not a record")
+      local newtype = n.newtype
+      if newtype.is_alias then
+         return self:resolve_typealias(newtype), aliasing_variable(self, newtype.def)
+      end
+      return newtype, nil
+   end
+
+   function TypeChecker:get_typedecl(value)
+      local resolved, aliasing = recurse_type_declaration(self, value)
+      local nt = value.newtype
+      if nt and nt.is_alias and resolved.typename == "typedecl" then
+         if nt.typeargs then
+            local def = resolved.def
+
+
+
+            if def.typename == "record" or def.typename == "function" or def.typename == "interface" then
+               def.typeargs = nt.typeargs
             end
          end
-         return ty
-      else
-         local newtype = value.newtype
-         if newtype.is_alias then
-            local def = newtype.def
-            assert(def.typename == "nominal")
-            local aliasing = self:find_var(def.names[1], "use_type")
-            return self:resolve_typealias(newtype), aliasing
-         end
-         return newtype, nil
       end
+      return resolved, aliasing
    end
 
    local function total_check_key(key, seen_keys, is_total, missing)
@@ -11193,18 +11215,6 @@ self:expand_type(node, values, elements) })
          before = function(self, node)
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
-            local nt = node.value.newtype
-            if nt and nt.is_alias and resolved.typename == "typedecl" then
-               if nt.typeargs then
-                  local def = resolved.def
-
-
-
-                  if def.typename == "record" or def.typename == "function" or def.typename == "interface" then
-                     def.typeargs = nt.typeargs
-                  end
-               end
-            end
             local var = self:add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing

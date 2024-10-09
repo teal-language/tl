@@ -11037,50 +11037,72 @@ do
       return ok, t, infertype ~= nil
    end
 
-   function TypeChecker:get_typedecl(value: Node): InvalidOrTypeDeclType, Variable
-      if value.kind == "op"
-         and value.op.op == "@funcall"
-         and value.e1.kind == "variable"
-         and value.e1.tk == "require"
-      then
-         local ty = resolve_tuple(special_functions["require"](self, value,
-                                                               self:find_var_type("require"),
-                                                               a_tuple(value.e2, { a_type(value.e2[1], "string", {}) })))
-         if ty is TypeDeclType then
+   local function aliasing_variable(self: TypeChecker, def: Type): Variable
+      if def is NominalType then
+         return (self:find_var(def.names[1], "use_type"))
+      end
+   end
+
+   local function recurse_type_declaration(self: TypeChecker, n: Node): InvalidOrTypeDeclType, Variable
+      if n.kind == "op" then
+         -- recursive case: e1.e2
+         if n.op.op == "." then
+            local ty = recurse_type_declaration(self, n.e1)
+            if not ty is TypeDeclType then
+               return ty
+            end
+            local def = ty.def
+            if not def is RecordType then
+               return self.errs:invalid_at(n.e1, "type is not a record")
+            end
+            local t = def.fields[n.e2.tk]
+            if t and t is TypeDeclType then
+               return t
+            end
+            return self.errs:invalid_at(n.e2, "nested type '" .. n.e2.tk .. "' not found in record")
+         -- base case: require(e2)
+         elseif n.op.op == "@funcall"
+            and n.e1.kind == "variable"
+            and n.e1.tk == "require"
+         then
+            local ty = resolve_tuple(
+               special_functions["require"](
+                  self, n, self:find_var_type("require"),
+                  a_tuple(n.e2, { a_type(n.e2[1], "string", {}) })
+               )
+            )
+            if not ty is TypeDeclType then
+               return a_type(n, "typedecl", { def = ty } as TypeDeclType)
+            end
             if ty.is_alias then
                return self:resolve_typealias(ty)
             end
             return ty
          end
-         return a_type(value, "typedecl", { def = ty } as TypeDeclType)
-      elseif value.kind == "op"
-         and value.op.op == "."
-      then
-         local ty = self:get_typedecl(value.e1)
-         if ty is TypeDeclType then
-            local def = ty.def
-            if def is RecordType then
-               local t = def.fields[value.e2.tk]
-               if t and t is TypeDeclType then
-                  return t
-               else
-                  return self.errs:invalid_at(value.e2, "nested type '" .. value.e2.tk .. "' not found in record")
-               end
-            else
-               return self.errs:invalid_at(value.e1, "type is not a record")
+      end
+      -- base case: type
+      local newtype = n.newtype
+      if newtype.is_alias then
+         return self:resolve_typealias(newtype), aliasing_variable(self, newtype.def)
+      end
+      return newtype, nil
+   end
+
+   function TypeChecker:get_typedecl(value: Node): InvalidOrTypeDeclType, Variable
+      local resolved, aliasing = recurse_type_declaration(self, value)
+      local nt = value.newtype
+      if nt and nt.is_alias and resolved is TypeDeclType then
+         if nt.typeargs then
+            local def = resolved.def
+            -- FIXME this looks sketchy; not sure if just overwriting the
+            -- type variables in a resolved alias won't have bad side-effects.
+            -- Is it guaranteed to be a fresh type?
+            if def is RecordType or def is FunctionType or def is InterfaceType then
+               def.typeargs = nt.typeargs
             end
          end
-         return ty
-      else
-         local newtype = value.newtype
-         if newtype.is_alias then
-            local def = newtype.def
-            assert(def is NominalType)
-            local aliasing = self:find_var(def.names[1], "use_type")
-            return self:resolve_typealias(newtype), aliasing
-         end
-         return newtype, nil
       end
+      return resolved, aliasing
    end
 
    local function total_check_key(key: CheckableKey, seen_keys: {CheckableKey:Where}, is_total: boolean, missing: {string}): boolean, {string}
@@ -11193,18 +11215,6 @@ do
          before = function(self: TypeChecker, node: Node)
             local name = node.var.tk
             local resolved, aliasing = self:get_typedecl(node.value)
-            local nt = node.value.newtype
-            if nt and nt.is_alias and resolved is TypeDeclType then
-               if nt.typeargs then
-                  local def = resolved.def
-                  -- FIXME this looks sketchy; not sure if just overwriting the
-                  -- type variables in a resolved alias won't have bad side-effects.
-                  -- also global types need to propagate type variables as well.
-                  if def is RecordType or def is FunctionType or def is InterfaceType then
-                     def.typeargs = nt.typeargs
-                  end
-               end
-            end
             local var = self:add_var(node.var, name, resolved, node.var.attribute)
             if aliasing then
                var.aliasing = aliasing
