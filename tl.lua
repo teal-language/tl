@@ -7956,50 +7956,58 @@ do
 
 
    do
-      local function match_typevals(self, t, def)
-         if t.typevals and def.typeargs then
-            if #t.typevals ~= #def.typeargs then
-               self.errs:add(t, "mismatch in number of type arguments")
-               return nil
-            end
-
-            self:begin_scope()
-            for i, tt in ipairs(t.typevals) do
-               self:add_var(nil, def.typeargs[i].typearg, tt)
-            end
-            local ret = self:resolve_typevars_at(t, def)
-
-            if def == self.cache_std_metatable_type then
-               local tv = t.typevals[1]
-               if tv.typename == "nominal" then
-                  local found = tv.found
-                  if found and found.typename == "typedecl" then
-                     local rec = found.def
-                     if rec.fields and rec.meta_fields and ret.fields then
-                        for fname, ftype in pairs(rec.meta_fields) do
-                           if ret.fields[fname] then
-                              if not self:is_a(ftype, ret.fields[fname]) then
-                                 self.errs:add(ftype, fname .. " does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
-                              end
-                           end
-                           ret.fields[fname] = ftype
-                        end
-                     end
-                  end
+      local function check_metatable_contract(self, tv, ret)
+         if not ret then
+            return
+         end
+         if not (tv.typename == "nominal") then
+            return
+         end
+         local found = tv.found
+         if not found then
+            return
+         end
+         local rec = found.def
+         if not (rec.fields and rec.meta_fields and ret.fields) then
+            return
+         end
+         for fname, ftype in pairs(rec.meta_fields) do
+            if ret.fields[fname] then
+               if not self:is_a(ftype, ret.fields[fname]) then
+                  self.errs:add(ftype, fname .. " does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
                end
             end
+            ret.fields[fname] = ftype
+         end
+      end
 
-            self:end_scope()
-            return ret
-         elseif t.typevals then
-            self.errs:add(t, "unexpected type argument")
+      local function match_typevals(self, t, def)
+         if not t.typevals and not def.typeargs then
+            return def
+         elseif not def.typeargs then
+            self.errs:add(t, "unexpected type argument", t)
             return nil
-         elseif def.typeargs then
+         elseif not t.typevals then
             self.errs:add(t, "missing type arguments in %s", def)
             return nil
-         else
-            return def
+         elseif #t.typevals ~= #def.typeargs then
+            self.errs:add(t, "mismatch in number of type arguments")
+            return nil
          end
+
+         self:begin_scope()
+
+         for i, tt in ipairs(t.typevals) do
+            self:add_var(nil, def.typeargs[i].typearg, tt)
+         end
+         local ret = self:resolve_typevars_at(t, def)
+         if def == self.cache_std_metatable_type then
+            check_metatable_contract(self, t.typevals[1], ret)
+         end
+
+         self:end_scope()
+
+         return ret
       end
 
       local function find_nominal_type_decl(self, t)
