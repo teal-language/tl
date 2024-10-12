@@ -181,9 +181,9 @@ do
       fmod: function(integer, integer): integer
       fmod: function(number, number): number
 
-      frexp: function(number): number, number
+      frexp: function(number): number, integer
       huge: number
-      ldexp: function(number, number): number
+      ldexp: function(number, integer): number
       log: function(number, ? number): number
       log10: function(number): number
 
