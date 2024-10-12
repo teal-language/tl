@@ -1759,6 +1759,9 @@ end
 local record SelfType
    is Type
    where self.typename == "self"
+
+   -- to be used only in error reports, not for type resolution
+   display_type: Type
 end
 
 local interface ArrayLikeType
@@ -2222,6 +2225,10 @@ end
 
 local macroexp a_union(w: Where, t: {Type}): UnionType
    return a_type(w, "union", { types = t } as UnionType)
+end
+
+local macroexp a_self(w: Where, display_type: Type): SelfType
+   return a_type(w, "self", { display_type = display_type } as SelfType)
 end
 
 local function a_function(w: Where, t: FunctionType): FunctionType
@@ -3809,7 +3816,7 @@ local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): 
    return i, node
 end
 
-local function parse_where_clause(ps: ParseState, i: integer): integer, Node
+local function parse_where_clause(ps: ParseState, i: integer, def: Type): integer, Node
    local node = new_node(ps, i, "macroexp")
 
    node.is_method = true
@@ -3817,6 +3824,7 @@ local function parse_where_clause(ps: ParseState, i: integer): integer, Node
    node.args[1] = new_node(ps, i, "argument")
    node.args[1].tk = "self"
    node.args[1].argtype = new_type(ps, i, "self")
+   (node.args[1].argtype as SelfType).display_type = def
    node.min_arity = 1
    node.rets = new_tuple(ps, i)
    node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3918,7 +3926,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       local wstart = i
       i = i + 1
       local where_macroexp: Node
-      i, where_macroexp = parse_where_clause(ps, i)
+      i, where_macroexp = parse_where_clause(ps, i, def)
 
       local typ = new_type(ps, wstart, "function") as FunctionType
       if def.typeargs then
@@ -3927,7 +3935,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       typ.is_method = true
       typ.min_arity = 1
       typ.args = new_tuple(ps, wstart, {
-         a_type(where_macroexp, "self", {})
+         a_self(where_macroexp, def)
       })
       typ.rets = new_tuple(ps, wstart, { new_type(ps, wstart, "boolean") })
       typ.macroexp = where_macroexp
@@ -6751,6 +6759,13 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       end
       return ret
    elseif t is SelfType then
+      if t.display_type then
+         local ret = show_type_base(t.display_type, short, seen)
+         if TL_DEBUG then
+            ret = "self " .. ret
+         end
+         return ret
+      end
       return "self"
    elseif t is TupleType then
       local out: {string} = {}
@@ -7650,6 +7665,9 @@ do
             for i, tf in ipairs(t.tuple) do
                copy.tuple[i], same = resolve(tf, same)
             end
+         elseif t is SelfType then
+            assert(copy is SelfType)
+            copy.display_type, same = resolve(t.display_type, same)
          end
 
          copy.typeid = same and t.typeid or new_typeid()
@@ -9708,7 +9726,7 @@ do
       end
 
       if rec.kind == "variable" then
-         return nil, "cannot index key '" .. key .. "' in " .. tbl.typename .. " '" .. rec.tk .. "' of type %s"
+         return nil, "cannot index key '" .. key .. "' in variable '" .. rec.tk .. "' of type %s"
       else
          return nil, "cannot index key '" .. key .. "' in type %s"
       end
@@ -12009,7 +12027,7 @@ do
                   self.errs:add(node, "could not resolve type of self")
                   return
                end
-               args.tuple[1] = a_type(node, "self", {})
+               args.tuple[1] = a_self(node, selftype)
                self:add_var(nil, "self", selftype)
                self:add_var(nil, "@self", a_typedecl(node, selftype))
             end
@@ -12884,7 +12902,7 @@ do
                         if fargs[1] then
                            ftype.is_method = ensure_is_method_self(typ, fargs)
                            if ftype.is_method then
-                              fargs[1] = a_type(fargs[1], "self", {})
+                              fargs[1] = a_self(fargs[1], typ)
                            end
                         end
                      end

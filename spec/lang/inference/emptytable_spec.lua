@@ -19,7 +19,7 @@ describe("empty table without type annotation", function()
 
       t.foo = "bar"
    ]], {
-      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:3:10)]] },
+      { msg = [[cannot index key 'foo' in variable 't' of type {integer} (inferred at foo.tl:3:10)]] },
    }))
 
    it("first use can be a function call", util.check([[
@@ -72,7 +72,7 @@ describe("empty table without type annotation", function()
          return t
       end
    ]], {
-      { msg = [[cannot index key 'foo' in array 't' of type {integer} (inferred at foo.tl:5:13)]] },
+      { msg = [[cannot index key 'foo' in variable 't' of type {integer} (inferred at foo.tl:5:13)]] },
    }))
 
    it("inferred type is not const by default (#383)", util.check([[

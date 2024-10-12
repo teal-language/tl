@@ -1994,6 +1994,9 @@ end
 
 
 
+
+
+
 local TruthyFact = {}
 
 
@@ -2211,6 +2214,10 @@ local function edit_type(w, t, typename)
    setmetatable(t, type_mt)
    return t
 end
+
+
+
+
 
 
 
@@ -3809,14 +3816,15 @@ do
       return i, node
    end
 
-   local function parse_where_clause(ps, i)
+   local function parse_where_clause(ps, i, def)
       local node = new_node(ps, i, "macroexp")
 
       node.is_method = true
       node.args = new_node(ps, i, "argument_list")
       node.args[1] = new_node(ps, i, "argument")
       node.args[1].tk = "self"
-      node.args[1].argtype = new_type(ps, i, "self")
+      node.args[1].argtype = new_type(ps, i, "self");
+      (node.args[1].argtype).display_type = def
       node.min_arity = 1
       node.rets = new_tuple(ps, i)
       node.rets.tuple[1] = new_type(ps, i, "boolean")
@@ -3918,7 +3926,7 @@ do
          local wstart = i
          i = i + 1
          local where_macroexp
-         i, where_macroexp = parse_where_clause(ps, i)
+         i, where_macroexp = parse_where_clause(ps, i, def)
 
          local typ = new_type(ps, wstart, "function")
          if def.typeargs then
@@ -3927,7 +3935,7 @@ do
          typ.is_method = true
          typ.min_arity = 1
          typ.args = new_tuple(ps, wstart, {
-            a_type(where_macroexp, "self", {}),
+            a_type(where_macroexp, "self", { display_type = def }),
          })
          typ.rets = new_tuple(ps, wstart, { new_type(ps, wstart, "boolean") })
          typ.macroexp = where_macroexp
@@ -6751,6 +6759,13 @@ local function show_type_base(t, short, seen)
       end
       return ret
    elseif t.typename == "self" then
+      if t.display_type then
+         local ret = show_type_base(t.display_type, short, seen)
+         if TL_DEBUG then
+            ret = "self " .. ret
+         end
+         return ret
+      end
       return "self"
    elseif t.typename == "tuple" then
       local out = {}
@@ -7650,6 +7665,9 @@ do
             for i, tf in ipairs(t.tuple) do
                copy.tuple[i], same = resolve(tf, same)
             end
+         elseif t.typename == "self" then
+            assert(copy.typename == "self")
+            copy.display_type, same = resolve(t.display_type, same)
          end
 
          copy.typeid = same and t.typeid or new_typeid()
@@ -9708,7 +9726,7 @@ a.types[i], b.types[i]), }
       end
 
       if rec.kind == "variable" then
-         return nil, "cannot index key '" .. key .. "' in " .. tbl.typename .. " '" .. rec.tk .. "' of type %s"
+         return nil, "cannot index key '" .. key .. "' in variable '" .. rec.tk .. "' of type %s"
       else
          return nil, "cannot index key '" .. key .. "' in type %s"
       end
@@ -12009,7 +12027,7 @@ self:expand_type(node, values, elements) })
                   self.errs:add(node, "could not resolve type of self")
                   return
                end
-               args.tuple[1] = a_type(node, "self", {})
+               args.tuple[1] = a_type(node, "self", { display_type = selftype })
                self:add_var(nil, "self", selftype)
                self:add_var(nil, "@self", a_type(node, "typedecl", { def = selftype }))
             end
@@ -12884,7 +12902,7 @@ self:expand_type(node, values, elements) })
                         if fargs[1] then
                            ftype.is_method = ensure_is_method_self(typ, fargs)
                            if ftype.is_method then
-                              fargs[1] = a_type(fargs[1], "self", {})
+                              fargs[1] = a_type(fargs[1], "self", { display_type = typ })
                            end
                         end
                      end
