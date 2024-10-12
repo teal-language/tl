@@ -8481,12 +8481,8 @@ do
       if not t then
          return a_type(w, "invalid", {})
       end
-
-      if t.typename == "typedecl" then
-         t = t.def
-      end
-
-      return t
+      assert(t.typename == "typedecl")
+      return t.def
    end
 
 
@@ -9431,7 +9427,11 @@ a.types[i], b.types[i]), }
          check_call = function(self, w, wargs, f, args, expected_rets, cm, argdelta)
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
-               self:add_var(nil, "@self", a_type(w, "typedecl", { def = arg1 }))
+               local selftype = arg1
+               if selftype.typename == "self" then
+                  selftype = self:type_of_self(selftype)
+               end
+               self:add_var(nil, "@self", a_type(w, "typedecl", { def = selftype }))
             end
 
             local fargs = f.args.tuple
@@ -9660,6 +9660,10 @@ a.types[i], b.types[i]), }
       assert(type(key) == "string")
 
       tbl = self:to_structural(tbl)
+
+      if tbl.typename == "self" then
+         tbl = self:type_of_self(tbl)
+      end
 
       if tbl.typename == "string" or tbl.typename == "enum" then
          tbl = self:find_var_type("string")

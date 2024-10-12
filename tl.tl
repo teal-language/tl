@@ -8481,12 +8481,8 @@ do
       if not t then
          return an_invalid(w)
       end
-
-      if t is TypeDeclType then
-         t = t.def
-      end
-
-      return t
+      assert(t is TypeDeclType)
+      return t.def
    end
 
    -- ∃ x ∈ xs. t <: x
@@ -9431,7 +9427,11 @@ do
          check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
-               self:add_var(nil, "@self", a_typedecl(w, arg1))
+               local selftype = arg1
+               if selftype is SelfType then
+                  selftype = self:type_of_self(selftype)
+               end
+               self:add_var(nil, "@self", a_typedecl(w, selftype))
             end
 
             local fargs = f.args.tuple
@@ -9660,6 +9660,10 @@ do
       assert(type(key) == "string")
 
       tbl = self:to_structural(tbl)
+
+      if tbl is SelfType then
+         tbl = self:type_of_self(tbl)
+      end
 
       if tbl is StringType or tbl is EnumType then
          tbl = self:find_var_type("string") -- simulate string metatable
