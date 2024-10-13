@@ -8063,7 +8063,7 @@ do
 
          local immediate, found = find_nominal_type_decl(self, nom)
 
-         if type(immediate) == "table" then
+         if immediate and (immediate.typename == "invalid" or immediate.typename == "typedecl") then
             return immediate
          end
 
@@ -9668,6 +9668,36 @@ a.types[i], b.types[i]), }
       else
          return nil, nil
       end
+   end
+
+   local function make_is_node(self, var, v, t)
+      local node = node_at(var, { kind = "op", op = { op = "is", arity = 2, prec = 3 } })
+      node.e1 = var
+      node.e2 = node_at(var, { kind = "cast", casttype = self:infer_at(var, t) })
+      self:check_metamethod(node, "__is", self:to_structural(v), self:to_structural(t), v, t)
+      if node.expanded then
+         apply_macroexp(node)
+      end
+      node.known = IsFact({ var = var.tk, typ = t, w = node })
+      return node
+   end
+
+   local function convert_is_of_union_to_or_of_is(self, node, v, u)
+      local var = node.e1
+      node.op.op = "or"
+      node.op.arity = 2
+      node.op.prec = 1
+      node.e1 = make_is_node(self, var, v, u.types[1])
+      local at = node
+      local n = #u.types
+      for i = 2, n - 1 do
+         at.e2 = node_at(var, { kind = "op", op = { op = "or", arity = 2, prec = 1 } })
+         at.e2.e1 = make_is_node(self, var, v, u.types[i])
+         node.known = OrFact({ f1 = at.e1.known, f2 = at.e2.known, w = node })
+         at = at.e2
+      end
+      at.e2 = make_is_node(self, var, v, u.types[n])
+      node.known = OrFact({ f1 = at.e1.known, f2 = at.e2.known, w = node })
    end
 
    function TypeChecker:match_record_key(tbl, rec, key)
@@ -12320,9 +12350,15 @@ self:expand_type(node, values, elements) })
                if rb.typename == "integer" then
                   self.all_needs_compat["math"] = true
                end
-               if node.e1.kind == "variable" then
-                  self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
-                  node.known = IsFact({ var = node.e1.tk, typ = ub, w = node })
+               if ra.typename == "typedecl" then
+                  self.errs:add(node, "can only use 'is' on variables, not types")
+               elseif node.e1.kind == "variable" then
+                  if rb.typename == "union" then
+                     convert_is_of_union_to_or_of_is(self, node, ra, rb)
+                  else
+                     self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
+                     node.known = IsFact({ var = node.e1.tk, typ = ub, w = node })
+                  end
                else
                   self.errs:add(node, "can only use 'is' on variables")
                end
