@@ -144,5 +144,55 @@ describe("macroexp code generation", function()
          print("yes")
       end
    ]]))
+
+   it("can resolve __eq metamethod (regression test for #814)", util.gen([[
+      local type R = record
+         x: number
+         y: number
+
+         metamethod __lt: function(a: R, b: R) = macroexp(a: R, b: R)
+            return a.x < b.x
+         end
+
+         metamethod __eq: function(a: R, b: R) = macroexp(a: R, b: R)
+            return a.x == b.x
+         end
+      end
+
+      local r: R = { x = 10, y = 20 }
+      local s: R = { x = 10, y = 0 }
+
+      if r > s then
+         print("yes")
+      end
+
+      if r == s then
+         print("the 'x' fields are equal")
+      end
+   ]], [[
+
+
+
+
+
+
+
+
+
+
+
+
+
+      local r = { x = 10, y = 20 }
+      local s = { x = 10, y = 0 }
+
+      if s.x < r.x then
+         print("yes")
+      end
+
+      if r.x == s.x then
+         print("the 'x' fields are equal")
+      end
+   ]]))
 end)
 
