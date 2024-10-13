@@ -649,6 +649,124 @@ end]]))
             end
          end
       ]]))
+
+      it("generates type checks expanding unions (#742)", util.gen([[
+         global record Foo
+           bar: string
+         end
+
+         global function repro(x:Foo | string | nil): integer
+           local y = x
+           if y is string | Foo then
+             return 1
+           elseif y is nil then
+             return 2
+           end
+           return 3
+         end
+      ]], [[
+         Foo = {}
+
+
+
+         function repro(x)
+           local y = x
+           if type(y) == "string" or type(y) == "table" then
+             return 1
+           elseif y == nil then
+             return 2
+           end
+           return 3
+         end
+      ]]))
+
+      it("generates type checks applying __is to discriminated records in unions", util.gen([[
+         local interface Type
+            typename: string
+         end
+
+         local record FooType is Type where self.typename == "foo"
+         end
+
+         local record BarType is Type where self.typename == "bar"
+         end
+
+         global function repro(x:Type | string | nil): integer
+           local y = x
+           if y is FooType | BarType then
+             return 1
+           elseif y is nil then
+             return 2
+           end
+           return 3
+         end
+      ]], [[
+
+
+
+
+
+
+
+
+
+
+         function repro(x)
+           local y = x
+           if y.typename == "foo" or y.typename == "bar" then
+             return 1
+           elseif y == nil then
+             return 2
+           end
+           return 3
+         end
+      ]]))
+
+      it("generates type checks applying __is to discriminated records in unions expanding alias", util.gen([[
+         local interface Type
+            typename: string
+         end
+
+         local record FooType is Type where self.typename == "foo"
+         end
+
+         local record BarType is Type where self.typename == "bar"
+         end
+
+         local type FooBar = FooType | BarType
+
+         global function repro(x:Type | string | nil): integer
+           local y = x
+           if y is FooBar then
+             return 1
+           elseif y is nil then
+             return 2
+           end
+           return 3
+         end
+      ]], [[
+
+
+
+
+
+
+
+
+
+
+
+
+         function repro(x)
+           local y = x
+           if y.typename == "foo" or y.typename == "bar" then
+             return 1
+           elseif y == nil then
+             return 2
+           end
+           return 3
+         end
+      ]]))
    end)
 
 end)
