@@ -27,4 +27,18 @@ describe("setmetatable", function()
       print(r("!!!", 1000)) -- prints 12000!!!
       print((r + s).x)      -- prints 32
    ]]))
+
+   it("works with nested records (regression test for #772", util.check([[
+      local record Wrapper
+          record Inner
+              metamethod __call: function(container: Inner, instance: Inner): Inner
+          end
+      end
+
+      setmetatable(Wrapper.Inner, {
+          __call = function(container: Wrapper.Inner, instance: Wrapper.Inner): Wrapper.Inner
+              return setmetatable(instance, {__index = container})
+          end
+      })
+   ]]))
 end)

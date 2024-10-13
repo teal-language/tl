@@ -8590,6 +8590,10 @@ do
       },
       ["nominal"] = {
          ["nominal"] = TypeChecker.are_same_nominals,
+         ["typedecl"] = function(self, a, b)
+
+            return self:same_type(self:resolve_nominal(a), b.def)
+         end,
       },
       ["record"] = {
          ["record"] = TypeChecker.eqtype_record,
