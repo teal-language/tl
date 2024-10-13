@@ -1,6 +1,6 @@
 util = require("spec.util")
 
-describe("function calls", function()
+describe("function call", function()
    it("does not crash attempting to infer an emptytable when there's no return type", util.check_type_error([[
       local function f()
       end
@@ -32,6 +32,28 @@ describe("function calls", function()
           return foo("hi there", select(2, ...))
       end
    ]]))
+
+   it("does not allow passing non-record type definitions as values (#813)" , util.check_type_error([[
+      local enum TestEnum
+          "test1"
+      end
+
+      local function testFunc(param1:TestEnum)
+      end
+
+      testFunc(TestEnum)
+
+      local interface X
+      end
+
+      local function testFunc2(param1:X)
+      end
+
+      testFunc2(X)
+   ]], {
+      { y = 8, msg = "argument 1: cannot use a type definition as a concrete value" },
+      { y = 16, msg = "argument 1: interfaces are abstract" },
+   }))
 
    describe("check the arity of functions:", function()
       it("when excessive", util.check_type_error([[

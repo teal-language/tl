@@ -34,11 +34,12 @@ describe("assignment", function()
                err = {}
                if outer == "interface" and scope:match("with outer def") then
                   table.insert(err, { y = 6, msg = "interfaces are abstract; consider using a concrete record" })
-               end
-               if inner == "record" then
-                  table.insert(err, { y = 6, msg = "cannot reassign a type" })
                else
-                  table.insert(err, { y = 6, msg = "interfaces are abstract; consider using a concrete record" })
+                  if inner == "record" then
+                     table.insert(err, { y = 6, msg = "cannot reassign a type" })
+                  else
+                     table.insert(err, { y = 6, msg = "interfaces are abstract; consider using a concrete record" })
+                  end
                end
             elseif outer == "interface" and scope == "to inner var with outer def" then -- 4
                err = { { y = 6, msg = "interfaces are abstract; consider using a concrete record" } }
