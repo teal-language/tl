@@ -741,8 +741,9 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
             proto.x = 2
          ]], {
-            { y = 16, msg = "cannot use a nested type alias as a concrete value" },
-            { y = 20, msg = "cannot use a nested type alias as a concrete value" },
+            { y = 16, msg = "cannot use a type definition as a concrete value" },
+            { y = 18, msg = "cannot use a type definition as a concrete value" },
+            { y = 20, msg = "cannot use a type definition as a concrete value" },
          }))
       else
          it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
@@ -768,11 +769,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
             proto.x = 2
          ]], {
             { y = 16, msg = "interfaces are abstract" },
-            { y = 16, msg = "cannot use a nested type alias as a concrete value" },
             { y = 18, msg = "interfaces are abstract" },
-            { y = 18, msg = "interfaces are abstract" },
-            { y = 18, msg = "interfaces are abstract" },
-            { y = 20, msg = "cannot use a nested type alias as a concrete value" },
          }))
       end
 

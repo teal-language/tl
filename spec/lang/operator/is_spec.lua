@@ -396,10 +396,10 @@ describe("flow analysis with is", function()
          end
       ]], {
          { msg = "can only use 'is' on variables, not types" },
-         { msg = "cannot use operator '..'" },
+         { msg = "cannot use a type definition as a concrete value" },
          { msg = "can only use 'is' on variables, not types" },
-         { msg = "cannot use operator '+'" },
-         { msg = "cannot index" },
+         { msg = "cannot use a type definition as a concrete value" },
+         { msg = "cannot use a type definition as a concrete value" },
       }))
 
       it("produces no errors or warnings for checks on unions of records", util.check_warnings([[

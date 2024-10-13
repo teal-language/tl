@@ -7305,6 +7305,8 @@ do
          local def = t.def
          if def is InterfaceType then
             return nil, "interfaces are abstract; consider using a concrete record"
+         elseif not def is RecordType then
+            return nil, "cannot use a type definition as a concrete value"
          end
       end
       return true
@@ -7828,46 +7830,6 @@ do
 
    local type CompareTypes = function(TypeChecker, Type, Type): boolean, {Error}
 
-   local enum ArgCheckMode
-      "argument"
-      "return"
-      "self"
-   end
-
-   local enum VarianceMode
-      "covariant"
-      "contravariant"
-      "bivariant"
-      "invariant"
-   end
-
-   function TypeChecker:arg_check(w: Where, all_errs: {Error}, a: Type, b: Type, v: VarianceMode, mode: ArgCheckMode, n?: integer): boolean
-      local ok, errs: boolean, {Error}
-
-      if v == "covariant" then
-         ok, errs = self:is_a(a, b)
-      elseif v == "contravariant" then
-         ok, errs = self:is_a(b, a)
-      elseif v == "bivariant" then
-         ok, errs = self:is_a(a, b)
-         if ok then
-            return true
-         end
-         ok = self:is_a(b, a)
-         if ok then
-            return true
-         end
-      elseif v == "invariant" then
-         ok, errs = self:same_type(a, b)
-      end
-
-      if not ok then
-         self.errs:add_prefixing(w, errs, mode .. (n and " " .. n or "") .. ": ", all_errs)
-         return false
-      end
-      return true
-   end
-
    function TypeChecker:has_all_types_of(t1s: {Type}, t2s: {Type}): boolean
       for _, t1 in ipairs(t1s) do
          local found = false
@@ -8121,6 +8083,54 @@ do
          -- and return it
          return td
       end
+   end
+
+   local enum ArgCheckMode
+      "argument"
+      "return"
+      "self"
+   end
+
+   local enum VarianceMode
+      "covariant"
+      "contravariant"
+      "bivariant"
+      "invariant"
+   end
+
+   function TypeChecker:arg_check(w: Where, all_errs: {Error}, a: Type, b: Type, v: VarianceMode, mode: ArgCheckMode, n?: integer): boolean
+      local ok, err, errs: boolean, string, {Error}
+
+      if v == "covariant" then
+         ok, errs = self:is_a(a, b)
+      elseif v == "contravariant" then
+         ok, errs = self:is_a(b, a)
+      elseif v == "bivariant" then
+         ok, errs = self:is_a(a, b)
+         if ok then
+            return true
+         end
+         ok = self:is_a(b, a)
+         if ok then
+            return true
+         end
+      elseif v == "invariant" then
+         ok, errs = self:same_type(a, b)
+      end
+
+      if ok and b is NominalType then
+         local rb = self:resolve_nominal(b)
+         ok, err = ensure_not_abstract(rb)
+         if not ok then
+            errs = { Err_at(w, err) }
+         end
+      end
+
+      if not ok then
+         self.errs:add_prefixing(w, errs, mode .. (n and " " .. n or "") .. ": ", all_errs)
+         return false
+      end
+      return true
    end
 
    do
@@ -12245,13 +12255,14 @@ do
 
             elseif node.op.op == "as" then
                return gb
-            end
 
-            local expected = node.expected and self:to_structural(resolve_tuple(node.expected))
+            elseif node.op.op == "is" and ra is TypeDeclType then
+               return self.errs:invalid_at(node, "can only use 'is' on variables, not types")
+            end
 
             local ok, err = ensure_not_abstract(ra)
             if not ok then
-               self.errs:add(node.e1, err)
+               return self.errs:invalid_at(node.e1, err)
             end
             if ra is TypeDeclType and ra.def.typename == "record" then
                ra = ra.def
@@ -12264,7 +12275,7 @@ do
                rb = self:to_structural(ub)
                ok, err = ensure_not_abstract(rb)
                if not ok then
-                  self.errs:add(node.e2, err)
+                  return self.errs:invalid_at(node.e2, err)
                end
                if rb is TypeDeclType and rb.def.typename == "record" then
                   rb = rb.def
@@ -12303,9 +12314,7 @@ do
                if rb.typename == "integer" then
                   self.all_needs_compat["math"] = true
                end
-               if ra is TypeDeclType then
-                  self.errs:add(node, "can only use 'is' on variables, not types")
-               elseif node.e1.kind == "variable" then
+               if node.e1.kind == "variable" then
                   self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
                   node.known = IsFact { var = node.e1.tk, typ = ub, w = node }
                else
@@ -12346,6 +12355,9 @@ do
 
             if node.op.op == "or" then
                local t: Type
+
+               local expected = node.expected and self:to_structural(resolve_tuple(node.expected))
+
                if ub.typename == "nil" then
                   node.known = nil
                   t = ua
