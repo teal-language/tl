@@ -10827,13 +10827,16 @@ a.types[i], b.types[i]), }
       for i, child in ipairs(children) do
          local ck = child.kname
          local cktype = child.ktype
-         local n = node[i].key.constnum
-         local b = nil
-         if cktype.typename == "boolean" then
-            b = (node[i].key.tk == "true")
+         local key = ck
+         local n
+         if not key then
+            n = node[i].key.constnum
+            key = n
+            if not key and node[i].key.kind == "boolean" then
+               key = (node[i].key.tk == "true")
+            end
          end
 
-         local key = ck or n or b
          self.errs:check_redeclared_key(node[i], nil, seen_keys, key)
 
          local uvtype = resolve_tuple(child.vtype)

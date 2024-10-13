@@ -37,4 +37,25 @@ describe("maps", function()
       { y = 5, msg = "redeclared key false" },
       { y = 6, msg = "redeclared key true" },
    }))
+
+   it("redeclaration check does not fail on non-literal boolean keys (regression test for #816)", util.check([[
+      local KEY_FALSE = false
+      local KEY_TRUE  = true
+
+      local foo = {
+          [false] = "false",
+          [true]  = "true",
+      }
+
+      local bar = {
+          [KEY_FALSE] = "false",
+          [KEY_TRUE]  = "true",
+      }
+
+      print(foo[false])
+      print(foo[true])
+
+      print(bar[KEY_FALSE])
+      print(bar[KEY_TRUE])
+   ]]))
 end)
