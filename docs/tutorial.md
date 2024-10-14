@@ -607,13 +607,7 @@ r.b = "this works"
 r.a = "this works too because 'a' comes from MyAbstractInterface"
 ```
 
-Keep in mind that this refers strictly to subtyping of interfaces, not
-inheritance of implementations. You cannot use `is` to do `local MyRecord is
-AnotherRecord`, as Teal does not implement a class/object model of its own, as
-it aims to be compatible with the multiple class/object models that exist in
-the Lua ecosystem.
-
-Note also that the definition of `my_func` used `self` as a type name. `self`
+Note that the definition of `my_func` used `self` as a type name. `self`
 is a valid type that can be used when declaring arguments in functions
 declared in interfaces and records. When a record is declared to be a subtype
 of an interface using `is`, any function arguments using `self` in the parent
@@ -627,6 +621,67 @@ function MyRecord:another_func(n: integer, another: MyRecord)
    print(n + self.x, another.b)
 end
 ```
+
+Records and interfaces can inherit from multiple interfaces,
+as long as their component parts are compatible (that is, as long
+as the parent interfaces don't declare fields with the same name
+but different types). Here is an example showing how incompatible
+fields need to be stated explicitly, but compatible fields can be
+inherited:
+
+```
+local interface Shape
+   x: number
+   y: number
+end
+
+local interface Colorful
+   r: integer
+   g: integer
+   b: integer
+end
+
+local interface SecondPoint
+   x2: number
+   y2: number
+   get_distance: function(self): number
+end
+
+local record Line is Shape, SecondPoint
+end
+
+local record Square is Shape, SecondPoint, Colorful
+   get_area: function(self): number
+end
+
+--[[
+-- this produces a record with these fields,
+-- but Square also satisfies `Square is Shape`,
+-- `Square is SecondPoint`, `Square is Colorful`
+local record Square
+   x: number
+   y: number
+   x2: number
+   y2: number
+   get_distance: function(self): number
+   r: integer
+   g: integer
+   b: integer
+   get_area: function(self): number
+end
+]]
+```
+
+Keep in mind that this refers strictly to subtyping of interfaces, not
+inheritance of implementations. For that reason, records cannot inherit from
+other records; that is, you cannot use `is` to do `local record MyRecord is
+AnotherRecord`. You can define function fields in your interfaces and those
+definitions will be inherited (as in the `get_distance` and `get_area`
+examples above), but you need to ensure that the actual implementations of
+these functions are resolved at runtime the same way as they would do in Lua,
+most likely using metatables to perform implementation inheritance. Teal
+does not implement a class/object model of its own, as it aims to be compatible
+with the multiple class/object models that exist in the Lua ecosystem.
 
 ## Generics
 
