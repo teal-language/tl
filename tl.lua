@@ -7667,7 +7667,9 @@ do
             end
          elseif t.typename == "self" then
             assert(copy.typename == "self")
-            copy.display_type, same = resolve(t.display_type, same)
+            if t.display_type ~= nil then
+               copy.display_type, same = resolve(t.display_type, same)
+            end
          end
 
          copy.typeid = same and t.typeid or new_typeid()
