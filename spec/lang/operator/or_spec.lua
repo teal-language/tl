@@ -201,6 +201,19 @@ describe("or", function()
       end
    ]]))
 
+   it("resolves the negation of 'or' with '== nil' when 'if' returns (regression test for #823)", util.check([[
+      local function foo(bar:string):boolean
+         if bar == nil or #bar == 0 then
+            return true
+         end
+
+         print(bar:upper())
+         return false
+      end
+
+      foo("asdf")
+   ]]))
+
    it("resolves the negation of 'or' when 'if' returns, error case with interface", util.check_type_error([[
       local interface Type
          t: string

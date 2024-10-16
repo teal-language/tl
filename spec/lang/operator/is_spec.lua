@@ -9,6 +9,7 @@ describe("flow analysis with is", function()
       end
    ]], {
       { y = 1, msg = "unknown type b"},
+      { y = 2, msg = "cannot resolve a type for x here"},
       { y = 2, msg = "unknown variable: x"},
       { y = 2, msg = "cannot resolve a type for x here"},
    }))

@@ -10487,7 +10487,7 @@ do
          elseif f is AndFact and f.f2 and f.f2.fact == "truthy" then
             return eval_not(self, f.f1)
          elseif f is OrFact and f.f2 and f.f2.fact == "truthy" then
-            return eval_fact(self, f.f1)
+            return eval_not(self, f.f1)
          elseif f is AndFact then
             return or_facts(self, eval_not(self, f.f1), eval_not(self, f.f2))
          elseif f is OrFact then
