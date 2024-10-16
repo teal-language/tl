@@ -12408,9 +12408,9 @@ do
             end
 
             if node.op.op == "==" or node.op.op == "~=" then
---               if is_lua_table_type(ra) and is_lua_table_type(rb) then
---                  self:check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb)
---               end
+               if is_lua_table_type(ra) and is_lua_table_type(rb) then
+                  self:check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb, ua, ub)
+               end
 
                if ra is EnumType and rb is StringType then
                   if not (rb.literal and ra.enumset[rb.literal]) then
