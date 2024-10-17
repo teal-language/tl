@@ -1296,4 +1296,32 @@ describe("require", function()
       assert.same({}, result.type_errors)
    end)
 
+   it("a module returning an interface gives a helpful error message (#829)", function ()
+      util.mock_io(finally, {
+         ["ifoo.tl"] = [[
+            local interface IFoo
+               bar: function(self)
+            end
+
+            return IFoo
+         ]],
+         ["main.tl"] = [[
+            local IFoo = require("ifoo")
+
+            local record Foo is IFoo
+            end
+
+            function Foo:bar()
+               print("bar")
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({
+         { filename = "main.tl", x = 33, y = 1, msg = "module type is abstract; use a 'type' declaration" }
+      }, result.type_errors)
+   end)
+
 end)

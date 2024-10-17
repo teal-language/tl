@@ -2323,6 +2323,23 @@ local simple_types: {TypeName:boolean} = {
    ["self"] = true,
 }
 
+local function node_is_require_call(n: Node): string
+   if not (n.e1 and n.e2) then
+      return nil
+   end
+   if n.op and n.op.op == "." then
+      -- `require("str").something`
+      return node_is_require_call(n.e1)
+   elseif n.e1.kind == "variable" and n.e1.tk == "require"
+      and n.e2.kind == "expression_list" and #n.e2 == 1
+      and n.e2[1].kind == "string"
+   then
+      -- `require("str")`
+      return n.e2[1].conststr
+   end
+   return nil -- table.insert cares about arity
+end
+
 do -----------------------------------------------------------------------------
 
 local record ParseState
@@ -2958,23 +2975,6 @@ local function parse_literal(ps: ParseState, i: integer): integer, Node
       return fail(ps, i, "invalid token")
    end
    return fail(ps, i, "syntax error")
-end
-
-local function node_is_require_call(n: Node): string
-   if not (n.e1 and n.e2) then
-      return nil
-   end
-   if n.op and n.op.op == "." then
-      -- `require("str").something`
-      return node_is_require_call(n.e1)
-   elseif n.e1.kind == "variable" and n.e1.tk == "require"
-      and n.e2.kind == "expression_list" and #n.e2 == 1
-      and n.e2[1].kind == "string"
-   then
-      -- `require("str")`
-      return n.e2[1].conststr
-   end
-   return nil -- table.insert cares about arity
 end
 
 local function node_is_require_call_or_pcall(n: Node): string
@@ -11725,7 +11725,11 @@ do
             for i, t in ipairs(tuple.tuple) do
                local ok, err = ensure_not_abstract(t)
                if not ok then
-                  self.errs:add(node[i], err)
+                  if node_is_require_call(node[i]) then
+                     self.errs:add(node[i], "module type is abstract; use a 'type' declaration")
+                  else
+                     self.errs:add(node[i], err)
+                  end
                end
             end
 
