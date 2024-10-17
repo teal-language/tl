@@ -8922,11 +8922,8 @@ a.types[i], b.types[i]), }
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["typedecl"] = {
-         ["record"] = function(self, a, b)
-            local def = a.def
-            if def.fields then
-               return self:subtype_record(def, b)
-            end
+         ["*"] = function(self, a, b)
+            return self:is_a(a.def, b)
          end,
       },
       ["function"] = {
@@ -9000,6 +8997,9 @@ a.types[i], b.types[i]), }
          ["tuple"] = function(self, a, b)
             return self:is_a(a_type(a, "tuple", { tuple = { a } }), b)
          end,
+         ["typedecl"] = function(self, a, b)
+            return self:is_a(a, b.def)
+         end,
          ["typevar"] = function(self, a, b)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.is_a)
          end,
@@ -9032,27 +9032,28 @@ a.types[i], b.types[i]), }
       ["self"] = 3,
       ["tuple"] = 4,
       ["typevar"] = 5,
-      ["any"] = 6,
-      ["boolean_context"] = 7,
-      ["union"] = 8,
-      ["poly"] = 9,
+      ["typedecl"] = 6,
+      ["any"] = 7,
+      ["boolean_context"] = 8,
+      ["union"] = 9,
+      ["poly"] = 10,
 
-      ["typearg"] = 10,
+      ["typearg"] = 11,
 
-      ["nominal"] = 11,
+      ["nominal"] = 12,
 
-      ["enum"] = 12,
-      ["string"] = 12,
-      ["integer"] = 12,
-      ["boolean"] = 12,
+      ["enum"] = 13,
+      ["string"] = 13,
+      ["integer"] = 13,
+      ["boolean"] = 13,
 
-      ["interface"] = 13,
+      ["interface"] = 14,
 
-      ["tupletable"] = 14,
-      ["record"] = 14,
-      ["array"] = 14,
-      ["map"] = 14,
-      ["function"] = 14,
+      ["tupletable"] = 15,
+      ["record"] = 15,
+      ["array"] = 15,
+      ["map"] = 15,
+      ["function"] = 15,
    }
 
    local function compare_types(self, relations, t1, t2)
@@ -12290,6 +12291,10 @@ self:expand_type(node, values, elements) })
                return t
 
             elseif node.op.op == "as" then
+               local ok, err = ensure_not_abstract(ra)
+               if not ok then
+                  return self.errs:invalid_at(node.e1, err)
+               end
                return gb
 
             elseif node.op.op == "is" and ra.typename == "typedecl" then

@@ -8922,11 +8922,8 @@ do
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["typedecl"] = {
-         ["record"] = function(self: TypeChecker, a: TypeDeclType, b: RecordType): boolean, {Error}
-            local def = a.def
-            if def is RecordLikeType then
-               return self:subtype_record(def, b) -- record as prototype
-            end
+         ["*"] = function(self: TypeChecker, a: TypeDeclType, b: RecordType): boolean, {Error}
+            return self:is_a(a.def, b)
          end,
       },
       ["function"] = {
@@ -9000,6 +8997,9 @@ do
          ["tuple"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self:is_a(a_tuple(a, {a}), b)
          end,
+         ["typedecl"] = function(self: TypeChecker, a: Type, b: TypeDeclType): boolean, {Error}
+            return self:is_a(a, b.def)
+         end,
          ["typevar"] = function(self: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.is_a)
          end,
@@ -9032,27 +9032,28 @@ do
       ["self"] = 3,
       ["tuple"] = 4,
       ["typevar"] = 5,
-      ["any"] = 6,
-      ["boolean_context"] = 7,
-      ["union"] = 8,
-      ["poly"] = 9,
+      ["typedecl"] = 6,
+      ["any"] = 7,
+      ["boolean_context"] = 8,
+      ["union"] = 9,
+      ["poly"] = 10,
       -- then typeargs
-      ["typearg"] = 10,
+      ["typearg"] = 11,
       -- then nominals
-      ["nominal"] = 11,
+      ["nominal"] = 12,
       -- then base types
-      ["enum"] = 12,
-      ["string"] = 12,
-      ["integer"] = 12,
-      ["boolean"] = 12,
+      ["enum"] = 13,
+      ["string"] = 13,
+      ["integer"] = 13,
+      ["boolean"] = 13,
       -- then interfaces
-      ["interface"] = 13,
+      ["interface"] = 14,
       -- then special cases of tables
-      ["tupletable"] = 14,
-      ["record"] = 14,
-      ["array"] = 14,
-      ["map"] = 14,
-      ["function"] = 14,
+      ["tupletable"] = 15,
+      ["record"] = 15,
+      ["array"] = 15,
+      ["map"] = 15,
+      ["function"] = 15,
    }
 
    local function compare_types(self: TypeChecker, relations: TypeRelations, t1: Type, t2: Type): boolean, {Error}
@@ -12290,6 +12291,10 @@ do
                return t
 
             elseif node.op.op == "as" then
+               local ok, err = ensure_not_abstract(ra)
+               if not ok then
+                  return self.errs:invalid_at(node.e1, err)
+               end
                return gb
 
             elseif node.op.op == "is" and ra is TypeDeclType then
