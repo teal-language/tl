@@ -386,17 +386,18 @@ local function batch_compare(batch, category, expected, got)
    for i = 1, #expected do
       local e = expected[i] or {}
       local g = got[i] or {}
+      local at = "[" .. (e.line and ("\"" .. e.line .. "\"") or i) .. "]"
       if e.y then
-         batch:add(assert.same, e.y, g.y,  "[" .. i .. "] Expected same y location:")
+         batch:add(assert.same, e.y, g.y, at .. " Expected same y location:")
       end
       if e.x then
-         batch:add(assert.same, e.x, g.x,  "[" .. i .. "] Expected same x location:")
+         batch:add(assert.same, e.x, g.x, at .. " Expected same x location:")
       end
       if e.msg then
-         batch:add(assert.match, e.msg, g.msg or "", 1, true,  "[" .. i .. "] Expected messages to match:")
+         batch:add(assert.match, e.msg, g.msg or "", 1, true, at .. " Expected messages to match:")
       end
       if e.filename then
-         batch:add(assert.match, e.filename, g.filename or "", 1, true,  "[" .. i .. "] Expected filenames to match:")
+         batch:add(assert.match, e.filename, g.filename or "", 1, true, at .. " Expected filenames to match:")
       end
    end
    if #got > #expected then
@@ -632,6 +633,23 @@ end
 
 function util.run_lax_check(...)
    return util.lax_check(...)()
+end
+
+function util.check_lines(prelude, testcases)
+   local code = prelude
+   local errs = {}
+   local y = 0
+   for _ in prelude:gmatch("\n") do
+      y = y + 1
+   end
+   for _, testcase in ipairs(testcases) do
+      code = code .. testcase.line .. "\n"
+      y = y + 1
+      if testcase.err then
+         table.insert(errs, { y = y, line = testcase.line, msg = testcase.err })
+      end
+   end
+   return util.check_type_error(code, errs)
 end
 
 return util
