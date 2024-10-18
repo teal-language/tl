@@ -239,4 +239,43 @@ describe("local type code generation", function()
       ]])
    end)
 
+   it("always elides local type require used as a variable, even if incorrect use of interfaces or aliases", util.gen([[
+      local interface IFoo
+      end
+
+      local type Alias = IFoo
+
+      local record Foo is IFoo
+      end
+
+      local function register(_id:any, _value:any)
+      end
+
+      local foo:Foo
+
+      register(IFoo, foo)
+
+      register(Alias, foo)
+   ]], [[
+
+
+
+
+
+
+
+
+      local function register(_id, _value)
+      end
+
+      local foo
+
+      register(IFoo, foo)
+
+      register(Alias, foo)
+   ]], nil, {
+      { y = 14, msg = "interfaces are abstract" },
+      { y = 16, msg = "interfaces are abstract" },
+   }))
+
 end)

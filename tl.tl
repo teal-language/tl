@@ -6341,6 +6341,20 @@ function Errors:add_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Err
    end
 end
 
+local function ensure_not_abstract(t: Type): boolean, string
+   if t is FunctionType and t.macroexp then
+      return nil, "macroexps are abstract; consider using a concrete function"
+   elseif t is TypeDeclType then
+      local def = t.def
+      if def is InterfaceType then
+         return nil, "interfaces are abstract; consider using a concrete record"
+      elseif not def is RecordType then
+         return nil, "cannot use a type definition as a concrete value"
+      end
+   end
+   return true
+end
+
 local record Unused
    y: integer
    x: integer
@@ -6368,7 +6382,9 @@ local function check_for_unused_vars(scope: Scope, is_global?: boolean): {Unused
          end
       elseif var.used and t is TypeDeclType and var.aliasing then
          var.aliasing.used = true
-         var.aliasing.declared_at.elide_type = false
+         if ensure_not_abstract(t) then
+            var.aliasing.declared_at.elide_type = false
+         end
       end
    end
    if list then
@@ -7298,20 +7314,6 @@ do
       end
    end
 
-   local function ensure_not_abstract(t: Type): boolean, string
-      if t is FunctionType and t.macroexp then
-         return nil, "macroexps are abstract; consider using a concrete function"
-      elseif t is TypeDeclType then
-         local def = t.def
-         if def is InterfaceType then
-            return nil, "interfaces are abstract; consider using a concrete record"
-         elseif not def is RecordType then
-            return nil, "cannot use a type definition as a concrete value"
-         end
-      end
-      return true
-   end
-
    local function ensure_not_method(t: Type): Type
 
       if t is FunctionType and t.is_method then
@@ -7768,10 +7770,9 @@ do
       return ret
    end
 
-   function TypeChecker:add_to_scope(node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow, dont_check_redeclaration: boolean): Variable
-      local scope <const> = self.st[#self.st]
-      local var = scope.vars[name]
-      if narrow then
+   do
+      local function narrow_var(scope: Scope, node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow): Variable
+         local var = scope.vars[name]
          if var then
             if var.is_narrowed then
                var.t = t
@@ -7792,42 +7793,44 @@ do
          return var
       end
 
-      if not dont_check_redeclaration
-         and node
-         and name ~= "self"
-         and name ~= "..."
-         and name:sub(1, 1) ~= "@"
-      then
-         self:check_if_redeclaration(name, node, t)
+      function TypeChecker:add_var(node: Node, name: string, t: Type, attribute?: Attribute, narrow?: Narrow): Variable
+         if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
+            self.errs:add_unknown(node, name)
+         end
+         if not attribute then
+            t = drop_constant_value(t)
+         end
+
+         if self.collector and node then
+            self.collector.add_to_symbol_list(node, name, t)
+         end
+
+         local scope <const> = self.st[#self.st]
+         if narrow then
+            return narrow_var(scope, node, name, t, attribute, narrow)
+         end
+
+         if node then
+            if name ~= "self" and name ~= "..." and name:sub(1, 1) ~= "@" then
+               self:check_if_redeclaration(name, node, t)
+            end
+            if not ensure_not_abstract(t) then
+               node.elide_type = true
+            end
+         end
+
+         local var = scope.vars[name]
+         if var and not var.used then
+            -- the old var is removed from the scope and won't be checked when it closes,
+            -- so check it here
+            self.errs:unused_warning(name, var)
+         end
+
+         var = { t = t, attribute = attribute, declared_at = node }
+         scope.vars[name] = var
+
+         return var
       end
-
-      if var and not var.used then
-         -- the old var is removed from the scope and won't be checked when it closes,
-         -- so check it here
-         self.errs:unused_warning(name, var)
-      end
-
-      var = { t = t, attribute = attribute, is_narrowed = nil, declared_at = node }
-      scope.vars[name] = var
-
-      return var
-   end
-
-   function TypeChecker:add_var(node: Node, name: string, t: Type, attribute?: Attribute, narrow?: Narrow, dont_check_redeclaration?: boolean): Variable
-      if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
-         self.errs:add_unknown(node, name)
-      end
-      if not attribute then
-         t = drop_constant_value(t)
-      end
-
-      local var = self:add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
-
-      if self.collector and node then
-         self.collector.add_to_symbol_list(node, name, t)
-      end
-
-      return var
    end
 
    local type CompareTypes = function(TypeChecker, Type, Type): boolean, {Error}

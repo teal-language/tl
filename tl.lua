@@ -6341,6 +6341,20 @@ function Errors:add_prefixing(w, src, prefix, dst)
    end
 end
 
+local function ensure_not_abstract(t)
+   if t.typename == "function" and t.macroexp then
+      return nil, "macroexps are abstract; consider using a concrete function"
+   elseif t.typename == "typedecl" then
+      local def = t.def
+      if def.typename == "interface" then
+         return nil, "interfaces are abstract; consider using a concrete record"
+      elseif not (def.typename == "record") then
+         return nil, "cannot use a type definition as a concrete value"
+      end
+   end
+   return true
+end
+
 
 
 
@@ -6368,7 +6382,9 @@ local function check_for_unused_vars(scope, is_global)
          end
       elseif var.used and t.typename == "typedecl" and var.aliasing then
          var.aliasing.used = true
-         var.aliasing.declared_at.elide_type = false
+         if ensure_not_abstract(t) then
+            var.aliasing.declared_at.elide_type = false
+         end
       end
    end
    if list then
@@ -7298,20 +7314,6 @@ do
       end
    end
 
-   local function ensure_not_abstract(t)
-      if t.typename == "function" and t.macroexp then
-         return nil, "macroexps are abstract; consider using a concrete function"
-      elseif t.typename == "typedecl" then
-         local def = t.def
-         if def.typename == "interface" then
-            return nil, "interfaces are abstract; consider using a concrete record"
-         elseif not (def.typename == "record") then
-            return nil, "cannot use a type definition as a concrete value"
-         end
-      end
-      return true
-   end
-
    local function ensure_not_method(t)
 
       if t.typename == "function" and t.is_method then
@@ -7768,10 +7770,9 @@ do
       return ret
    end
 
-   function TypeChecker:add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
-      local scope = self.st[#self.st]
-      local var = scope.vars[name]
-      if narrow then
+   do
+      local function narrow_var(scope, node, name, t, attribute, narrow)
+         local var = scope.vars[name]
          if var then
             if var.is_narrowed then
                var.t = t
@@ -7792,42 +7793,44 @@ do
          return var
       end
 
-      if not dont_check_redeclaration and
-         node and
-         name ~= "self" and
-         name ~= "..." and
-         name:sub(1, 1) ~= "@" then
+      function TypeChecker:add_var(node, name, t, attribute, narrow)
+         if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
+            self.errs:add_unknown(node, name)
+         end
+         if not attribute then
+            t = drop_constant_value(t)
+         end
 
-         self:check_if_redeclaration(name, node, t)
+         if self.collector and node then
+            self.collector.add_to_symbol_list(node, name, t)
+         end
+
+         local scope = self.st[#self.st]
+         if narrow then
+            return narrow_var(scope, node, name, t, attribute, narrow)
+         end
+
+         if node then
+            if name ~= "self" and name ~= "..." and name:sub(1, 1) ~= "@" then
+               self:check_if_redeclaration(name, node, t)
+            end
+            if not ensure_not_abstract(t) then
+               node.elide_type = true
+            end
+         end
+
+         local var = scope.vars[name]
+         if var and not var.used then
+
+
+            self.errs:unused_warning(name, var)
+         end
+
+         var = { t = t, attribute = attribute, declared_at = node }
+         scope.vars[name] = var
+
+         return var
       end
-
-      if var and not var.used then
-
-
-         self.errs:unused_warning(name, var)
-      end
-
-      var = { t = t, attribute = attribute, is_narrowed = nil, declared_at = node }
-      scope.vars[name] = var
-
-      return var
-   end
-
-   function TypeChecker:add_var(node, name, t, attribute, narrow, dont_check_redeclaration)
-      if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
-         self.errs:add_unknown(node, name)
-      end
-      if not attribute then
-         t = drop_constant_value(t)
-      end
-
-      local var = self:add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
-
-      if self.collector and node then
-         self.collector.add_to_symbol_list(node, name, t)
-      end
-
-      return var
    end
 
 
