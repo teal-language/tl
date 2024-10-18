@@ -1216,7 +1216,7 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({
-         { filename = "main.tl", x = 37, y = 1, msg = "type is not a record" },
+         { filename = "main.tl", x = 30, y = 1, msg = "'require' did not return a type, got integer" },
          { filename = "main.tl", x = 45, y = 1, msg = "cannot index key 'Foo' in type integer" },
       }, result.type_errors)
    end)
@@ -1322,6 +1322,31 @@ describe("require", function()
       assert.same({
          { filename = "main.tl", x = 33, y = 1, msg = "module type is abstract; use a 'type' declaration" }
       }, result.type_errors)
+   end)
+
+   it("a module returning an interface instance can be required concretely (#825)", function ()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local interface IFoo
+               bar: function(self)
+            end
+
+            local foo: IFoo = {}
+
+            return foo
+         ]],
+         ["main.tl"] = [[
+            local foo = require("foo")
+
+            foo.bar = function(self)
+               print("bar")
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
    end)
 
 end)

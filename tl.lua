@@ -11148,7 +11148,7 @@ self:expand_type(node, values, elements) })
 
 
             if not (ty.typename == "typedecl") then
-               return a_type(n, "typedecl", { def = ty })
+               return self.errs:invalid_at(n.e1, "'require' did not return a type, got %s", ty)
             end
             if ty.is_alias then
                return self:resolve_typealias(ty)
@@ -11669,14 +11669,15 @@ self:expand_type(node, values, elements) })
             local expected = self:find_var_type("@return")
             if not expected then
 
-               expected = self:infer_at(node, got)
-               local module_type = resolve_tuple(expected)
+               local module_type = resolve_tuple(got)
                if module_type.typename == "nominal" then
                   self:resolve_nominal(module_type)
-                  self.module_type = module_type.found
+                  self.module_type = module_type.resolved
                else
                   self.module_type = drop_constant_value(module_type)
                end
+
+               expected = self:infer_at(node, got)
                self.st[2].vars["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
