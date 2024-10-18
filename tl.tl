@@ -12154,6 +12154,15 @@ do
          before = function(self: TypeChecker, node: Node)
             self:widen_all_unions(node)
             self:begin_scope(node)
+
+            local expected = node.expected
+            if expected and expected is FunctionType then
+               for i, t in ipairs(expected.args.tuple) do
+                  if node.args[i] then
+                     node.args[i].expected = t
+                  end
+               end
+            end
          end,
          before_statements = function(self: TypeChecker, node: Node, children: {Type})
             local args = children[1]
@@ -12676,9 +12685,13 @@ do
          after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local t = children[1]
             if not t then
-               t = self.feat_lax
-                   and an_unknown(node)
-                   or a_type(node, "any", {})
+               if node.expected and node.tk == "self" then
+                  t = node.expected
+               else
+                  t = self.feat_lax
+                      and an_unknown(node)
+                      or  a_type(node, "any", {})
+               end
             end
             if node.tk == "..." then
                t = a_vararg(node, { t })
