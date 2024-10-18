@@ -11148,7 +11148,7 @@ do
                )
             )
             if not ty is TypeDeclType then
-               return a_type(n, "typedecl", { def = ty } as TypeDeclType)
+               return self.errs:invalid_at(n.e1, "'require' did not return a type, got %s", ty)
             end
             if ty.is_alias then
                return self:resolve_typealias(ty)
@@ -11669,14 +11669,15 @@ do
             local expected = self:find_var_type("@return") as TupleType
             if not expected then
                -- if at the toplevel
-               expected = self:infer_at(node, got)
-               local module_type = resolve_tuple(expected)
+               local module_type = resolve_tuple(got)
                if module_type is NominalType then
                   self:resolve_nominal(module_type)
-                  self.module_type = module_type.found
+                  self.module_type = module_type.resolved
                else
                   self.module_type = drop_constant_value(module_type)
                end
+
+               expected = self:infer_at(node, got)
                self.st[2].vars["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
