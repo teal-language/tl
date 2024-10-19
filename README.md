@@ -19,7 +19,12 @@ the project's progress:
 
 * [Minimalism versus types (2019)](https://www.youtube.com/watch?v=OPyBQRndLUk)
 * [Minimalistic typed Lua is here (2020)](https://www.youtube.com/watch?v=HfnjUCRzRKU)
-* [What's Next for Teal (2021)](https://www.youtube.com/watch?v=OqXbnaDR8QY)
+* [What's next for Teal (2021)](https://www.youtube.com/watch?v=OqXbnaDR8QY)
+
+And here's an update from early 2024, describing the process that eventually
+resulted in Teal Spring '24, later in the year:
+
+* [Five years of Teal: minimalism versus growth in language design (2024)](https://www.youtube.com/watch?v=68F5Qs91izQ)
 
 Check also the [tutorial](docs/tutorial.md) to get started with an overview of
 the language.
