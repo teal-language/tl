@@ -456,18 +456,23 @@ local p: Point = { x = 100, y = 100 }
 This, however, won't work:
 
 ```lua
-local p1 = { x = 100, y = 100 }
-local p2: Point = p1 -- Error!
+local record Vector
+   x: number
+   y: number
+end
+
+local v1: Vector = { x = 100, y = 100 }
+local p2: Point = v1 -- Error!
 ```
 
 Just because a table has fields with the same names and types, it doesn't mean
-that it is a Point. A Distance could also be defined as fields x and y, but a
-distance is not a point.
+that it is a Point. This is because records in Teal are [nominal
+types](aliasing.md).
 
 You can always force a type, though, using the `as` operator:
 
 ```lua
-local p2 = p1 as Point -- Ok, I'll trust you...
+local p2 = v1 as Point -- Teal goes "ok, I'll trust you..."
 ```
 
 Note we didn't even have to declare the type of p2. The `as` expression resolves
