@@ -2323,6 +2323,23 @@ local simple_types: {TypeName:boolean} = {
    ["self"] = true,
 }
 
+local function node_is_require_call(n: Node): string
+   if not (n.e1 and n.e2) then
+      return nil
+   end
+   if n.op and n.op.op == "." then
+      -- `require("str").something`
+      return node_is_require_call(n.e1)
+   elseif n.e1.kind == "variable" and n.e1.tk == "require"
+      and n.e2.kind == "expression_list" and #n.e2 == 1
+      and n.e2[1].kind == "string"
+   then
+      -- `require("str")`
+      return n.e2[1].conststr
+   end
+   return nil -- table.insert cares about arity
+end
+
 do -----------------------------------------------------------------------------
 
 local record ParseState
@@ -2958,23 +2975,6 @@ local function parse_literal(ps: ParseState, i: integer): integer, Node
       return fail(ps, i, "invalid token")
    end
    return fail(ps, i, "syntax error")
-end
-
-local function node_is_require_call(n: Node): string
-   if not (n.e1 and n.e2) then
-      return nil
-   end
-   if n.op and n.op.op == "." then
-      -- `require("str").something`
-      return node_is_require_call(n.e1)
-   elseif n.e1.kind == "variable" and n.e1.tk == "require"
-      and n.e2.kind == "expression_list" and #n.e2 == 1
-      and n.e2[1].kind == "string"
-   then
-      -- `require("str")`
-      return n.e2[1].conststr
-   end
-   return nil -- table.insert cares about arity
 end
 
 local function node_is_require_call_or_pcall(n: Node): string
@@ -6341,6 +6341,20 @@ function Errors:add_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Err
    end
 end
 
+local function ensure_not_abstract(t: Type): boolean, string
+   if t is FunctionType and t.macroexp then
+      return nil, "macroexps are abstract; consider using a concrete function"
+   elseif t is TypeDeclType then
+      local def = t.def
+      if def is InterfaceType then
+         return nil, "interfaces are abstract; consider using a concrete record"
+      elseif not def is RecordType then
+         return nil, "cannot use a type definition as a concrete value"
+      end
+   end
+   return true
+end
+
 local record Unused
    y: integer
    x: integer
@@ -6368,7 +6382,9 @@ local function check_for_unused_vars(scope: Scope, is_global?: boolean): {Unused
          end
       elseif var.used and t is TypeDeclType and var.aliasing then
          var.aliasing.used = true
-         var.aliasing.declared_at.elide_type = false
+         if ensure_not_abstract(t) then
+            var.aliasing.declared_at.elide_type = false
+         end
       end
    end
    if list then
@@ -7298,20 +7314,6 @@ do
       end
    end
 
-   local function ensure_not_abstract(t: Type): boolean, string
-      if t is FunctionType and t.macroexp then
-         return nil, "macroexps are abstract; consider using a concrete function"
-      elseif t is TypeDeclType then
-         local def = t.def
-         if def is InterfaceType then
-            return nil, "interfaces are abstract; consider using a concrete record"
-         elseif not def is RecordType then
-            return nil, "cannot use a type definition as a concrete value"
-         end
-      end
-      return true
-   end
-
    local function ensure_not_method(t: Type): Type
 
       if t is FunctionType and t.is_method then
@@ -7768,10 +7770,9 @@ do
       return ret
    end
 
-   function TypeChecker:add_to_scope(node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow, dont_check_redeclaration: boolean): Variable
-      local scope <const> = self.st[#self.st]
-      local var = scope.vars[name]
-      if narrow then
+   do
+      local function narrow_var(scope: Scope, node: Node, name: string, t: Type, attribute: Attribute, narrow: Narrow): Variable
+         local var = scope.vars[name]
          if var then
             if var.is_narrowed then
                var.t = t
@@ -7792,42 +7793,44 @@ do
          return var
       end
 
-      if not dont_check_redeclaration
-         and node
-         and name ~= "self"
-         and name ~= "..."
-         and name:sub(1, 1) ~= "@"
-      then
-         self:check_if_redeclaration(name, node, t)
+      function TypeChecker:add_var(node: Node, name: string, t: Type, attribute?: Attribute, narrow?: Narrow): Variable
+         if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
+            self.errs:add_unknown(node, name)
+         end
+         if not attribute then
+            t = drop_constant_value(t)
+         end
+
+         if self.collector and node then
+            self.collector.add_to_symbol_list(node, name, t)
+         end
+
+         local scope <const> = self.st[#self.st]
+         if narrow then
+            return narrow_var(scope, node, name, t, attribute, narrow)
+         end
+
+         if node then
+            if name ~= "self" and name ~= "..." and name:sub(1, 1) ~= "@" then
+               self:check_if_redeclaration(name, node, t)
+            end
+            if not ensure_not_abstract(t) then
+               node.elide_type = true
+            end
+         end
+
+         local var = scope.vars[name]
+         if var and not var.used then
+            -- the old var is removed from the scope and won't be checked when it closes,
+            -- so check it here
+            self.errs:unused_warning(name, var)
+         end
+
+         var = { t = t, attribute = attribute, declared_at = node }
+         scope.vars[name] = var
+
+         return var
       end
-
-      if var and not var.used then
-         -- the old var is removed from the scope and won't be checked when it closes,
-         -- so check it here
-         self.errs:unused_warning(name, var)
-      end
-
-      var = { t = t, attribute = attribute, is_narrowed = nil, declared_at = node }
-      scope.vars[name] = var
-
-      return var
-   end
-
-   function TypeChecker:add_var(node: Node, name: string, t: Type, attribute?: Attribute, narrow?: Narrow, dont_check_redeclaration?: boolean): Variable
-      if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
-         self.errs:add_unknown(node, name)
-      end
-      if not attribute then
-         t = drop_constant_value(t)
-      end
-
-      local var = self:add_to_scope(node, name, t, attribute, narrow, dont_check_redeclaration)
-
-      if self.collector and node then
-         self.collector.add_to_symbol_list(node, name, t)
-      end
-
-      return var
    end
 
    local type CompareTypes = function(TypeChecker, Type, Type): boolean, {Error}
@@ -11145,7 +11148,7 @@ do
                )
             )
             if not ty is TypeDeclType then
-               return a_type(n, "typedecl", { def = ty } as TypeDeclType)
+               return self.errs:invalid_at(n.e1, "'require' did not return a type, got %s", ty)
             end
             if ty.is_alias then
                return self:resolve_typealias(ty)
@@ -11666,14 +11669,15 @@ do
             local expected = self:find_var_type("@return") as TupleType
             if not expected then
                -- if at the toplevel
-               expected = self:infer_at(node, got)
-               local module_type = resolve_tuple(expected)
+               local module_type = resolve_tuple(got)
                if module_type is NominalType then
                   self:resolve_nominal(module_type)
-                  self.module_type = module_type.found
+                  self.module_type = module_type.resolved
                else
                   self.module_type = drop_constant_value(module_type)
                end
+
+               expected = self:infer_at(node, got)
                self.st[2].vars["@return"] = { t = expected }
             end
             local expected_t = expected.tuple
@@ -11725,7 +11729,11 @@ do
             for i, t in ipairs(tuple.tuple) do
                local ok, err = ensure_not_abstract(t)
                if not ok then
-                  self.errs:add(node[i], err)
+                  if node_is_require_call(node[i]) then
+                     self.errs:add(node[i], "module type is abstract; use a 'type' declaration")
+                  else
+                     self.errs:add(node[i], err)
+                  end
                end
             end
 
@@ -12150,6 +12158,15 @@ do
          before = function(self: TypeChecker, node: Node)
             self:widen_all_unions(node)
             self:begin_scope(node)
+
+            local expected = node.expected
+            if expected and expected is FunctionType then
+               for i, t in ipairs(expected.args.tuple) do
+                  if node.args[i] then
+                     node.args[i].expected = t
+                  end
+               end
+            end
          end,
          before_statements = function(self: TypeChecker, node: Node, children: {Type})
             local args = children[1]
@@ -12672,9 +12689,13 @@ do
          after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local t = children[1]
             if not t then
-               t = self.feat_lax
-                   and an_unknown(node)
-                   or a_type(node, "any", {})
+               if node.expected and node.tk == "self" then
+                  t = node.expected
+               else
+                  t = self.feat_lax
+                      and an_unknown(node)
+                      or  a_type(node, "any", {})
+               end
             end
             if node.tk == "..." then
                t = a_vararg(node, { t })
