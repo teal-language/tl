@@ -1320,8 +1320,11 @@ describe("require", function()
 
       assert.same({}, result.syntax_errors)
       assert.same({
-         { filename = "main.tl", x = 33, y = 1, msg = "module type is abstract; use a 'type' declaration" }
+         { filename = "main.tl", x = 33, y = 1, msg = "module type is abstract: interface IFoo" }
       }, result.type_errors)
+      assert.same({
+         { filename = "main.tl", x = 19, y = 1, msg = "hint: consider using 'local type' instead", tag = "hint" }
+      }, result.warnings)
    end)
 
    it("a module returning an interface instance can be required concretely (#825)", function ()

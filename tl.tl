@@ -6341,16 +6341,19 @@ function Errors:add_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Err
    end
 end
 
-local function ensure_not_abstract(t: Type): boolean, string
+local function ensure_not_abstract(t: Type, node?: Node): boolean, string
    if t is FunctionType and t.macroexp then
       return nil, "macroexps are abstract; consider using a concrete function"
    elseif t is TypeDeclType then
       local def = t.def
-      if def is InterfaceType then
+      if def is RecordType then
+         return true
+      elseif node and node_is_require_call(node) then
+         return nil, "module type is abstract: " .. tostring(t.def)
+      elseif def is InterfaceType then
          return nil, "interfaces are abstract; consider using a concrete record"
-      elseif not def is RecordType then
-         return nil, "cannot use a type definition as a concrete value"
       end
+      return nil, "cannot use a type definition as a concrete value"
    end
    return true
 end
@@ -11369,6 +11372,9 @@ do
 
                assert(var)
                self:add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "localizing")
+               if var.elide_type then
+                  self.errs:add_warning("hint", node, "hint: consider using 'local type' instead")
+               end
 
                local infertype = infertypes.tuple[i]
                if ok and infertype then
@@ -11407,6 +11413,9 @@ do
                end
 
                self:add_global(var, var.tk, t, is_inferred)
+               if var.elide_type then
+                  self.errs:add_warning("hint", node, "hint: consider using 'global type' instead")
+               end
 
                self:dismiss_unresolved(var.tk)
             end
@@ -11727,13 +11736,9 @@ do
             tuple = flatten_tuple(tuple)
 
             for i, t in ipairs(tuple.tuple) do
-               local ok, err = ensure_not_abstract(t)
+               local ok, err = ensure_not_abstract(t, node[i])
                if not ok then
-                  if node_is_require_call(node[i]) then
-                     self.errs:add(node[i], "module type is abstract; use a 'type' declaration")
-                  else
-                     self.errs:add(node[i], err)
-                  end
+                  self.errs:add(node[i], err)
                end
             end
 
