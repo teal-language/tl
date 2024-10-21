@@ -42,7 +42,7 @@ local function parse_arguments(args: {string}): string, string
 end
 
 -- create or return file handles
-local function get_fd(name: string, mode: string, default: FILE): FILE, string
+local function get_fd(name: string, mode: io.OpenMode, default: FILE): FILE, string
    if not name then
       return default
    end
