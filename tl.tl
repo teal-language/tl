@@ -8937,7 +8937,7 @@ do
             local errs = {}
 
             local aa, ba = a.args.tuple, b.args.tuple
-            if (not b.args.is_va) and (self.feat_arity and a.min_arity > b.min_arity) then
+            if (not b.args.is_va) and (self.feat_arity and (#aa > #ba and a.min_arity > b.min_arity)) then
                table.insert(errs, Err("incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", a.args, b.args))
             else
                for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
