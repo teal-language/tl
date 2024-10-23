@@ -8942,7 +8942,7 @@ do
             else
                for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
                   local ai = aa[i]
-                  local bi = ba[i] or ba[#ba]
+                  local bi = ba[i] or (b.args.is_va and ba[#ba])
                   if bi then
                      self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
                   end
