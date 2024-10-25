@@ -1,3 +1,44 @@
+# 0.24.1
+
+2024-10-25
+
+A bugfix release for Teal 0.24. Several fixes that bring the implementation
+closer to the vision of what the 2024 edition is intended to be, thanks to
+the invaluable feedback of the user community!
+
+This release features commits by François Perrad, Steve Vermeulen and
+Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Standard library
+  * Improved signatures for `math.frexp` and `math.ldexp`
+
+### Fixes
+
+As expected, fixes are mainly related to the new features introduced in Teal
+0.24:
+
+* Better handling of abstract vs. concrete types
+  * Fixed subtyping and casting checks for records vs. interfaces (#830).
+  * Disallow passing non-record types as arguments (#813).
+  * Allow interface instances to be required concretely
+  * Always elide abstract types from generated code
+* Fixes for improved type inference
+  * Fixed type inference for `is x == nil or ...` (#823).
+  * Resolve type parameter in `setmetatable` using nested records (#772).
+  * Ignore non-literal booleans in table key declarations (#816).
+  * Type variables from function results also resolve arguments (#838).
+  * Do not mistake missing optional argument for a vararg.
+* Improved code generation
+  * Generate `__is`-aware code for `is` on unions (#742).
+  * Handles metamethod for `__eq` (#814).
+* Fixes for `self` type
+  * Fixed a nil reference exception (#824).
+  * Corrected resolution of `self` in methods (#812).
+
 # 0.24.0 - Teal Spring '24
 
 2024-10-07
