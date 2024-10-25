@@ -12267,13 +12267,13 @@ self:expand_type(node, values, elements) })
                   for _, typ in ipairs(e1args) do
                      at = at + 1
                      if node.e2[at] then
-                        node.e2[at].expected = typ
+                        node.e2[at].expected = self:infer_at(node.e2[at], typ)
                      end
                   end
                   if e1type.args.is_va then
                      local typ = e1args[#e1args]
                      for i = at + 1, #node.e2 do
-                        node.e2[i].expected = typ
+                        node.e2[i].expected = self:infer_at(node.e2[i], typ)
                      end
                   end
                end

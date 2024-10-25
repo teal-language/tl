@@ -96,7 +96,7 @@ describe("forin", function()
    it("with a callable record iterator", util.check([[
       local record R
          incr: integer
-         metamethod __call: function(): integer
+         metamethod __call: function(self): integer
       end
 
       local function foo(incr: integer): R
