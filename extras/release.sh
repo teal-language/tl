@@ -75,7 +75,12 @@ luarocks new_version tl-dev-*.rockspec "${version}" --tag="v${version}" || {
    exit 1
 }
 
-./luarocks upload tl-${version}-1.rockspec || {
+api_key=
+[ "$LUAROCKS_API_KEY" ] && {
+   api_key="--temp-key $LUAROCKS_API_KEY"
+}
+
+./luarocks upload $api_key tl-${version}-1.rockspec || {
    echo "Failed to upload the new rockspec."
    exit 1
 }
