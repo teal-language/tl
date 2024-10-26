@@ -634,7 +634,7 @@ but different types). Here is an example showing how incompatible
 fields need to be stated explicitly, but compatible fields can be
 inherited:
 
-```
+```lua
 local interface Shape
    x: number
    y: number
