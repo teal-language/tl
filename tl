@@ -139,6 +139,58 @@ local function filename_to_module_name(filename)
    return (filename:gsub("%.lua$", ""):gsub("%.d%.tl$", ""):gsub("%.tl$", ""):gsub("[/\\]", "."))
 end
 
+local function serializeAstTableToJSON(tbl, maxDepth)
+   local function escapeString(str)
+      return string.gsub(str, '[%c"\\]', {
+          ['\t'] = '\\t',
+          ['\r'] = '\\r',
+          ['\n'] = '\\n',
+          ['"']  = '\\"',
+          ['\\'] = '\\\\'
+      })
+   end
+   maxDepth = maxDepth or 10  -- Default max depth
+
+   local function serialize(val, stack, depth)
+       if depth > maxDepth then
+           return '"MAX_DEPTH_REACHED"'
+       end
+
+       local t = type(val)
+       if t == 'string' then
+           return '"' .. escapeString(val) .. '"'
+       elseif t == 'number' or t == 'boolean' or t == 'nil' then
+           return tostring(val)
+       elseif t == 'table' then
+           if stack[val] then
+               return '"CIRCULAR_REF_' .. tostring(stack[val]) .. '"'
+           end
+           stack[val] = depth
+
+           local result = {}
+           local isArray = #val > 0
+           local opening, closing = "{", "}"
+           if isArray then
+               opening, closing = "[", "]"
+               for i, v in ipairs(val) do
+                   table.insert(result, serialize(v, stack, depth + 1))
+               end
+           else
+               for k, v in pairs(val) do
+                   if type(k) ~= 'string' then k = tostring(k) end
+                   table.insert(result, '"' .. escapeString(k) .. '":' .. serialize(v, stack, depth + 1))
+               end
+           end
+           stack[val] = nil
+           return opening .. table.concat(result, ",") .. closing
+       else
+           return '"UNSUPPORTED_TYPE"'
+       end
+   end
+
+   return serialize(tbl, {}, 1)
+end
+
 --------------------------------------------------------------------------------
 -- Common driver backend
 --------------------------------------------------------------------------------
@@ -168,6 +220,7 @@ local function setup_env(tlconfig, filename)
          feat_arity = tlconfig["feat_arity"],
          gen_compat = tlconfig["gen_compat"],
          gen_target = tlconfig["gen_target"],
+         gen_ast = tlconfig["gen_ast"],
       },
       predefined_modules = tlconfig._init_env_modules,
    }
@@ -268,28 +321,50 @@ local function type_check_and_load(tlconfig, filename)
    return chunk
 end
 
-local function write_out(tlconfig, result, output_file, pp_opts)
+local function write_out(tlconfig, result, output_files, pp_opts)
    if tlconfig["pretend"] then
-      print("Would Write: " .. output_file)
+      print("Would write lua file: " .. output_files[1])
+      if tlconfig["gen_ast"]>0 then
+         print("Would write ast file: " .. output_files[2])
+      end
       return
    end
 
-   local ofd, err = io.open(output_file, "wb")
+   local ofd, err = io.open(output_files[1], "wb")
 
    if not ofd then
-      die("cannot write " .. output_file .. ": " .. err)
+      die("cannot write " .. output_files[1] .. ": " .. err)
    end
 
    local _
    _, err = ofd:write(tl.generate(result.ast, tlconfig.gen_target, pp_opts) .. "\n")
    if err then
-      die("error writing " .. output_file .. ": " .. err)
+      die("error writing " .. output_files[1] .. ": " .. err)
    end
-
    ofd:close()
 
    if not tlconfig["quiet"] then
-      print("Wrote: " .. output_file)
+      print("Wrote: " .. output_files[1])
+   end
+
+   if tlconfig["gen_ast"]>0 then
+      local ofd_ast,err = io.open(output_files[2], "w")
+      if not ofd_ast then
+         die("cannot write " .. output_files[2] .. ": " .. err)
+      else
+         print("Write ast file: " .. output_files[2])
+         _, err =ofd_ast:write('{"ast":\n')
+         _, err =ofd_ast:write(serializeAstTableToJSON(result.ast,tlconfig["gen_ast"]))
+         _, err =ofd_ast:write("\n}")
+
+         if err then
+            die("error writing " .. output_files[2] .. ": " .. err)
+         end
+         ofd_ast:close()
+         if not tlconfig["quiet"] then
+            print("Wrote: " .. output_files[2])
+         end
+      end
    end
 end
 
@@ -331,6 +406,7 @@ local function validate_config(config)
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
+      gen_ast = "number",
    }
 
    for k, v in pairs(config) do
@@ -408,6 +484,8 @@ local function get_args_parser()
 
    parser:flag("-p --pretend", "Do not write to any files, type check and output what files would be generated.")
 
+   parser:flag("-a --gen-ast", "AST file will be generated.")
+
    parser:require_command(false)
    parser:command_target("command")
 
@@ -443,7 +521,8 @@ local function get_config(cmd)
       include_dir = {},
       disable_warnings = {},
       warning_error = {},
-      quiet = false
+      quiet = false,
+      gen_ast = 0
    }
 
    local config_path = find_file_in_parent_dirs("tlconfig.lua") or "tlconfig.lua"
@@ -530,6 +609,8 @@ local function merge_config_and_args(tlconfig, args)
       tlconfig["pretend"] = true
    end
 
+   tlconfig["gen_ast"] = args["gen_ast"] or tlconfig["gen_ast"]
+
    tlconfig["feat_arity"] = args["feat_arity"] or tlconfig["feat_arity"]
 
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
@@ -548,9 +629,9 @@ local function get_output_filename(file_name)
    local name, ext = tail:match("(.+)%.([a-zA-Z]+)$")
    if not name then name = tail end
    if ext ~= "lua" then
-      return name .. ".lua"
+      return {name .. ".lua",name .. "_ast.json"}
    else
-      return name .. ".out.lua"
+      return {name .. ".out.lua",name .. "_out_ast.json"}
    end
 end
 
@@ -750,7 +831,7 @@ commands["check"] = function(tlconfig, args)
    if ok and tlconfig["quiet"] == false and #args["file"] == 1 then
       local file_name = args["file"][1]
 
-      local output_file = get_output_filename(file_name)
+      local output_files = get_output_filename(file_name)
       print("========================================")
       print("Type checked " .. file_name)
       print("0 errors detected -- you can use:")
@@ -761,7 +842,7 @@ commands["check"] = function(tlconfig, args)
       print()
       print("   tl gen " .. file_name)
       print()
-      print("       to generate " .. output_file)
+      print("       to generate " .. output_files[1] .. " and " .. output_files[2])
    end
 
    os.exit(ok and 0 or 1)
@@ -794,7 +875,7 @@ commands["gen"] = function(tlconfig, args)
 
       local res = {
          input_file = input_file,
-         output_file = get_output_filename(input_file)
+         output_files = get_output_filename(input_file)
       }
 
       res.tl_result, err = process_module(input_file, env)
@@ -808,7 +889,7 @@ commands["gen"] = function(tlconfig, args)
 
    for _, res in ipairs(results) do
       if #res.tl_result.syntax_errors == 0 then
-         write_out(tlconfig, res.tl_result, args["output"] or res.output_file, pp_opts)
+         write_out(tlconfig, res.tl_result, args["output"] or res.output_files, pp_opts)
       end
    end
 
