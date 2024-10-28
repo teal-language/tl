@@ -136,7 +136,7 @@ do
       end
 
       close: function(? FILE)
-      input: function(? FILE): FILE
+      input: function(? FILE | string): FILE
       flush: function()
 
       lines: function(? string): (function(): (string))
@@ -146,7 +146,7 @@ do
       lines: function(? string, (number | string)...): (function(): (string...))
 
       open: function(string, ? OpenMode): FILE, string, integer
-      output: function(? FILE): FILE
+      output: function(? FILE | string): FILE
       popen: function(string, ? OpenMode): FILE, string
 
       read: function(): string
