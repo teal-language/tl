@@ -311,7 +311,7 @@ do
 
       char: function(integer...): string
       dump: function(function(any...): (any), ? boolean): string
-      find: function(string, string, ? integer, ? boolean): integer, integer, string
+      find: function(string, string, ? integer, ? boolean): integer, integer, string...
       format: function(string, any...): string
       gmatch: function(string, string, ? integer): (function(): string...)
 
