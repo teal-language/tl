@@ -30,4 +30,12 @@ describe("<", function()
    ]], {
       { msg = "cannot use operator '<' for types boolean and integer" }
    }))
+
+   it("< on aliases to comparable types return boolean", util.check([[
+      local type Test = integer
+
+      local function f(a: Test, b: Test) : boolean
+         return a < b
+      end
+   ]]))
 end)

@@ -12623,7 +12623,7 @@ do
                   end
                end
 
-               if ua is NominalType and ub is NominalType and not meta_on_operator then
+               if (not t) and ua is NominalType and ub is NominalType and not meta_on_operator then
                   if self:is_a(ua, ub) then
                      t = ua
                   else
