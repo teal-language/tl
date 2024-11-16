@@ -7301,9 +7301,11 @@ do
       end
 
       fresh_typevar_ctr = fresh_typevar_ctr + 1
-      local ok
-      ok, t = typevar_resolver(nil, t, fresh_typevar, fresh_typearg)
-      assert(ok and t, "Internal Compiler Error: error creating fresh type variables")
+      local ok, errs
+      ok, t, errs = typevar_resolver(nil, t, fresh_typevar, fresh_typearg)
+      if not ok then
+         self.errs:collect(errs)
+      end
       return t
    end
 
