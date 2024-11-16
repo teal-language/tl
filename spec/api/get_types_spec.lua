@@ -62,6 +62,138 @@ describe("tl.get_types", function()
       assert.same(fields, {"init", "x", "y"})
    end)
 
+   it("reports inherited interface fields in record field list, case 1 (#852)", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local interface IFoo
+            bar: function(self)
+         end
+
+         local record Foo is IFoo
+            -- Uncommenting this causes 'bar' to be hidden from fields of Foo
+            qux:function(Foo)
+
+            -- Using this style doesn't have this problem
+            -- qux:function(self)
+         end
+
+         function Foo:bar()
+         end
+
+         function Foo:qux()
+         end
+
+         local record Runner
+            foo: Foo
+         end
+
+         function Runner:run()
+            -- self.foo.
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 5
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "Foo")
+      local fields = {}
+      for k, _ in pairs(tr.types[type_at_y_x].fields) do
+         table.insert(fields, k)
+      end
+      table.sort(fields)
+      assert.same(fields, {"bar", "qux"})
+   end)
+
+   it("reports inherited interface fields in record field list, case 2 (#852)", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local interface IFoo
+            bar: function(self)
+         end
+
+         local record Foo is IFoo
+            -- Uncommenting this causes 'bar' to be hidden from fields of Foo
+            -- qux:function(Foo)
+
+            -- Using this style doesn't have this problem
+            qux:function(self)
+         end
+
+         function Foo:bar()
+         end
+
+         function Foo:qux()
+         end
+
+         local record Runner
+            foo: Foo
+         end
+
+         function Runner:run()
+            -- self.foo.
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 5
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "Foo")
+      local fields = {}
+      for k, _ in pairs(tr.types[type_at_y_x].fields) do
+         table.insert(fields, k)
+      end
+      table.sort(fields)
+      assert.same(fields, {"bar", "qux"})
+   end)
+
+   it("reports inherited interface fields in record field list, case 3 (#852)", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local interface IFoo
+            bar: function(self)
+         end
+
+         local record Foo is IFoo
+            -- Uncommenting this causes 'bar' to be hidden from fields of Foo
+            -- qux:function(Foo)
+
+            -- Using this style doesn't have this problem
+            -- qux:function(self)
+         end
+
+         function Foo:bar()
+         end
+
+         function Foo:qux()
+         end
+
+         local record Runner
+            foo: Foo
+         end
+
+         function Runner:run()
+            -- self.foo.
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 5
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "Foo")
+      local fields = {}
+      for k, _ in pairs(tr.types[type_at_y_x].fields) do
+         table.insert(fields, k)
+      end
+      table.sort(fields)
+      assert.same(fields, {"bar", "qux"})
+   end)
+
    it("reports reference of a nominal type", function()
       local env = tl.init_env()
       env.report_types = true

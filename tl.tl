@@ -13043,6 +13043,12 @@ do
 
                if typ.interface_list then
                   self:expand_interfaces(typ)
+
+                  if self.collector then
+                     for fname, ftype in fields_of(typ) do
+                        self.env.reporter:add_field(typ, fname, ftype)
+                     end
+                  end
                end
 
                if fmacros then
