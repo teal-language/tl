@@ -12623,7 +12623,7 @@ self:expand_type(node, values, elements) })
                   end
                end
 
-               if ua.typename == "nominal" and ub.typename == "nominal" and not meta_on_operator then
+               if (not t) and ua.typename == "nominal" and ub.typename == "nominal" and not meta_on_operator then
                   if self:is_a(ua, ub) then
                      t = ua
                   else
