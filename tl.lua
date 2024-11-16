@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 local VERSION = "0.24.1+dev"
 
 local stdlib = [=====[
@@ -7027,6 +7027,8 @@ local function add_compat_entries(program, used_set, gen_compat)
          load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
       elseif name == "math.mininteger" then
          load_code(name, "local _tl_math_mininteger = math.mininteger or -math.pow(2,53) - 1")
+      elseif name == "type" then
+         load_code(name, "local type = type")
       else
          if not compat_loaded then
             load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
@@ -9681,12 +9683,12 @@ a.types[i], b.types[i]), }
       local node = node_at(var, { kind = "op", op = { op = "is", arity = 2, prec = 3 } })
       node.e1 = var
       node.e2 = node_at(var, { kind = "cast", casttype = self:infer_at(var, t) })
-      self:check_metamethod(node, "__is", self:to_structural(v), self:to_structural(t), v, t)
+      local _, has = self:check_metamethod(node, "__is", self:to_structural(v), self:to_structural(t), v, t)
       if node.expanded then
          apply_macroexp(node)
       end
       node.known = IsFact({ var = var.tk, typ = t, w = node })
-      return node
+      return node, has
    end
 
    local function convert_is_of_union_to_or_of_is(self, node, v, u)
@@ -9694,17 +9696,21 @@ a.types[i], b.types[i]), }
       node.op.op = "or"
       node.op.arity = 2
       node.op.prec = 1
-      node.e1 = make_is_node(self, var, v, u.types[1])
+      local has_any = nil
+      node.e1, has_any = make_is_node(self, var, v, u.types[1])
       local at = node
       local n = #u.types
       for i = 2, n - 1 do
          at.e2 = node_at(var, { kind = "op", op = { op = "or", arity = 2, prec = 1 } })
-         at.e2.e1 = make_is_node(self, var, v, u.types[i])
+         local has
+         at.e2.e1, has = make_is_node(self, var, v, u.types[i])
+         has_any = has_any or has
          node.known = OrFact({ f1 = at.e1.known, f2 = at.e2.known, w = node })
          at = at.e2
       end
       at.e2 = make_is_node(self, var, v, u.types[n])
       node.known = OrFact({ f1 = at.e1.known, f2 = at.e2.known, w = node })
+      return not not has_any
    end
 
    function TypeChecker:match_record_key(tbl, rec, key)
@@ -12374,20 +12380,31 @@ self:expand_type(node, values, elements) })
             end
 
             if node.op.op == "is" then
+               local add_type = false
                if rb.typename == "integer" then
                   self.all_needs_compat["math"] = true
+               elseif rb.typename ~= "nil" then
+                  add_type = true
                end
                if ra.typename == "typedecl" then
                   self.errs:add(node, "can only use 'is' on variables, not types")
                elseif node.e1.kind == "variable" then
+                  local has_meta
                   if rb.typename == "union" then
-                     convert_is_of_union_to_or_of_is(self, node, ra, rb)
+                     has_meta = convert_is_of_union_to_or_of_is(self, node, ra, rb)
                   else
-                     self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
+                     local _, meta = self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
                      node.known = IsFact({ var = node.e1.tk, typ = ub, w = node })
+                     has_meta = not not meta
+                  end
+                  if has_meta then
+                     add_type = false
                   end
                else
                   self.errs:add(node, "can only use 'is' on variables")
+               end
+               if add_type then
+                  self.all_needs_compat["type"] = true
                end
                return a_type(node, "boolean", {})
             end

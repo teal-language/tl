@@ -608,7 +608,7 @@ end]]))
             end
          end
       ]], [[
-         local function process(ts)
+         local type = type; local function process(ts)
             local t
             t = ts[1]
             if type(t) == "number" then
@@ -635,7 +635,7 @@ end]]))
             end
          end
       ]], [[
-
+         local type = type
 
 
          function process(ts)
@@ -666,7 +666,7 @@ end]]))
            return 3
          end
       ]], [[
-         Foo = {}
+         local type = type; Foo = {}
 
 
 
