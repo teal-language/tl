@@ -12611,6 +12611,10 @@ do
                   end
                   if mt_name then
                      t, meta_on_operator = self:check_metamethod(node, mt_name, ra, rb, ua, ub, flipped)
+                     if flipped and not meta_on_operator then
+                        ra, rb = rb, ra
+                        ua, ub = ub, ua
+                     end
                   end
                   if not t then
                      t = self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
