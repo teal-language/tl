@@ -565,6 +565,7 @@ local record tl
       "branch"
       "hint"
       "debug"
+      "unread"
    end
    warning_kinds: {WarningKind:boolean}
 
@@ -716,6 +717,7 @@ local wk <total>: {tl.WarningKind:boolean} = {
    ["branch"] = true,
    ["hint"] = true,
    ["debug"] = true,
+   ["unread"] = true,
 }
 tl.warning_kinds = wk
 
@@ -795,10 +797,11 @@ local record Variable
    is_narrowed: Narrow
    declared_at: Node
    is_func_arg: boolean
-   used: boolean
    used_as_type: boolean
    aliasing: Variable
    implemented: {string:boolean}
+   has_been_read_from: boolean
+   has_been_written_to: boolean
 end
 
 --------------------------------------------------------------------------------
@@ -6294,26 +6297,34 @@ function Errors:redeclaration_warning(at: Where, var_name: string, var_kind: str
    end
 end
 
-function Errors:unused_warning(name: string, var: Variable)
+local function var_should_be_ignored_for_warnings(name: string, var: Variable): boolean
    local prefix <const> = name:sub(1,1)
-   if var.declared_at
-      and var.is_narrowed ~= "narrow"
-      and prefix ~= "_"
-      and prefix ~= "@"
-   then
-      local t = var.t
-      self:add_warning(
-         "unused",
-         var.declared_at,
-         "unused %s %s: %s",
-         var.is_func_arg and "argument"
-            or t is FunctionType and "function"
-            or t is TypeDeclType and "type"
-            or "variable",
-         name,
-         show_type(var.t)
-      )
+   return (not var.declared_at)
+      or var.is_narrowed == "narrow"
+      or prefix == "_"
+      or prefix == "@"
+end
+
+local function user_facing_variable_description(var: Variable): string
+   local t <const> = var.t
+   return var.is_func_arg and "argument"
+      or t is FunctionType and "function"
+      or t is TypeDeclType and "type"
+      or "variable"
+end
+
+function Errors:unused_warning(name: string, var: Variable)
+   if var_should_be_ignored_for_warnings(name, var) then
+      return
    end
+   self:add_warning(
+      "unused",
+      var.declared_at,
+      "unused %s %s: %s",
+      user_facing_variable_description(var),
+      name,
+      show_type(var.t)
+   )
 end
 
 function Errors:add_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Error})
@@ -6358,51 +6369,87 @@ local function ensure_not_abstract(t: Type, node?: Node): boolean, string
    return true
 end
 
-local record Unused
+local record UsageWarning
    y: integer
    x: integer
    name: string
    var: Variable
+   kind: Kind
+
+   enum Kind
+      "unused"
+      "written but not read"
+   end
 end
 
-local function check_for_unused_vars(scope: Scope, is_global?: boolean): {Unused}
+local function has_var_been_used(var: Variable): boolean
+   return var.has_been_read_from or var.has_been_written_to
+end
+
+local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning}
    local vars = scope.vars
    if not next(vars) then
       return
    end
-   local list: {Unused}
+   local usage_warnings: {UsageWarning}
    for name, var in pairs(vars) do
-      local t = var.t
-      if var.declared_at and not var.used then
+      local t <const> = var.t
+      if not var_should_be_ignored_for_warnings(name, var) then
+         if var.has_been_written_to and not var.has_been_read_from then
+            usage_warnings = usage_warnings or {}
+            table.insert(usage_warnings, {
+               y = var.declared_at.y,
+               x = var.declared_at.x,
+               name = name,
+               var = var,
+               kind = "written but not read",
+            })
+         end
+
+      end
+
+      if var.declared_at and not has_var_been_used(var) then
          if var.used_as_type then
             var.declared_at.elide_type = true
          else
             if t is TypeDeclType and not is_global then
                var.declared_at.elide_type = true
             end
-            list = list or {}
-            table.insert(list, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var })
+            usage_warnings = usage_warnings or {}
+            table.insert(usage_warnings, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var, kind = "unused" })
          end
-      elseif var.used and t is TypeDeclType and var.aliasing then
-         var.aliasing.used = true
+      elseif has_var_been_used(var) and t is TypeDeclType and var.aliasing then
+         var.aliasing.has_been_written_to = var.has_been_written_to
+         var.aliasing.has_been_read_from = var.has_been_read_from
          if ensure_not_abstract(t) then
             var.aliasing.declared_at.elide_type = false
          end
       end
    end
-   if list then
-      table.sort(list, function(a: Unused, b: Unused): boolean
+   if usage_warnings then
+      table.sort(usage_warnings, function(a: UsageWarning, b: UsageWarning): boolean
          return a.y < b.y or (a.y == b.y and a.x < b.x)
       end)
    end
-   return list
+   return usage_warnings
 end
 
-function Errors:warn_unused_vars(scope: Scope, is_global?: boolean)
-   local unused = check_for_unused_vars(scope, is_global)
-   if unused then
-      for _, u in ipairs(unused) do
-         self:unused_warning(u.name, u.var)
+function Errors:check_var_usage(scope: Scope, is_global?: boolean)
+   local usage_warnings <const> = check_var_usage(scope, is_global)
+   if usage_warnings then
+      for _, u in ipairs(usage_warnings) do
+         if u.kind == "unused" then
+            self:unused_warning(u.name, u.var)
+         elseif u.kind == "written but not read" then
+            self:add_warning(
+               "unread",
+               u.var.declared_at,
+               "%s %s (of type %s) is never read",
+               user_facing_variable_description(u.var),
+               u.name,
+               show_type(u.var.t)
+            )
+         end
       end
    end
 
@@ -7244,7 +7291,7 @@ do
          if var then
             if use == "lvalue" and var.is_narrowed and var.is_narrowed ~= "localizing" then
                if var.narrowed_from then
-                  var.used = true
+                  var.has_been_written_to = true
                   return { t = var.narrowed_from, attribute = var.attribute }, i, var.attribute
                end
             else
@@ -7254,7 +7301,11 @@ do
                if use == "use_type" then
                   var.used_as_type = true
                elseif use ~= "check_only" then
-                  var.used = true
+                  if use == "lvalue" then
+                     var.has_been_written_to = true
+                  else
+                     var.has_been_read_from = true
+                  end
                end
                return var, i, var.attribute
             end
@@ -7827,7 +7878,7 @@ do
          end
 
          local var = scope.vars[name]
-         if var and not var.used then
+         if var and not has_var_been_used(var) then
             -- the old var is removed from the scope and won't be checked when it closes,
             -- so check it here
             self.errs:unused_warning(name, var)
@@ -7928,7 +7979,7 @@ do
       end
 
       close_types(scope)
-      self.errs:warn_unused_vars(scope)
+      self.errs:check_var_usage(scope)
 
       table.remove(st)
 
@@ -13341,7 +13392,7 @@ do
 
       local global_scope = self.st[1]
       close_types(global_scope)
-      self.errs:warn_unused_vars(global_scope, true)
+      self.errs:check_var_usage(global_scope, true)
 
       clear_redundant_errors(self.errs.errors)
 
