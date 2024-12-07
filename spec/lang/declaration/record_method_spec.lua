@@ -613,11 +613,11 @@ describe("record method", function()
                local B = require('base')
 
                local function new(cond: boolean): B
-                 local C: B
+                 local _C: B
                  if cond then
-                   C = require('t1')
+                   _C = require('t1')
                  else
-                   C = require('t2')
+                   _C = require('t2')
                  end
                end
 

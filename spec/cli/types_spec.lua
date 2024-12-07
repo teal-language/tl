@@ -185,13 +185,13 @@ describe("tl types works like check", function()
 
             if 1 == 1 then
                 local abc = hello()
-                local def = abc
+                local _def = abc
 
 
 
 
 
-                def = abc
+                _def = abc
             end
          ]])
          local pd = io.popen(util.tl_cmd("types", "-p", "12:1", filename), "r")
@@ -204,7 +204,7 @@ describe("tl types works like check", function()
          end
          assert(n == 3)
          assert(type(types["abc"]) == "number")
-         assert(type(types["def"]) == "number")
+         assert(type(types["_def"]) == "number")
          assert(type(types["hello"]) == "number")
       end)
 

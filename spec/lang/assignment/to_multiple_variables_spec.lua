@@ -28,12 +28,12 @@ describe("assignment to multiple variables", function()
       local function foo(_a: integer, _b: string, _c: boolean): string, boolean
          return "hi", true
       end
-      local x, y, z, w: string, boolean, integer, boolean
+      local _x, _y, _z, _w: string, boolean, integer, boolean
 
-      x, y, z, w = foo(1, "hello", true)
+      _x, _y, _z, _w = foo(1, "hello", true)
    ]], {
-      { y = 6, x = 13, msg = "only 2 values are returned by the function" },
-      { y = 6, x = 16, msg = "only 2 values are returned by the function" },
+      { y = 6, x = 15, msg = "only 2 values are returned by the function" },
+      { y = 6, x = 19, msg = "only 2 values are returned by the function" },
    }))
 
    it("reports unsufficient rvalues as an error, tricky", util.check_type_error([[
