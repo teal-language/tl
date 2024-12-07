@@ -9639,7 +9639,7 @@ do
 
          local cm = should_warn_dot(node, e1, is_method)
 
-         local ok, errs: boolean, {Error}
+         local errs: {Error}
          local f, ret: FunctionType, InvalidOrTupleType
 
          self:begin_scope()
@@ -9647,7 +9647,8 @@ do
          if func is PolyType then
             f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
          elseif func is FunctionType then
-            ok, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
+            local _: boolean
+            _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
             f, ret = func, func.rets
          else
             ret = self.errs:invalid_at(node, "not a function: %s", func)
