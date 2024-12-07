@@ -56,11 +56,23 @@ describe("warnings", function()
          { y = 1, msg = [[unused variable foo: string]] }
       }))
 
+      it("reports unread (but written) variables", util.check_warnings([[
+         local foo = "bar"
+         foo = "baz"
+      ]], {
+         { y = 1, msg = [[variable foo (of type string) is never read]] }
+      }))
+
       it("does not report variable shadows previous declaration ofs prefixed with '_'", util.check_warnings([[
          local _ = 1
          print(_) -- ensure usage
          local _ = 2
          print(_)
+      ]], { }))
+
+      it("does not report unread (but written) variables prefixed with '_'", util.check_warnings([[
+         local _foo = "bar"
+         _foo = "baz"
       ]], { }))
 
       it("does not report unused global variables", util.check_warnings([[
