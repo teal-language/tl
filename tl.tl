@@ -2479,6 +2479,7 @@ local function skip(ps: ParseState, i: integer, skip_fn: SkipFunction): integer,
       tokens = ps.tokens,
       errs = {},
       required_modules = {},
+      parse_lang = ps.parse_lang,
    }
    return skip_fn(err_ps, i)
 end
@@ -2574,6 +2575,7 @@ local function parse_table_item(ps: ParseState, i: integer, n?: integer): intege
             tokens = ps.tokens,
             errs = {},
             required_modules = ps.required_modules,
+            parse_lang = ps.parse_lang,
          }
          i, node.key = verify_kind(try_ps, i, "identifier", "string")
          node.key.conststr = node.key.tk
@@ -2682,6 +2684,7 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
       tokens = ps.tokens,
       errs = {},
       required_modules = ps.required_modules,
+      parse_lang = ps.parse_lang
    }
    local tryi, item: integer, T = parse_item(try_ps, i)
    if not item then
@@ -4458,6 +4461,7 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl
       errs = errs,
       filename = filename or "",
       required_modules = {},
+      -- TODO: parse_lang
    }
    local i = 1
    local hashbang: string
