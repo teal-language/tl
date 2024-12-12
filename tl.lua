@@ -2476,6 +2476,7 @@ do
          tokens = ps.tokens,
          errs = {},
          required_modules = {},
+         parse_lang = ps.parse_lang,
       }
       return skip_fn(err_ps, i)
    end
@@ -2571,6 +2572,7 @@ do
                tokens = ps.tokens,
                errs = {},
                required_modules = ps.required_modules,
+               parse_lang = ps.parse_lang,
             }
             i, node.key = verify_kind(try_ps, i, "identifier", "string")
             node.key.conststr = node.key.tk
@@ -2679,6 +2681,7 @@ do
          tokens = ps.tokens,
          errs = {},
          required_modules = ps.required_modules,
+         parse_lang = ps.parse_lang,
       }
       local tryi, item = parse_item(try_ps, i)
       if not item then
@@ -4455,6 +4458,7 @@ do
          errs = errs,
          filename = filename or "",
          required_modules = {},
+
       }
       local i = 1
       local hashbang
