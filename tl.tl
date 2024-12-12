@@ -2345,6 +2345,12 @@ end
 
 do -----------------------------------------------------------------------------
 
+local enum ParseLang
+   "lua"
+   "tl"
+   "lax-tl"
+end
+
 local record ParseState
    tokens: {Token}
    errs: {Error}
@@ -2352,6 +2358,7 @@ local record ParseState
    end_alignment_hint: Error
 
    required_modules: {string}
+   parse_lang: ParseLang
 end
 
 local enum ParseTypeListMode
