@@ -111,7 +111,7 @@ describe("function call", function()
          f[[hello]]()
       ]=]))
 
-      it("with double square brackets across multiple lines", util.check([=[
+      it("with double square brackets across multiple lines", util.check_lua([=[
          local function f(a: string): function()
             return function() end
          end
@@ -126,7 +126,7 @@ describe("function call", function()
          f[=[hello]=]()
       ]]))
 
-      it("with double square brackets with equals across multiple lines", util.check([[
+      it("with double square brackets with equals across multiple lines", util.check_lua([[
          local function f(a: string): function()
             return function() end
          end
