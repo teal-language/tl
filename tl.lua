@@ -2340,13 +2340,13 @@ local function node_is_require_call(n)
    return nil
 end
 
+
+
+
+
+
+
 do
-
-
-
-
-
-
 
 
 
@@ -4451,14 +4451,14 @@ do
       return i, node
    end
 
-   function tl.parse_program(tokens, errs, filename)
+   function tl.parse_program(tokens, errs, filename, parse_lang)
       errs = errs or {}
       local ps = {
          tokens = tokens,
          errs = errs,
          filename = filename or "",
          required_modules = {},
-
+         parse_lang = parse_lang,
       }
       local i = 1
       local hashbang
@@ -13396,21 +13396,33 @@ local function read_full_file(fd)
    return content, err
 end
 
-local function feat_lax_heuristic(filename, input)
+local function lang_heuristic(filename, input)
    if filename then
-      local _, extension = filename:match("(.*)%.([a-z]+)$")
+      local pattern = "(.*)%.([a-z]+)$"
+      local front, extension = filename:match(pattern)
       extension = extension and extension:lower()
 
       if extension == "tl" then
-         return "off"
+         local _, subextension = front:match(pattern)
+         if (subextension == "lax") then
+            return "lax-tl"
+         else
+            return "tl"
+         end
       elseif extension == "lua" then
-         return "on"
+         return "lua"
       end
    end
    if input then
-      return (input:match("^#![^\n]*lua[^\n]*\n")) and "on" or "off"
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
-   return "off"
+   return "tl"
+end
+
+
+local function feat_lax_heuristic(filename, input)
+   local lang = lang_heuristic(filename, input)
+   return lang == "tl" and "off" or "on"
 end
 
 tl.check_file = function(filename, env, fd)

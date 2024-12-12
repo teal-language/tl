@@ -660,7 +660,7 @@ local record tl
    loader: function()
    new_env: function(? EnvOptions): Env, string
    parse: function(input: string, filename: string): Node, {Error}, {string}
-   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    check_string: function(input: string, env?: Env, filename?: string): Result
    search_module: function(module_name: string, search_dtl: boolean): string, FILE, {string}
@@ -2340,13 +2340,13 @@ local function node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
-do -----------------------------------------------------------------------------
-
 local enum ParseLang
    "lua"
    "tl"
    "lax-tl"
 end
+
+do -----------------------------------------------------------------------------
 
 local record ParseState
    tokens: {Token}
@@ -4451,14 +4451,14 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl.Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
       errs = errs,
       filename = filename or "",
       required_modules = {},
-      -- TODO: parse_lang
+      parse_lang = parse_lang,
    }
    local i = 1
    local hashbang: string
@@ -13396,21 +13396,33 @@ local function read_full_file(fd: FILE): string, string
    return content, err
 end
 
-local function feat_lax_heuristic(filename?: string, input?: string): Feat
+local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
-      local _, extension = filename:match("(.*)%.([a-z]+)$")
+      local pattern = "(.*)%.([a-z]+)$"
+      local front, extension = filename:match(pattern)
       extension = extension and extension:lower()
 
       if extension == "tl" then
-         return "off"
+         local _, subextension = front:match(pattern)
+         if (subextension == "lax") then
+            return "lax-tl"
+         else
+            return "tl"
+         end
       elseif extension == "lua" then
-         return "on"
+         return "lua"
       end
    end
    if input then
-      return (input:match("^#![^\n]*lua[^\n]*\n")) and "on" or "off"
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
-   return "off"
+   return "tl"
+end
+
+-- TODO: just use lang at the call site?
+local function feat_lax_heuristic(filename?: string, input?: string): Feat
+   local lang = lang_heuristic(filename, input)
+   return lang == "tl" and "off" or "on"
 end
 
 tl.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
