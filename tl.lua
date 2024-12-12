@@ -4475,9 +4475,9 @@ do
       return node, ps.required_modules
    end
 
-   function tl.parse(input, filename)
+   function tl.parse(input, filename, parse_lang)
       local tokens, errs = tl.lex(input, filename)
-      local node, required_modules = tl.parse_program(tokens, errs, filename)
+      local node, required_modules = tl.parse_program(tokens, errs, filename, parse_lang)
       return node, errs, required_modules
    end
 
@@ -7009,6 +7009,7 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
+
          code = tl.parse(text, "@internal")
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
@@ -7150,7 +7151,7 @@ tl.new_env = function(opts)
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
+      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
       assert_no_stdlib_errors(syntax_errors, "syntax errors")
       local result = tl.check(program, "@stdlib", {}, env)
       assert_no_stdlib_errors(result.type_errors, "type errors")
@@ -13419,9 +13420,7 @@ local function lang_heuristic(filename, input)
    return "tl"
 end
 
-
-local function feat_lax_heuristic(filename, input)
-   local lang = lang_heuristic(filename, input)
+local function feat_lax_heuristic(lang)
    return lang == "tl" and "off" or "on"
 end
 
@@ -13459,12 +13458,12 @@ function tl.target_from_lua_version(str)
    end
 end
 
-local function default_env_opts(runtime, filename, input)
+local function default_env_opts(runtime, parse_lang)
    local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
    local gen_compat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
    return {
       defaults = {
-         feat_lax = feat_lax_heuristic(filename, input),
+         feat_lax = feat_lax_heuristic(parse_lang),
          gen_target = gen_target,
          gen_compat = gen_compat,
          run_internal_compiler_checks = false,
@@ -13472,15 +13471,16 @@ local function default_env_opts(runtime, filename, input)
    }
 end
 
-function tl.check_string(input, env, filename)
-   env = env or tl.new_env(default_env_opts(false, filename, input))
+function tl.check_string(input, env, filename, parse_lang)
+   parse_lang = parse_lang or lang_heuristic(filename, input)
+   env = env or tl.new_env(default_env_opts(false, parse_lang))
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
    filename = filename or ""
 
-   local program, syntax_errors = tl.parse(input, filename)
+   local program, syntax_errors = tl.parse(input, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
@@ -13503,8 +13503,9 @@ function tl.check_string(input, env, filename)
    return result
 end
 
-tl.gen = function(input, env, opts)
-   env = env or assert(tl.new_env(default_env_opts(false, nil, input)), "Default environment initialization failed")
+tl.gen = function(input, env, opts, parse_lang)
+   parse_lang = parse_lang or lang_heuristic(nil, input)
+   env = env or assert(tl.new_env(default_env_opts(false, parse_lang)), "Default environment initialization failed")
    local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
@@ -13519,12 +13520,13 @@ end
 local function tl_package_loader(module_name)
    local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
+      local parse_lang = lang_heuristic(found_filename)
       local input = read_full_file(fd)
       if not input then
          return table.concat(tried, "\n\t")
       end
       fd:close()
-      local program, errs = tl.parse(input, found_filename)
+      local program, errs = tl.parse(input, found_filename, parse_lang)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
@@ -13535,7 +13537,7 @@ local function tl_package_loader(module_name)
          env = tl.package_loader_env
       end
 
-      local opts = default_env_opts(true, found_filename)
+      local opts = default_env_opts(true, parse_lang)
 
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
@@ -13589,12 +13591,13 @@ local function env_for(opts, env_tbl)
 end
 
 tl.load = function(input, chunkname, mode, ...)
-   local program, errs = tl.parse(input, chunkname)
+   local parse_lang = lang_heuristic(chunkname)
+   local program, errs = tl.parse(input, chunkname, parse_lang)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
-   local opts = default_env_opts(true, chunkname)
+   local opts = default_env_opts(true, parse_lang)
 
    if not tl.package_loader_env then
       tl.package_loader_env = tl.new_env(opts)
