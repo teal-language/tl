@@ -96,7 +96,7 @@ describe("syntax errors", function()
    }))
 
    it("doesn't support function calls on new lines", util.check_syntax_error([=[
-      local function test(): function()
+      local function test(a: string): function()
       end
 
       test
