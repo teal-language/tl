@@ -95,5 +95,27 @@ describe("syntax errors", function()
       { y = 7, x = 6 + 6, msg = "syntax error, cannot perform an assignment here (did you mean '=='?)" },
    }))
 
+   it("doesn't support function calls on new lines", util.check_syntax_error([=[
+      local function test(): function()
+      end
+
+      test
+      ("hello world")
+   ]=], {
+      { y = 4, x = 11, msg = "syntax error, expected '='" },
+      { y = 5, msg = "syntax error" },
+   }))
+
+   it("doesn't support function calls after multiline string literals", util.check_syntax_error([=[
+      local function test(a: string): function()
+         return function() end
+      end
+      test[[hello
+      world]]()
+   ]=], {
+      { y = 5, x = 15, msg = "syntax error" },
+      { y = 5, msg = "syntax error, expected ')'" },
+   }))
+
 end)
 
