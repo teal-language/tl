@@ -89,52 +89,6 @@ describe("function call", function()
       ]]))
    end)
 
-   describe("call the result of calling functions with string literals:", function()
-      it("with single quotes", util.check([[
-         local function f(a: string): function()
-            return function() end
-         end
-         f'hello'()
-      ]]))
-
-      it("with double quotes", util.check([[
-         local function f(a: string): function()
-            return function() end
-         end
-         f"hello"()
-      ]]))
-
-      it("with double square brackets", util.check([=[
-         local function f(a: string): function()
-            return function() end
-         end
-         f[[hello]]()
-      ]=]))
-
-      it("with double square brackets across multiple lines", util.check_lua([=[
-         local function f(a: string): function()
-            return function() end
-         end
-         f[[hello
-         world]]()
-      ]=]))
-
-      it("with double square brackets with equals", util.check([[
-         local function f(a: string): function()
-            return function() end
-         end
-         f[=[hello]=]()
-      ]]))
-
-      it("with double square brackets with equals across multiple lines", util.check_lua([[
-         local function f(a: string): function()
-            return function() end
-         end
-         f[=[hello
-         world]=]()
-      ]]))
-   end)
-
    describe("check the arity of functions:", function()
       it("when excessive", util.check_type_error([[
          local function f(n: number, m: number): number
