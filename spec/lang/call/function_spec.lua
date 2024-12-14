@@ -111,7 +111,18 @@ describe("function call", function()
          f[[hello]]()
       ]=]))
 
-      it("with double square brackets across multiple lines", util.check_lua([=[
+      it("with double square brackets across multiple lines", util.check_syntax_error([=[
+         local function f(a: string): function()
+            return function() end
+         end
+         f[[hello
+         world]]()
+      ]=], {
+         { y = 5, x = 18, msg = "syntax error: teal does not support a function call after a newline or multiline string literal; consider moving the call to a previous line or wrapping a string literal in parentheses" },
+         { y = 5, msg = "syntax error, expected ')'" },
+      }))
+
+      it("with double square brackets across multiple lines in lua", util.check_lua([=[
          local function f(a: string): function()
             return function() end
          end
@@ -126,7 +137,18 @@ describe("function call", function()
          f[=[hello]=]()
       ]]))
 
-      it("with double square brackets with equals across multiple lines", util.check_lua([[
+      it("with double square brackets with equals across multiple lines", util.check_syntax_error([[
+         local function f(a: string): function()
+            return function() end
+         end
+         f[=[hello
+         world]=]()
+      ]], {
+         { y = 5, x = 19, msg = "syntax error: teal does not support a function call after a newline or multiline string literal; consider moving the call to a previous line or wrapping a string literal in parentheses" },
+         { y = 5, msg = "syntax error, expected ')'" },
+      }))
+
+      it("with double square brackets with equals across multiple lines in lua", util.check_lua([[
          local function f(a: string): function()
             return function() end
          end
