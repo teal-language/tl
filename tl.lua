@@ -6947,6 +6947,10 @@ tl.search_module = function(module_name, search_dtl)
    if found then
       return found, fd
    end
+   found, fd, tried = search_for(module_name, ".lax.tl", path, tried)
+   if found then
+      return found, fd
+   end
    found, fd, tried = search_for(module_name, ".lua", path, tried)
    if found then
       return found, fd
