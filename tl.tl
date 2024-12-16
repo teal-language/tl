@@ -2343,7 +2343,6 @@ end
 local enum ParseLang
    "lua"
    "tl"
-   "lax-tl"
 end
 
 do -----------------------------------------------------------------------------
@@ -6944,10 +6943,6 @@ tl.search_module = function(module_name: string, search_dtl: boolean): string, F
       end
    end
    found, fd, tried = search_for(module_name, ".tl", path, tried)
-   if found then
-      return found, fd
-   end
-   found, fd, tried = search_for(module_name, ".lax.tl", path, tried)
    if found then
       return found, fd
    end
@@ -13404,16 +13399,11 @@ end
 local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
       local pattern = "(.*)%.([a-z]+)$"
-      local front, extension = filename:match(pattern)
+      local _, extension = filename:match(pattern)
       extension = extension and extension:lower()
 
       if extension == "tl" then
-         local _, subextension = front:match(pattern)
-         if (subextension == "lax") then
-            return "lax-tl"
-         else
-            return "tl"
-         end
+         return "tl"
       elseif extension == "lua" then
          return "lua"
       end
