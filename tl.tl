@@ -6894,10 +6894,16 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       if t.rets.tuple and #t.rets.tuple > 0 then
          table.insert(out, ": ")
          local rets = {}
+         if #t.rets.tuple > 1 then
+            table.insert(out, "(")
+         end
          for i, v in ipairs(t.rets.tuple) do
             table.insert(rets, show(v) .. (i == #t.rets.tuple and t.rets.is_va and "..." or ""))
          end
          table.insert(out, table.concat(rets, ", "))
+         if #t.rets.tuple > 1 then
+            table.insert(out, ")")
+         end
       end
       return table.concat(out)
    elseif t.typename == "number"
