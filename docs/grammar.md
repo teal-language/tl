@@ -118,7 +118,7 @@ precedence, see below.
 
 *  recordentry ::= ‘userdata’ |
 *      ‘type’ Name ‘=’ newtype | [‘metamethod’] recordkey ‘:’ type |
-*      ‘record’ recordbody | ‘enum’ enumbody
+*      ‘record’ Name recordbody | ‘enum’ Name enumbody
 
 *  recordkey ::= Name | ‘[’ LiteralString ‘]’
 

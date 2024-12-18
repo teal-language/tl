@@ -81,7 +81,7 @@ checks, require the library, then re-enable them:
 
 ```lua
 --#pragma arity off
-local old_library = require("old_library)
+local old_library = require("old_library")
 --#pragma arity on
 
 local function add(a: number, b: number): number
