@@ -660,10 +660,10 @@ local record tl
    load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
    loader: function()
    new_env: function(? EnvOptions): Env, string
-   parse: function(input: string, filename: string): Node, {Error}, {string}
-   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
+   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
-   check_string: function(input: string, env?: Env, filename?: string): Result
+   check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    search_module: function(module_name: string, search_dtl: boolean): string, FILE, {string}
    symbols_in_scope: function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
    target_from_lua_version: function(str: string): GenTarget
@@ -2343,6 +2343,11 @@ local function node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
+local enum ParseLang
+   "lua"
+   "tl"
+end
+
 do -----------------------------------------------------------------------------
 
 local record ParseState
@@ -2352,6 +2357,7 @@ local record ParseState
    end_alignment_hint: Error
 
    required_modules: {string}
+   parse_lang: ParseLang
 end
 
 local enum ParseTypeListMode
@@ -2472,6 +2478,7 @@ local function skip(ps: ParseState, i: integer, skip_fn: SkipFunction): integer,
       tokens = ps.tokens,
       errs = {},
       required_modules = {},
+      parse_lang = ps.parse_lang,
    }
    return skip_fn(err_ps, i)
 end
@@ -2567,6 +2574,7 @@ local function parse_table_item(ps: ParseState, i: integer, n?: integer): intege
             tokens = ps.tokens,
             errs = {},
             required_modules = ps.required_modules,
+            parse_lang = ps.parse_lang,
          }
          i, node.key = verify_kind(try_ps, i, "identifier", "string")
          node.key.conststr = node.key.tk
@@ -2675,6 +2683,7 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
       tokens = ps.tokens,
       errs = {},
       required_modules = ps.required_modules,
+      parse_lang = ps.parse_lang
    }
    local tryi, item: integer, T = parse_item(try_ps, i)
    if not item then
@@ -3151,7 +3160,7 @@ do
             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = "op", op = op, e1 = e1, e2 = key }
          elseif tkop.tk == "(" then
             local prev_tk = ps.tokens[i - 1]
-            if tkop.y > prev_tk.y then
+            if tkop.y > prev_tk.y and ps.parse_lang ~= "lua" then
                table.insert(ps.tokens, i, { y = prev_tk.y, x = prev_tk.x + #prev_tk.tk, tk = ";", kind = ";" })
                break
             end
@@ -4444,13 +4453,14 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl.Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
       errs = errs,
       filename = filename or "",
       required_modules = {},
+      parse_lang = parse_lang,
    }
    local i = 1
    local hashbang: string
@@ -4467,9 +4477,9 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string): tl
    return node, ps.required_modules
 end
 
-function tl.parse(input: string, filename: string): tl.Node, {Error}, {string}
+function tl.parse(input: string, filename: string, parse_lang?: ParseLang): tl.Node, {Error}, {string}
    local tokens, errs = tl.lex(input, filename)
-   local node, required_modules = tl.parse_program(tokens, errs, filename)
+   local node, required_modules = tl.parse_program(tokens, errs, filename, parse_lang)
    return node, errs, required_modules
 end
 
@@ -7051,6 +7061,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
+         -- TODO: does this need a parse_lang?
          code = tl.parse(text, "@internal") as Node
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
@@ -7192,7 +7203,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl")
+      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
       assert_no_stdlib_errors(syntax_errors, "syntax errors")
       local result = tl.check(program, "@stdlib", {}, env)
       assert_no_stdlib_errors(result.type_errors, "type errors")
@@ -13443,21 +13454,26 @@ local function read_full_file(fd: FILE): string, string
    return content, err
 end
 
-local function feat_lax_heuristic(filename?: string, input?: string): Feat
+local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
-      local _, extension = filename:match("(.*)%.([a-z]+)$")
+      local pattern = "(.*)%.([a-z]+)$"
+      local _, extension = filename:match(pattern)
       extension = extension and extension:lower()
 
       if extension == "tl" then
-         return "off"
+         return "tl"
       elseif extension == "lua" then
-         return "on"
+         return "lua"
       end
    end
    if input then
-      return (input:match("^#![^\n]*lua[^\n]*\n")) and "on" or "off"
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
-   return "off"
+   return "tl"
+end
+
+local function feat_lax_heuristic(lang: ParseLang): Feat
+   return lang == "tl" and "off" or "on"
 end
 
 tl.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
@@ -13494,12 +13510,12 @@ function tl.target_from_lua_version(str: string): GenTarget
    end
 end
 
-local function default_env_opts(runtime: boolean, filename?: string, input?: string): EnvOptions
+local function default_env_opts(runtime: boolean, parse_lang?: ParseLang): EnvOptions
    local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
    local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
    return {
       defaults = {
-         feat_lax = feat_lax_heuristic(filename, input),
+         feat_lax = feat_lax_heuristic(parse_lang),
          gen_target = gen_target,
          gen_compat = gen_compat,
          run_internal_compiler_checks = false,
@@ -13507,15 +13523,16 @@ local function default_env_opts(runtime: boolean, filename?: string, input?: str
    }
 end
 
-function tl.check_string(input: string, env?: Env, filename?: string): Result
-   env = env or tl.new_env(default_env_opts(false, filename, input))
+function tl.check_string(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
+   parse_lang = parse_lang or lang_heuristic(filename, input)
+   env = env or tl.new_env(default_env_opts(false, parse_lang))
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
    filename = filename or ""
 
-   local program, syntax_errors = tl.parse(input, filename)
+   local program, syntax_errors = tl.parse(input, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
@@ -13538,8 +13555,9 @@ function tl.check_string(input: string, env?: Env, filename?: string): Result
    return result
 end
 
-tl.gen = function(input: string, env?: Env, opts?: GenerateOptions): string, Result
-   env = env or assert(tl.new_env(default_env_opts(false, nil, input)), "Default environment initialization failed")
+tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
+   parse_lang = parse_lang or lang_heuristic(nil, input)
+   env = env or assert(tl.new_env(default_env_opts(false, parse_lang)), "Default environment initialization failed")
    local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
@@ -13554,12 +13572,13 @@ end
 local function tl_package_loader(module_name: string): any, any
    local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
+      local parse_lang = lang_heuristic(found_filename)
       local input = read_full_file(fd)
       if not input then
          return table.concat(tried, "\n\t")
       end
       fd:close()
-      local program, errs = tl.parse(input, found_filename)
+      local program, errs = tl.parse(input, found_filename, parse_lang)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
@@ -13570,7 +13589,7 @@ local function tl_package_loader(module_name: string): any, any
          env = tl.package_loader_env
       end
 
-      local opts = default_env_opts(true, found_filename)
+      local opts = default_env_opts(true, parse_lang)
 
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
@@ -13624,12 +13643,13 @@ local function env_for(opts: EnvOptions, env_tbl: {any:any}): Env
 end
 
 tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
-   local program, errs = tl.parse(input, chunkname)
+   local parse_lang = lang_heuristic(chunkname)
+   local program, errs = tl.parse(input, chunkname, parse_lang)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
-   local opts = default_env_opts(true, chunkname)
+   local opts = default_env_opts(true, parse_lang)
 
    if not tl.package_loader_env then
       tl.package_loader_env = tl.new_env(opts)
