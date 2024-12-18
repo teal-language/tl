@@ -60,6 +60,8 @@ JavaScript, so everything runs on the client.
 
 ## Running
 
+### Using the compiler directly
+
 Once `tl` is in your path, there are a few subcommands:
 
 * `tl run script.tl` will run a Teal script.
@@ -68,11 +70,16 @@ Once `tl` is in your path, there are a few subcommands:
 * `tl gen module.tl` will check for syntax errors and
   generate a `module.lua` file in plain Lua with all type annotations
   stripped.
-* `tl build` will compile your project via the rules defined in `tlconfig.lua`.
 * `tl warnings` will list all warnings the compiler can generate.
 
 `tl` also supports some [compiler options](docs/compiler_options.md).
 These can either be specified on the command line or inside a tlconfig.lua file at the root of your project.
+
+### Building projects with Cyan
+
+To build whole projects, you probably won't want to run `tl` on each
+file individually. We recommend using [Cyan](https://github.com/teal-language/cyan),
+the build tool designed for Teal.
 
 ## Loading Teal code from Lua
 
