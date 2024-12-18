@@ -377,7 +377,7 @@ describe("tl types works like check", function()
          assert.same({
             ["17"] = 7,
             ["20"] = 2,
-            ["25"] = 10,
+            ["25"] = 17,
             ["31"] = 9,
          }, by_pos["2"])
       end)
