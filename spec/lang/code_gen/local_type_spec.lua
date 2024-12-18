@@ -135,6 +135,40 @@ describe("local type code generation", function()
       local lunchbox = L2.new({ "apple", "peach" })
    ]]))
 
+   it("alias for a type that shouldn't be elided, with function generics", util.gen([[
+      local type List2 = record<T>
+          new: function<U>(initialItems: {T}, u: U): List2<T>
+      end
+
+      function List2.new<Y>(initialItems: {T}, u: Y): List2<T>
+      end
+
+      local type Fruit2 = enum
+         "apple"
+         "peach"
+         "banana"
+      end
+
+      local type L2 = List2<Fruit2>
+      local lunchbox = L2.new({"apple", "peach"}, true)
+   ]], [[
+      local List2 = {}
+
+
+
+      function List2.new(initialItems, u)
+      end
+
+
+
+
+
+
+
+      local L2 = List2
+      local lunchbox = L2.new({ "apple", "peach" }, true)
+   ]]))
+
    it("if alias shouldn't be elided, type shouldn't be elided either", util.gen([[
       local type List = record<T>
           new: function(initialItems: {T}): List<T>

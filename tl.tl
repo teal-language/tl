@@ -1590,6 +1590,7 @@ local function new_typeid(): integer
 end
 
 local enum TypeName
+   "generic"
    "typedecl"
    "typevar"
    "typearg"
@@ -1634,6 +1635,7 @@ local table_types <total>: {TypeName:boolean} = {
    ["emptytable"] = true,
    ["tupletable"] = true,
 
+   ["generic"] = false,
    ["typedecl"] = false,
    ["typevar"] = false,
    ["typearg"] = false,
@@ -1709,15 +1711,17 @@ local record BooleanContextType
    where self.typename == "boolean_context"
 end
 
-local interface HasTypeArgs
+local record GenericType
    is Type
-   where self.typeargs
+   where self.typename == "generic"
 
    typeargs: {TypeArgType}
+   t: Type
+   fresh: boolean
 end
 
 local record TypeDeclType
-   is Type, HasTypeArgs
+   is Type
    where self.typename == "typedecl"
 
    def: Type
@@ -1777,7 +1781,7 @@ local interface ArrayLikeType
 end
 
 local interface RecordLikeType
-   is Type, HasTypeArgs, HasDeclName, ArrayLikeType
+   is Type, HasDeclName, ArrayLikeType
    where self.fields
 
    interface_list: {ArrayType | NominalType}
@@ -1882,7 +1886,7 @@ local record UnresolvedEmptyTableValueType
 end
 
 local record FunctionType
-   is Type, HasTypeArgs
+   is Type
    where self.typename == "function"
 
    is_method: boolean
@@ -1917,7 +1921,7 @@ local record PolyType
    is AggregateType
    where self.typename == "poly"
 
-   types: {FunctionType}
+   types: {FunctionType | GenericType}
 end
 
 local record EnumType
@@ -2379,7 +2383,6 @@ local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, Type, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
-local parse_newtype: function(ps: ParseState, i: integer): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type): integer, boolean
@@ -2446,6 +2449,13 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    return t
 end
 
+local function new_generic(ps: ParseState, i: integer, typeargs: {TypeArgType}, typ: Type): GenericType
+   local gt = new_type(ps, i, "generic") as GenericType
+   gt.typeargs = typeargs
+   gt.t = typ
+   return gt
+end
+
 local function new_typedecl(ps: ParseState, i: integer, def: Type): TypeDeclType
    local t = new_type(ps, i, "typedecl") as TypeDeclType
    t.def = def
@@ -2500,12 +2510,6 @@ local function parse_type_body(ps: ParseState, i: integer, istart: integer, node
 
    def = new_type(ps, istart, tn)
 
-   if typeargs then
-      if def is RecordType or def is InterfaceType then
-         def.typeargs = typeargs
-      end
-   end
-
    local ok: boolean
    i, ok = parse_type_body_fns[tn](ps, i, def)
    if not ok then
@@ -2513,6 +2517,10 @@ local function parse_type_body(ps: ParseState, i: integer, istart: integer, node
    end
 
    i = verify_end(ps, i, istart, node)
+
+   if typeargs then
+      def = new_generic(ps, istart, typeargs, def)
+   end
 
    return i, def
 end
@@ -2760,11 +2768,12 @@ parse_typeargs_if_any = function(ps: ParseState, i: integer): integer, {TypeArgT
    return i
 end
 
-local function parse_function_type(ps: ParseState, i: integer): integer, FunctionType
+local function parse_function_type(ps: ParseState, i: integer): integer, GenericType | FunctionType
+   local typeargs: {TypeArgType}
    local typ = new_type(ps, i, "function") as FunctionType
    i = i + 1
 
-   i, typ.typeargs = parse_typeargs_if_any(ps, i)
+   i, typeargs = parse_typeargs_if_any(ps, i)
    if ps.tokens[i].tk == "(" then
       i, typ.args, typ.maybe_method, typ.min_arity = parse_argument_type_list(ps, i)
       i, typ.rets = parse_return_types(ps, i)
@@ -2774,6 +2783,11 @@ local function parse_function_type(ps: ParseState, i: integer): integer, Functio
       typ.is_method = false
       typ.min_arity = 0
    end
+
+   if typeargs then
+      return i, new_generic(ps, i, typeargs, typ)
+   end
+
    return i, typ
 end
 
@@ -3723,15 +3737,17 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
    end
 
    local oldt = fields[field_name]
+   local oldf = oldt is GenericType and oldt.t or oldt
+   local newf = newt is GenericType and newt.t or newt
 
-   if newt is FunctionType then
-      if oldt is FunctionType then
+   if newf is FunctionType then
+      if oldf is FunctionType then
          local p = new_type(ps, i, "poly") as PolyType
-         p.types = { oldt, newt }
+         p.types = { oldt as FunctionType, newt as FunctionType }
          fields[field_name] = p
          return true
       elseif oldt is PolyType then
-         table.insert(oldt.types, newt)
+         table.insert(oldt.types, newt as FunctionType)
          return true
       end
    end
@@ -3740,6 +3756,10 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
 end
 
 local function set_declname(def: Type, declname: string)
+   if def is GenericType then
+      def = def.t
+   end
+
    if def is RecordType or def is InterfaceType or def is EnumType then
       if not def.declname then
          def.declname = declname
@@ -3882,15 +3902,16 @@ local function parse_array_interface_type(ps: ParseState, i: integer, def: Recor
    return i, t
 end
 
-local function clone_typeargs(ps: ParseState, i: integer, typeargs: {TypeArgType}): {TypeArgType}
-   local copy = {}
-   for a, ta in ipairs(typeargs) do
-      local cta = new_type(ps, i, "typearg") as TypeArgType
-      cta.typearg = ta.typearg
-      copy[a] = cta
-   end
-   return copy
-end
+-- FIXME (a) GenericType do we need to patch the where-generated __is function into a generic? (see (b))
+--local function clone_typeargs(ps: ParseState, i: integer, typeargs: {TypeArgType}): {TypeArgType}
+--   local copy = {}
+--   for a, ta in ipairs(typeargs) do
+--      local cta = new_type(ps, i, "typearg") as TypeArgType
+--      cta.typearg = ta.typearg
+--      copy[a] = cta
+--   end
+--   return copy
+--end
 
 local function extract_userdata_from_interface_list(ps: ParseState, i: integer, def: RecordLikeType)
    for j = #def.interface_list, 1, -1 do
@@ -3948,9 +3969,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       i, where_macroexp = parse_where_clause(ps, i, def)
 
       local typ = new_type(ps, wstart, "function") as FunctionType
-      if def.typeargs then
-         typ.typeargs = clone_typeargs(ps, i, def.typeargs)
-      end
+      -- FIXME (b) GenericType do we need to patch the where-generated __is function into a generic? (see (a))
       typ.is_method = true
       typ.min_arity = 1
       typ.args = new_tuple(ps, wstart, {
@@ -4083,7 +4102,7 @@ parse_type_body_fns = {
    ["enum"] = parse_enum_body,
 }
 
-parse_newtype = function(ps: ParseState, i: integer): integer, Node
+local function parse_newtype(ps: ParseState, i: integer): integer, Node
    local node: Node = new_node(ps, i, "newtype")
    local def: Type
    local tn = ps.tokens[i].tk as TypeName
@@ -4102,6 +4121,11 @@ parse_newtype = function(ps: ParseState, i: integer): integer, Node
 
    if def is NominalType then
       node.newtype.is_alias = true
+   elseif def is GenericType then
+      local deft = def.t
+      if deft is NominalType then
+         node.newtype.is_alias = true
+      end
    end
 
    return i, node
@@ -4244,9 +4268,8 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    end
    local typeargs: {TypeArgType}
    local itypeargs = i
-   if ps.tokens[i].tk == "<" then
-      i, typeargs = parse_anglebracket_list(ps, i, parse_typearg)
-   end
+   i, typeargs = parse_typeargs_if_any(ps, i)
+
    asgn.var = var
 
    if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
@@ -4254,6 +4277,7 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    end
 
    i = verify_tk(ps, i, "=")
+   local istart = i
 
    if ps.tokens[i].kind == "identifier" then
       local done: boolean
@@ -4270,23 +4294,16 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
 
    local nt = asgn.value.newtype
    if nt is TypeDeclType then
-      local def = nt.def
-
       if typeargs then
-         if def is HasTypeArgs then
-            if def.typeargs then
-               fail(ps, itypeargs, "cannot declare type arguments twice in type declaration")
-            else
-               def.typeargs = typeargs
-            end
+         local def = nt.def
+         if def is GenericType then
+            fail(ps, itypeargs, "cannot declare type arguments twice in type declaration")
          else
-            -- FIXME how to resolve type arguments in unions properly
-            -- fail(ps, itypeargs, def.typename .. " does not accept type arguments")
-            nt.typeargs = typeargs
+            nt.def = new_generic(ps, istart, typeargs, def)
          end
       end
 
-      set_declname(def, asgn.var.tk)
+      set_declname(nt.def, asgn.var.tk)
    end
 
    return i, asgn
@@ -4621,15 +4638,12 @@ local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, T
 
    local xs: {T} = {}
 
-   if ast is HasTypeArgs then
-      if ast.typeargs then
-         for _, child in ipairs(ast.typeargs) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
+   if ast is GenericType then
+      for _, child in ipairs(ast.typeargs) do
+         table.insert(xs, recurse_type(s, child, visit))
       end
-   end
-
-   if ast is TupleType then
+      table.insert(xs, recurse_type(s, ast.t, visit))
+   elseif ast is TupleType then
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
       end
@@ -5808,6 +5822,7 @@ local typename_to_typecode <total>: {TypeName:integer} = {
    ["tuple"] = tl.typecodes.UNKNOWN,
    ["literal_table_item"] = tl.typecodes.UNKNOWN,
    ["typedecl"] = tl.typecodes.UNKNOWN,
+   ["generic"] = tl.typecodes.UNKNOWN,
    ["*"] = tl.typecodes.UNKNOWN,
 }
 
@@ -5907,6 +5922,11 @@ function TypeReporter:get_typenum(t: Type): integer
 
    if rt is TypeDeclType then
       return self:get_typenum(rt.def)
+   end
+
+   -- CHECK is this sufficient?
+   if rt is GenericType then
+      rt = rt.t
    end
 
    local ti: TypeInfo = {
@@ -6369,19 +6389,26 @@ function Errors:add_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Err
    end
 end
 
+local function ensure_not_abstract_type(def: Type, node?: Node): boolean, string
+   if def is RecordType then
+      return true
+   elseif def is GenericType then
+      return ensure_not_abstract_type(def.t)
+   elseif node and node_is_require_call(node) then
+      return nil, "module type is abstract: " .. tostring(def)
+   elseif def is InterfaceType then
+      return nil, "interfaces are abstract; consider using a concrete record"
+   end
+   return nil, "cannot use a type definition as a concrete value"
+end
+
 local function ensure_not_abstract(t: Type, node?: Node): boolean, string
    if t is FunctionType and t.macroexp then
       return nil, "macroexps are abstract; consider using a concrete function"
+   elseif t is GenericType then
+      return ensure_not_abstract(t.t, node)
    elseif t is TypeDeclType then
-      local def = t.def
-      if def is RecordType then
-         return true
-      elseif node and node_is_require_call(node) then
-         return nil, "module type is abstract: " .. tostring(t.def)
-      elseif def is InterfaceType then
-         return nil, "interfaces are abstract; consider using a concrete record"
-      end
-      return nil, "cannot use a type definition as a concrete value"
+      return ensure_not_abstract_type(t.def, node)
    end
    return true
 end
@@ -6777,27 +6804,11 @@ local function display_typevar(typevar: string, what: TypeName): string
 end
 
 local function show_fields(t: RecordLikeType, show: function(Type):(string)): string
-   if t.declname and not t.typeargs then
+   if t.declname then
       return " " .. t.declname
    end
 
    local out: {string} = {}
-   if t.declname and not t.typeargs then
-      table.insert(out, " " .. t.declname)
-   end
-   if t.typeargs then
-      table.insert(out, "<")
-      local typeargs = {}
-      for _, v in ipairs(t.typeargs) do
-         table.insert(typeargs, show(v))
-      end
-      table.insert(out, table.concat(typeargs, ", "))
-      table.insert(out, ">")
-   end
-   if t.declname then
-      return table.concat(out)
-   end
-
    table.insert(out, " (")
    if t.elements then
       table.insert(out, "{" .. show(t.elements) .. "}")
@@ -6889,17 +6900,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t is RecordLikeType then
       return short and (t.declname or t.typename) or t.typename .. show_fields(t, show)
    elseif t is FunctionType then
-      local out: {string} = {"function"}
-      if t.typeargs then
-         table.insert(out, "<")
-         local typeargs = {}
-         for _, v in ipairs(t.typeargs) do
-            table.insert(typeargs, show(v))
-         end
-         table.insert(out, table.concat(typeargs, ", "))
-         table.insert(out, ">")
-      end
-      table.insert(out, "(")
+      local out: {string} = {"function("}
       local args = {}
       for i, v in ipairs(t.args.tuple) do
          table.insert(args, ((i == #t.args.tuple and t.args.is_va) and "...: "
@@ -6922,6 +6923,26 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
             table.insert(out, ")")
          end
       end
+      return table.concat(out)
+   elseif t is GenericType then
+      local out: {string} = {}
+      local name, rest: string, string
+      local tt = t.t
+      if tt is RecordType or tt is InterfaceType or tt is FunctionType then
+         name, rest = show(tt):match("^(%a+)(.*)")
+         table.insert(out, name)
+      else
+         rest = " " .. show(tt)
+         table.insert(out, "generic")
+      end
+      table.insert(out, "<")
+      local typeargs = {}
+      for _, v in ipairs(t.typeargs) do
+         table.insert(typeargs, show(v))
+      end
+      table.insert(out, table.concat(typeargs, ", "))
+      table.insert(out, ">")
+      table.insert(out, rest)
       return table.concat(out)
    elseif t.typename == "number"
        or t.typename == "integer"
@@ -7352,35 +7373,46 @@ do
       }, nil
    end
 
-   local type ResolveType = function<S>(S, Type): Type
-   local typevar_resolver: function<S>(s: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
+   local type ResolveTypeVars = function<S>(S, TypeVarType | TypeArgType): Type, boolean
+   local map_typevars: function<S>(s: S, ty: Type, fn_tv: ResolveTypeVars<S>): Type, {Error}
 
-   local function fresh_typevar(_: nil, t: TypeVarType): Type, Type, boolean
-      return a_type(t, "typevar", {
-         typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-         constraint = t.constraint,
-      } as TypeVarType)
+   local function fresh_typevar(_: nil, t: TypeVarType | TypeArgType): Type, boolean
+      if t is TypeVarType then
+         return a_type(t, "typevar", {
+            typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+            constraint = t.constraint,
+         } as TypeVarType), false
+      else
+         return a_type(t, "typearg", {
+            typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+            constraint = t.constraint,
+         } as TypeArgType), true
+      end
    end
 
-   local function fresh_typearg(_: nil, t: TypeArgType): Type
-      return a_type(t, "typearg", {
-         typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-         constraint = t.constraint,
-      } as TypeArgType)
+   local function fresh_typeargs(self: TypeChecker, g: GenericType): GenericType
+      fresh_typevar_ctr = fresh_typevar_ctr + 1
+
+      local newg, errs = map_typevars(nil, g, fresh_typevar)
+      if newg is InvalidType then
+         self.errs:collect(errs)
+         return g
+      end
+      assert(newg is GenericType, "Internal Compiler Error: error creating fresh type variables")
+      assert(newg ~= g)
+      newg.fresh = true
+
+      return newg
    end
 
-   function TypeChecker:ensure_fresh_typeargs<T is Type>(t: T): T
-      if not t is HasTypeArgs then
+   local function wrap_generic_if_typeargs<T is Type>(typeargs: {TypeArgType}, t: T): T | GenericType
+      if not typeargs then
          return t
       end
 
-      fresh_typevar_ctr = fresh_typevar_ctr + 1
-      local ok, errs: boolean, {Error}
-      ok, t, errs = typevar_resolver(nil, t, fresh_typevar, fresh_typearg)
-      if not ok then
-         self.errs:collect(errs)
-      end
-      return t
+      local gt = a_type(t, "generic", { t = t } as GenericType)
+      gt.typeargs = typeargs
+      return gt
    end
 
    function TypeChecker:find_var_type(name: string, use?: VarUse): Type, Attribute, Type
@@ -7390,18 +7422,42 @@ do
          if t is UnresolvedTypeArgType then
             return nil, nil, t.constraint
          end
-         t = self:ensure_fresh_typeargs(t)
+
+         if t is GenericType then
+            t = fresh_typeargs(self, t)
+         end
+
          return t, var.attribute
       end
    end
 
    local function ensure_not_method(t: Type): Type
 
+      if t is GenericType then
+         local tt = ensure_not_method(t.t)
+         if tt ~= t.t then
+            local gg = shallow_copy_new_type(t)
+            gg.t = tt
+            return gg
+         end
+      end
+
       if t is FunctionType and t.is_method then
          t = shallow_copy_new_type(t)
          t.is_method = false
       end
       return t
+   end
+
+   local function unwrap_for_find_type(typ: Type): Type
+      if typ is NominalType and typ.found then
+         return unwrap_for_find_type(typ.found)
+      elseif typ is TypeDeclType then
+         return unwrap_for_find_type(typ.def)
+      elseif typ is GenericType then
+         return unwrap_for_find_type(typ.t)
+      end
+      return typ
    end
 
    function TypeChecker:find_type(names: {string}): TypeDeclType, TypeArgType
@@ -7412,13 +7468,8 @@ do
          end
          return nil
       end
-      if typ is NominalType and typ.found then
-         typ = typ.found
-      end
       for i = 2, #names do
-         if typ is TypeDeclType then
-            typ = typ.def
-         end
+         typ = unwrap_for_find_type(typ)
 
          local fields = typ is RecordLikeType and typ.fields
          if not fields then
@@ -7426,15 +7477,14 @@ do
          end
 
          typ = fields[names[i]]
+         if typ and typ is NominalType then
+            typ = typ.found
+         end
          if typ == nil then
             return nil
          end
-
-         typ = self:ensure_fresh_typeargs(typ)
-         if typ is NominalType and typ.found then
-            typ = typ.found
-         end
       end
+
       if typ is TypeDeclType then
          return typ
       elseif typ is TypeArgType then
@@ -7444,7 +7494,7 @@ do
 
    local function type_for_union(t: Type): string, Type
       if t is TypeDeclType then
-         return type_for_union(t.def), t.def
+         return type_for_union(t.def)
       elseif t is TupleType then
          return type_for_union(t.tuple[1]), t.tuple[1]
       elseif t is NominalType then
@@ -7458,6 +7508,8 @@ do
             return "userdata", t
          end
          return "table", t
+      elseif t is GenericType then
+         return type_for_union(t.t)
       elseif table_types[t.typename] then
          return "table", t
       else
@@ -7570,11 +7622,7 @@ do
       ["unknown"] = true,
    }
 
-   local function clear_resolved_typeargs(copy: Type, resolved: {string:Type})
-      if not copy is HasTypeArgs then
-         return
-      end
-
+   local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
       for i = #copy.typeargs, 1, -1 do
          local r = resolved[copy.typeargs[i].typearg]
          if r then
@@ -7582,25 +7630,16 @@ do
          end
       end
       if not copy.typeargs[1] then
-         copy.typeargs = nil
+         return copy.t
       end
-
-      return
+      return copy
    end
 
-   typevar_resolver = function<S>(self: S, typ: Type, fn_var: ResolveType<S>, fn_arg?: ResolveType<S>): boolean, Type, {Error}
+   map_typevars = function<S>(self: S, ty: Type, fn_tv: ResolveTypeVars<S>): Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
       local resolved: {string:Type} = {}
       local resolve: function<T is Type>(t: T, all_same: boolean): T, boolean
-
-      local function copy_typeargs(t: {TypeArgType}, same: boolean): {TypeArgType}, boolean
-         local copy = {}
-         for i, tf in ipairs(t) do
-            copy[i], same = resolve(tf, same) as (TypeArgType, boolean)
-         end
-         return copy, same
-      end
 
       resolve = function<T is Type>(t: T, all_same: boolean): T, boolean
          local same = true
@@ -7616,9 +7655,11 @@ do
 
          local orig_t = t
          if t is TypeVarType then
-            local rt = fn_var(self, t)
+            local rt, is_resolved = fn_tv(self, t)
             if rt then
-               resolved[t.typevar] = rt
+               if is_resolved then
+                  resolved[t.typevar] = rt
+               end
                if no_nested_types[rt.typename] or (rt is NominalType and not rt.typevals) then
                   seen[orig_t] = rt
                   return rt, false
@@ -7637,30 +7678,32 @@ do
          copy.x = t.x
          copy.y = t.y
 
-         if t is HasTypeArgs then
-            (copy as HasTypeArgs).typeargs, same = copy_typeargs(t.typeargs, same)
-         end
+         if t is GenericType then
+            assert(copy is GenericType)
 
-         if t is ArrayType then
+            local ct = {}
+            for i, tf in ipairs(t.typeargs) do
+               ct[i], same = resolve(tf, same)
+            end
+            copy.typeargs = ct
+            copy.t, same = resolve(t.t, same)
+         elseif t is ArrayType then
             assert(copy is ArrayType)
 
             copy.elements, same = resolve(t.elements, same)
             -- inferred_len is not propagated
          elseif t is TypeArgType then
-            if fn_arg then
-               copy = fn_arg(self, t)
+            local rt, is_resolved = fn_tv(self, t)
+            if is_resolved then
+               resolved[t.typearg] = rt
+               copy = rt
+               same = false
             else
                assert(copy is TypeArgType)
                copy.typearg = t.typearg
                if t.constraint then
                   copy.constraint, same = resolve(t.constraint, same)
                end
-            end
-
-            -- eager resolution of type argument variables
-            local rt = fn_var(self, a_type(t, "typevar", { typevar = t.typearg } as TypeVarType))
-            if rt then
-               resolved[t.typearg] = rt
             end
          elseif t is UnresolvableTypeArgType then
             assert(copy is UnresolvableTypeArgType)
@@ -7740,7 +7783,7 @@ do
             assert(copy is PolyType)
             copy.types = {}
             for i, tf in ipairs(t.types) do
-               copy.types[i], same = resolve(tf, same) as (FunctionType, boolean)
+               copy.types[i], same = resolve(tf, same)
             end
          elseif t is TupleTableType then
             assert(copy is TupleTableType)
@@ -7767,23 +7810,29 @@ do
          return copy, same and all_same
       end
 
-      local copy = resolve(typ, true)
+      local copy = resolve(ty, true)
       if errs then
-         return false, an_invalid(typ), errs
+         return an_invalid(ty), errs
       end
 
-      clear_resolved_typeargs(copy, resolved)
+      if copy is GenericType then
+         copy = clear_resolved_typeargs(copy, resolved)
+      end
 
-      return true, copy, nil
+      return copy
    end
 
-   local function resolve_typevar(tc: TypeChecker, t: TypeVarType): Type
-      local rt = tc:find_var_type(t.typevar)
-      if not rt then
-         return nil
-      end
+   local function resolve_typevar(tc: TypeChecker, t: TypeVarType | TypeArgType): Type, boolean
+      if t is TypeVarType then
+         local rt = tc:find_var_type(t.typevar)
+         if not rt then
+            return nil
+         end
 
-      return drop_constant_value(rt)
+         return drop_constant_value(rt), true
+      else
+         return t, false
+      end
    end
 
    function TypeChecker:infer_emptytable(emptytable: EmptyTableType, fresh_t: Type)
@@ -7829,10 +7878,10 @@ do
       return t
    end
 
-   function TypeChecker:resolve_typevars_at<T is Type>(w: Where, t: T): T
+   function TypeChecker:resolve_typevars_at(w: Where, t: Type): Type
       assert(w)
-      local ok, ret, errs = typevar_resolver(self, t, resolve_typevar)
-      if not ok then
+      local ret, errs = map_typevars(self, t, resolve_typevar)
+      if errs then
          assert(w.y)
          self.errs:add_prefixing(w, errs, "")
       end
@@ -8025,6 +8074,43 @@ do
       return NONE
    end
 
+   local function unresolved_typeargs_for(g: GenericType): {Type}
+      local ts = {}
+      for _, ta in ipairs(g.typeargs) do
+         table.insert(ts, a_type(ta, "unresolved_typearg", {
+            constraint = ta.constraint
+         } as UnresolvedTypeArgType))
+      end
+      return ts
+   end
+
+   function TypeChecker:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): Type
+      if not g.fresh then
+         g = fresh_typeargs(self, g)
+      end
+
+      if not typeargs then
+         typeargs = unresolved_typeargs_for(g)
+      end
+
+      assert(#g.typeargs == #typeargs)
+
+      for i, ta in ipairs(g.typeargs) do
+         self:add_var(nil, ta.typearg, typeargs[i])
+      end
+      local applied, errs = map_typevars(self, g, resolve_typevar)
+      if errs then
+         self.errs:add_prefixing(w, errs, "")
+         return nil
+      end
+
+      if applied is GenericType then
+         return applied.t
+      else
+         return applied
+      end
+   end
+
    local type InvalidOrTypeDeclType = InvalidType | TypeDeclType
 
    do
@@ -8050,13 +8136,8 @@ do
          end
       end
 
-      local function match_typevals(self: TypeChecker, t: NominalType, def: HasTypeArgs): Type
-         if not t.typevals and not def.typeargs then
-            return def
-         elseif not def.typeargs then
-            self.errs:add(t, "unexpected type argument", t)
-            return nil
-         elseif not t.typevals then
+      local function match_typevals(self: TypeChecker, t: NominalType, def: GenericType): Type
+         if not t.typevals then
             self.errs:add(t, "missing type arguments in %s", def)
             return nil
          elseif #t.typevals ~= #def.typeargs then
@@ -8066,10 +8147,7 @@ do
 
          self:begin_scope()
 
-         for i, tt in ipairs(t.typevals) do
-            self:add_var(nil, def.typeargs[i].typearg, tt)
-         end
-         local ret = self:resolve_typevars_at(t, def)
+         local ret = self:apply_generic(t, def, t.typevals)
          if def == self.cache_std_metatable_type then
             check_metatable_contract(self, t.typevals[1], ret)
          end
@@ -8091,8 +8169,10 @@ do
 
          if found is TypeDeclType and found.is_alias then
             local def = found.def
-            assert(def is NominalType)
-            found = def.found
+            if def is NominalType then
+               found = def.found
+            end
+            -- if found.def is GenericType, return found as-is
          end
 
          if not found then
@@ -8120,14 +8200,16 @@ do
          return nil, found
       end
 
-      local function resolve_decl_into_nominal(self: TypeChecker, t: NominalType, found: TypeDeclType): Type
+      local function resolve_decl_in_nominal(self: TypeChecker, t: NominalType, found: TypeDeclType): Type
          local def = found.def
          local resolved: Type
-         if def is RecordLikeType or def is FunctionType then
+         if def is GenericType then
             resolved = match_typevals(self, t, def)
             if not resolved then
-               return self.errs:invalid_at(t, table.concat(t.names, ".") .. " cannot be resolved in scope")
+               resolved = an_invalid(t)
             end
+         elseif t.typevals then
+            resolved = self.errs:invalid_at(t, "unexpected type argument")
          else
             resolved = def
          end
@@ -8143,13 +8225,21 @@ do
             return immediate
          end
 
-         return resolve_decl_into_nominal(self, t, found)
+         return resolve_decl_in_nominal(self, t, found)
       end
 
       function TypeChecker:resolve_typealias(ta: TypeDeclType): InvalidOrTypeDeclType
+         local def = ta.def
+
+         local nom = def
+         if def is GenericType then
+            nom = def.t
+         end
+
+         if not nom is NominalType then
+            return ta
+         end
          -- given a typealias that points to a nominal,
-         local nom = ta.def
-         assert(nom is NominalType)
 
          local immediate, found = find_nominal_type_decl(self, nom)
          -- if it was previously resolved (or a circular require, or an error), return that;
@@ -8166,7 +8256,11 @@ do
          -- otherwise, this can't be an alias.
 
          -- resolve the nominal into a structural type
-         local struc = resolve_decl_into_nominal(self, nom, found or nom.found)
+         local struc = resolve_decl_in_nominal(self, nom, found or nom.found)
+
+         if def is GenericType then
+            struc = wrap_generic_if_typeargs(def.typeargs, struc)
+         end
 
          -- wrap it into a new non-alias typedecl
          local td = a_type(ta, "typedecl", { def = struc } as TypeDeclType)
@@ -8261,6 +8355,10 @@ do
             end
          end
          local t = typedecl.def
+
+         if t is GenericType then
+            t = t.t
+         end
 
          return t
       end
@@ -8566,8 +8664,8 @@ do
             end
          end
 
-         local ok, r, errs = typevar_resolver(self, other, resolve_typevar)
-         if not ok then
+         local r, errs = map_typevars(self, other, resolve_typevar)
+         if errs then
             return false, errs
          end
          if r is TypeVarType and r.typevar == typevar then
@@ -8741,6 +8839,19 @@ do
       },
       ["boolean_context"] = {
          ["boolean"] = compare_true,
+      },
+      ["generic"] = {
+         ["generic"] = function(self: TypeChecker, a: GenericType, b: GenericType): boolean, {Error}
+            if #a.typeargs ~= #b.typeargs then
+               return false
+            end
+            for i = 1, #a.typeargs do
+               if not self:same_type(a.typeargs[i], b.typeargs[i]) then
+                  return false
+               end
+            end
+            return self:same_type(a.t, b.t)
+         end,
       },
       ["*"] = {
          ["boolean_context"] = compare_true,
@@ -9071,6 +9182,16 @@ do
       ["boolean_context"] = {
          ["boolean"] = compare_true,
       },
+      ["generic"] = {
+         ["*"] = function(self: TypeChecker, a: GenericType, b: Type): boolean, {Error}
+            -- TODO check if commenting this out causes variable leaks anywhere
+            -- self:begin_scope()
+            local aa = self:apply_generic(a, a)
+            local ok, errs = self:is_a(aa, b)
+            -- self:end_scope()
+            return ok, errs
+         end,
+      },
       ["*"] = {
          ["any"] = compare_true,
          ["boolean_context"] = compare_true,
@@ -9080,6 +9201,14 @@ do
          ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
             infer_emptytable_from_unresolved_value(self, b, b, a)
             return true
+         end,
+         ["generic"] = function(self: TypeChecker, a: Type, b: GenericType): boolean, {Error}
+            -- TODO check if commenting this out causes variable leaks anywhere
+            -- self:begin_scope()
+            local bb = self:apply_generic(b, b)
+            local ok, errs = self:is_a(a, bb)
+            -- self:end_scope()
+            return ok, errs
          end,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
             return self:is_a(a, self:type_of_self(b))
@@ -9116,6 +9245,7 @@ do
    -- evaluation strategy
    TypeChecker.type_priorities = {
       -- types that have catch-all rules evaluate first
+      ["generic"] = -1,
       ["nil"] = 0,
       ["unresolved_emptytable_value"] = 1,
       ["emptytable"] = 2,
@@ -9289,6 +9419,11 @@ do
       end
       -- unwrap if tuple, resolve if nominal
       func = self:to_structural(func)
+
+      if func is GenericType then
+         func = self:apply_generic(func, func)
+      end
+
       if func.typename ~= "function" and func.typename ~= "poly" then
          -- resolve if union
          if func is UnionType then
@@ -9408,17 +9543,15 @@ do
    end
 
    do
-      local function mark_invalid_typeargs(self: TypeChecker, f: FunctionType)
-         if f.typeargs then
-            for _, a in ipairs(f.typeargs) do
-               if not self:find_var_type(a.typearg) then
-                  if a.constraint then
-                     self:add_var(nil, a.typearg, a.constraint)
-                  else
-                     self:add_var(nil, a.typearg, self.feat_lax and an_unknown(a) or a_type(a, "unresolvable_typearg", {
-                        typearg = a.typearg
-                     } as UnresolvableTypeArgType))
-                  end
+      local function mark_invalid_typeargs(self: TypeChecker, gt: GenericType)
+         for _, a in ipairs(gt.typeargs) do
+            if not self:find_var_type(a.typearg) then
+               if a.constraint then
+                  self:add_var(nil, a.typearg, a.constraint)
+               else
+                  self:add_var(nil, a.typearg, self.feat_lax and an_unknown(a) or a_type(a, "unresolvable_typearg", {
+                     typearg = a.typearg
+                  } as UnresolvableTypeArgType))
                end
             end
          end
@@ -9521,16 +9654,6 @@ do
             return false
          end
 
-         local function add_call_typeargs(self: TypeChecker, func: FunctionType)
-            if func.typeargs then
-               for _, fnarg in ipairs(func.typeargs) do
-                  self:add_var(nil, fnarg.typearg, a_type(fnarg, "unresolved_typearg", {
-                     constraint = fnarg.constraint,
-                  } as UnresolvedTypeArgType))
-               end
-            end
-         end
-
          check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
@@ -9554,17 +9677,30 @@ do
                return nil, { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. show_arity(f) .. ")") }
             end
 
-            add_call_typeargs(self, f)
-
             return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta)
+         end
+      end
+
+      function TypeChecker:iterate_poly(p: PolyType): function(): integer, FunctionType
+         local i = 0
+         return function(): integer, FunctionType
+            i = i + 1
+            local fg = p.types[i]
+            if not fg then
+               return
+            elseif fg is FunctionType then
+               return i, fg
+            elseif fg is GenericType then
+               return i, self:apply_generic(p, fg) as FunctionType
+            end
          end
       end
 
       local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
       do
-         local function fail_poly_call_arity(w: Where, p: PolyType, given: integer): {Error}
+         local function fail_poly_call_arity(self: TypeChecker, w: Where, p: PolyType, given: integer): {Error}
             local expects: {string} = {}
-            for _, f in ipairs(p.types) do
+            for _, f in self:iterate_poly(p) do
                table.insert(expects, show_arity(f))
             end
             table.sort(expects)
@@ -9591,7 +9727,9 @@ do
             local first_errs: {Error}
 
             for pass = 1, 3 do
-               for i, f in ipairs(p.types) do
+               for i, f in self:iterate_poly(p) do
+                  assert(f is FunctionType, f.typename)
+                  assert(f.args)
                   first_rets = first_rets or f.rets
 
                   local wanted = #f.args.tuple
@@ -9622,7 +9760,7 @@ do
             end
 
             if not first_errs then
-               return nil, first_rets, fail_poly_call_arity(w, p, given)
+               return nil, first_rets, fail_poly_call_arity(self, w, p, given)
             end
 
             return nil, first_rets, first_errs
@@ -9657,6 +9795,14 @@ do
             expected_rets = a_tuple(node, { node.expected })
          end
 
+         self:begin_scope()
+
+         local g: GenericType
+         if func is GenericType then
+            g = func
+            func = self:apply_generic(node, func) as FunctionType
+         end
+
          local is_method = (argdelta == -1)
 
          if not (func is FunctionType or func is PolyType) then
@@ -9670,8 +9816,6 @@ do
 
          local errs: {Error}
          local f, ret: FunctionType, InvalidOrTupleType
-
-         self:begin_scope()
 
          if func is PolyType then
             f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
@@ -9687,11 +9831,11 @@ do
             self.errs:collect(errs)
          end
 
-         if f then
-            mark_invalid_typeargs(self, f)
+         if g then
+            mark_invalid_typeargs(self, g)
          end
 
-         ret = self:resolve_typevars_at(node, ret)
+         ret = self:resolve_typevars_at(node, ret) as InvalidOrTupleType
          self:end_scope()
 
          if self.collector then
@@ -9724,6 +9868,7 @@ do
       if self.feat_lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
          return an_unknown(node), nil
       end
+
       local ameta = a is RecordLikeType and a.meta_fields
       local bmeta = b and b is RecordLikeType and b.meta_fields
 
@@ -9822,6 +9967,10 @@ do
          else
             tbl = def
          end
+      end
+
+      if tbl is GenericType then
+         tbl = self:apply_generic(tbl, tbl)
       end
 
       if tbl is UnionType then
@@ -10007,12 +10156,11 @@ do
    end
 
    function TypeChecker:add_function_definition_for_recursion(node: Node, fnargs: TupleType, feat_arity: boolean)
-      self:add_var(nil, node.name.tk, a_function(node, {
+      self:add_var(nil, node.name.tk, wrap_generic_if_typeargs(node.typeargs, a_function(node, {
          min_arity = feat_arity and node.min_arity or 0,
-         typeargs = node.typeargs,
          args = fnargs,
          rets = self.get_rets(node.rets),
-      }))
+      })))
    end
 
    function TypeChecker:end_function_scope(node: Node)
@@ -10300,7 +10448,7 @@ do
    local function typedecl_to_nominal(node: Node, name: string, t: TypeDeclType, resolved?: Type): Type
       local typevals: {Type}
       local def = t.def
-      if def is HasTypeArgs then
+      if def is GenericType then
          typevals = {}
          for _, a in ipairs(def.typeargs) do
             table.insert(typevals, a_type(a, "typevar", {
@@ -10926,7 +11074,7 @@ do
             local typ: Type
             typ = decls[i]
             if typ then
-               if node.kind == "assignment" and i == nexps and ndecl > nexps then
+               if i == nexps and ndecl > nexps and node_is_funcall(node.exps[i]) then
                   typ = a_tuple(node, {})
                   for a = i, ndecl do
                      table.insert(typ.tuple, decls[a])
@@ -11217,6 +11365,13 @@ do
       if def is NominalType then
          return (self:find_var(def.names[1], "use_type"))
       end
+
+      if def is GenericType then
+         local nom = def.t
+         if nom is NominalType then
+            return (self:find_var(nom.names[1], "use_type"))
+         end
+      end
    end
 
    local function recurse_type_declaration(self: TypeChecker, n: Node): InvalidOrTypeDeclType, Variable
@@ -11268,14 +11423,13 @@ do
       local resolved, aliasing = recurse_type_declaration(self, value)
       local nt = value.newtype
       if nt and nt.is_alias and resolved is TypeDeclType then
-         if nt.typeargs then
-            local def = resolved.def
+         local ntdef = nt.def
+         local rdef = resolved.def
+         if ntdef is GenericType and rdef is GenericType then
             -- FIXME this looks sketchy; not sure if just overwriting the
             -- type variables in a resolved alias won't have bad side-effects.
             -- Is it guaranteed to be a fresh type?
-            if def is RecordType or def is FunctionType or def is InterfaceType then
-               def.typeargs = nt.typeargs
-            end
+            ntdef.typeargs = rdef.typeargs
          end
       end
       return resolved, aliasing
@@ -11851,6 +12005,10 @@ do
                   decltype = resolve_typedecl(self:to_structural(decltype.constraint))
                end
 
+               if decltype is GenericType then
+                  decltype = self:apply_generic(node, decltype)
+               end
+
                if decltype is TupleTableType then
                   for _, child in ipairs(node) do
                      local n = child.key.constnum
@@ -11893,6 +12051,10 @@ do
             if decltype is TypeVarType and decltype.constraint then
                constraint = resolve_typedecl(decltype.constraint)
                decltype = self:to_structural(constraint)
+            end
+
+            if decltype is GenericType then
+               decltype = self:apply_generic(node, decltype)
             end
 
             if decltype is UnionType then
@@ -12049,9 +12211,8 @@ do
 
             self:end_function_scope(node)
 
-            local t = self:ensure_fresh_typeargs(a_function(node, {
+            local t = wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.min_arity or 0,
-               typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
             }))
@@ -12078,9 +12239,8 @@ do
 
             self:check_macroexp_arg_use(node.macrodef)
 
-            local t = self:ensure_fresh_typeargs(a_function(node, {
+            local t = wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.macrodef.min_arity or 0,
-               typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
                macroexp = node.macrodef,
@@ -12125,9 +12285,8 @@ do
                return NONE
             end
 
-            self:add_global(node, node.name.tk, self:ensure_fresh_typeargs(a_function(node, {
+            self:add_global(node, node.name.tk, wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.min_arity or 0,
-               typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
             })))
@@ -12144,7 +12303,7 @@ do
             local rtype = self:to_structural(resolve_typedecl(children[1]))
 
             -- add type arguments from the record implicitly
-            if rtype is RecordLikeType and rtype.typeargs then
+            if rtype is GenericType then
                for _, typ in ipairs(rtype.typeargs) do
                   self:add_var(nil, typ.typearg, a_type(typ, "typearg", {
                      typearg = typ.typearg,
@@ -12161,6 +12320,10 @@ do
 
             local t = children[1]
             local rtype = self:to_structural(resolve_typedecl(t))
+
+            if rtype is GenericType then
+               rtype = rtype.t
+            end
 
             do
                local ok, err = ensure_not_abstract(t)
@@ -12199,10 +12362,9 @@ do
                end
             end
 
-            local fn_type = self:ensure_fresh_typeargs(a_function(node, {
+            local fn_type = wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.min_arity or 0,
                is_method = node.is_method,
-               typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
                is_record_function = true,
@@ -12218,6 +12380,12 @@ do
                   self.errs:redeclaration_warning(node, node.name.tk, "function")
                end
 
+               if fn_type is GenericType and not rfieldtype is GenericType then
+                  self:begin_scope()
+                  fn_type = self:apply_generic(node, fn_type) as FunctionType
+                  self:end_scope()
+               end
+
                local ok, err = self:same_type(fn_type, rfieldtype)
                if not ok then
                   if rfieldtype is PolyType then
@@ -12231,7 +12399,15 @@ do
                   return
                end
             else
+               if open_t and open_t is GenericType then
+                  open_t = open_t.t
+               end
                if self.feat_lax or rtype == open_t then
+                  -- TODO is this needed?
+                  -- if fn_type is GenericType then
+                  --    fn_type = fresh_typeargs(self, fn_type)
+                  -- end
+
                   rtype.fields[node.name.tk] = fn_type
                   table.insert(rtype.field_order, node.name.tk)
 
@@ -12286,9 +12462,9 @@ do
             assert(rets is TupleType)
 
             self:end_function_scope(node)
-            return self:ensure_fresh_typeargs(a_function(node, {
+
+            return wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.min_arity or 0,
-               typeargs = node.typeargs,
                args = args,
                rets = self.get_rets(rets),
             }))
@@ -12312,9 +12488,8 @@ do
             assert(rets is TupleType)
 
             self:end_function_scope(node)
-            return self:ensure_fresh_typeargs(a_function(node, {
+            return wrap_generic_if_typeargs(node.typeargs, a_function(node, {
                min_arity = self.feat_arity and node.min_arity or 0,
-               typeargs = node.typeargs,
                args = args,
                rets = rets,
             }))
@@ -12356,6 +12531,9 @@ do
             elseif node.op.op == "or" then
                self:apply_facts(node, facts_not(node, node.e1.known))
             elseif node.op.op == "@funcall" then
+               if e1type is GenericType then
+                  e1type = self:apply_generic(node, e1type)
+               end
                if e1type is FunctionType then
                   local argdelta = (node.e1.op and node.e1.op.op == ":") and -1 or 0
                   if node.expected then
@@ -12976,16 +13154,6 @@ do
       end
    end
 
-   local visit_type_with_typeargs = {
-      before = function(self: TypeChecker, _typ: Type)
-         self:begin_scope()
-      end,
-      after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
-         self:end_scope()
-         return self:ensure_fresh_typeargs(typ)
-      end,
-   }
-
    function TypeChecker:begin_temporary_record_types(typ: RecordType)
       self:add_var(nil, "@self", a_typedecl(typ, typ))
 
@@ -13013,26 +13181,35 @@ do
       end
    end
 
-   local function ensure_is_method_self(typ: RecordLikeType, fargs: {Type}): boolean
-      assert(typ.declname)
-      local selfarg = fargs[1]
+   local function ensure_is_method_self(typ: RecordLikeType, selfarg: Type, g?: GenericType): boolean
       if selfarg is SelfType then
          return true
       end
       if not selfarg is NominalType then
          return false
       end
-      if selfarg.names[1] ~= typ.declname or (typ.typeargs and not selfarg.typevals) then
+
+      if #selfarg.names ~= 1 or selfarg.names[1] ~= typ.declname then
          return false
       end
-      if typ.typeargs then
-         for j=1,#typ.typeargs do
+
+      if g then
+         if not selfarg.typevals then
+            return false
+         end
+
+         if g.t.typeid ~= typ.typeid then
+            return false
+         end
+
+         for j=1,#g.typeargs do
             local tv = selfarg.typevals[j]
-            if not (tv and tv is TypeVarType and tv.typevar == typ.typeargs[j].typearg) then
+            if not (tv and tv is TypeVarType and tv.typevar == g.typeargs[j].typearg) then
                return false
             end
          end
       end
+
       return true
    end
 
@@ -13053,13 +13230,22 @@ do
    local visit_type: Visitor<TypeChecker, TypeName,Type,Type>
    visit_type = {
       cbs = {
+         ["generic"] = {
+            before = function(self: TypeChecker, typ: GenericType)
+               self:begin_scope()
+               self:add_var(nil, "@generic", typ)
+            end,
+            after = function(self: TypeChecker, typ: GenericType, _children: {Type}): Type
+               self:end_scope()
+               return fresh_typeargs(self, typ)
+            end,
+         },
          ["function"] = {
-            before = visit_type_with_typeargs.before,
-            after = function(self: TypeChecker, typ: FunctionType, children: {Type}): Type
+            after = function(self: TypeChecker, typ: FunctionType, _children: {Type}): Type
                if self.feat_arity == false then
                   typ.min_arity = 0
                end
-               return visit_type_with_typeargs.after(self, typ, children)
+               return typ
             end
          },
          ["record"] = {
@@ -13069,12 +13255,6 @@ do
             end,
             after = function(self: TypeChecker, typ: RecordType, children: {Type}): Type
                local i = 1
-               if typ.typeargs then
-                  for _, _ in ipairs(typ.typeargs) do
-                     typ.typeargs[i] = children[i] as TypeArgType
-                     i = i + 1
-                  end
-               end
                if typ.interface_list then
                   for j, _ in ipairs(typ.interface_list) do
                      local iface = children[i]
@@ -13096,6 +13276,7 @@ do
                   i = i + 1
                end
                local fmacros: {FunctionType}
+               local g: Variable
                for name, _ in fields_of(typ) do
                   local ftype = children[i]
                   if ftype is FunctionType then
@@ -13107,7 +13288,10 @@ do
                      if ftype.is_method then
                         local fargs = ftype.args.tuple
                         if fargs[1] then
-                           ftype.is_method = ensure_is_method_self(typ, fargs)
+                           if not g then
+                              g = self:find_var("@generic")
+                           end
+                           ftype.is_method = ensure_is_method_self(typ, fargs[1], g and g.t as GenericType)
                            if ftype.is_method then
                               fargs[1] = a_self(fargs[1], typ)
                            end
@@ -13197,8 +13381,12 @@ do
                if t then
                   local def = t.def
                   if t.is_alias then
-                     assert(def is NominalType)
-                     typ.found = def.found
+                     if def is GenericType then
+                        def = def.t
+                     end
+                     if def is NominalType then
+                        typ.found = def.found
+                     end
                   elseif def.typename ~= "circular_require" then
                      typ.found = t
                   end
@@ -13239,8 +13427,7 @@ do
 
    visit_type.cbs["interface"] = visit_type.cbs["record"]
 
-   visit_type.cbs["typedecl"] = visit_type_with_typeargs
-
+   visit_type.cbs["typedecl"] = default_type_visitor
    visit_type.cbs["self"] = default_type_visitor
    visit_type.cbs["string"] = default_type_visitor
    visit_type.cbs["tupletable"] = default_type_visitor
