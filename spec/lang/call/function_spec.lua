@@ -55,6 +55,40 @@ describe("function call", function()
       { y = 16, msg = "argument 1: interfaces are abstract" },
    }))
 
+   describe("call functions with string literals:", function()
+      it("with single quotes", util.check([[
+         local function f(a: string) end
+         f'hello'
+      ]]))
+
+      it("with double quotes", util.check([[
+         local function f(a: string) end
+         f"hello"
+      ]]))
+
+      it("with double square brackets", util.check([=[
+         local function f(a: string) end
+         f[[hello]]
+      ]=]))
+
+      it("with double square brackets across multiple lines", util.check([=[
+         local function f(a: string) end
+         f[[hello
+         world]]
+      ]=]))
+
+      it("with double square brackets with equals", util.check([[
+         local function f(a: string) end
+         f[=[hello]=]
+      ]]))
+
+      it("with double square brackets with equals across multiple lines", util.check([[
+         local function f(a: string) end
+         f[=[hello
+         world]=]
+      ]]))
+   end)
+
    describe("check the arity of functions:", function()
       it("when excessive", util.check_type_error([[
          local function f(n: number, m: number): number

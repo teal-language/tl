@@ -427,9 +427,9 @@ local function filter_by(tag, warnings)
    return out
 end
 
-local function check(lax, code, unknowns, gen_target)
+local function check(lax, code, unknowns, gen_target, lang)
    return function()
-      local ast, syntax_errors = tl.parse(code, "foo.lua")
+      local ast, syntax_errors = tl.parse(code, "foo.lua", lang)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local gen_compat
@@ -476,6 +476,13 @@ function util.check(code, gen_target)
    assert(gen_target == nil or type(gen_target) == "string")
 
    return check(false, code, nil, gen_target)
+end
+
+function util.check_lua(code, gen_target)
+   assert(type(code) == "string")
+   assert(gen_target == nil or type(gen_target) == "string")
+
+   return check(false, code, nil, gen_target, "lua")
 end
 
 function util.lax_check(code, unknowns)
