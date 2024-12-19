@@ -7008,8 +7008,7 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-
-         code = tl.parse(text, "@internal")
+         code = tl.parse(text, "@internal", "lua")
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end

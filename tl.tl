@@ -7008,8 +7008,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         -- TODO: does this need a parse_lang?
-         code = tl.parse(text, "@internal") as Node
+         code = tl.parse(text, "@internal", "lua") as Node
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
