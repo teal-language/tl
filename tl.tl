@@ -13451,7 +13451,7 @@ function tl.target_from_lua_version(str: string): GenTarget
    end
 end
 
-local function default_env_opts(runtime: boolean, parse_lang?: ParseLang): EnvOptions
+local function default_env_opts(runtime: boolean, parse_lang: ParseLang): EnvOptions
    local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
    local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
    return {
