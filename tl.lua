@@ -10908,7 +10908,7 @@ a.types[i], b.types[i]), }
       end
    end
 
-   local function set_expected_types_to_decltuple(_, node, children)
+   local function set_expected_types_to_decltuple(self, node, children)
       local decltuple = node.kind == "assignment" and children[1] or node.decltuple
       assert(decltuple.typename == "tuple")
       local decls = decltuple.tuple
@@ -10919,7 +10919,7 @@ a.types[i], b.types[i]), }
             local typ
             typ = decls[i]
             if typ then
-               if i == nexps and ndecl > nexps then
+               if node.kind == "assignment" and i == nexps and ndecl > nexps then
                   typ = a_type(node, "tuple", { tuple = {} })
                   for a = i, ndecl do
                      table.insert(typ.tuple, decls[a])
@@ -10928,6 +10928,14 @@ a.types[i], b.types[i]), }
                node.exps[i].expected = typ
                node.exps[i].expected_context = { kind = node.kind, name = node.vars[i].tk }
             end
+         end
+      end
+
+      if node.decltuple then
+         local ndecltuple = #node.decltuple.tuple
+         local nvars = #node.vars
+         if ndecltuple > nvars then
+            self.errs:add(node.decltuple.tuple[nvars + 1], "number of types exceeds number of variables")
          end
       end
    end

@@ -385,4 +385,18 @@ describe("local", function()
       { y = 9, msg = "_bar1: got number, expected Bar" },
       { y = 10, msg = "_bar2: Foo is not a Bar" },
    }))
+
+   it("catches excessive types in declaration (regression test for #868)", util.check_type_error([[
+      local function f(): string, string
+         return "hello", "world"
+      end
+
+      local x, y: integer, string, string = 1, ""
+
+      local z, w = 0, f()
+
+      z, w = 0, f()
+   ]], {
+      { y = 5, x = 36, msg = "number of types exceeds number of variables" },
+   }))
 end)
