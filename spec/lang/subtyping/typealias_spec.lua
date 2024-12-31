@@ -43,4 +43,14 @@ describe("typealias", function()
       local type Test = {StringFoo: StringBar}
       local test: Test = {}
    ]]))
+
+   it("nested generic type aliases work with early resolution (regression test for #888)", util.check([[
+      local record Generic<T>
+         x: T
+      end
+
+      local record Export
+         type Test = Generic<string>
+      end
+   ]]))
 end)
