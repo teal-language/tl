@@ -8159,7 +8159,7 @@ do
          -- otherwise, this can't be an alias.
 
          -- resolve the nominal into a structural type
-         local struc = resolve_decl_into_nominal(self, nom, found)
+         local struc = resolve_decl_into_nominal(self, nom, found or nom.found)
 
          -- wrap it into a new non-alias typedecl
          local td = a_type(ta, "typedecl", { def = struc } as TypeDeclType)
