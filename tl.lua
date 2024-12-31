@@ -7649,6 +7649,12 @@ do
                   copy.constraint, same = resolve(t.constraint, same)
                end
             end
+
+
+            local rt = fn_var(self, a_type(t, "typevar", { typevar = t.typearg }))
+            if rt then
+               resolved[t.typearg] = rt
+            end
          elseif t.typename == "unresolvable_typearg" then
             assert(copy.typename == "unresolvable_typearg")
             copy.typearg = t.typearg

@@ -32,4 +32,15 @@ describe("typealias", function()
          end
       end
    ]]))
+
+   it("resolves early even if type arguments are not used (regression test for #881)", util.check([[
+      local record Foo<T> end
+      local record Bar<T> end
+
+      local type StringFoo = Foo<string>
+      local type StringBar = Bar<string>
+
+      local type Test = {StringFoo: StringBar}
+      local test: Test = {}
+   ]]))
 end)
