@@ -669,7 +669,7 @@ local function cd()
    end
    local wd = os.getenv("PWD")
    if not wd then
-      local pd = io.popen("cd", "rb")
+      local pd = io.popen("cd", "r")
       wd = pd:read("*l")
       pd:close()
    end
