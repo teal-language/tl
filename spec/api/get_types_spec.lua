@@ -226,4 +226,39 @@ describe("tl.get_types", function()
       assert(ti ~= ti.ref)
       assert.same(ti_ref.str, "Operator")
    end)
+
+   it("reports self of a record function (#884)", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local record mod
+             foo1: function(self)
+             foo2: function(self)
+         end
+
+         function mod:foo1()
+         end
+
+         function mod.foo2(self: mod)
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      assert.same(#tr.symbols, 9)
+      local syms = {
+         { 1, "@{" },
+         { 1, "mod" },
+         { 6, "@{" },
+         { 6, "self" },
+         { 7, "@}" },
+         { 9, "@{" },
+         { 9, "self" },
+         { 10, "@}" },
+         { 11, "@}" }
+      }
+      for i, s in ipairs(tr.symbols) do
+         assert.same(s[1], syms[i][1])
+         assert.same(s[3], syms[i][2])
+      end
+   end)
 end)

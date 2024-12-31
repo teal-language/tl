@@ -12173,6 +12173,9 @@ self:expand_type(node, values, elements) })
                args.tuple[1] = a_type(node, "self", { display_type = selftype })
                self:add_var(nil, "self", selftype)
                self:add_var(nil, "@self", a_type(node, "typedecl", { def = selftype }))
+               if self.collector then
+                  self.collector.add_to_symbol_list(node.fn_owner, "self", selftype)
+               end
             end
 
             local fn_type = self:ensure_fresh_typeargs(a_function(node, {
