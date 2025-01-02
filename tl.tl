@@ -2343,6 +2343,10 @@ local function node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
+local function node_is_funcall(node: Node): boolean
+   return node.kind == "op" and node.op.op == "@funcall"
+end
+
 local enum ParseLang
    "lua"
    "tl"
@@ -2994,7 +2998,7 @@ local function node_is_require_call_or_pcall(n: Node): string
    if r then
       return r
    end
-   if n.op and n.op.op == "@funcall"
+   if node_is_funcall(n)
       and n.e1 and n.e1.tk == "pcall"
       and n.e2 and #n.e2 == 2
       and n.e2[1].kind == "variable" and n.e2[1].tk == "require"
@@ -4143,7 +4147,7 @@ do
          return i
       end
 
-      if (exp.op and exp.op.op == "@funcall") or exp.failstore then
+      if node_is_funcall(exp) or exp.failstore then
          return i, exp
       end
 
@@ -9626,7 +9630,7 @@ do
          if is_method then
             return "method"
          end
-         if node.kind == "op" and node.op.op == "@funcall" and e1 and e1.receiver then
+         if node_is_funcall(node) and e1 and e1.receiver then
             local receiver = e1.receiver
             if receiver is NominalType then
                local resolved = receiver.resolved
@@ -11527,7 +11531,7 @@ do
                local valtype = valtypes.tuple[i]
                local rvar, rval, err = self:check_assignment(varnode, vartype, valtype)
                if err == "missing" then
-                  if #node.exps == 1 and node.exps[1].kind == "op" and node.exps[1].op.op == "@funcall" then
+                  if #node.exps == 1 and node_is_funcall(node.exps[1]) then
                      local msg = #valtuple.tuple == 1
                                  and "only 1 value is returned by the function"
                                  or ("only " .. #valtuple.tuple .. " values are returned by the function")
