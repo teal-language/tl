@@ -770,4 +770,11 @@ end]]))
       ]]))
    end)
 
+   it("generic unions can resolve correctly (regression test for #787)", util.check([[
+      local type Maybe<T> = T | boolean
+      local x: Maybe<string>
+      if not x is boolean then
+          print("Result: "..x)
+      end
+   ]]))
 end)
