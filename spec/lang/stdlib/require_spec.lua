@@ -1352,4 +1352,56 @@ describe("require", function()
       assert.same({}, result.type_errors)
    end)
 
+   it("a module returning a generic interface can be required", function ()
+      util.mock_io(finally, {
+         ["ifoo.tl"] = [[
+            local interface IFoo<T>
+               bar: function(self, T)
+            end
+
+            return IFoo
+         ]],
+         ["main.tl"] = [[
+            local type IFoo = require("ifoo")
+
+            local fs: IFoo<string> = {}
+
+            fs.bar = function(self, s:string)
+               print(s)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
+   it("a generic interface can be extracted from a required module", function ()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local record foo
+               interface IFoo<T>
+                  bar: function(self, T)
+               end
+            end
+
+            return foo
+         ]],
+         ["main.tl"] = [[
+            local type IFoo = require("foo").IFoo
+
+            local fs: IFoo<string> = {}
+
+            fs.bar = function(self, s:string)
+               print(s)
+            end
+         ]],
+      })
+      local result, err = tl.process("main.tl")
+
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+   end)
+
 end)
