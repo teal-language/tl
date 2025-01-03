@@ -7470,6 +7470,9 @@ do
       end
       for i = 2, #names do
          typ = unwrap_for_find_type(typ)
+         if typ == nil then
+            return nil
+         end
 
          local fields = typ is RecordLikeType and typ.fields
          if not fields then
@@ -7477,12 +7480,14 @@ do
          end
 
          typ = fields[names[i]]
-         if typ and typ is NominalType then
-            typ = typ.found
-         end
-         if typ == nil then
-            return nil
-         end
+      end
+
+      -- FIXME doing this at the and lets all nominals be used as types (see #891)
+      if typ and typ is NominalType then
+         typ = typ.found
+      end
+      if typ == nil then
+         return nil
       end
 
       if typ is TypeDeclType then
