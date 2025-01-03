@@ -3708,6 +3708,9 @@ do
       i = parse_list(ps, i, node.exps, stop_return_list, "sep", parse_expression)
       if ps.tokens[i].kind == ";" then
          i = i + 1
+         if ps.tokens[i].kind ~= "$EOF$" and not stop_statement_list[ps.tokens[i].kind] then
+            return fail(ps, i, "return must be the last statement of its block")
+         end
       end
       return i, node
    end
