@@ -37,6 +37,14 @@ describe("return", function()
             return bar()
          end
       ]], {}))
+
+      it("with zero (regression test for #741)", util.check([[
+         local function bar() end
+
+         local function foo()
+            return bar()
+         end
+      ]]))
    end)
 
    describe("type checking", function()
