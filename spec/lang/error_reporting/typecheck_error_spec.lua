@@ -153,4 +153,33 @@ describe("typecheck errors", function()
       })
    end)
 
+   it("do not confuse filenames", function ()
+      util.mock_io(finally, {
+         ["ordering.tl"] = [[
+            local record ordering
+               type SortBy<K> = table.SortFunction<K>
+            end
+
+            return ordering
+         ]],
+         ["util.tl"] = [[
+            local type SortBy = require("ordering").SortBy
+
+            local record util
+               func: function(sort_by?: SortBy)
+            end
+
+            return util
+         ]]
+      })
+      util.run_check_type_error([[
+         local util = require("util")
+
+         util.func(function() end)
+         print("this is where the error should not be")
+      ]], {
+         { y = 4, x = 41, filename = "./util.tl", msg = "missing type argument" }
+      })
+   end)
+
 end)
