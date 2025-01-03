@@ -8408,8 +8408,11 @@ do
 
    function TypeChecker:to_structural(t: Type): Type
       assert(not t is TupleType)
+      if t is TypeVarType and t.constraint then
+         t = t.constraint
+      end
       if t is NominalType then
-         return self:resolve_nominal(t)
+         t = self:resolve_nominal(t)
       end
       return t
    end
