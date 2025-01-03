@@ -1,4 +1,3 @@
-local tl = require("tl")
 local util = require("spec.util")
 
 describe("local function", function()
@@ -19,6 +18,16 @@ describe("local function", function()
             return a + #b
          end
          local ok = f(3, "abc")
+      ]]))
+
+      it("can have type variables with constraints", util.check([[
+         local type F = function(any...): any...
+
+         local function partial<T is F>(f: T, a: any): T
+            return function(...: any): any...
+               return f(a, ...)
+            end
+         end
       ]]))
 
       it("cannot have unused type variables", util.check_type_error([[
