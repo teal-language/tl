@@ -7470,6 +7470,9 @@ do
       end
       for i = 2, #names do
          typ = unwrap_for_find_type(typ)
+         if typ == nil then
+            return nil
+         end
 
          local fields = typ.fields and typ.fields
          if not fields then
@@ -7477,12 +7480,13 @@ do
          end
 
          typ = fields[names[i]]
-         if typ and typ.typename == "nominal" then
-            typ = typ.found
-         end
-         if typ == nil then
-            return nil
-         end
+      end
+
+      if typ and typ.typename == "nominal" then
+         typ = typ.found
+      end
+      if typ == nil then
+         return nil
       end
 
       if typ.typename == "typedecl" then

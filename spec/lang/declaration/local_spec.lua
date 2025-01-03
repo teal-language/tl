@@ -399,4 +399,66 @@ describe("local", function()
    ]], {
       { y = 5, x = 36, msg = "number of types exceeds number of variables" },
    }))
+
+   -- behaviors to be deprecated, once we can implement
+   -- proper detection and warnings.
+   describe("behavior to deprecate", function()
+      it("plain `local` aliasing of enums works (regression test for #891)", util.check([[
+         local enum MyEnum1
+             "A"
+             "B"
+         end
+
+         -- this should require `local type`...
+         local MyEnum2 = MyEnum1
+
+         local record MyRecord
+             x: MyEnum2
+         end
+
+         local x: MyRecord = {x = "A"}
+         assert(x)
+      ]]))
+      it("plain `local` aliasing of records works (regression test for #891)", util.check([[
+         local record MyRecord1 end
+
+         local MyRecord2 = MyRecord1
+
+         local record MyRecord
+             x: MyRecord2
+         end
+
+         local x: MyRecord = {x = {}}
+         assert(x)
+      ]]))
+
+      it("plain `local` aliasing of records works across `require` (regression test for #891)", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               local enum MyEnum
+                   "A"
+                   "B"
+               end
+
+               return { MyEnum = MyEnum }
+            ]],
+            ["bar.tl"] = [[
+               local foo = require "foo"
+
+               local MyEnum = foo.MyEnum
+
+               local record MyRecord
+                   x: MyEnum
+               end
+
+               local x: MyRecord = {x = "A"}
+               assert(x)
+            ]],
+         })
+         local result, err = tl.process("bar.tl", assert(tl.init_env()))
+         assert.same(nil, err)
+         assert.same({}, result.syntax_errors)
+         assert.same({}, result.type_errors)
+      end)
+   end)
 end)
