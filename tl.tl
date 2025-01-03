@@ -12532,6 +12532,18 @@ do
                self:apply_facts(node, node.e1.known)
             elseif node.op.op == "or" then
                self:apply_facts(node, facts_not(node, node.e1.known))
+
+               -- special-case `v is T and v or _` when T is a truthy type
+               if node.e1.kind == "op" and node.e1.op.op == "and"
+                  and node.e1.e1.kind == "op" and node.e1.e1.op.op == "is"
+                  and node.e1.e2.kind == "variable"
+                  and node.e1.e2.tk == node.e1.e1.e1.tk
+                  and node.e1.e1.e2.casttype.typename ~= "boolean"
+                  and node.e1.e1.e2.casttype.typename ~= "nil"
+               then
+                  self:apply_facts(node, facts_not(node, IsFact { var = node.e1.e1.e1.tk, typ = node.e1.e1.e2.casttype, w = node }))
+               end
+
             elseif node.op.op == "@funcall" then
                if e1type is GenericType then
                   e1type = self:apply_generic(node, e1type)
