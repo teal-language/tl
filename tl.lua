@@ -1681,9 +1681,6 @@ local table_types = {
 
 
 
-
-
-
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
@@ -6250,10 +6247,10 @@ local function Err_at(w, msg)
    }
 end
 
-local function insert_error(self, y, x, err)
+local function insert_error(self, y, x, f, err)
    err.y = assert(y)
    err.x = assert(x)
-   err.filename = self.filename
+   err.filename = assert(f)
 
    if TL_DEBUG then
       io.stderr:write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
@@ -6265,7 +6262,7 @@ end
 function Errors:add(w, msg, ...)
    local e = Err(msg, ...)
    if e then
-      insert_error(self, w.y, w.x, e)
+      insert_error(self, w.y, w.x, w.f, e)
    end
 end
 
@@ -6292,14 +6289,14 @@ function Errors:add_in_context(w, ctx, msg, ...)
 
    local e = Err(msg, ...)
    if e then
-      insert_error(self, w.y, w.x, e)
+      insert_error(self, w.y, w.x, w.f, e)
    end
 end
 
 
 function Errors:collect(errs)
    for _, e in ipairs(errs) do
-      insert_error(self, e.y, e.x, e)
+      insert_error(self, e.y, e.x, e.filename, e)
    end
 end
 
@@ -6309,7 +6306,7 @@ function Errors:add_warning(tag, w, fmt, ...)
       y = w.y,
       x = w.x,
       msg = fmt:format(...),
-      filename = self.filename,
+      filename = assert(w.f),
       tag = tag,
    })
 end
@@ -6384,7 +6381,7 @@ function Errors:add_prefixing(w, src, prefix, dst)
       if dst then
          table.insert(dst, err)
       else
-         insert_error(self, err.y, err.x, err)
+         insert_error(self, err.y, err.x, err.filename, err)
       end
    end
 end
@@ -7481,6 +7478,7 @@ do
 
          typ = fields[names[i]]
       end
+
 
       if typ and typ.typename == "nominal" then
          typ = typ.found
