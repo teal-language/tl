@@ -34,6 +34,26 @@ describe("parser", function()
       assert.same("return", result.ast[1].kind)
    end)
 
+   it("does not accept statements after 'return;' (regression test for #495)", function ()
+      local result = tl.process_string([[
+         return;
+         print("")
+      ]])
+      assert.same(1, #result.syntax_errors)
+      assert.same(result.syntax_errors[1].msg, "return must be the last statement of its block")
+
+      local result = tl.process_string([[
+         local function get_foo(): string
+            if true then
+               return "foo";
+               print("")
+            end
+         end
+      ]])
+      assert.same(1, #result.syntax_errors)
+      assert.same(result.syntax_errors[1].msg, "return must be the last statement of its block")
+   end)
+
    it("accepts semicolons in tables (regression test for #54)", function ()
       local result = tl.process_string([[
          local t = {
