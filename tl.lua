@@ -13102,10 +13102,11 @@ self:expand_type(node, values, elements) })
    end
 
    do
-      local function add_interface_fields(self, what, fields, field_order, resolved, named, list)
+      local function add_interface_fields(self, fields, field_order, resolved, named, list)
          for fname, ftype in fields_of(resolved, list) do
             if fields[fname] then
                if not self:is_a(fields[fname], ftype) then
+                  local what = list == "meta" and "metamethod" or "field"
                   self.errs:add(fields[fname], what .. " '" .. fname .. "' does not match definition in interface %s", named)
                end
             else
@@ -13152,11 +13153,11 @@ self:expand_type(node, values, elements) })
             if iface.typename == "nominal" then
                local ri = self:resolve_nominal(iface)
                assert(ri.typename == "interface")
-               add_interface_fields(self, "field", t.fields, t.field_order, ri, iface)
+               add_interface_fields(self, t.fields, t.field_order, ri, iface)
                if ri.meta_fields then
                   t.meta_fields = t.meta_fields or {}
                   t.meta_field_order = t.meta_field_order or {}
-                  add_interface_fields(self, "metamethod", t.meta_fields, t.meta_field_order, ri, iface, "meta")
+                  add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
                end
             else
                if not t.elements then
