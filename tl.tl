@@ -10006,71 +10006,65 @@ do
       return not not has_any
    end
 
-   function TypeChecker:match_record_key(tbl: Type, rec: Node, key: string): Type, string
-      assert(type(tbl) == "table")
-      assert(type(rec) == "table")
-      assert(type(key) == "string")
+   function TypeChecker:match_record_key(t: Type, rec: Node, key: string): Type, string
+      t = self:to_structural(t)
 
-      tbl = self:to_structural(tbl)
-
-      if tbl is SelfType then
-         tbl = self:type_of_self(tbl)
+      if t is SelfType then
+         t = self:type_of_self(t)
       end
 
-      if tbl is StringType or tbl is EnumType then
-         tbl = self:find_var_type("string") -- simulate string metatable
+      if t is StringType or t is EnumType then
+         t = self:find_var_type("string") -- simulate string metatable
       end
 
-      if tbl is TypeDeclType then
-         if tbl.is_nested_alias then
+      if t is TypeDeclType then
+         if t.is_nested_alias then
             return nil, "cannot use a nested type alias as a concrete value"
          end
-         local def = tbl.def
+         local def = t.def
          if def is NominalType then
-            assert(tbl.is_alias)
-            tbl = self:resolve_nominal(def)
+            assert(t.is_alias)
+            t = self:resolve_nominal(def)
          else
-            tbl = def
+            t = def
          end
       end
 
-      if tbl is GenericType then
-         tbl = self:apply_generic(tbl, tbl)
+      if t is GenericType then
+         t = self:apply_generic(t, t)
       end
 
-      if tbl is UnionType then
-         local t = self:same_in_all_union_entries(tbl, function(t: Type): (Type, Type)
-            return (self:match_record_key(t, rec, key))
+      if t is UnionType then
+         local ty = self:same_in_all_union_entries(t, function(typ: Type): (Type, Type)
+            return (self:match_record_key(typ, rec, key))
          end)
-
-         if t then
-            return t
+         if ty then
+            return ty
          end
       end
 
-      if (tbl is TypeVarType or tbl is TypeArgType) and tbl.constraint then
-         local t = self:match_record_key(tbl.constraint, rec, key)
-
-         if t then
-            return t
+      if (t is TypeVarType or t is TypeArgType) and t.constraint then
+         local ty = self:match_record_key(t.constraint, rec, key)
+         if ty then
+            return ty
          end
       end
 
-      if tbl is RecordLikeType then
-         assert(tbl.fields, "record has no fields!?")
+      if t is RecordLikeType then
+         assert(t.fields, "record has no fields!?")
 
-         if tbl.fields[key] then
-            return tbl.fields[key]
+         if t.fields[key] then
+            return t.fields[key]
          end
 
          local str = a_type(rec, "string", {})
-         local meta_t = self:check_metamethod(rec, "__index", tbl, str, tbl, str)
+         local meta_t = self:check_metamethod(rec, "__index", t, str, t, str)
          if meta_t then
             return meta_t
          end
 
          if rec.kind == "variable" then
-            if tbl is InterfaceType then
+            if t is InterfaceType then
                return nil, "invalid key '" .. key .. "' in '" .. rec.tk .. "' of interface type %s"
             else
                return nil, "invalid key '" .. key .. "' in record '" .. rec.tk .. "' of type %s"
@@ -10078,7 +10072,7 @@ do
          else
             return nil, "invalid key '" .. key .. "' in type %s"
          end
-      elseif tbl is EmptyTableType or is_unknown(tbl) then
+      elseif t is EmptyTableType or is_unknown(t) then
          if self.feat_lax then
             return an_unknown(rec)
          end
@@ -13305,7 +13299,7 @@ do
       ["__unm"] = true,
    }
 
-   local visit_type: Visitor<TypeChecker, TypeName,Type,Type>
+   local visit_type: Visitor<TypeChecker, TypeName, Type, Type>
    visit_type = {
       cbs = {
          ["generic"] = {
