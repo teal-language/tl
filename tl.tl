@@ -7430,27 +7430,29 @@ do
       }, nil
    end
 
-   local type ResolveTypeVars = function<S>(S, TypeVarType | TypeArgType): Type, boolean
-   local map_typevars: function<S>(s: S, ty: Type, fn_tv: ResolveTypeVars<S>): Type, {Error}
+   local type TypeFunction = function<S>(S, Type): Type, boolean
+   local type TypeFunctionMap<S> = {TypeName: TypeFunction<S>}
+   local map_type: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
 
-   local function fresh_typevar(_: nil, t: TypeVarType | TypeArgType): Type, boolean
-      if t is TypeVarType then
+   local fresh_typevar_fns: TypeFunctionMap<nil> = {
+      ["typevar"] = function(_: nil, t: TypeVarType): Type, boolean
          return a_type(t, "typevar", {
             typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
             constraint = t.constraint,
-         } as TypeVarType), false
-      else
+         } as TypeVarType), true
+      end,
+      ["typearg"] = function(_: nil, t: TypeArgType): Type, boolean
          return a_type(t, "typearg", {
             typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
             constraint = t.constraint,
          } as TypeArgType), true
-      end
-   end
+      end,
+   }
 
    local function fresh_typeargs(self: TypeChecker, g: GenericType): GenericType
       fresh_typevar_ctr = fresh_typevar_ctr + 1
 
-      local newg, errs = map_typevars(nil, g, fresh_typevar)
+      local newg, errs = map_type(nil, g, fresh_typevar_fns)
       if newg is InvalidType then
          self.errs:collect(errs)
          return g
@@ -7684,23 +7686,61 @@ do
       ["unknown"] = true,
    }
 
-   local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
-      for i = #copy.typeargs, 1, -1 do
-         local r = resolved[copy.typeargs[i].typearg]
-         if r then
-            table.remove(copy.typeargs, i)
+   local resolve_typevars: function(self: TypeChecker, t: Type): Type, {Error}
+   do
+      local record ResolveTypeVarState
+         tc: TypeChecker
+         resolved: {string:Type}
+      end
+
+      local resolve_typevar_fns: TypeFunctionMap<ResolveTypeVarState> = {
+         ["typevar"] = function(s: ResolveTypeVarState, t: TypeVarType): Type, boolean
+            local rt = s.tc:find_var_type(t.typevar)
+            if not rt then
+               return t, false
+            end
+
+            rt = drop_constant_value(rt)
+            s.resolved[t.typevar] = rt
+
+            return rt, true
+         end,
+      }
+
+      local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
+         for i = #copy.typeargs, 1, -1 do
+            local r = resolved[copy.typeargs[i].typearg]
+            if r then
+               table.remove(copy.typeargs, i)
+            end
          end
+         if not copy.typeargs[1] then
+            return copy.t
+         end
+         return copy
       end
-      if not copy.typeargs[1] then
-         return copy.t
+
+      resolve_typevars = function(self: TypeChecker, t: Type): Type, {Error}
+         local state: ResolveTypeVarState = {
+            tc = self,
+            resolved = {},
+         }
+         local rt, errs = map_type(state, t, resolve_typevar_fns)
+         if errs then
+            return rt, errs
+         end
+
+         if rt is GenericType then
+            rt = clear_resolved_typeargs(rt, state.resolved)
+         end
+
+         return rt
       end
-      return copy
    end
 
-   map_typevars = function<S>(self: S, ty: Type, fn_tv: ResolveTypeVars<S>): Type, {Error}
+   map_type = function<S>(self: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
-      local resolved: {string:Type} = {}
       local resolve: function<T is Type>(t: T, all_same: boolean): T, boolean
 
       resolve = function<T is Type>(t: T, all_same: boolean): T, boolean
@@ -7716,18 +7756,15 @@ do
          end
 
          local orig_t = t
-         if t is TypeVarType then
-            local rt, is_resolved = fn_tv(self, t)
-            if rt then
+         local fn = fns[t.typename]
+         if fn then
+            local rt, is_resolved = fn(self, t)
+            if rt ~= t then
                if is_resolved then
-                  resolved[t.typevar] = rt
-               end
-               if no_nested_types[rt.typename] or (rt is NominalType and not rt.typevals) then
-                  seen[orig_t] = rt
+                  seen[t] = rt
                   return rt, false
                end
-               all_same = false
-               t = rt
+               return resolve(rt, false)
             end
          end
 
@@ -7755,17 +7792,10 @@ do
             copy.elements, same = resolve(t.elements, same)
             -- inferred_len is not propagated
          elseif t is TypeArgType then
-            local rt, is_resolved = fn_tv(self, t)
-            if is_resolved then
-               resolved[t.typearg] = rt
-               copy = rt
-               same = false
-            else
-               assert(copy is TypeArgType)
-               copy.typearg = t.typearg
-               if t.constraint then
-                  copy.constraint, same = resolve(t.constraint, same)
-               end
+            assert(copy is TypeArgType)
+            copy.typearg = t.typearg
+            if t.constraint then
+               copy.constraint, same = resolve(t.constraint, same)
             end
          elseif t is UnresolvableTypeArgType then
             assert(copy is UnresolvableTypeArgType)
@@ -7877,24 +7907,7 @@ do
          return an_invalid(ty), errs
       end
 
-      if copy is GenericType then
-         copy = clear_resolved_typeargs(copy, resolved)
-      end
-
       return copy
-   end
-
-   local function resolve_typevar(tc: TypeChecker, t: TypeVarType | TypeArgType): Type, boolean
-      if t is TypeVarType then
-         local rt = tc:find_var_type(t.typevar)
-         if not rt then
-            return nil
-         end
-
-         return drop_constant_value(rt), true
-      else
-         return t, false
-      end
    end
 
    function TypeChecker:infer_emptytable(emptytable: EmptyTableType, fresh_t: Type)
@@ -7933,16 +7946,14 @@ do
       end
    end
 
-
    local function type_at<T is Type>(w: Where, t: T): T
       t.x = w.x
       t.y = w.y
       return t
    end
 
-   function TypeChecker:resolve_typevars_at(w: Where, t: Type): Type
-      assert(w)
-      local ret, errs = map_typevars(self, t, resolve_typevar)
+   function TypeChecker:assert_resolved_typevars_at(w: Where, t: Type): Type
+      local ret, errs = resolve_typevars(self, t)
       if errs then
          assert(w.y)
          self.errs:add_prefixing(w, errs, "")
@@ -7955,9 +7966,9 @@ do
    end
 
    function TypeChecker:infer_at<T is Type>(w: Where, t: T): T
-      local ret = self:resolve_typevars_at(w, t)
+      local ret = self:assert_resolved_typevars_at(w, t)
       if ret is InvalidType then
-         ret = t -- errors are produced by resolve_typevars_at
+         ret = t -- errors are produced by assert_resolved_typevars_at
       end
 
       if ret == t or t is TypeVarType then
@@ -8160,7 +8171,7 @@ do
       for i, ta in ipairs(g.typeargs) do
          self:add_var(nil, ta.typearg, typeargs[i])
       end
-      local applied, errs = map_typevars(self, g, resolve_typevar)
+      local applied, errs = resolve_typevars(self, g)
       if errs then
          self.errs:add_prefixing(w, errs, "")
          return nil
@@ -8729,7 +8740,7 @@ do
             end
          end
 
-         local r, errs = map_typevars(self, other, resolve_typevar)
+         local r, errs = resolve_typevars(self, other)
          if errs then
             return false, errs
          end
@@ -9900,7 +9911,7 @@ do
             mark_invalid_typeargs(self, g)
          end
 
-         ret = self:resolve_typevars_at(node, ret) as InvalidOrTupleType
+         ret = self:assert_resolved_typevars_at(node, ret) as InvalidOrTupleType
          self:end_scope()
 
          if self.collector then
