@@ -4617,7 +4617,134 @@ local function tl_debug_indent_pop(mark, single, y, x, fmt, ...)
    end
 end
 
-local function recurse_type(s, ast, visit)
+local recurse_type
+
+local function aggregate_type_walker(s, ast, visit)
+   local xs = {}
+   for i, child in ipairs(ast.types) do
+      xs[i] = recurse_type(s, child, visit)
+   end
+   return xs
+end
+
+local function record_like_type_walker(s, ast, visit)
+   local xs = {}
+   if ast.interface_list then
+      for _, child in ipairs(ast.interface_list) do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
+   if ast.elements then
+      table.insert(xs, recurse_type(s, ast.elements, visit))
+   end
+   if ast.fields then
+      for _, child in fields_of(ast) do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
+   if ast.meta_fields then
+      for _, child in fields_of(ast, "meta") do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
+   return xs
+end
+
+local type_walkers = {
+   ["typevar"] = false,
+   ["unresolved_typearg"] = false,
+   ["unresolvable_typearg"] = false,
+   ["self"] = false,
+   ["enum"] = false,
+   ["boolean"] = false,
+   ["string"] = false,
+   ["nil"] = false,
+   ["thread"] = false,
+   ["number"] = false,
+   ["integer"] = false,
+   ["circular_require"] = false,
+   ["boolean_context"] = false,
+   ["emptytable"] = false,
+   ["unresolved_emptytable_value"] = false,
+   ["any"] = false,
+   ["unknown"] = false,
+   ["invalid"] = false,
+   ["none"] = false,
+   ["*"] = false,
+
+   ["generic"] = function(s, ast, visit)
+      local xs = {}
+      for _, child in ipairs(ast.typeargs) do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+      table.insert(xs, recurse_type(s, ast.t, visit))
+      return xs
+   end,
+   ["tuple"] = function(s, ast, visit)
+      local xs = {}
+      for i, child in ipairs(ast.tuple) do
+         xs[i] = recurse_type(s, child, visit)
+      end
+      return xs
+   end,
+   ["union"] = aggregate_type_walker,
+   ["tupletable"] = aggregate_type_walker,
+   ["poly"] = aggregate_type_walker,
+   ["map"] = function(s, ast, visit)
+      return {
+         recurse_type(s, ast.keys, visit),
+         recurse_type(s, ast.values, visit),
+      }
+   end,
+   ["record"] = record_like_type_walker,
+   ["interface"] = record_like_type_walker,
+   ["function"] = function(s, ast, visit)
+      local xs = {}
+      if ast.args then
+         for _, child in ipairs(ast.args.tuple) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
+      if ast.rets then
+         for _, child in ipairs(ast.rets.tuple) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
+      return xs
+   end,
+   ["nominal"] = function(s, ast, visit)
+      local xs = {}
+      if ast.typevals then
+         for _, child in ipairs(ast.typevals) do
+            table.insert(xs, recurse_type(s, child, visit))
+         end
+      end
+      return xs
+   end,
+   ["typearg"] = function(s, ast, visit)
+      return {
+         ast.constraint and recurse_type(s, ast.constraint, visit),
+      }
+   end,
+   ["array"] = function(s, ast, visit)
+      return {
+         recurse_type(s, ast.elements, visit),
+      }
+   end,
+   ["literal_table_item"] = function(s, ast, visit)
+      return {
+         recurse_type(s, ast.ktype, visit),
+         recurse_type(s, ast.vtype, visit),
+      }
+   end,
+   ["typedecl"] = function(s, ast, visit)
+      return {
+         recurse_type(s, ast.def, visit),
+      }
+   end,
+}
+
+recurse_type = function(s, ast, visit)
    local kind = ast.typename
 
    if TL_DEBUG then
@@ -4633,77 +4760,10 @@ local function recurse_type(s, ast, visit)
       end
    end
 
-   local xs = {}
-
-   if ast.typename == "generic" then
-      for _, child in ipairs(ast.typeargs) do
-         table.insert(xs, recurse_type(s, child, visit))
-      end
-      table.insert(xs, recurse_type(s, ast.t, visit))
-   elseif ast.typename == "tuple" then
-      for i, child in ipairs(ast.tuple) do
-         xs[i] = recurse_type(s, child, visit)
-      end
-   elseif ast.types then
-      for _, child in ipairs(ast.types) do
-         table.insert(xs, recurse_type(s, child, visit))
-      end
-   elseif ast.typename == "map" then
-      table.insert(xs, recurse_type(s, ast.keys, visit))
-      table.insert(xs, recurse_type(s, ast.values, visit))
-   elseif ast.fields then
-      if ast.interface_list then
-         for _, child in ipairs(ast.interface_list) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-      if ast.elements then
-         table.insert(xs, recurse_type(s, ast.elements, visit))
-      end
-      if ast.fields then
-         for _, child in fields_of(ast) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-      if ast.meta_fields then
-         for _, child in fields_of(ast, "meta") do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-   elseif ast.typename == "function" then
-      if ast.args then
-         for _, child in ipairs(ast.args.tuple) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-      if ast.rets then
-         for _, child in ipairs(ast.rets.tuple) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-   elseif ast.typename == "nominal" then
-      if ast.typevals then
-         for _, child in ipairs(ast.typevals) do
-            table.insert(xs, recurse_type(s, child, visit))
-         end
-      end
-   elseif ast.typename == "typearg" then
-      if ast.constraint then
-         table.insert(xs, recurse_type(s, ast.constraint, visit))
-      end
-   elseif ast.typename == "array" then
-      if ast.elements then
-         table.insert(xs, recurse_type(s, ast.elements, visit))
-      end
-   elseif ast.typename == "literal_table_item" then
-      if ast.ktype then
-         table.insert(xs, recurse_type(s, ast.ktype, visit))
-      end
-      if ast.vtype then
-         table.insert(xs, recurse_type(s, ast.vtype, visit))
-      end
-   elseif ast.typename == "typedecl" then
-      table.insert(xs, recurse_type(s, ast.def, visit))
+   local xs
+   local walker = type_walkers[ast.typename]
+   if not (type(walker) == "boolean") then
+      xs = walker(s, ast, visit)
    end
 
    local ret
