@@ -11935,8 +11935,13 @@ do
             local exp1type = self:resolve_for_call(exptypes[1], args, false)
 
             if exp1type is PolyType then
-               local _: Type
-               _, exp1type = self:type_check_function_call(exp1, exp1type, args, 0, exp1, {node.exps[2], node.exps[3]})
+               local _r, f: Type, Type
+               _r, f = self:type_check_function_call(exp1, exp1type, args, 0, exp1, {node.exps[2], node.exps[3]})
+               if f then
+                  exp1type = f
+               else
+                  self.errs:add(exp1, "cannot resolve polymorphic function given arguments")
+               end
             end
 
             if exp1type is FunctionType then

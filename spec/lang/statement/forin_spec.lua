@@ -262,4 +262,12 @@ describe("forin", function()
          { msg = "v" },
       }))
    end)
+
+   it("does not crash given next and an unknown variable (#879)", util.check_type_error([[
+      for k, v in next, t, nil do
+      end
+   ]], {
+      { msg = "cannot resolve polymorphic function given arguments" },
+      { msg = "unknown variable: t" },
+   }))
 end)
