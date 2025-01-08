@@ -1,5 +1,9 @@
 local util = require("spec.util")
 
+local function popen_tl(...)
+   return io.popen(util.tl_cmd(...) .. " 2>&1", "r")
+end
+
 local input_file = [[
 global type1 = 2
 
@@ -108,7 +112,7 @@ describe("tl gen", function()
    describe("on .tl files", function()
       it("works on empty files", function()
          local name = util.write_tmp_file(finally, [[]])
-         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -124,7 +128,7 @@ describe("tl gen", function()
 
             print(add(10, 20))
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -140,7 +144,7 @@ describe("tl gen", function()
 
       it("handles Unix newlines on every OS", function()
          local name = util.write_tmp_file(finally, "print'1'--comment\nprint'2'\nprint'3'\n")
-         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -148,7 +152,7 @@ describe("tl gen", function()
          assert.same("print('1')\nprint('2')\nprint('3')\n", util.read_file(lua_name))
       end)
 
-      it("ignores type errors", function()
+      it("catches type errors by default", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number
                return a + b
@@ -157,10 +161,25 @@ describe("tl gen", function()
             print(add("string", 20))
             print(add(10, true))
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
+         local pd = popen_tl("gen", name)
+         local output = pd:read("*a")
+         util.assert_popen_close(1, pd:close())
+         assert.match("2 errors", output, 1, true)
+      end)
+
+      it("ignores type errors with --no-check", function()
+         local name = util.write_tmp_file(finally, [[
+            local function add(a: number, b: number): number
+               return a + b
+            end
+
+            print(add("string", 20))
+            print(add(10, true))
+         ]])
+         local pd = popen_tl("gen", "--no-check", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
-         assert.same("", output)
+         assert.match("Wrote:", output, 1, true)
          local lua_name = tl_to_lua(name)
          util.assert_line_by_line([[
             local function add(a, b)
@@ -176,22 +195,22 @@ describe("tl gen", function()
          local name = util.write_tmp_file(finally, [[
             print(add("string", 20))))))
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          assert.match("1 syntax error:", output, 1, true)
       end)
 
-      it("ignores unknowns code 0 if no errors", function()
+      it("ignores unknowns with --no-check", function()
          local name = util.write_tmp_file(finally, [[
             local function unk(x, y): number, number
                return a + b
             end
          ]])
-         local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
+         local pd = popen_tl("gen", "--no-check", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
-         assert.same("", output)
+         assert.match("Wrote:", output, 1, true)
          local lua_name = tl_to_lua(name)
          util.assert_line_by_line([[
             local function unk(x, y)
@@ -202,7 +221,7 @@ describe("tl gen", function()
 
       it("does not mess up the indentation (#109)", function()
          local name = util.write_tmp_file(finally, input_file)
-         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -214,7 +233,7 @@ describe("tl gen", function()
    for i, case in ipairs(hashbang_cases) do
       it("[" .. i .. "] preserves hashbang with --keep-hashbang", function()
          local name = util.write_tmp_file(finally, case.with_hashbang)
-         local pd = io.popen(util.tl_cmd("gen", "--keep-hashbang", name), "r")
+         local pd = popen_tl("gen", "--keep-hashbang", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -224,7 +243,7 @@ describe("tl gen", function()
 
       it("[" .. i .. "] drops hashbang when not using --keep-hashbang", function()
          local name = util.write_tmp_file(finally, case.with_hashbang)
-         local pd = io.popen(util.tl_cmd("gen", name), "r")
+         local pd = popen_tl("gen", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -240,7 +259,7 @@ describe("tl gen", function()
             local x = 2 // 3
             local y = 2 << 3
          ]])
-         local pd = io.popen(util.tl_cmd("gen", "--gen-target=5.1", name), "r")
+         local pd = popen_tl("gen", "--gen-target=5.1", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -252,7 +271,7 @@ describe("tl gen", function()
          ]], util.read_file(lua_name))
       end)
 
-      it("generates bit32 operations even for invalid variables (regression test for #673)", function()
+      it("with --no-check generates bit32 operations even for invalid variables (regression test for #673)", function()
          local name = util.write_tmp_file(finally, [[
 
             local foo = require("nonexisting")
@@ -260,7 +279,7 @@ describe("tl gen", function()
             local x = ~y
             local z = aa // bb
          ]])
-         local pd = io.popen(util.tl_cmd("gen", "--gen-target=5.1", name), "r")
+         local pd = popen_tl("gen", "--no-check", "--gen-target=5.1", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -281,7 +300,7 @@ describe("tl gen", function()
             local x = 2 // 3
             local y = 2 << 3
          ]])
-         local pd = io.popen(util.tl_cmd("gen", "--gen-target=5.3", name), "r")
+         local pd = popen_tl("gen", "--gen-target=5.3", name)
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local lua_name = tl_to_lua(name)
@@ -371,7 +390,7 @@ describe("tl gen", function()
 
    local function run_gen_with_flag(finally, flag, output_code)
       local name = util.write_tmp_file(finally, input_code)
-      local pd = io.popen(util.tl_cmd("gen", name, flag), "r")
+      local pd = popen_tl("gen", name, flag)
       local output = pd:read("*a")
       util.assert_popen_close(0, pd:close())
       local lua_name = tl_to_lua(name)
