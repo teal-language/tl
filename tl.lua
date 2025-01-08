@@ -2254,9 +2254,9 @@ end
 
 
 
-local function a_nominal(n, names)
-   return a_type(n, "nominal", { names = names })
-end
+
+
+
 
 
 
@@ -2449,6 +2449,7 @@ do
    local function new_generic(ps, i, typeargs, typ)
       local gt = new_type(ps, i, "generic")
       gt.typeargs = typeargs
+      assert(not (typ.typename == "typedecl"))
       gt.t = typ
       return gt
    end
@@ -7469,6 +7470,8 @@ do
          return t
       end
 
+      assert(not (t.typename == "typedecl"))
+
       local gt = a_type(t, "generic", { t = t })
       gt.typeargs = typeargs
       return gt
@@ -7836,6 +7839,13 @@ do
 
             if t.elements then
                copy.elements, same = resolve(t.elements, same)
+            end
+
+            if t.interface_list then
+               copy.interface_list = {}
+               for i, v in ipairs(t.interface_list) do
+                  copy.interface_list[i], same = resolve(v, same)
+               end
             end
 
             copy.is_userdata = t.is_userdata
@@ -8755,10 +8765,10 @@ do
    function TypeChecker:type_of_self(w)
       local t = self:find_var_type("@self")
       if not t then
-         return a_type(w, "invalid", {})
+         return a_type(w, "invalid", {}), nil
       end
       assert(t.typename == "typedecl")
-      return t.def
+      return t.def, t
    end
 
 
@@ -8932,7 +8942,7 @@ do
       ["*"] = {
          ["boolean_context"] = compare_true,
          ["self"] = function(self, a, b)
-            return self:same_type(a, self:type_of_self(b))
+            return self:same_type(a, (self:type_of_self(b)))
          end,
          ["typevar"] = function(self, a, b)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
@@ -9287,7 +9297,7 @@ a.types[i], b.types[i]), }
             return ok, errs
          end,
          ["self"] = function(self, a, b)
-            return self:is_a(a, self:type_of_self(b))
+            return self:is_a(a, (self:type_of_self(b)))
          end,
          ["tuple"] = function(self, a, b)
             return self:is_a(a_type(a, "tuple", { tuple = { a } }), b)
@@ -10515,7 +10525,7 @@ a.types[i], b.types[i]), }
       end
    end
 
-   local function typedecl_to_nominal(node, name, t, resolved)
+   local function typedecl_to_nominal(w, name, t, resolved)
       local typevals
       local def = t.def
       if def.typename == "generic" then
@@ -10527,7 +10537,7 @@ a.types[i], b.types[i]), }
             }))
          end
       end
-      local nom = a_nominal(node, { name })
+      local nom = a_type(w, "nominal", { names = { name } })
       nom.typevals = typevals
       nom.found = t
       nom.resolved = resolved
@@ -13166,6 +13176,27 @@ self:expand_type(node, values, elements) })
       return t
    end
 
+   local resolve_self
+   do
+      local resolve_self_fns = {
+         ["self"] = function(tc, t)
+            local selftype, selfdecl = tc:type_of_self(t)
+            local checktype = selftype
+            if selftype.typename == "generic" then
+               checktype = selftype.t
+            end
+            if checktype.typename == "record" then
+               return typedecl_to_nominal(t, checktype.declname, selfdecl)
+            end
+            return t
+         end,
+      }
+
+      resolve_self = function(self, t)
+         return map_type(self, t, resolve_self_fns)
+      end
+   end
+
    do
       local function add_interface_fields(self, fields, field_order, resolved, named, list)
          for fname, ftype in fields_of(resolved, list) do
@@ -13176,7 +13207,7 @@ self:expand_type(node, values, elements) })
                end
             else
                table.insert(field_order, fname)
-               fields[fname] = ftype
+               fields[fname] = resolve_self(self, ftype)
             end
          end
       end

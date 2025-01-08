@@ -2254,8 +2254,8 @@ local macroexp a_map(w: Where, k: Type, v: Type): MapType
    return a_type(w, "map", { keys = k, values = v } as MapType)
 end
 
-local function a_nominal(n: Node, names: {string}): NominalType
-   return a_type(n, "nominal", { names = names } as NominalType)
+local macroexp a_nominal(w: Where, names: {string}): NominalType
+   return a_type(w, "nominal", { names = names } as NominalType)
 end
 
 local macroexp an_invalid(w: Where): InvalidType
@@ -2449,6 +2449,7 @@ end
 local function new_generic(ps: ParseState, i: integer, typeargs: {TypeArgType}, typ: Type): GenericType
    local gt = new_type(ps, i, "generic") as GenericType
    gt.typeargs = typeargs
+   assert(not typ is TypeDeclType)
    gt.t = typ
    return gt
 end
@@ -7469,6 +7470,8 @@ do
          return t
       end
 
+      assert(not t is TypeDeclType)
+
       local gt = a_type(t, "generic", { t = t } as GenericType)
       gt.typeargs = typeargs
       return gt
@@ -7836,6 +7839,13 @@ do
             -- checking array interface
             if t.elements then
                copy.elements, same = resolve(t.elements, same)
+            end
+
+            if t.interface_list then
+               copy.interface_list = {}
+               for i, v in ipairs(t.interface_list) do
+                  copy.interface_list[i], same = resolve(v, same)
+               end
             end
 
             copy.is_userdata = t.is_userdata
@@ -8752,13 +8762,13 @@ do
       end
    end
 
-   function TypeChecker:type_of_self(w: Where): Type
+   function TypeChecker:type_of_self(w: Where): Type, TypeDeclType
       local t = self:find_var_type("@self")
       if not t then
-         return an_invalid(w)
+         return an_invalid(w), nil
       end
       assert(t is TypeDeclType)
-      return t.def
+      return t.def, t
    end
 
    -- ∃ x ∈ xs. t <: x
@@ -8932,7 +8942,7 @@ do
       ["*"] = {
          ["boolean_context"] = compare_true,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
-            return self:same_type(a, self:type_of_self(b))
+            return self:same_type(a, (self:type_of_self(b)))
          end,
          ["typevar"] = function(self: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
@@ -9287,7 +9297,7 @@ do
             return ok, errs
          end,
          ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
-            return self:is_a(a, self:type_of_self(b))
+            return self:is_a(a, (self:type_of_self(b)))
          end,
          ["tuple"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self:is_a(a_tuple(a, {a}), b)
@@ -10515,7 +10525,7 @@ do
       end
    end
 
-   local function typedecl_to_nominal(node: Node, name: string, t: TypeDeclType, resolved?: Type): Type
+   local function typedecl_to_nominal(w: Where, name: string, t: TypeDeclType, resolved?: Type): Type
       local typevals: {Type}
       local def = t.def
       if def is GenericType then
@@ -10527,7 +10537,7 @@ do
             } as TypeVarType))
          end
       end
-      local nom = a_nominal(node, { name })
+      local nom = a_nominal(w, { name })
       nom.typevals = typevals
       nom.found = t
       nom.resolved = resolved
@@ -13166,6 +13176,27 @@ do
       return t
    end
 
+   local resolve_self: function(self: TypeChecker, t: Type): Type, {Error}
+   do
+      local resolve_self_fns: TypeFunctionMap<TypeChecker> = {
+         ["self"] = function(tc: TypeChecker, t: SelfType): Type, boolean
+            local selftype, selfdecl = tc:type_of_self(t)
+            local checktype = selftype
+            if selftype is GenericType then
+               checktype = selftype.t
+            end
+            if checktype is RecordType then
+               return typedecl_to_nominal(t, checktype.declname, selfdecl)
+            end
+            return t
+         end,
+      }
+
+      resolve_self = function(self: TypeChecker, t: Type): Type, {Error}
+         return map_type(self, t, resolve_self_fns)
+      end
+   end
+
    do
       local function add_interface_fields(self: TypeChecker, fields: {string:Type}, field_order: {string}, resolved: RecordLikeType, named: NominalType, list?: MetaMode)
          for fname, ftype in fields_of(resolved, list) do
@@ -13176,7 +13207,7 @@ do
                end
             else
                table.insert(field_order, fname)
-               fields[fname] = ftype
+               fields[fname] = resolve_self(self, ftype)
             end
          end
       end
