@@ -1,3 +1,66 @@
+# 0.24.2
+
+2025-01-10
+
+Another bugfix release for Teal 0.24. We got more feedback, bug report,
+test cases.
+
+The good news is that the arity changes went very smoothly: no bug reports or
+complaints about that big change, really. The lack of feedback means that
+people must have adapted well to the new behavior, and that the pragma support
+and documentation on how to migrate was sufficient. A big win!
+
+The bad news is that the added complexity to the type system caused by the
+introduction of interfaces and the `self` type, have produced various bugs.
+Those came up especially due to the interactions between interfaces, the
+`self` type and generics. Most bugs were fixed for this release, but not all.
+
+This release features commits by Pierre Chapuis, JR Mitchell, Corey Williamson,
+@FourierTransformer, @FractalU and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* `record` declarations nested inside `interface` declarations are no
+  longer allowed; allowing a concrete object inside an abstract object
+  was an oversight.
+* Relational operators on aliases to comparable types now correctly return
+  boolean
+* Nominal function types can now be used as type variable constraints.
+* Improved standard library definitions
+  * `io.input` and `io.output` types
+  * `string.find`
+
+### Tooling
+
+* Compiler now produces warnings for unread variables.
+
+### Fixes
+
+* Record fields inherited from interfaces now resolve `self` on declaration
+  (#877).
+* Fixes parsing of `.lua` files, respecting Lua heuristics for function calls
+  across multiple lines.
+* Fixes a syntax error with `return;` is not the last statement of a
+  block (#893).
+* Eager resolution of unused type arguments (#881).
+  * Nested generic type aliases work with eager resolution (#888).
+* Fixes support for generics on array types (#880).
+* Fixes support for generic unions (#787).
+* Check if number of types in declaration exceeds number of variables (#868).
+* API fixes:
+  * `tl.get_types` reports all inherited interface fields
+  * reports `self` symbol in methods
+* Internal Compiler Error when declaring an invalid union in a function arg
+  in a field (#856)
+* Crash on a `for` loop that explicitly uses `next` and an unknown variable.
+* Stack overflow when a nested interface extends its parent interface.
+* Error messages for `>` no longer have its operands flipped
+* Fix: do not get file names and locations out-of-sync when compiling multiple
+  files.
+* CLI: compatibility fix for Windows.
+
 # 0.24.1
 
 2024-10-25
