@@ -8082,13 +8082,16 @@ do
       end
    end
 
-   local function close_nested_records(t: RecordLikeType)
-      for _, ft in pairs(t.fields) do
-         if ft is TypeDeclType then
-            ft.closed = true
-            local def = ft.def
-            if def is RecordLikeType then
-               close_nested_records(def)
+   local function close_nested_records(t: TypeDeclType)
+      if t.closed then
+         return
+      end
+      local tdef = t.def
+      if tdef is RecordLikeType then
+         t.closed = true
+         for _, ft in pairs(tdef.fields) do
+            if ft is TypeDeclType then
+               close_nested_records(ft)
             end
          end
       end
@@ -8098,11 +8101,7 @@ do
       for _, var in pairs(scope.vars) do
          local t = var.t
          if t is TypeDeclType then
-            t.closed = true
-            local def = t.def
-            if def is RecordLikeType then
-               close_nested_records(def)
-            end
+            close_nested_records(t)
          end
       end
    end
@@ -13216,7 +13215,11 @@ do
                end
             else
                table.insert(field_order, fname)
-               fields[fname] = resolve_self(self, ftype)
+               if ftype is TypeDeclType then
+                  fields[fname] = ftype
+               else
+                  fields[fname] = resolve_self(self, ftype)
+               end
             end
          end
       end

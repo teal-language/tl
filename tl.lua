@@ -8083,12 +8083,15 @@ do
    end
 
    local function close_nested_records(t)
-      for _, ft in pairs(t.fields) do
-         if ft.typename == "typedecl" then
-            ft.closed = true
-            local def = ft.def
-            if def.fields then
-               close_nested_records(def)
+      if t.closed then
+         return
+      end
+      local tdef = t.def
+      if tdef.fields then
+         t.closed = true
+         for _, ft in pairs(tdef.fields) do
+            if ft.typename == "typedecl" then
+               close_nested_records(ft)
             end
          end
       end
@@ -8098,11 +8101,7 @@ do
       for _, var in pairs(scope.vars) do
          local t = var.t
          if t.typename == "typedecl" then
-            t.closed = true
-            local def = t.def
-            if def.fields then
-               close_nested_records(def)
-            end
+            close_nested_records(t)
          end
       end
    end
@@ -13216,7 +13215,11 @@ self:expand_type(node, values, elements) })
                end
             else
                table.insert(field_order, fname)
-               fields[fname] = resolve_self(self, ftype)
+               if ftype.typename == "typedecl" then
+                  fields[fname] = ftype
+               else
+                  fields[fname] = resolve_self(self, ftype)
+               end
             end
          end
       end

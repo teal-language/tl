@@ -1072,3 +1072,12 @@ describe("abstract check", function()
       { y = 2, x = 10, msg = "interfaces cannot contain record definitions", }
    }))
 end)
+
+describe("loop check", function()
+   it("nested interfaces extending outer interface", util.check([[
+      local interface X
+         interface A is X
+         end
+      end
+   ]]))
+end)
