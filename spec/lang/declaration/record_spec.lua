@@ -1061,4 +1061,14 @@ describe("abstract check", function()
    ]], {
       { y = 7, x = 9, msg = "interfaces are abstract", }
    }))
+
+   it("for record definitions inside interfaces", util.check_syntax_error([[
+      local interface X
+         record Y
+            z: number
+         end
+      end
+   ]], {
+      { y = 2, x = 10, msg = "interfaces cannot contain record definitions", }
+   }))
 end)

@@ -4019,7 +4019,11 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
 
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
       elseif parse_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
-         i = parse_nested_type(ps, i, def, tn)
+         if def.typename == "interface" and tn == "record" then
+            i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
+         else
+            i = parse_nested_type(ps, i, def, tn)
+         end
       else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
