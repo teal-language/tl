@@ -5237,6 +5237,9 @@ function tl.generate(ast, gen_target, opts)
       for fname, ftype in fields_of(typ) do
          if ftype.typename == "typedecl" then
             local def = ftype.def
+            if def.typename == "generic" then
+               def = def.t
+            end
             if def.typename == "record" then
                if i > 0 then
                   table.insert(out, ",")

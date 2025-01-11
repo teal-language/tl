@@ -312,4 +312,50 @@ describe("local type code generation", function()
       { y = 16, msg = "interfaces are abstract" },
    }))
 
+   it("does not elide generic entries that are needed (#902)", util.gen([[
+      local record Qux<T>
+          v: integer
+      end
+
+      Qux.v = 123
+
+      local record Foo
+          record Bar<S>
+              value: S
+
+              metamethod __call: function(self, value: S): self
+          end
+      end
+
+      setmetatable(Foo.Bar, {
+          __call = function<S>(self, value: S): Foo.Bar<S>
+              return {value = value}
+          end
+      })
+
+      print(Foo.Bar("hi").value)
+   ]], [[
+      local Qux = {}
+
+
+
+      Qux.v = 123
+
+      local Foo = {Bar = {}, }
+
+
+
+
+
+
+
+      setmetatable(Foo.Bar, {
+         __call = function(self, value)
+            return { value = value }
+         end,
+      })
+
+      print(Foo.Bar("hi").value)
+   ]], nil, {}))
+
 end)

@@ -5237,6 +5237,9 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
       for fname, ftype in fields_of(typ) do
          if ftype is TypeDeclType then
             local def = ftype.def
+            if def is GenericType then
+               def = def.t
+            end
             if def is RecordType then
                if i > 0 then
                   table.insert(out, ",")
