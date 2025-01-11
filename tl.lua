@@ -7390,6 +7390,7 @@ do
 
 
 
+
    function TypeChecker:find_var(name, use)
       for i = #self.st, 1, -1 do
          local scope = self.st[i]
@@ -7834,6 +7835,7 @@ do
             copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
+            copy.is_record_function = t.is_record_function
             copy.args, same = resolve(t.args, same)
             copy.rets, same = resolve(t.rets, same)
          elseif t.fields then
@@ -12171,6 +12173,13 @@ self:expand_type(node, values, elements) })
                return infer_table_literal(self, node, children)
             end
 
+            if decltype.fields then
+               self:begin_scope()
+               self:add_var(nil, "@self", a_type(node, "typedecl", { def = decltype }))
+               decltype = self:resolve_self(decltype, true)
+               self:end_scope()
+            end
+
             local force_array = nil
 
             local seen_keys = {}
@@ -13181,24 +13190,21 @@ self:expand_type(node, values, elements) })
       return t
    end
 
-   local resolve_self
-   do
-      local resolve_self_fns = {
-         ["self"] = function(tc, t)
-            local selftype, selfdecl = tc:type_of_self(t)
-            local checktype = selftype
-            if selftype.typename == "generic" then
-               checktype = selftype.t
-            end
-            if checktype.typename == "record" then
-               return typedecl_to_nominal(t, checktype.declname, selfdecl)
-            end
-            return t
-         end,
-      }
+   function TypeChecker:resolve_self(t, resolve_interface)
+      local selftype, selfdecl = self:type_of_self(t)
+      local checktype = selftype
+      if selftype.typename == "generic" then
+         checktype = selftype.t
+      end
 
-      resolve_self = function(self, t)
-         return map_type(self, t, resolve_self_fns)
+      if (resolve_interface and checktype.typename == "interface") or checktype.typename == "record" then
+         return map_type(self, t, {
+            ["self"] = function(_, typ)
+               return typedecl_to_nominal(typ, checktype.declname, selfdecl)
+            end,
+         })
+      else
+         return t
       end
    end
 
@@ -13215,7 +13221,7 @@ self:expand_type(node, values, elements) })
                if ftype.typename == "typedecl" then
                   fields[fname] = ftype
                else
-                  fields[fname] = resolve_self(self, ftype)
+                  fields[fname] = self:resolve_self(ftype)
                end
             end
          end

@@ -1,3 +1,20 @@
+# 0.24.3
+
+2025-01-11
+
+A minor bugfix release, thanks to feedback received upon the release
+of 0.24.2.
+
+This release features commits by Hisham Muhammad.
+
+## What's New
+
+### Fixes
+
+* Fixes a regression in generic records with a __call metamethod (#901).
+* Record fields declared with self type were not being properly type checked
+  in table literals (#846).
+
 # 0.24.2
 
 2025-01-10
@@ -347,7 +364,7 @@ and Hisham Muhammad.
 2023-01-23
 
 A minor bugfix release, thanks to feedback received upon the release
-of 0.15.03
+of 0.15.0.
 
 This release features commits by Hisham Muhammad.
 

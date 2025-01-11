@@ -7379,6 +7379,7 @@ do
       type_check_funcall: function(TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
 
       expand_type: function(TypeChecker, w: Where, old: Type, new: Type): Type
+      resolve_self: function(TypeChecker, Type, resolve_interface?: boolean): Type, {Error}
 
       get_rets: function(TupleType): TupleType
    end
@@ -7834,6 +7835,7 @@ do
             copy.macroexp = t.macroexp
             copy.min_arity = t.min_arity
             copy.is_method = t.is_method
+            copy.is_record_function = t.is_record_function
             copy.args, same = resolve(t.args, same) as (TupleType, boolean)
             copy.rets, same = resolve(t.rets, same) as (TupleType, boolean)
          elseif t is RecordLikeType then
@@ -12171,6 +12173,13 @@ do
                return infer_table_literal(self, node, children)
             end
 
+            if decltype is RecordLikeType then
+               self:begin_scope()
+               self:add_var(nil, "@self", a_typedecl(node, decltype))
+               decltype = self:resolve_self(decltype, true)
+               self:end_scope()
+            end
+
             local force_array: Type = nil
 
             local seen_keys: {CheckableKey:Where} = {}
@@ -13181,24 +13190,21 @@ do
       return t
    end
 
-   local resolve_self: function(self: TypeChecker, t: Type): Type, {Error}
-   do
-      local resolve_self_fns: TypeFunctionMap<TypeChecker> = {
-         ["self"] = function(tc: TypeChecker, t: SelfType): Type, boolean
-            local selftype, selfdecl = tc:type_of_self(t)
-            local checktype = selftype
-            if selftype is GenericType then
-               checktype = selftype.t
-            end
-            if checktype is RecordType then
-               return typedecl_to_nominal(t, checktype.declname, selfdecl)
-            end
-            return t
-         end,
-      }
+   function TypeChecker:resolve_self(t: Type, resolve_interface?: boolean): Type, {Error}
+      local selftype, selfdecl = self:type_of_self(t)
+      local checktype = selftype
+      if selftype is GenericType then
+         checktype = selftype.t
+      end
 
-      resolve_self = function(self: TypeChecker, t: Type): Type, {Error}
-         return map_type(self, t, resolve_self_fns)
+      if (resolve_interface and checktype is InterfaceType) or checktype is RecordType then
+         return map_type(self, t, {
+            ["self"] = function(_: TypeChecker, typ: SelfType): Type, boolean
+               return typedecl_to_nominal(typ, checktype.declname, selfdecl)
+            end,
+         })
+      else
+         return t
       end
    end
 
@@ -13215,7 +13221,7 @@ do
                if ftype is TypeDeclType then
                   fields[fname] = ftype
                else
-                  fields[fname] = resolve_self(self, ftype)
+                  fields[fname] = self:resolve_self(ftype)
                end
             end
          end

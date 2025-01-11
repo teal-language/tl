@@ -65,4 +65,58 @@ describe("bidirectional inference for table literals", function()
    ]], {
       { msg = 'in record field: item: got string "wtf", expected number' }
    }))
+
+   it("resolves self type from records (regression test for #846)", util.check_type_error([[
+      local record Struct<T>
+         a: T
+         b: T
+         c: self
+      end
+
+      local a: Struct<integer> = {
+         a = 1,
+         b = 2,
+         c = 3,
+      }
+
+      print(a.a, a.b, a.c)
+   ]], {
+      { msg = 'in record field: c: got integer, expected Struct' }
+   }))
+
+   it("resolves self type in function fields (regression test for #846)", util.check_type_error([[
+      local record Struct<T>
+         a: T
+         b: T
+         c: function<T>(self)
+      end
+
+      local a: Struct<integer> = {
+         a = 1,
+         b = 2,
+         c = function(a: integer) end,
+      }
+
+      print(a.a, a.b, a.c)
+   ]], {
+      { msg = 'in record field: c: argument 1: got integer, expected Struct' }
+   }))
+
+   it("resolves self type from interfaces (regression test for #846)", util.check_type_error([[
+      local interface Struct<T>
+         a: T
+         b: T
+         c: self
+      end
+
+      local a: Struct<integer> = {
+         a = 1,
+         b = 2,
+         c = 3,
+      }
+
+      print(a.a, a.b, a.c)
+   ]], {
+      { msg = 'in record field: c: got integer, expected Struct' }
+   }))
 end)
