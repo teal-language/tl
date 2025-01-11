@@ -492,7 +492,7 @@ local Errors = {}
 
 
 
-local tl = {GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {}, }
+local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {} }
 
 
 
@@ -2076,7 +2076,7 @@ local attributes = {
 }
 local is_attribute = attributes
 
-local Node = {ExpectedContext = {}, }
+local Node = { ExpectedContext = {} }
 
 
 
@@ -5233,16 +5233,24 @@ function tl.generate(ast, gen_target, opts)
 
    local function print_record_def(typ)
       local out = { "{" }
+      local i = 0
       for fname, ftype in fields_of(typ) do
          if ftype.typename == "typedecl" then
             local def = ftype.def
             if def.typename == "record" then
+               if i > 0 then
+                  table.insert(out, ",")
+               end
+               i = i + 1
+               table.insert(out, " ")
                table.insert(out, fname)
                table.insert(out, " = ")
                table.insert(out, print_record_def(def))
-               table.insert(out, ", ")
             end
          end
+      end
+      if i > 0 then
+         table.insert(out, " ")
       end
       table.insert(out, "}")
       return table.concat(out)

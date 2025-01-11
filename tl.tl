@@ -5233,16 +5233,24 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
 
    local function print_record_def(typ: RecordLikeType): string
       local out: {string} = { "{" }
+      local i = 0
       for fname, ftype in fields_of(typ) do
          if ftype is TypeDeclType then
             local def = ftype.def
             if def is RecordType then
+               if i > 0 then
+                  table.insert(out, ",")
+               end
+               i = i + 1
+               table.insert(out, " ")
                table.insert(out, fname)
                table.insert(out, " = ")
                table.insert(out, print_record_def(def))
-               table.insert(out, ", ")
             end
          end
+      end
+      if i > 0 then
+         table.insert(out, " ")
       end
       table.insert(out, "}")
       return table.concat(out)
