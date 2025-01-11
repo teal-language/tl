@@ -9524,10 +9524,7 @@ a.types[i], b.types[i]), }
          end
 
          if func.typename == "typedecl" then
-            local funcdef = func.def
-            if funcdef.typename == "record" then
-               func = func.def
-            end
+            return self:resolve_for_call(func.def, args, is_method)
          end
 
          if func.fields and func.meta_fields and func.meta_fields["__call"] then

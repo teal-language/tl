@@ -162,4 +162,50 @@ describe("metamethod __call", function()
 
       f()
    ]]))
+
+   describe("regression tests for #901", function()
+      it("case 1", util.check([[
+         local record Foo<S>
+            value: S
+            metamethod __call: function(self: Foo<S>, value: S): Foo<S>
+         end
+         Foo(1)
+      ]]))
+
+      it("case 2", util.check([[
+         local record someModule
+            record Foo<S>
+               value: S
+               metamethod __call: function(self: Foo<S>, value: S): Foo<S>
+            end
+         end
+
+         someModule.Foo(1)
+      ]]))
+
+      it("case 3", util.check([[
+         local record Foo<S>
+            value: S
+            metamethod __call: function(self: Foo<S>, value: S): Foo<S>
+         end
+
+         Foo(1)
+      ]]))
+
+      it("case 4", util.check([[
+         local record Foo<S>
+             value: S
+             metamethod __call: function(self: Foo<S>, value: S): Foo<S>
+         end
+
+         local mt: metatable<Foo> = {
+             __call = function<S>(self: Foo<S>, value: S): Foo<S>
+                 return setmetatable({}, {__index = Foo})
+             end
+         }
+         setmetatable(Foo, mt)
+
+         Foo(1)
+      ]]))
+   end)
 end)

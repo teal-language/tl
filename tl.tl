@@ -9524,10 +9524,7 @@ do
          end
          -- resolve if prototype
          if func is TypeDeclType then
-            local funcdef = func.def
-            if funcdef is RecordType then
-               func = func.def
-            end
+            return self:resolve_for_call(func.def, args, is_method)
          end
          -- resolve if metatable
          if func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
