@@ -9044,17 +9044,14 @@ do
                return true
             end
 
-
             local ra = self:resolve_nominal(a)
             local rb = self:resolve_nominal(b)
-            if ra.typename == "union" and rb.typename == "union" then
-               return self:is_a(ra, rb)
-            end
-            if ra.typename == "union" then
-               return self:is_a(ra, b)
-            end
-            if rb.typename == "union" then
-               return self:is_a(a, rb)
+
+
+            local union_a = ra.typename == "union"
+            local union_b = rb.typename == "union"
+            if union_a or union_b then
+               return self:is_a(union_a and ra or a, union_b and rb or b)
             end
 
 

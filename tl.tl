@@ -9044,17 +9044,14 @@ do
                return true
             end
 
-            -- match unions structurally
             local ra = self:resolve_nominal(a)
             local rb = self:resolve_nominal(b)
-            if ra is UnionType and rb is UnionType then
-               return self:is_a(ra, rb)
-            end
-            if ra is UnionType then
-               return self:is_a(ra, b)
-            end
-            if rb is UnionType then
-               return self:is_a(a, rb)
+
+            -- match unions structurally
+            local union_a = ra is UnionType
+            local union_b = rb is UnionType
+            if union_a or union_b then
+               return self:is_a(union_a and ra or a, union_b and rb or b)
             end
 
             -- match interface subtyping
