@@ -8830,8 +8830,10 @@ do
    end
 
    local function a_is_interface_b(self: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
-      assert(a.found)
-      assert(b.found)
+      if (not a.found) or (not b.found) then
+         return false
+      end
+
       local af = a.found.def
       if af is GenericType then
          af = self:apply_generic(a, af, a.typevals)

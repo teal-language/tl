@@ -106,6 +106,19 @@ describe("subtyping of interfaces:", function()
       print(foo:get_value())
    ]]))
 
+   it("regression test when matching against an unknown type", util.check_type_error([[
+      local interface B
+      end
+
+      local x: B
+
+      if x is W then
+      end
+   ]], {
+      { msg = "x (of type B) can never be a W" },
+      { msg = "unknown type W" },
+   }))
+
    it("regression test for #830", util.check_lines([[
       local interface IFoo
       end
