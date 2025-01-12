@@ -1,5 +1,5 @@
 
-local VERSION = "0.24.3"
+local VERSION = "0.24.3+dev"
 
 local stdlib = [=====[
 
