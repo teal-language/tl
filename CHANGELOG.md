@@ -1,6 +1,6 @@
 # 0.24.3
 
-2025-01-11
+2025-01-12
 
 A minor bugfix release, thanks to feedback received upon the release
 of 0.24.2.
@@ -11,6 +11,7 @@ This release features commits by Hisham Muhammad.
 
 ### Fixes
 
+* Fixes code generation of nested generics that should not be elided (#902).
 * Fixes a regression in generic records with a __call metamethod (#901).
 * Record fields declared with self type were not being properly type checked
   in table literals (#846).
