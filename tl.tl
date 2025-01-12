@@ -1674,8 +1674,27 @@ local interface Type
    needs_compat: boolean -- for Lua compatibilty
 end
 
-local record StringType
+local record GenericType
    is Type
+   where self.typename == "generic"
+
+   typeargs: {TypeArgType}
+   t: FirstOrderType
+   fresh: boolean
+end
+
+local interface FirstOrderType
+   is Type
+end
+
+local type FirstClassType = GenericType | FirstOrderType
+
+local interface StructuralType
+   is FirstOrderType
+end
+
+local record StringType
+   is StructuralType
    where self.typename == "string"
 
    literal: string
@@ -1686,7 +1705,7 @@ local function is_numeric_type(t:Type): boolean
 end
 
 local interface NumericType
-   is Type
+   is StructuralType
    where is_numeric_type(self)
 end
 
@@ -1696,7 +1715,7 @@ local record IntegerType
 end
 
 local record BooleanType
-   is Type
+   is StructuralType
    where self.typename == "boolean"
 end
 
@@ -1704,24 +1723,15 @@ end
 -- type in boolean contexts such as `if _ then`. It behaves exactly like
 -- boolean except that type variables do not infer to it.
 local record BooleanContextType
-   is Type
+   is StructuralType
    where self.typename == "boolean_context"
-end
-
-local record GenericType
-   is Type
-   where self.typename == "generic"
-
-   typeargs: {TypeArgType}
-   t: Type
-   fresh: boolean
 end
 
 local record TypeDeclType
    is Type
    where self.typename == "typedecl"
 
-   def: Type
+   def: FirstClassType
    closed: boolean
    is_alias: boolean
    is_nested_alias: boolean
@@ -1733,8 +1743,8 @@ local record LiteralTableItemType
 
    -- table items
    kname: string
-   ktype: Type
-   vtype: Type
+   ktype: FirstClassType
+   vtype: FirstClassType
 end
 
 local record Scope
@@ -1751,25 +1761,25 @@ local interface HasDeclName
 end
 
 local record NominalType
-   is Type
+   is FirstOrderType
    where self.typename == "nominal"
 
    names: {string}
-   typevals: {Type}
+   typevals: {FirstClassType}
    found: TypeDeclType      -- type is found but typeargs are not resolved
    resolved: Type       -- type is found and typeargs are resolved
 end
 
 local record SelfType
-   is Type
+   is FirstOrderType
    where self.typename == "self"
 
    -- to be used only in error reports, not for type resolution
-   display_type: Type
+   display_type: RecordLikeType
 end
 
 local interface ArrayLikeType
-   is Type
+   is StructuralType
    where self.elements
 
    elements: Type
@@ -1777,8 +1787,13 @@ local interface ArrayLikeType
    inferred_len: integer
 end
 
+local record ArrayType
+   is ArrayLikeType
+   where self.typename == "array"
+end
+
 local interface RecordLikeType
-   is Type, HasDeclName, ArrayLikeType
+   is StructuralType, HasDeclName, ArrayLikeType
    where self.fields
 
    interface_list: {ArrayType | NominalType}
@@ -1788,11 +1803,6 @@ local interface RecordLikeType
    meta_fields: {string: Type}
    meta_field_order: {string}
    is_userdata: boolean
-end
-
-local record ArrayType
-   is ArrayLikeType
-   where self.typename == "array"
 end
 
 local record RecordType
@@ -1820,7 +1830,7 @@ local record UnknownType
 end
 
 local record TupleType
-   is Type
+   is FirstOrderType
    where self.typename == "tuple"
 
    is_va: boolean
@@ -1851,7 +1861,7 @@ local record UnresolvableTypeArgType
 end
 
 local record TypeVarType
-   is Type
+   is FirstOrderType
    where self.typename == "typevar"
 
    typevar: string
@@ -1859,11 +1869,16 @@ local record TypeVarType
 end
 
 local record MapType
-   is Type
+   is StructuralType
    where self.typename == "map"
 
    keys: Type
    values: Type
+end
+
+local record NilType
+   is StructuralType
+   where self.typename == "nil"
 end
 
 local record EmptyTableType
@@ -1883,7 +1898,7 @@ local record UnresolvedEmptyTableValueType
 end
 
 local record FunctionType
-   is Type
+   is StructuralType
    where self.typename == "function"
 
    is_method: boolean
@@ -1896,7 +1911,7 @@ local record FunctionType
 end
 
 local interface AggregateType
-   is Type
+   is StructuralType
    where self.types
 
    types: {Type}
@@ -1922,7 +1937,7 @@ local record PolyType
 end
 
 local record EnumType
-   is Type, HasDeclName
+   is StructuralType, HasDeclName
    where self.typename == "enum"
 
    enumset: {string:boolean}
@@ -2371,6 +2386,13 @@ local enum ParseTypeListMode
    "casttype"
 end
 
+-- type names used by parse_type_body_fns
+local enum BodyTypeName
+   "interface"
+   "record"
+   "enum"
+end
+
 local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer, TupleType
 local parse_typeargs_if_any: function(ps: ParseState, i: integer): integer, {TypeArgType}
 local parse_expression: function(ParseState, integer): integer, Node, integer
@@ -2378,14 +2400,14 @@ local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string):
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
-local parse_type: function(ParseState, integer): integer, Type, integer
+local parse_type: function(ParseState, integer): integer, FirstOrderType, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_enum_body: function(ps: ParseState, i: integer, def: EnumType): integer, boolean
 local parse_record_body: function(ps: ParseState, i: integer, def: Type): integer, boolean
-local parse_type_body_fns: {TypeName:ParseBody}
+local parse_type_body_fns: {BodyTypeName:ParseBody}
 
 local function fail(ps: ParseState, i: integer, msg: string): integer
    if not ps.tokens[i] then
@@ -2446,15 +2468,18 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    return t
 end
 
-local function new_generic(ps: ParseState, i: integer, typeargs: {TypeArgType}, typ: Type): GenericType
+local function new_first_order_type(ps: ParseState, i: integer, tn: BodyTypeName): FirstOrderType
+   return new_type(ps, i, tn as TypeName) as FirstOrderType
+end
+
+local function new_generic(ps: ParseState, i: integer, typeargs: {TypeArgType}, typ: FirstOrderType): GenericType
    local gt = new_type(ps, i, "generic") as GenericType
    gt.typeargs = typeargs
-   assert(not typ is TypeDeclType)
    gt.t = typ
    return gt
 end
 
-local function new_typedecl(ps: ParseState, i: integer, def: Type): TypeDeclType
+local function new_typedecl(ps: ParseState, i: integer, def: FirstClassType): TypeDeclType
    local t = new_type(ps, i, "typedecl") as TypeDeclType
    t.def = def
    return t
@@ -2501,12 +2526,12 @@ local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFu
    return skip_i
 end
 
-local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: TypeName): integer, Type
+local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: BodyTypeName): integer, GenericType | StructuralType
    local typeargs: {TypeArgType}
-   local def: Type
+   local def: FirstOrderType
    i, typeargs = parse_typeargs_if_any(ps, i)
 
-   def = new_type(ps, istart, tn)
+   def = new_first_order_type(ps, istart, tn)
 
    local ok: boolean
    i, ok = parse_type_body_fns[tn](ps, i, def)
@@ -2517,14 +2542,14 @@ local function parse_type_body(ps: ParseState, i: integer, istart: integer, node
    i = verify_end(ps, i, istart, node)
 
    if typeargs then
-      def = new_generic(ps, istart, typeargs, def)
+      return i, new_generic(ps, istart, typeargs, def)
    end
 
    return i, def
 end
 
 local function skip_type_body(ps: ParseState, i: integer): integer, boolean
-   local tn = ps.tokens[i].tk as TypeName
+   local tn = ps.tokens[i].tk as BodyTypeName
    i = i + 1
    assert(parse_type_body_fns[tn], tn .. " has no parse body function")
    local ii, tt = parse_type_body(ps, i, i - 1, {}, tn)
@@ -2789,11 +2814,11 @@ local function parse_function_type(ps: ParseState, i: integer): integer, Generic
    return i, typ
 end
 
-local function parse_simple_type_or_nominal(ps: ParseState, i: integer): integer, Type
+local function parse_simple_type_or_nominal(ps: ParseState, i: integer): integer, FirstOrderType
    local tk = ps.tokens[i].tk
    local st = simple_types[tk as TypeName]
    if st then
-      return i + 1, new_type(ps, i, tk as TypeName)
+      return i + 1, new_type(ps, i, tk as TypeName) as StructuralType
    elseif tk == "table" and ps.tokens[i + 1].tk ~= "."  then
       local typ = new_type(ps, i, "map") as MapType
       typ.keys = new_type(ps, i, "any")
@@ -2819,7 +2844,7 @@ local function parse_simple_type_or_nominal(ps: ParseState, i: integer): integer
    return i, typ
 end
 
-local function parse_base_type(ps: ParseState, i: integer): integer, Type, integer
+local function parse_base_type(ps: ParseState, i: integer): integer, FirstClassType, integer
    local tk = ps.tokens[i].tk
    if ps.tokens[i].kind == "identifier" then
       return parse_simple_type_or_nominal(ps, i)
@@ -2868,12 +2893,12 @@ local function parse_base_type(ps: ParseState, i: integer): integer, Type, integ
    elseif tk == "function" then
       return parse_function_type(ps, i)
    elseif tk == "nil" then
-      return i + 1, new_type(ps, i, "nil")
+      return i + 1, new_type(ps, i, "nil") as NilType
    end
    return fail(ps, i, "expected a type")
 end
 
-parse_type = function(ps: ParseState, i: integer): integer, Type, integer
+parse_type = function(ps: ParseState, i: integer): integer, FirstClassType, integer
    if ps.tokens[i].tk == "(" then
       i = i + 1
       local t: Type
@@ -2882,7 +2907,7 @@ parse_type = function(ps: ParseState, i: integer): integer, Type, integer
       return i, t
    end
 
-   local bt: Type
+   local bt: FirstClassType
    local istart = i
    i, bt = parse_base_type(ps, i)
    if not bt then
@@ -3765,7 +3790,7 @@ local function set_declname(def: Type, declname: string)
    end
 end
 
-local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, typename: TypeName): integer, boolean
+local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, tn: BodyTypeName): integer, boolean
    local istart = i
    i = i + 1 -- skip 'record' or 'enum'
    local iv = i
@@ -3779,7 +3804,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
    local nt: Node = new_node(ps, istart, "newtype")
 
    local ndef: Type
-   i, ndef = parse_type_body(ps, i, istart, nt, typename)
+   i, ndef = parse_type_body(ps, i, istart, nt, tn)
    if not ndef then
       return i
    end
@@ -3853,7 +3878,7 @@ local function parse_macroexp(ps: ParseState, istart: integer, iargs: integer): 
    return i, node
 end
 
-local function parse_where_clause(ps: ParseState, i: integer, def: Type): integer, Node
+local function parse_where_clause(ps: ParseState, i: integer, def: RecordLikeType): integer, Node
    local node = new_node(ps, i, "macroexp")
 
    node.is_method = true
@@ -3870,9 +3895,9 @@ local function parse_where_clause(ps: ParseState, i: integer, def: Type): intege
    return i, node
 end
 
-parse_interface_name = function(ps: ParseState, i: integer): integer, Type, integer
+parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrderType, integer
    local istart = i
-   local typ: Type
+   local typ: FirstOrderType
    i, typ = parse_simple_type_or_nominal(ps, i)
    if not typ is NominalType then
       return fail(ps, istart, "expected an interface")
@@ -3982,7 +4007,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
    end
 
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
-      local tn = ps.tokens[i].tk as TypeName
+      local tn = ps.tokens[i].tk as BodyTypeName
       if ps.tokens[i].tk == "userdata" and ps.tokens[i+1].tk ~= ":" then
          if def.is_userdata then
             fail(ps, i, "duplicated 'userdata' declaration")
@@ -4106,8 +4131,8 @@ parse_type_body_fns = {
 
 local function parse_newtype(ps: ParseState, i: integer): integer, Node
    local node: Node = new_node(ps, i, "newtype")
-   local def: Type
-   local tn = ps.tokens[i].tk as TypeName
+   local def: FirstClassType
+   local tn = ps.tokens[i].tk as BodyTypeName
    local istart = i
 
    if parse_type_body_fns[tn] then
@@ -4219,7 +4244,7 @@ local function parse_variable_declarations(ps: ParseState, i: integer, node_name
    if ps.tokens[i].tk == "=" then
       -- produce nice error message when using <= 0.7.1 syntax
       local next_word = ps.tokens[i + 1].tk
-      local tn = next_word as TypeName
+      local tn = next_word as BodyTypeName
       if parse_type_body_fns[tn] then
          local scope = node_name == "local_declaration" and "local" or "global"
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn.vars[1].tk .. "'", skip_type_body)
@@ -4311,7 +4336,7 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    return i, asgn
 end
 
-local function parse_type_constructor(ps: ParseState, i: integer, node_name: NodeKind, tn: TypeName): integer, Node
+local function parse_type_constructor(ps: ParseState, i: integer, node_name: NodeKind, tn: BodyTypeName): integer, Node
    local asgn: Node = new_node(ps, i, node_name)
    local nt: Node = new_node(ps, i, "newtype")
    asgn.value = nt
@@ -4360,8 +4385,8 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
       return parse_type_declaration(ps, i + 2, "local_type")
    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
       return parse_local_macroexp(ps, i)
-   elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "local_type", tn)
+   elseif parse_type_body_fns[tn as BodyTypeName] and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "local_type", tn as BodyTypeName)
    end
    return parse_variable_declarations(ps, i + 1, "local_declaration")
 end
@@ -4373,8 +4398,8 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
       return parse_function(ps, i + 1, "global")
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return parse_type_declaration(ps, i + 2, "global_type")
-   elseif parse_type_body_fns[tn] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "global_type", tn)
+   elseif parse_type_body_fns[tn as BodyTypeName] and ps.tokens[i+2].kind == "identifier" then
+      return parse_type_constructor(ps, i, "global_type", tn as BodyTypeName)
    elseif ps.tokens[i+1].kind == "identifier" then
       return parse_variable_declarations(ps, i + 1, "global_declaration")
    end
@@ -7509,7 +7534,7 @@ do
       end
    end
 
-   local function ensure_not_method(t: Type): Type
+   local function ensure_not_method<T is Type>(t: T): T
 
       if t is GenericType then
          local tt = ensure_not_method(t.t)
@@ -7522,7 +7547,7 @@ do
 
       if t is FunctionType and t.is_method then
          t = shallow_copy_new_type(t)
-         t.is_method = false
+         (t as FunctionType).is_method = false
       end
       return t
    end
@@ -7705,7 +7730,7 @@ do
       ["unknown"] = true,
    }
 
-   local resolve_typevars: function(self: TypeChecker, t: Type): Type, {Error}
+   local resolve_typevars: function(self: TypeChecker, t: Type): FirstClassType, {Error}
    do
       local record ResolveTypeVarState
          tc: TypeChecker
@@ -8183,7 +8208,7 @@ do
       return ts
    end
 
-   function TypeChecker:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): Type
+   function TypeChecker:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType
       if not g.fresh then
          g = fresh_typeargs(self, g)
       end
@@ -10554,7 +10579,7 @@ do
    end
 
    local function typedecl_to_nominal(w: Where, name: string, t: TypeDeclType, resolved?: Type): Type
-      local typevals: {Type}
+      local typevals: {TypeVarType}
       local def = t.def
       if def is GenericType then
          typevals = {}

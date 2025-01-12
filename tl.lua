@@ -1681,13 +1681,28 @@ local table_types = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
-
-
-
-
 
 
 
@@ -2371,6 +2386,13 @@ do
 
 
 
+
+
+
+
+
+
+
    local parse_type_list
    local parse_typeargs_if_any
    local parse_expression
@@ -2446,10 +2468,13 @@ do
       return t
    end
 
+   local function new_first_order_type(ps, i, tn)
+      return new_type(ps, i, tn)
+   end
+
    local function new_generic(ps, i, typeargs, typ)
       local gt = new_type(ps, i, "generic")
       gt.typeargs = typeargs
-      assert(not (typ.typename == "typedecl"))
       gt.t = typ
       return gt
    end
@@ -2506,7 +2531,7 @@ do
       local def
       i, typeargs = parse_typeargs_if_any(ps, i)
 
-      def = new_type(ps, istart, tn)
+      def = new_first_order_type(ps, istart, tn)
 
       local ok
       i, ok = parse_type_body_fns[tn](ps, i, def)
@@ -2517,7 +2542,7 @@ do
       i = verify_end(ps, i, istart, node)
 
       if typeargs then
-         def = new_generic(ps, istart, typeargs, def)
+         return i, new_generic(ps, istart, typeargs, def)
       end
 
       return i, def
@@ -3765,7 +3790,7 @@ do
       end
    end
 
-   local function parse_nested_type(ps, i, def, typename)
+   local function parse_nested_type(ps, i, def, tn)
       local istart = i
       i = i + 1
       local iv = i
@@ -3779,7 +3804,7 @@ do
       local nt = new_node(ps, istart, "newtype")
 
       local ndef
-      i, ndef = parse_type_body(ps, i, istart, nt, typename)
+      i, ndef = parse_type_body(ps, i, istart, nt, tn)
       if not ndef then
          return i
       end
@@ -7521,8 +7546,8 @@ do
       end
 
       if t.typename == "function" and t.is_method then
-         t = shallow_copy_new_type(t)
-         t.is_method = false
+         t = shallow_copy_new_type(t);
+         (t).is_method = false
       end
       return t
    end
