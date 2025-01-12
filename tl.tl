@@ -8636,19 +8636,18 @@ do
       return true
    end
 
-   local function find_in_interface_list<T>(a: RecordLikeType, f: function(Type): T): T
-      if not a.interface_list then
-         return nil
+   function TypeChecker:in_interface_list(r: RecordLikeType, iface: Type): boolean
+      if not r.interface_list then
+         return false
       end
 
-      for _, t in ipairs(a.interface_list) do
-         local ret = f(t)
-         if ret then
-            return ret
+      for _, t in ipairs(r.interface_list) do
+         if self:is_a(t, iface) then
+            return true
          end
       end
 
-      return nil
+      return false
    end
 
    function TypeChecker:subtype_record(a: RecordLikeType, b: RecordLikeType): boolean, {Error}
@@ -8828,6 +8827,23 @@ do
                           or  a_map(w, keys, values)
          self:infer_emptytable(et, self:infer_at(w, infer_to))
       end
+   end
+
+   local function a_is_interface_b(self: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
+      assert(a.found)
+      assert(b.found)
+      local af = a.found.def
+      if af is GenericType then
+         af = self:apply_generic(a, af, a.typevals)
+      end
+
+      if af is RecordLikeType then
+         if self:in_interface_list(af, b) then
+            return true
+         end
+      end
+
+      return self:is_a(a, self:resolve_nominal(b))
    end
 
    -- emptytable rules are the same in eqtype_relations and subtype_relations
@@ -9056,7 +9072,7 @@ do
 
             -- match interface subtyping
             if rb is InterfaceType then
-               return self:is_a(a, rb)
+               return a_is_interface_b(self, a, b)
             end
 
             -- all other types nominally
@@ -9094,7 +9110,7 @@ do
       },
       ["interface"] = {
          ["interface"] = function(self: TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
-            if find_in_interface_list(a, function(t: Type): boolean return (self:is_a(t, b)) end) then
+            if self:in_interface_list(a, b) then
                return true
             end
             return self:same_type(a, b)
@@ -9152,7 +9168,7 @@ do
       ["record"] = {
          ["record"] = TypeChecker.subtype_record,
          ["interface"] = function(self: TypeChecker, a: RecordType, b: InterfaceType): boolean, {Error}
-            if find_in_interface_list(a, function(t: Type): boolean return (self:is_a(t, b)) end) then
+            if self:in_interface_list(a, b) then
                return true
             end
             if not a.declname then
@@ -12924,10 +12940,14 @@ do
                local t = tn and a_type(node, tn, {})
 
                if not t and ra is RecordLikeType then
-                  t = find_in_interface_list(ra, function(ty: Type): Type
-                     local tname = types_op[ty.typename]
-                     return tname and a_type(node, tname, {})
-                  end)
+                  if ra.interface_list then
+                     for _, it in ipairs(ra.interface_list) do
+                        if types_op[it.typename] then
+                           t = a_type(node, types_op[it.typename], {})
+                           break
+                        end
+                     end
+                  end
                end
 
                local meta_on_operator: integer

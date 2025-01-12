@@ -8636,19 +8636,18 @@ do
       return true
    end
 
-   local function find_in_interface_list(a, f)
-      if not a.interface_list then
-         return nil
+   function TypeChecker:in_interface_list(r, iface)
+      if not r.interface_list then
+         return false
       end
 
-      for _, t in ipairs(a.interface_list) do
-         local ret = f(t)
-         if ret then
-            return ret
+      for _, t in ipairs(r.interface_list) do
+         if self:is_a(t, iface) then
+            return true
          end
       end
 
-      return nil
+      return false
    end
 
    function TypeChecker:subtype_record(a, b)
@@ -8828,6 +8827,23 @@ do
          a_type(w, "map", { keys = keys, values = values })
          self:infer_emptytable(et, self:infer_at(w, infer_to))
       end
+   end
+
+   local function a_is_interface_b(self, a, b)
+      assert(a.found)
+      assert(b.found)
+      local af = a.found.def
+      if af.typename == "generic" then
+         af = self:apply_generic(a, af, a.typevals)
+      end
+
+      if af.fields then
+         if self:in_interface_list(af, b) then
+            return true
+         end
+      end
+
+      return self:is_a(a, self:resolve_nominal(b))
    end
 
 
@@ -9056,7 +9072,7 @@ do
 
 
             if rb.typename == "interface" then
-               return self:is_a(a, rb)
+               return a_is_interface_b(self, a, b)
             end
 
 
@@ -9094,7 +9110,7 @@ do
       },
       ["interface"] = {
          ["interface"] = function(self, a, b)
-            if find_in_interface_list(a, function(t) return (self:is_a(t, b)) end) then
+            if self:in_interface_list(a, b) then
                return true
             end
             return self:same_type(a, b)
@@ -9152,7 +9168,7 @@ a.types[i], b.types[i]), }
       ["record"] = {
          ["record"] = TypeChecker.subtype_record,
          ["interface"] = function(self, a, b)
-            if find_in_interface_list(a, function(t) return (self:is_a(t, b)) end) then
+            if self:in_interface_list(a, b) then
                return true
             end
             if not a.declname then
@@ -12924,10 +12940,14 @@ self:expand_type(node, values, elements) })
                local t = tn and a_type(node, tn, {})
 
                if not t and ra.fields then
-                  t = find_in_interface_list(ra, function(ty)
-                     local tname = types_op[ty.typename]
-                     return tname and a_type(node, tname, {})
-                  end)
+                  if ra.interface_list then
+                     for _, it in ipairs(ra.interface_list) do
+                        if types_op[it.typename] then
+                           t = a_type(node, types_op[it.typename], {})
+                           break
+                        end
+                     end
+                  end
                end
 
                local meta_on_operator

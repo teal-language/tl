@@ -47,6 +47,65 @@ describe("subtyping of interfaces:", function()
       f(MyRecord)
    ]]))
 
+   it("record <: interface (regression test for #859, example without generics)", util.check([[
+      local interface IFoo
+         get_value: function(self): integer
+      end
+
+      local record Foo is IFoo
+         _value: integer
+      end
+
+      function Foo:get_value():integer
+         return self._value
+      end
+
+      function Foo.new(value: integer):Foo
+         local fields = { _value = value }
+         return setmetatable(fields, { __index = Foo })
+      end
+
+      local function create_foo(value: integer):IFoo
+         local foo = Foo.new(value)
+         return foo
+      end
+
+      local foo = create_foo(5)
+      print(foo:get_value())
+    ]]))
+
+   it("generic record <: generic interface (regression test for #859)", util.check([[
+      local interface IFoo<T>
+         get_value: function(self): T
+      end
+
+      local record Foo<T> is IFoo<T>
+         _value: T
+      end
+
+      function Foo:get_value():T
+         return self._value
+      end
+
+      function Foo.new(value: T):Foo<T>
+         local fields = { _value = value }
+         return setmetatable(fields, { __index = Foo })
+      end
+
+      local function create_foo<T>(value: T):IFoo<T>
+         local foo = Foo.new(value)
+         return foo
+
+         -- Have to do this instead for now:
+         -- return foo as IFoo<T>
+      end
+
+      ------------------------
+
+      local foo = create_foo(5)
+      print(foo:get_value())
+   ]]))
+
    it("regression test for #830", util.check_lines([[
       local interface IFoo
       end
