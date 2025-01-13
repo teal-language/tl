@@ -55,6 +55,31 @@ describe("metamethod __call", function()
       { msg = "argument 2: got Rec, expected number" },
    }))
 
+   it("works with generic function (#904)", util.check([[
+      local record Rec
+         record Nest<T>
+            field: T
+         end
+
+         metamethod __call: function<T>(self, Nest<T>):T
+      end
+
+      local function create_rec(): Rec
+         return setmetatable({}, {
+            __call = function<T>(_, Nest: Rec.Nest<T>):T
+               return Nest.field
+            end
+         })
+      end
+
+      local rec = create_rec()
+      local value = rec({
+         field = 5
+      })
+
+      print("value = " .. tostring(value))
+   ]]))
+
    it("cannot be typechecked if the metamethod is not defined in the record", util.check_type_error([[
       local type Rec = record
          x: number

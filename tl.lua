@@ -9591,6 +9591,10 @@ a.types[i], b.types[i]), }
          is_method = true
       end
 
+      if func.typename == "generic" then
+         func = self:apply_generic(func, func)
+      end
+
       return func, is_method
    end
 

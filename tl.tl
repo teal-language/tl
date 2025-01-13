@@ -9591,6 +9591,10 @@ do
          is_method = true
       end
 
+      if func is GenericType then
+         func = self:apply_generic(func, func)
+      end
+
       return func, is_method
    end
 
