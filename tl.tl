@@ -6965,6 +6965,9 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
          table.insert(out, show(v))
       end
       local list = table.concat(out, ", ")
+      if t.is_va then
+         list = list .. "..."
+      end
       if short then
          return list
       end
@@ -10301,10 +10304,9 @@ do
       self:end_scope(node)
    end
 
-   local function flatten_tuple(vals: TupleType): TupleType
-      local vt = vals.tuple
+   local function flat_tuple(w: Where, vt: {FirstClassType | TupleType}): TupleType
       local n_vals = #vt
-      local ret = a_tuple(vals, {})
+      local ret = a_tuple(w, {})
       local rt = ret.tuple
 
       if n_vals == 0 then
@@ -10326,7 +10328,6 @@ do
          ret.is_va = last.is_va
       else
          rt[n_vals] = vt[n_vals]
-         ret.is_va = vals.is_va
       end
 
       return ret
@@ -10337,20 +10338,24 @@ do
          return a_tuple(w, {})
       end
 
-      local ret = flatten_tuple(vals)
-
       -- ...if the last is vararg, repeat its type until it matches the number of wanted args
-      if ret.is_va then
-         local rt = ret.tuple
-         local n_ret = #rt
-         if n_ret > 0 and n_ret < wanted then
-            local last = rt[n_ret]
-            for _ = n_ret + 1, wanted do
+      if vals.is_va then
+         local vt = vals.tuple
+         local n_vals = #vt
+         if n_vals > 0 and n_vals < wanted then
+            local last = vt[n_vals]
+            local ret = a_tuple(w, {})
+            local rt = ret.tuple
+            for i = 1, n_vals do
+               table.insert(rt, vt[i])
+            end
+            for _ = n_vals + 1, wanted do
                table.insert(rt, last)
             end
+            return ret
          end
       end
-      return ret
+      return vals
    end
 
    function TypeChecker:match_all_record_field_names(node: Node, a: RecordLikeType, field_names: {string}, errmsg: string): Type
@@ -12119,10 +12124,8 @@ do
          end,
       },
       ["variable_list"] = {
-         after = function(self: TypeChecker, node: Node, children: {Type}): Type
-            local tuple = a_tuple(node, children)
-
-            tuple = flatten_tuple(tuple)
+         after = function(self: TypeChecker, node: Node, children: {FirstClassType | TupleType}): Type
+            local tuple = flat_tuple(node, children)
 
             for i, t in ipairs(tuple.tuple) do
                local ok, err = ensure_not_abstract(t, node[i])
