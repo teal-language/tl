@@ -13743,7 +13743,10 @@ do
 
       self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
 
-      setmetatable(self, { __index = TypeChecker })
+      setmetatable(self, {
+         __index = TypeChecker,
+         __tostring = function(): string return "TypeChecker" end,
+      })
 
       self.feat_lax   = set_feat(opts.feat_lax   or env.defaults.feat_lax,   false)
       self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
