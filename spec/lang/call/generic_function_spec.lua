@@ -591,5 +591,23 @@ describe("generic function", function()
          a.f()
       end
    ]]))
+
+   it("should not over-fresh type variables (regression test for #905)", util.check([[
+      local record Mapper<T1>
+         map:function<T2>(self, selector:(function(T1):T2))
+      end
+
+      local function to_mapper<T>(_values:{T}):Mapper<T>
+         error("unimplemented")
+      end
+
+      local function _run<X>(values:{X})
+         to_mapper(values):map(function(_:X):integer return 5 end)
+      end
+
+      _run({
+         "five"
+      })
+   ]]))
 end)
 

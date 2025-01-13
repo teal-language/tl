@@ -9947,7 +9947,7 @@ do
          local g: GenericType
          if func is GenericType then
             g = func
-            func = self:apply_generic(node, func) as FunctionType
+            func = g.t
          end
 
          local is_method = (argdelta == -1)

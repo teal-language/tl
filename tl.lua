@@ -9947,7 +9947,7 @@ a.types[i], b.types[i]), }
          local g
          if func.typename == "generic" then
             g = func
-            func = self:apply_generic(node, func)
+            func = g.t
          end
 
          local is_method = (argdelta == -1)
