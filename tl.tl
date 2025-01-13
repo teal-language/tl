@@ -9522,7 +9522,7 @@ do
       return definitely_not_closable_exprs[e.kind]
    end
 
-   function TypeChecker:same_in_all_union_entries(u: UnionType, check: function(Type): (Type, Type)): Type
+   function TypeChecker:same_in_all_union_entries<T is Type, F is Type>(u: UnionType, check: function(Type): (T, F)): F
       local t1, f = check(u.types[1])
       if not t1 then
          return nil
@@ -9533,11 +9533,11 @@ do
             return nil
          end
       end
-      return f or t1
+      return f
    end
 
-   function TypeChecker:same_call_mt_in_all_union_entries(u: UnionType): Type
-      return self:same_in_all_union_entries(u, function(t: Type): (Type, Type)
+   function TypeChecker:same_call_mt_in_all_union_entries(u: UnionType): FunctionType
+      return self:same_in_all_union_entries(u, function(t: Type): (TupleType, FunctionType)
          t = self:to_structural(t)
          if t is RecordLikeType then
             local call_mt = t.meta_fields and t.meta_fields["__call"]
@@ -9569,27 +9569,28 @@ do
          func = self:apply_generic(func, func)
       end
 
-      if func.typename ~= "function" and func.typename ~= "poly" then
-         -- resolve if union
-         if func is UnionType then
-            local r = self:same_call_mt_in_all_union_entries(func)
-            if r then
-               table.insert(args.tuple, 1, func.types[1]) -- FIXME: is this right?
-               return self:to_structural(r), true
-            end
-         end
-         -- resolve if prototype
-         if func is TypeDeclType then
-            return self:resolve_for_call(func.def, args, is_method)
-         end
-         -- resolve if metatable
-         if func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
-            table.insert(args.tuple, 1, func)
-            func = func.meta_fields["__call"]
-            func = self:to_structural(func)
-            is_method = true
-         end
+      if func is FunctionType or func is PolyType then
+         return func, is_method
       end
+
+      -- resolve if union
+      if func is UnionType then
+         local r = self:same_call_mt_in_all_union_entries(func)
+         if r then
+            table.insert(args.tuple, 1, func.types[1]) -- FIXME: is this right?
+            return r, true
+         end
+      -- resolve if prototype
+      elseif func is TypeDeclType then
+         return self:resolve_for_call(func.def, args, is_method)
+      -- resolve if metatable
+      elseif func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
+         table.insert(args.tuple, 1, func)
+         func = func.meta_fields["__call"]
+         func = self:to_structural(func)
+         is_method = true
+      end
+
       return func, is_method
    end
 
@@ -10113,7 +10114,8 @@ do
 
       if t is UnionType then
          local ty = self:same_in_all_union_entries(t, function(typ: Type): (Type, Type)
-            return (self:match_record_key(typ, rec, key))
+            local v = self:match_record_key(typ, rec, key)
+            return v, v
          end)
          if ty then
             return ty

@@ -9533,7 +9533,7 @@ a.types[i], b.types[i]), }
             return nil
          end
       end
-      return f or t1
+      return f
    end
 
    function TypeChecker:same_call_mt_in_all_union_entries(u)
@@ -9569,27 +9569,28 @@ a.types[i], b.types[i]), }
          func = self:apply_generic(func, func)
       end
 
-      if func.typename ~= "function" and func.typename ~= "poly" then
-
-         if func.typename == "union" then
-            local r = self:same_call_mt_in_all_union_entries(func)
-            if r then
-               table.insert(args.tuple, 1, func.types[1])
-               return self:to_structural(r), true
-            end
-         end
-
-         if func.typename == "typedecl" then
-            return self:resolve_for_call(func.def, args, is_method)
-         end
-
-         if func.fields and func.meta_fields and func.meta_fields["__call"] then
-            table.insert(args.tuple, 1, func)
-            func = func.meta_fields["__call"]
-            func = self:to_structural(func)
-            is_method = true
-         end
+      if func.typename == "function" or func.typename == "poly" then
+         return func, is_method
       end
+
+
+      if func.typename == "union" then
+         local r = self:same_call_mt_in_all_union_entries(func)
+         if r then
+            table.insert(args.tuple, 1, func.types[1])
+            return r, true
+         end
+
+      elseif func.typename == "typedecl" then
+         return self:resolve_for_call(func.def, args, is_method)
+
+      elseif func.fields and func.meta_fields and func.meta_fields["__call"] then
+         table.insert(args.tuple, 1, func)
+         func = func.meta_fields["__call"]
+         func = self:to_structural(func)
+         is_method = true
+      end
+
       return func, is_method
    end
 
@@ -10113,7 +10114,8 @@ a.types[i], b.types[i]), }
 
       if t.typename == "union" then
          local ty = self:same_in_all_union_entries(t, function(typ)
-            return (self:match_record_key(typ, rec, key))
+            local v = self:match_record_key(typ, rec, key)
+            return v, v
          end)
          if ty then
             return ty
