@@ -7484,25 +7484,35 @@ do
    local type TypeFunctionMap<S> = {TypeName: TypeFunction<S>}
    local map_type: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
 
-   local fresh_typevar_fns: TypeFunctionMap<nil> = {
-      ["typevar"] = function(_: nil, t: TypeVarType): Type, boolean
-         return a_type(t, "typevar", {
-            typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-            constraint = t.constraint,
-         } as TypeVarType), true
+   local fresh_typevar_fns: TypeFunctionMap<{TypeArgType}> = {
+      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType): Type, boolean
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typevar then
+               return a_type(t, "typevar", {
+                  typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint,
+               } as TypeVarType), true
+            end
+         end
+         return t, false
       end,
-      ["typearg"] = function(_: nil, t: TypeArgType): Type, boolean
-         return a_type(t, "typearg", {
-            typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-            constraint = t.constraint,
-         } as TypeArgType), true
+      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType): Type, boolean
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typearg then
+               return a_type(t, "typearg", {
+                  typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint,
+               } as TypeArgType), true
+            end
+         end
+         return t, false
       end,
    }
 
    local function fresh_typeargs(self: TypeChecker, g: GenericType): GenericType
       fresh_typevar_ctr = fresh_typevar_ctr + 1
 
-      local newg, errs = map_type(nil, g, fresh_typevar_fns)
+      local newg, errs = map_type(g.typeargs, g, fresh_typevar_fns)
       if newg is InvalidType then
          self.errs:collect(errs)
          return g
