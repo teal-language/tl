@@ -2451,20 +2451,25 @@ local function verify_end(ps: ParseState, i: integer, istart: integer, node: Nod
    return fail(ps, i, "syntax error, expected 'end' to close construct started at " .. ps.filename .. ":" .. ps.tokens[istart].y .. ":" .. ps.tokens[istart].x .. ":")
 end
 
+local node_mt: metatable<Node> = {
+   __tostring = function(n: Node): string
+      return n.f .. ":" .. n.y .. ":" .. n.x .. " " .. n.kind
+   end
+}
+
 local function new_node(ps: ParseState, i: integer, kind?: NodeKind): Node
    local t = ps.tokens[i]
-   return { f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }
+   return setmetatable({ f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }, node_mt)
 end
 
 local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    local token = ps.tokens[i]
-   local t: Type = {}
+   local t: Type = setmetatable({}, type_mt)
    t.typeid = new_typeid()
    t.f = ps.filename
    t.x = token.x
    t.y = token.y
    t.typename = typename
-   setmetatable(t, type_mt)
    return t
 end
 
@@ -5947,7 +5952,7 @@ local function mark_array<T>(x: T): T
 end
 
 function tl.new_type_reporter(): TypeReporter
-   local self: TypeReporter = {
+   local self: TypeReporter = setmetatable({
       next_num = 1,
       typeid_to_num = {},
       typename_to_num = {},
@@ -5957,7 +5962,7 @@ function tl.new_type_reporter(): TypeReporter
          symbols_by_file = {},
          globals = {},
       },
-   }
+   }, { __index = TypeReporter })
 
    local names = {}
    for name, _ in pairs(simple_types) do
@@ -5976,7 +5981,7 @@ function tl.new_type_reporter(): TypeReporter
       self.next_num = self.next_num + 1
    end
 
-   return setmetatable(self, { __index = TypeReporter })
+   return self
 end
 
 function TypeReporter:store_function(ti: TypeInfo, rt: FunctionType)
