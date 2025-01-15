@@ -7485,24 +7485,34 @@ do
    local map_type
 
    local fresh_typevar_fns = {
-      ["typevar"] = function(_, t)
-         return a_type(t, "typevar", {
-            typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-            constraint = t.constraint,
-         }), true
+      ["typevar"] = function(typeargs, t)
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typevar then
+               return a_type(t, "typevar", {
+                  typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint,
+               }), true
+            end
+         end
+         return t, false
       end,
-      ["typearg"] = function(_, t)
-         return a_type(t, "typearg", {
-            typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-            constraint = t.constraint,
-         }), true
+      ["typearg"] = function(typeargs, t)
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typearg then
+               return a_type(t, "typearg", {
+                  typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint,
+               }), true
+            end
+         end
+         return t, false
       end,
    }
 
    local function fresh_typeargs(self, g)
       fresh_typevar_ctr = fresh_typevar_ctr + 1
 
-      local newg, errs = map_type(nil, g, fresh_typevar_fns)
+      local newg, errs = map_type(g.typeargs, g, fresh_typevar_fns)
       if newg.typename == "invalid" then
          self.errs:collect(errs)
          return g
