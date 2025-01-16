@@ -1754,6 +1754,7 @@ local record Scope
    pending_nominals: {string:{NominalType}}
    pending_global_types: {string:boolean}
    narrows: {string:boolean}
+   is_transaction: boolean
 end
 
 local interface HasDeclName
@@ -1837,7 +1838,7 @@ local record TupleType
    tuple: {Type}
 end
 
-local record TypeArgType
+local interface TypeArgType
    is Type
    where self.typename == "typearg"
 
@@ -1846,11 +1847,8 @@ local record TypeArgType
 end
 
 local record UnresolvedTypeArgType
-   is Type
+   is TypeArgType
    where self.typename == "unresolved_typearg"
-
-   typearg: string
-   constraint: Type
 end
 
 local record UnresolvableTypeArgType
@@ -6114,6 +6112,7 @@ local record TypeCollector
    reserve_symbol_list_slot: function(Node)
    add_to_symbol_list: function(node: Node, name: string, t: Type)
    begin_symbol_list_scope: function(node: Node)
+   rollback_symbol_list_scope: function()
    end_symbol_list_scope: function(node: Node)
 end
 
@@ -6165,6 +6164,13 @@ function TypeReporter:get_collector(filename: string): TypeCollector
    collector.begin_symbol_list_scope = function(node: Node)
       symbol_list_n = symbol_list_n + 1
       symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
+   end
+
+   collector.rollback_symbol_list_scope = function()
+      while symbol_list[symbol_list_n].name ~= "@{" do
+         symbol_list[symbol_list_n] = nil
+         symbol_list_n = symbol_list_n - 1
+      end
    end
 
    collector.end_symbol_list_scope = function(node: Node)
@@ -8029,6 +8035,11 @@ do
          self.errs:add_prefixing(w, errs, "")
       end
 
+      -- recurse until fixed point
+      if ret.typeid ~= t.typeid then
+         return self:assert_resolved_typevars_at(w, ret)
+      end
+
       if ret == t or t is TypeVarType then
          ret = shallow_copy_new_type(ret)
       end
@@ -8073,6 +8084,7 @@ do
       end
 
       function TypeChecker:add_var(node: Node, name: string, t: Type, attribute?: Attribute, narrow?: Narrow): Variable
+
          if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
             self.errs:add_unknown(node, name)
          end
@@ -8175,6 +8187,8 @@ do
       local scope = st[#st]
       local next_scope = st[#st - 1]
 
+      assert(not scope.is_transaction)
+
       if next_scope then
          if scope.pending_labels then
             next_scope.pending_labels = next_scope.pending_labels or {}
@@ -8208,6 +8222,45 @@ do
       end
    end
 
+   function TypeChecker:begin_scope_transaction()
+      self:begin_scope()
+      local st = self.st
+      st[#st].is_transaction = true
+   end
+
+   function TypeChecker:rollback_scope_transaction()
+      local st = self.st
+      local scope = st[#st]
+      assert(scope.is_transaction)
+
+      local vars = scope.vars
+      for k, _ in pairs(vars) do
+         vars[k] = nil
+      end
+
+      if self.collector then
+         self.collector.rollback_symbol_list_scope()
+      end
+   end
+
+   function TypeChecker:commit_scope_transaction()
+      local st = self.st
+      local scope = st[#st]
+      local next_scope = st[#st - 1]
+
+      assert(scope.is_transaction)
+      assert(not scope.pending_labels)
+      assert(not scope.pending_nominals)
+
+      for name, var in pairs(scope.vars) do
+         local t = var.t
+         next_scope.vars[name] = var
+         assert(t)
+      end
+
+      table.remove(st)
+   end
+
    -- This type must never be used for any values
    local NONE = a_type({ f = "@none", x = -1, y = -1 }, "none", {})
 
@@ -8226,7 +8279,7 @@ do
       return ts
    end
 
-   function TypeChecker:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType
+   function TypeChecker:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType, {TypeArgType}
       if not g.fresh then
          g = fresh_typeargs(self, g)
       end
@@ -8247,9 +8300,9 @@ do
       end
 
       if applied is GenericType then
-         return applied.t
+         return applied.t, g.typeargs
       else
-         return applied
+         return applied, g.typeargs
       end
    end
 
@@ -9705,8 +9758,8 @@ do
    end
 
    do
-      local function mark_invalid_typeargs(self: TypeChecker, gt: GenericType)
-         for _, a in ipairs(gt.typeargs) do
+      local function mark_invalid_typeargs(self: TypeChecker, typeargs: {TypeArgType})
+         for _, a in ipairs(typeargs) do
             if not self:find_var_type(a.typearg) then
                if a.constraint then
                   self:add_var(nil, a.typearg, a.constraint)
@@ -9874,13 +9927,6 @@ do
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
          end
 
-         local function reset_scope(self: TypeChecker)
-            local vars = self.st[#self.st].vars
-            for k, _ in pairs(vars) do
-               vars[k] = nil
-            end
-         end
-
          check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
             local given = #args.tuple
 
@@ -9913,7 +9959,7 @@ do
                         infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
                      end
 
-                     reset_scope(self)
+                     self:rollback_scope_transaction()
 
                      first_errs = first_errs or errs
                      tried[i] = true
@@ -9957,12 +10003,13 @@ do
             expected_rets = a_tuple(node, { node.expected })
          end
 
-         self:begin_scope()
+         self:begin_scope_transaction()
 
          local g: GenericType
+         local typeargs: {TypeArgType}
          if func is GenericType then
             g = func
-            func = self:apply_generic(node, func) as FunctionType
+            func, typeargs = self:apply_generic(node, func)
          end
 
          local is_method = (argdelta == -1)
@@ -9994,11 +10041,12 @@ do
          end
 
          if g then
-            mark_invalid_typeargs(self, g)
+            mark_invalid_typeargs(self, typeargs)
          end
 
+         self:commit_scope_transaction()
+
          ret = self:assert_resolved_typevars_at(node, ret) as InvalidOrTupleType
-         self:end_scope()
 
          if self.collector then
             self.collector.store_type(e1.y, e1.x, f)
