@@ -1,0 +1,178 @@
+#!/usr/bin/env lua5.3
+
+local lfs = require("lfs")
+local cbor = require("cbor")
+local cfg = require("luarocks.core.cfg")
+cfg.init()
+local fs = require("luarocks.fs")
+local dir = require("luarocks.dir")
+fs.init()
+
+local coro
+
+local env_variables = {
+   TL_DEBUG = "1"
+}
+
+if #arg == 0 then
+   print("usage: " .. arg[0] .. " <cmd> <args...>")
+   os.exit(0)
+end
+
+local script_name = arg[1]
+table.remove(arg, 1)
+local fd = io.open(script_name, "r"):read("*a"):gsub("^#![^\n]*\n", "")
+
+local env = {}
+for k, v in pairs(_G) do
+print(k, v)
+   env[k] = v
+end
+
+env.require = function(name)
+   local loader, path = package.searchers[2](name)
+   if path then
+      local fn = assert(loadfile(path, "bt", env))
+      return fn()
+   end
+   loader, path = package.searchers[3](name)
+   if path then
+      return loader(path)
+   end
+   return nil, "fail"
+end
+
+env.debug = setmetatable({
+}, {
+   __index = function(_, k)
+      return debug[k]
+   end
+})
+
+env.os = setmetatable({
+   getenv = function(var)
+      print(var)
+      if env_variables[var] then
+         return env_variables[var]
+      end
+      return os.getenv(var)
+   end,
+   exit = function()
+      coroutine.yield()
+   end,
+}, {
+   __index = function(_, k)
+      return os[k]
+   end
+})
+
+env.arg = arg
+env._G = env
+env._ENV = env
+local fn = assert(load(fd, script_name, "t", env))
+print(debug.getupvalue(fn, 1))
+
+local trace = {}
+
+local function new_map()
+   return {
+      n = 1,
+      code_to_output = { [1] = "nil" },
+      input_to_code = { ["nil"] = 1 },
+      output_to_code = { ["nil"] = 1 },
+   }
+end
+
+local filenames = new_map()
+local strings = new_map()
+
+local function map_add(map, input, output)
+   local x = map.output_to_code[output]
+   if x then
+      map.input_to_code[input] = x
+      return x
+   end
+
+   local n = map.n + 1
+   map.code_to_output[n] = output
+   map.input_to_code[input] = n
+   map.n = n
+   return n
+end
+
+local function xlate_filename(source)
+   local filename = source:gsub("^@", "")
+   local tlfile = dir.normalize(fs.absolute_name((filename:gsub("%.lua$", ".tl"))))
+   if lfs.attributes(tlfile) then
+      filename = tlfile
+   end
+   return filename
+end
+
+local line_hook
+
+local function short_value(value)
+   debug.sethook(coro, nil, "l", 0)
+   local pok
+   pok, value = pcall(tostring, value)
+   if not pok then
+      value = "?"
+   end
+   debug.sethook(coro, line_hook, "l", 0)
+   return #value < 64 and value or value:sub(1, 64)
+end
+
+line_hook = function()
+   local info = debug.getinfo(2, "lnSt")
+   local locals = {}
+   local i = 1
+   while true do
+      local name, value = debug.getlocal(2, i)
+      if not name then
+         break
+      end
+      if name:sub(1, 1) ~= "(" then
+         local k = strings.input_to_code[name] or map_add(strings, name, name)
+         local v
+         if value ~= nil then
+            value = short_value(value)
+            v = strings.input_to_code[value] or map_add(strings, value, value)
+         else
+            v = 1
+         end
+         locals[k] = v
+      end
+      i = i + 1
+   end
+   local source = info.source
+   local data = {
+      filenames.input_to_code[source] or map_add(filenames, source, xlate_filename(source)),
+      info.currentline,
+      locals,
+   }
+   info.locals = locals
+   table.insert(trace, data)
+end
+
+coro = coroutine.create(fn)
+debug.sethook(coro, line_hook, "l", 0)
+print(coroutine.resume(coro))
+
+--print(#trace)
+--os.exit(0)
+
+--for k, v in ipairs(strings.code_to_output) do
+--   print(k, v)
+--end
+
+local fd = io.open("tl.tl.trace", "w")
+io.stdout:write("Serializing ... ")
+io.stdout:flush()
+local data = cbor.encode({
+   trace = trace,
+   filenames = filenames.code_to_output,
+   strings = strings.code_to_output,
+})
+print("done")
+fd:write(data)
+fd:close()
