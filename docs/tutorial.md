@@ -1027,7 +1027,7 @@ local record AnotherRecord is Named
    where self.name == "AnotherRecord"
 end
 
-local valid: MyRecord | MyOtherRecord
+local valid: MyRecord | AnotherRecord
 ```
 
 A `where` clause is any Teal expression that uses the identifier `self`
