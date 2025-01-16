@@ -591,5 +591,80 @@ describe("generic function", function()
          a.f()
       end
    ]]))
+
+   it("can use method overload alongside generic (#910)", util.check([[
+      local record Mapper<T1>
+         map:function<T2>(self, selector:(function(T1):T2))
+
+         -- Removing this line causes error to disappear
+         map:function(self)
+      end
+
+      local function to_mapper<T>(_values:{T}):Mapper<T>
+         error("unimplemented")
+      end
+
+      local function _run<T>(values:{T})
+         to_mapper(values):map(function(_:T):integer return 5 end)
+      end
+
+      _run({
+         "five"
+      })
+   ]]))
+
+   it("can re-use generic identifiers across unrelated functions (#909)", util.check([[
+      local record util
+      end
+
+      -- Using 'K' works though:
+      -- function util.remove<K>(_list:{K}, _item:K)
+      function util.remove<T>(_list:{T}, _item:T)
+         error("not implemented")
+      end
+
+      local function foo<T>(handler:function(T), handlers:{function(T)})
+         util.remove(handlers, handler)
+      end
+
+      local handlers:{function(integer)} = {}
+
+      local function bar(_value:integer)
+         error("not implemented")
+      end
+
+      foo(bar, handlers)
+   ]]))
+
+   it("can resolve a generic through an assert (#908)", util.check([[
+      local ivalues: function<Value>({any:Value}): function(): Value
+
+      local function _list_contains_string(list: {string}, str: string): boolean
+         for val in ivalues(assert(list)) do
+            if val == str then
+               return true
+            end
+         end
+         return false
+      end
+   ]]))
+
+   it("handles fresh type variables correctly (#905)", util.check([[
+      local record Mapper<T1>
+         map:function<T2>(self, selector:(function(T1):T2))
+      end
+
+      local function to_mapper<T>(_values:{T}):Mapper<T>
+         error("unimplemented")
+      end
+
+      local function _run<T>(values:{T})
+         to_mapper(values):map(function(_:T):integer return 5 end)
+      end
+
+      _run({
+         "five"
+      })
+   ]]))
 end)
 
