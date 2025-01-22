@@ -8804,8 +8804,8 @@ do
    end
 
    local function compare_map(self: TypeChecker, ak: Type, bk: Type, av: Type, bv: Type, no_hack?: boolean): boolean, {Error}
-      local ok1, errs_k = self:same_type(ak, bk)
-      local ok2, errs_v = self:same_type(av, bv)
+      local ok1, errs_k = self:is_a(bk, ak)
+      local ok2, errs_v = self:is_a(av, bv)
 
       -- FIXME hack for {any:any}
       if bk.typename == "any" and not no_hack then
