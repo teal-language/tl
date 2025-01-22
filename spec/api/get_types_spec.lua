@@ -22,16 +22,26 @@ describe("tl.get_types", function()
          local record R
             f: function(string)
             f: function(integer)
+
+            g: function<X>(string, X): {X}
+            g: function<T>(integer, T): T
          end
 
          R.f("hello")
+         R.f(9)
+         local z = R.g(123, "hello")
       ]], env))
 
       local tr, trenv = tl.get_types(result)
-      local y = 6
+      local y = 9
       local x = 11
       local type_at_y_x = tr.by_pos[""][y][x]
-      assert(tr.types[type_at_y_x].str == "function(string)")
+      assert.same(tr.types[type_at_y_x].str, "function(string)")
+
+      y = 11
+      x = 21
+      type_at_y_x = tr.by_pos[""][y][x]
+      assert.same(tr.types[type_at_y_x].str, "function(integer, T): T")
    end)
 
    it("reports record functions in record field list", function()

@@ -8222,8 +8222,8 @@ do
       end
    end
 
-   function TypeChecker:begin_scope_transaction()
-      self:begin_scope()
+   function TypeChecker:begin_scope_transaction(node: Node)
+      self:begin_scope(node)
       local st = self.st
       st[#st].is_transaction = true
    end
@@ -10003,7 +10003,7 @@ do
             expected_rets = a_tuple(node, { node.expected })
          end
 
-         self:begin_scope_transaction()
+         self:begin_scope_transaction(node)
 
          local g: GenericType
          local typeargs: {TypeArgType}
