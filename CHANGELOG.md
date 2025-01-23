@@ -1,3 +1,33 @@
+# 0.24.4
+
+2025-01-23
+
+Writing this changelog from the train, as the ICE approaches Berlin
+Südkreuz. More fixes to the generics system, tightening the type system
+in the presence of interfaces. I'd like to especially thank Steve
+Vermeulen, Michael Dowling and Corey Williamson for their bug reports,
+test cases and feedback on these issues, helping to get Teal 0.24 to a
+more stable shape.
+
+This release features commits by Pierre Chapuis, André L. Alvares and
+Hisham Muhammad.
+
+## What's New
+
+### Fixes
+
+* Fixed the resolution of type arguments in generics, especially
+  for function calls (#905, #908, #909, #910)
+* Fixed the resolution of the `__call` metamethod for generics.
+  (#904)
+* Fixed the subtype checking of generic records against generic
+  interfaces. (#859)
+* Fixed an error when matching against an undefined type.
+* Bumped the pinned compat53 dependency, which had a build issue
+  on Windows. (#916)
+
+### Tooling
+
 # 0.24.3
 
 2025-01-12
