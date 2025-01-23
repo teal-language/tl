@@ -96,6 +96,8 @@ function util.mock_io(finally, filemap)
    assert(type(finally) == "function")
    assert(type(filemap) == "table")
 
+   local io = package.loaded["compat53.module"] and require("compat53.module").io or io
+
    local io_open = io.open
    on_finally(finally, function() io.open = io_open end)
    io.open = function (filename, mode)

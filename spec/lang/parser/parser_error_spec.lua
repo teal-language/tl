@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 describe("parser errors", function()
    it("parse errors include filename", function ()
@@ -7,25 +8,11 @@ describe("parser errors", function()
    end)
 
    it("parse errors in a required package include filename of required file", function ()
-      local io_open = io.open
-      finally(function() io.open = io_open end)
-      io.open = function (filename, mode)
-         if string.match(filename, "bar.tl$") then
-            -- Return a stub file handle
-            return {
-               read = function (_, format)
-                  if format == "*a" then
-                     return "local x 1"                  -- Return fake bar.tl content
-                  else
-                     error("Not implemented!")  -- Implement other modes if needed
-                  end
-               end,
-               close = function () end,
-            }
-         else
-            return io_open(filename, mode)
-         end
-      end
+      util.mock_io(finally, {
+         ["bar.tl"] = [[
+            local x 1
+         ]],
+      })
 
       local code = [[
          local bar = require "bar"
