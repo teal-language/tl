@@ -9597,6 +9597,8 @@ a.types[i], b.types[i]), }
    end
 
    function TypeChecker:same_in_all_union_entries(u, check)
+      assert(#u.types > 0)
+
       local t1, f = check(u.types[1])
       if not t1 then
          return nil
@@ -10844,15 +10846,16 @@ a.types[i], b.types[i]), }
                   table.insert(out, t)
                end
             end
-            return unite(w, out)
-         else
-            if self:is_a(t1, t2) then
-               return t1
-            elseif self:is_a(t2, t1) then
-               return t2
-            else
-               return a_type(w, "nil", {})
+            if #out > 0 then
+               return unite(w, out)
             end
+         end
+         if self:is_a(t1, t2) then
+            return t1
+         elseif self:is_a(t2, t1) then
+            return t2
+         else
+            return a_type(w, "nil", {})
          end
       end
 
