@@ -8865,6 +8865,12 @@ do
          if errs then
             return false, errs
          end
+
+
+         if r.typename == "boolean_context" then
+            return true
+         end
+
          if r.typename == "typevar" and r.typevar == typevar then
             return true
          end

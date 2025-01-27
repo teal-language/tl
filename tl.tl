@@ -8865,6 +8865,12 @@ do
          if errs then
             return false, errs
          end
+
+         -- do not infer a type variable to a boolean_context
+         if r is BooleanContextType then
+            return true
+         end
+
          if r is TypeVarType and r.typevar == typevar then
             return true
          end
