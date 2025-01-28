@@ -11091,7 +11091,7 @@ a.types[i], b.types[i]), }
             if not typ then
                return { [f.var] = invalid_from(f) }
             end
-            if typ.typename ~= "typevar" then
+            if not (typ.typename == "typevar") then
                if self:is_a(typ, f.typ) then
 
 
@@ -11228,7 +11228,7 @@ a.types[i], b.types[i]), }
             self.errs:add_warning("hint", node, "hint: applying pairs on an array: did you intend to apply ipairs?")
          end
 
-         if t.typename ~= "map" then
+         if not (t.typename == "map") then
             if not (self.feat_lax and is_unknown(t)) then
                if t.fields then
                   self:match_all_record_field_names(node.e2, t, t.field_order,
@@ -11601,7 +11601,7 @@ self:expand_type(node, values, elements) })
 
       if var.attribute == "total" then
          local rd = decltype and self:to_structural(decltype)
-         if rd and (rd.typename ~= "map" and rd.typename ~= "record") then
+         if rd and (not (rd.typename == "map")) and (not (rd.typename == "record")) then
             self.errs:add(var, "attribute <total> only applies to maps and records")
             ok = false
          elseif not infertype then
@@ -12972,7 +12972,7 @@ self:expand_type(node, values, elements) })
                local add_type = false
                if rb.typename == "integer" then
                   self.all_needs_compat["math"] = true
-               elseif rb.typename ~= "nil" then
+               elseif not (rb.typename == "nil") then
                   add_type = true
                end
                if ra.typename == "typedecl" then

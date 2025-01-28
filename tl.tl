@@ -7079,11 +7079,11 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return display_typevar(t.typearg, "typearg") .. " (unresolved generic)"
    elseif is_unknown(t) then
       return "<unknown type>"
-   elseif t.typename == "invalid" then
+   elseif t is InvalidType then
       return "<invalid type>"
    elseif t.typename == "any" then
       return "<any type>"
-   elseif t.typename == "nil" then
+   elseif t is NilType then
       return "nil"
    elseif t.typename == "boolean_context" then
       return "boolean"
@@ -9225,7 +9225,7 @@ do
          ["nominal"] = function(self: TypeChecker, a: UnionType, b: NominalType): boolean, {Error}
             -- match unions structurally
             local rb = self:resolve_nominal(b)
-            if rb.typename == "union" then
+            if rb is UnionType then
                return self:is_a(a, rb)
             end
 
@@ -9287,7 +9287,7 @@ do
          ["union"] = function(self: TypeChecker, a: NominalType, b: UnionType): boolean, {Error}
             -- match unions structurally
             local ra = self:resolve_nominal(a)
-            if ra.typename == "union" then
+            if ra is UnionType then
                return self:is_a(ra, b)
             end
 
@@ -9685,7 +9685,7 @@ do
       if t is InvalidType then
          return false
       end
-      if t.typename == "nil" then
+      if t is NilType then
          return true
       end
       if t is NominalType then
@@ -10596,7 +10596,7 @@ do
                t2.args = shallow_copy_new_type(t.args)
                t2.args.tuple = shallow_copy_table(t2.args.tuple)
                for i, p in ipairs(t2.args.tuple) do
-                  if p.typename == "self" then
+                  if p is SelfType then
                      t2.args.tuple[i] = a
                   end
                end
@@ -10638,7 +10638,7 @@ do
    end
 
    function TypeChecker:expand_type(w: Where, old: Type, new: Type): Type
-      if not old or old.typename == "nil" then
+      if not old or old is NilType then
          return new
       else
          if not self:is_a(new, old) then
@@ -11091,7 +11091,7 @@ do
             if not typ then
                return { [f.var] = invalid_from(f) }
             end
-            if typ.typename ~= "typevar" then
+            if not typ is TypeVarType then
                if self:is_a(typ, f.typ) then
                   -- drop this warning because of implicit nil in all unions
                   -- self.errs:add_warning("branch", f.w, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
@@ -11228,12 +11228,12 @@ do
             self.errs:add_warning("hint", node, "hint: applying pairs on an array: did you intend to apply ipairs?")
          end
 
-         if t.typename ~= "map" then
+         if not t is MapType then
             if not (self.feat_lax and is_unknown(t)) then
                if t is RecordLikeType then
                   self:match_all_record_field_names(node.e2, t, t.field_order,
                      "attempting pairs on a record with attributes of different types")
-                  local ct = t.typename == "record" and "{string:any}" or "{any:any}"
+                  local ct = t is RecordType and "{string:any}" or "{any:any}"
                   self.errs:add_warning("hint", node.e2, "hint: if you want to iterate over fields of a record, cast it to " .. ct)
                else
                   self.errs:add(node.e2, "cannot apply pairs on values of type: %s", t)
@@ -11289,7 +11289,7 @@ do
          }
          local t, module_filename = require_module(node, module_name, tc_opts, self.env)
 
-         if t.typename == "invalid" then
+         if t is InvalidType then
             if not module_filename then
                return self.errs:invalid_at(node, "module not found: '" .. module_name .. "'")
             end
@@ -11570,7 +11570,7 @@ do
       local ok = true
       local name = var.tk
       local infertype = infertypes and infertypes.tuple[i]
-      if self.feat_lax and infertype and infertype.typename == "nil" then
+      if self.feat_lax and infertype and infertype is NilType then
          infertype = nil
       end
 
@@ -11601,7 +11601,7 @@ do
 
       if var.attribute == "total" then
          local rd = decltype and self:to_structural(decltype)
-         if rd and (rd.typename ~= "map" and rd.typename ~= "record") then
+         if rd and (not rd is MapType) and (not rd is RecordType) then
             self.errs:add(var, "attribute <total> only applies to maps and records")
             ok = false
          elseif not infertype then
@@ -11752,7 +11752,7 @@ do
          for _, key in ipairs(sorted_keys(keys.enumset)) do
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
-      elseif keys.typename == "boolean" then
+      elseif keys is BooleanType then
          for _, key in ipairs({ true, false }) do
             is_total, missing = total_check_key(key, seen_keys, is_total, missing)
          end
@@ -11803,7 +11803,7 @@ do
    end
 
    local function discard_tuple(node: Node, t: Type, b: Type): Type
-      if b.typename == "tuple" then
+      if b is TupleType then
          node.discarded_tuple = true
       end
       return resolve_tuple(t)
@@ -12201,9 +12201,9 @@ do
             local from_t = self:to_structural(resolve_tuple(children[2]))
             local to_t = self:to_structural(resolve_tuple(children[3]))
             local step_t = children[4] and self:to_structural(children[4])
-            local typename: TypeName = (from_t.typename == "integer" and
-                                        to_t.typename == "integer" and
-                                        (not step_t or step_t.typename == "integer"))
+            local typename: TypeName = (from_t is IntegerType and
+                                        to_t is IntegerType and
+                                        (not step_t or step_t is IntegerType))
                                        and "integer"
                                        or  "number"
             self:add_var(node.var, node.var.tk, a_type(node.var, typename, {}))
@@ -12970,9 +12970,9 @@ do
 
             if node.op.op == "is" then
                local add_type = false
-               if rb.typename == "integer" then
+               if rb is IntegerType then
                   self.all_needs_compat["math"] = true
-               elseif rb.typename ~= "nil" then
+               elseif not rb is NilType then
                   add_type = true
                end
                if ra is TypeDeclType then
@@ -13033,7 +13033,7 @@ do
 
                local expected = node.expected and self:to_structural(resolve_tuple(node.expected))
 
-               if ub.typename == "nil" then
+               if ub is NilType then
                   node.known = nil
                   t = ua
 
@@ -13260,7 +13260,7 @@ do
          after = function(self: TypeChecker, node: Node, _children: {Type}): Type
             if node.tk == "..." then
                local va_sentinel = self:find_var_type("@is_va")
-               if not va_sentinel or va_sentinel.typename == "nil" then
+               if not va_sentinel or va_sentinel is NilType then
                   return self.errs:invalid_at(node, "cannot use '...' outside a vararg function")
                end
             end
