@@ -9839,7 +9839,7 @@ do
             end
 
             check_args_rets = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): boolean, {Error}
-               local rets_ok, rets_errs: boolean, {Error} = true, nil
+               local rets_ok = true
                local args_ok, args_errs: boolean, {Error} = true, nil
 
                local from = 1
@@ -9856,7 +9856,7 @@ do
                   expected_rets = self:infer_at(w, expected_rets)
                   infer_emptytables(self, w, nil, expected_rets, f.rets, 0)
 
-                  rets_ok, rets_errs = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
+                  rets_ok = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
                end
 
                args_ok, args_errs = check_func_type_list(self, w, wargs, f.args, args, from, argdelta, "contravariant", "argument")

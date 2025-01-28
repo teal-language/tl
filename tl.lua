@@ -9839,7 +9839,7 @@ a.types[i], b.types[i]), }
             end
 
             check_args_rets = function(self, w, wargs, f, args, expected_rets, argdelta)
-               local rets_ok, rets_errs = true, nil
+               local rets_ok = true
                local args_ok, args_errs = true, nil
 
                local from = 1
@@ -9856,7 +9856,7 @@ a.types[i], b.types[i]), }
                   expected_rets = self:infer_at(w, expected_rets)
                   infer_emptytables(self, w, nil, expected_rets, f.rets, 0)
 
-                  rets_ok, rets_errs = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
+                  rets_ok = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
                end
 
                args_ok, args_errs = check_func_type_list(self, w, wargs, f.args, args, from, argdelta, "contravariant", "argument")
