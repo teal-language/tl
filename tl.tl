@@ -13143,9 +13143,6 @@ do
                   if mt_name then
                      t, meta_on_operator = self:check_metamethod(node, mt_name, ra, nil, ua, nil)
                   end
-                  if not t then
-                     t = self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
-                  end
                end
 
                if ra is MapType then
@@ -13156,10 +13153,6 @@ do
                   end
                end
 
-               if t.typename ~= "boolean" and not is_unknown(t) then
-                  node.known = FACT_TRUTHY
-               end
-
                if node.op.op == "~" and self.gen_target == "5.1" then
                   if meta_on_operator then
                      self.all_needs_compat["mt"] = true
@@ -13168,6 +13161,14 @@ do
                      self.all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", "bnot", node.e1)
                   end
+               end
+
+               if not t then
+                  return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
+               end
+
+               if not (t is BooleanType or is_unknown(t)) then
+                  node.known = FACT_TRUTHY
                end
 
                return t
@@ -13209,22 +13210,11 @@ do
                         ua, ub = ub, ua
                      end
                   end
-                  if not t then
-                     t = self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
-                     if node.op.op == "or" then
-                        local u = unite(node, {ua, ub})
-                        if u is UnionType and is_valid_union(u) then
-                           self.errs:add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
-                        end
-                     end
-                  end
                end
 
                if (not t) and ua is NominalType and ub is NominalType and not meta_on_operator then
                   if self:is_a(ua, ub) then
                      t = ua
-                  else
-                     self.errs:add(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for distinct nominal types %s and %s", ua, ub)
                   end
                end
 
@@ -13248,6 +13238,16 @@ do
                      self.all_needs_compat["bit32"] = true
                      convert_node_to_compat_call(node, "bit32", bit_operators[node.op.op], node.e1, node.e2)
                   end
+               end
+
+               if not t then
+                  if node.op.op == "or" then
+                     local u = unite(node, {ua, ub})
+                     if u is UnionType and is_valid_union(u) then
+                        self.errs:add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
+                     end
+                  end
+                  return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
                end
 
                return t
