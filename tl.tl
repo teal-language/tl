@@ -823,7 +823,7 @@ if TL_DEBUG then
       TL_DEBUG_MAXLINE = math.tointeger(-max)
    elseif max > 1 then
       local count = 0
-      local skip: string = nil
+      local skip: string
       debug.sethook(function(event: debug.HookEvent)
          if event == "call" or event == "tail call" or event == "return" then
             local info <const> = debug.getinfo(2)
