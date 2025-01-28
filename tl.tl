@@ -9621,7 +9621,16 @@ do
       end
 
       if (not ok) and not err then
-         return false, { Err("got %s, expected %s", t1, t2) }
+         if t1 is InvalidType or t2 is InvalidType then
+            return false, {}
+         end
+         local show_t1 = show_type(t1)
+         local show_t2 = show_type(t2)
+         if show_t1 == show_t2 then
+            return false, { Err_at(t1, "types are incompatible") }
+         else
+            return false, { Err_at(t1, "got " .. show_t1 .. ", expected " .. show_t2) }
+         end
       end
       return ok, err
    end

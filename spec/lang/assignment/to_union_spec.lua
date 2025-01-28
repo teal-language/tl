@@ -75,4 +75,24 @@ describe("assignment to union", function()
       local x: {string | Item} = {"name1", {name="myname"}}
    ]]))
 
+   it("do not produce a confusing message when reporting on incompatible types with the same local names", util.check_type_error([[
+      local record A
+         record X
+         end
+
+         f: function(X | integer)
+      end
+
+      local record B
+         record X
+         end
+
+         g: function(): X | integer
+      end
+
+      A.f(B.g())
+   ]], {
+      { msg = "argument 1: types are incompatible" }
+   }))
+
 end)
