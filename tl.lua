@@ -808,6 +808,7 @@ local DEFAULT_GEN_TARGET = "5.3"
 
 
 
+
 local TL_DEBUG = os.getenv("TL_DEBUG")
 local TL_DEBUG_FACTS = os.getenv("TL_DEBUG_FACTS")
 local TL_DEBUG_MAXLINE = _tl_math_maxinteger
@@ -1703,6 +1704,7 @@ local table_types = {
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
+
 
 
 
@@ -6446,7 +6448,7 @@ end
 local function var_should_be_ignored_for_warnings(name, var)
    local prefix = name:sub(1, 1)
    return (not var.declared_at) or
-   var.is_narrowed == "narrow" or
+   var.is_specialized == "narrow" or
    prefix == "_" or
    prefix == "@"
 end
@@ -7446,7 +7448,7 @@ do
          local scope = self.st[i]
          local var = scope.vars[name]
          if var then
-            if use == "lvalue" and var.is_narrowed and var.is_narrowed ~= "localizing" then
+            if use == "lvalue" and var.is_specialized and var.is_specialized ~= "localizing" then
                if var.narrowed_from then
                   var.has_been_written_to = true
                   return { t = var.narrowed_from, attribute = var.attribute }, i, var.attribute
@@ -8061,31 +8063,36 @@ do
    end
 
    do
-      local function narrow_var(scope, node, name, t, attribute, narrow)
+      local function specialize_var(scope, node, name, t, attribute, specialization)
          local var = scope.vars[name]
          if var then
-            if var.is_narrowed then
+            if var.is_specialized then
                var.t = t
                return var
             end
 
-            var.is_narrowed = narrow
+            var.is_specialized = specialization
             var.narrowed_from = var.t
             var.t = t
          else
-            var = { t = t, attribute = attribute, is_narrowed = narrow, declared_at = node }
+            var = { t = t, attribute = attribute, is_specialized = specialization, declared_at = node }
             scope.vars[name] = var
          end
 
-         scope.narrows = scope.narrows or {}
-         scope.narrows[name] = true
+         if specialization == "widen" then
+            scope.widens = scope.widens or {}
+            scope.widens[name] = true
+         else
+            scope.narrows = scope.narrows or {}
+            scope.narrows[name] = true
+         end
 
          return var
       end
 
-      function TypeChecker:add_var(node, name, t, attribute, narrow)
+      function TypeChecker:add_var(node, name, t, attribute, specialization)
 
-         if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not narrow then
+         if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not specialization then
             self.errs:add_unknown(node, name)
          end
          if not attribute then
@@ -8097,8 +8104,8 @@ do
          end
 
          local scope = self.st[#self.st]
-         if narrow then
-            return narrow_var(scope, node, name, t, attribute, narrow)
+         if specialization then
+            return specialize_var(scope, node, name, t, attribute, specialization)
          end
 
          if node then
@@ -10243,7 +10250,7 @@ a.types[i], b.types[i]), }
    function TypeChecker:widen_in_scope(scope, var)
       local v = scope.vars[var]
       assert(v, "no " .. var .. " in scope")
-      local narrow_mode = scope.vars[var].is_narrowed
+      local narrow_mode = scope.vars[var].is_specialized
       if (not narrow_mode) or narrow_mode == "localizing" then
          return false
       end
@@ -10251,7 +10258,7 @@ a.types[i], b.types[i]), }
       if v.narrowed_from then
          v.t = v.narrowed_from
          v.narrowed_from = nil
-         v.is_narrowed = nil
+         v.is_specialized = nil
       else
          scope.vars[var] = nil
       end
