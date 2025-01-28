@@ -13,6 +13,7 @@ describe("union argument", function()
       R.f = function(a: boolean | E)
       end
    ]], {
-      { y = 9, msg = "unknown type E" }
+      { y = 9, msg = "argument 1: types are incompatible" },
+      { y = 9, msg = "unknown type E" },
    }))
 end)

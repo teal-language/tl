@@ -13753,9 +13753,9 @@ self:expand_type(node, values, elements) })
          },
          ["union"] = {
             after = function(self, typ, _children)
-               local ok, err = is_valid_union(typ)
-               if not ok then
-                  return err and self.errs:invalid_at(typ, err, typ) or a_type(typ, "invalid", {})
+               local _, err = is_valid_union(typ)
+               if err then
+                  return self.errs:invalid_at(typ, err, typ)
                end
                return typ
             end,

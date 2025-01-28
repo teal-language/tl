@@ -57,7 +57,7 @@ describe("__is with macroexp", function()
 
    it("can expand self in an expression", util.gen([[
       local record R1
-         metamethod __is: function(self: R1|R2): boolean = macroexp(self: R1|R2): boolean
+         metamethod __is: function(self: R1): boolean = macroexp(self: R1): boolean
             return self.kind == "r1"
          end
 
@@ -65,7 +65,7 @@ describe("__is with macroexp", function()
       end
 
       local record R2
-         metamethod __is: function(self: R1|R2): boolean = macroexp(self: R1|R2): boolean
+         metamethod __is: function(self: R2): boolean = macroexp(self: R2): boolean
             return self.kind == "r2"
          end
 

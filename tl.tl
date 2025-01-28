@@ -13753,9 +13753,9 @@ do
          },
          ["union"] = {
             after = function(self: TypeChecker, typ: UnionType, _children: {Type}): Type
-               local ok, err = is_valid_union(typ)
-               if not ok then
-                  return err and self.errs:invalid_at(typ, err, typ) or an_invalid(typ)
+               local _, err = is_valid_union(typ)
+               if err then
+                  return self.errs:invalid_at(typ, err, typ)
                end
                return typ
             end

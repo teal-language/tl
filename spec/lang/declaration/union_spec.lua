@@ -163,4 +163,25 @@ describe("union declaration", function()
          end
       end
    ]]))
+
+   it("do not try to resolve validity of unions too early (regression test for #903)", util.check([[
+      local interface A
+         where true
+      end
+
+      local record D
+         v: A | C
+      end
+
+      local interface C
+         where true
+      end
+
+      local d: D
+
+      local v = d.v
+      if v is A then
+      end
+   ]]))
+
 end)
