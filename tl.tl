@@ -2144,6 +2144,7 @@ local record Node
    if_parent: Node
    if_block_n: integer
    if_blocks: {Node}
+   if_widens: {string: boolean}
    block_returns: boolean
 
    -- fornum
@@ -8250,6 +8251,25 @@ do
       return widened
    end
 
+   function TypeChecker:collect_if_widens(widens: {string:boolean}): {string:boolean}
+      local st = self.st
+      local scope = st[#st]
+      if scope.widens then
+         widens = widens or {}
+         for k, _ in pairs(scope.widens) do
+            widens[k] = true
+         end
+         scope.widens = nil
+      end
+      return widens
+   end
+
+   function TypeChecker:widen_all(widens: {string:boolean})
+      for name, _ in pairs(widens) do
+         self:widen_back_var(name)
+      end
+   end
+
    function TypeChecker:begin_scope(node?: Node)
       table.insert(self.st, { vars = {} })
 
@@ -8296,9 +8316,7 @@ do
       table.remove(st)
 
       if scope.widens then
-         for name, _ in pairs(scope.widens) do
-            self:widen_back_var(name)
-         end
+         self:widen_all(scope.widens)
       end
 
       if self.collector and node then
@@ -11980,6 +11998,10 @@ do
       },
       ["if"] = {
          after = function(self: TypeChecker, node: Node, _children: {Type}): Type
+            if node.if_widens then
+               self:widen_all(node.if_widens)
+            end
+
             local all_return = true
             for _, b in ipairs(node.if_blocks) do
                if not b.block_returns then
@@ -12011,6 +12033,8 @@ do
             end
          end,
          after = function(self: TypeChecker, node: Node, _children: {Type}): Type
+            node.if_parent.if_widens = self:collect_if_widens(node.if_parent.if_widens)
+
             self:end_scope(node)
 
             if #node.body > 0 and node.body[#node.body].block_returns then

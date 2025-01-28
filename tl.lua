@@ -2203,6 +2203,7 @@ local Node = { ExpectedContext = {} }
 
 
 
+
 local show_type
 
 local type_mt = {
@@ -8250,6 +8251,25 @@ do
       return widened
    end
 
+   function TypeChecker:collect_if_widens(widens)
+      local st = self.st
+      local scope = st[#st]
+      if scope.widens then
+         widens = widens or {}
+         for k, _ in pairs(scope.widens) do
+            widens[k] = true
+         end
+         scope.widens = nil
+      end
+      return widens
+   end
+
+   function TypeChecker:widen_all(widens)
+      for name, _ in pairs(widens) do
+         self:widen_back_var(name)
+      end
+   end
+
    function TypeChecker:begin_scope(node)
       table.insert(self.st, { vars = {} })
 
@@ -8296,9 +8316,7 @@ do
       table.remove(st)
 
       if scope.widens then
-         for name, _ in pairs(scope.widens) do
-            self:widen_back_var(name)
-         end
+         self:widen_all(scope.widens)
       end
 
       if self.collector and node then
@@ -11980,6 +11998,10 @@ self:expand_type(node, values, elements) })
       },
       ["if"] = {
          after = function(self, node, _children)
+            if node.if_widens then
+               self:widen_all(node.if_widens)
+            end
+
             local all_return = true
             for _, b in ipairs(node.if_blocks) do
                if not b.block_returns then
@@ -12011,6 +12033,8 @@ self:expand_type(node, values, elements) })
             end
          end,
          after = function(self, node, _children)
+            node.if_parent.if_widens = self:collect_if_widens(node.if_parent.if_widens)
+
             self:end_scope(node)
 
             if #node.body > 0 and node.body[#node.body].block_returns then
