@@ -39,7 +39,7 @@ describe("assignment to union", function()
       local u: number | string
       t = 12
       if math.random(10) > 5 then
-         t = "hello"
+         t = true
       end
       u = t
    ]], {

@@ -8181,6 +8181,75 @@ do
       end
    end
 
+   function TypeChecker:widen_in_scope(n, var)
+      local scope = self.st[n]
+      local v = scope.vars[var]
+      assert(v, "no " .. var .. " in scope")
+      local specialization = scope.vars[var].is_specialized
+      if (not specialization) or
+         not (specialization == "narrow" or
+         specialization == "narrowed_declaration") then
+
+         return false
+      end
+
+      local top = #self.st
+      if n ~= top then
+         local t = v.specialized_from
+         if not t then
+            local old
+            for i = n - 1, 1, -1 do
+               old = self.st[i].vars[var]
+               if old then
+                  if old.specialized_from then
+                     t = old.specialized_from
+                     break
+                  elseif old.is_specialized == "localizing" or not old.is_specialized then
+                     t = old.t
+                     break
+                  end
+               end
+            end
+
+
+            if not t then
+               return false
+            end
+         end
+         self:add_var(nil, var, t, nil, "widen")
+         return true
+      end
+
+      if v.specialized_from then
+         v.t = v.specialized_from
+         v.specialized_from = nil
+         v.is_specialized = nil
+      else
+         scope.vars[var] = nil
+      end
+
+      if scope.narrows then
+         scope.narrows[var] = nil
+      end
+
+      return true
+   end
+
+   function TypeChecker:widen_back_var(name)
+      local widened = false
+      for i = #self.st, 1, -1 do
+         local scope = self.st[i]
+         if scope.vars[name] then
+            if self:widen_in_scope(i, name) then
+               widened = true
+            else
+               break
+            end
+         end
+      end
+      return widened
+   end
+
    function TypeChecker:begin_scope(node)
       table.insert(self.st, { vars = {} })
 
@@ -8192,7 +8261,8 @@ do
    function TypeChecker:end_scope(node)
       local st = self.st
       local scope = st[#st]
-      local next_scope = st[#st - 1]
+      local next_n = #st - 1
+      local next_scope = st[next_n]
 
       assert(not scope.is_transaction)
 
@@ -8207,6 +8277,7 @@ do
             end
             scope.pending_labels = nil
          end
+
          if scope.pending_nominals then
             next_scope.pending_nominals = next_scope.pending_nominals or {}
             for name, types in pairs(scope.pending_nominals) do
@@ -8223,6 +8294,12 @@ do
       self.errs:check_var_usage(scope)
 
       table.remove(st)
+
+      if scope.widens then
+         for name, _ in pairs(scope.widens) do
+            self:widen_back_var(name)
+         end
+      end
 
       if self.collector and node then
          self.collector.end_symbol_list_scope(node)
@@ -10247,47 +10324,6 @@ a.types[i], b.types[i]), }
       end
    end
 
-   function TypeChecker:widen_in_scope(scope, var)
-      local v = scope.vars[var]
-      assert(v, "no " .. var .. " in scope")
-      local specialization = scope.vars[var].is_specialized
-      if (not specialization) or
-         not (specialization == "narrow" or
-         specialization == "narrowed_declaration") then
-
-         return false
-      end
-
-      if v.specialized_from then
-         v.t = v.specialized_from
-         v.specialized_from = nil
-         v.is_specialized = nil
-      else
-         scope.vars[var] = nil
-      end
-
-      if scope.narrows then
-         scope.narrows[var] = nil
-      end
-
-      return true
-   end
-
-   function TypeChecker:widen_back_var(name)
-      local widened = false
-      for i = #self.st, 1, -1 do
-         local scope = self.st[i]
-         if scope.vars[name] then
-            if self:widen_in_scope(scope, name) then
-               widened = true
-            else
-               break
-            end
-         end
-      end
-      return widened
-   end
-
    local function assigned_anywhere(name, root)
       local visit_node = {
          cbs = {
@@ -10329,7 +10365,7 @@ a.types[i], b.types[i]), }
          if scope.narrows then
             for name, _ in pairs(scope.narrows) do
                if not node or assigned_anywhere(name, node) then
-                  self:widen_in_scope(scope, name)
+                  self:widen_in_scope(i, name)
                end
             end
          end
