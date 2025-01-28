@@ -7449,9 +7449,9 @@ do
          local var = scope.vars[name]
          if var then
             if use == "lvalue" and var.is_specialized and var.is_specialized ~= "localizing" then
-               if var.narrowed_from then
+               if var.specialized_from then
                   var.has_been_written_to = true
-                  return { t = var.narrowed_from, attribute = var.attribute }, i, var.attribute
+                  return { t = var.specialized_from, attribute = var.attribute }, i, var.attribute
                end
             else
                if i == 1 and var.needs_compat then
@@ -8072,7 +8072,7 @@ do
             end
 
             var.is_specialized = specialization
-            var.narrowed_from = var.t
+            var.specialized_from = var.t
             var.t = t
          else
             var = { t = t, attribute = attribute, is_specialized = specialization, declared_at = node }
@@ -10250,14 +10250,17 @@ a.types[i], b.types[i]), }
    function TypeChecker:widen_in_scope(scope, var)
       local v = scope.vars[var]
       assert(v, "no " .. var .. " in scope")
-      local narrow_mode = scope.vars[var].is_specialized
-      if (not narrow_mode) or narrow_mode == "localizing" then
+      local specialization = scope.vars[var].is_specialized
+      if (not specialization) or
+         not (specialization == "narrow" or
+         specialization == "narrowed_declaration") then
+
          return false
       end
 
-      if v.narrowed_from then
-         v.t = v.narrowed_from
-         v.narrowed_from = nil
+      if v.specialized_from then
+         v.t = v.specialized_from
+         v.specialized_from = nil
          v.is_specialized = nil
       else
          scope.vars[var] = nil
