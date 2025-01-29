@@ -416,7 +416,8 @@ local function get_args_parser()
 
    local gen_command = parser:command("gen", "Generate a Lua file for one or more Teal files.")
    gen_command:argument("file", "The Teal source file."):args("+")
-   gen_command:flag("-c --check", "Type check and fail on type errors.")
+   gen_command:flag("-c --check", "Type check and fail on type errors. This is the default."):hidden(true)
+   gen_command:flag("--no-check", "Do not fail on type errors, only on syntax errors.")
    gen_command:flag("--keep-hashbang", "Preserve hashbang line (#!) at the top of file if present.")
    gen_command:option("-o --output", "Write to <filename> instead.")
               :argname("<filename>")
@@ -806,13 +807,13 @@ commands["gen"] = function(tlconfig, args)
       check_collect(i)
    end
 
+   local ok, serr, terr = report_all_errors(tlconfig, env, args["no_check"])
+
    for _, res in ipairs(results) do
-      if #res.tl_result.syntax_errors == 0 then
+      if (not serr) and (args["no_check"] or not terr) then
          write_out(tlconfig, res.tl_result, args["output"] or res.output_file, pp_opts)
       end
    end
-
-   local ok = report_all_errors(tlconfig, env, not args["check"])
 
    os.exit(ok and 0 or 1)
 end
