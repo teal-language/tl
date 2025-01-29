@@ -14165,7 +14165,6 @@ local function tl_package_loader(module_name)
                loader_data = found_filename
             end
             local ret = chunk(modname, loader_data)
-            package.loaded[module_name] = ret
             return ret
          end, found_filename
       else
