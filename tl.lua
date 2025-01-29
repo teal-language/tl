@@ -10315,6 +10315,8 @@ a.types[i], b.types[i]), }
          end
       end
 
+      local keyg = key:gsub('%%', '%%%%')
+
       if t.fields then
          assert(t.fields, "record has no fields!?")
 
@@ -10330,12 +10332,12 @@ a.types[i], b.types[i]), }
 
          if rec.kind == "variable" then
             if t.typename == "interface" then
-               return nil, "invalid key '" .. key .. "' in '" .. rec.tk .. "' of interface type %s"
+               return nil, "invalid key '" .. keyg .. "' in '" .. rec.tk .. "' of interface type %s"
             else
-               return nil, "invalid key '" .. key .. "' in record '" .. rec.tk .. "' of type %s"
+               return nil, "invalid key '" .. keyg .. "' in record '" .. rec.tk .. "' of type %s"
             end
          else
-            return nil, "invalid key '" .. key .. "' in type %s"
+            return nil, "invalid key '" .. keyg .. "' in type %s"
          end
       elseif t.typename == "emptytable" or is_unknown(t) then
          if self.feat_lax then
@@ -10345,9 +10347,9 @@ a.types[i], b.types[i]), }
       end
 
       if rec.kind == "variable" then
-         return nil, "cannot index key '" .. key .. "' in variable '" .. rec.tk .. "' of type %s"
+         return nil, "cannot index key '" .. keyg .. "' in variable '" .. rec.tk .. "' of type %s"
       else
-         return nil, "cannot index key '" .. key .. "' in type %s"
+         return nil, "cannot index key '" .. keyg .. "' in type %s"
       end
    end
 
@@ -10612,7 +10614,7 @@ a.types[i], b.types[i]), }
             local field_names = sorted_keys(rb.enumset)
             for _, k in ipairs(field_names) do
                if not ra.fields[k] then
-                  errm, erra = "enum value '" .. k .. "' is not a field in %s", ra
+                  errm, erra = "enum value '" .. k:gsub('%%', '%%%%') .. "' is not a field in %s", ra
                   break
                end
             end
