@@ -31,7 +31,7 @@ do
          "no" "full" "line"
       end
 
-      close: function(FILE): boolean, string, number
+      close: function(FILE): boolean, string, integer
       flush: function(FILE)
 
       lines: function(FILE): (function(): (string))
