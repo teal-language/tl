@@ -30,5 +30,36 @@ describe("tl.loader", function()
             @.]] .. util.os_sep .. [[file1.tl
          ]], output)
       end)
+      it("works properly with the package.loaded table", function()
+         local dir_name = util.write_tmp_dir(finally, {
+            ["module.lua"] = [[
+               package.loaded['module'] = { worked = 'it works' }
+
+               return nil
+            ]],
+            ["module.d.tl"] = [[
+               local record module
+                  worked: string
+               end
+
+               return module
+            ]],
+            ["main.tl"] = [[
+               local m = require 'module'
+               print(type(m))
+               print(m.worked)
+            ]]
+         })
+         local pd, output
+         util.do_in(dir_name, function()
+            pd = io.popen(util.tl_cmd("run", "main.tl"), "r")
+            output = pd:read("*a")
+         end)
+         util.assert_popen_close(0, pd:close())
+         util.assert_line_by_line([[
+            table
+            it works
+         ]], output)
+      end)
    end)
 end)
