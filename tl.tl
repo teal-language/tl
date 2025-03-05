@@ -664,10 +664,12 @@ local record tl
    parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
-   search_module: function(module_name: string, search_dtl: boolean): string, FILE, {string}
+   search_module: function(module_name: string, search_all: boolean): string, FILE, {string}
    symbols_in_scope: function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
    target_from_lua_version: function(str: string): GenTarget
    version: function(): string
+
+   path: string -- if set be the user, this overrides package.path for Teal
 
    -----------------------------------------------------------------------------
    -- Deprecated, mantained for backwards compatibility:
@@ -7127,12 +7129,12 @@ local function search_for(module_name: string, suffix: string, path: string, tri
    return nil, nil, tried
 end
 
-tl.search_module = function(module_name: string, search_dtl: boolean): string, FILE, {string}
+tl.search_module = function(module_name: string, search_all: boolean): string, FILE, {string}
    local found: string
    local fd: FILE
    local tried: {string} = {}
-   local path = os.getenv("TL_PATH") or package.path
-   if search_dtl then
+   local path = os.getenv("TL_PATH") or tl.path or package.path
+   if search_all then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
@@ -7142,9 +7144,11 @@ tl.search_module = function(module_name: string, search_dtl: boolean): string, F
    if found then
       return found, fd
    end
-   found, fd, tried = search_for(module_name, ".lua", path, tried)
-   if found then
-      return found, fd
+   if search_all then
+      found, fd, tried = search_for(module_name, ".lua", path, tried)
+      if found then
+         return found, fd
+      end
    end
    return nil, nil, tried
 end

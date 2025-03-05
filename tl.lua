@@ -701,6 +701,8 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
+
 local TypeReporter = {}
 
 
@@ -7127,12 +7129,12 @@ local function search_for(module_name, suffix, path, tried)
    return nil, nil, tried
 end
 
-tl.search_module = function(module_name, search_dtl)
+tl.search_module = function(module_name, search_all)
    local found
    local fd
    local tried = {}
-   local path = os.getenv("TL_PATH") or package.path
-   if search_dtl then
+   local path = os.getenv("TL_PATH") or tl.path or package.path
+   if search_all then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
@@ -7142,9 +7144,11 @@ tl.search_module = function(module_name, search_dtl)
    if found then
       return found, fd
    end
-   found, fd, tried = search_for(module_name, ".lua", path, tried)
-   if found then
-      return found, fd
+   if search_all then
+      found, fd, tried = search_for(module_name, ".lua", path, tried)
+      if found then
+         return found, fd
+      end
    end
    return nil, nil, tried
 end
