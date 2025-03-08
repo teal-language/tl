@@ -4315,9 +4315,9 @@ parse_type_declaration = function(ps: ParseState, i: integer, node_name: NodeKin
    local istart = i
 
    if ps.tokens[i].kind == "identifier" then
-      local done: boolean
-      done, i, asgn = parse_special_type_declaration(ps, i, asgn)
-      if done then
+      local is_done: boolean
+      is_done, i, asgn = parse_special_type_declaration(ps, i, asgn)
+      if is_done then
          return i, asgn
       end
    end
@@ -13134,9 +13134,9 @@ do
 
                if not t and ra is RecordLikeType then
                   if ra.interface_list then
-                     for _, it in ipairs(ra.interface_list) do
-                        if types_op[it.typename] then
-                           t = a_type(node, types_op[it.typename], {})
+                     for _, iface in ipairs(ra.interface_list) do
+                        if types_op[iface.typename] then
+                           t = a_type(node, types_op[iface.typename], {})
                            break
                         end
                      end

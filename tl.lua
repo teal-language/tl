@@ -4315,9 +4315,9 @@ do
       local istart = i
 
       if ps.tokens[i].kind == "identifier" then
-         local done
-         done, i, asgn = parse_special_type_declaration(ps, i, asgn)
-         if done then
+         local is_done
+         is_done, i, asgn = parse_special_type_declaration(ps, i, asgn)
+         if is_done then
             return i, asgn
          end
       end
@@ -13134,9 +13134,9 @@ self:expand_type(node, values, elements) })
 
                if not t and ra.fields then
                   if ra.interface_list then
-                     for _, it in ipairs(ra.interface_list) do
-                        if types_op[it.typename] then
-                           t = a_type(node, types_op[it.typename], {})
+                     for _, iface in ipairs(ra.interface_list) do
+                        if types_op[iface.typename] then
+                           t = a_type(node, types_op[iface.typename], {})
                            break
                         end
                      end
