@@ -9810,6 +9810,16 @@ do
 
                   return on_arg_id(node, i)
                end
+            },
+            ["..."] = {
+               after = function(_: nil, node: Node, _children: {T}): T
+                  local i = argnames[node.tk]
+                  if not i then
+                     return nil
+                  end
+
+                  return on_arg_id(node, i)
+               end
             }
          },
          after = on_node as VisitorAfter<nil, Node, T>,

@@ -9811,6 +9811,16 @@ a.types[i], b.types[i]), }
                   return on_arg_id(node, i)
                end,
             },
+            ["..."] = {
+               after = function(_, node, _children)
+                  local i = argnames[node.tk]
+                  if not i then
+                     return nil
+                  end
+
+                  return on_arg_id(node, i)
+               end,
+            },
          },
          after = on_node,
       }

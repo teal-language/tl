@@ -35,4 +35,18 @@ describe("macroexp declaration", function()
    ]], {
       { y = 7, x = 29, msg = "cannot use argument 's' multiple times in macroexp" }
    }))
+
+   it("checks multiple use of arguments", util.check_type_error([[
+      global function f(a: string, b:string)
+         print(a, b)
+      end
+
+      local record R1
+         metamethod __call: function(self: R1, ...: string): boolean = macroexp(self: R1, ...: string): boolean
+            return print(...) or print(...)
+         end
+      end
+   ]], {
+      { y = 7, x = 40, msg = "cannot use argument '...' multiple times in macroexp" }
+   }))
 end)
