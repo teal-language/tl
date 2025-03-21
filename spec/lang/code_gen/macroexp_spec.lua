@@ -194,5 +194,19 @@ describe("macroexp code generation", function()
          print("the 'x' fields are equal")
       end
    ]]))
+
+   it("works with ...", util.gen([[
+      local macroexp macroprint(a: string, ...: string): string
+         return print(a, ...)
+      end
+
+      macroprint('varargs', 'dis', 'appear')
+   ]], [[
+
+
+
+
+      print('varargs', 'dis', 'appear')
+   ]]))
 end)
 

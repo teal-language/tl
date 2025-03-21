@@ -9829,8 +9829,19 @@ a.types[i], b.types[i]), }
    end
 
    local function expand_macroexp(orignode, args, macroexp)
-      local on_arg_id = function(_node, i)
-         return { Node, args[i] }
+      local on_arg_id = function(node, i)
+         if node.kind == '...' then
+
+            local nd = {
+               kind = "expression_list",
+            }
+            for n = i, #args do
+               nd[n - i + 1] = args[n]
+            end
+            return { Node, nd }
+         else
+            return { Node, args[i] }
+         end
       end
 
       local on_node = function(_, node, children, ret)
