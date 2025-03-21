@@ -9832,7 +9832,7 @@ do
       local on_arg_id = function(node: Node, i: integer): {Node, Node}
          if node.kind == '...' then
             -- we have to handle varargs specifically
-            local nd = {
+            local nd: Node = {
                kind = "expression_list",
             }
             for n = i, #args do
