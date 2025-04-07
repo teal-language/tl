@@ -9810,6 +9810,16 @@ do
 
                   return on_arg_id(node, i)
                end
+            },
+            ["..."] = {
+               after = function(_: nil, node: Node, _children: {T}): T
+                  local i = argnames[node.tk]
+                  if not i then
+                     return nil
+                  end
+
+                  return on_arg_id(node, i)
+               end
             }
          },
          after = on_node as VisitorAfter<nil, Node, T>,
@@ -9819,8 +9829,19 @@ do
    end
 
    local function expand_macroexp(orignode: Node, args: {Node}, macroexp: Node)
-      local on_arg_id = function(_node: Node, i: integer): {Node, Node}
-         return { Node, args[i] }
+      local on_arg_id = function(node: Node, i: integer): {Node, Node}
+         if node.kind == '...' then
+            -- we have to handle varargs specifically
+            local nd: Node = {
+               kind = "expression_list",
+            }
+            for n = i, #args do
+               nd[n - i + 1] = args[n]
+            end
+            return { Node, nd }
+         else
+            return { Node, args[i] }
+         end
       end
 
       local on_node = function(_: nil, node: Node, children: {{Node, Node}}, ret: {Node, Node}): {Node, Node}
