@@ -9941,9 +9941,9 @@ do
          "type_dot" -- a dot-call where the receiver is a type, e.g. `MyRecord.my_func()`
       end
 
-      local check_call: function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
+      local check_call: function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
       do
-         local check_args_rets: function(TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): boolean, {Error}
+         local check_args_rets: function(TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
          do
             -- check if a tuple `xs` matches tuple `ys`
             local function check_func_type_list(self: TypeChecker, w: Where, wheres: {Where}, xs: TupleType, ys: TupleType, from: integer, delta: integer, v: VarianceMode, mode: ArgCheckMode): boolean, {Error}
@@ -9967,15 +9967,18 @@ do
                return true
             end
 
-            check_args_rets = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): boolean, {Error}
+            check_args_rets = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
                local rets_ok = true
                local args_ok, args_errs: boolean, {Error} = true, nil
+
+               local fargs = or_args or f.args
+               local frets = or_rets or f.rets
 
                local from = 1
                if argdelta == -1 then
                   from = 2
                   local errs = {}
-                  local first = f.args.tuple[1]
+                  local first = fargs.tuple[1]
                   if (not first is SelfType) and not self:arg_check(w, errs, first, args.tuple[1], "contravariant", "self") then
                      return nil, errs
                   end
@@ -9983,17 +9986,17 @@ do
 
                if expected_rets then
                   expected_rets = self:infer_at(w, expected_rets)
-                  infer_emptytables(self, w, nil, expected_rets, f.rets, 0)
+                  infer_emptytables(self, w, nil, expected_rets, frets, 0)
 
-                  rets_ok = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
+                  rets_ok = check_func_type_list(self, w, nil, frets, expected_rets, 1, 0, "covariant", "return")
                end
 
-               args_ok, args_errs = check_func_type_list(self, w, wargs, f.args, args, from, argdelta, "contravariant", "argument")
+               args_ok, args_errs = check_func_type_list(self, w, wargs, fargs, args, from, argdelta, "contravariant", "argument")
                if (not args_ok) or (not rets_ok) then
                   return nil, args_errs or {}
                end
 
-               infer_emptytables(self, w, wargs, args, f.args, argdelta)
+               infer_emptytables(self, w, wargs, args, fargs, argdelta)
 
                return true
             end
@@ -10013,7 +10016,7 @@ do
             return false
          end
 
-         check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
+         check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
                local selftype = arg1
@@ -10023,7 +10026,7 @@ do
                self:add_var(nil, "@self", a_typedecl(w, selftype))
             end
 
-            local fargs = f.args.tuple
+            local fargs = (or_args or f.args).tuple
             if f.is_method and is_method_mismatch(self, w, arg1, fargs[1], cm) then
                return false
             end
@@ -10032,11 +10035,11 @@ do
             local wanted = #fargs
             local min_arity = self.feat_arity and f.min_arity or 0
 
-            if given < min_arity or (given > wanted and not f.args.is_va) then
+            if given < min_arity or (given > wanted and not (or_args or f.args).is_va) then
                return nil, { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. show_arity(f) .. ")") }
             end
 
-            return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta)
+            return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta, or_args, or_rets)
          end
       end
 
@@ -10055,7 +10058,7 @@ do
          end
       end
 
-      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
+      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
       do
          local function fail_poly_call_arity(self: TypeChecker, w: Where, p: PolyType, given: integer): {Error}
             local expects: {string} = {}
@@ -10071,7 +10074,7 @@ do
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
          end
 
-         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
+         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
             local given = #args.tuple
 
             local tried: {integer:boolean} = {}
@@ -10082,7 +10085,7 @@ do
                for i, f in self:iterate_poly(p) do
                   assert(f is FunctionType, f.typename)
                   assert(f.args)
-                  first_rets = first_rets or f.rets
+                  first_rets = first_rets or or_rets or f.rets
 
                   local wanted = #f.args.tuple
                   local min_arity = self.feat_arity and f.min_arity or 0
@@ -10095,12 +10098,12 @@ do
                      -- then finally try vararg functions
                      or (pass == 3 and (f.args.is_va and given > wanted)) )
                   then
-                     local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta)
+                     local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta, or_args, or_rets)
                      if ok then
-                        return f, f.rets
+                        return f, or_rets or f.rets
                      elseif expected_rets then
                         -- revert inferred returns
-                        infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
+                        infer_emptytables(self, w, wargs, or_rets or f.rets, or_rets or f.rets, argdelta)
                      end
 
                      self:rollback_scope_transaction()
@@ -10135,7 +10138,7 @@ do
          return "plain"
       end
 
-      function TypeChecker:type_check_function_call(node: Node, func: Type, args: TupleType, argdelta: integer, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
+      function TypeChecker:type_check_function_call(node: Node, func: Type, args: TupleType, argdelta: integer, or_args ?: TupleType, or_rets ?: TupleType, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
          e1 = e1 or node.e1
          e2 = e2 or node.e2
 
@@ -10171,11 +10174,11 @@ do
          local f, ret: FunctionType, InvalidOrTupleType
 
          if func is PolyType then
-            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
+            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
          elseif func is FunctionType then
             local _: boolean
-            _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
-            f, ret = func, func.rets
+            _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
+            f, ret = func, or_rets or func.rets
          else
             ret = self.errs:invalid_at(node, "not a function: %s", func)
          end
@@ -10252,7 +10255,7 @@ do
          end
 
          local mtdelta = metamethod is FunctionType and metamethod.is_method and -1 or 0
-         local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, node, e2)
+         local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, nil, nil, node, e2)
          local ret_unary <const> = resolve_tuple(ret_call)
          local ret <const> = self:to_structural(ret_unary)
          return ret, meta_on_operator
@@ -12178,7 +12181,7 @@ do
 
             if exp1type is PolyType then
                local _r, f: Type, Type
-               _r, f = self:type_check_function_call(exp1, exp1type, args, 0, exp1, {node.exps[2], node.exps[3]})
+               _r, f = self:type_check_function_call(exp1, exp1type, args, 0, nil, nil, exp1, {node.exps[2], node.exps[3]})
                if f then
                   exp1type = f
                else
