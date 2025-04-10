@@ -316,8 +316,9 @@ do
       gmatch: function(string, string, ? integer): (function(): string...)
 
       gsub: function(string, string, string, ? integer): string, integer
-      gsub: function(string, string, {string:string}, ? integer): string, integer
-      gsub: function(string, string, function(string...): ((string | integer | number)...), ? integer): string, integer
+      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer
 
       len: function(string): integer
       lower: function(string): string
