@@ -20,6 +20,31 @@ describe("string", function()
          local s1: string = string.match("hello world", "world")
          local s2: string = string.match("hello world", "world", 2)
       ]]))
+      it("can match with position captures", util.check([[
+         local i1, s1: integer, string = string.match("hello world", "()w(o)rld")
+      ]]))
+   end)
+
+   describe("find", function()
+      it("can take an optional init position", util.check([[
+         local a, b: integer, integer = string.find("hello world", "world")
+         local a2, b2: integer, integer = string.find("hello world", "world", 2)
+      ]]))
+      it("accepts plain patterns", util.check([[
+         local a, b: integer, integer = string.find("hello world", "wor[ld", 1, true)
+      ]]))
+      it("can find with position captures", util.check([[
+         local a, b, i1, s1: integer, integer, integer, string = string.find("hello world", "()[()w](o)rld")
+      ]]))
+   end)
+
+   describe("format", function()
+      it("works with various specifiers", util.check([[
+         local s1: string = string.format("%02A %a  %E %e %f %G %g %% %%", 1.1, 1.2, 1.3, 1.4, 1.4, 1.4, 1.4)
+         local s2: string = string.format("%5c  %3d %i %o %u %X %x %% %%", 11, 12, 13, 14, 14, 14, 14)
+         local s3: string = string.format('%s %s %s', 123, 123.5, "test")
+         local s4: string = string.format('%p %p %p %p', {}, "test", 5, io.input())
+      ]]))
    end)
 
    describe("gsub", function()
@@ -45,6 +70,15 @@ describe("string", function()
             ["world"] = "mundo",
          }
          local holamundo, count: string, integer = s:gsub("%w+", map)
+      ]]))
+
+      it("accepts a map with integers, returns a string and integer", util.check([[
+         local s = "hello world"
+         local map: {integer:string} = {
+            [1] = "hola",
+            [2] = "mundo",
+         }
+         local holamundo, count: string, integer = s:gsub("()", map)
       ]]))
 
       it("accepts a map and integer, returns a string and integer", util.check([[
@@ -91,6 +125,27 @@ describe("string", function()
              return t
          end
       ]]))
+
+      it("captures integer positions, returns a string", util.check([[
+         local s = "hello world"
+         local function f(a: integer, b: string): string
+            return '[' .. a .. ']' .. b
+         end
+         local ret: string = s:gsub("()(%w+)", f)
+      ]]))
    end)
 
+
+   describe("pack", function()
+      it("works with types", util.check([[
+         local packed: string = string.pack("<!7XdLfz", 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = string.unpack("<!7XdLfz", packed)
+      ]]))
+      it("works with constant strings", util.check([[
+         -- <const> is required so that it gets recognised as a constant for string.pack and unpack
+         local pstr <const> = "<!7XdLfz"
+         local packed: string = string.pack(pstr, 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = pstr:unpack(packed)
+      ]]))
+   end)
 end)
