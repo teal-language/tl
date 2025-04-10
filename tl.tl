@@ -14585,7 +14585,7 @@ end
 
 local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
-      local pattern = "(.*)%.([a-z]+)$"
+      local pattern <const> = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
       extension = extension and extension:lower()
 
