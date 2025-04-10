@@ -11400,6 +11400,43 @@ do
       return results
    end
 
+   local function parse_format_string(node: Node, pat: string): {Type}, string
+      local pos = 1
+      local results: {Type} = {}
+      while pos <= #pat do
+         -- TODO: remove once bootstrap
+         local endc = pat:match("%%[-+#0-9. ]*()", pos) as integer
+         if not endc then return results end
+         local c = pat:sub(endc, endc)
+         if c == "" then
+            return nil, "missing pattern specifier at end"
+         end
+         if c:match"[AaEefGg]" then
+            table.insert(results, a_type(node, "number", {}))
+         elseif c:match"[cdiouXx]" then
+            table.insert(results, a_type(node, "integer", {}))
+         elseif c == "q" then
+            table.insert(results,
+               a_union(node, {
+                  a_type(node, "string", {}),
+                  a_type(node, "number", {}),
+                  a_type(node, "integer", {}),
+                  a_type(node, "boolean", {}),
+                  a_type(node, "nil", {}),
+               })
+            )
+         elseif c == "p" or c == "s" then
+            table.insert(results, a_type(node, "any", {}))
+         elseif c == "%" then
+            -- escaped percent sign
+         else
+            return nil, "invalid pattern specifier: '" .. c .. "'"
+         end
+         pos = endc + 1
+      end
+      return results
+   end
+
    local special_functions: {string : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
       ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
@@ -11494,6 +11531,39 @@ do
          local r = self:type_check_function_call(node, a, b, argdelta)
          self:apply_facts(node, node.e2[1].known)
          return r
+      end,
+
+      ["string_format"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
+         end
+
+         local fstr = b.tuple[1]
+
+         if fstr is StringType and fstr.literal and a is FunctionType then
+            local st = fstr.literal
+            local items, e = parse_format_string(node, st)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", fstr, e)
+               else
+                  return self.errs:invalid_at(fstr, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(node, "string", {}))
+
+            if #items ~= #b.tuple then
+               return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects " .. #items .. ")")
+            end
+
+            -- check the arguments now
+            return (self:type_check_function_call(node, a, b, argdelta, a_tuple(node, items), nil))
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
       end,
 
       ["string_match"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType

@@ -38,6 +38,15 @@ describe("string", function()
       ]]))
    end)
 
+   describe("format", function()
+      it("works with various specifiers", util.check([[
+         local s1: string = string.format("%02A %a  %E %e %f %G %g %% %%", 1.1, 1.2, 1.3, 1.4, 1.4, 1.4, 1.4)
+         local s2: string = string.format("%5c  %3d %i %o %u %X %x %% %%", 11, 12, 13, 14, 14, 14, 14)
+         local s3: string = string.format('%s %s %s', 123, 123.5, "test")
+         local s4: string = string.format('%p %p %p %p', {}, "test", 5, io.input())
+      ]]))
+   end)
+
    describe("gsub", function()
       it("accepts a string, returns a string", util.check([[
          local s = "hello"
