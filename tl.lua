@@ -11450,26 +11450,27 @@ a.types[i], b.types[i]), }
       while pos <= #pat do
          local c = pat:sub(pos, pos)
          local to_add
+         local goto_next
          if c:match("[<> =x]") then
 
             if skip_next then
                return nil, "expected argument for 'X'"
             end
             pos = pos + 1
-            goto next
+            goto_next = true
          elseif c == "X" then
             if skip_next then
                return nil, "expected argument for 'X'"
             end
             skip_next = true
             pos = pos + 1
-            goto next
+            goto_next = true
          elseif c == "!" then
             if skip_next then
                return nil, "expected argument for 'X'"
             end
             pos = pack_string_skipnum(pos + 1, pat)
-            goto next
+            goto_next = true
          elseif c:match("[Ii]") then
             pos = pack_string_skipnum(pos + 1, pat)
             to_add = a_type(node, "integer", {})
@@ -11490,12 +11491,13 @@ a.types[i], b.types[i]), }
          else
             return nil, "invalid format option: '" .. c .. "'"
          end
-         if skip_next then
-            skip_next = false
-         else
-            table.insert(results, to_add)
+         if not goto_next then
+            if skip_next then
+               skip_next = false
+            else
+               table.insert(results, to_add)
+            end
          end
-         ::next::
       end
       if skip_next then
          return nil, "expected argument for 'X'"
