@@ -5777,7 +5777,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string, ws: string): string
+            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5788,7 +5789,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return ""
             end)
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string, digits: string): string
+            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5797,7 +5799,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return byte and string.format("\\%03d", byte) or "\\x" .. digits
             end)
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string, hex_digits: string): string
+            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
@@ -11248,6 +11251,155 @@ do
       return rets
    end
 
+   local function pattern_findclassend(pat: string, i: integer, strict: boolean): integer, boolean, string
+      local c = pat:sub(i, i)
+      if c == "%" then
+         local peek = pat:sub(i + 1, i + 1)
+         if peek == "f" then
+            -- frontier
+            if pat:sub(i + 2, i + 2) ~= "[" then
+               return nil, nil, "malformed pattern: missing '[' after %f"
+            end
+            return pattern_findclassend(pat, i + 2, strict), false
+         elseif peek == "b" then
+            if pat:sub(i + 3, i + 3) == "" then
+               return nil, nil, "malformed pattern: need balanced characters"
+            end
+            return i + 3, false
+         elseif peek == "" then
+            return nil, nil, "malformed pattern: expected class"
+         elseif peek:match"[1-9]" then
+            return i + 1, false
+         elseif strict and not peek:match"[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]" then
+            return nil, nil, "malformed pattern: invalid class '" .. peek .. "'"
+         else
+            return i + 1, true
+         end
+      elseif c == "[" then
+         if pat:sub(i + 1, i + 1) == "^" then
+            i = i + 2 -- skip the inverter
+         else
+            i = i + 1
+         end
+
+         local isfirst = true
+         repeat
+            local c_ = pat:sub(i, i)
+            if c_ == "" then
+               return nil, nil, "malformed pattern: missing ']'"
+            elseif c_ == "%" then
+               if strict and not pat:sub(i + 1, i + 1):match"[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]" then
+                  return nil, nil, "malformed pattern: invalid escape"
+               end
+               i = i + 2
+            elseif c_ == "-" and strict and not isfirst then
+               return nil, nil, "malformed pattern: unexpected '-'"
+            else
+               local c2 = pat:sub(i + 1, i + 1)
+               local c3 = pat:sub(i + 2, i + 2)
+               if c2 == "-" then
+                  if strict and c3 == "]" then
+                     return nil, nil, "malformed pattern: unexpected ']'"
+                  elseif strict and c3 == "-" then
+                     return nil, nil, "malformed pattern: unexpected '-'"
+                  elseif strict and c3 == "%" then
+                     return nil, nil, "malformed pattern: unexpected '%'"
+                  end
+                  -- don't skip the last one if it is a % or ]
+                  i = i + 2
+               else
+                  i = i + 1
+               end
+            end
+            isfirst = false
+         until pat:sub(i, i) == "]"
+
+         return i, true
+      else
+         return i, true
+      end
+   end
+
+   local pattern_isop: {string:boolean} = {
+      ["?"] = true,
+      ["+"] = true,
+      ["-"] = true,
+      ["*"] = true,
+   }
+
+   local function parse_pattern_string(node: Node, pat: string, inclempty: boolean): {Type}, string
+      --[[
+         Pattern syntax:
+
+         pat <- start? mid* end?
+         start <- "^"
+         end <- "$"
+         mid <- "(" mid* ")"
+              | "[" "^"? set "]" rpt?
+              | "%" "b" . .
+              | "%" "f" "[" "^"? set "]"
+              | "%" [1-9]
+              | "%" [][^$()%.*+-?AaCcDdGgLlPpSsUuWwXxZz] rpt?
+              | [^][^$()%*+-?] rpt?
+         set <- setitem1? setitem*
+         setitem1 <- "]"
+                   | "]" "-" [^]%]
+         setitem <- "%" [][^$()%.*+-?AaCcDdGgLlPpSsUuWwXxZz]
+                  | [^]%] "-" [^]%]
+                  | [^]%-]
+         rpt <- [-*+?]
+      --]]
+      local strict = false
+
+      local results: {Type} = {}
+
+      local i = pat:sub(1, 1) == "^" and 2 or 1
+      local unclosed = 0
+
+      while i <= #pat do
+         local c = pat:sub(i, i)
+
+         if i == #pat and c == "$" then
+            break
+         end
+
+         local classend, canhavemul, err = pattern_findclassend(pat, i, strict)
+         if not classend then
+            return nil, err
+         end
+
+         local peek = pat:sub(classend + 1, classend + 1)
+
+         if c == "(" and peek == ")" then
+            -- position match
+            table.insert(results, a_type(node, "integer", {}))
+            i = i + 2
+         elseif c == "(" then
+            table.insert(results, a_type(node, "string", {}))
+            unclosed = unclosed + 1
+            i = i + 1
+         elseif c == ")" then
+            unclosed = unclosed - 1
+            i = i + 1
+         elseif strict and c:match"[]^$()*+%-?]" then -- operations that haven't been handled
+            return nil, "malformed pattern: character was unexpected: '" .. c .. "'"
+         elseif pattern_isop[peek] and canhavemul then
+            i = classend + 2
+         else
+            -- simple match
+            i = classend + 1
+         end
+      end
+
+      if inclempty and not results[1] then
+         results[1] = a_type(node, "string", {})
+      end
+      if unclosed ~= 0 then
+         return results, unclosed .. " captures not closed"
+      end
+      return results
+   end
+
    local special_functions: {string : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
       ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
@@ -11343,6 +11495,183 @@ do
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
+
+      ["string_match"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets: TupleType
+         local pat = b.tuple[2]
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            -- set the returns to match the response
+            rets = a_tuple(node, items)
+         end
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_find"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 2 and at most 4)")
+         end
+
+         local plainarg = node.e2[4 + (argdelta or 0)]
+         local pat = b.tuple[2]
+
+         local rets: TupleType
+
+         if pat is StringType and pat.literal
+            and ((not plainarg) or (plainarg.kind == "boolean" and plainarg.tk == "false")) then
+            -- we have a nice constant string that we can modify
+            local st = pat.literal
+
+            local items, e = parse_pattern_string(node, st, false)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(pat, "integer", {}))
+            table.insert(items, 1, a_type(pat, "integer", {}))
+
+            -- set the returns to match the response
+            rets = a_tuple(node, items)
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_gmatch"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets: TupleType
+         local pat = b.tuple[2]
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            -- set the returns to match the response
+            rets = a_tuple(node, {
+               a_function(node, {
+                  min_arity = 0,
+                  args = a_tuple(node, {}),
+                  rets = a_tuple(node, items),
+               })
+            })
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_gsub"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         -- if the second argument is a literal, we can parse it and change the matchers
+         -- gsub: function(string, string, <matcher>, ? integer): string, integer
+
+         if #b.tuple < 3 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 3 or 4)")
+         end
+         local pat = b.tuple[2]
+         local orig_t = b.tuple[3]
+         local trepl = self:to_structural(orig_t)
+
+         local has_fourth = b.tuple[4]
+
+         local args: TupleType
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            local i1 = items[1]
+
+            -- we expect replarg to be one of:
+            -- string
+            -- {(items[1]):string}
+            -- function(table.unpack(items)): ((string|integer|number)...)
+
+            local replarg_type: Type
+
+            local expected_pat_return = a_union(node, {
+               a_type(node, "string", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "number", {}),
+            })
+            if self:is_a(trepl, expected_pat_return) then
+               -- fine
+               replarg_type = expected_pat_return
+            elseif trepl is MapType then
+               replarg_type = a_map(node, i1, expected_pat_return)
+            elseif trepl is RecordLikeType then
+               if not (i1 is StringType) then
+                  self.errs:invalid_at(trepl, "expected a table with integers as keys")
+               end
+               replarg_type = a_map(node, i1, expected_pat_return)
+            elseif trepl is ArrayLikeType then
+               if not (i1 is IntegerType) then
+                  self.errs:invalid_at(trepl, "expected a table with strings as keys")
+               end
+               replarg_type = an_array(node, expected_pat_return)
+            elseif trepl is FunctionType then
+               local validftype = a_function(node, {
+                  min_arity = self.feat_arity and #items or 0,
+                  args = a_tuple(node, items),
+                  rets = a_vararg(node, { expected_pat_return }),
+               })
+               replarg_type = validftype
+            end
+            -- other types should be taken care of by the type_check_function_call below
+
+            if replarg_type then
+               args = a_tuple(node, {
+                  a_type(node, "string", {}),
+                  a_type(node, "string", {}),
+                  replarg_type,
+                  has_fourth and a_type(node, "integer", {}) or nil,
+               })
+            end
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, args, nil))
+      end,
    }
 
    function TypeChecker:type_check_funcall(node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
@@ -11354,8 +11683,22 @@ do
          else
             return (self:type_check_function_call(node, a, b, argdelta))
          end
+      elseif node.e1.op and node.e1.op.op == "." and node.e1.e1.kind == "variable" and node.e1.e1.tk == "string" then
+         local special = special_functions["string_" .. node.e1.e2.tk]
+         if special then
+            return special(self, node, a, b, argdelta)
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
+         if b.tuple[1].typename == "string" then
+            -- test for a special function
+            local special = special_functions["string_" .. node.e1.e2.tk]
+            if special then
+               return special(self, node, a, b, -1)
+            end
+         end
          return (self:type_check_function_call(node, a, b, -1))
       else
          return (self:type_check_function_call(node, a, b, argdelta))

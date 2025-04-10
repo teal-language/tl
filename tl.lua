@@ -5778,6 +5778,7 @@ function tl.generate(ast, gen_target, opts)
             end
 
             replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise, ws)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5789,6 +5790,7 @@ function tl.generate(ast, gen_target, opts)
             end)
 
             replaced = replaced:gsub("()\\x(..)", function(index_in_disguise, digits)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5798,6 +5800,7 @@ function tl.generate(ast, gen_target, opts)
             end)
 
             replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise, hex_digits)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
@@ -11248,6 +11251,155 @@ a.types[i], b.types[i]), }
       return rets
    end
 
+   local function pattern_findclassend(pat, i, strict)
+      local c = pat:sub(i, i)
+      if c == "%" then
+         local peek = pat:sub(i + 1, i + 1)
+         if peek == "f" then
+
+            if pat:sub(i + 2, i + 2) ~= "[" then
+               return nil, nil, "malformed pattern: missing '[' after %f"
+            end
+            return pattern_findclassend(pat, i + 2, strict), false
+         elseif peek == "b" then
+            if pat:sub(i + 3, i + 3) == "" then
+               return nil, nil, "malformed pattern: need balanced characters"
+            end
+            return i + 3, false
+         elseif peek == "" then
+            return nil, nil, "malformed pattern: expected class"
+         elseif peek:match("[1-9]") then
+            return i + 1, false
+         elseif strict and not peek:match("[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]") then
+            return nil, nil, "malformed pattern: invalid class '" .. peek .. "'"
+         else
+            return i + 1, true
+         end
+      elseif c == "[" then
+         if pat:sub(i + 1, i + 1) == "^" then
+            i = i + 2
+         else
+            i = i + 1
+         end
+
+         local isfirst = true
+         repeat
+            local c_ = pat:sub(i, i)
+            if c_ == "" then
+               return nil, nil, "malformed pattern: missing ']'"
+            elseif c_ == "%" then
+               if strict and not pat:sub(i + 1, i + 1):match("[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]") then
+                  return nil, nil, "malformed pattern: invalid escape"
+               end
+               i = i + 2
+            elseif c_ == "-" and strict and not isfirst then
+               return nil, nil, "malformed pattern: unexpected '-'"
+            else
+               local c2 = pat:sub(i + 1, i + 1)
+               local c3 = pat:sub(i + 2, i + 2)
+               if c2 == "-" then
+                  if strict and c3 == "]" then
+                     return nil, nil, "malformed pattern: unexpected ']'"
+                  elseif strict and c3 == "-" then
+                     return nil, nil, "malformed pattern: unexpected '-'"
+                  elseif strict and c3 == "%" then
+                     return nil, nil, "malformed pattern: unexpected '%'"
+                  end
+
+                  i = i + 2
+               else
+                  i = i + 1
+               end
+            end
+            isfirst = false
+         until pat:sub(i, i) == "]"
+
+         return i, true
+      else
+         return i, true
+      end
+   end
+
+   local pattern_isop = {
+      ["?"] = true,
+      ["+"] = true,
+      ["-"] = true,
+      ["*"] = true,
+   }
+
+   local function parse_pattern_string(node, pat, inclempty)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      local strict = false
+
+      local results = {}
+
+      local i = pat:sub(1, 1) == "^" and 2 or 1
+      local unclosed = 0
+
+      while i <= #pat do
+         local c = pat:sub(i, i)
+
+         if i == #pat and c == "$" then
+            break
+         end
+
+         local classend, canhavemul, err = pattern_findclassend(pat, i, strict)
+         if not classend then
+            return nil, err
+         end
+
+         local peek = pat:sub(classend + 1, classend + 1)
+
+         if c == "(" and peek == ")" then
+
+            table.insert(results, a_type(node, "integer", {}))
+            i = i + 2
+         elseif c == "(" then
+            table.insert(results, a_type(node, "string", {}))
+            unclosed = unclosed + 1
+            i = i + 1
+         elseif c == ")" then
+            unclosed = unclosed - 1
+            i = i + 1
+         elseif strict and c:match("[]^$()*+%-?]") then
+            return nil, "malformed pattern: character was unexpected: '" .. c .. "'"
+         elseif pattern_isop[peek] and canhavemul then
+            i = classend + 2
+         else
+
+            i = classend + 1
+         end
+      end
+
+      if inclempty and not results[1] then
+         results[1] = a_type(node, "string", {})
+      end
+      if unclosed ~= 0 then
+         return results, unclosed .. " captures not closed"
+      end
+      return results
+   end
+
    local special_functions = {
       ["pairs"] = function(self, node, a, b, argdelta)
          if not b.tuple[1] then
@@ -11343,6 +11495,183 @@ a.types[i], b.types[i]), }
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
+
+      ["string_match"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets
+         local pat = b.tuple[2]
+
+         if pat.typename == "string" and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+
+            rets = a_type(node, "tuple", { tuple = items })
+         end
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_find"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 2 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 2 and at most 4)")
+         end
+
+         local plainarg = node.e2[4 + (argdelta or 0)]
+         local pat = b.tuple[2]
+
+         local rets
+
+         if pat.typename == "string" and pat.literal and
+            ((not plainarg) or (plainarg.kind == "boolean" and plainarg.tk == "false")) then
+
+            local st = pat.literal
+
+            local items, e = parse_pattern_string(node, st, false)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(pat, "integer", {}))
+            table.insert(items, 1, a_type(pat, "integer", {}))
+
+
+            rets = a_type(node, "tuple", { tuple = items })
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_gmatch"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets
+         local pat = b.tuple[2]
+
+         if pat.typename == "string" and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+
+            rets = a_type(node, "tuple", { tuple = {
+               a_function(node, {
+                  min_arity = 0,
+                  args = a_type(node, "tuple", { tuple = {} }),
+                  rets = a_type(node, "tuple", { tuple = items }),
+               }),
+            } })
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string_gsub"] = function(self, node, a, b, argdelta)
+
+
+
+         if #b.tuple < 3 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 3 or 4)")
+         end
+         local pat = b.tuple[2]
+         local orig_t = b.tuple[3]
+         local trepl = self:to_structural(orig_t)
+
+         local has_fourth = b.tuple[4]
+
+         local args
+
+         if pat.typename == "string" and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            local i1 = items[1]
+
+
+
+
+
+
+            local replarg_type
+
+            local expected_pat_return = a_type(node, "union", { types = {
+               a_type(node, "string", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "number", {}),
+            } })
+            if self:is_a(trepl, expected_pat_return) then
+
+               replarg_type = expected_pat_return
+            elseif trepl.typename == "map" then
+               replarg_type = a_type(node, "map", { keys = i1, values = expected_pat_return })
+            elseif trepl.fields then
+               if not (i1.typename == "string") then
+                  self.errs:invalid_at(trepl, "expected a table with integers as keys")
+               end
+               replarg_type = a_type(node, "map", { keys = i1, values = expected_pat_return })
+            elseif trepl.elements then
+               if not (i1.typename == "integer") then
+                  self.errs:invalid_at(trepl, "expected a table with strings as keys")
+               end
+               replarg_type = a_type(node, "array", { elements = expected_pat_return })
+            elseif trepl.typename == "function" then
+               local validftype = a_function(node, {
+                  min_arity = self.feat_arity and #items or 0,
+                  args = a_type(node, "tuple", { tuple = items }),
+                  rets = a_vararg(node, { expected_pat_return }),
+               })
+               replarg_type = validftype
+            end
+
+
+            if replarg_type then
+               args = a_type(node, "tuple", { tuple = {
+                  a_type(node, "string", {}),
+                  a_type(node, "string", {}),
+                  replarg_type,
+                  has_fourth and a_type(node, "integer", {}) or nil,
+               } })
+            end
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, args, nil))
+      end,
    }
 
    function TypeChecker:type_check_funcall(node, a, b, argdelta)
@@ -11354,8 +11683,22 @@ a.types[i], b.types[i]), }
          else
             return (self:type_check_function_call(node, a, b, argdelta))
          end
+      elseif node.e1.op and node.e1.op.op == "." and node.e1.e1.kind == "variable" and node.e1.e1.tk == "string" then
+         local special = special_functions["string_" .. node.e1.e2.tk]
+         if special then
+            return special(self, node, a, b, argdelta)
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
       elseif node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
+         if b.tuple[1].typename == "string" then
+
+            local special = special_functions["string_" .. node.e1.e2.tk]
+            if special then
+               return special(self, node, a, b, -1)
+            end
+         end
          return (self:type_check_function_call(node, a, b, -1))
       else
          return (self:type_check_function_call(node, a, b, argdelta))
