@@ -135,4 +135,17 @@ describe("string", function()
       ]]))
    end)
 
+
+   describe("pack", function()
+      it("works with types", util.check([[
+         local packed: string = string.pack("<!7XdLfz", 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = string.unpack("<!7XdLfz", packed)
+      ]]))
+      it("works with constant strings", util.check([[
+         -- <const> is required so that it gets recognised as a constant for string.pack and unpack
+         local pstr <const> = "<!7XdLfz"
+         local packed: string = string.pack(pstr, 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = pstr:unpack(packed)
+      ]]))
+   end)
 end)

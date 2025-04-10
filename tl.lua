@@ -11437,6 +11437,71 @@ a.types[i], b.types[i]), }
       return results
    end
 
+   local function pack_string_skipnum(pos, pat)
+
+      return pat:match("[0-9]*()", pos)
+   end
+
+   local function parse_pack_string(node, pat)
+      local pos = 1
+      local results = {}
+      local skip_next = false
+      while pos <= #pat do
+         local c = pat:sub(pos, pos)
+         local to_add
+         if c:match("[<> =x]") then
+
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            pos = pos + 1
+            goto next
+         elseif c == "X" then
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            skip_next = true
+            pos = pos + 1
+            goto next
+         elseif c == "!" then
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            pos = pack_string_skipnum(pos + 1, pat)
+            goto next
+         elseif c:match("[Ii]") then
+            pos = pack_string_skipnum(pos + 1, pat)
+            to_add = a_type(node, "integer", {})
+         elseif c:match("[bBhHlLjJT]") then
+            pos = pos + 1
+            to_add = a_type(node, "integer", {})
+         elseif c:match("[fdn]") then
+            pos = pos + 1
+            to_add = a_type(node, "number", {})
+         elseif c == "z" or c == "s" or c == "c" then
+            if c == "z" then
+               pos = pos + 1
+            else
+               pos = pack_string_skipnum(pos + 1, pat)
+            end
+
+            to_add = a_type(node, "string", {})
+         else
+            return nil, "invalid format option: '" .. c .. "'"
+         end
+         if skip_next then
+            skip_next = false
+         else
+            table.insert(results, to_add)
+         end
+         ::next::
+      end
+      if skip_next then
+         return nil, "expected argument for 'X'"
+      end
+      return results
+   end
+
    local special_functions = {
       ["pairs"] = function(self, node, a, b, argdelta)
          if not b.tuple[1] then
@@ -11531,6 +11596,69 @@ a.types[i], b.types[i]), }
          local r = self:type_check_function_call(node, a, b, argdelta)
          self:apply_facts(node, node.e2[1].known)
          return r
+      end,
+
+      ["string_pack"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
+         end
+
+         local packstr = b.tuple[1]
+
+         if packstr.typename == "string" and packstr.literal and a.typename == "function" then
+            local st = packstr.literal
+            local items, e = parse_pack_string(node, st)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", packstr, e)
+               else
+                  return self.errs:invalid_at(packstr, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(node, "string", {}))
+
+            if #items ~= #b.tuple then
+               return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects " .. #items .. ")")
+            end
+
+            return (self:type_check_function_call(node, a, b, argdelta, a_type(node, "tuple", { tuple = items }), nil))
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
+      end,
+
+      ["string_unpack"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local packstr = b.tuple[1]
+
+         local rets
+
+         if packstr.typename == "string" and packstr.literal then
+            local st = packstr.literal
+            local items, e = parse_pack_string(node, st)
+
+            if e then
+               if items then
+
+                  self.errs:add_warning("hint", packstr, e)
+               else
+                  return self.errs:invalid_at(packstr, e)
+               end
+            end
+
+            table.insert(items, a_type(node, "integer", {}))
+
+
+            rets = a_type(node, "tuple", { tuple = items })
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
       end,
 
       ["string_format"] = function(self, node, a, b, argdelta)
