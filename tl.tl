@@ -5840,50 +5840,54 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
 
             local out <const>: Output = { y = node.y, h = 0 }
 
-            local replaced = node.tk
-            for _ in replaced:gmatch("\n") do
+            local str = node.tk
+            for _ in str:gmatch("\n") do
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
-               if replaced:sub(index, index) == "\\" then
-                  return "\\z" .. ws
-               end
-               for _ in ws:gmatch("\n") do
-                  out.h = out.h - 1
-               end
-               return ""
-            end)
+            local replaced: {string} = {}
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
-               if replaced:sub(index, index) == "\\" then
-                  return "\\x" .. digits
+            local i = 1
+            local currstrstart = 1
+            while true do
+               local slashpos = str:find("\\", i)
+               if not slashpos then break end
+               local nextc = str:sub(slashpos + 1, slashpos + 1)
+               if nextc == "z" then
+                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
+                  local wsend = str:find("%S", slashpos + 2) -- next non-whitespace
+                  local ws = str:sub(slashpos + 2, wsend - 1)
+                  for _ in ws:gmatch("\n") do
+                     out.h = out.h - 1
+                  end
+                  currstrstart = wsend
+                  i = currstrstart
+               elseif nextc == "x" then
+                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
+                  local digits <const> = str:sub(slashpos + 2, slashpos + 3)
+                  local byte <const> = tonumber(digits, 16)
+                  table.insert(replaced, string.format("\\%03d", byte))
+                  currstrstart = slashpos + 4
+                  i = currstrstart
+               elseif nextc == "u" then
+                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
+                  local _, e, hex_digits = str:find("{(.-)}", slashpos + 2)
+                  local codepoint <const> = tonumber(hex_digits, 16)
+                  local sequence <const> = utf8.char(codepoint)
+                  table.insert(replaced, (sequence:gsub(".", function(c: string): string
+                     return ("\\%03d"):format(string.byte(c))
+                  end)))
+                  currstrstart = e + 1
+                  i = currstrstart
+               else
+                  i = slashpos + 2
                end
-               local byte <const> = tonumber(digits, 16)
-               return byte and string.format("\\%03d", byte) or "\\x" .. digits
-            end)
+            end
+            if currstrstart <= #str then
+               table.insert(replaced, str:sub(currstrstart))
+            end
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
-               if replaced:sub(index, index) == "\\" then
-                  return "\\u{" .. hex_digits .. "}"
-               end
-               local codepoint <const> = tonumber(hex_digits, 16)
-               if not codepoint then
-                  return "\\000"
-               end
-               local sequence <const> = utf8.char(codepoint)
-               return (sequence:gsub(".", function(c: string): string
-                  return ("\\%03d"):format(string.byte(c))
-               end))
-            end)
-
-            out[1] = replaced
+            out[1] = table.concat(replaced)
             return out
          end,
       },
