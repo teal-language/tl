@@ -11301,7 +11301,12 @@ a.types[i], b.types[i]), }
             if pat:sub(i + 2, i + 2) ~= "[" then
                return nil, nil, "malformed pattern: missing '[' after %f"
             end
-            return pattern_findclassend(pat, i + 2, strict), false
+            local e, _, err = pattern_findclassend(pat, i + 2, strict)
+            if not e then
+               return nil, nil, err
+            else
+               return e, false
+            end
          elseif peek == "b" then
             if pat:sub(i + 3, i + 3) == "" then
                return nil, nil, "malformed pattern: need balanced characters"
@@ -11421,6 +11426,9 @@ a.types[i], b.types[i]), }
             i = i + 1
          elseif c == ")" then
             unclosed = unclosed - 1
+            if unclosed < 0 then
+               return nil, "malformed pattern: unexpected ')'"
+            end
             i = i + 1
          elseif strict and c:match("[]^$()*+%-?]") then
             return nil, "malformed pattern: character was unexpected: '" .. c .. "'"
@@ -11436,7 +11444,7 @@ a.types[i], b.types[i]), }
          results[1] = a_type(node, "string", {})
       end
       if unclosed ~= 0 then
-         return results, unclosed .. " captures not closed"
+         return nil, "malformed pattern: " .. unclosed .. " capture" .. (unclosed == 1 and "" or "s") .. " not closed"
       end
       return results
    end

@@ -158,10 +158,23 @@ describe("string", function()
          local a = ("test"):gsub("(", "")
          local b = ("test"):gsub("%", "")
          local c = ("test"):gsub(")(", "")
+         local d = ("test"):gsub("%f[", "")
       ]], {
+         {
+            msg = "malformed pattern: 1 capture not closed",
+            y = 1,
+         },
          {
             msg = "malformed pattern: expected class",
             y = 2,
+         },
+         {
+            msg = "malformed pattern: unexpected ')'",
+            y = 3,
+         },
+         {
+            msg = "malformed pattern: missing ']'",
+            y = 4,
          },
       }))
    end)
