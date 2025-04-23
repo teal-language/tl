@@ -311,24 +311,24 @@ do
 
       char: function(integer...): string
       dump: function(function(any...): (any), ? boolean): string
-      find: function(string, string, ? integer, ? boolean): integer, integer, string...
-      format: function(string, any...): string
-      gmatch: function(string, string, ? integer): (function(): string...)
+      find: function(string, string, ? integer, ? boolean): integer, integer, string... --[[special_function]]
+      format: function(string, any...): string --[[special_function]]
+      gmatch: function(string, string, ? integer): (function(): string...) --[[special_function]]
 
-      gsub: function(string, string, string, ? integer): string, integer
-      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer
-      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer
-      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer
+      gsub: function(string, string, string, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer --[[special_function]]
 
       len: function(string): integer
       lower: function(string): string
-      match: function(string, string, ? integer): string...
-      pack: function(string, any...): string
+      match: function(string, string, ? integer): string... --[[special_function]]
+      pack: function(string, any...): string --[[special_function]]
       packsize: function(string): integer
       rep: function(string, integer, ? string): string
       reverse: function(string): string
       sub: function(string, integer, ? integer): string
-      unpack: function(string, string, ? integer): any...
+      unpack: function(string, string, ? integer): any... --[[special_function]]
       upper: function(string): string
    end
 
@@ -397,7 +397,7 @@ do
       type XpcallMsghFunction = function(...: any): ()
 
       arg: {string}
-      assert: function<A, B>(A, ? B, ...: any): A
+      assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
 
       collectgarbage: function(? CollectGarbageCommand): number
       collectgarbage: function(CollectGarbageSetValue, integer): number
@@ -408,7 +408,7 @@ do
 
       error: function(? any, ? integer)
       getmetatable: function<T>(T): metatable<T>
-      ipairs: function<A>({A}): (function():(integer, A))
+      ipairs: function<A>({A}): (function():(integer, A)) --[[special_function]]
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
       load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
@@ -418,12 +418,12 @@ do
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
 
-      pairs: function<K, V>({K:V}): (function():(K, V))
-      pcall: function(function(any...):(any...), any...): boolean, any...
+      pairs: function<K, V>({K:V}): (function():(K, V)) --[[special_function]]
+      pcall: function(function(any...):(any...), any...): boolean, any... --[[special_function]]
       print: function(any...)
       rawequal: function(any, any): boolean
 
-      rawget: function<K, V>({K:V}, K): V
+      rawget: function<K, V>({K:V}, K): V --[[special_function]]
       rawget: function({any:any}, any): any
       rawget: function(any, any): any
 
@@ -433,7 +433,7 @@ do
       rawset: function({any:any}, any, any): {any:any}
       rawset: function(any, any, any): any
 
-      require: function(string): any
+      require: function(string): any --[[special_function]]
 
       select: function<T>(integer, T...): T...
       select: function(integer, any...): any...
@@ -447,7 +447,7 @@ do
       tostring: function(any): string
       type: function(any): string
       warn: function(string, string...)
-      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any...
+      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any... --[[special_function]]
       _VERSION: string
    end
 
@@ -1667,6 +1667,24 @@ local table_types = {
    ["none"] = false,
    ["*"] = false,
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7370,6 +7388,24 @@ tl.new_env = function(opts)
       table_t.fields["unpack"].needs_compat = true
 
 
+      local string_t = (stdlib_globals["string"].t).def
+      string_t.fields["find"].special_function_handler = "string_find"
+      string_t.fields["format"].special_function_handler = "string_format"
+      string_t.fields["gmatch"].special_function_handler = "string_gmatch"
+      string_t.fields["gsub"].special_function_handler = "string_gsub"
+      string_t.fields["match"].special_function_handler = "string_match"
+      string_t.fields["pack"].special_function_handler = "string_pack"
+      string_t.fields["unpack"].special_function_handler = "string_unpack"
+
+      stdlib_globals["assert"].t.special_function_handler = "assert"
+      stdlib_globals["ipairs"].t.special_function_handler = "ipairs"
+      stdlib_globals["pairs"].t.special_function_handler = "pairs"
+      stdlib_globals["pcall"].t.special_function_handler = "pcall"
+      stdlib_globals["xpcall"].t.special_function_handler = "xpcall"
+      stdlib_globals["rawget"].t.special_function_handler = "rawget"
+      stdlib_globals["require"].t.special_function_handler = "require"
+
+
 
 
       stdlib_globals["..."] = { t = a_vararg(w, { a_type(w, "string", {}) }) }
@@ -7865,6 +7901,7 @@ do
             end
             copy.typeargs = ct
             copy.t, same = resolve(t.t, same)
+            copy.special_function_handler = t.special_function_handler
          elseif t.typename == "array" then
             assert(copy.typename == "array")
 
@@ -7909,6 +7946,7 @@ do
             copy.is_record_function = t.is_record_function
             copy.args, same = resolve(t.args, same)
             copy.rets, same = resolve(t.rets, same)
+            copy.special_function_handler = t.special_function_handler
          elseif t.fields then
             assert(copy.typename == "record" or copy.typename == "interface")
             copy.declname = t.declname
@@ -7964,6 +8002,7 @@ do
             for i, tf in ipairs(t.types) do
                copy.types[i], same = resolve(tf, same)
             end
+            copy.special_function_handler = t.special_function_handler
          elseif t.typename == "tupletable" then
             assert(copy.typename == "tupletable")
             copy.inferred_at = t.inferred_at
@@ -11593,14 +11632,12 @@ a.types[i], b.types[i]), }
 
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
-
       ["assert"] = function(self, node, a, b, argdelta)
          node.known = FACT_TRUTHY
          local r = self:type_check_function_call(node, a, b, argdelta)
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
-
       ["string_pack"] = function(self, node, a, b, argdelta)
          if #b.tuple < 1 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
@@ -11877,31 +11914,19 @@ a.types[i], b.types[i]), }
 
    function TypeChecker:type_check_funcall(node, a, b, argdelta)
       argdelta = argdelta or 0
-      if node.e1.kind == "variable" then
-         local special = special_functions[node.e1.tk]
-         if special then
-            return special(self, node, a, b, argdelta)
-         else
-            return (self:type_check_function_call(node, a, b, argdelta))
-         end
-      elseif node.e1.op and node.e1.op.op == "." and node.e1.e1.kind == "variable" and node.e1.e1.tk == "string" then
-         local special = special_functions["string_" .. node.e1.e2.tk]
-         if special then
-            return special(self, node, a, b, argdelta)
-         else
-            return (self:type_check_function_call(node, a, b, argdelta))
-         end
-      elseif node.e1.op and node.e1.op.op == ":" then
-         table.insert(b.tuple, 1, node.e1.receiver)
-         if b.tuple[1].typename == "string" then
 
-            local special = special_functions["string_" .. node.e1.e2.tk]
-            if special then
-               return special(self, node, a, b, -1)
-            end
+      local special_tyck = special_functions[a.special_function_handler]
+
+      if node.e1.op and node.e1.op.op == ":" then
+         table.insert(b.tuple, 1, node.e1.receiver)
+         if special_tyck then
+            return special_tyck(self, node, a, b, -1)
          end
          return (self:type_check_function_call(node, a, b, -1))
       else
+         if special_tyck then
+            return special_tyck(self, node, a, b, argdelta)
+         end
          return (self:type_check_function_call(node, a, b, argdelta))
       end
    end
