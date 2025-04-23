@@ -97,8 +97,11 @@ describe("xpcall", function()
          return {"hello", "world"}, true
       end
 
+      -- checking that it doesn't get confused
+      local pcall = xpcall
+
       local function msgh(err: string) print(err) end
-      local pok, strs, yep = xpcall(f, msgh, "hello", 123)
+      local pok, strs, yep = pcall(f, msgh, "hello", 123)
       print(strs[1]:upper())
       local xyz: number = yep
    ]], {
