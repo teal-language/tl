@@ -11247,8 +11247,9 @@ a.types[i], b.types[i]), }
       end
    end
 
-   local function special_pcall_xpcall(self, node, _a, b, argdelta)
-      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
+   local function special_pcall_xpcall(self, node, a, b, argdelta)
+      local isx = a.special_function_handler == "xpcall"
+      local base_nargs = isx and 2 or 1
       local bool = a_type(node, "boolean", {})
       if #node.e2 < base_nargs then
          self.errs:add(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
@@ -11263,7 +11264,7 @@ a.types[i], b.types[i]), }
       ftype = ensure_not_method(ftype)
 
       local fe2 = node_at(node.e2, {})
-      if node.e1.tk == "xpcall" then
+      if isx then
          base_nargs = 2
          local arg2 = node.e2[2]
          local msgh = table.remove(b.tuple, 1)
