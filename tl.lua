@@ -7389,13 +7389,13 @@ tl.new_env = function(opts)
 
 
       local string_t = (stdlib_globals["string"].t).def
-      string_t.fields["find"].special_function_handler = "string_find"
-      string_t.fields["format"].special_function_handler = "string_format"
-      string_t.fields["gmatch"].special_function_handler = "string_gmatch"
-      string_t.fields["gsub"].special_function_handler = "string_gsub"
-      string_t.fields["match"].special_function_handler = "string_match"
-      string_t.fields["pack"].special_function_handler = "string_pack"
-      string_t.fields["unpack"].special_function_handler = "string_unpack"
+      string_t.fields["find"].special_function_handler = "string.find"
+      string_t.fields["format"].special_function_handler = "string.format"
+      string_t.fields["gmatch"].special_function_handler = "string.gmatch"
+      string_t.fields["gsub"].special_function_handler = "string.gsub"
+      string_t.fields["match"].special_function_handler = "string.match"
+      string_t.fields["pack"].special_function_handler = "string.pack"
+      string_t.fields["unpack"].special_function_handler = "string.unpack"
 
       stdlib_globals["assert"].t.special_function_handler = "assert"
       stdlib_globals["ipairs"].t.special_function_handler = "ipairs"
@@ -11647,7 +11647,7 @@ a.types[i], b.types[i]), }
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
-      ["string_pack"] = function(self, node, a, b, argdelta)
+      ["string.pack"] = function(self, node, a, b, argdelta)
          if #b.tuple < 1 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
          end
@@ -11679,7 +11679,7 @@ a.types[i], b.types[i]), }
          end
       end,
 
-      ["string_unpack"] = function(self, node, a, b, argdelta)
+      ["string.unpack"] = function(self, node, a, b, argdelta)
          if #b.tuple < 2 or #b.tuple > 3 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
          end
@@ -11710,7 +11710,7 @@ a.types[i], b.types[i]), }
          return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
       end,
 
-      ["string_format"] = function(self, node, a, b, argdelta)
+      ["string.format"] = function(self, node, a, b, argdelta)
          if #b.tuple < 1 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
          end
@@ -11743,7 +11743,7 @@ a.types[i], b.types[i]), }
          end
       end,
 
-      ["string_match"] = function(self, node, a, b, argdelta)
+      ["string.match"] = function(self, node, a, b, argdelta)
          if #b.tuple < 2 or #b.tuple > 3 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
          end
@@ -11770,7 +11770,7 @@ a.types[i], b.types[i]), }
          return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
       end,
 
-      ["string_find"] = function(self, node, a, b, argdelta)
+      ["string.find"] = function(self, node, a, b, argdelta)
          if #b.tuple < 2 or #b.tuple > 4 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 2 and at most 4)")
          end
@@ -11806,7 +11806,7 @@ a.types[i], b.types[i]), }
          return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
       end,
 
-      ["string_gmatch"] = function(self, node, a, b, argdelta)
+      ["string.gmatch"] = function(self, node, a, b, argdelta)
          if #b.tuple < 2 or #b.tuple > 3 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
          end
@@ -11840,7 +11840,7 @@ a.types[i], b.types[i]), }
          return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
       end,
 
-      ["string_gsub"] = function(self, node, a, b, argdelta)
+      ["string.gsub"] = function(self, node, a, b, argdelta)
 
 
 
