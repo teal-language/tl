@@ -1,6 +1,12 @@
 local util = require("spec.util")
 
 describe("string", function()
+   describe("literal", function()
+      it("doesn't care about local string", util.check([[
+         local string = "text"
+         print(("%i"):format(42))
+      ]]))
+   end)
 
    describe("byte", function()
       it("can return multiple values", util.check([[
