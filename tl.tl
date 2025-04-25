@@ -9832,15 +9832,19 @@ do
       local on_arg_id = function(node: Node, i: integer): {Node, Node}
          if node.kind == '...' then
             -- we have to handle varargs specifically
-            local nd: Node = {
+            local nd: Node = node_at(orignode, {
                kind = "expression_list",
-            }
+            })
             for n = i, #args do
                nd[n - i + 1] = args[n]
             end
             return { Node, nd }
          else
-            return { Node, args[i] }
+            -- the function should have already been typechecked for optional
+            -- parameters.
+            -- this one is optional, so return nil
+            local nd: Node = args[i] or node_at(orignode, { kind = "nil", tk = "nil" })
+            return { Node, nd }
          end
       end
 

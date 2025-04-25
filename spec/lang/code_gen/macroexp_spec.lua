@@ -196,7 +196,7 @@ describe("macroexp code generation", function()
    ]]))
 
    it("works with ...", util.gen([[
-      local macroexp macroprint(a: string, ...: string): string
+      local macroexp macroprint(a: string, ...: string)
          return print(a, ...)
       end
 
@@ -207,6 +207,20 @@ describe("macroexp code generation", function()
 
 
       print('varargs', 'dis', 'appear')
+   ]]))
+
+   it("works with optional parameters", util.gen([[
+      local macroexp macroprint(a: string, b ?: string, c ?: string)
+         return print(a, b, c)
+      end
+
+      macroprint('arg1', 'arg2')
+   ]], [[
+
+
+
+
+      print('arg1', 'arg2', nil)
    ]]))
 end)
 
