@@ -10353,7 +10353,9 @@ a.types[i], b.types[i]), }
       end
 
       if t.typename == "string" or t.typename == "enum" then
-         t = self:find_var_type("string")
+
+         t = self.env.modules["string"]
+         self.all_needs_compat["string"] = true
       end
 
       if t.typename == "typedecl" then

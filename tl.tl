@@ -10353,7 +10353,9 @@ do
       end
 
       if t is StringType or t is EnumType then
-         t = self:find_var_type("string") -- simulate string metatable
+         -- simulate string metatable
+         t = self.env.modules["string"]
+         self.all_needs_compat["string"] = true
       end
 
       if t is TypeDeclType then
