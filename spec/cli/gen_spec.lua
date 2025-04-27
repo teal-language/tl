@@ -408,4 +408,34 @@ describe("tl gen", function()
          run_gen_with_flag(finally, nil, output_code_with_optional_compat)
       end)
    end)
+
+   it("generates code using pragma (regression test for #929)", function()
+      local name = util.write_tmp_file(finally, [[
+         --#pragma arity on
+         local record A
+         end
+
+         function A.hi()
+            print("hi")
+         end
+
+         return A
+      ]])
+      local pd = io.popen(util.tl_cmd("gen", name) .. " 2>&1 1>" .. util.os_null, "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      assert.same("", output)
+      local lua_name = tl_to_lua(name)
+      util.assert_line_by_line([[
+
+         local A = {}
+
+
+         function A.hi()
+            print("hi")
+         end
+
+         return A
+      ]], util.read_file(lua_name))
+   end)
 end)

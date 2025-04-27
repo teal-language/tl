@@ -5327,6 +5327,13 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
 
    local emit_exactly_visitor_cbs <const>: VisitorCallbacks<nil, Node, Output> = { after = emit_exactly }
 
+   local emit_nothing_visitor_cbs <const>: VisitorCallbacks<nil, Node, Output> = {
+      after = function(_: nil, node: Node, _children: {Output}): Output
+         local out: Output = { y = node.y, h = 0 }
+         return out
+      end
+   }
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
@@ -5671,8 +5678,6 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             return out
          end,
       },
-      ["cast"] = {
-      },
       ["paren"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
@@ -5838,8 +5843,6 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             return out
          end,
       },
-      ["pragma"] = {
-      },
 
       ["variable"] = emit_exactly_visitor_cbs,
       ["identifier"] = emit_exactly_visitor_cbs,
@@ -5850,6 +5853,9 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
       ["..."] = emit_exactly_visitor_cbs,
       ["argument"] = emit_exactly_visitor_cbs,
       ["type_identifier"] = emit_exactly_visitor_cbs,
+
+      ["cast"] = emit_nothing_visitor_cbs,
+      ["pragma"] = emit_nothing_visitor_cbs,
    }
 
    local visit_type: Visitor<nil, TypeName, Type, Output> = {}

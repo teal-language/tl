@@ -5327,6 +5327,13 @@ function tl.generate(ast, gen_target, opts)
 
    local emit_exactly_visitor_cbs = { after = emit_exactly }
 
+   local emit_nothing_visitor_cbs = {
+      after = function(_, node, _children)
+         local out = { y = node.y, h = 0 }
+         return out
+      end,
+   }
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_, node, children)
@@ -5671,8 +5678,6 @@ function tl.generate(ast, gen_target, opts)
             return out
          end,
       },
-      ["cast"] = {},
-
       ["paren"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
@@ -5838,8 +5843,6 @@ function tl.generate(ast, gen_target, opts)
             return out
          end,
       },
-      ["pragma"] = {},
-
 
       ["variable"] = emit_exactly_visitor_cbs,
       ["identifier"] = emit_exactly_visitor_cbs,
@@ -5850,6 +5853,9 @@ function tl.generate(ast, gen_target, opts)
       ["..."] = emit_exactly_visitor_cbs,
       ["argument"] = emit_exactly_visitor_cbs,
       ["type_identifier"] = emit_exactly_visitor_cbs,
+
+      ["cast"] = emit_nothing_visitor_cbs,
+      ["pragma"] = emit_nothing_visitor_cbs,
    }
 
    local visit_type = {}
