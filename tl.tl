@@ -1693,7 +1693,6 @@ local interface Type
    typeid: integer       -- unique identifier
    inferred_at: Where    -- for error messages
    needs_compat: boolean -- for Lua compatibilty
-   special_function_handler: SpecialFunctionName -- special handling for format strings etc
 end
 
 local record GenericType
@@ -1929,6 +1928,7 @@ local record FunctionType
    args: TupleType
    rets: TupleType
    macroexp: Node
+   special_function_handler: SpecialFunctionName -- special handling for format strings etc
 end
 
 local interface AggregateType
@@ -7355,6 +7355,23 @@ local function assert_no_stdlib_errors(errors: {Error}, name: string)
    end
 end
 
+local function resolve_for_special_function(t: Type): FunctionType
+   if t is PolyType then
+      t = t.types[1]
+   end
+   if t is GenericType then
+      t = t.t
+   end
+   if t is FunctionType then
+      return t
+   end
+end
+
+local function set_special_function(t: Type, fname: SpecialFunctionName)
+   t = resolve_for_special_function(t)
+   t.special_function_handler = fname
+end
+
 tl.new_env = function(opts?: EnvOptions): Env, string
    opts = opts or {}
 
@@ -7395,21 +7412,21 @@ tl.new_env = function(opts?: EnvOptions): Env, string
 
       -- special cased functions
       local string_t = (stdlib_globals["string"].t as TypeDeclType).def as RecordType
-      string_t.fields["find"].special_function_handler = "string.find"
-      string_t.fields["format"].special_function_handler = "string.format"
-      string_t.fields["gmatch"].special_function_handler = "string.gmatch"
-      string_t.fields["gsub"].special_function_handler = "string.gsub"
-      string_t.fields["match"].special_function_handler = "string.match"
-      string_t.fields["pack"].special_function_handler = "string.pack"
-      string_t.fields["unpack"].special_function_handler = "string.unpack"
+      set_special_function(string_t.fields["find"], "string.find")
+      set_special_function(string_t.fields["format"], "string.format")
+      set_special_function(string_t.fields["gmatch"], "string.gmatch")
+      set_special_function(string_t.fields["gsub"], "string.gsub")
+      set_special_function(string_t.fields["match"], "string.match")
+      set_special_function(string_t.fields["pack"], "string.pack")
+      set_special_function(string_t.fields["unpack"], "string.unpack")
 
-      stdlib_globals["assert"].t.special_function_handler = "assert"
-      stdlib_globals["ipairs"].t.special_function_handler = "ipairs"
-      stdlib_globals["pairs"].t.special_function_handler = "pairs"
-      stdlib_globals["pcall"].t.special_function_handler = "pcall"
-      stdlib_globals["xpcall"].t.special_function_handler = "xpcall"
-      stdlib_globals["rawget"].t.special_function_handler = "rawget"
-      stdlib_globals["require"].t.special_function_handler = "require"
+      set_special_function(stdlib_globals["assert"].t, "assert")
+      set_special_function(stdlib_globals["ipairs"].t, "ipairs")
+      set_special_function(stdlib_globals["pairs"].t, "pairs")
+      set_special_function(stdlib_globals["pcall"].t, "pcall")
+      set_special_function(stdlib_globals["xpcall"].t, "xpcall")
+      set_special_function(stdlib_globals["rawget"].t, "rawget")
+      set_special_function(stdlib_globals["require"].t, "require")
 
       -- only global scope and vararg functions accept `...`:
       -- `@is_va` is an internal sentinel value which is
@@ -7907,7 +7924,6 @@ do
             end
             copy.typeargs = ct
             copy.t, same = resolve(t.t, same)
-            copy.special_function_handler = t.special_function_handler
          elseif t is ArrayType then
             assert(copy is ArrayType)
 
@@ -8008,7 +8024,6 @@ do
             for i, tf in ipairs(t.types) do
                copy.types[i], same = resolve(tf, same)
             end
-            copy.special_function_handler = t.special_function_handler
          elseif t is TupleTableType then
             assert(copy is TupleTableType)
             copy.inferred_at = t.inferred_at
@@ -11259,7 +11274,7 @@ do
       end
    end
 
-   local function special_pcall_xpcall(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): Type
+   local function special_pcall_xpcall(self: TypeChecker, node: Node, a: FunctionType, b: TupleType, argdelta?: integer): Type
       local isx = a.special_function_handler == "xpcall"
       local base_nargs = isx and 2 or 1
       local bool = a_type(node, "boolean", {})
@@ -11941,10 +11956,14 @@ do
          argdelta = argdelta or 0
       end
 
-      local special_tyck = special_functions[a.special_function_handler]
-      if special_tyck then
-         return special_tyck(self, node, a, b, argdelta)
+      local sa = resolve_for_special_function(a)
+      if sa then
+         local special_tyck = special_functions[sa.special_function_handler]
+         if special_tyck then
+            return special_tyck(self, node, a, b, argdelta)
+         end
       end
+
       return (self:type_check_function_call(node, a, b, argdelta))
    end
 

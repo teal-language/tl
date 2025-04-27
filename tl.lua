@@ -1721,10 +1721,10 @@ local table_types = {
 
 
 
-
 local function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
+
 
 
 
@@ -7355,6 +7355,23 @@ local function assert_no_stdlib_errors(errors, name)
    end
 end
 
+local function resolve_for_special_function(t)
+   if t.typename == "poly" then
+      t = t.types[1]
+   end
+   if t.typename == "generic" then
+      t = t.t
+   end
+   if t.typename == "function" then
+      return t
+   end
+end
+
+local function set_special_function(t, fname)
+   t = resolve_for_special_function(t)
+   t.special_function_handler = fname
+end
+
 tl.new_env = function(opts)
    opts = opts or {}
 
@@ -7395,21 +7412,21 @@ tl.new_env = function(opts)
 
 
       local string_t = (stdlib_globals["string"].t).def
-      string_t.fields["find"].special_function_handler = "string.find"
-      string_t.fields["format"].special_function_handler = "string.format"
-      string_t.fields["gmatch"].special_function_handler = "string.gmatch"
-      string_t.fields["gsub"].special_function_handler = "string.gsub"
-      string_t.fields["match"].special_function_handler = "string.match"
-      string_t.fields["pack"].special_function_handler = "string.pack"
-      string_t.fields["unpack"].special_function_handler = "string.unpack"
+      set_special_function(string_t.fields["find"], "string.find")
+      set_special_function(string_t.fields["format"], "string.format")
+      set_special_function(string_t.fields["gmatch"], "string.gmatch")
+      set_special_function(string_t.fields["gsub"], "string.gsub")
+      set_special_function(string_t.fields["match"], "string.match")
+      set_special_function(string_t.fields["pack"], "string.pack")
+      set_special_function(string_t.fields["unpack"], "string.unpack")
 
-      stdlib_globals["assert"].t.special_function_handler = "assert"
-      stdlib_globals["ipairs"].t.special_function_handler = "ipairs"
-      stdlib_globals["pairs"].t.special_function_handler = "pairs"
-      stdlib_globals["pcall"].t.special_function_handler = "pcall"
-      stdlib_globals["xpcall"].t.special_function_handler = "xpcall"
-      stdlib_globals["rawget"].t.special_function_handler = "rawget"
-      stdlib_globals["require"].t.special_function_handler = "require"
+      set_special_function(stdlib_globals["assert"].t, "assert")
+      set_special_function(stdlib_globals["ipairs"].t, "ipairs")
+      set_special_function(stdlib_globals["pairs"].t, "pairs")
+      set_special_function(stdlib_globals["pcall"].t, "pcall")
+      set_special_function(stdlib_globals["xpcall"].t, "xpcall")
+      set_special_function(stdlib_globals["rawget"].t, "rawget")
+      set_special_function(stdlib_globals["require"].t, "require")
 
 
 
@@ -7907,7 +7924,6 @@ do
             end
             copy.typeargs = ct
             copy.t, same = resolve(t.t, same)
-            copy.special_function_handler = t.special_function_handler
          elseif t.typename == "array" then
             assert(copy.typename == "array")
 
@@ -8008,7 +8024,6 @@ do
             for i, tf in ipairs(t.types) do
                copy.types[i], same = resolve(tf, same)
             end
-            copy.special_function_handler = t.special_function_handler
          elseif t.typename == "tupletable" then
             assert(copy.typename == "tupletable")
             copy.inferred_at = t.inferred_at
@@ -11941,10 +11956,14 @@ a.types[i], b.types[i]), }
          argdelta = argdelta or 0
       end
 
-      local special_tyck = special_functions[a.special_function_handler]
-      if special_tyck then
-         return special_tyck(self, node, a, b, argdelta)
+      local sa = resolve_for_special_function(a)
+      if sa then
+         local special_tyck = special_functions[sa.special_function_handler]
+         if special_tyck then
+            return special_tyck(self, node, a, b, argdelta)
+         end
       end
+
       return (self:type_check_function_call(node, a, b, argdelta))
    end
 
