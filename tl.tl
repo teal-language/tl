@@ -11928,22 +11928,18 @@ do
    }
 
    function TypeChecker:type_check_funcall(node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
-      argdelta = argdelta or 0
-
-      local special_tyck = special_functions[a.special_function_handler]
-
       if node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
-         if special_tyck then
-            return special_tyck(self, node, a, b, -1)
-         end
-         return (self:type_check_function_call(node, a, b, -1))
+         argdelta = -1
       else
-         if special_tyck then
-            return special_tyck(self, node, a, b, argdelta)
-         end
-         return (self:type_check_function_call(node, a, b, argdelta))
+         argdelta = argdelta or 0
       end
+
+      local special_tyck = special_functions[a.special_function_handler]
+      if special_tyck then
+         return special_tyck(self, node, a, b, argdelta)
+      end
+      return (self:type_check_function_call(node, a, b, argdelta))
    end
 
    -- is the i-th assignment in a local declaration of the form `x = x` ?
