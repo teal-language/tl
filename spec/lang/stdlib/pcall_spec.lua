@@ -27,7 +27,9 @@ describe("pcall", function()
       local function f(s: string): number
          return 123
       end
-      local a, b, d = pcall(pcall, f, "num")
+      -- checking that it doesn't get confused
+      local xpcall = pcall
+      local a, b, d = pcall(xpcall, f, "num")
 
       assert(a == true)
       assert(b == true)

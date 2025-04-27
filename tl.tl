@@ -311,23 +311,24 @@ do
 
       char: function(integer...): string
       dump: function(function(any...): (any), ? boolean): string
-      find: function(string, string, ? integer, ? boolean): integer, integer, string...
-      format: function(string, any...): string
-      gmatch: function(string, string, ? integer): (function(): string...)
+      find: function(string, string, ? integer, ? boolean): integer, integer, string... --[[special_function]]
+      format: function(string, any...): string --[[special_function]]
+      gmatch: function(string, string, ? integer): (function(): string...) --[[special_function]]
 
-      gsub: function(string, string, string, ? integer): string, integer
-      gsub: function(string, string, {string:string}, ? integer): string, integer
-      gsub: function(string, string, function(string...): ((string | integer | number)...), ? integer): string, integer
+      gsub: function(string, string, string, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer --[[special_function]]
 
       len: function(string): integer
       lower: function(string): string
-      match: function(string, string, ? integer): string...
-      pack: function(string, any...): string
+      match: function(string, string, ? integer): string... --[[special_function]]
+      pack: function(string, any...): string --[[special_function]]
       packsize: function(string): integer
       rep: function(string, integer, ? string): string
       reverse: function(string): string
       sub: function(string, integer, ? integer): string
-      unpack: function(string, string, ? integer): any...
+      unpack: function(string, string, ? integer): any... --[[special_function]]
       upper: function(string): string
    end
 
@@ -396,7 +397,7 @@ do
       type XpcallMsghFunction = function(...: any): ()
 
       arg: {string}
-      assert: function<A, B>(A, ? B, ...: any): A
+      assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
 
       collectgarbage: function(? CollectGarbageCommand): number
       collectgarbage: function(CollectGarbageSetValue, integer): number
@@ -407,7 +408,7 @@ do
 
       error: function(? any, ? integer)
       getmetatable: function<T>(T): metatable<T>
-      ipairs: function<A>({A}): (function():(integer, A))
+      ipairs: function<A>({A}): (function():(integer, A)) --[[special_function]]
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
       load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
@@ -417,12 +418,12 @@ do
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
 
-      pairs: function<K, V>({K:V}): (function():(K, V))
-      pcall: function(function(any...):(any...), any...): boolean, any...
+      pairs: function<K, V>({K:V}): (function():(K, V)) --[[special_function]]
+      pcall: function(function(any...):(any...), any...): boolean, any... --[[special_function]]
       print: function(any...)
       rawequal: function(any, any): boolean
 
-      rawget: function<K, V>({K:V}, K): V
+      rawget: function<K, V>({K:V}, K): V --[[special_function]]
       rawget: function({any:any}, any): any
       rawget: function(any, any): any
 
@@ -432,7 +433,7 @@ do
       rawset: function({any:any}, any, any): {any:any}
       rawset: function(any, any, any): any
 
-      require: function(string): any
+      require: function(string): any --[[special_function]]
 
       select: function<T>(integer, T...): T...
       select: function(integer, any...): any...
@@ -446,7 +447,7 @@ do
       tostring: function(any): string
       type: function(any): string
       warn: function(string, string...)
-      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any...
+      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any... --[[special_function]]
       _VERSION: string
    end
 
@@ -1667,6 +1668,23 @@ local table_types <total>: {TypeName:boolean} = {
    ["*"] = false,
 }
 
+local enum SpecialFunctionName
+   "assert"
+   "ipairs"
+   "pairs"
+   "pcall"
+   "xpcall"
+   "rawget"
+   "require"
+   "string.find"
+   "string.format"
+   "string.gmatch"
+   "string.gsub"
+   "string.match"
+   "string.pack"
+   "string.unpack"
+end
+
 local interface Type
    is Where
    where self.typename
@@ -1675,6 +1693,7 @@ local interface Type
    typeid: integer       -- unique identifier
    inferred_at: Where    -- for error messages
    needs_compat: boolean -- for Lua compatibilty
+   special_function_handler: SpecialFunctionName -- special handling for format strings etc
 end
 
 local record GenericType
@@ -5777,7 +5796,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string, ws: string): string
+            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5788,7 +5808,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return ""
             end)
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string, digits: string): string
+            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5797,7 +5818,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return byte and string.format("\\%03d", byte) or "\\x" .. digits
             end)
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string, hex_digits: string): string
+            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
@@ -7365,6 +7387,24 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       table_t.fields["pack"].needs_compat = true
       table_t.fields["unpack"].needs_compat = true
 
+      -- special cased functions
+      local string_t = (stdlib_globals["string"].t as TypeDeclType).def as RecordType
+      string_t.fields["find"].special_function_handler = "string.find"
+      string_t.fields["format"].special_function_handler = "string.format"
+      string_t.fields["gmatch"].special_function_handler = "string.gmatch"
+      string_t.fields["gsub"].special_function_handler = "string.gsub"
+      string_t.fields["match"].special_function_handler = "string.match"
+      string_t.fields["pack"].special_function_handler = "string.pack"
+      string_t.fields["unpack"].special_function_handler = "string.unpack"
+
+      stdlib_globals["assert"].t.special_function_handler = "assert"
+      stdlib_globals["ipairs"].t.special_function_handler = "ipairs"
+      stdlib_globals["pairs"].t.special_function_handler = "pairs"
+      stdlib_globals["pcall"].t.special_function_handler = "pcall"
+      stdlib_globals["xpcall"].t.special_function_handler = "xpcall"
+      stdlib_globals["rawget"].t.special_function_handler = "rawget"
+      stdlib_globals["require"].t.special_function_handler = "require"
+
       -- only global scope and vararg functions accept `...`:
       -- `@is_va` is an internal sentinel value which is
       -- `any` if `...` is accepted in this scope or `nil` if it isn't.
@@ -7861,6 +7901,7 @@ do
             end
             copy.typeargs = ct
             copy.t, same = resolve(t.t, same)
+            copy.special_function_handler = t.special_function_handler
          elseif t is ArrayType then
             assert(copy is ArrayType)
 
@@ -7905,6 +7946,7 @@ do
             copy.is_record_function = t.is_record_function
             copy.args, same = resolve(t.args, same) as (TupleType, boolean)
             copy.rets, same = resolve(t.rets, same) as (TupleType, boolean)
+            copy.special_function_handler = t.special_function_handler
          elseif t is RecordLikeType then
             assert(copy is RecordType or copy is InterfaceType)
             copy.declname = t.declname
@@ -7960,6 +8002,7 @@ do
             for i, tf in ipairs(t.types) do
                copy.types[i], same = resolve(tf, same)
             end
+            copy.special_function_handler = t.special_function_handler
          elseif t is TupleTableType then
             assert(copy is TupleTableType)
             copy.inferred_at = t.inferred_at
@@ -9941,9 +9984,9 @@ do
          "type_dot" -- a dot-call where the receiver is a type, e.g. `MyRecord.my_func()`
       end
 
-      local check_call: function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
+      local check_call: function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
       do
-         local check_args_rets: function(TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): boolean, {Error}
+         local check_args_rets: function(TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
          do
             -- check if a tuple `xs` matches tuple `ys`
             local function check_func_type_list(self: TypeChecker, w: Where, wheres: {Where}, xs: TupleType, ys: TupleType, from: integer, delta: integer, v: VarianceMode, mode: ArgCheckMode): boolean, {Error}
@@ -9967,15 +10010,18 @@ do
                return true
             end
 
-            check_args_rets = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer): boolean, {Error}
+            check_args_rets = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
                local rets_ok = true
                local args_ok, args_errs: boolean, {Error} = true, nil
+
+               local fargs = or_args or f.args
+               local frets = or_rets or f.rets
 
                local from = 1
                if argdelta == -1 then
                   from = 2
                   local errs = {}
-                  local first = f.args.tuple[1]
+                  local first = fargs.tuple[1]
                   if (not first is SelfType) and not self:arg_check(w, errs, first, args.tuple[1], "contravariant", "self") then
                      return nil, errs
                   end
@@ -9983,17 +10029,17 @@ do
 
                if expected_rets then
                   expected_rets = self:infer_at(w, expected_rets)
-                  infer_emptytables(self, w, nil, expected_rets, f.rets, 0)
+                  infer_emptytables(self, w, nil, expected_rets, frets, 0)
 
-                  rets_ok = check_func_type_list(self, w, nil, f.rets, expected_rets, 1, 0, "covariant", "return")
+                  rets_ok = check_func_type_list(self, w, nil, frets, expected_rets, 1, 0, "covariant", "return")
                end
 
-               args_ok, args_errs = check_func_type_list(self, w, wargs, f.args, args, from, argdelta, "contravariant", "argument")
+               args_ok, args_errs = check_func_type_list(self, w, wargs, fargs, args, from, argdelta, "contravariant", "argument")
                if (not args_ok) or (not rets_ok) then
                   return nil, args_errs or {}
                end
 
-               infer_emptytables(self, w, wargs, args, f.args, argdelta)
+               infer_emptytables(self, w, wargs, args, fargs, argdelta)
 
                return true
             end
@@ -10013,7 +10059,7 @@ do
             return false
          end
 
-         check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): boolean, {Error}
+         check_call = function(self: TypeChecker, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
             local arg1 = args.tuple[1]
             if cm == "method" and arg1 then
                local selftype = arg1
@@ -10023,7 +10069,7 @@ do
                self:add_var(nil, "@self", a_typedecl(w, selftype))
             end
 
-            local fargs = f.args.tuple
+            local fargs = (or_args or f.args).tuple
             if f.is_method and is_method_mismatch(self, w, arg1, fargs[1], cm) then
                return false
             end
@@ -10032,11 +10078,11 @@ do
             local wanted = #fargs
             local min_arity = self.feat_arity and f.min_arity or 0
 
-            if given < min_arity or (given > wanted and not f.args.is_va) then
+            if given < min_arity or (given > wanted and not (or_args or f.args).is_va) then
                return nil, { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. show_arity(f) .. ")") }
             end
 
-            return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta)
+            return check_args_rets(self, w, wargs, f, args, expected_rets, argdelta, or_args, or_rets)
          end
       end
 
@@ -10055,7 +10101,7 @@ do
          end
       end
 
-      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
+      local check_poly_call: function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
       do
          local function fail_poly_call_arity(self: TypeChecker, w: Where, p: PolyType, given: integer): {Error}
             local expects: {string} = {}
@@ -10071,7 +10117,7 @@ do
             return { Err_at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
          end
 
-         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer): FunctionType, TupleType, {Error}
+         check_poly_call = function(self: TypeChecker, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
             local given = #args.tuple
 
             local tried: {integer:boolean} = {}
@@ -10082,7 +10128,7 @@ do
                for i, f in self:iterate_poly(p) do
                   assert(f is FunctionType, f.typename)
                   assert(f.args)
-                  first_rets = first_rets or f.rets
+                  first_rets = first_rets or or_rets or f.rets
 
                   local wanted = #f.args.tuple
                   local min_arity = self.feat_arity and f.min_arity or 0
@@ -10095,12 +10141,12 @@ do
                      -- then finally try vararg functions
                      or (pass == 3 and (f.args.is_va and given > wanted)) )
                   then
-                     local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta)
+                     local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta, or_args, or_rets)
                      if ok then
-                        return f, f.rets
+                        return f, or_rets or f.rets
                      elseif expected_rets then
                         -- revert inferred returns
-                        infer_emptytables(self, w, wargs, f.rets, f.rets, argdelta)
+                        infer_emptytables(self, w, wargs, or_rets or f.rets, or_rets or f.rets, argdelta)
                      end
 
                      self:rollback_scope_transaction()
@@ -10135,7 +10181,7 @@ do
          return "plain"
       end
 
-      function TypeChecker:type_check_function_call(node: Node, func: Type, args: TupleType, argdelta: integer, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
+      function TypeChecker:type_check_function_call(node: Node, func: Type, args: TupleType, argdelta: integer, or_args ?: TupleType, or_rets ?: TupleType, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
          e1 = e1 or node.e1
          e2 = e2 or node.e2
 
@@ -10171,11 +10217,11 @@ do
          local f, ret: FunctionType, InvalidOrTupleType
 
          if func is PolyType then
-            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta)
+            f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
          elseif func is FunctionType then
             local _: boolean
-            _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta)
-            f, ret = func, func.rets
+            _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
+            f, ret = func, or_rets or func.rets
          else
             ret = self.errs:invalid_at(node, "not a function: %s", func)
          end
@@ -10252,7 +10298,7 @@ do
          end
 
          local mtdelta = metamethod is FunctionType and metamethod.is_method and -1 or 0
-         local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, node, e2)
+         local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, nil, nil, node, e2)
          local ret_unary <const> = resolve_tuple(ret_call)
          local ret <const> = self:to_structural(ret_unary)
          return ret, meta_on_operator
@@ -10340,7 +10386,7 @@ do
          end
       end
 
-      local keyg = key:gsub('%%', '%%%%')
+      local keyg = key:gsub("%%", "%%%%")
 
       if t is RecordLikeType then
          assert(t.fields, "record has no fields!?")
@@ -10639,7 +10685,7 @@ do
             local field_names: {string} = sorted_keys(rb.enumset)
             for _, k in ipairs(field_names) do
                if not ra.fields[k] then
-                  errm, erra = "enum value '" .. k:gsub('%%', '%%%%') .. "' is not a field in %s", ra
+                  errm, erra = "enum value '" .. k:gsub("%%", "%%%%") .. "' is not a field in %s", ra
                   break
                end
             end
@@ -11201,8 +11247,9 @@ do
       end
    end
 
-   local function special_pcall_xpcall(self: TypeChecker, node: Node, _a: Type, b: TupleType, argdelta?: integer): Type
-      local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
+   local function special_pcall_xpcall(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): Type
+      local isx = a.special_function_handler == "xpcall"
+      local base_nargs = isx and 2 or 1
       local bool = a_type(node, "boolean", {})
       if #node.e2 < base_nargs then
          self.errs:add(node, "wrong number of arguments (given " .. #node.e2 .. ", expects at least " .. base_nargs .. ")")
@@ -11217,7 +11264,7 @@ do
       ftype = ensure_not_method(ftype)
 
       local fe2: Node = node_at(node.e2, {})
-      if node.e1.tk == "xpcall" then
+      if isx then
          base_nargs = 2
          local arg2 = node.e2[2]
          local msgh = table.remove(b.tuple, 1)
@@ -11245,7 +11292,268 @@ do
       return rets
    end
 
-   local special_functions: {string : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
+   local function pattern_findclassend(pat: string, i: integer, strict: boolean): integer, boolean, string
+      local c = pat:sub(i, i)
+      if c == "%" then
+         local peek = pat:sub(i + 1, i + 1)
+         if peek == "f" then
+            -- frontier
+            if pat:sub(i + 2, i + 2) ~= "[" then
+               return nil, nil, "malformed pattern: missing '[' after %f"
+            end
+            local e, _, err = pattern_findclassend(pat, i + 2, strict)
+            if not e then
+               return nil, nil, err
+            else
+               return e, false
+            end
+         elseif peek == "b" then
+            if pat:sub(i + 3, i + 3) == "" then
+               return nil, nil, "malformed pattern: need balanced characters"
+            end
+            return i + 3, false
+         elseif peek == "" then
+            return nil, nil, "malformed pattern: expected class"
+         elseif peek:match"[1-9]" then
+            return i + 1, false
+         elseif strict and not peek:match"[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]" then
+            return nil, nil, "malformed pattern: invalid class '" .. peek .. "'"
+         else
+            return i + 1, true
+         end
+      elseif c == "[" then
+         if pat:sub(i + 1, i + 1) == "^" then
+            i = i + 2 -- skip the inverter
+         else
+            i = i + 1
+         end
+
+         local isfirst = true
+         repeat
+            local c_ = pat:sub(i, i)
+            if c_ == "" then
+               return nil, nil, "malformed pattern: missing ']'"
+            elseif c_ == "%" then
+               if strict and not pat:sub(i + 1, i + 1):match"[][^$()%%.*+%-?AaCcDdGgLlPpSsUuWwXxZz]" then
+                  return nil, nil, "malformed pattern: invalid escape"
+               end
+               i = i + 2
+            elseif c_ == "-" and strict and not isfirst then
+               return nil, nil, "malformed pattern: unexpected '-'"
+            else
+               local c2 = pat:sub(i + 1, i + 1)
+               local c3 = pat:sub(i + 2, i + 2)
+               if c2 == "-" then
+                  if strict and c3 == "]" then
+                     return nil, nil, "malformed pattern: unexpected ']'"
+                  elseif strict and c3 == "-" then
+                     return nil, nil, "malformed pattern: unexpected '-'"
+                  elseif strict and c3 == "%" then
+                     return nil, nil, "malformed pattern: unexpected '%'"
+                  end
+                  -- don't skip the last one if it is a % or ]
+                  i = i + 2
+               else
+                  i = i + 1
+               end
+            end
+            isfirst = false
+         until pat:sub(i, i) == "]"
+
+         return i, true
+      else
+         return i, true
+      end
+   end
+
+   local pattern_isop: {string:boolean} = {
+      ["?"] = true,
+      ["+"] = true,
+      ["-"] = true,
+      ["*"] = true,
+   }
+
+   local function parse_pattern_string(node: Node, pat: string, inclempty: boolean): {Type}, string
+      --[[
+         Pattern syntax:
+
+         pat <- start? mid* end?
+         start <- "^"
+         end <- "$"
+         mid <- "(" mid* ")"
+              | "[" "^"? set "]" rpt?
+              | "%" "b" . .
+              | "%" "f" "[" "^"? set "]"
+              | "%" [1-9]
+              | "%" [][^$()%.*+-?AaCcDdGgLlPpSsUuWwXxZz] rpt?
+              | [^][^$()%*+-?] rpt?
+         set <- setitem1? setitem*
+         setitem1 <- "]"
+                   | "]" "-" [^]%]
+         setitem <- "%" [][^$()%.*+-?AaCcDdGgLlPpSsUuWwXxZz]
+                  | [^]%] "-" [^]%]
+                  | [^]%-]
+         rpt <- [-*+?]
+      --]]
+      local strict = false
+
+      local results: {Type} = {}
+
+      local i = pat:sub(1, 1) == "^" and 2 or 1
+      local unclosed = 0
+
+      while i <= #pat do
+         local c = pat:sub(i, i)
+
+         if i == #pat and c == "$" then
+            break
+         end
+
+         local classend, canhavemul, err = pattern_findclassend(pat, i, strict)
+         if not classend then
+            return nil, err
+         end
+
+         local peek = pat:sub(classend + 1, classend + 1)
+
+         if c == "(" and peek == ")" then
+            -- position match
+            table.insert(results, a_type(node, "integer", {}))
+            i = i + 2
+         elseif c == "(" then
+            table.insert(results, a_type(node, "string", {}))
+            unclosed = unclosed + 1
+            i = i + 1
+         elseif c == ")" then
+            unclosed = unclosed - 1
+            if unclosed < 0 then
+               return nil, "malformed pattern: unexpected ')'"
+            end
+            i = i + 1
+         elseif strict and c:match"[]^$()*+%-?]" then -- operations that haven't been handled
+            return nil, "malformed pattern: character was unexpected: '" .. c .. "'"
+         elseif pattern_isop[peek] and canhavemul then
+            i = classend + 2
+         else
+            -- simple match
+            i = classend + 1
+         end
+      end
+
+      if inclempty and not results[1] then
+         results[1] = a_type(node, "string", {})
+      end
+      if unclosed ~= 0 then
+         return nil, "malformed pattern: " .. unclosed .. " capture" .. (unclosed == 1 and "" or "s") .. " not closed"
+      end
+      return results
+   end
+
+   local function parse_format_string(node: Node, pat: string): {Type}, string
+      local pos = 1
+      local results: {Type} = {}
+      while pos <= #pat do
+         -- TODO: remove once bootstrap
+         local endc = pat:match("%%[-+#0-9. ]*()", pos) as integer
+         if not endc then return results end
+         local c = pat:sub(endc, endc)
+         if c == "" then
+            return nil, "missing pattern specifier at end"
+         end
+         if c:match"[AaEefGg]" then
+            table.insert(results, a_type(node, "number", {}))
+         elseif c:match"[cdiouXx]" then
+            table.insert(results, a_type(node, "integer", {}))
+         elseif c == "q" then
+            table.insert(results,
+               a_union(node, {
+                  a_type(node, "string", {}),
+                  a_type(node, "number", {}),
+                  a_type(node, "integer", {}),
+                  a_type(node, "boolean", {}),
+                  a_type(node, "nil", {}),
+               })
+            )
+         elseif c == "p" or c == "s" then
+            table.insert(results, a_type(node, "any", {}))
+         elseif c == "%" then
+            -- escaped percent sign
+         else
+            return nil, "invalid pattern specifier: '" .. c .. "'"
+         end
+         pos = endc + 1
+      end
+      return results
+   end
+
+   local function pack_string_skipnum(pos: integer, pat: string): integer
+      -- TODO: remove cast once bootstrap is updated
+      return pat:match("[0-9]*()", pos) as integer
+   end
+
+   local function parse_pack_string(node: Node, pat: string): {Type}, string
+      local pos = 1
+      local results: {Type} = {}
+      local skip_next = false
+      while pos <= #pat do
+         local c = pat:sub(pos, pos)
+         local to_add: Type
+         local goto_next: boolean
+         if c:match"[<> =x]" then
+            -- nothing to do with argument
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            pos = pos + 1
+            goto_next = true
+         elseif c == "X" then
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            skip_next = true
+            pos = pos + 1
+            goto_next = true
+         elseif c == "!" then
+            if skip_next then
+               return nil, "expected argument for 'X'"
+            end
+            pos = pack_string_skipnum(pos + 1, pat)
+            goto_next = true
+         elseif c:match"[Ii]" then
+            pos = pack_string_skipnum(pos + 1, pat)
+            to_add = a_type(node, "integer", {})
+         elseif c:match"[bBhHlLjJT]" then
+            pos = pos + 1
+            to_add = a_type(node, "integer", {})
+         elseif c:match"[fdn]" then
+            pos = pos + 1
+            to_add = a_type(node, "number", {})
+         elseif c == "z" or c == "s" or c == "c" then
+            if c == "z" then
+               pos = pos + 1
+            else
+               pos = pack_string_skipnum(pos + 1, pat)
+            end
+            -- string.pack accepts numbers here, but unpacks them as strings so we just skip it
+            to_add = a_type(node, "string", {})
+         else
+            return nil, "invalid format option: '" .. c .. "'"
+         end
+         if not goto_next then
+            if skip_next then
+               skip_next = false
+            else
+               table.insert(results, to_add)
+            end
+         end
+      end
+      if skip_next then
+         return nil, "expected argument for 'X'"
+      end
+      return results
+   end
+
+   local special_functions <total>: {SpecialFunctionName : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
       ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
             return self.errs:invalid_at(node, "pairs requires an argument")
@@ -11333,28 +11641,301 @@ do
 
       ["pcall"] = special_pcall_xpcall,
       ["xpcall"] = special_pcall_xpcall,
-
       ["assert"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          node.known = FACT_TRUTHY
          local r = self:type_check_function_call(node, a, b, argdelta)
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
+      ["string.pack"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
+         end
+
+         local packstr = b.tuple[1]
+
+         if packstr is StringType and packstr.literal and a is FunctionType then
+            local st = packstr.literal
+            local items, e = parse_pack_string(node, st)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", packstr, e)
+               else
+                  return self.errs:invalid_at(packstr, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(node, "string", {}))
+
+            if #items ~= #b.tuple then
+               return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects " .. #items .. ")")
+            end
+
+            return (self:type_check_function_call(node, a, b, argdelta, a_tuple(node, items), nil))
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
+      end,
+
+      ["string.unpack"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local packstr = b.tuple[1]
+
+         local rets: TupleType
+
+         if packstr is StringType and packstr.literal then
+            local st = packstr.literal
+            local items, e = parse_pack_string(node, st)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", packstr, e)
+               else
+                  return self.errs:invalid_at(packstr, e)
+               end
+            end
+
+            table.insert(items, a_type(node, "integer", {}))
+
+            -- set the returns to match the response
+            rets = a_tuple(node, items)
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string.format"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
+         end
+
+         local fstr = b.tuple[1]
+
+         if fstr is StringType and fstr.literal and a is FunctionType then
+            local st = fstr.literal
+            local items, e = parse_format_string(node, st)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", fstr, e)
+               else
+                  return self.errs:invalid_at(fstr, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(node, "string", {}))
+
+            if #items ~= #b.tuple then
+               return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects " .. #items .. ")")
+            end
+
+            -- check the arguments now
+            return (self:type_check_function_call(node, a, b, argdelta, a_tuple(node, items), nil))
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
+      end,
+
+      ["string.match"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets: TupleType
+         local pat = b.tuple[2]
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            -- set the returns to match the response
+            rets = a_tuple(node, items)
+         end
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string.find"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 2 and at most 4)")
+         end
+
+         local plainarg = node.e2[4 + (argdelta or 0)]
+         local pat = b.tuple[2]
+
+         local rets: TupleType
+
+         if pat is StringType and pat.literal
+            and ((not plainarg) or (plainarg.kind == "boolean" and plainarg.tk == "false")) then
+            -- we have a nice constant string that we can modify
+            local st = pat.literal
+
+            local items, e = parse_pattern_string(node, st, false)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            table.insert(items, 1, a_type(pat, "integer", {}))
+            table.insert(items, 1, a_type(pat, "integer", {}))
+
+            -- set the returns to match the response
+            rets = a_tuple(node, items)
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string.gmatch"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         end
+
+         local rets: TupleType
+         local pat = b.tuple[2]
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            -- set the returns to match the response
+            rets = a_tuple(node, {
+               a_function(node, {
+                  min_arity = 0,
+                  args = a_tuple(node, {}),
+                  rets = a_tuple(node, items),
+               })
+            })
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, nil, rets))
+      end,
+
+      ["string.gsub"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         -- if the second argument is a literal, we can parse it and change the matchers
+         -- gsub: function(string, string, <matcher>, ? integer): string, integer
+
+         if #b.tuple < 3 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 3 or 4)")
+         end
+         local pat = b.tuple[2]
+         local orig_t = b.tuple[3]
+         local trepl = self:to_structural(orig_t)
+
+         local has_fourth = b.tuple[4]
+
+         local args: TupleType
+
+         if pat is StringType and pat.literal then
+            local st = pat.literal
+            local items, e = parse_pattern_string(node, st, true)
+
+            if e then
+               if items then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            local i1 = items[1]
+
+            -- we expect replarg to be one of:
+            -- string
+            -- {(items[1]):string}
+            -- function(table.unpack(items)): ((string|integer|number)...)
+
+            local replarg_type: Type
+
+            local expected_pat_return = a_union(node, {
+               a_type(node, "string", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "number", {}),
+            })
+            if self:is_a(trepl, expected_pat_return) then
+               -- fine
+               replarg_type = expected_pat_return
+            elseif trepl is MapType then
+               replarg_type = a_map(node, i1, expected_pat_return)
+            elseif trepl is RecordLikeType then
+               if not (i1 is StringType) then
+                  self.errs:invalid_at(trepl, "expected a table with integers as keys")
+               end
+               replarg_type = a_map(node, i1, expected_pat_return)
+            elseif trepl is ArrayLikeType then
+               if not (i1 is IntegerType) then
+                  self.errs:invalid_at(trepl, "expected a table with strings as keys")
+               end
+               replarg_type = an_array(node, expected_pat_return)
+            elseif trepl is FunctionType then
+               local validftype = a_function(node, {
+                  min_arity = self.feat_arity and #items or 0,
+                  args = a_tuple(node, items),
+                  rets = a_vararg(node, { expected_pat_return }),
+               })
+               replarg_type = validftype
+            end
+            -- other types should be taken care of by the type_check_function_call below
+
+            if replarg_type then
+               args = a_tuple(node, {
+                  a_type(node, "string", {}),
+                  a_type(node, "string", {}),
+                  replarg_type,
+                  has_fourth and a_type(node, "integer", {}) or nil,
+               })
+            end
+         end
+
+         return (self:type_check_function_call(node, a, b, argdelta, args, nil))
+      end,
    }
 
    function TypeChecker:type_check_funcall(node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
       argdelta = argdelta or 0
-      if node.e1.kind == "variable" then
-         local special = special_functions[node.e1.tk]
-         if special then
-            return special(self, node, a, b, argdelta)
-         else
-            return (self:type_check_function_call(node, a, b, argdelta))
-         end
-      elseif node.e1.op and node.e1.op.op == ":" then
+
+      local special_tyck = special_functions[a.special_function_handler]
+
+      if node.e1.op and node.e1.op.op == ":" then
          table.insert(b.tuple, 1, node.e1.receiver)
+         if special_tyck then
+            return special_tyck(self, node, a, b, -1)
+         end
          return (self:type_check_function_call(node, a, b, -1))
       else
+         if special_tyck then
+            return special_tyck(self, node, a, b, argdelta)
+         end
          return (self:type_check_function_call(node, a, b, argdelta))
       end
    end
@@ -12178,7 +12759,7 @@ do
 
             if exp1type is PolyType then
                local _r, f: Type, Type
-               _r, f = self:type_check_function_call(exp1, exp1type, args, 0, exp1, {node.exps[2], node.exps[3]})
+               _r, f = self:type_check_function_call(exp1, exp1type, args, 0, nil, nil, exp1, {node.exps[2], node.exps[3]})
                if f then
                   exp1type = f
                else
@@ -14040,7 +14621,7 @@ end
 
 local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
-      local pattern = "(.*)%.([a-z]+)$"
+      local pattern <const> = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
       extension = extension and extension:lower()
 

@@ -20,6 +20,50 @@ describe("string", function()
          local s1: string = string.match("hello world", "world")
          local s2: string = string.match("hello world", "world", 2)
       ]]))
+      it("can match with position captures", util.check([[
+         local i1, s1: integer, string = string.match("hello world", "()w(o)rld")
+      ]]))
+   end)
+
+   describe("find", function()
+      it("can take an optional init position", util.check([[
+         local a, b: integer, integer = string.find("hello world", "world")
+         local a2, b2: integer, integer = string.find("hello world", "world", 2)
+      ]]))
+      it("accepts plain patterns", util.check([[
+         local a, b: integer, integer = string.find("hello world", "wor[ld", 1, true)
+      ]]))
+      it("can find with position captures", util.check([[
+         local a, b, i1, s1: integer, integer, integer, string = string.find("hello world", "()[()w](o)rld")
+      ]]))
+      it("works with locals", util.check([[
+         local myfinder = ("test").find
+         local a, b, i1, s1: integer, integer, integer, string = myfinder("hello world", "()[()w](o)rld")
+      ]]))
+   end)
+
+   describe("format", function()
+      it("works with various specifiers", util.check([[
+         local sfmt = string.format
+         local s1: string = sfmt("%02A %a  %E %e %f %G %g %% %%", 1.1, 1.2, 1.3, 1.4, 1.4, 1.4, 1.4)
+         local s2: string = sfmt("%5c  %3d %i %o %u %X %x %% %%", 11, 12, 13, 14, 14, 14, 14)
+         local s3: string = sfmt('%s %s %s', 123, 123.5, "test")
+         local s4: string = sfmt('%p %p %p %p', {}, "test", 5, io.input())
+      ]]))
+      it("fails with bad specifiers", util.check_type_error([[
+         local sfmt = string.format
+         local s1: string = sfmt("%e", "test")
+         local s2: string = sfmt("%5c", 10.5)
+      ]], {
+         {
+            msg = "argument 2: got string \"test\", expected number",
+            y = 2,
+         },
+         {
+            msg = "argument 2: got number, expected integer",
+            y = 3,
+         }
+      }))
    end)
 
    describe("gsub", function()
@@ -36,6 +80,7 @@ describe("string", function()
       it("accepts a string and integer, returns a string and integer", util.check([[
          local s = "hello world"
          local helloword, count: string, integer = s:gsub("%w+", "word", 6)
+         local helloword, count: string, integer = s:gsub("()", "%1", 6)
       ]]))
 
       it("accepts a map, returns a string and integer", util.check([[
@@ -45,6 +90,15 @@ describe("string", function()
             ["world"] = "mundo",
          }
          local holamundo, count: string, integer = s:gsub("%w+", map)
+      ]]))
+
+      it("accepts a map with integers, returns a string and integer", util.check([[
+         local s = "hello world"
+         local map: {integer:string} = {
+            [1] = "hola",
+            [2] = "mundo",
+         }
+         local holamundo, count: string, integer = s:gsub("()", map)
       ]]))
 
       it("accepts a map and integer, returns a string and integer", util.check([[
@@ -91,6 +145,74 @@ describe("string", function()
              return t
          end
       ]]))
+
+      it("captures integer positions, returns a string", util.check([[
+         local s = "hello world"
+         local function f(a: integer, b: string): string
+            return '[' .. a .. ']' .. b
+         end
+         local ret: string = s:gsub("()(%w+)", f)
+      ]]))
+
+      it("fails with unclosed patterns", util.check_type_error([[
+         local a = ("test"):gsub("(", "")
+         local b = ("test"):gsub("%", "")
+         local c = ("test"):gsub(")(", "")
+         local d = ("test"):gsub("%f[", "")
+      ]], {
+         {
+            msg = "malformed pattern: 1 capture not closed",
+            y = 1,
+         },
+         {
+            msg = "malformed pattern: expected class",
+            y = 2,
+         },
+         {
+            msg = "malformed pattern: unexpected ')'",
+            y = 3,
+         },
+         {
+            msg = "malformed pattern: missing ']'",
+            y = 4,
+         },
+      }))
    end)
 
+
+   describe("pack", function()
+      it("works with types", util.check([[
+         local packed: string = string.pack("<!7XdLfz", 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = string.unpack("<!7XdLfz", packed)
+      ]]))
+      it("errors with invalid types or arguments", util.check_type_error([[
+         local packed: string = string.pack("<!7L", 4.5)
+         local packed2: string = string.pack("<!7Xdf", "testing")
+         local packed3: string = string.pack("<!7z", 5)
+         local packed4: string = string.pack("", "test")
+      ]], {
+         {
+            msg = "argument 2: got number, expected integer",
+            y = 1,
+         },
+         {
+            msg = "argument 2: got string \"testing\", expected number",
+            y = 2,
+         },
+         {
+            msg = "argument 2: got integer, expected string",
+            y = 3,
+         },
+         {
+            msg = "wrong number of arguments",
+            y = 4,
+         },
+      }))
+      it("works with constant strings", util.check([[
+         -- <const> is required so that it gets recognised as a constant for string.pack and unpack
+         local pstr <const> = "<!7XdLfz"
+         local packed: string = string.pack(pstr, 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = pstr:unpack(packed)
+      ]]))
+   end)
 end)
