@@ -9875,15 +9875,19 @@ a.types[i], b.types[i]), }
       local on_arg_id = function(node, i)
          if node.kind == '...' then
 
-            local nd = {
+            local nd = node_at(orignode, {
                kind = "expression_list",
-            }
+            })
             for n = i, #args do
                nd[n - i + 1] = args[n]
             end
             return { Node, nd }
          else
-            return { Node, args[i] }
+
+
+
+            local nd = args[i] or node_at(orignode, { kind = "nil", tk = "nil" })
+            return { Node, nd }
          end
       end
 
