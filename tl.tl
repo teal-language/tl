@@ -8348,40 +8348,13 @@ do
 
    function TypeChecker:end_scope(node?: Node)
       local st = self.st
-      local scope = st[#st]
-      local next_n = #st - 1
-      local next_scope = st[next_n]
+      local scope = table.remove(st)
+      local next_scope = st[#st]
 
       assert(not scope.is_transaction)
 
-      if next_scope then
-         if scope.pending_labels then
-            next_scope.pending_labels = next_scope.pending_labels or {}
-            for name, nodes in pairs(scope.pending_labels) do
-               for _, n in ipairs(nodes) do
-                  next_scope.pending_labels[name] = next_scope.pending_labels[name] or {}
-                  table.insert(next_scope.pending_labels[name], n)
-               end
-            end
-            scope.pending_labels = nil
-         end
-
-         if scope.pending_nominals then
-            next_scope.pending_nominals = next_scope.pending_nominals or {}
-            for name, types in pairs(scope.pending_nominals) do
-               for _, typ in ipairs(types) do
-                  next_scope.pending_nominals[name] = next_scope.pending_nominals[name] or {}
-                  table.insert(next_scope.pending_nominals[name], typ)
-               end
-            end
-            scope.pending_nominals = nil
-         end
-      end
-
       close_types(scope)
       self.errs:check_var_usage(scope)
-
-      table.remove(st)
 
       if scope.widens then
          self:widen_all(scope.widens)
@@ -8389,6 +8362,36 @@ do
 
       if self.collector and node then
          self.collector.end_symbol_list_scope(node)
+      end
+
+      if not next_scope then
+         return
+      end
+
+      if scope.pending_labels then
+         if next_scope.pending_labels then
+            for name, nodes in pairs(scope.pending_labels) do
+               for _, n in ipairs(nodes) do
+                  next_scope.pending_labels[name] = next_scope.pending_labels[name] or {}
+                  table.insert(next_scope.pending_labels[name], n)
+               end
+            end
+         else
+            next_scope.pending_labels = scope.pending_labels
+         end
+      end
+
+      if scope.pending_nominals then
+         if next_scope.pending_nominals then
+            for name, types in pairs(scope.pending_nominals) do
+               for _, typ in ipairs(types) do
+                  next_scope.pending_nominals[name] = next_scope.pending_nominals[name] or {}
+                  table.insert(next_scope.pending_nominals[name], typ)
+               end
+            end
+         else
+            next_scope.pending_nominals = scope.pending_nominals
+         end
       end
    end
 
