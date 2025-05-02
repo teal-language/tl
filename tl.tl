@@ -7147,7 +7147,11 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t is TypeVarType then
       return display_typevar(t.typevar, "typevar")
    elseif t is TypeArgType then
-      return display_typevar(t.typearg, "typearg")
+      local out = display_typevar(t.typearg, "typearg")
+      if t.constraint then
+         out = out .. " is " .. show(t.constraint)
+      end
+      return out
    elseif t is UnresolvableTypeArgType then
       return display_typevar(t.typearg, "typearg") .. " (unresolved generic)"
    elseif is_unknown(t) then
@@ -7609,28 +7613,29 @@ do
       }, nil
    end
 
-   local type TypeFunction = function<S>(S, Type): Type, boolean
+   local type ResolveFunction = function<T is Type>(t: T, all_same: boolean): T, boolean
+   local type TypeFunction = function<S>(S, Type, ResolveFunction): Type, boolean
    local type TypeFunctionMap<S> = {TypeName: TypeFunction<S>}
    local map_type: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
 
    local fresh_typevar_fns: TypeFunctionMap<{TypeArgType}> = {
-      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType): Type, boolean
+      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType, resolve: ResolveFunction): Type, boolean
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
                   typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint,
+                  constraint = t.constraint and resolve(t.constraint, false),
                } as TypeVarType), true
             end
          end
          return t, false
       end,
-      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType): Type, boolean
+      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType, resolve: ResolveFunction): Type, boolean
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {
                   typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint,
+                  constraint = t.constraint and resolve(t.constraint, false),
                } as TypeArgType), true
             end
          end
@@ -7932,7 +7937,7 @@ do
    map_type = function<S>(self: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
       local errs: {Error}
       local seen: {Type:Type} = {}
-      local resolve: function<T is Type>(t: T, all_same: boolean): T, boolean
+      local resolve: ResolveFunction
 
       resolve = function<T is Type>(t: T, all_same: boolean): T, boolean
          local same = true
@@ -7949,7 +7954,7 @@ do
          local orig_t = t
          local fn = fns[t.typename]
          if fn then
-            local rt, is_resolved = fn(self, t)
+            local rt, is_resolved = fn(self, t, resolve)
             if rt ~= t then
                if is_resolved then
                   seen[t] = rt
