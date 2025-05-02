@@ -13462,6 +13462,9 @@ self:expand_type(node, values, elements) })
                   end
                end
             end
+            if node.op.op == "not" then
+               node.e1.expected = a_type(node, "boolean_context", {})
+            end
          end,
          before_e2 = function(self, node, children)
             local e1type = children[1]

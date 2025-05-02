@@ -25,6 +25,15 @@ describe("not", function()
       local z: boolean = not not 12
    ]]))
 
+   it("not propagates a boolean context", util.check([[
+      local n = 123
+      local s = "hello"
+      if not (n or s) then
+         local ns: number | string = n or s
+         print(ns)
+      end
+   ]]))
+
    it("handles precedence of sequential unaries correctly", function()
       local code = [[
          local y = not -a == not -b

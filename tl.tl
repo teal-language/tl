@@ -13462,6 +13462,9 @@ do
                   end
                end
             end
+            if node.op.op == "not" then
+               node.e1.expected = a_type(node, "boolean_context", {})
+            end
          end,
          before_e2 = function(self: TypeChecker, node: Node, children: {Type})
             local e1type = children[1]
