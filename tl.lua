@@ -8566,8 +8566,12 @@ do
 
       local function match_typevals(self, t, def)
          if not t.typevals then
-            self.errs:add(t, "missing type arguments in %s", def)
-            return nil
+
+            local deft = def.t
+            if (not (deft.typename == "function")) and (not (deft.typename == "poly")) then
+               self.errs:add(t, "missing type arguments in %s", def)
+               return nil
+            end
          elseif #t.typevals ~= #def.typeargs then
             self.errs:add(t, "mismatch in number of type arguments")
             return nil

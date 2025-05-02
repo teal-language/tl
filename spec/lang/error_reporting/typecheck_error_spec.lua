@@ -166,7 +166,7 @@ describe("typecheck errors", function()
             local type SortBy = require("ordering").SortBy
 
             local record util
-               func: function(sort_by?: SortBy)
+               func: function(sort_by?: SortBy<integer, integer>)
             end
 
             return util
@@ -178,7 +178,7 @@ describe("typecheck errors", function()
          util.func(function() end)
          print("this is where the error should not be")
       ]], {
-         { y = 4, x = 41, filename = "./util.tl", msg = "missing type argument" }
+         { y = 4, x = 41, filename = "./util.tl", msg = "mismatch in number of type arguments" }
       })
    end)
 
