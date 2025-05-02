@@ -8566,8 +8566,12 @@ do
 
       local function match_typevals(self: TypeChecker, t: NominalType, def: GenericType): Type
          if not t.typevals then
-            self.errs:add(t, "missing type arguments in %s", def)
-            return nil
+            -- HACK: accept function nominal without arguments
+            local deft = def.t
+            if (not deft is FunctionType) and (not deft is PolyType) then
+               self.errs:add(t, "missing type arguments in %s", def)
+               return nil
+            end
          elseif #t.typevals ~= #def.typeargs then
             self.errs:add(t, "mismatch in number of type arguments")
             return nil
