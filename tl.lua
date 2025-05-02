@@ -7147,7 +7147,11 @@ local function show_type_base(t, short, seen)
    elseif t.typename == "typevar" then
       return display_typevar(t.typevar, "typevar")
    elseif t.typename == "typearg" then
-      return display_typevar(t.typearg, "typearg")
+      local out = display_typevar(t.typearg, "typearg")
+      if t.constraint then
+         out = out .. " is " .. show(t.constraint)
+      end
+      return out
    elseif t.typename == "unresolvable_typearg" then
       return display_typevar(t.typearg, "typearg") .. " (unresolved generic)"
    elseif is_unknown(t) then
@@ -7611,26 +7615,27 @@ do
 
 
 
+
    local map_type
 
    local fresh_typevar_fns = {
-      ["typevar"] = function(typeargs, t)
+      ["typevar"] = function(typeargs, t, resolve)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
                   typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint,
+                  constraint = t.constraint and resolve(t.constraint, false),
                }), true
             end
          end
          return t, false
       end,
-      ["typearg"] = function(typeargs, t)
+      ["typearg"] = function(typeargs, t, resolve)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {
                   typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint,
+                  constraint = t.constraint and resolve(t.constraint, false),
                }), true
             end
          end
@@ -7949,7 +7954,7 @@ do
          local orig_t = t
          local fn = fns[t.typename]
          if fn then
-            local rt, is_resolved = fn(self, t)
+            local rt, is_resolved = fn(self, t, resolve)
             if rt ~= t then
                if is_resolved then
                   seen[t] = rt
@@ -13224,6 +13229,11 @@ self:expand_type(node, values, elements) })
                args = args,
                rets = self.get_rets(rets),
             }))
+
+
+            if t.typename == "generic" then
+               t = fresh_typeargs(self, t)
+            end
 
             self:add_var(node, node.name.tk, t)
             return t
