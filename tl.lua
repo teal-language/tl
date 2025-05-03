@@ -4,8 +4,10 @@ local VERSION = "0.24.4+dev"
 local stdlib = [=====[
 
 do
-   global type any
-   global type thread
+   global interface any
+   end
+   global interface thread
+   end
    global interface userdata
       is userdata
    end
@@ -8085,18 +8087,25 @@ do
       return rt
    end
 
-
    function TypeChecker:check_if_redeclaration(new_name, node, t)
-      local old = self:find_var(new_name, "check_only")
-      if old or (t.typename == "typedecl" and simple_types[new_name]) then
-         local var_name = node.tk
-         local var_kind = "variable"
-         if node.kind == "local_function" or node.kind == "record_function" then
-            var_kind = "function"
-            var_name = node.name.tk
+      local old
+      if simple_types[new_name] then
+         if t.typename ~= "typedecl" then
+            return
          end
-         self.errs:redeclaration_warning(node, var_name, var_kind, old)
+      else
+         old = self:find_var(new_name, "check_only")
+         if not old then
+            return
+         end
       end
+      local var_name = node.tk
+      local var_kind = "variable"
+      if node.kind == "local_function" or node.kind == "record_function" then
+         var_kind = "function"
+         var_name = node.name.tk
+      end
+      self.errs:redeclaration_warning(node, var_name, var_kind, old)
    end
 
    local function type_at(w, t)
