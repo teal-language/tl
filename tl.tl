@@ -3504,7 +3504,7 @@ local record ArgumentInfo
 end
 
 local function parse_argument_type(ps: ParseState, i: integer): integer, ArgumentInfo, integer
-   local opt = false
+   local opt = 0
    local is_va = false
    local is_self = false
    local argument_name: string = nil
@@ -3512,7 +3512,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
    if ps.tokens[i].kind == "identifier" then
       argument_name = ps.tokens[i].tk
       if ps.tokens[i + 1].tk == "?" then
-         opt = true
+         opt = i + 1
          if ps.tokens[i + 2].tk == ":" then
             i = i + 3
          end
@@ -3520,9 +3520,13 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
          i = i + 2
       end
    elseif ps.tokens[i].kind == "?" then
-      opt = true
+      opt = i
       i = i + 1
    elseif ps.tokens[i].tk == "..." then
+      if ps.tokens[i + 1].tk == "?" then
+         fail(ps, i + 1, "cannot mix '?' and '...' in a declaration; '...' already implies optional")
+         i = i + 1
+      end
       if ps.tokens[i + 1].tk == ":" then
          i = i + 2
          is_va = true
@@ -3536,6 +3540,9 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
       if not is_va and ps.tokens[i].tk == "..." then
          i = i + 1
          is_va = true
+         if opt > 0 then
+            fail(ps, opt, "cannot mix '?' and '...' in a declaration; '...' already implies optional")
+         end
       end
 
       if argument_name == "self" then
@@ -3543,7 +3550,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
       end
    end
 
-   return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = opt or is_va }, 0
+   return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = (opt > 0) or is_va }, 0
 end
 
 parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type, boolean, integer
