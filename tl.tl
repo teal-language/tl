@@ -2449,7 +2449,7 @@ local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string):
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
-local parse_type: function(ParseState, integer): integer, FirstOrderType, integer
+local parse_type: function(ParseState, integer): integer, FirstClassType, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
 local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
 
@@ -4166,10 +4166,12 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             end
 
             if ps.tokens[i].tk == "=" and ps.tokens[i + 1].tk == "macroexp" then
-               if not t is FunctionType then
-                  fail(ps, i + 1, "macroexp must have a function type")
+               local tt = t is GenericType and t.t or t
+
+               if tt is FunctionType then
+                  i, tt.macroexp = parse_macroexp(ps, i + 1, i + 2)
                else
-                  i, t.macroexp = parse_macroexp(ps, i + 1, i + 2)
+                  fail(ps, i + 1, "macroexp must have a function type")
                end
             end
 

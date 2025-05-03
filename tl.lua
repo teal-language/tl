@@ -4166,10 +4166,12 @@ do
                end
 
                if ps.tokens[i].tk == "=" and ps.tokens[i + 1].tk == "macroexp" then
-                  if not (t.typename == "function") then
-                     fail(ps, i + 1, "macroexp must have a function type")
+                  local tt = t.typename == "generic" and t.t or t
+
+                  if tt.typename == "function" then
+                     i, tt.macroexp = parse_macroexp(ps, i + 1, i + 2)
                   else
-                     i, t.macroexp = parse_macroexp(ps, i + 1, i + 2)
+                     fail(ps, i + 1, "macroexp must have a function type")
                   end
                end
 
