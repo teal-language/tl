@@ -6,7 +6,9 @@ local stdlib = [=====[
 do
    global type any
    global type thread
-   global type userdata
+   global interface userdata
+      is userdata
+   end
 
    local enum FileStringMode
       "a" "l" "L" "*a" "*l" "*L"
@@ -1630,6 +1632,7 @@ end
 
 
 
+
 local table_types = {
    ["array"] = true,
    ["map"] = true,
@@ -1649,6 +1652,7 @@ local table_types = {
    ["string"] = false,
    ["nil"] = false,
    ["thread"] = false,
+   ["userdata"] = false,
    ["number"] = false,
    ["integer"] = false,
    ["union"] = false,
@@ -4717,6 +4721,7 @@ local type_walkers = {
    ["string"] = false,
    ["nil"] = false,
    ["thread"] = false,
+   ["userdata"] = false,
    ["number"] = false,
    ["integer"] = false,
    ["circular_require"] = false,
@@ -5939,6 +5944,7 @@ local typename_to_typecode = {
    ["string"] = tl.typecodes.STRING,
    ["nil"] = tl.typecodes.NIL,
    ["thread"] = tl.typecodes.THREAD,
+   ["userdata"] = tl.typecodes.USERDATA,
    ["number"] = tl.typecodes.NUMBER,
    ["integer"] = tl.typecodes.INTEGER,
    ["union"] = tl.typecodes.UNION,
