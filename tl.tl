@@ -2796,9 +2796,16 @@ local function parse_trying_list<T>(ps: ParseState, i: integer, list: {T}, parse
 end
 
 local function parse_anglebracket_list<T is Type>(ps: ParseState, i: integer, parse_item: ParseItem<T>): integer, {T}
-   if ps.tokens[i+1].tk == ">" then
+   local second = ps.tokens[i+1]
+   if second.tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
+   elseif second.tk == ">>" then
+      -- tokenizer hack: consume one bracket from '>>', don't skip over it
+      second.tk = ">"
+      fail(ps, i+1, "type argument list cannot be empty")
+      return i+1
    end
+
    local types: {T} = {}
    i = verify_tk(ps, i, "<")
    i = parse_list(ps, i, types, { [">"] = true, [">>"] = true, }, "sep", parse_item)

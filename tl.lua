@@ -2796,9 +2796,16 @@ do
    end
 
    local function parse_anglebracket_list(ps, i, parse_item)
-      if ps.tokens[i + 1].tk == ">" then
+      local second = ps.tokens[i + 1]
+      if second.tk == ">" then
          return fail(ps, i + 1, "type argument list cannot be empty")
+      elseif second.tk == ">>" then
+
+         second.tk = ">"
+         fail(ps, i + 1, "type argument list cannot be empty")
+         return i + 1
       end
+
       local types = {}
       i = verify_tk(ps, i, "<")
       i = parse_list(ps, i, types, { [">"] = true, [">>"] = true }, "sep", parse_item)
