@@ -14150,11 +14150,11 @@ self:expand_type(node, values, elements) })
                if iface.typename == "nominal" then
                   local ri = self:resolve_nominal(iface)
                   if ri.typename == "interface" then
+                     table.insert(list, iface)
                      if ri.interfaces_expanded and not seen[ri] then
                         seen[ri] = true
                         collect_interfaces(self, list, ri, seen)
                      end
-                     table.insert(list, iface)
                   else
                      self.errs:add(iface, "attempted to use %s as interface, but its type is %s", iface, ri)
                   end

@@ -154,4 +154,68 @@ describe("subtyping of interfaces:", function()
       { line = "qux(Foo as IFoo)" },
       { line = "qux(IFoo as IFoo)", err = "interfaces are abstract" },
    }))
+
+   it("interface fields are covariant (regression test for #944)", util.check([[
+      local interface Move
+      end
+
+      local interface Fly is Move
+      end
+
+      local interface Animal
+          move: Move -- Error: field 'move' does not match definition in interface Bird
+      end
+
+      local interface Bird is Animal
+          move: Fly
+      end
+
+      local record Test1 is Animal
+      end
+
+      local record Test2 is Bird
+      end
+   ]]))
+
+   it("interface fields are covariant (regression test for #944)", util.check_type_error([[
+      local interface Move
+      end
+
+      local interface Fly is Move
+      end
+
+      local interface Animal
+          move: Fly
+      end
+
+      local interface Bird is Animal
+          move: Move
+      end
+
+      local record Test1 is Animal
+      end
+
+      local record Test2 is Bird
+      end
+   ]], {
+      { y = 12, msg = "'move' does not match definition in interface Animal" }
+   }))
+
+   it("interface fields are covariant even if interface not instantiated (regression test for #944)", util.check_type_error([[
+      local interface Move
+      end
+
+      local interface Fly is Move
+      end
+
+      local interface Animal
+          move: Fly
+      end
+
+      local interface Bird is Animal
+          move: Move
+      end
+   ]], {
+      { y = 12, msg = "'move' does not match definition in interface Animal" }
+   }))
 end)
