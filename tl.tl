@@ -1,8 +1,13 @@
 
 local VERSION = "0.24.4+dev"
 
-local stdlib = [=====[
-
+-- These are definitions that are core to the language.
+--
+-- In Lua terms, these are definitions that fundamental to the
+-- Lua language behavior itself, that is, which are valid
+-- even before one does luaL_openlibs to load the standard
+-- library.
+local prelude = [=====[
 do
    global interface any
    end
@@ -12,6 +17,62 @@ do
       is userdata
    end
 
+   global record metatable<T>
+      enum Mode
+         "k" "v" "kv"
+      end
+
+      __call: function(T, any...): any...
+      __mode: Mode
+      __name: string
+      __tostring: function(T): string
+      __pairs: function<K, V>(T): function(): (K, V)
+
+      __index: any --[[FIXME: function | table | anything with an __index metamethod]]
+      __newindex: any --[[FIXME: function | table | anything with an __index metamethod]]
+
+      __gc: function(T)
+      __close: function(T)
+
+      __add: function<A, B, C>(A, B): C
+      __sub: function<A, B, C>(A, B): C
+      __mul: function<A, B, C>(A, B): C
+      __div: function<A, B, C>(A, B): C
+      __idiv: function<A, B, C>(A, B): C
+      __mod: function<A, B, C>(A, B): C
+      __pow: function<A, B, C>(A, B): C
+      __band: function<A, B, C>(A, B): C
+      __bor: function<A, B, C>(A, B): C
+      __bxor: function<A, B, C>(A, B): C
+      __shl: function<A, B, C>(A, B): C
+      __shr: function<A, B, C>(A, B): C
+      __concat: function<A, B, C>(A, B): C
+
+      __len: function<A>(T): A
+      __unm: function<A>(T): A
+      __bnot: function<A>(T): A
+
+      __eq: function<A, B>(A, B): boolean
+      __lt: function<A, B>(A, B): boolean
+      __le: function<A, B>(A, B): boolean
+   end
+end
+]=====]
+
+-- This is the Teal standard library.
+--
+-- It should be recognizable as a pretty standard Lua standard
+-- library, but in practice it is a "common denominator" definition,
+-- which depicts the common subset of what you can get in any
+-- Lua 5.1+ version when using compat-5.3. For example, there
+-- are no definitions for either setfenv (5.1-specific) or
+-- _ENV (5.2+-specific).
+--
+-- If you write code targeting the Teal standard library, it should
+-- be able to run in any Lua 5.1+ version if compat53 is installed
+-- and code is built with --gen-compat=on (which is the default).
+local stdlib = [=====[
+do
    local enum FileStringMode
       "a" "l" "L" "*a" "*l" "*L"
    end
@@ -25,7 +86,7 @@ do
    end
 
    global record FILE
-      userdata
+      is userdata
 
       enum SeekWhence
          "set" "cur" "end"
@@ -222,46 +283,6 @@ do
       tointeger: function(any): integer
       type: function(any): string
       ult: function(number, number): boolean
-   end
-
-   global record metatable<T>
-      enum Mode
-         "k" "v" "kv"
-      end
-
-      __call: function(T, any...): any...
-      __mode: Mode
-      __name: string
-      __tostring: function(T): string
-      __pairs: function<K, V>(T): function(): (K, V)
-
-      __index: any --[[FIXME: function | table | anything with an __index metamethod]]
-      __newindex: any --[[FIXME: function | table | anything with an __index metamethod]]
-
-      __gc: function(T)
-      __close: function(T)
-
-      __add: function<A, B, C>(A, B): C
-      __sub: function<A, B, C>(A, B): C
-      __mul: function<A, B, C>(A, B): C
-      __div: function<A, B, C>(A, B): C
-      __idiv: function<A, B, C>(A, B): C
-      __mod: function<A, B, C>(A, B): C
-      __pow: function<A, B, C>(A, B): C
-      __band: function<A, B, C>(A, B): C
-      __bor: function<A, B, C>(A, B): C
-      __bxor: function<A, B, C>(A, B): C
-      __shl: function<A, B, C>(A, B): C
-      __shr: function<A, B, C>(A, B): C
-      __concat: function<A, B, C>(A, B): C
-
-      __len: function<A>(T): A
-      __unm: function<A>(T): A
-      __bnot: function<A>(T): A
-
-      __eq: function<A, B>(A, B): boolean
-      __lt: function<A, B>(A, B): boolean
-      __le: function<A, B>(A, B): boolean
    end
 
    global record os
@@ -6676,7 +6697,7 @@ end
 function Errors:fail_unresolved_nominals(scope: Scope, global_scope: Scope)
    if global_scope and scope.pending_nominals then
       for name, types in pairs(scope.pending_nominals) do
-         if not global_scope.pending_global_types[name] and name ~= "metatable" then
+         if not global_scope.pending_global_types[name] then
             for _, typ in ipairs(types) do
                assert(typ.x)
                assert(typ.y)
@@ -7353,13 +7374,13 @@ local stdlib_globals: {string:Variable} = nil
 local globals_typeid = new_typeid()
 local fresh_typevar_ctr = 1
 
-local function assert_no_stdlib_errors(errors: {Error}, name: string)
+local function assert_no_errors(errors: {Error}, msg: string)
    if #errors ~= 0 then
       local out = {}
       for _, err in ipairs(errors) do
          table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
       end
-      error("Internal Compiler Error: standard library contains " .. name .. ":\n" .. table.concat(out), 2)
+      error("Internal Compiler Error: " .. msg .. ":\n" .. table.concat(out), 2)
    end
 end
 
@@ -7396,16 +7417,24 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
    end
 
-   local w: Where = { f = "@stdlib", x = 1, y = 1 }
-
    if not stdlib_globals then
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
-      assert_no_stdlib_errors(syntax_errors, "syntax errors")
-      local result = tl.check(program, "@stdlib", {}, env)
-      assert_no_stdlib_errors(result.type_errors, "type errors")
+      do
+         local program, syntax_errors = tl.parse(prelude, "prelude.d.tl", "tl")
+         assert_no_errors(syntax_errors, "prelude contains syntax errors")
+         local result = tl.check(program, "@prelude", {}, env)
+         assert_no_errors(result.type_errors, "prelude contains type errors")
+      end
+
+      do
+         local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
+         assert_no_errors(syntax_errors, "standard library contains syntax errors")
+         local result = tl.check(program, "@stdlib", {}, env)
+         assert_no_errors(result.type_errors, "standard library contains type errors")
+      end
+
       stdlib_globals = env.globals
 
       TL_DEBUG = tl_debug
@@ -7439,6 +7468,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       -- only global scope and vararg functions accept `...`:
       -- `@is_va` is an internal sentinel value which is
       -- `any` if `...` is accepted in this scope or `nil` if it isn't.
+      local w: Where = { f = "@prelude", x = 1, y = 1 }
       stdlib_globals["..."] = { t = a_vararg(w, { a_type(w, "string", {}) }) }
       stdlib_globals["@is_va"] = { t = a_type(w, "any", {}) }
 
@@ -7462,6 +7492,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
             feat_lax = env.defaults.feat_lax,
             feat_arity = env.defaults.feat_arity,
          }
+         local w: Where = { f = "@predefined", x = 1, y = 1 }
          local module_type = require_module(w, name, tc_opts, env)
 
          if module_type is InvalidType then
@@ -8704,6 +8735,7 @@ do
 
    do
       local function are_same_unresolved_global_type(self: TypeChecker, t1: NominalType, t2: NominalType): boolean
+         -- FIXME shouldn't this be allowed only when `#t1.names == 1 and #t2.names == 1`?
          if t1.names[1] == t2.names[1] then
             local global_scope = self.st[1]
             if global_scope.pending_global_types[t1.names[1]] then
