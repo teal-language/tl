@@ -1,3 +1,63 @@
+# 0.24.5
+
+2025-05-05
+
+This is a big bugfix release! Almost all known bugs since 0.24.0 are now
+closed. It feels good to improve on the stability of Teal 0.24 before we start
+focusing on language changes for Teal 2025. At the same time, this release
+does include some new features, though mainly to make Teal 0.24 closer to what
+one would consider an ideal vision for Teal 2024, rather than introducing new
+concepts.
+
+This release features commits by @mbartlett21, François Perrad
+and Hisham Muhammad.
+
+## What's New
+
+### Language
+
+* Special-case type inference for various `string` functions:
+  `string.format`, `string.pack`, `string.unpack`, `string.find`,
+  `string.match`, `string.gsub`, `string.gmatch` (#946).
+* String metatable is resolved using the `string` module, which makes
+  it resilient to shadowing via `local string`.
+* Improved flow inference
+  * Preserve type narrowing/widening on all branches of an `if` statement,
+    including with constrained generics.
+  * `not` operator propagates a boolean context.
+* Disallow mixing `?` and `...` in argument declarations, making error
+  checks more consistent.
+* Improved standard library definitions
+  * `file:close` signature
+
+### API
+
+* if `tl.path` is set, this overrides `package.path` for Teal.
+
+### Tooling
+
+* Avoid confusing error messages like `got Foo, expected Foo` when
+  names refer to incompatible types with the same local names.
+
+### Fixes
+
+* Fix regression in support for macro expressions with generics (#941).
+* Avoid leakage of constrained type variables, by resolving constraints
+  when freshening type variables (#
+* Fixed inheritance order for covariant behavior of specialized
+  fields (#944).
+* Fixed syntax check for empty argument list in nested entries
+  such as `Foo<Bar<>>` (#958).
+* Generate code correctly when using pragma (#929).
+* Correct behavior of `...` in macro expressions (#940).
+* Correct behavior of optional arguments in macro expressions (#956).
+* Fixed escaping in error messages.
+* Let Lua sort the `package.loaded` table on its own (#922).
+* Do not try to resolve validity of unions too early (#903).
+* Ensure that union specialization with interface subtype produces
+  a valid type.
+* Do not infer type variables as boolean contexts.
+
 # 0.24.4
 
 2025-01-23
@@ -25,8 +85,6 @@ Hisham Muhammad.
 * Fixed an error when matching against an undefined type.
 * Bumped the pinned compat53 dependency, which had a build issue
   on Windows. (#916)
-
-### Tooling
 
 # 0.24.3
 
