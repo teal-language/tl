@@ -1,5 +1,5 @@
 
-local VERSION = "0.24.5"
+local VERSION = "0.24.5+dev"
 
 -- These are definitions that are core to the language.
 --
