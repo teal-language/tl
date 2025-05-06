@@ -10815,52 +10815,36 @@ do
    function TypeChecker:expand_type(w: Where, old: Type, new: Type): Type
       if not old or old is NilType then
          return new
-      else
-         if not self:is_a(new, old) then
-            if old is MapType and new is RecordLikeType then
-               local old_keys = old.keys
-               if old_keys is StringType then
-                  for _, ftype in fields_of(new) do
-                     old.values = self:expand_type(w, old.values, ftype)
-                  end
-                  edit_type(w, old, "map") -- map changed, refresh typeid
-               else
-                  self.errs:add(w, "cannot determine table literal type")
-               end
-            elseif old is RecordLikeType and new is RecordLikeType then
-               local values: Type
-               for _, ftype in fields_of(old) do
-                  if not values then
-                     values = ftype
-                  else
-                     values = self:expand_type(w, values, ftype)
-                  end
-               end
-               for _, ftype in fields_of(new) do
-                  if not values then
-                     values = ftype
-                  else
-                     values = self:expand_type(w, values, ftype)
-                  end
-               end
-               old.fields = nil
-               old.field_order = nil
-               old.meta_fields = nil
-               old.meta_fields = nil
+      end
+      if self:is_a(new, old) then
+         return old
+      end
 
-               edit_type(w, old, "map")
-               local map = old as MapType
-               map.keys = a_type(w, "string", {})
-               map.values = values
-            elseif old is UnionType then
-               edit_type(w, old, "union")
-               table.insert(old.types, drop_constant_value(new))
-            else
-               return unite(w, { old, new }, true)
+      if new is RecordLikeType then
+         local keys: Type
+         local values: Type
+         if old is MapType then
+            keys = old.keys
+            if not keys is StringType then
+               self.errs:add(w, "cannot determine table literal type")
+               return old
+            end
+            values = old.values
+         elseif old is RecordLikeType then
+            keys = a_type(w, "string", {})
+            for _, ftype in fields_of(old) do
+               values = self:expand_type(w, values, ftype)
             end
          end
+
+         for _, ftype in fields_of(new) do
+            values = self:expand_type(w, values, ftype)
+         end
+
+         return a_map(w, keys, values)
       end
-      return old
+
+      return unite(w, { old, new }, true)
    end
 
    function TypeChecker:find_record_to_extend(exp: Node): Type, Variable, string

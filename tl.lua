@@ -10815,52 +10815,36 @@ a.types[i], b.types[i]), }
    function TypeChecker:expand_type(w, old, new)
       if not old or old.typename == "nil" then
          return new
-      else
-         if not self:is_a(new, old) then
-            if old.typename == "map" and new.fields then
-               local old_keys = old.keys
-               if old_keys.typename == "string" then
-                  for _, ftype in fields_of(new) do
-                     old.values = self:expand_type(w, old.values, ftype)
-                  end
-                  edit_type(w, old, "map")
-               else
-                  self.errs:add(w, "cannot determine table literal type")
-               end
-            elseif old.fields and new.fields then
-               local values
-               for _, ftype in fields_of(old) do
-                  if not values then
-                     values = ftype
-                  else
-                     values = self:expand_type(w, values, ftype)
-                  end
-               end
-               for _, ftype in fields_of(new) do
-                  if not values then
-                     values = ftype
-                  else
-                     values = self:expand_type(w, values, ftype)
-                  end
-               end
-               old.fields = nil
-               old.field_order = nil
-               old.meta_fields = nil
-               old.meta_fields = nil
+      end
+      if self:is_a(new, old) then
+         return old
+      end
 
-               edit_type(w, old, "map")
-               local map = old
-               map.keys = a_type(w, "string", {})
-               map.values = values
-            elseif old.typename == "union" then
-               edit_type(w, old, "union")
-               table.insert(old.types, drop_constant_value(new))
-            else
-               return unite(w, { old, new }, true)
+      if new.fields then
+         local keys
+         local values
+         if old.typename == "map" then
+            keys = old.keys
+            if not (keys.typename == "string") then
+               self.errs:add(w, "cannot determine table literal type")
+               return old
+            end
+            values = old.values
+         elseif old.fields then
+            keys = a_type(w, "string", {})
+            for _, ftype in fields_of(old) do
+               values = self:expand_type(w, values, ftype)
             end
          end
+
+         for _, ftype in fields_of(new) do
+            values = self:expand_type(w, values, ftype)
+         end
+
+         return a_type(w, "map", { keys = keys, values = values })
       end
-      return old
+
+      return unite(w, { old, new }, true)
    end
 
    function TypeChecker:find_record_to_extend(exp)
@@ -13231,11 +13215,6 @@ self:expand_type(node, values, elements) })
                args = args,
                rets = self.get_rets(rets),
             }))
-
-
-            if t.typename == "generic" then
-               t = fresh_typeargs(self, t)
-            end
 
             self:add_var(node, node.name.tk, t)
             return t
