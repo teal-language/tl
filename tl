@@ -170,6 +170,7 @@ local function setup_env(tlconfig, filename)
          gen_target = tlconfig["gen_target"],
       },
       predefined_modules = tlconfig._init_env_modules,
+      no_std = tlconfig.no_std,
    }
 
    local env, err = tl.new_env(opts)
@@ -324,6 +325,7 @@ local function validate_config(config)
    local valid_keys = {
       include_dir = "{string}",
       global_env_def = "string",
+      no_std = "boolean",
       quiet = "boolean",
       skip_compat53 = "boolean",
       feat_arity = { ["off"] = true, ["on"] = true },
@@ -373,6 +375,8 @@ local function get_args_parser()
    parser:option("--global-env-def", "Predefined types from a custom global environment.")
          :argname("<dtlfilename>")
          :count("*") -- count("1") does not work? we verify by hand below then
+
+   parser:flag("--no-std", "Do not load the Lua standard library.")
 
    parser:option("-I --include-dir", "Prepend this directory to the module search path.")
          :argname("<directory>")
@@ -443,7 +447,8 @@ local function get_config(cmd)
       include_dir = {},
       disable_warnings = {},
       warning_error = {},
-      quiet = false
+      quiet = false,
+      no_std = false,
    }
 
    local config_path = find_file_in_parent_dirs("tlconfig.lua") or "tlconfig.lua"
@@ -537,6 +542,10 @@ local function merge_config_and_args(tlconfig, args)
                                                or (tlconfig["skip_compat53"] and "off")
    for _, include in ipairs(tlconfig["include_dir"]) do
       prepend_to_lua_paths(include)
+   end
+
+   if args["no_std"] then
+      tlconfig["no_std"] = true
    end
 end
 

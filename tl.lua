@@ -729,6 +729,7 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
 local TypeReporter = {}
 
 
@@ -7421,6 +7422,11 @@ local function set_special_function(t, fname)
    t.special_function_handler = fname
 end
 
+local function set_needs_compat(t, fname)
+   local f = t.fields[fname]
+   f.needs_compat = true
+end
+
 tl.new_env = function(opts)
    opts = opts or {}
 
@@ -7448,7 +7454,7 @@ tl.new_env = function(opts)
          assert_no_errors(result.type_errors, "prelude contains type errors")
       end
 
-      do
+      if not opts.no_std then
          local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
          assert_no_errors(syntax_errors, "standard library contains syntax errors")
          local result = tl.check(program, "@stdlib", {}, env)
@@ -7460,30 +7466,50 @@ tl.new_env = function(opts)
       TL_DEBUG = tl_debug
 
 
-      local math_t = (stdlib_globals["math"].t).def
-      local table_t = (stdlib_globals["table"].t).def
-      math_t.fields["maxinteger"].needs_compat = true
-      math_t.fields["mininteger"].needs_compat = true
-      table_t.fields["pack"].needs_compat = true
-      table_t.fields["unpack"].needs_compat = true
+      if stdlib_globals["math"] then
+         local math_t = (stdlib_globals["math"].t).def
+         set_needs_compat(math_t, "maxinteger")
+         set_needs_compat(math_t, "mininteger")
+      end
+      if stdlib_globals["table"] then
+         local table_t = (stdlib_globals["table"].t).def
+         set_needs_compat(table_t, "unpack")
+         set_needs_compat(table_t, "pack")
+      end
 
 
-      local string_t = (stdlib_globals["string"].t).def
-      set_special_function(string_t.fields["find"], "string.find")
-      set_special_function(string_t.fields["format"], "string.format")
-      set_special_function(string_t.fields["gmatch"], "string.gmatch")
-      set_special_function(string_t.fields["gsub"], "string.gsub")
-      set_special_function(string_t.fields["match"], "string.match")
-      set_special_function(string_t.fields["pack"], "string.pack")
-      set_special_function(string_t.fields["unpack"], "string.unpack")
+      if stdlib_globals["string"] then
+         local string_t = (stdlib_globals["string"].t).def
+         set_special_function(string_t.fields["find"], "string.find")
+         set_special_function(string_t.fields["format"], "string.format")
+         set_special_function(string_t.fields["gmatch"], "string.gmatch")
+         set_special_function(string_t.fields["gsub"], "string.gsub")
+         set_special_function(string_t.fields["match"], "string.match")
+         set_special_function(string_t.fields["pack"], "string.pack")
+         set_special_function(string_t.fields["unpack"], "string.unpack")
+      end
 
-      set_special_function(stdlib_globals["assert"].t, "assert")
-      set_special_function(stdlib_globals["ipairs"].t, "ipairs")
-      set_special_function(stdlib_globals["pairs"].t, "pairs")
-      set_special_function(stdlib_globals["pcall"].t, "pcall")
-      set_special_function(stdlib_globals["xpcall"].t, "xpcall")
-      set_special_function(stdlib_globals["rawget"].t, "rawget")
-      set_special_function(stdlib_globals["require"].t, "require")
+      if stdlib_globals["assert"] then
+         set_special_function(stdlib_globals["assert"].t, "assert")
+      end
+      if stdlib_globals["ipairs"] then
+         set_special_function(stdlib_globals["ipairs"].t, "ipairs")
+      end
+      if stdlib_globals["pairs"] then
+         set_special_function(stdlib_globals["pairs"].t, "pairs")
+      end
+      if stdlib_globals["pcall"] then
+         set_special_function(stdlib_globals["pcall"].t, "pcall")
+      end
+      if stdlib_globals["xpcall"] then
+         set_special_function(stdlib_globals["xpcall"].t, "xpcall")
+      end
+      if stdlib_globals["rawget"] then
+         set_special_function(stdlib_globals["rawget"].t, "rawget")
+      end
+      if stdlib_globals["require"] then
+         set_special_function(stdlib_globals["require"].t, "require")
+      end
 
 
 
