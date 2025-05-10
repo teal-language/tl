@@ -1,0 +1,30 @@
+# Compile this file like so:
+#   complgen --bash _tl tl.usage
+
+tl [<GLOBAL-OPTIONS>]... check                 "Type-check one or more Teal files." <PATH>...;
+tl [<GLOBAL-OPTIONS>]... gen                   "Generate a Lua file for one or more Teal files." <PATH>...;
+tl [<GLOBAL-OPTIONS>]... run                   "Run a Teal script." <PATH>...;
+tl [<GLOBAL-OPTIONS>]... warnings              "List each kind of warning the compiler can produce.";
+tl [<GLOBAL-OPTIONS>]... types                 "Report all types found in one or more Teal files" <PATH>...;
+
+<GLOBAL-OPTIONS> ::=  (-h | --help) "Show this help message and exit."
+                    | (--global-env-def <PATH>) "Predefined types from a custom global environment."
+                    | (-I <DIRECTORY> | --include-dir <DIRECTORY>) "Prepend this directory to the module search path."
+                    | (--wdisable <warning>) "Disable the given kind of warning."
+                    | (--werror <warning>) "Promote the given kind of warning to an error. Use '--werror all' to promote all warnings to errors"
+                    | --feat-arity (off|on) "Define minimum arities for functions based on optional argument annotations."
+                    | --gen-compat (off|optional|required) "Generate compatibility code for targeting different Lua VM versions. (default: optional)"
+                    | --gen-target (5.1|5.3|5.4) "Minimum targeted Lua version for generated code."
+                    | --version "Print version and exit"
+                    | (-q | --quiet) "Do not print information messages to stdout. Errors may still be printed to stderr."
+                    | (-p | --pretend) "Do not write to any files, type check and output what files would be generated."
+                    ;
+
+<warning>        ::=  branch
+                    | debug
+                    | hint
+                    | redeclaration
+                    | unknown
+                    | unread
+                    | unused
+                    ;
