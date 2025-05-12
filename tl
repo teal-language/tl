@@ -370,6 +370,8 @@ end
 local function get_args_parser()
    local parser = argparse("tl", "A minimalistic typed dialect of Lua.")
 
+   parser:add_complete_command()
+
    parser:option("--global-env-def", "Predefined types from a custom global environment.")
          :argname("<dtlfilename>")
          :count("*") -- count("1") does not work? we verify by hand below then
