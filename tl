@@ -380,13 +380,17 @@ local function get_args_parser()
          :argname("<directory>")
          :count("*")
 
+   local warnings = keys(tl.warning_kinds)
+
    parser:option("--wdisable", "Disable the given kind of warning.")
          :argname("<warning>")
+         :choices(warnings)
          :count("*")
 
    parser:option("--werror", "Promote the given kind of warning to an error. " ..
                              "Use '--werror all' to promote all warnings to errors")
          :argname("<warning>")
+         :choices({ "all", (unpack or table.unpack)(warnings) })
          :count("*")
 
    parser:option("--feat-arity", "Define minimum arities for functions based on optional argument annotations.")
