@@ -191,6 +191,10 @@ describe("or", function()
       local _print_testcty: nil = _testc
       local _print_testdty: nil = _testd
    ]], {
+      { y = 6, msg = "the resulting type is ambiguous: A or B" },
+      { y = 6, msg = "currently choosing B" },
+      { y = 7, msg = "the resulting type is ambiguous: B or A" },
+      { y = 7, msg = "currently choosing A" },
    }, {
       { y = 8, msg = "_print_testcty: got B" },
       { y = 9, msg = "_print_testdty: got A" },
