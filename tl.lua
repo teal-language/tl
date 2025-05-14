@@ -5838,13 +5838,7 @@ function tl.generate(ast, gen_target, opts)
                return emit_exactly(nil, node, children)
             end
 
-            local out = { y = node.y, h = 0 }
-
             local str = node.tk
-            for _ in str:gmatch("\n") do
-               out.h = out.h + 1
-            end
-
             local replaced = {}
 
             local i = 1
@@ -5856,10 +5850,6 @@ function tl.generate(ast, gen_target, opts)
                if nextc == "z" then
                   table.insert(replaced, str:sub(currstrstart, slashpos - 1))
                   local wsend = str:find("%S", slashpos + 2)
-                  local ws = str:sub(slashpos + 2, wsend - 1)
-                  for _ in ws:gmatch("\n") do
-                     out.h = out.h - 1
-                  end
                   currstrstart = wsend
                   i = currstrstart
                elseif nextc == "x" then
@@ -5887,8 +5877,16 @@ function tl.generate(ast, gen_target, opts)
                table.insert(replaced, str:sub(currstrstart))
             end
 
-            out[1] = table.concat(replaced)
-            return out
+            local h = 0
+            local finalstr = table.concat(replaced)
+            for _ in finalstr:gmatch("\n") do
+               h = h + 1
+            end
+            return {
+               y = node.y,
+               h = h,
+               finalstr,
+            }
          end,
       },
 
