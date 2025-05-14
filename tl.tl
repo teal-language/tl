@@ -13765,17 +13765,26 @@ do
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                   local is_same = self:same_type(ra, rb)
 
+                  -- we can have some types that can be converted into either
+                  local ambiguous = a_ge_b and b_ge_a and not is_same
+
                   -- prefer a type that we can easily work out rather than defaulting to the expected one
                   -- (the expected one might need to be collapsed later with special functions)
                   if is_same then
                      t = ua
-                  elseif (a_ge_b or b_ge_a) then
+                  elseif (a_ge_b or b_ge_a) and not ambiguous then
                      local larger_type = b_ge_a and ub or ua
                      t = larger_type
                   elseif expected and self:is_a(ua, expected) and self:is_a(ub, expected) then
                      t = self:infer_at(node, expected)
                   end
 
+                  if ambiguous and not t then
+                     self.errs:add_warning("hint", node, "the resulting type is ambiguous: %s or %s", ua, ub)
+                     self.errs:add_warning("hint", node, "currently choosing %s", ub)
+                     -- workaround to keep existing code working
+                     t = ub
+                  end
                   if t then
                      t = drop_constant_value(t)
                   end
