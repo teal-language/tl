@@ -50,9 +50,14 @@ describe("string", function()
 
    describe("format", function()
       it("doesn't break inference", util.check([[
+         local function f_that_is_int(): integer
+            return 5
+         end
+
          local function do_the_test(y ?: integer)
             string.format('%d', y)
             string.format('%d', y or 0) -- shouldn't error
+            string.format('%d', f_that_is_int())
          end
       ]]))
       it("works with various specifiers", util.check([[
