@@ -236,15 +236,14 @@ end
 
 local function process_module(filename, env)
    local is_stdin = filename == "-"
-   local module_name, fd, err
+   local module_name, fd
    if is_stdin then
       module_name = "stdin"
       fd = io.input()
       filename = "<stdin>"
    else
       module_name = filename_to_module_name(filename)
-      fd, err = io.open(filename, "rb")
-      if not fd then return fd, err end
+      -- let tl.process handle opening the file and nice errors
    end
    local result, err = tl.process(filename, env, fd)
    if result then
