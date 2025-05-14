@@ -13755,6 +13755,15 @@ do
                   end
                   t = u
 
+               -- prefer the union type if it already works and the other one isn't a union
+               elseif ra is UnionType and not (rb is UnionType) and self:is_a(rb, ra) then
+                  -- convert it to the union type
+                  t = drop_constant_value(ra)
+
+               elseif rb is UnionType and not (ra is UnionType) and self:is_a(ra, rb) then
+                  -- convert it to the union type
+                  t = drop_constant_value(rb)
+
                else
                   local a_ge_b = self:is_a(rb, ra)
                   local b_ge_a = self:is_a(ra, rb)
