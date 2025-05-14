@@ -13763,7 +13763,11 @@ do
                   local a_ge_b = self:is_a(rb, ra)
                   local b_ge_a = self:is_a(ra, rb)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
-                  if a_ge_b or b_ge_a then
+                  local is_same = self:same_type(ra, rb)
+
+                  if is_same then
+                     t = ua
+                  elseif a_ge_b or b_ge_a then
                      if expected then
                         local a_is = self:is_a(ua, expected)
                         local b_is = self:is_a(ub, expected)
