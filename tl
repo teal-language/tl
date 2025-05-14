@@ -276,7 +276,12 @@ local function write_out(tlconfig, result, output_file, pp_opts)
       return
    end
 
-   local ofd, err = io.open(output_file, "wb")
+   local ofd, err
+   if output_file == '-' then
+      ofd = io.output()
+   else
+      ofd, err = io.open(output_file, "wb")
+   end
 
    if not ofd then
       die("cannot write " .. output_file .. ": " .. err)
@@ -288,7 +293,9 @@ local function write_out(tlconfig, result, output_file, pp_opts)
       die("error writing " .. output_file .. ": " .. err)
    end
 
-   ofd:close()
+   if output_file ~= '-' then
+      ofd:close()
+   end
 
    if not tlconfig["quiet"] then
       print("Wrote: " .. output_file)
