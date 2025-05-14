@@ -5,6 +5,7 @@ local util = {
    os_null   = win32 and "NUL" or "/dev/null",
    os_join   = win32 and " & " or "",
    os_set    = win32 and "set " or "",
+   os_cat    = win32 and "type " or "cat ",
 }
 
 function util.os_path(path)
