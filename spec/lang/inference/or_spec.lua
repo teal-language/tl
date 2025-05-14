@@ -23,4 +23,14 @@ describe("inference in 'or' expressions", function()
    it("works with expected types", util.check([[
       local a: integer|string = 5 or "string"
    ]]))
+   it("works with sub and superclasses", util.check([[
+      local interface Super end
+      local interface SubA is Super end
+      local interface SubB is Super end
+
+      local sa: SubA
+      local sb: SubB
+
+      local sc: Super = sa or sb
+   ]]))
 end)

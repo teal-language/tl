@@ -13770,20 +13770,18 @@ do
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                   local is_same = self:same_type(ra, rb)
 
+                  -- prefer a type that we can easily work out rather than defaulting to the expected one
+                  -- (the expected one might need to be collapsed later with special functions)
                   if is_same then
                      t = ua
-                  elseif a_ge_b or b_ge_a then
-                     if expected then
-                        local a_is = self:is_a(ua, expected)
-                        local b_is = self:is_a(ub, expected)
-                        if a_is and b_is then
-                           t = self:infer_at(node, expected)
-                        end
-                     end
-                     if not t then
-                        local larger_type = b_ge_a and ub or ua
-                        t = larger_type
-                     end
+                  elseif (a_ge_b or b_ge_a) then
+                     local larger_type = b_ge_a and ub or ua
+                     t = larger_type
+                  elseif expected and self:is_a(ua, expected) and self:is_a(ub, expected) then
+                     t = self:infer_at(node, expected)
+                  end
+
+                  if t then
                      t = drop_constant_value(t)
                   end
 
