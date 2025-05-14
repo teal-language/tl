@@ -157,8 +157,16 @@ describe("or", function()
       local b = ab is A and ab.b or ab -- ab.b may be nil, causing the value of type A to be returned via 'or'
 
       wants_b(b)
+
+      local real_b: B = {tag="b"}
+      local also_not_b = ab or real_b
+      wants_b(also_not_b)
+
+      local also_still_not_b = real_b or ab
+      wants_b(also_still_not_b)
    ]], {
       { y = 20, x = 15, msg = "got A | B, expected B" },
+      { y = 27, x = 15, msg = "got A | B, expected B" },
    }))
 
    it("resolves the negation of 'or' when 'if' returns", util.check([[

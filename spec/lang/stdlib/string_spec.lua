@@ -49,6 +49,12 @@ describe("string", function()
    end)
 
    describe("format", function()
+      it("doesn't break inference", util.check([[
+         local function do_the_test(y ?: integer)
+            string.format('%d', y)
+            string.format('%d', y or 0) -- shouldn't error
+         end
+      ]]))
       it("works with various specifiers", util.check([[
          local sfmt = string.format
          local s1: string = sfmt("%02A %a  %E %e %f %G %g %% %%", 1.1, 1.2, 1.3, 1.4, 1.4, 1.4, 1.4)
