@@ -180,6 +180,22 @@ describe("or", function()
       end
    ]]))
 
+   it("chooses the second type", util.check_warnings([[
+      local interface A end
+      local record B is A end
+
+      local _testa: A = {}
+      local _testb: B = {}
+      local _testc = _testa or _testb
+      local _testd = _testb or _testa
+      local _print_testcty: nil = _testc
+      local _print_testdty: nil = _testd
+   ]], {
+   }, {
+      { y = 8, msg = "_print_testcty: got B" },
+      { y = 9, msg = "_print_testdty: got A" },
+   }))
+
    it("resolves the negation of 'or' when 'if' returns, error case", util.check_type_error([[
       local function f(b: boolean, u: string | number)
          if not b or u is number then
