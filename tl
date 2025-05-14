@@ -560,6 +560,7 @@ local function merge_config_and_args(tlconfig, args)
 end
 
 local function get_output_filename(file_name)
+   if file_name == "-" then return "-" end
    local tail = file_name:match("[^%" .. PATH_SEPARATOR .. "]+$")
    if not tail then
       return
