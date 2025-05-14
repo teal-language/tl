@@ -8,6 +8,7 @@ describe("string literal code generation", function()
 
       , world!"
       local _source_new_lines_get_preserved = 0
+      local _works_with_slashes = "\\\x123 \\x123"
    ]], [[
       local _hex_bytes = "\222\173\190\239\005"
       local _unicode = "hello \228\184\150\231\149\140"
@@ -15,6 +16,7 @@ describe("string literal code generation", function()
 
 
       local _source_new_lines_get_preserved = 0
+      local _works_with_slashes = "\\\0183 \\x123"
    ]], "5.1"))
 
    it("does not substitute escape sequences in [[strings]]", util.gen([==[
