@@ -4,7 +4,7 @@ local util = {
    os_tmp    = win32 and os.getenv("TEMP") or "/tmp",
    os_null   = win32 and "NUL" or "/dev/null",
    os_join   = win32 and " & " or "",
-   os_set    = win32 and "set " or ""
+   os_set    = win32 and "set " or "",
 }
 
 function util.os_path(path)
@@ -175,9 +175,9 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
-local cmd_prefix = { string.format(util.os_set .. "LUA_PATH=%q" .. util.os_join, package.path) }
+local vars_prefix = { string.format(util.os_set .. "LUA_PATH=%q" .. util.os_join, package.path) }
 for i = 1, 4 do
-   table.insert(cmd_prefix, string.format(util.os_set .. "LUA_PATH_5_%d=%q" .. util.os_join, i, package.path))
+   table.insert(vars_prefix, string.format(util.os_set .. "LUA_PATH_5_%d=%q" .. util.os_join, i, package.path))
 end
 
 local first_arg = 0
@@ -186,9 +186,44 @@ while arg[first_arg - 1] do
 end
 util.lua_interpreter = arg[first_arg]
 
-table.insert(cmd_prefix, util.lua_interpreter) -- Lua interpreter used by Busted
-table.insert(cmd_prefix, tl_executable)
-cmd_prefix = table.concat(cmd_prefix, " ")
+vars_prefix = table.concat(vars_prefix)
+local lua_prefix = util.lua_interpreter .. " " .. tl_executable
+local cmd_prefix = vars_prefix .. " " .. lua_prefix
+
+function util.tl_pipe_cmd(piped, name, ...)
+   assert(name, "no command provided")
+
+   local pre_command_args = {}
+   local first = ...
+   local has_pre_commands = false
+   if type(first) == "table" then
+      pre_command_args = first
+      has_pre_commands = true
+   end
+   local cmd
+   if win32 then
+      cmd = {
+         vars_prefix,
+         piped, " | ",
+         lua_prefix,
+      }
+   else
+      cmd = {
+         piped, " | ",
+         cmd_prefix,
+      }
+   end
+   table.insert(cmd, table.concat(pre_command_args, " "))
+   table.insert(cmd, name)
+   for i = (has_pre_commands and 2) or 1 , select("#", ...) do
+      local a = select(i, ...)
+      if a then
+         table.insert(cmd, string.format("%q", a))
+      end
+   end
+   return table.concat(cmd, " ") .. " "
+end
+
 function util.tl_cmd(name, ...)
    assert(name, "no command provided")
 
@@ -238,15 +273,10 @@ math.randomseed(os.time())
 local function tmp_file_name()
    return util.os_tmp .. util.os_sep .. "teal_tmp" .. math.random(99999999)
 end
-function util.write_tmp_file(finally, content, ext)
+function util.get_tmp_filename(finally, ext)
    assert(type(finally) == "function")
-   assert(type(content) == "string")
 
    local full_name = tmp_file_name() .. "." .. (ext or "tl")
-
-   local fd = assert(io.open(full_name, "wb"))
-   fd:write(content)
-   fd:close()
 
    on_finally(finally, function()
       os.remove(full_name)
@@ -259,6 +289,15 @@ function util.write_tmp_file(finally, content, ext)
       -- Normalize to unix filenames to pass assert_line_by_line
       full_name = full_name:gsub("\\+", "/")
    end
+
+   return full_name
+end
+function util.write_tmp_file(finally, content, ext)
+   local full_name = util.get_tmp_filename(finally, ext)
+
+   local fd = assert(io.open(full_name, "wb"))
+   fd:write(content)
+   fd:close()
 
    return full_name
 end
