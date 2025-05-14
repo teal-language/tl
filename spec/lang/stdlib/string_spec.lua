@@ -49,7 +49,7 @@ describe("string", function()
    end)
 
    describe("format", function()
-      it("doesn't break inference", util.check([[
+      it("doesn't break inference (#975)", util.check([[
          local function do_the_test(y ?: integer)
             string.format('%d', y)
             string.format('%d', y or 0) -- shouldn't error
