@@ -236,7 +236,9 @@ end
 
 local function process_module(filename, env)
    local module_name = filename_to_module_name(filename)
-   local result, err = tl.process(filename, env)
+   local fd
+   if filename == '-' then fd = io.input() end
+   local result, err = tl.process(filename, env, fd)
    if result then
       env.modules[module_name] = result.type
    end
