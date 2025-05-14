@@ -235,8 +235,17 @@ do
 end
 
 local function process_module(filename, env)
-   local module_name = filename_to_module_name(filename)
-   local result, err = tl.process(filename, env)
+   local is_stdin = filename == "-"
+   local module_name, fd
+   if is_stdin then
+      module_name = "stdin"
+      fd = io.input()
+      filename = "<stdin>"
+   else
+      module_name = filename_to_module_name(filename)
+      -- let tl.process handle opening the file and nice errors
+   end
+   local result, err = tl.process(filename, env, fd)
    if result then
       env.modules[module_name] = result.type
    end
@@ -269,27 +278,36 @@ local function type_check_and_load(tlconfig, filename)
 end
 
 local function write_out(tlconfig, result, output_file, pp_opts)
+   local is_stdout = output_file == "-"
+   local prettyname = is_stdout and "<stdout>" or output_file
    if tlconfig["pretend"] then
-      print("Would Write: " .. output_file)
+      print("Would Write: " .. prettyname)
       return
    end
 
-   local ofd, err = io.open(output_file, "wb")
+   local ofd, err
+   if is_stdout then
+      ofd = io.output()
+   else
+      ofd, err = io.open(output_file, "wb")
+   end
 
    if not ofd then
-      die("cannot write " .. output_file .. ": " .. err)
+      die("cannot write " .. prettyname .. ": " .. err)
    end
 
    local _
    _, err = ofd:write(tl.generate(result.ast, tlconfig.gen_target, pp_opts) .. "\n")
    if err then
-      die("error writing " .. output_file .. ": " .. err)
+      die("error writing " .. prettyname .. ": " .. err)
    end
 
-   ofd:close()
+   if not is_stdout then
+      ofd:close()
+   end
 
    if not tlconfig["quiet"] then
-      print("Wrote: " .. output_file)
+      print("Wrote: " .. prettyname)
    end
 end
 
@@ -547,6 +565,7 @@ local function merge_config_and_args(tlconfig, args)
 end
 
 local function get_output_filename(file_name)
+   if file_name == "-" then return "-" end
    local tail = file_name:match("[^%" .. PATH_SEPARATOR .. "]+$")
    if not tail then
       return
