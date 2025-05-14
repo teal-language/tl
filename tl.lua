@@ -13759,6 +13759,15 @@ self:expand_type(node, values, elements) })
                   end
                   t = u
 
+
+               elseif ra.typename == "union" and not (rb.typename == "union") and self:is_a(rb, ra) then
+
+                  t = drop_constant_value(ra)
+
+               elseif rb.typename == "union" and not (ra.typename == "union") and self:is_a(ra, rb) then
+
+                  t = drop_constant_value(rb)
+
                else
                   local a_ge_b = self:is_a(ub, ua)
                   local b_ge_a = self:is_a(ua, ub)
