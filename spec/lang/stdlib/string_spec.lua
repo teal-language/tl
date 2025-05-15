@@ -49,7 +49,7 @@ describe("string", function()
    end)
 
    describe("format", function()
-      it("doesn't break inference", util.check([[
+      it("doesn't break inference (#975)", util.check([[
          local function f_that_is_int(): integer
             return 5
          end
