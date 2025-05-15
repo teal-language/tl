@@ -218,4 +218,24 @@ describe("subtyping of interfaces:", function()
    ]], {
       { y = 12, msg = "'move' does not match definition in interface Animal" }
    }))
+
+   it("interface :> record but not the other way around", util.check_type_error([[
+      local interface I
+      end
+
+      local record R is I
+      end
+
+      local r: R
+      local i: I
+
+      local wants_i1: I = i or r
+      local wants_i2: I = r or i
+
+      local wants_r1: R = i or r
+      local wants_r2: R = r or i
+   ]], {
+      { y = 13, msg = "I is not a R" },
+      { y = 14, msg = "I is not a R" },
+   }))
 end)

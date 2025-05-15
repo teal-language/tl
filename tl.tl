@@ -2580,7 +2580,7 @@ local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFu
    return skip_i
 end
 
-local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: BodyTypeName): integer, GenericType | StructuralType
+local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: BodyTypeName): integer, GenericType | FirstOrderType
    local typeargs: {TypeArgType}
    local def: FirstOrderType
    i, typeargs = parse_typeargs_if_any(ps, i)
@@ -3973,7 +3973,7 @@ parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrder
    return i, typ
 end
 
-local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, Type
+local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, ArrayType
    if def.interface_list then
       local first = def.interface_list[1]
       if first is ArrayType then
@@ -9467,7 +9467,6 @@ do
             return self:same_type(a, b)
          end,
          ["array"] = TypeChecker.subtype_array,
-         ["record"] = TypeChecker.subtype_record,
          ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
