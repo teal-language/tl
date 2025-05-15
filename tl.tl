@@ -11111,7 +11111,7 @@ do
          end
 
          t2 = self:resolve_if_union(t2)
-         local t2types = t2 is UnionType and t2.types or { t2 }
+         local t2types: {Type} = t2 is UnionType and t2.types or { t2 }
 
          for _, at in ipairs(t1.types) do
             local not_present = true
@@ -12047,7 +12047,7 @@ do
    end
 
    local function set_expected_types_to_decltuple(self: TypeChecker, node: Node, children: {Type})
-      local decltuple = node.kind == "assignment" and children[1] or node.decltuple
+      local decltuple: Type = node.kind == "assignment" and children[1] or node.decltuple
       assert(decltuple is TupleType)
       local decls = decltuple.tuple
       if decls and node.exps then
@@ -13144,7 +13144,7 @@ do
                end
             end
 
-            local t = force_array and an_array(node, force_array) or node.expected
+            local t: Type = force_array and an_array(node, force_array) or node.expected
             t = self:infer_at(node, t)
 
             if decltype is RecordType then
