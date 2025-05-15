@@ -20,6 +20,10 @@ describe("inference in 'or' expressions", function()
          test("", y or 0)
       end
    ]]))
+   it("doesn't immediately convert to any", util.check([[
+      local a: any = 5 or 7
+      local a_is_integer: integer = a
+   ]]))
    it("works with expected types", util.check([[
       local a: integer|string = 5 or "string"
    ]]))
