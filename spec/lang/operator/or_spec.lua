@@ -157,8 +157,17 @@ describe("or", function()
       local b = ab is A and ab.b or ab -- ab.b may be nil, causing the value of type A to be returned via 'or'
 
       wants_b(b)
+
+      local real_b: B = {tag="b"}
+      local also_not_b = ab or real_b
+      wants_b(also_not_b)
+
+      local also_still_not_b = real_b or ab
+      wants_b(also_still_not_b)
    ]], {
       { y = 20, x = 15, msg = "got A | B, expected B" },
+      { y = 24, x = 15, msg = "got A | B, expected B" },
+      { y = 27, x = 15, msg = "got A | B, expected B" },
    }))
 
    it("resolves the negation of 'or' when 'if' returns", util.check([[
@@ -170,6 +179,26 @@ describe("or", function()
          print(u + 1)
       end
    ]]))
+
+   it("chooses the second type", util.check_warnings([[
+      local interface A end
+      local record B is A end
+
+      local _testa: A = {}
+      local _testb: B = {}
+      local _testc = _testa or _testb
+      local _testd = _testb or _testa
+      local _print_testcty: nil = _testc
+      local _print_testdty: nil = _testd
+   ]], {
+      { y = 6, msg = "the resulting type is ambiguous: A or B" },
+      { y = 6, msg = "currently choosing B" },
+      { y = 7, msg = "the resulting type is ambiguous: B or A" },
+      { y = 7, msg = "currently choosing A" },
+   }, {
+      { y = 8, msg = "_print_testcty: got B" },
+      { y = 9, msg = "_print_testdty: got A" },
+   }))
 
    it("resolves the negation of 'or' when 'if' returns, error case", util.check_type_error([[
       local function f(b: boolean, u: string | number)

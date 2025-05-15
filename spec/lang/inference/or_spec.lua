@@ -12,4 +12,29 @@ describe("inference in 'or' expressions", function()
          and u
          or convert(u)
    ]]))
+   it("or expressions work in function args", util.check([[
+      local function test(_s: string, _x ?: integer) end
+
+      local function do_the_test(y ?: integer)
+         test("", y)
+         test("", y or 0)
+      end
+   ]]))
+   it("doesn't immediately convert to any", util.check([[
+      local a: any = 5 or 7
+      local a_is_integer: integer = a
+   ]]))
+   it("works with expected types", util.check([[
+      local a: integer|string = 5 or "string"
+   ]]))
+   it("works with sub and superclasses", util.check([[
+      local interface Super end
+      local interface SubA is Super end
+      local interface SubB is Super end
+
+      local sa: SubA
+      local sb: SubB
+
+      local sc: Super = sa or sb
+   ]]))
 end)

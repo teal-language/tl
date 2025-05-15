@@ -13757,22 +13757,42 @@ self:expand_type(node, values, elements) })
                   end
                   t = u
 
+
+               elseif ra.typename == "union" and not (rb.typename == "union") and self:is_a(rb, ra) then
+
+                  t = drop_constant_value(ra)
+
+               elseif rb.typename == "union" and not (ra.typename == "union") and self:is_a(ra, rb) then
+
+                  t = drop_constant_value(rb)
+
                else
                   local a_ge_b = self:is_a(rb, ra)
                   local b_ge_a = self:is_a(ra, rb)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
-                  if a_ge_b or b_ge_a then
-                     if expected then
-                        local a_is = self:is_a(ua, expected)
-                        local b_is = self:is_a(ub, expected)
-                        if a_is and b_is then
-                           t = self:infer_at(node, expected)
-                        end
-                     end
-                     if not t then
-                        local larger_type = b_ge_a and ub or ua
-                        t = larger_type
-                     end
+                  local is_same = self:same_type(ra, rb)
+
+
+                  local ambiguous = a_ge_b and b_ge_a and not is_same
+
+
+
+                  if is_same then
+                     t = ua
+                  elseif (a_ge_b or b_ge_a) and not ambiguous then
+                     local larger_type = b_ge_a and ub or ua
+                     t = larger_type
+                  elseif expected and self:is_a(ua, expected) and self:is_a(ub, expected) then
+                     t = self:infer_at(node, expected)
+                  end
+
+                  if ambiguous and not t then
+                     self.errs:add_warning("hint", node, "the resulting type is ambiguous: %s or %s", ua, ub)
+                     self.errs:add_warning("hint", node, "currently choosing %s", ub)
+
+                     t = ub
+                  end
+                  if t then
                      t = drop_constant_value(t)
                   end
 

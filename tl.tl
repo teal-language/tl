@@ -11113,7 +11113,7 @@ do
          end
 
          t2 = self:resolve_if_union(t2)
-         local t2types = t2 is UnionType and t2.types or { t2 }
+         local t2types: {Type} = t2 is UnionType and t2.types or { t2 }
 
          for _, at in ipairs(t1.types) do
             local not_present = true
@@ -12049,7 +12049,7 @@ do
    end
 
    local function set_expected_types_to_decltuple(self: TypeChecker, node: Node, children: {Type})
-      local decltuple = node.kind == "assignment" and children[1] or node.decltuple
+      local decltuple: Type = node.kind == "assignment" and children[1] or node.decltuple
       assert(decltuple is TupleType)
       local decls = decltuple.tuple
       if decls and node.exps then
@@ -13146,7 +13146,7 @@ do
                end
             end
 
-            local t = force_array and an_array(node, force_array) or node.expected
+            local t: Type = force_array and an_array(node, force_array) or node.expected
             t = self:infer_at(node, t)
 
             if decltype is RecordType then
@@ -13757,22 +13757,42 @@ do
                   end
                   t = u
 
+               -- prefer the union type if it already works and the other one isn't a union
+               elseif ra is UnionType and not (rb is UnionType) and self:is_a(rb, ra) then
+                  -- convert it to the union type
+                  t = drop_constant_value(ra)
+
+               elseif rb is UnionType and not (ra is UnionType) and self:is_a(ra, rb) then
+                  -- convert it to the union type
+                  t = drop_constant_value(rb)
+
                else
                   local a_ge_b = self:is_a(rb, ra)
                   local b_ge_a = self:is_a(ra, rb)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
-                  if a_ge_b or b_ge_a then
-                     if expected then
-                        local a_is = self:is_a(ua, expected)
-                        local b_is = self:is_a(ub, expected)
-                        if a_is and b_is then
-                           t = self:infer_at(node, expected)
-                        end
-                     end
-                     if not t then
-                        local larger_type = b_ge_a and ub or ua
-                        t = larger_type
-                     end
+                  local is_same = self:same_type(ra, rb)
+
+                  -- we can have some types that can be converted into either
+                  local ambiguous = a_ge_b and b_ge_a and not is_same
+
+                  -- prefer a type that we can easily work out rather than defaulting to the expected one
+                  -- (the expected one might need to be collapsed later with special functions)
+                  if is_same then
+                     t = ua
+                  elseif (a_ge_b or b_ge_a) and not ambiguous then
+                     local larger_type = b_ge_a and ub or ua
+                     t = larger_type
+                  elseif expected and self:is_a(ua, expected) and self:is_a(ub, expected) then
+                     t = self:infer_at(node, expected)
+                  end
+
+                  if ambiguous and not t then
+                     self.errs:add_warning("hint", node, "the resulting type is ambiguous: %s or %s", ua, ub)
+                     self.errs:add_warning("hint", node, "currently choosing %s", ub)
+                     -- workaround to keep existing code working
+                     t = ub
+                  end
+                  if t then
                      t = drop_constant_value(t)
                   end
 
