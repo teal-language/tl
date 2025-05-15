@@ -9470,7 +9470,6 @@ do
             return self:same_type(a, b)
          end,
          ["array"] = TypeChecker.subtype_array,
-         ["record"] = TypeChecker.subtype_record,
          ["tupletable"] = function(self, a, b)
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
