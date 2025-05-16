@@ -114,6 +114,8 @@ do
          isvararg: boolean
          func: any
          activelines: {integer:boolean}
+         ftransfer: integer -- TODO: what should compat be for these? (5.4+)
+         ntransfer: integer
       end
 
       enum HookEvent
