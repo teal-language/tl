@@ -1,4 +1,4 @@
-# Type Variable Matching
+# Type variable matching
 
 When Teal type-checks a generic function call, it infers any type variables
 based on context. Type variables can appear in function arguments and return

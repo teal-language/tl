@@ -13,21 +13,8 @@ run `.tl` files.
 
 ## Introduction
 
-Here are videos of talks given at FOSDEM 2019, 2020 and 2021 which discuss the
-history of Lua and types, outline the motivations behind Teal and talk about
-the project's progress:
-
-* [Minimalism versus types (2019)](https://www.youtube.com/watch?v=OPyBQRndLUk)
-* [Minimalistic typed Lua is here (2020)](https://www.youtube.com/watch?v=HfnjUCRzRKU)
-* [What's next for Teal (2021)](https://www.youtube.com/watch?v=OqXbnaDR8QY)
-
-And here's an update from early 2024, describing the process that eventually
-resulted in Teal Spring '24, later in the year:
-
-* [Five years of Teal: minimalism versus growth in language design (2024)](https://www.youtube.com/watch?v=68F5Qs91izQ)
-
-Check also the [tutorial](docs/tutorial.md) to get started with an overview of
-the language.
+You can read the [tutorial chapter](https://teal-language.org/book/tutorial.html)
+of the Teal documentation to get started with an overview of the language.
 
 ## Installing
 
@@ -72,7 +59,7 @@ Once `tl` is in your path, there are a few subcommands:
   stripped.
 * `tl warnings` will list all warnings the compiler can generate.
 
-`tl` also supports some [compiler options](docs/compiler_options.md).
+`tl` also supports some [compiler options](https://teal-language.org/book/compiler_options.html).
 These can either be specified on the command line or inside a tlconfig.lua file at the root of your project.
 
 ### Building projects with Cyan
@@ -96,12 +83,13 @@ compile `.tl` files on-the-fly.
 
 ## Documentation
 
-You can learn more about programming and using Teal in the [docs/](docs/)
-folder. The [tutorial](docs/tutorial.md) is a great place to start!
+You can read the [rendered documentation](https://teal-language.org/book/) online;
+it can also be generated locally from the files in the [docs/](docs/) folder
+of this repository.
 
 ## Type definitions
 
-`tl` supports [declaration files](docs/declaration_files.md), which can be used to annotate the types
+`tl` supports [declaration files](https://teal-language.org/book/declaration_files.html), which can be used to annotate the types
 of third-party Lua libraries.
 
 We have a collaborative repository for declaration files at
