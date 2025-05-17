@@ -12691,7 +12691,7 @@ do
 
                   if varname and (rvar is UnionType or rvar is InterfaceType) then
                      -- narrow unions and interfaces
-                     self:add_var(varnode, varname, rval, nil, "narrow")
+                     self:add_var(varnode, varname, valtype, nil, "narrow")
                   end
 
                   if self.collector then
@@ -13760,8 +13760,8 @@ do
                   t = u
 
                else
-                  local a_ge_b = self:is_a(rb, ra)
-                  local b_ge_a = self:is_a(ra, rb)
+                  local a_ge_b = self:is_a(ub, ua)
+                  local b_ge_a = self:is_a(ua, ub)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                   local is_same = self:same_type(ra, rb)
 

@@ -37,4 +37,23 @@ describe("inference in 'or' expressions", function()
 
       local sc: Super = sa or sb
    ]]))
+   it("does not drop nominal type on assignment, avoiding ambiguity", util.check_warnings([[
+      local interface Type
+      end
+
+      local record UnionType is Type
+         types: {Type}
+      end
+
+      local function g(t: Type): Type
+         return t
+      end
+
+      local function f(t: Type)
+         t = g(t)
+         local _ = t is UnionType and t.types or { t }
+      end
+   ]], {
+      { msg = "unused function f" }
+   }, {}))
 end)
