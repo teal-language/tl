@@ -1,0 +1,6 @@
+[book]
+authors = ["Hisham Muhammad", "Teal project contributors"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The Teal Programming Language"

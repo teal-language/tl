@@ -7,7 +7,7 @@ large](http://konghq.com) [Lua applications](http://luarocks.org).
 The goal of the language is to be a dialect of Lua as much as TypeScript is a
 dialect of JavaScript. So yes, it is on the one hand a different language
 (there are new keywords such as `global` for example) but on the other hand it
-is pretty much recognizable, as you said, as "Lua + typing".
+is pretty much recognizable as "Lua + typing".
 
 It aims to integrate to pretty much any Lua environment, since it's a
 "transpiler" that generates plain Lua and has no dependencies. The goal is to
