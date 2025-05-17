@@ -1,0 +1,40 @@
+name: docs
+
+on:
+  push:
+    branches: master
+
+jobs:
+  Docs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: Check if any updates in docs
+      id: check
+      continue-on-error: true
+      run: |
+        git checkout master
+        git show --stat | grep -q docs
+    - name: Setup mdBook
+      if: steps.check.conclusion == 'success'
+      uses: peaceiris/actions-mdbook@adeb05db28a0c0004681db83893d56c0388ea9ea
+      with:
+        mdbook-version: 'latest'
+    - name: Generate book
+      if: steps.check.conclusion == 'success'
+      run: |
+        cd docs
+        mdbook build
+    - name: Push to docs repo
+      if: steps.check.conclusion == 'success'
+      uses: hishamhm/github-action-push-to-another-repository@b3514b264edf63bd8ea41fb5cd4f5b93979bdf81
+      env:
+        API_TOKEN_GITHUB: ${{ secrets.DOCS_PUSH_GITHUB_TOKEN }}
+      with:
+        destination-github-username: 'teal-language'
+        destination-repository-name: 'teal-language.github.io'
+        user-email: hisham@gobolinux.org
+        target-branch: main
+        source-directory: 'docs/book'
+        target-directory: 'book'
