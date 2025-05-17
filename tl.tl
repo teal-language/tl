@@ -2580,7 +2580,7 @@ local function failskip(ps: ParseState, i: integer, msg: string, skip_fn: SkipFu
    return skip_i
 end
 
-local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: BodyTypeName): integer, GenericType | StructuralType
+local function parse_type_body(ps: ParseState, i: integer, istart: integer, node: Node, tn: BodyTypeName): integer, GenericType | FirstOrderType
    local typeargs: {TypeArgType}
    local def: FirstOrderType
    i, typeargs = parse_typeargs_if_any(ps, i)
@@ -3973,7 +3973,7 @@ parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrder
    return i, typ
 end
 
-local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, Type
+local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, ArrayType
    if def.interface_list then
       local first = def.interface_list[1]
       if first is ArrayType then
@@ -9467,7 +9467,6 @@ do
             return self:same_type(a, b)
          end,
          ["array"] = TypeChecker.subtype_array,
-         ["record"] = TypeChecker.subtype_record,
          ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
@@ -12689,7 +12688,7 @@ do
 
                   if varname and (rvar is UnionType or rvar is InterfaceType) then
                      -- narrow unions and interfaces
-                     self:add_var(varnode, varname, rval, nil, "narrow")
+                     self:add_var(varnode, varname, valtype, nil, "narrow")
                   end
 
                   if self.collector then
@@ -13757,22 +13756,42 @@ do
                   end
                   t = u
 
+               -- prefer the union type if it already works and the other one isn't a union
+               elseif ra is UnionType and not (rb is UnionType) and self:is_a(rb, ra) then
+                  -- convert it to the union type
+                  t = drop_constant_value(ra)
+
+               elseif rb is UnionType and not (ra is UnionType) and self:is_a(ra, rb) then
+                  -- convert it to the union type
+                  t = drop_constant_value(rb)
+
                else
-                  local a_ge_b = self:is_a(rb, ra)
-                  local b_ge_a = self:is_a(ra, rb)
+                  local a_ge_b = self:is_a(ub, ua)
+                  local b_ge_a = self:is_a(ua, ub)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
-                  if a_ge_b or b_ge_a then
-                     if expected then
-                        local a_is = self:is_a(ua, expected)
-                        local b_is = self:is_a(ub, expected)
-                        if a_is and b_is then
-                           t = self:infer_at(node, expected)
-                        end
-                     end
-                     if not t then
-                        local larger_type = b_ge_a and ub or ua
-                        t = larger_type
-                     end
+                  local is_same = self:same_type(ra, rb)
+
+                  -- we can have some types that can be converted into either
+                  local ambiguous = a_ge_b and b_ge_a and not is_same
+
+                  -- prefer a type that we can easily work out rather than defaulting to the expected one
+                  -- (the expected one might need to be collapsed later with special functions)
+                  if is_same then
+                     t = ua
+                  elseif (a_ge_b or b_ge_a) and not ambiguous then
+                     local larger_type = b_ge_a and ub or ua
+                     t = larger_type
+                  elseif expected and self:is_a(ua, expected) and self:is_a(ub, expected) then
+                     t = self:infer_at(node, expected)
+                  end
+
+                  if ambiguous and not t then
+                     self.errs:add_warning("hint", node, "the resulting type is ambiguous: %s or %s", ua, ub)
+                     self.errs:add_warning("hint", node, "currently choosing %s", ub)
+                     -- workaround to keep existing code working
+                     t = ub
+                  end
+                  if t then
                      t = drop_constant_value(t)
                   end
 
