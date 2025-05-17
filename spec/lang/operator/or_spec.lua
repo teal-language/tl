@@ -166,6 +166,7 @@ describe("or", function()
       wants_b(also_still_not_b)
    ]], {
       { y = 20, x = 15, msg = "got A | B, expected B" },
+      { y = 24, x = 15, msg = "got A | B, expected B" },
       { y = 27, x = 15, msg = "got A | B, expected B" },
    }))
 
