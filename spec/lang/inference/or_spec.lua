@@ -56,4 +56,20 @@ describe("inference in 'or' expressions", function()
    ]], {
       { msg = "unused function f" }
    }, {}))
+
+   it("infers `A|B or B` to `A|B`, avoiding ambiguity", util.check_warnings([[
+      local record A where self.field == "a"
+         field: string
+      end
+      local record B where self.field == "b"
+         field: string
+      end
+
+      local ab: A|B
+      local b: B
+
+      local c = ab or b
+   ]], {
+      { msg = "unused variable c: A | B" }
+   }, {}))
 end)
