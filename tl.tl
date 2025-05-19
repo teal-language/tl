@@ -13769,9 +13769,13 @@ do
                   t = drop_constant_value(rb)
 
                else
+                  -- these compare using the unresolved type to prevent nominal types resolving into
+                  -- each other.
                   local a_ge_b = self:is_a(ub, ua)
                   local b_ge_a = self:is_a(ua, ub)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
+                  -- TODO: change this to use unresolved types, but make sure that it works with
+                  -- table literal and nominal type
                   local is_same = self:same_type(ra, rb)
 
                   -- we can have some types that can be converted into either
