@@ -154,6 +154,7 @@ do
 
       traceback: function(thread, ? string, ? integer): string
       traceback: function(? string, ? integer): string
+      traceback: function(any): any
 
       upvalueid: function(AnyFunction, integer): userdata
       upvaluejoin: function(AnyFunction, integer, AnyFunction, integer)
@@ -426,7 +427,7 @@ do
          "b" "t" "bt"
       end
 
-      type XpcallMsghFunction = function(...: any): ()
+      type XpcallMsghFunction = function(any): any...
 
       arg: {string}
       assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
@@ -11614,7 +11615,7 @@ a.types[i], b.types[i]), }
          local msgh_type = a_function(arg2, {
             min_arity = self.feat_arity and 1 or 0,
             args = a_type(arg2, "tuple", { tuple = { a_type(arg2, "any", {}) } }),
-            rets = a_type(arg2, "tuple", { tuple = {} }),
+            rets = a_vararg(arg2, { a_type(arg2, "any", {}) }),
          })
          self:assert_is_a(arg2, msgh, msgh_type, "in message handler")
       end
