@@ -7739,6 +7739,9 @@ do
          end
 
          typ = fields[names[i]]
+         if typ == nil then
+            return nil
+         end
       end
 
       -- FIXME doing this at the and lets all nominals be used as types (see #891)
