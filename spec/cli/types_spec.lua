@@ -367,19 +367,27 @@ describe("tl types works like check", function()
          local types = json.decode(output)
          assert(types.by_pos)
          local by_pos = types.by_pos[next(types.by_pos)]
+         local function map_to_str(tbl)
+            local ntbl = {}
+            for k, v in pairs(tbl) do
+               ntbl[k] = assert(types.types[tostring(v)]).str
+            end
+            return ntbl
+         end
+
          assert.same({
-            ["19"] = 9,
-            ["22"] = 9,
-            ["23"] = 7,
-            ["30"] = 2,
-            ["41"] = 9,
-         }, by_pos["1"])
+            ["19"] = '{string : boolean}',
+            ["22"] = '{string : boolean}',
+            ["23"] = 'string',
+            ["30"] = 'boolean',
+            ["41"] = '{string : boolean}',
+         }, map_to_str(by_pos["1"]))
          assert.same({
-            ["17"] = 7,
-            ["20"] = 2,
-            ["25"] = 17,
-            ["31"] = 9,
-         }, by_pos["2"])
+            ["17"] = 'string',
+            ["20"] = 'boolean',
+            ["25"] = 'function({K : V}): function(): (K, V)',
+            ["31"] = '{string : boolean}',
+         }, map_to_str(by_pos["2"]))
       end)
    end)
 end)
