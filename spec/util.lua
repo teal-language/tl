@@ -423,24 +423,26 @@ function util.assert_popen_close(want, ret1, ret2, ret3)
    end
 end
 
+local function batch_add_individual_assert(batch, at, e, g)
+   assert(next(e))
+   for k, v in pairs(e) do
+      if k ~= "line" then
+         if type(v) == "string" and v ~= "" then
+            batch:add(assert.match, v, g[k] or "", 1, true, at .. " Expected same " .. k)
+         else
+            batch:add(assert.same, v, g[k], at .. " Expected same " .. k)
+         end
+      end
+   end
+end
+
 local function batch_compare(batch, category, expected, got)
    batch:add(assert.same, #expected, #got, "Expected same number of " .. category .. ":")
    for i = 1, #expected do
       local e = expected[i] or {}
       local g = got[i] or {}
       local at = "[" .. (e.line and ("\"" .. e.line .. "\"") or i) .. "]"
-      if e.y then
-         batch:add(assert.same, e.y, g.y, at .. " Expected same y location:")
-      end
-      if e.x then
-         batch:add(assert.same, e.x, g.x, at .. " Expected same x location:")
-      end
-      if e.msg then
-         batch:add(assert.match, e.msg, g.msg or "", 1, true, at .. " Expected messages to match:")
-      end
-      if e.filename then
-         batch:add(assert.match, e.filename, g.filename or "", 1, true, at .. " Expected filenames to match:")
-      end
+      batch_add_individual_assert(batch, at, e, g)
    end
    if #got > #expected then
       for i = #expected + 1, #got do
@@ -489,6 +491,13 @@ local function check(lax, code, unknowns, gen_target, lang)
 
       if unknowns then
          local unks = filter_by("unknown", combine_result(result, "warnings"))
+         for i, v in ipairs(unknowns) do
+            if type(v) == "string" then
+               v = { msg = v }
+               unknowns[i] = v
+            end
+            unknowns[i].msg = "unknown variable: " .. unknowns[i].msg
+         end
          batch_compare(batch, "unknowns", unknowns, unks)
       end
       batch:assert()

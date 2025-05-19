@@ -20,10 +20,10 @@ describe("records", function()
 
       local t: Rec = { m = 42 }
    ]], {
-      { y = 6, "record field doesn't match: m: got integer, expected string" },
-      { y = 11, "record field doesn't match: m: got integer, expected string" },
-      { y = 15, "record field doesn't match: m: got integer, expected string" },
-      { y = 17, "record field doesn't match: m: got integer, expected string" },
+      { y = 6, msg = "in record field: m: got integer, expected string" },
+      { y = 11, msg = "record field doesn't match: m: got integer, expected string" },
+      { y = 15, msg = "in record field: m: got integer, expected string" },
+      { y = 17, msg = "in record field: m: got integer, expected string" },
    }))
 
    it("refines self on fields inherited from interfaces (regression test for #877)", util.check([[

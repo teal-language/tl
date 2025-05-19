@@ -1015,9 +1015,9 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          x:bar()
          x:bar2()
       ]], {
-         { y = 5, x = 25, type = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
-         { y = 8, x = 33, type = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
-         { y = 1, x = 23, type = "unused", msg = "unused type Foos" },
+         { y = 5, x = 25, tag = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
+         { y = 8, x = 33, tag = "redeclaration", msg = "type argument shadows previous declaration of 'Foos'" },
+         { y = 1, x = 23, tag = "unused", msg = "unused type Foos" },
       }))
    end)
 end
