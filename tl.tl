@@ -127,9 +127,8 @@ do
       debug: function()
       gethook: function(? thread): HookFunction, integer
 
-      getinfo: function(AnyFunction | integer): GetInfoTable
-      getinfo: function(AnyFunction | integer, string): GetInfoTable
-      getinfo: function(thread, AnyFunction | integer, string): GetInfoTable
+      getinfo: function(thread, AnyFunction | integer, ? string): GetInfoTable
+      getinfo: function(        AnyFunction | integer, ? string): GetInfoTable
 
       getlocal: function(thread, AnyFunction, integer): string
       getlocal: function(thread, integer, integer): string, any
