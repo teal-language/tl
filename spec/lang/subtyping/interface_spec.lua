@@ -218,4 +218,13 @@ describe("subtyping of interfaces:", function()
    ]], {
       { y = 12, msg = "'move' does not match definition in interface Animal" }
    }))
+
+   it("early-outs on nonexistent nested interface types (regression test for #986)", util.check_type_error([[
+      local interface Example
+      end
+
+      local fails: Example.A.B = {}
+   ]], {
+      { y = 4, msg = "unknown type Example.A.B" }
+   }))
 end)
