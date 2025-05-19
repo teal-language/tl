@@ -385,7 +385,7 @@ describe("tl types works like check", function()
          assert.same({
             ["17"] = 'string',
             ["20"] = 'boolean',
-            ["25"] = 'function({K : V}): function(): (K, V)',
+            ["25"] = 'function({K : V}): (function({K : V}, ? K): (K, V), {K : V}, K)',
             ["31"] = '{string : boolean}',
          }, map_to_str(by_pos["2"]))
       end)
