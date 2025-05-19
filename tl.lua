@@ -138,8 +138,8 @@ do
 
       getmetatable: function<T>(T): metatable<T>
       getregistry: function(): {any:any}
-      getupvalue: function(AnyFunction, integer): any
-      getuservalue: function(userdata, integer): any
+      getupvalue: function(AnyFunction, integer): string, any
+      getuservalue: function(userdata, ? integer): any, boolean
 
       sethook: function(thread, HookFunction, string, ? integer)
       sethook: function(HookFunction, string, ? integer)
