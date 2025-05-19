@@ -45,7 +45,7 @@ describe("forin", function()
             end
          end
       ]], {
-         { msg = "attempting ipairs" },
+         { y = 2, msg = "attempting ipairs" },
          { y = 3, msg = "expression in for loop does not return an iterator" },
          { y = 3, msg = "unknown variable: a" },
          { y = 4, msg = "unknown variable: i" },

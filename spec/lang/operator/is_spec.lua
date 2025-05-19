@@ -592,7 +592,7 @@ end]]))
 
             local n = x is number and x < 123 or tonumber(x:sub(1,2))
          ]], {
-            { msg = "cannot use operator 'or' for types boolean and number" },
+            { y = 3, msg = "cannot use operator 'or' for types boolean and number" },
             { y = 3, x = 61, msg = "cannot index key 'sub' in variable 'x' of type number | string" },
          }))
       end)

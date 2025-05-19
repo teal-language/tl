@@ -423,6 +423,18 @@ function util.assert_popen_close(want, ret1, ret2, ret3)
    end
 end
 
+-- function(errs: {Error}): {integer:{Error}}
+local function combine_ys(errs, ty)
+   local combined = {}
+   for i, v in ipairs(errs) do
+      local y = v.y
+      assert(y, 'expected y value for ' .. ty .. ' error')
+      if not combined[y] then combined[y] = {} end
+      table.insert(combined[y], v)
+   end
+   return combined
+end
+
 local function batch_add_individual_assert(batch, at, e, g)
    assert(next(e))
    for k, v in pairs(e) do
@@ -436,7 +448,48 @@ local function batch_add_individual_assert(batch, at, e, g)
    end
 end
 
+local function batch_compare_combine_y(batch, category, expected, got)
+   batch:add(assert.same, #expected, #got, "Expected same number of " .. category .. ":")
+   local expected_by_y = combine_ys(expected, "expected")
+   local got_by_y = combine_ys(got, "gotten")
+
+   for y, expected_errs in pairs(expected_by_y) do
+      local got_errs = got_by_y[y]
+      local at_y = "[y=" .. y .. "]"
+      -- if expected_errs[1].line then at_y = at_y .. " [\"" .. expected_errs[1].line .. "\"]" end
+      if not got_errs then
+         batch:add(assert.same, expected_errs, {}, at_y .. " Expected " .. #expected_errs .. " " .. category .. ", got none:")
+      else
+         batch:add(assert.same, #expected_errs, #got_errs, at_y .. " Expected same number of " .. category .. ":")
+         -- check each individual one
+         for i = 1, #expected_errs do
+            local e = expected_errs[i] or {}
+            local g = got_errs[i] or {}
+            local at = at_y .. " [" .. (e.line and ("\"" .. e.line .. "\"") or i) .. "]"
+            batch_add_individual_assert(batch, at, e, g)
+         end
+         if #got_errs > #expected_errs then
+            for i = #expected_errs + 1, #got_errs do
+               batch:add(assert.same, {}, got_errs[i], at_y .. " [" .. i .. "] Did not expect:")
+            end
+         end
+      end
+   end
+
+   for y, got_errs in pairs(got_by_y) do
+      if not expected_by_y[y] then
+         local at_y = "[y=" .. y .. "]"
+         batch:add(assert.same, {}, got_errs, at_y .. " Did not expect:")
+      end
+   end
+end
+
 local function batch_compare(batch, category, expected, got)
+   local has_y = false
+   for _, v in ipairs(expected) do if v.y then has_y = true end end
+   if has_y then
+      return batch_compare_combine_y(batch, category, expected, got)
+   end
    batch:add(assert.same, #expected, #got, "Expected same number of " .. category .. ":")
    for i = 1, #expected do
       local e = expected[i] or {}
