@@ -184,7 +184,7 @@ describe("forin", function()
          -- if you try to put "for a, b" here you get an error
       end
    ]], {
-      { y = 7, "too many variables for this iterator; it produces 1 value" }
+      { y = 7, msg = "too many variables for this iterator; it produces 1 value" }
    }))
 
    describe("regression tests", function()

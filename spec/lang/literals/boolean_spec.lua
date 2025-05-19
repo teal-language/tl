@@ -18,6 +18,6 @@ describe("boolean literals", function()
          print(x .. "!")
       end
    ]], {
-      { y = 5, "cannot use operator for types number | string and string" }
+      { y = 5, msg = "cannot use operator '..' for types number | string and string" }
    }))
 end)

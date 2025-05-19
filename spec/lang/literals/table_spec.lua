@@ -8,6 +8,6 @@ describe("table literals", function()
          print(x)
       end
    ]], {
-      { y = 3, "x: got string | number, expected string" }
+      { y = 3, msg = "x: got string | number, expected string" }
    }))
 end)

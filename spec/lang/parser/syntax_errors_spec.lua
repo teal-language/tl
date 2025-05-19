@@ -56,7 +56,7 @@ describe("syntax errors", function()
    it("in variadic return type", util.check_syntax_error([[
       local f: function(x: number)...
    ]], {
-      { y = 1, "unexpected '...'" },
+      { y = 1, msg = "syntax error" },
    }))
 
    it("missing return type", util.check_syntax_error([[
