@@ -13789,8 +13789,10 @@ self:expand_type(node, values, elements) })
                   end
 
                   if ambiguous and not t then
-                     self.errs:add_warning("hint", node, "the resulting type is ambiguous: %s or %s", ua, ub)
-                     self.errs:add_warning("hint", node, "currently choosing %s", ub)
+                     if TL_DEBUG then
+                        self.errs:add_warning("debug", node, "the resulting type is ambiguous: %s or %s", ua, ub)
+                        self.errs:add_warning("debug", node, "currently choosing %s", ub)
+                     end
 
                      t = ub
                   end
