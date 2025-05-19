@@ -13769,9 +13769,13 @@ self:expand_type(node, values, elements) })
                   t = drop_constant_value(rb)
 
                else
+
+
                   local a_ge_b = self:is_a(ub, ua)
                   local b_ge_a = self:is_a(ua, ub)
                   node.known = facts_or(node, node.e1.known, node.e2.known)
+
+
                   local is_same = self:same_type(ra, rb)
 
 
