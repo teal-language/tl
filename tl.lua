@@ -440,7 +440,7 @@ do
 
       error: function(? any, ? integer)
       getmetatable: function<T>(T): metatable<T>
-      ipairs: function<A>({A}): (function():(integer, A)) --[[special_function]]
+      ipairs: function<A>({A}): (function({A}, integer): (integer, A), {A}, integer) --[[special_function]]
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? {any:any}): (function, string)
       load: function((string | LoadFunction), ? string, ? string,   ? {any:any}): (function, string)
