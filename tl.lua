@@ -329,10 +329,10 @@ do
       cpath: string
       loaded: {string:any}
       loadlib: function(string, string): (function)
-      loaders: { function(string): any, any }
+      loaders: { (function(string): (function(? string, ? any): (any), any)) }
       path: string
-      preload: {any:any}
-      searchers: { function(string): any }
+      preload: {string : function(? string, ? any): (any) }
+      searchers: { (function(string): (function(? string, ? any): (any), any)) }
       searchpath: function(string, string, ? string, ? string): string, string
    end
 
