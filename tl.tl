@@ -8488,7 +8488,7 @@ do
       end
    end
 
-   function TypeChecker:commit_scope_transaction()
+   function TypeChecker:commit_scope_transaction(node: Node)
       local st = self.st
       local scope = st[#st]
       local next_scope = st[#st - 1]
@@ -8504,6 +8504,10 @@ do
       end
 
       table.remove(st)
+
+      if self.collector and node then
+         self.collector.end_symbol_list_scope(node)
+      end
    end
 
    -- This type must never be used for any values
@@ -10338,7 +10342,7 @@ do
             mark_invalid_typeargs(self, typeargs)
          end
 
-         self:commit_scope_transaction()
+         self:commit_scope_transaction(node)
 
          ret = self:assert_resolved_typevars_at(node, ret) as InvalidOrTupleType
 
