@@ -6370,12 +6370,15 @@ function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer, filename: s
 
    while n >= 1 do
       local s = symbols[n]
-      if s[3] == "@{" then
+      local symbol_name = s[3]
+      if symbol_name == "@{" then
          n = n - 1
-      elseif s[3] == "@}" then
+      elseif symbol_name == "@}" then
          n = s[4]
       else
-         ret[s[3]] = s[4]
+         if ret[symbol_name] == nil then
+            ret[symbol_name] = s[4]
+         end
          n = n - 1
       end
    end
