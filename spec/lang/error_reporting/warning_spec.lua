@@ -175,6 +175,61 @@ describe("warnings", function()
       ]], {
          { y = 3, msg = "function shadows previous declaration of 'a' (originally declared at 1:16)" },
       }))
+
+      it("does not misreport a variable written then read in another scope as being never read (regression test for #967)", util.check_warnings([[
+         local interface A end
+         local function GetTable(): A
+            return {}
+         end
+
+         local function DoSomething(_: A)
+         end
+
+         local a: A
+         do
+            a = GetTable()
+            DoSomething(a)
+         end
+      ]], {}))
+
+      it("does not misreport a variable read in another scope as being never read (regression test for #967)", util.check_warnings([[
+         local interface A end
+
+         local function DoSomething(_: A)
+         end
+
+         local a: A
+         do
+            DoSomething(a)
+         end
+      ]], {}))
+
+      it("does not misreport a variable written then read in the same scope as being never read (regression test for #967)", util.check_warnings([[
+         local interface A end
+         local function GetTable(): A
+            return {}
+         end
+
+         local function DoSomething(_: A)
+         end
+
+         a = GetTable()
+         DoSomething(a)
+      ]], {}))
+
+      it("does not misreport a variable written then read in the same scope as being never read (regression test for #967)", util.check_warnings([[
+         local interface A end
+         local function GetTable(): A
+            return {}
+         end
+
+         local a: A
+         do
+            a = GetTable()
+         end
+      ]], {
+         { y = 6, msg = "variable a (of type A) is never read" }
+      }))
    end)
 
    describe("on goto labels", function()

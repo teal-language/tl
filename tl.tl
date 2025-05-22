@@ -7575,6 +7575,16 @@ do
       "check_only"
    end
 
+   local function get_real_var_from_lower_scope(st: {Scope}, i: integer, name: string): Variable
+      for j = i - 1, 1, -1 do
+         local scope = st[j]
+         local sv = scope.vars[name]
+         if sv and ((not sv.is_specialized) or (sv.specialized_from)) then
+            return sv
+         end
+      end
+   end
+
    function TypeChecker:find_var(name: string, use?: VarUse): Variable, integer, Attribute
       for i = #self.st, 1, -1 do
          local scope = self.st[i]
@@ -7589,15 +7599,24 @@ do
                if i == 1 and var.needs_compat then
                   self.all_needs_compat[name] = true
                end
+
+               local real_var = var
+               if var.is_specialized and var.is_specialized ~= "localizing" then
+                  real_var = get_real_var_from_lower_scope(self.st, i, name) or real_var
+               end
                if use == "use_type" then
-                  var.used_as_type = true
+                  --var.used_as_type = true
+                  real_var.used_as_type = true
                elseif use ~= "check_only" then
                   if use == "lvalue" then
-                     var.has_been_written_to = true
+                     --var.has_been_written_to = true
+                     real_var.has_been_written_to = true
                   else
-                     var.has_been_read_from = true
+                     --var.has_been_read_from = true
+                     real_var.has_been_read_from = true
                   end
                end
+
                return var, i, var.attribute
             end
          end
