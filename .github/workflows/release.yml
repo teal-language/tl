@@ -1,3 +1,4 @@
+name: release
 
 on:
   workflow_dispatch:
@@ -18,7 +19,7 @@ jobs:
 
     - uses: luarocks/gh-actions-lua@master
       with:
-        luaVersion: ${{ matrix.lua-version }}
+        luaVersion: "5.4"
 
     - uses: luarocks/gh-actions-luarocks@master
 
