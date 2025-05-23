@@ -26,8 +26,10 @@ jobs:
     - env:
         VERSION: ${{ inputs.version }}
         LUAROCKS_API_KEY:
-        GITHUB_USER: ${{ secrets.GITHUB_USER }}
+        GITHUB_USER: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        git config --global user.name "$(curl https://api.github.com/users/$GITHUB_USER | jq -r .name)"
+        git config --global user.email "$GITHUB_USER@users.noreply.github.com"
         extras/release.sh $VERSION
 
