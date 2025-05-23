@@ -22,11 +22,11 @@ jobs:
     steps:
     - uses: actions/checkout@master
 
-    - uses: hishamhm/gh-actions-lua@master
+    - uses: luarocks/gh-actions-lua@master
       with:
         luaVersion: ${{ matrix.lua-version }}
 
-    - uses: hishamhm/gh-actions-luarocks@master
+    - uses: luarocks/gh-actions-luarocks@master
 
     - name: Build
       run: |
