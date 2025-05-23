@@ -17,16 +17,6 @@ grep -q "# ${version}$" CHANGELOG.md || {
    exit 1
 }
 
-git status --porcelain CHANGELOG.md | grep -q "^ M" && {
-   git add CHANGELOG.md
-   git commit -m "Prepare changelog for Teal $version"
-}
-
-git status --porcelain --untracked-files=no | grep "." && {
-   echo "You have uncommitted changes, please commit or stash first."
-   exit 1
-}
-
 git stash
 
 git checkout .
