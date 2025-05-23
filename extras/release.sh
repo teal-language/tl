@@ -112,7 +112,10 @@ return {
 }
 EOF
 
-extras/binary.sh
+extras/binary.sh || {
+   echo "Failed building Linux binary."
+   exit 1
+}
 
 rm -rf $linux_folder
 mkdir $linux_folder
@@ -125,7 +128,10 @@ cp tl.lua $linux_folder/build
 cp _binary/build/tl $linux_folder
 tar czvpf $linux_pkg $linux_folder
 
-extras/binary.sh --windows
+extras/binary.sh --windows || {
+   echo "Failed building Windows binary."
+   exit 1
+}
 
 rm -rf $windows_folder
 mkdir $windows_folder
