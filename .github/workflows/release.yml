@@ -1,0 +1,32 @@
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (0.x.y)"
+        required: true
+
+jobs:
+  Release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install MinGW
+      uses: egor-tensin/setup-mingw@84c781b557efd538dec66bde06988d81cd3138cf
+
+    - uses: luarocks/gh-actions-lua@master
+      with:
+        luaVersion: ${{ matrix.lua-version }}
+
+    - uses: luarocks/gh-actions-luarocks@master
+
+    - env:
+        VERSION: ${{ inputs.version }}
+        LUAROCKS_API_KEY:
+        GITHUB_USER: ${{ secrets.GITHUB_USER }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        extras/release.sh $VERSION
+
