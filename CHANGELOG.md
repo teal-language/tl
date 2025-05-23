@@ -1,3 +1,49 @@
+# 0.24.6
+
+2025-05-23
+
+Another good bugfix release, with a bunch of fixes reported and fixed by the
+community! I'm especially happy to welcome Morgan Bartlett as a committer;
+it's really good to be able to discuss the internals of the compiler in
+matters that affect both the implementation and the language behavior. The
+fixes and improvements for the `or` operator inference were a truly
+collaborative piece of work!
+
+This release features commits by @0komo, @wu4, Morgan Bartlett
+and Hisham Muhammad.
+
+### Language
+
+* Improved type inference for the `or` operator. Various subtle changes
+  to its behavior, but the end result is that the behavior should match
+  more closely what is intuitively desired. See the test cases in #983
+  for details.
+
+### Tooling
+
+* `-` can be used as an argument for reading from standard input
+  or writing into standard output
+* `tl completion`: new command for generating shell completions for
+  bash, zsh and fish.
+* `--wdisable` and `--werror` now reject invalid values
+
+### API
+
+* `tl.symbols_in_scope` now returns the inferred type at the requested
+  cursor position.
+
+### Fixes
+
+* API fixes:
+  * Type collection report fixes so that `tl.symbols_in_scope`
+    behaves correctly, returning types for the correct scope.
+
+* Fix "never read" warnings on specialized variables (#967).
+* Avoid accidentally matching interfaces to records structurally.
+* Do not crash when traversing an invalid type.
+* Fix handling of string escapes for Lua 5.1 targets (#977).
+* Fix a type leak in table literals (#965).
+
 # 0.24.5
 
 2025-05-05
@@ -9,7 +55,7 @@ does include some new features, though mainly to make Teal 0.24 closer to what
 one would consider an ideal vision for Teal 2024, rather than introducing new
 concepts.
 
-This release features commits by @mbartlett21, François Perrad
+This release features commits by Morgan Bartlett, François Perrad
 and Hisham Muhammad.
 
 ## What's New
