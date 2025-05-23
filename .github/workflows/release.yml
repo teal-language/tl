@@ -25,7 +25,7 @@ jobs:
 
     - env:
         VERSION: ${{ inputs.version }}
-        LUAROCKS_API_KEY:
+        LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
         GITHUB_USER: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
