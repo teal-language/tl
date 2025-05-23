@@ -19,7 +19,7 @@ export AR="${AR:-ar}"
 export NM="${NM:-nm}"
 export RANLIB="${RANLIB:-ranlib}"
 LUA="${LUA:-lua}"
-MYCFLAGS="-Os -rdynamic -ldl -lpthread -lm"
+MYCFLAGS=("-Os" "-rdynamic" "-ldl" "-lpthread" "-lm")
 
 sourcedir="$(pwd)"
 root="$(pwd)/_binary"
@@ -35,7 +35,7 @@ do
       export NM=x86_64-w64-mingw32-nm
       export AR=x86_64-w64-mingw32-ar
       export RANLIB=x86_64-w64-mingw32-ranlib
-      MYCFLAGS="-Os -lm"
+      MYCFLAGS=("-Os" "-lm")
       executable="tl.exe"
       ;;
    --sourcedir=*)
@@ -487,7 +487,7 @@ check "${root}/src/tl.c"
 
 exe_pathname="${root}/build/${executable}"
 
-${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" $MYCFLAGS
+${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" "${MYCFLAGS[@]}"
 
 set +x
 
