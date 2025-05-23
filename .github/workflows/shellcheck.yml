@@ -1,0 +1,26 @@
+name: shellcheck
+
+on:
+  pull_request:
+    paths:
+      - '**/*.sh'
+  workflow_dispatch:
+  push:
+    branches: master
+    paths:
+      - '**/*.sh'
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+
+    - name: Install shellcheck
+      run: |
+        sudo apt install shellcheck
+
+    - name: Check shell scripts
+      run: |
+        shellcheck $(find . -name "*.sh")
