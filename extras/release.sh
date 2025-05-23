@@ -147,7 +147,15 @@ Teal $version
 
 EOF
 
-hub release create -F _binary/release.txt -a $linux_pkg -a $windows_pkg v$version
+if which hub &>/dev/null
+then
+   hub release create -F _binary/release.txt -a $linux_pkg -a $windows_pkg v$version
+elif which gh &>/dev/null
+   gh release create v$version -F _binary/release.txt $linux_pkg $windows_pkg
+else
+   exit "No GitHub release tool available"
+   exit 1
+fi
 
 echo "*** tl ${version} is now released! ***"
 exit 0
