@@ -34,67 +34,6 @@ git status --porcelain tl.lua | grep -q " M " || {
    exit 1
 }
 
-git commit tl.tl tl.lua -m "Release ${version}" || {
-   echo "Failed to create the release commit."
-   exit 1
-}
-
-git push || {
-   echo "Failed to push the release commit."
-
-   # Undo release commit
-   git reset HEAD^ &> /dev/null
-   git checkout . &> /dev/null
-   exit 1
-}
-
-git tag v${version}
-
-git push origin v${version} || {
-   echo "Failed to push the release tag."
-   exit 1
-}
-
-[ $(ls tl-dev-*.rockspec | wc -l) = 1 ] || {
-   echo "Multiple dev rockspecs fonud."
-   exit 1
-}
-
-luarocks new_version tl-dev-*.rockspec "${version}" --tag="v${version}" || {
-   echo "Failed to create the new rockspec."
-   exit 1
-}
-
-api_key=
-[ "$LUAROCKS_API_KEY" ] && {
-   api_key="--temp-key $LUAROCKS_API_KEY"
-}
-
-./luarocks upload $api_key tl-${version}-1.rockspec || {
-   echo "Failed to upload the new rockspec."
-   exit 1
-}
-
-sed -i 's/^local VERSION = .*/local VERSION = "'${version}'+dev"/' tl.tl
-sed -i 's/^local VERSION = .*/local VERSION = "'${version}'+dev"/' tl.lua
-
-git status --porcelain tl.tl | grep -q " M " || {
-   echo "Failed to update the version number in tl.tl."
-   exit 1
-}
-
-git status --porcelain tl.lua | grep -q " M " || {
-   echo "Failed to update the version number in tl.lua."
-   exit 1
-}
-
-git commit tl.tl tl.lua -m "Update version_string"
-
-git push || {
-   echo "Failed to push the post-release commit."
-   exit 1
-}
-
 cat <<EOF > _binary/tlconfig.lua
 return {
    source_dir = "src",
@@ -136,6 +75,53 @@ zip -r $windows_pkg $windows_folder
 
 vtag=${version//./}
 
+echo "*** All prepared. Will start pushing the release... ***"
+
+git commit tl.tl tl.lua -m "Release ${version}" || {
+   echo "Failed to create the release commit."
+   exit 1
+}
+
+git push || {
+   echo "Failed to push the release commit."
+
+   # Undo release commit
+   git reset HEAD^ &> /dev/null
+   git checkout . &> /dev/null
+   exit 1
+}
+
+git tag v${version}
+
+git push origin v${version} || {
+   echo "Failed to push the release tag."
+   exit 1
+}
+
+echo "*** tl ${version} is now tagged on the repository! ***"
+
+[ $(ls tl-dev-*.rockspec | wc -l) = 1 ] || {
+   echo "Multiple dev rockspecs fonud."
+   exit 1
+}
+
+luarocks new_version tl-dev-*.rockspec "${version}" --tag="v${version}" || {
+   echo "Failed to create the new rockspec."
+   exit 1
+}
+
+api_key=
+[ "$LUAROCKS_API_KEY" ] && {
+   api_key="--temp-key $LUAROCKS_API_KEY"
+}
+
+luarocks upload $api_key tl-${version}-1.rockspec || {
+   echo "Failed to upload the new rockspec."
+   exit 1
+}
+
+echo "*** tl ${version} is now released on LuaRocks! ***"
+
 cat <<EOF > _binary/release.txt
 Teal $version
 
@@ -153,5 +139,29 @@ else
    exit 1
 fi
 
-echo "*** tl ${version} is now released! ***"
+echo "*** tl ${version} is now released on GitHub Releases! ***"
+
+sed -i 's/^local VERSION = .*/local VERSION = "'${version}'+dev"/' tl.tl
+sed -i 's/^local VERSION = .*/local VERSION = "'${version}'+dev"/' tl.lua
+
+git status --porcelain tl.tl | grep -q " M " || {
+   echo "Failed to update the version number in tl.tl."
+   exit 1
+}
+
+git status --porcelain tl.lua | grep -q " M " || {
+   echo "Failed to update the version number in tl.lua."
+   exit 1
+}
+
+git commit tl.tl tl.lua -m "Update version_string"
+
+git push || {
+   echo "Failed to push the post-release commit."
+   exit 1
+}
+
+
+echo "*** tl ${version} is now released! All done! ***"
+
 exit 0
