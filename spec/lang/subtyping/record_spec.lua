@@ -26,6 +26,20 @@ describe("records", function()
       { y = 17, msg = "in record field: m: got integer, expected string" },
    }))
 
+   it("reports an error on extra fields", util.check_type_error([[
+      local record A
+         a: string
+      end
+
+      local test_a = { a = "test", bad = "this" }
+      local test_b = { a = "test" }
+
+      local test_it: A = test_a
+      local test_it_2: A = test_b
+   ]], {
+      { y = 8, msg = ") is not a record A: record field doesn't exist: bad" },
+   }))
+
    it("refines self on fields inherited from interfaces (regression test for #877)", util.check([[
       -- Define an interface that uses self.
       -- Using self should automatically refine implementations to map self to the impl.

@@ -729,6 +729,7 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
 local TypeReporter = {}
 
 
@@ -1132,6 +1133,7 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
          }
@@ -1144,6 +1146,7 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = keywords[tk] and "keyword" or "identifier",
          }
@@ -1156,6 +1159,7 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
          }
@@ -1168,6 +1172,7 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
          }
@@ -3627,7 +3632,7 @@ do
       local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
       i = parse_function_args_rets_body(ps, i, fn)
       if fn.is_method and fn.args then
-         table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+         table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier" })
          fn.min_arity = fn.min_arity + 1
       end
 
@@ -9044,6 +9049,8 @@ do
             if not ok then
                self.errs:add_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
             end
+         elseif (not bk) and b.typename == "record" then
+            table.insert(errs, Err("record field doesn't exist: " .. k))
          end
       end
       if #errs > 0 then
@@ -14846,7 +14853,6 @@ function tl.check_string(input, env, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
-         ok = false,
          filename = filename,
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
