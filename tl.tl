@@ -201,6 +201,7 @@ do
 
    global record FILE
       is userdata
+      where io.type(self)
 
       enum SeekWhence
          "set" "cur" "end"
