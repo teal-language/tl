@@ -85,40 +85,6 @@ do
       "a" "l" "L" "*a" "*l" "*L" "n" "*n"
    end
 
-   global record FILE
-      is userdata
-
-      enum SeekWhence
-         "set" "cur" "end"
-      end
-
-      enum SetVBufMode
-         "no" "full" "line"
-      end
-
-      close: function(FILE): boolean, string, integer
-      flush: function(FILE)
-
-      lines: function(FILE): (function(): (string))
-      lines: function(FILE, FileNumberMode...): (function(): (number...))
-      lines: function(FILE, (number | FileStringMode)...): (function(): (string...))
-      lines: function(FILE, (number | FileMode)...): (function(): ((string | number)...))
-      lines: function(FILE, (number | string)...): (function(): (string...))
-
-      read: function(FILE): string
-      read: function(FILE, FileNumberMode...): number...
-      read: function(FILE, (number | FileStringMode)...): string...
-      read: function(FILE, (number | FileMode)...): ((string | number)...)
-      read: function(FILE, (number | string)...): (string...)
-
-      seek: function(FILE, ? SeekWhence, ? integer): integer, string
-      setvbuf: function(FILE, SetVBufMode, ? integer)
-
-      write: function(FILE, (string | number)...): FILE, string
-
-      metamethod __close: function(FILE)
-   end
-
    global record coroutine
       type Function = function(any...): any...
 
@@ -194,9 +160,9 @@ do
 
    global record io
       enum OpenMode
-         "r" "w" "a" "r+" "w+" "a+"
-         "rb" "wb" "ab" "r+b" "w+b" "a+b"
-         "*r" "*w" "*a" "*r+" "*w+" "*a+"
+          "r"   "w"   "a"   "r+"   "w+"   "a+"
+          "rb"  "wb"  "ab"  "r+b"  "w+b"  "a+b"
+         "*r"  "*w"  "*a"  "*r+"  "*w+"  "*a+"
          "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
       end
 
@@ -226,6 +192,40 @@ do
       tmpfile: function(): FILE
       type: function(any): string
       write: function((string | number)...): FILE, string
+   end
+
+   global record FILE
+      is userdata
+
+      enum SeekWhence
+         "set" "cur" "end"
+      end
+
+      enum SetVBufMode
+         "no" "full" "line"
+      end
+
+      close: function(FILE): boolean, string, integer
+      flush: function(FILE)
+
+      lines: function(FILE): (function(): (string))
+      lines: function(FILE, FileNumberMode...): (function(): (number...))
+      lines: function(FILE, (number | FileStringMode)...): (function(): (string...))
+      lines: function(FILE, (number | FileMode)...): (function(): ((string | number)...))
+      lines: function(FILE, (number | string)...): (function(): (string...))
+
+      read: function(FILE): string
+      read: function(FILE, FileNumberMode...): number...
+      read: function(FILE, (number | FileStringMode)...): string...
+      read: function(FILE, (number | FileMode)...): ((string | number)...)
+      read: function(FILE, (number | string)...): (string...)
+
+      seek: function(FILE, ? SeekWhence, ? integer): integer, string
+      setvbuf: function(FILE, SetVBufMode, ? integer)
+
+      write: function(FILE, (string | number)...): FILE, string
+
+      metamethod __close: function(FILE)
    end
 
    global record math
