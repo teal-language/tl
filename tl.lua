@@ -1188,7 +1188,6 @@ do
             tk = tk,
             kind = kind,
             comments = comments,
-
          }
          comments = nil
          in_token = false
@@ -1594,7 +1593,7 @@ do
          end
       end
 
-      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$", comments = comments })
+      table.insert(tokens, { x = x + 1, y = y, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
    end
@@ -3670,7 +3669,7 @@ do
       local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
       i = parse_function_args_rets_body(ps, i, fn)
       if fn.is_method and fn.args then
-         table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+         table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier" })
          fn.min_arity = fn.min_arity + 1
       end
 
@@ -9249,6 +9248,8 @@ do
             if not ok then
                self.errs:add_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
             end
+         elseif (not bk) and b.typename == "record" then
+            table.insert(errs, Err("record field doesn't exist: " .. k))
          end
       end
       if #errs > 0 then
@@ -15053,7 +15054,6 @@ function tl.check_string(input, env, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
-         ok = false,
          filename = filename,
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
