@@ -159,4 +159,32 @@ describe("flow typing in 'if' statements", function()
          end
       end
    ]]))
+
+   it("do not widen back type if type in all blocks are the same", util.check([[
+      local t: number | string | boolean
+      local u: number | string
+      t = 12
+      if math.random(10) > 5 then
+         t = 8
+      else
+         t = 9
+      end
+      local v: integer = t
+   ]]))
+
+   it("widen back type if type in blocks are different", util.check_type_error([[
+      local t: number | string | boolean
+      local u: number | string
+      t = 12
+      if math.random(10) > 5 then
+         t = true
+      else
+         t = 9
+      end
+      local v: integer = t
+   ]], {
+      -- if we produced a union of each if branch, we could provide
+      -- a more specific type here
+      { msg = "got number | string | boolean, expected integer" },
+   }))
 end)

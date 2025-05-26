@@ -12747,6 +12747,8 @@ self:expand_type(node, values, elements) })
       ["if"] = {
          after = function(self, node, _children)
             if node.if_widens then
+
+
                self:widen_all(node.if_widens, {})
             end
 
