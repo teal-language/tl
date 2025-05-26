@@ -12752,6 +12752,8 @@ do
       ["if"] = {
          after = function(self: TypeChecker, node: Node, _children: {Type}): Type
             if node.if_widens then
+               -- TODO we could collect the types from each if_block
+               -- and narrow the type to their union
                self:widen_all(node.if_widens, {})
             end
 
