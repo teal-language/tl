@@ -8426,9 +8426,13 @@ do
       return widens
    end
 
-   function TypeChecker:widen_all(widens: {string:boolean})
+   function TypeChecker:widen_all(widens: {string:boolean}, widen_types: {string:Type})
       for name, _ in pairs(widens) do
-         self:widen_back_var(name)
+         local curr = self:find_var(name, "check_only")
+         local prev = widen_types[name]
+         if (not prev) or (curr and not self:same_type(curr.t, prev)) then
+            self:widen_back_var(name)
+         end
       end
    end
 
@@ -8442,7 +8446,18 @@ do
 
    function TypeChecker:end_scope(node?: Node)
       local st = self.st
-      local scope = table.remove(st)
+      local scope = st[#st]
+
+      local widen_types: {string:Type}
+      if scope.widens then
+         widen_types = {}
+         for name, _ in pairs(scope.widens) do
+            local var = self:find_var(name, "check_only")
+            widen_types[name] = var.t
+         end
+      end
+
+      table.remove(st)
       local next_scope = st[#st]
 
       assert(not scope.is_transaction)
@@ -8451,7 +8466,7 @@ do
       self.errs:check_var_usage(scope)
 
       if scope.widens then
-         self:widen_all(scope.widens)
+         self:widen_all(scope.widens, widen_types)
       end
 
       if self.collector and node then
@@ -12732,7 +12747,7 @@ do
       ["if"] = {
          after = function(self: TypeChecker, node: Node, _children: {Type}): Type
             if node.if_widens then
-               self:widen_all(node.if_widens)
+               self:widen_all(node.if_widens, {})
             end
 
             local all_return = true
