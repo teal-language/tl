@@ -144,4 +144,19 @@ describe("flow typing in 'if' statements", function()
          end
       end
    ]], {}, {}))
+
+   it("do not widen if type remains the same (regression test for #994)", util.check([[
+      local type T = table
+      global function a() : string
+         local value : string | T
+
+         local is_escaped = false;
+         if value is string then
+            if not is_escaped then
+               value = tostring(value)
+            end
+            return "" .. value .. ""
+         end
+      end
+   ]]))
 end)
