@@ -103,11 +103,15 @@ describe("long string", function()
       local result = tl.process_string([==[
          local t: {string: boolean} = {}
          t[ [["random_string"]] ] = true
+         t[ [["random_string"]] .. 'test' ] = true
+         t[ [["random_string"]] .. 'test' .. 'other' ] = true
       ]==])
       local lua = tl.pretty_print_ast(result.ast)
       assert.equal(multitrim([==[
          local t = {}
          t[ [["random_string"]] ] = true
+         t[ [["random_string"]] .. 'test' ] = true
+         t[ [["random_string"]] .. 'test' .. 'other' ] = true
       ]==]), multitrim(lua))
    end)
 

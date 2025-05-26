@@ -5378,6 +5378,11 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
       end
    }
 
+   local function starts_with_longstring(n: Node): boolean
+      while n.e1 do n = n.e1 end
+      return n.is_longstring
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
@@ -5742,7 +5747,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             elseif node.op.op == "@index" then
                add_child(out, children[1], "", indent)
                table.insert(out, "[")
-               if node.e2.is_longstring then
+               if starts_with_longstring(node.e2) then
                   table.insert(children[3], 1, " ")
                   table.insert(children[3], " ")
                end
