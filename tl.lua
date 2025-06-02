@@ -729,6 +729,7 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
 local TypeReporter = {}
 
 
@@ -6144,6 +6145,15 @@ function TypeReporter:get_typenum(t)
          r[k] = self:get_typenum(v)
       end
       ti.fields = r
+      if rt.meta_fields then
+
+         local m = {}
+         for _, k in ipairs(rt.meta_field_order) do
+            local v = rt.meta_fields[k]
+            m[k] = self:get_typenum(v)
+         end
+         ti.meta_fields = m
+      end
    end
 
    if rt.elements then
