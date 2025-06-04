@@ -1,4 +1,5 @@
 local tl = require("tl")
+local util = require("spec.util")
 
 local function map(f, xs)
    local rs = {}
@@ -7,23 +8,8 @@ local function map(f, xs)
    end
    return rs
 end
---- removes leading whitespace from every line of a multiline string
-local function dedent(s)
-  local min, lines = math.huge, {}
-  
-  for line in s:gmatch("([^\n]*)\n?") do
-    local indent = line:match("^(%s*)%S")
-    if indent then min = math.min(min, #indent) end
-    table.insert(lines, line)
-  end
 
-  for i, line in ipairs(lines) do
-    lines[i] = line:gsub("^" .. string.rep(" ", min), "")
-  end
-
-  return table.concat(lines, "\n")
-end
-
+local dedent = util.dedent
 
 describe("lexer", function()
    it("line comment at the end of a line", function()

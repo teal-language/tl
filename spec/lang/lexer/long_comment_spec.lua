@@ -6,22 +6,7 @@ local function string_trim(s)
    return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
---- removes leading whitespace from every line of a multiline string
-local function dedent(s)
-  local min, lines = math.huge, {}
-  
-  for line in s:gmatch("([^\n]*)\n?") do
-    local indent = line:match("^(%s*)%S")
-    if indent then min = math.min(min, #indent) end
-    table.insert(lines, line)
-  end
-
-  for i, line in ipairs(lines) do
-    lines[i] = line:gsub("^" .. string.rep(" ", min), "")
-  end
-
-  return table.concat(lines, "\n")
-end
+local dedent = util.dedent
 
 local function map(f, xs)
    local rs = {}
