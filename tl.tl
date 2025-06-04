@@ -620,6 +620,7 @@ local record tl
       y: integer
       ref: integer -- NOMINAL
       fields: {string: integer} -- RECORD
+      meta_fields: {string: integer} -- RECORD (optional)
       enums: {string} -- ENUM
       args: {{integer, string}} -- FUNCTION
       rets: {{integer, string}} -- FUNCTION
@@ -6144,6 +6145,15 @@ function TypeReporter:get_typenum(t: Type): integer
          r[k] = self:get_typenum(v)
       end
       ti.fields = r
+      if rt.meta_fields then
+         -- store record metafield info
+         local m = {}
+         for _, k in ipairs(rt.meta_field_order) do
+            local v = rt.meta_fields[k]
+            m[k] = self:get_typenum(v)
+         end
+         ti.meta_fields = m
+      end
    end
 
    if rt is ArrayLikeType then

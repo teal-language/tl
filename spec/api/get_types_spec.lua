@@ -271,4 +271,24 @@ describe("tl.get_types", function()
          assert.same(s[3], syms[i][2])
       end
    end)
+
+   it("exposes metafields", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local record rec
+            metamethod __eq: function(rec, rec): boolean
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 1
+      local x = 10
+      local rec_type_id = tr.by_pos[""][y][x]
+      local rec_type = tr.types[rec_type_id]
+      assert(rec_type)
+      assert.same(rec_type.str, "rec")
+      assert(rec_type.meta_fields)
+      assert(rec_type.meta_fields.__eq)
+   end)
 end)
