@@ -144,7 +144,7 @@ describe("long comment", function()
       assert.same({}, syntax_errors)
       assert.same(9, #tokens)
       assert.same({"local", "x", "=", "1", "local", "y", "=", "2", "$EOF$"}, map(function(x) return x.tk end, tokens))
-      assert.same({}, tokens[4].comments)
+      assert.same(nil, tokens[4].comments)
       assert.same({
          {text = "--[[\ntrailing long comment\n]]", x = 13, y = 1}
       }, tokens[5].comments)

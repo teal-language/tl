@@ -1128,7 +1128,7 @@ do
       local ti: integer
       local in_token = false
 
-      local comments: {Comment} = {}
+      local comments: {Comment}
 
       local function begin_token()
          tx = x
@@ -1146,7 +1146,7 @@ do
             kind = kind,
             comments = comments,
          }
-         comments = {}
+         comments = nil
          in_token = false
       end
 
@@ -1160,7 +1160,7 @@ do
             kind = keywords[tk] and "keyword" or "identifier",
             comments = comments,
          }
-         comments = {}
+         comments = nil
          in_token = false
       end
 
@@ -1174,7 +1174,7 @@ do
             kind = kind,
             comments = comments,
          }
-         comments = {}
+         comments = nil
          in_token = false
       end
 
@@ -1189,7 +1189,7 @@ do
             comments = comments,
 
          }
-         comments = {}
+         comments = nil
          in_token = false
       end
 
@@ -1205,6 +1205,17 @@ do
             x = t.x,
             msg = msg or "invalid token '" .. t.tk .. "'",
          })
+      end
+
+      local function add_comment(text: string) 
+         if not comments then
+            comments = {}
+         end
+         comments[#comments + 1] = {
+            x = tx,
+            y = ty,
+            text = text,
+         }
       end
 
       local len = #input
@@ -1272,11 +1283,7 @@ do
             end
          elseif state == "comment short" then
             if c == "\n" then
-               comments[#comments + 1] = {
-                  x = tx,
-                  y = ty,
-                  text = input:sub(ti, i - 1),
-               }
+               add_comment(input:sub(ti, i - 1))
                state = "any"
             end
          elseif state == "got =" then
@@ -1431,11 +1438,7 @@ do
             end
          elseif state == "comment long got ]" then
             if c == "]" and lc_close_lvl == lc_open_lvl then
-               comments[#comments + 1] = {
-                  x = tx,
-                  y = ty,
-                  text = input:sub(ti, i),
-               }
+               add_comment(input:sub(ti, i))
                drop_token()
                state = "any"
                lc_open_lvl = 0
