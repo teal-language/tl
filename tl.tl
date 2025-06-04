@@ -668,11 +668,18 @@ local record tl
       "$EOF$"
    end
 
+   record Comment
+      x: integer
+      y: integer
+      text: string
+   end
+
    record Token
       x: integer
       y: integer
       tk: string
       kind: TokenKind
+      comments: {Comment}
    end
 
    -----------------------------------------------------------------------------
@@ -805,6 +812,7 @@ local type Result = tl.Result
 local type CheckOptions = tl.CheckOptions
 local type Token = tl.Token
 local type TokenKind = tl.TokenKind
+local type Comment = tl.Comment
 local type TypeInfo = tl.TypeInfo
 local type TypeReport = tl.TypeReport
 local type WarningKind = tl.WarningKind
@@ -1121,6 +1129,8 @@ do
       local ti: integer
       local in_token = false
 
+      local comments: {Comment}
+
       local function begin_token()
          tx = x
          ty = y
@@ -1135,7 +1145,9 @@ do
             y = ty,
             tk = tk,
             kind = kind,
+            comments = comments,
          }
+         comments = nil
          in_token = false
       end
 
@@ -1146,8 +1158,10 @@ do
             x = tx,
             y = ty,
             tk = tk,
-            kind = keywords[tk] and "keyword" or "identifier"
+            kind = keywords[tk] and "keyword" or "identifier",
+            comments = comments,
          }
+         comments = nil
          in_token = false
       end
 
@@ -1158,8 +1172,10 @@ do
             x = tx,
             y = ty,
             tk = tk,
-            kind = kind
+            kind = kind,
+            comments = comments,
          }
+         comments = nil
          in_token = false
       end
 
@@ -1170,8 +1186,11 @@ do
             x = tx,
             y = ty,
             tk = tk,
-            kind = kind
+            kind = kind,
+            comments = comments,
+
          }
+         comments = nil
          in_token = false
       end
 
@@ -1187,6 +1206,17 @@ do
             x = t.x,
             msg = msg or "invalid token '" .. t.tk .. "'",
          })
+      end
+
+      local function add_comment(text: string) 
+         if not comments then
+            comments = {}
+         end
+         comments[#comments + 1] = {
+            x = tx,
+            y = ty,
+            text = text,
+         }
       end
 
       local len = #input
@@ -1254,6 +1284,7 @@ do
             end
          elseif state == "comment short" then
             if c == "\n" then
+               add_comment(input:sub(ti, i - 1))
                state = "any"
             end
          elseif state == "got =" then
@@ -1408,6 +1439,7 @@ do
             end
          elseif state == "comment long got ]" then
             if c == "]" and lc_close_lvl == lc_open_lvl then
+               add_comment(input:sub(ti, i))
                drop_token()
                state = "any"
                lc_open_lvl = 0
@@ -1562,7 +1594,7 @@ do
          end
       end
 
-      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$" })
+      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
    end

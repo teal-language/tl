@@ -772,4 +772,26 @@ function util.check_lines(prelude, testcases)
    return util.check_type_error(code, errs)
 end
 
+--- removes leading whitespace from every line of a multiline string
+function util.dedent(s)
+   local min, lines = math.huge, {}
+  
+   for line in s:gmatch("([^\n]*)\n?") do
+      local indent = line:match("^(%s*)%S")
+      if indent then min = math.min(min, #indent) end
+      table.insert(lines, line)
+   end
+
+   if min == math.huge then
+      return s
+   end
+
+   for i, line in ipairs(lines) do
+      lines[i] = line:sub(min + 1)
+   end
+
+   return table.concat(lines, "\n")
+end
+
+
 return util
