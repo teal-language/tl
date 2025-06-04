@@ -782,8 +782,12 @@ function util.dedent(s)
       table.insert(lines, line)
    end
 
+   if min == math.huge then
+      return s
+   end
+
    for i, line in ipairs(lines) do
-      lines[i] = line:gsub("^" .. string.rep(" ", min), "")
+      lines[i] = line:sub(min + 1)
    end
 
    return table.concat(lines, "\n")
