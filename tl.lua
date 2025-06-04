@@ -518,7 +518,14 @@ local Errors = {}
 
 
 
-local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {} }
+local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Comment = {}, Token = {}, TypeCheckOptions = {} }
+
+
+
+
+
+
+
 
 
 
@@ -790,6 +797,7 @@ tl.typecodes = {
    UNKNOWN = 0x80008000,
    INVALID = 0x80000000,
 }
+
 
 
 
@@ -1120,6 +1128,8 @@ do
       local ti
       local in_token = false
 
+      local comments = {}
+
       local function begin_token()
          tx = x
          ty = y
@@ -1134,7 +1144,9 @@ do
             y = ty,
             tk = tk,
             kind = kind,
+            comments = comments,
          }
+         comments = {}
          in_token = false
       end
 
@@ -1146,7 +1158,9 @@ do
             y = ty,
             tk = tk,
             kind = keywords[tk] and "keyword" or "identifier",
+            comments = comments,
          }
+         comments = {}
          in_token = false
       end
 
@@ -1158,7 +1172,9 @@ do
             y = ty,
             tk = tk,
             kind = kind,
+            comments = comments,
          }
+         comments = {}
          in_token = false
       end
 
@@ -1170,7 +1186,10 @@ do
             y = ty,
             tk = tk,
             kind = kind,
+            comments = comments,
+
          }
+         comments = {}
          in_token = false
       end
 
@@ -1253,6 +1272,11 @@ do
             end
          elseif state == "comment short" then
             if c == "\n" then
+               comments[#comments + 1] = {
+                  x = tx,
+                  y = ty,
+                  text = input:sub(ti, i - 1),
+               }
                state = "any"
             end
          elseif state == "got =" then
@@ -1407,6 +1431,11 @@ do
             end
          elseif state == "comment long got ]" then
             if c == "]" and lc_close_lvl == lc_open_lvl then
+               comments[#comments + 1] = {
+                  x = tx,
+                  y = ty,
+                  text = input:sub(ti, i),
+               }
                drop_token()
                state = "any"
                lc_open_lvl = 0
@@ -1561,7 +1590,7 @@ do
          end
       end
 
-      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$" })
+      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
    end
