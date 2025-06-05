@@ -6,13 +6,28 @@ else
 	BUSTED = busted --suppress-pending
 endif
 
+SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl tl.tl
+
 all: selfbuild suite
 
-selfbuild:
-	cp tl.lua tl.lua.bak
-	$(LUA) ./tl gen --check --gen-target=5.1 tl.tl && cp tl.lua tl.lua.1 || { cp tl.lua tl.lua.1; cp tl.lua.bak tl.lua; exit 1; }
-	$(LUA) ./tl gen --check --gen-target=5.1 tl.tl && cp tl.lua tl.lua.2 || { cp tl.lua tl.lua.2; cp tl.lua.bak tl.lua; exit 1; }
-	diff tl.lua.1 tl.lua.2
+%.lua.bak: %.lua
+	cp $< $@
+
+%.lua.1: %.tl
+	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { rm $@; exit 1; }
+
+%.lua.2: %.tl %.lua.1
+	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}
+
+build1: $(addsuffix .lua.1,$(basename $(SOURCES)))
+
+replace1:
+	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; cp $$l $$l.bak; cp $$f $$l; done
+
+build2: $(addsuffix .lua.2,$(basename $(SOURCES)))
+
+selfbuild: build1 replace1 build2
+	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}; done
 
 suite:
 	${BUSTED} -v $(TESTFLAGS) spec/lang
@@ -24,3 +39,9 @@ cov:
 	${BUSTED} -c
 	luacov tl.lua
 	cat luacov.report.out
+
+clean:
+	for f in $$(find . -name '*.lua.1'); do rm $$f; done
+	for f in $$(find . -name '*.lua.1.err'); do rm $$f; done
+	for f in $$(find . -name '*.lua.2'); do rm $$f; done
+	for f in $$(find . -name '*.lua.bak'); do rm $$f; done
