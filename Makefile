@@ -6,7 +6,7 @@ else
 	BUSTED = busted --suppress-pending
 endif
 
-SOURCES = teal/errors.tl teal/lexer.tl teal/binary_search.tl teal/embed/prelude.tl teal/embed/stdlib.tl tl.tl
+SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/binary_search.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl tl.tl
 
 all: selfbuild suite
 
@@ -14,10 +14,10 @@ all: selfbuild suite
 	cp $< $@
 
 %.lua.1: %.tl
-	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@
+	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { rm $@; exit 1; }
 
 %.lua.2: %.tl %.lua.1
-	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done ; exit 1 ;}
+	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}
 
 build1: $(addsuffix .lua.1,$(basename $(SOURCES)))
 
@@ -27,7 +27,7 @@ replace1:
 build2: $(addsuffix .lua.2,$(basename $(SOURCES)))
 
 selfbuild: build1 replace1 build2
-	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done ; exit 1 ;}; done
+	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}; done
 
 suite:
 	${BUSTED} -v $(TESTFLAGS) spec/lang
