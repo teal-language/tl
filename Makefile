@@ -39,3 +39,8 @@ cov:
 	${BUSTED} -c
 	luacov tl.lua
 	cat luacov.report.out
+
+clean:
+	for f in $$(find . -name '*.lua.1'); do rm $$f; done
+	for f in $$(find . -name '*.lua.2'); do rm $$f; done
+	for f in $$(find . -name '*.lua.bak'); do rm $$f; done
