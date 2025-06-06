@@ -41,4 +41,10 @@ local record variables
    end
 end
 
+local type Variable = variables.Variable
+
+function variables.has_var_been_used(var: Variable): boolean
+   return var.has_been_read_from or var.has_been_written_to
+end
+
 return variables
