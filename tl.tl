@@ -1883,8 +1883,10 @@ local interface RecordLikeType
    interfaces_expanded: boolean
    fields: {string: Type}
    field_order: {string}
+   field_comments: {string: {{Comment}}}
    meta_fields: {string: Type}
    meta_field_order: {string}
+   meta_field_comments: {string: {{Comment}}}
    is_userdata: boolean
 end
 
@@ -2010,6 +2012,7 @@ end
 
 -- Intersection types, currently restricted to polymorphic functions
 -- defined inside records, representing polymorphic Lua APIs.
+-- types order should match the order of declarations in the record or interface.
 local record PolyType
    is AggregateType
    where self.typename == "poly"
@@ -2022,6 +2025,7 @@ local record EnumType
    where self.typename == "enum"
 
    enumset: {string:boolean}
+   value_comments: {string:{Comment}}
 end
 
 local record Operator
@@ -2183,6 +2187,7 @@ local record Node
 
    tk: string
    kind: NodeKind
+   comments: {Comment}
    symbol_list_slot: integer
    semicolon: boolean
    hashbang: string
@@ -3853,11 +3858,21 @@ local function parse_return(ps: ParseState, i: integer): integer, Node
    return i, node
 end
 
-local function store_field_in_record(ps: ParseState, i: integer, field_name: string, newt: Type, fields: {string: Type}, field_order: {string}): boolean
+local function store_field_in_record(ps: ParseState, i: integer, field_name: string, newt: Type, comments: {Comment}, fields: {string: Type}, field_order: {string}, field_comments: {string: {{Comment}}}): boolean
    if not fields[field_name] then
       fields[field_name] = newt
+      if comments then 
+         field_comments[field_name] = {comments}
+      end
       table.insert(field_order, field_name)
       return true
+   end
+
+   if comments then
+      if not field_comments[field_name] then
+         field_comments[field_name] = {}
+      end
+      table.insert(field_comments[field_name], comments)
    end
 
    local oldt = fields[field_name]
@@ -3914,17 +3929,20 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
 
    nt.newtype = new_typedecl(ps, istart, ndef)
 
-   store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
+   store_field_in_record(ps, iv, v.tk, nt.newtype, ps.tokens[istart].comments, def.fields, def.field_order, def.field_comments)
    return i
 end
 
 parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, boolean
    def.enumset = {}
+   def.value_comments = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
       i, item = verify_kind(ps, i, "string", "string")
       if item then
-         def.enumset[unquote(item.tk)] = true
+         local name = unquote(item.tk)
+         def.enumset[name] = true
+         def.value_comments[name] = item.comments
       end
    end
    return i, true
@@ -4053,6 +4071,7 @@ end
 parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): integer, boolean
    def.fields = {}
    def.field_order = {}
+   def.field_comments = {}
 
    if ps.tokens[i].tk == "{" then
       local atype: Type
@@ -4104,7 +4123,8 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
 
       def.meta_fields = {}
       def.meta_field_order = {}
-      store_field_in_record(ps, i, "__is", typ, def.meta_fields, def.meta_field_order)
+      def.meta_field_comments = {}
+      store_field_in_record(ps, i, "__is", typ, {}, def.meta_fields, def.meta_field_order, def.meta_field_comments)
    end
 
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
@@ -4119,6 +4139,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       elseif ps.tokens[i].tk == "{" then
          return fail(ps, i, "syntax error: this syntax is no longer valid; declare array interface at the top with 'is {...}'")
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
+         local comments = ps.tokens[i].comments
          i = i + 1
          local iv = i
 
@@ -4143,7 +4164,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             ntt.is_nested_alias = true
          end
 
-         store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
+         store_field_in_record(ps, iv, v.tk, nt.newtype, comments, def.fields, def.field_order, def.field_comments)
       elseif parse_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
          if def.typename == "interface" and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
@@ -4151,6 +4172,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             i = parse_nested_type(ps, i, def, tn)
          end
       else
+         local comments = ps.tokens[i].comments
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
             is_metamethod = true
@@ -4186,13 +4208,16 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             local field_name = v.conststr or v.tk
             local fields = def.fields
             local field_order = def.field_order
+            local field_comments = def.field_comments
             if is_metamethod then
                if not def.meta_fields then
                   def.meta_fields = {}
                   def.meta_field_order = {}
+                  def.meta_field_comments = {}
                end
                fields = def.meta_fields
                field_order = def.meta_field_order
+               field_comments = def.meta_field_comments
                if not metamethod_names[field_name] then
                   fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                end
@@ -4208,7 +4233,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
                end
             end
 
-            store_field_in_record(ps, iv, field_name, t, fields, field_order)
+            store_field_in_record(ps, iv, field_name, t, comments, fields, field_order, field_comments)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
             if next_word == "record" or next_word == "enum" then
@@ -4480,37 +4505,59 @@ local function parse_local_macroexp(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_local(ps: ParseState, i: integer): integer, Node
+   local comments = ps.tokens[i].comments
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
+   
+   local node: Node
    if ntk == "function" then
-      return parse_local_function(ps, i)
+      i, node = parse_local_function(ps, i)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_declaration(ps, i + 2, "local_type")
+      i, node = parse_type_declaration(ps, i + 2, "local_type")
    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
-      return parse_local_macroexp(ps, i)
+      i, node = parse_local_macroexp(ps, i)
    elseif parse_type_body_fns[tn as BodyTypeName] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "local_type", tn as BodyTypeName)
+      i, node = parse_type_constructor(ps, i, "local_type", tn as BodyTypeName)
+   else
+      i, node = parse_variable_declarations(ps, i + 1, "local_declaration")
    end
-   return parse_variable_declarations(ps, i + 1, "local_declaration")
+   if node then 
+      node.comments = comments
+   end
+   return i, node
 end
 
 local function parse_global(ps: ParseState, i: integer): integer, Node
+   local comments = ps.tokens[i].comments
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
+
+   local node: Node
    if ntk == "function" then
-      return parse_function(ps, i + 1, "global")
+      i, node = parse_function(ps, i + 1, "global")
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
-      return parse_type_declaration(ps, i + 2, "global_type")
+      i, node = parse_type_declaration(ps, i + 2, "global_type")
    elseif parse_type_body_fns[tn as BodyTypeName] and ps.tokens[i+2].kind == "identifier" then
-      return parse_type_constructor(ps, i, "global_type", tn as BodyTypeName)
+      i, node = parse_type_constructor(ps, i, "global_type", tn as BodyTypeName)
    elseif ps.tokens[i+1].kind == "identifier" then
-      return parse_variable_declarations(ps, i + 1, "global_declaration")
+      i, node = parse_variable_declarations(ps, i + 1, "global_declaration")
+   else 
+      return parse_call_or_assignment(ps, i) -- global is a soft keyword
    end
-   return parse_call_or_assignment(ps, i) -- global is a soft keyword
+   if node then
+      node.comments = comments
+   end
+   return i, node
 end
 
 local function parse_record_function(ps: ParseState, i: integer): integer, Node
-   return parse_function(ps, i, "record")
+   local comments = ps.tokens[i].comments
+   local node: Node
+   i, node = parse_function(ps, i, "record")
+   if node then
+      node.comments = comments
+   end
+   return i, node
 end
 
 local function parse_pragma(ps: ParseState, i: integer): integer, Node
