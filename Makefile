@@ -6,7 +6,7 @@ else
 	BUSTED = busted --suppress-pending
 endif
 
-SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/binary_search.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl tl.tl
+SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl tl.tl
 
 all: selfbuild suite
 
@@ -42,5 +42,6 @@ cov:
 
 clean:
 	for f in $$(find . -name '*.lua.1'); do rm $$f; done
+	for f in $$(find . -name '*.lua.1.err'); do rm $$f; done
 	for f in $$(find . -name '*.lua.2'); do rm $$f; done
 	for f in $$(find . -name '*.lua.bak'); do rm $$f; done

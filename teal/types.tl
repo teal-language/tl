@@ -4,52 +4,399 @@ local TL_DEBUG = tldebug.TL_DEBUG
 local errors = require("teal.errors")
 local type Error = errors.Error
 
-local interface Node
+-- FIXME because of the module split, this needs to be global
+global is_numeric_type: function(t: Type): boolean
+
+local record types
+   interface Node
+   end
+
+   interface Where
+      f: string
+      y: integer
+      x: integer
+   end
+
+   enum TypeName
+      "generic"
+      "typedecl"
+      "typevar"
+      "typearg"
+      "function"
+      "array"
+      "map"
+      "tupletable"
+      "record"
+      "interface"
+      "self"
+      "enum"
+      "boolean"
+      "string"
+      "nil"
+      "thread"
+      "userdata"
+      "number"
+      "integer"
+      "union"
+      "nominal"
+      "emptytable"
+      "literal_table_item"
+      "unresolved_emptytable_value"
+      "unresolved_typearg"
+      "unresolvable_typearg"
+      "circular_require"
+      "boolean_context"
+      "tuple"
+      "poly"
+      "any"
+      "unknown"
+      "invalid"
+      "none"
+      "*"
+   end
+
+   interface Type
+      is Where
+      where self.typename
+
+      typename: TypeName    -- discriminator
+      typeid: integer       -- unique identifier
+      inferred_at: Where    -- for error messages
+      needs_compat: boolean -- for Lua compatibilty
+   end
+
+   record GenericType
+      is Type
+      where self.typename == "generic"
+
+      typeargs: {TypeArgType}
+      t: FirstOrderType
+      fresh: boolean
+   end
+
+   interface FirstOrderType
+      is Type
+   end
+
+   type FirstClassType = GenericType | FirstOrderType
+
+   interface StructuralType
+      is FirstOrderType
+   end
+
+   record StringType
+      is StructuralType
+      where self.typename == "string"
+
+      literal: string
+   end
+
+   interface NumericType
+      is StructuralType
+      where is_numeric_type(self)
+   end
+
+   record IntegerType
+      is NumericType
+      where self.typename == "integer"
+   end
+
+   record BooleanType
+      is StructuralType
+      where self.typename == "boolean"
+   end
+
+   -- This is a special internal type, to be used only as the node.expected
+   -- type in boolean contexts such as `if _ then`. It behaves exactly like
+   -- boolean except that type variables do not infer to it.
+   record BooleanContextType
+      is StructuralType
+      where self.typename == "boolean_context"
+   end
+
+   record TypeDeclType
+      is Type
+      where self.typename == "typedecl"
+
+      def: FirstClassType
+      closed: boolean
+      is_alias: boolean
+      is_nested_alias: boolean
+   end
+
+   record LiteralTableItemType
+      is Type
+      where self.typename == "literal_table_item"
+
+      -- table items
+      kname: string
+      ktype: FirstClassType
+      vtype: FirstClassType
+   end
+
+   interface HasDeclName
+      declname: string
+   end
+
+   record NominalType
+      is FirstOrderType
+      where self.typename == "nominal"
+
+      names: {string}
+      typevals: {FirstClassType}
+      found: TypeDeclType      -- type is found but typeargs are not resolved
+      resolved: Type           -- type is found and typeargs are resolved
+   end
+
+   record SelfType
+      is FirstOrderType
+      where self.typename == "self"
+
+      -- to be used only in error reports, not for type resolution
+      display_type: RecordLikeType
+   end
+
+   interface ArrayLikeType
+      is StructuralType
+      where self.elements
+
+      elements: Type
+      consttypes: {Type}
+      inferred_len: integer
+   end
+
+   record ArrayType
+      is ArrayLikeType
+      where self.typename == "array"
+   end
+
+   interface RecordLikeType
+      is StructuralType, HasDeclName, ArrayLikeType
+      where self.fields
+
+      interface_list: {ArrayType | NominalType}
+      interfaces_expanded: boolean
+      fields: {string: Type}
+      field_order: {string}
+      meta_fields: {string: Type}
+      meta_field_order: {string}
+      is_userdata: boolean
+   end
+
+   record RecordType
+      is RecordLikeType
+      where self.typename == "record"
+   end
+
+   record InterfaceType
+      is RecordLikeType
+      where self.typename == "interface"
+   end
+
+   -- producing a new value of this type (not propagating)
+   -- must always produce a type error
+   record InvalidType
+      is Type
+      where self.typename == "invalid"
+   end
+
+   -- To be used in lax mode only:
+   -- this represents non-annotated types in .lua files.
+   record UnknownType
+      is Type
+      where self.typename == "unknown"
+   end
+
+   record TupleType
+      is FirstOrderType
+      where self.typename == "tuple"
+
+      is_va: boolean
+      tuple: {Type}
+   end
+
+   interface TypeArgType
+      is Type
+      where self.typename == "typearg"
+
+      typearg: string
+      constraint: Type
+   end
+
+   record UnresolvedTypeArgType
+      is TypeArgType
+      where self.typename == "unresolved_typearg"
+   end
+
+   record UnresolvableTypeArgType
+      is Type
+      where self.typename == "unresolvable_typearg"
+
+      typearg: string
+   end
+
+   record TypeVarType
+      is FirstOrderType
+      where self.typename == "typevar"
+
+      typevar: string
+      constraint: Type
+   end
+
+   record MapType
+      is StructuralType
+      where self.typename == "map"
+
+      keys: Type
+      values: Type
+   end
+
+   record NilType
+      is StructuralType
+      where self.typename == "nil"
+   end
+
+   record EmptyTableType
+      is Type
+      where self.typename == "emptytable"
+
+      is_global: boolean
+      assigned_to: string
+      keys: Type
+   end
+
+   record UnresolvedEmptyTableValueType
+      is Type
+      where self.typename == "unresolved_emptytable_value"
+
+      emptytable_type: EmptyTableType
+   end
+
+   enum SpecialFunctionName
+      "assert"
+      "ipairs"
+      "pairs"
+      "pcall"
+      "xpcall"
+      "rawget"
+      "require"
+      "string.find"
+      "string.format"
+      "string.gmatch"
+      "string.gsub"
+      "string.match"
+      "string.pack"
+      "string.unpack"
+   end
+
+   record FunctionType
+      is StructuralType
+      where self.typename == "function"
+
+      is_method: boolean
+      maybe_method: boolean
+      is_record_function: boolean
+      min_arity: integer
+      args: TupleType
+      rets: TupleType
+      macroexp: Node
+      special_function_handler: SpecialFunctionName -- special handling for format strings etc
+   end
+
+   interface AggregateType
+      is StructuralType
+      where self.types
+
+      types: {Type}
+   end
+
+   record UnionType
+      is AggregateType
+      where self.typename == "union"
+   end
+
+   record TupleTableType
+      is AggregateType
+      where self.typename == "tupletable"
+   end
+
+   -- Intersection types, currently restricted to polymorphic functions
+   -- defined inside records, representing polymorphic Lua APIs.
+   record PolyType
+      is AggregateType
+      where self.typename == "poly"
+
+      types: {FunctionType | GenericType}
+   end
+
+   record EnumType
+      is StructuralType, HasDeclName
+      where self.typename == "enum"
+
+      enumset: {string:boolean}
+   end
+
+   lua_primitives: {TypeName:string}
+   simple_types: {TypeName:boolean}
+   table_types: {TypeName:boolean}
+
+   a_type: function<T is Type>(w: Where, typename: TypeName, t: T): T
+   edit_type: function(w: Where, t: Type, typename: TypeName): Type
+   is_unknown: function(t: Type): boolean
+   inferred_msg: function(t: Type, prefix?: string): string
+   raw_type: function(f: string, y: integer, x: integer, typename: TypeName): Type
+   shallow_copy_new_type: function<T is Type>(t: T): T
+   show_type: function(Type, ? boolean, ? {Type:string}): string
+   show_typevar: function(typevar: string, what: TypeName): string
+   show_type_base: function(t: Type, short: boolean, seen: {Type:string}): string
+
+   type TypeFunction = function<S>(S, Type, function<T is Type>(t: T, all_same: boolean): T, boolean): Type, boolean
+   type TypeFunctionMap<S> = {TypeName: TypeFunction<S>}
+   map: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
+   globals_typeid: integer
 end
 
-local interface Where
-   f: string
-   y: integer
-   x: integer
+local type Type = types.Type
+local type GenericType = types.GenericType
+local type StringType = types.StringType
+local type TypeDeclType = types.TypeDeclType
+local type NominalType = types.NominalType
+local type SelfType = types.SelfType
+local type ArrayType = types.ArrayType
+local type RecordLikeType = types.RecordLikeType
+local type RecordType = types.RecordType
+local type InterfaceType = types.InterfaceType
+local type InvalidType = types.InvalidType
+local type TupleType = types.TupleType
+local type TypeArgType = types.TypeArgType
+local type UnresolvableTypeArgType = types.UnresolvableTypeArgType
+local type TypeVarType = types.TypeVarType
+local type MapType = types.MapType
+local type NilType = types.NilType
+local type EmptyTableType = types.EmptyTableType
+local type UnresolvedEmptyTableValueType = types.UnresolvedEmptyTableValueType
+local type FunctionType = types.FunctionType
+local type UnionType = types.UnionType
+local type TupleTableType = types.TupleTableType
+local type PolyType = types.PolyType
+local type EnumType = types.EnumType
+local type TypeName = types.TypeName
+local type Where = types.Where
+
+global function is_numeric_type(t: Type): boolean
+   return t.typename == "number" or t.typename == "integer"
 end
 
-local enum TypeName
-   "generic"
-   "typedecl"
-   "typevar"
-   "typearg"
-   "function"
-   "array"
-   "map"
-   "tupletable"
-   "record"
-   "interface"
-   "self"
-   "enum"
-   "boolean"
-   "string"
-   "nil"
-   "thread"
-   "userdata"
-   "number"
-   "integer"
-   "union"
-   "nominal"
-   "emptytable"
-   "literal_table_item"
-   "unresolved_emptytable_value"
-   "unresolved_typearg"
-   "unresolvable_typearg"
-   "circular_require"
-   "boolean_context"
-   "tuple"
-   "poly"
-   "any"
-   "unknown"
-   "invalid"
-   "none"
-   "*"
-end
+types.lua_primitives = {
+   ["function"] = "function",
+   ["enum"] = "string",
+   ["boolean"] = "boolean",
+   ["string"] = "string",
+   ["nil"] = "nil",
+   ["number"] = "number",
+   ["integer"] = "number",
+   ["thread"] = "thread",
+}
 
 local simple_types: {TypeName:boolean} = {
    ["nil"] = true,
@@ -113,292 +460,6 @@ local table_types <total>: {TypeName:boolean} = {
    ["none"] = false,
    ["*"] = false,
 }
-
-local interface Type
-   is Where
-   where self.typename
-
-   typename: TypeName    -- discriminator
-   typeid: integer       -- unique identifier
-   inferred_at: Where    -- for error messages
-   needs_compat: boolean -- for Lua compatibilty
-end
-
-local record GenericType
-   is Type
-   where self.typename == "generic"
-
-   typeargs: {TypeArgType}
-   t: FirstOrderType
-   fresh: boolean
-end
-
-local interface FirstOrderType
-   is Type
-end
-
-local type FirstClassType = GenericType | FirstOrderType
-
-local interface StructuralType
-   is FirstOrderType
-end
-
-local record StringType
-   is StructuralType
-   where self.typename == "string"
-
-   literal: string
-end
-
--- FIXME because of the module split, this needs to be global
-global function is_numeric_type(t:Type): boolean
-   return t.typename == "number" or t.typename == "integer"
-end
-
-local interface NumericType
-   is StructuralType
-   where is_numeric_type(self)
-end
-
-local record IntegerType
-   is NumericType
-   where self.typename == "integer"
-end
-
-local record BooleanType
-   is StructuralType
-   where self.typename == "boolean"
-end
-
--- This is a special internal type, to be used only as the node.expected
--- type in boolean contexts such as `if _ then`. It behaves exactly like
--- boolean except that type variables do not infer to it.
-local record BooleanContextType
-   is StructuralType
-   where self.typename == "boolean_context"
-end
-
-local record TypeDeclType
-   is Type
-   where self.typename == "typedecl"
-
-   def: FirstClassType
-   closed: boolean
-   is_alias: boolean
-   is_nested_alias: boolean
-end
-
-local record LiteralTableItemType
-   is Type
-   where self.typename == "literal_table_item"
-
-   -- table items
-   kname: string
-   ktype: FirstClassType
-   vtype: FirstClassType
-end
-
-local interface HasDeclName
-   declname: string
-end
-
-local record NominalType
-   is FirstOrderType
-   where self.typename == "nominal"
-
-   names: {string}
-   typevals: {FirstClassType}
-   found: TypeDeclType      -- type is found but typeargs are not resolved
-   resolved: Type       -- type is found and typeargs are resolved
-end
-
-local record SelfType
-   is FirstOrderType
-   where self.typename == "self"
-
-   -- to be used only in error reports, not for type resolution
-   display_type: RecordLikeType
-end
-
-local interface ArrayLikeType
-   is StructuralType
-   where self.elements
-
-   elements: Type
-   consttypes: {Type}
-   inferred_len: integer
-end
-
-local record ArrayType
-   is ArrayLikeType
-   where self.typename == "array"
-end
-
-local interface RecordLikeType
-   is StructuralType, HasDeclName, ArrayLikeType
-   where self.fields
-
-   interface_list: {ArrayType | NominalType}
-   interfaces_expanded: boolean
-   fields: {string: Type}
-   field_order: {string}
-   meta_fields: {string: Type}
-   meta_field_order: {string}
-   is_userdata: boolean
-end
-
-local record RecordType
-   is RecordLikeType
-   where self.typename == "record"
-end
-
-local record InterfaceType
-   is RecordLikeType
-   where self.typename == "interface"
-end
-
--- producing a new value of this type (not propagating)
--- must always produce a type error
-local record InvalidType
-   is Type
-   where self.typename == "invalid"
-end
-
--- To be used in lax mode only:
--- this represents non-annotated types in .lua files.
-local record UnknownType
-   is Type
-   where self.typename == "unknown"
-end
-
-local record TupleType
-   is FirstOrderType
-   where self.typename == "tuple"
-
-   is_va: boolean
-   tuple: {Type}
-end
-
-local interface TypeArgType
-   is Type
-   where self.typename == "typearg"
-
-   typearg: string
-   constraint: Type
-end
-
-local record UnresolvedTypeArgType
-   is TypeArgType
-   where self.typename == "unresolved_typearg"
-end
-
-local record UnresolvableTypeArgType
-   is Type
-   where self.typename == "unresolvable_typearg"
-
-   typearg: string
-end
-
-local record TypeVarType
-   is FirstOrderType
-   where self.typename == "typevar"
-
-   typevar: string
-   constraint: Type
-end
-
-local record MapType
-   is StructuralType
-   where self.typename == "map"
-
-   keys: Type
-   values: Type
-end
-
-local record NilType
-   is StructuralType
-   where self.typename == "nil"
-end
-
-local record EmptyTableType
-   is Type
-   where self.typename == "emptytable"
-
-   is_global: boolean
-   assigned_to: string
-   keys: Type
-end
-
-local record UnresolvedEmptyTableValueType
-   is Type
-   where self.typename == "unresolved_emptytable_value"
-
-   emptytable_type: EmptyTableType
-end
-
-local enum SpecialFunctionName
-   "assert"
-   "ipairs"
-   "pairs"
-   "pcall"
-   "xpcall"
-   "rawget"
-   "require"
-   "string.find"
-   "string.format"
-   "string.gmatch"
-   "string.gsub"
-   "string.match"
-   "string.pack"
-   "string.unpack"
-end
-
-local record FunctionType
-   is StructuralType
-   where self.typename == "function"
-
-   is_method: boolean
-   maybe_method: boolean
-   is_record_function: boolean
-   min_arity: integer
-   args: TupleType
-   rets: TupleType
-   macroexp: Node
-   special_function_handler: SpecialFunctionName -- special handling for format strings etc
-end
-
-local interface AggregateType
-   is StructuralType
-   where self.types
-
-   types: {Type}
-end
-
-local record UnionType
-   is AggregateType
-   where self.typename == "union"
-end
-
-local record TupleTableType
-   is AggregateType
-   where self.typename == "tupletable"
-end
-
--- Intersection types, currently restricted to polymorphic functions
--- defined inside records, representing polymorphic Lua APIs.
-local record PolyType
-   is AggregateType
-   where self.typename == "poly"
-
-   types: {FunctionType | GenericType}
-end
-
-local record EnumType
-   is StructuralType, HasDeclName
-   where self.typename == "enum"
-
-   enumset: {string:boolean}
-end
 
 local show_type: function(Type, ? boolean, ? {Type:string}): string
 
@@ -699,81 +760,6 @@ local function type_for_union(t: Type): string, Type
    end
 end
 
-local record types
-   type Type = Type
-   type GenericType = GenericType
-   type FirstOrderType = FirstOrderType
-   type StructuralType = StructuralType
-   type StringType = StringType
-   type NumericType = NumericType
-   type IntegerType = IntegerType
-   type BooleanType = BooleanType
-   type BooleanContextType = BooleanContextType
-   type TypeDeclType = TypeDeclType
-   type LiteralTableItemType = LiteralTableItemType
-   type NominalType = NominalType
-   type SelfType = SelfType
-   type ArrayLikeType = ArrayLikeType
-   type ArrayType = ArrayType
-   type RecordLikeType = RecordLikeType
-   type RecordType = RecordType
-   type InterfaceType = InterfaceType
-   type InvalidType = InvalidType
-   type UnknownType = UnknownType
-   type TupleType = TupleType
-   type TypeArgType = TypeArgType
-   type UnresolvedTypeArgType = UnresolvedTypeArgType
-   type UnresolvableTypeArgType = UnresolvableTypeArgType
-   type TypeVarType = TypeVarType
-   type MapType = MapType
-   type NilType = NilType
-   type EmptyTableType = EmptyTableType
-   type UnresolvedEmptyTableValueType = UnresolvedEmptyTableValueType
-   type FunctionType = FunctionType
-   type AggregateType = AggregateType
-   type UnionType = UnionType
-   type TupleTableType = TupleTableType
-   type PolyType = PolyType
-   type EnumType = EnumType
-   type FirstClassType = FirstClassType
-   type Node = Node
-   type TypeName = TypeName
-   type Where = Where
-   type SpecialFunctionName = SpecialFunctionName
-
-   simple_types: {TypeName:boolean}
-   table_types: {TypeName:boolean}
-
-   a_type: function<T is Type>(w: Where, typename: TypeName, t: T): T
-   edit_type: function(w: Where, t: Type, typename: TypeName): Type
-   is_unknown: function(t: Type): boolean
-   inferred_msg: function(t: Type, prefix?: string): string
-   raw_type: function(f: string, y: integer, x: integer, typename: TypeName): Type
-   shallow_copy_new_type: function<T is Type>(t: T): T
-   show_type: function(Type, ? boolean, ? {Type:string}): string
-   show_typevar: function(typevar: string, what: TypeName): string
-   show_type_base: function(t: Type, short: boolean, seen: {Type:string}): string
-
-   type TypeFunction = function<S>(S, Type, function<T is Type>(t: T, all_same: boolean): T, boolean): Type, boolean
-   type TypeFunctionMap<S> = {TypeName: TypeFunction<S>}
-   map: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
-   globals_typeid: integer
-end
-
-types.globals_typeid = new_typeid()
-types.simple_types = simple_types
-types.table_types = table_types
-
-types.a_type = a_type
-types.edit_type = edit_type
-types.is_unknown = is_unknown
-types.inferred_msg = inferred_msg
-types.raw_type = raw_type
-types.shallow_copy_new_type = shallow_copy_new_type
-types.show_type = show_type
-types.show_typevar = show_typevar
-types.show_type_base = show_type_base
-
 function types.is_valid_union(typ: UnionType): boolean, string
    -- check for limitations in our union support
    -- due to codegen limitations (we only check with type() so far)
@@ -1045,6 +1031,17 @@ types.map = function<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type,
    return copy
 end
 
+types.globals_typeid = new_typeid()
+types.simple_types = simple_types
+types.table_types = table_types
+types.a_type = a_type
+types.edit_type = edit_type
+types.is_unknown = is_unknown
+types.inferred_msg = inferred_msg
+types.raw_type = raw_type
+types.shallow_copy_new_type = shallow_copy_new_type
+types.show_type = show_type
+types.show_typevar = show_typevar
+types.show_type_base = show_type_base
+
 return types
-
-

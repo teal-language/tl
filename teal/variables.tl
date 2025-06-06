@@ -1,0 +1,44 @@
+local types = require("teal.types")
+local type Type = types.Type
+local type NominalType = types.NominalType
+
+local parser = require("teal.parser")
+local type Attribute = parser.Attribute
+local type Node = parser.Node
+
+local record variables
+   enum Specialization
+      "narrow"
+      "narrowed_declaration"
+      "localizing"
+      "widen"
+   end
+
+   record Variable
+      t: Type
+      attribute: Attribute
+      needs_compat: boolean
+      specialized_from: Type
+      is_specialized: Specialization
+      declared_at: Node
+      is_func_arg: boolean
+      used_as_type: boolean
+      aliasing: Variable
+      implemented: {string:boolean}
+      has_been_read_from: boolean
+      has_been_written_to: boolean
+   end
+
+   record Scope
+      vars: {string:Variable}
+      labels: {string:Node}
+      pending_labels: {string:{Node}}
+      pending_nominals: {string:{NominalType}}
+      pending_global_types: {string:boolean}
+      narrows: {string:boolean}
+      widens: {string:boolean}
+      is_transaction: boolean
+   end
+end
+
+return variables

@@ -11,8 +11,6 @@ local type WarningKind = errors.WarningKind
 
 local lexer = require("teal.lexer")
 
-local binary_search = require("teal.binary_search")
-
 local prelude = require("teal.embed.prelude")
 local stdlib = require("teal.embed.stdlib")
 
@@ -83,12 +81,26 @@ local type NotFact = facts.NotFact
 local type TruthyFact = facts.TruthyFact
 
 local traversal = require("teal.traversal")
-local type VisitorCallbacks = traversal.VisitorCallbacks
 local type VisitorAfter = traversal.VisitorAfter
 local type Visitor = traversal.Visitor
 local type MetaMode = traversal.MetaMode
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
+
+local lua_generator = require("teal.gen.lua_generator")
+
+local type_reporter = require("teal.type_reporter")
+local type TypeCollector = type_reporter.TypeCollector
+local type TypeReporter = type_reporter.TypeReporter
+local type TypeReport = type_reporter.TypeReport
+
+local variables = require("teal.variables")
+local type Variable = variables.Variable
+local type Scope = variables.Scope
+local type Specialization = variables.Specialization
+
+local util = require("teal.util")
+local sorted_keys = util.sorted_keys
 
 local record Errors
    filename: string
@@ -114,28 +126,16 @@ local record tl
       "required"
    end
 
-   enum GenTarget
-      "5.1"
-      "5.3"
-      "5.4"
-   end
-
    enum Feat
       "on"
       "off"
-   end
-
-   record GenerateOptions
-      preserve_indent: boolean
-      preserve_newlines: boolean
-      preserve_hashbang: boolean
    end
 
    record CheckOptions
       feat_lax: Feat
       feat_arity: Feat
       gen_compat: GenCompat
-      gen_target: GenTarget
+      gen_target: lua_generator.Target
       run_internal_compiler_checks: boolean
    end
 
@@ -163,39 +163,6 @@ local record tl
       dependencies: {string:string} -- module name, file found
    end
 
-   typecodes: {string:integer}
-
-   record TypeInfo
-      t: integer
-
-      str: string
-      file: string
-      x: integer
-      y: integer
-      ref: integer -- NOMINAL
-      fields: {string: integer} -- RECORD
-      meta_fields: {string: integer} -- RECORD (optional)
-      enums: {string} -- ENUM
-      args: {{integer, string}} -- FUNCTION
-      rets: {{integer, string}} -- FUNCTION
-      vararg: boolean -- FUNCTION
-      varret: boolean -- FUNCTION
-      types: {integer} -- UNION, POLY, TUPLE
-      keys: integer -- MAP
-      values: integer -- MAP
-      elements: integer -- ARRAY
-   end
-
-   record TypeReport
-      type Symbol = {integer, integer, string, integer}
-
-      by_pos: {string: {integer: {integer: integer}}}
-      types: {integer: TypeInfo}
-      symbols: {Symbol}
-      symbols_by_file: {string: {Symbol}}
-      globals: {string: integer}
-   end
-
    record EnvOptions
       defaults: CheckOptions
       predefined_modules: {string}
@@ -203,6 +170,19 @@ local record tl
 
    -- abstract type
    type Node = types.Node
+
+   -----------------------------------------------------------------------------
+   -- Re-exported entries
+   -----------------------------------------------------------------------------
+
+   type WarningKind = errors.WarningKind
+   warning_kinds: {WarningKind:boolean}
+   type Error = errors.Error
+   type TokenKind = lexer.TokenKind
+   type Comment = lexer.Comment
+   type Token = lexer.Token
+   type GenerateOptions = lua_generator.Options
+   type GenTarget = lua_generator.Target
 
    -----------------------------------------------------------------------------
    -- Public API
@@ -226,17 +206,6 @@ local record tl
    version: function(): string
 
    path: string -- if set be the user, this overrides package.path for Teal
-
-   -----------------------------------------------------------------------------
-   -- Re-exported entries
-   -----------------------------------------------------------------------------
-
-   type WarningKind = errors.WarningKind
-   warning_kinds: {WarningKind:boolean}
-   type Error = errors.Error
-   type TokenKind = lexer.TokenKind
-   type Comment = lexer.Comment
-   type Token = lexer.Token
 
    -----------------------------------------------------------------------------
    -- Deprecated, mantained for backwards compatibility:
@@ -272,60 +241,11 @@ end
 
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
+tl.generate = lua_generator.generate
 tl.get_token_at = lexer.get_token_at
 tl.parse = parser.parse
 tl.parse_program = parser.parse_program
-
-local record TypeReporter
-   typeid_to_num: {integer: integer}
-   typename_to_num: {TypeName: integer}
-   next_num: integer
-   tr: TypeReport
-
-   get_typenum: function(self, Type): integer
-end
-
--- Implementation rationale:
--- * bit 31: (MSB) special ("any", "unknown", "invalid")
---   * "any" satisfies all Lua masks
--- * bits 30-27: if valid: other Teal types ("nominal", "poly", "union", "typevar")
--- * bits 24-26: reserved
--- * bits 20-23: abstract types ("interface")
--- * bits 16-19: if valid: Teal types ("array", "record", "map", "tuple", "enum") that map to a Lua type ("table", "string")
--- * bit 15: if not valid: value is unknown
--- * bits 8-14: reserved
--- * bits 0-7: (LSB) Lua types, one bit for each ("nil", "number", "boolean", "string", table, "function", "userdata", "thread")
---   * every valid value has a Lua type bit set
-tl.typecodes = {
-   -- Lua types
-   NIL                    = 0x00000001,
-   NUMBER                 = 0x00000002,
-   BOOLEAN                = 0x00000004,
-   STRING                 = 0x00000008,
-   TABLE                  = 0x00000010,
-   FUNCTION               = 0x00000020,
-   USERDATA               = 0x00000040,
-   THREAD                 = 0x00000080,
-   -- Teal types
-   INTEGER                = 0x00010002,
-   ENUM                   = 0x00010004,
-   EMPTY_TABLE            = 0x00000008,
-   ARRAY                  = 0x00010008,
-   RECORD                 = 0x00020008,
-   MAP                    = 0x00040008,
-   TUPLE                  = 0x00080008,
-   INTERFACE              = 0x00100008,
-   SELF                   = 0x00200008,
-   POLY                   = 0x20000020,
-   UNION                  = 0x40000000,
-   -- Indirect types
-   NOMINAL                = 0x10000000,
-   TYPE_VARIABLE          = 0x08000000,
-   -- Special types
-   ANY                    = 0xffffffff,
-   UNKNOWN                = 0x80008000,
-   INVALID                = 0x80000000,
-}
+tl.symbols_in_scope = type_reporter.symbols_in_scope
 
 local type Env = tl.Env
 local type EnvOptions = tl.EnvOptions
@@ -337,44 +257,9 @@ local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
 local type Result = tl.Result
 local type CheckOptions = tl.CheckOptions
-local type TypeInfo = tl.TypeInfo
-local type TypeReport = tl.TypeReport
 
 local DEFAULT_GEN_COMPAT <const>: GenCompat = "optional"
 local DEFAULT_GEN_TARGET <const>: GenTarget = "5.3"
-
-local enum Specialization
-   "narrow"
-   "narrowed_declaration"
-   "localizing"
-   "widen"
-end
-
-local record Variable
-   t: Type
-   attribute: Attribute
-   needs_compat: boolean
-   specialized_from: Type
-   is_specialized: Specialization
-   declared_at: Node
-   is_func_arg: boolean
-   used_as_type: boolean
-   aliasing: Variable
-   implemented: {string:boolean}
-   has_been_read_from: boolean
-   has_been_written_to: boolean
-end
-
-local record Scope
-   vars: {string:Variable}
-   labels: {string:Node}
-   pending_labels: {string:{Node}}
-   pending_nominals: {string:{NominalType}}
-   pending_global_types: {string:boolean}
-   narrows: {string:boolean}
-   widens: {string:boolean}
-   is_transaction: boolean
-end
 
 local function shallow_copy_table<T>(t: T): T
    local copy: {any:any} = {}
@@ -433,1238 +318,6 @@ end
 
 local function Err(msg: string): Error
    return { msg = msg }
-end
-
---------------------------------------------------------------------------------
--- Lua code generation
---------------------------------------------------------------------------------
-
-local tight_op: {integer:{string:boolean}} = {
-   [1] = {
-      ["-"] = true,
-      ["~"] = true,
-      ["#"] = true,
-   },
-   [2] = {
-      ["."] = true,
-      [":"] = true,
-   },
-}
-
-local spaced_op: {integer:{string:boolean}} = {
-   [1] = {
-      ["not"] = true,
-   },
-   [2] = {
-      ["or"] = true,
-      ["and"] = true,
-      ["<"] = true,
-      [">"] = true,
-      ["<="] = true,
-      [">="] = true,
-      ["~="] = true,
-      ["=="] = true,
-      ["|"] = true,
-      ["~"] = true,
-      ["&"] = true,
-      ["<<"] = true,
-      [">>"] = true,
-      [".."] = true,
-      ["+"] = true,
-      ["-"] = true,
-      ["*"] = true,
-      ["/"] = true,
-      ["//"] = true,
-      ["%"] = true,
-      ["^"] = true,
-   },
-}
-
-
-local default_generate_opts: GenerateOptions = {
-   preserve_indent = true,
-   preserve_newlines = true,
-   preserve_hashbang = false,
-}
-
-local fast_generate_opts: GenerateOptions = {
-   preserve_indent = false,
-   preserve_newlines = true,
-   preserve_hashbang = false,
-}
-
-local primitive: {TypeName:string} = {
-   ["function"] = "function",
-   ["enum"] = "string",
-   ["boolean"] = "boolean",
-   ["string"] = "string",
-   ["nil"] = "nil",
-   ["number"] = "number",
-   ["integer"] = "number",
-   ["thread"] = "thread",
-}
-
-function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
-   local err: string
-   local indent = 0
-
-   opts = opts or default_generate_opts
-
-   local record Output
-      {string}
-      y: integer
-      h: integer
-   end
-
-   local save_indent: {integer} = {}
-
-   local function increment_indent(_: nil, node: Node)
-      local child = node.body or node[1]
-      if not child then
-         return
-      end
-      if child.y ~= node.y then
-         if indent == 0 and #save_indent > 0 then
-            indent = save_indent[#save_indent] + 1
-         else
-            indent = indent + 1
-         end
-      else
-         table.insert(save_indent, indent)
-         indent = 0
-      end
-   end
-
-   local function decrement_indent(node: Node, child: Node)
-      if child.y ~= node.y then
-         indent = indent - 1
-      else
-         indent = table.remove(save_indent)
-      end
-   end
-
-   if not opts.preserve_indent then
-      increment_indent = nil
-      decrement_indent = function() end
-   end
-
-   local function add_string(out: Output, s: string)
-      table.insert(out, s)
-      if string.find(s, "\n", 1, true) then
-         for _nl in s:gmatch("\n") do
-            out.h = out.h + 1
-         end
-      end
-   end
-
-   local function add_child(out: Output, child: Output, space?: string, current_indent?: integer): integer
-      if #child == 0 then
-         return
-      end
-
-      if child.y ~= -1 and child.y < out.y then
-         out.y = child.y
-      end
-
-      if child.y > out.y + out.h and opts.preserve_newlines then
-         local delta = child.y - (out.y + out.h)
-         out.h = out.h + delta
-         table.insert(out, ("\n"):rep(delta))
-      else
-         if space then
-            if space ~= "" then
-               table.insert(out, space)
-            end
-            current_indent = nil
-         end
-      end
-      if current_indent and opts.preserve_indent then
-         table.insert(out, ("   "):rep(current_indent))
-      end
-      table.insert(out, child as string)
-      out.h = out.h + child.h
-   end
-
-   local function concat_output(out: Output): string
-      for i, s in ipairs(out) do
-         if type(s) == "table" then
-            out[i] = concat_output(s as Output)
-         end
-      end
-      return table.concat(out)
-   end
-
-   local function print_record_def(typ: RecordLikeType): string
-      local out: {string} = { "{" }
-      local i = 0
-      for fname, ftype in fields_of(typ) do
-         if ftype is TypeDeclType then
-            local def = ftype.def
-            if def is GenericType then
-               def = def.t
-            end
-            if def is RecordType then
-               if i > 0 then
-                  table.insert(out, ",")
-               end
-               i = i + 1
-               table.insert(out, " ")
-               table.insert(out, fname)
-               table.insert(out, " = ")
-               table.insert(out, print_record_def(def))
-            end
-         end
-      end
-      if i > 0 then
-         table.insert(out, " ")
-      end
-      table.insert(out, "}")
-      return table.concat(out)
-   end
-
-   local visit_node: Visitor<nil, NodeKind, Node, Output> = {}
-
-   local lua_54_attribute <total>: {Attribute:string} = {
-      ["const"] = " <const>",
-      ["close"] = " <close>",
-      ["total"] = " <const>",
-   }
-
-   local function emit_exactly(_: nil, node: Node, _children: {Output}): Output
-      local out: Output = { y = node.y, h = 0 }
-      add_string(out, node.tk)
-      return out
-   end
-
-   local emit_exactly_visitor_cbs <const>: VisitorCallbacks<nil, Node, Output> = { after = emit_exactly }
-
-   local emit_nothing_visitor_cbs <const>: VisitorCallbacks<nil, Node, Output> = {
-      after = function(_: nil, node: Node, _children: {Output}): Output
-         local out: Output = { y = node.y, h = 0 }
-         return out
-      end
-   }
-
-   local function starts_with_longstring(n: Node): boolean
-      while n.e1 do n = n.e1 end
-      return n.is_longstring
-   end
-
-   visit_node.cbs = {
-      ["statements"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output
-            if opts.preserve_hashbang and node.hashbang then
-               out = { y = 1, h = 0 }
-               table.insert(out, node.hashbang)
-            else
-               out = { y = node.y, h = 0 }
-            end
-            local space: string
-            for i, child in ipairs(children) do
-               add_child(out, child, space, indent)
-               if node[i].semicolon then
-                  table.insert(out, ";")
-                  space = " "
-               else
-                  space = "; "
-               end
-            end
-            return out
-         end
-      },
-      ["local_declaration"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "local ")
-            for i, var in ipairs(node.vars) do
-               if i > 1 then
-                  add_string(out, ", ")
-               end
-               add_string(out, var.tk)
-               if var.attribute then
-                  if gen_target ~= "5.4" and var.attribute == "close" then
-                     err = "attempt to emit a <close> attribute for a non 5.4 target"
-                  end
-
-                  if gen_target == "5.4" then
-                     add_string(out, lua_54_attribute[var.attribute])
-                  end
-               end
-            end
-            if children[3] then
-               table.insert(out, " =")
-               add_child(out, children[3], " ")
-            end
-            return out
-         end,
-      },
-      ["local_type"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if not node.var.elide_type then
-               table.insert(out, "local")
-               add_child(out, children[1], " ")
-               table.insert(out, " =")
-               add_child(out, children[2], " ")
-            end
-            return out
-         end,
-      },
-      ["global_type"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if children[2] then
-               add_child(out, children[1])
-               table.insert(out, " =")
-               add_child(out, children[2], " ")
-            end
-            return out
-         end,
-      },
-      ["global_declaration"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if children[3] then
-               add_child(out, children[1])
-               table.insert(out, " =")
-               add_child(out, children[3], " ")
-            end
-            return out
-         end,
-      },
-      ["assignment"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            add_child(out, children[1])
-            table.insert(out, " =")
-            add_child(out, children[3], " ")
-            return out
-         end,
-      },
-      ["if"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            for i, child in ipairs(children) do
-               add_child(out, child, i > 1 and " ", child.y ~= node.y and indent)
-            end
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["if_block"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if node.if_block_n == 1 then
-               table.insert(out, "if")
-            elseif not node.exp then
-               table.insert(out, "else")
-            else
-               table.insert(out, "elseif")
-            end
-            if node.exp then
-               add_child(out, children[1], " ")
-               table.insert(out, " then")
-            end
-            add_child(out, children[2], " ")
-            decrement_indent(node, node.body)
-            return out
-         end,
-      },
-      ["while"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "while")
-            add_child(out, children[1], " ")
-            table.insert(out, " do")
-            add_child(out, children[2], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["repeat"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "repeat")
-            add_child(out, children[1], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
-            add_child(out, children[2])
-            return out
-         end,
-      },
-      ["do"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "do")
-            add_child(out, children[1], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["forin"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "for")
-            add_child(out, children[1], " ")
-            table.insert(out, " in")
-            add_child(out, children[2], " ")
-            table.insert(out, " do")
-            add_child(out, children[3], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["fornum"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "for")
-            add_child(out, children[1], " ")
-            table.insert(out, " =")
-            add_child(out, children[2], " ")
-            table.insert(out, ",")
-            add_child(out, children[3], " ")
-            if children[4] then
-               table.insert(out, ",")
-               add_child(out, children[4], " ")
-            end
-            table.insert(out, " do")
-            add_child(out, children[5], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["return"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "return")
-            if #children[1] > 0 then
-               add_child(out, children[1], " ")
-            end
-            return out
-         end,
-      },
-      ["break"] = {
-         after = function(_: nil, node: Node, _children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "break")
-            return out
-         end,
-      },
-      ["variable_list"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            local space: string
-            for i, child in ipairs(children) do
-               if i > 1 then
-                  table.insert(out, ",")
-                  space = " "
-               end
-               add_child(out, child, space, child.y ~= node.y and indent)
-            end
-            return out
-         end,
-      },
-      ["literal_table"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if #children == 0 then
-               table.insert(out, "{}")
-               return out
-            end
-            table.insert(out, "{")
-            local n = #children
-            for i, child in ipairs(children) do
-               add_child(out, child, " ", child.y ~= node.y and indent)
-               if i < n or node.yend ~= node.y then
-                  table.insert(out, ",")
-               end
-            end
-            decrement_indent(node, node[1])
-            add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
-            return out
-         end,
-      },
-      ["literal_table_item"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if node.key_parsed ~= "implicit" then
-               if node.key_parsed == "short" then
-                  children[1][1] = children[1][1]:sub(2, -2)
-                  add_child(out, children[1])
-                  table.insert(out, " = ")
-               else
-                  table.insert(out, "[")
-                  if node.key_parsed == "long" and node.key.is_longstring then
-                     table.insert(children[1], 1, " ")
-                     table.insert(children[1], " ")
-                  end
-                  add_child(out, children[1])
-                  table.insert(out, "] = ")
-               end
-            end
-            add_child(out, children[2])
-            return out
-         end,
-      },
-      ["local_macroexp"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, _children: {Output}): Output
-            return { y = node.y, h = 0 }
-         end,
-      },
-      ["local_function"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "local function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["global_function"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["record_function"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, node.is_method and ":" or ".")
-            add_child(out, children[2])
-            table.insert(out, "(")
-            if node.is_method then
-               -- remove self
-               table.remove(children[3], 1)
-               if children[3][1] == "," then
-                  table.remove(children[3], 1)
-                  if children[3][1] == " " then
-                     table.remove(children[3], 1)
-                  end
-               end
-            end
-            add_child(out, children[3])
-            table.insert(out, ")")
-            add_child(out, children[5], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["function"] = {
-         before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function(")
-            add_child(out, children[1])
-            table.insert(out, ")")
-            add_child(out, children[3], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
-      },
-      ["paren"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "(")
-            add_child(out, children[1], "", indent)
-            table.insert(out, ")")
-            return out
-         end,
-      },
-      ["op"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            if node.op.op == "@funcall" then
-               add_child(out, children[1], "", indent)
-               table.insert(out, "(")
-               add_child(out, children[3], "", indent)
-               table.insert(out, ")")
-            elseif node.op.op == "@index" then
-               add_child(out, children[1], "", indent)
-               table.insert(out, "[")
-               if starts_with_longstring(node.e2) then
-                  table.insert(children[3], 1, " ")
-                  table.insert(children[3], " ")
-               end
-               add_child(out, children[3], "", indent)
-               table.insert(out, "]")
-            elseif node.op.op == "as" then
-               add_child(out, children[1], "", indent)
-            elseif node.op.op == "is" then
-               if node.e2.casttype.typename == "integer" then
-                  table.insert(out, "math.type(")
-                  add_child(out, children[1], "", indent)
-                  table.insert(out, ") == \"integer\"")
-               elseif node.e2.casttype.typename == "nil" then
-                  add_child(out, children[1], "", indent)
-                  table.insert(out, " == nil")
-               else
-                  table.insert(out, "type(")
-                  add_child(out, children[1], "", indent)
-                  table.insert(out, ") == \"")
-                  add_child(out, children[3], "", indent)
-                  table.insert(out, "\"")
-               end
-            elseif spaced_op[node.op.arity][node.op.op] or tight_op[node.op.arity][node.op.op] then
-               local space = spaced_op[node.op.arity][node.op.op] and " " or ""
-               if children[2] and node.op.prec > tonumber(children[2]) then
-                  table.insert(children[1], 1, "(")
-                  table.insert(children[1], ")")
-               end
-               if node.op.arity == 1 then
-                  table.insert(out, node.op.op)
-                  add_child(out, children[1], space, indent)
-               elseif node.op.arity == 2 then
-                  add_child(out, children[1], "", indent)
-                  if space == " " then
-                     table.insert(out, " ")
-                  end
-                  table.insert(out, node.op.op)
-                  if children[4] and node.op.prec > tonumber(children[4]) then
-                     table.insert(children[3], 1, "(")
-                     table.insert(children[3], ")")
-                  end
-                  add_child(out, children[3], space, indent)
-               end
-            else
-               error("unknown node op " .. node.op.op)
-            end
-            return out
-         end,
-      },
-      ["newtype"] = {
-         after = function(_: nil, node: Node, _children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            local nt = node.newtype
-            if nt is TypeDeclType then
-               local def = nt.def
-               if def is RecordLikeType then
-                  table.insert(out, print_record_def(def))
-               elseif def is NominalType then
-                  table.insert(out, table.concat(def.names, "."))
-               else
-                  table.insert(out, "{}")
-               end
-            end
-            return out
-         end,
-      },
-      ["goto"] = {
-         after = function(_: nil, node: Node, _children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "goto ")
-            table.insert(out, node.label)
-            return out
-         end,
-      },
-      ["label"] = {
-         after = function(_: nil, node: Node, _children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "::")
-            table.insert(out, node.label)
-            table.insert(out, "::")
-            return out
-         end,
-      },
-      ["string"] = {
-         after = function(_: nil, node: Node, children: {Output}): Output
-            -- translate escape sequences not supported by Lua 5.1
-            -- in particular:
-            --  - \z : removes trailing whitespace
-            --  - \xXX : hex byte
-            --  - \u{} : unicode
-
-            if node.tk:sub(1, 1) == "[" or gen_target ~= "5.1" or not node.tk:find("\\", 1, true) then
-               return emit_exactly(nil, node, children)
-            end
-
-            local str = node.tk
-            local replaced: {string} = {}
-
-            local i = 1
-            local currstrstart = 1
-            while true do
-               local slashpos = str:find("\\", i)
-               if not slashpos then break end
-               local nextc = str:sub(slashpos + 1, slashpos + 1)
-               if nextc == "z" then
-                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
-                  local wsend = str:find("%S", slashpos + 2) -- next non-whitespace
-                  currstrstart = wsend
-                  i = currstrstart
-               elseif nextc == "x" then
-                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
-                  local digits <const> = str:sub(slashpos + 2, slashpos + 3)
-                  local byte <const> = tonumber(digits, 16)
-                  table.insert(replaced, string.format("\\%03d", byte))
-                  currstrstart = slashpos + 4
-                  i = currstrstart
-               elseif nextc == "u" then
-                  table.insert(replaced, str:sub(currstrstart, slashpos - 1))
-                  local _, e, hex_digits = str:find("{(.-)}", slashpos + 2)
-                  local codepoint <const> = tonumber(hex_digits, 16)
-                  local sequence <const> = utf8.char(codepoint)
-                  table.insert(replaced, (sequence:gsub(".", function(c: string): string
-                     return ("\\%03d"):format(string.byte(c))
-                  end)))
-                  currstrstart = e + 1
-                  i = currstrstart
-               else
-                  i = slashpos + 2
-               end
-            end
-            if currstrstart <= #str then
-               table.insert(replaced, str:sub(currstrstart))
-            end
-
-            local h = 0
-            local finalstr = table.concat(replaced)
-            for _ in finalstr:gmatch("\n") do
-               h = h + 1
-            end
-            return {
-               y = node.y,
-               h = h,
-               finalstr,
-            }
-         end,
-      },
-
-      ["variable"] = emit_exactly_visitor_cbs,
-      ["identifier"] = emit_exactly_visitor_cbs,
-      ["number"] = emit_exactly_visitor_cbs,
-      ["integer"] = emit_exactly_visitor_cbs,
-      ["nil"] = emit_exactly_visitor_cbs,
-      ["boolean"] = emit_exactly_visitor_cbs,
-      ["..."] = emit_exactly_visitor_cbs,
-      ["argument"] = emit_exactly_visitor_cbs,
-      ["type_identifier"] = emit_exactly_visitor_cbs,
-
-      ["cast"] = emit_nothing_visitor_cbs,
-      ["pragma"] = emit_nothing_visitor_cbs,
-   }
-
-   local visit_type: Visitor<nil, TypeName, Type, Output> = {}
-   visit_type.cbs = {}
-   local default_type_visitor = {
-      after = function(_: nil, typ: Type, _children: {Output}): Output
-         local out: Output = { y = typ.y or -1, h = 0 }
-         local r = typ is NominalType and typ.resolved or typ
-         local lua_type = primitive[r.typename] or "table"
-         if r is RecordLikeType and r.is_userdata then
-            lua_type = "userdata"
-         end
-         table.insert(out, lua_type)
-         return out
-      end,
-   }
-
-   visit_type.cbs["string"] = default_type_visitor
-   visit_type.cbs["typedecl"] = default_type_visitor
-   visit_type.cbs["typevar"] = default_type_visitor
-   visit_type.cbs["typearg"] = default_type_visitor
-   visit_type.cbs["function"] = default_type_visitor
-   visit_type.cbs["thread"] = default_type_visitor
-   visit_type.cbs["array"] = default_type_visitor
-   visit_type.cbs["map"] = default_type_visitor
-   visit_type.cbs["tupletable"] = default_type_visitor
-   visit_type.cbs["record"] = default_type_visitor
-   visit_type.cbs["enum"] = default_type_visitor
-   visit_type.cbs["boolean"] = default_type_visitor
-   visit_type.cbs["nil"] = default_type_visitor
-   visit_type.cbs["number"] = default_type_visitor
-   visit_type.cbs["integer"] = default_type_visitor
-   visit_type.cbs["union"] = default_type_visitor
-   visit_type.cbs["nominal"] = default_type_visitor
-   visit_type.cbs["emptytable"] = default_type_visitor
-   visit_type.cbs["literal_table_item"] = default_type_visitor
-   visit_type.cbs["unresolved_emptytable_value"] = default_type_visitor
-   visit_type.cbs["tuple"] = default_type_visitor
-   visit_type.cbs["poly"] = default_type_visitor
-   visit_type.cbs["any"] = default_type_visitor
-   visit_type.cbs["unknown"] = default_type_visitor
-   visit_type.cbs["invalid"] = default_type_visitor
-   visit_type.cbs["none"] = default_type_visitor
-
-   visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
-   visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
-
-   local out = traverse_nodes(nil, ast, visit_node, visit_type)
-   if err then
-      return nil, err
-   end
-
-   local code: Output
-   if opts.preserve_newlines then
-      code = { y = 1, h = 0 }
-      add_child(code, out)
-   else
-      code = out
-   end
-   return (concat_output(code):gsub(" *\n", "\n"))
-end
-
---------------------------------------------------------------------------------
--- Type collection for report
---------------------------------------------------------------------------------
-
-local typename_to_typecode <total>: {TypeName:integer} = {
-   ["typevar"] = tl.typecodes.TYPE_VARIABLE,
-   ["typearg"] = tl.typecodes.TYPE_VARIABLE,
-   ["unresolved_typearg"] = tl.typecodes.TYPE_VARIABLE,
-   ["unresolvable_typearg"] = tl.typecodes.TYPE_VARIABLE,
-   ["function"] = tl.typecodes.FUNCTION,
-   ["array"] = tl.typecodes.ARRAY,
-   ["map"] = tl.typecodes.MAP,
-   ["tupletable"] = tl.typecodes.TUPLE,
-   ["interface"] = tl.typecodes.INTERFACE,
-   ["self"] = tl.typecodes.SELF,
-   ["record"] = tl.typecodes.RECORD,
-   ["enum"] = tl.typecodes.ENUM,
-   ["boolean"] = tl.typecodes.BOOLEAN,
-   ["string"] = tl.typecodes.STRING,
-   ["nil"] = tl.typecodes.NIL,
-   ["thread"] = tl.typecodes.THREAD,
-   ["userdata"] = tl.typecodes.USERDATA,
-   ["number"] = tl.typecodes.NUMBER,
-   ["integer"] = tl.typecodes.INTEGER,
-   ["union"] = tl.typecodes.UNION,
-   ["nominal"] = tl.typecodes.NOMINAL,
-   ["circular_require"] = tl.typecodes.NOMINAL,
-   ["boolean_context"] = tl.typecodes.BOOLEAN,
-   ["emptytable"] = tl.typecodes.EMPTY_TABLE,
-   ["unresolved_emptytable_value"] = tl.typecodes.EMPTY_TABLE,
-   ["poly"] = tl.typecodes.POLY,
-   ["any"] = tl.typecodes.ANY,
-   ["unknown"] = tl.typecodes.UNKNOWN,
-   ["invalid"] = tl.typecodes.INVALID,
-   -- types that should be skipped or not present:
-   ["none"] = tl.typecodes.UNKNOWN,
-   ["tuple"] = tl.typecodes.UNKNOWN,
-   ["literal_table_item"] = tl.typecodes.UNKNOWN,
-   ["typedecl"] = tl.typecodes.UNKNOWN,
-   ["generic"] = tl.typecodes.UNKNOWN,
-   ["*"] = tl.typecodes.UNKNOWN,
-}
-
-local skip_types: {TypeName: boolean} = {
-   ["none"] = true,
-   ["tuple"] = true,
-   ["literal_table_item"] = true,
-}
-
-local function sorted_keys<A,B>(m: {A:B}):{A}
-   local keys = {}
-   for k, _ in pairs(m) do
-      table.insert(keys, k)
-   end
-   table.sort(keys)
-   return keys
-end
-
--- mark array for JSON-encoded reports in `tl types`
-local function mark_array<T>(x: T): T
-   local arr = x as {boolean}
-   arr[0] = false
-   return x
-end
-
-function tl.new_type_reporter(): TypeReporter
-   local self: TypeReporter = setmetatable({
-      next_num = 1,
-      typeid_to_num = {},
-      typename_to_num = {},
-      tr = {
-         by_pos = {},
-         types = {},
-         symbols_by_file = {},
-         globals = {},
-      },
-   }, { __index = TypeReporter })
-
-   local names = {}
-   for name, _ in pairs(simple_types) do
-      table.insert(names, name)
-   end
-   table.sort(names)
-
-   for _, name in ipairs(names) do
-      local ti: TypeInfo = {
-         t = assert(typename_to_typecode[name]),
-         str = name,
-      }
-      local n = self.next_num
-      self.typename_to_num[name] = n
-      self.tr.types[n] = ti
-      self.next_num = self.next_num + 1
-   end
-
-   return self
-end
-
-function TypeReporter:store_function(ti: TypeInfo, rt: FunctionType)
-   local args: {{integer, string}} = {}
-   for _, fnarg in ipairs(rt.args.tuple) do
-      table.insert(args, mark_array { self:get_typenum(fnarg), nil })
-   end
-   ti.args = mark_array(args)
-   local rets: {{integer, string}} = {}
-   for _, fnarg in ipairs(rt.rets.tuple) do
-      table.insert(rets, mark_array { self:get_typenum(fnarg), nil })
-   end
-   ti.rets = mark_array(rets)
-   ti.vararg = not not rt.args.is_va
-   ti.varret = not not rt.rets.is_va
-end
-
-function TypeReporter:get_typenum(t: Type): integer
-   -- try simple types first
-   local n = self.typename_to_num[t.typename]
-   if n then
-      return n
-   end
-
-   assert(t.typeid)
-   -- try by typeid
-   n = self.typeid_to_num[t.typeid]
-   if n then
-      return n
-   end
-
-   local tr = self.tr
-
-   -- it's a new entry: store and increment
-   n = self.next_num
-
-   local rt = t
-   if rt is TupleType and #rt.tuple == 1 then
-      rt = rt.tuple[1]
-   end
-
-   if rt is TypeDeclType then
-      return self:get_typenum(rt.def)
-   end
-
-   -- CHECK is this sufficient?
-   if rt is GenericType then
-      rt = rt.t
-   end
-
-   local ti: TypeInfo = {
-      t = assert(typename_to_typecode[rt.typename]),
-      str = show_type(t, true),
-      file = t.f,
-      y = t.y,
-      x = t.x,
-   }
-   tr.types[n] = ti
-   self.typeid_to_num[t.typeid] = n
-   self.next_num = self.next_num + 1
-
-   if t is NominalType then
-      if t.found then
-         ti.ref = self:get_typenum(t.found)
-      end
-      if t.resolved then
-         rt = t
-      end
-   end
-   assert(not (rt is TypeDeclType))
-
-   if rt is RecordLikeType then
-      -- store record field info
-      local r = {}
-      for _, k in ipairs(rt.field_order) do
-         local v = rt.fields[k]
-         r[k] = self:get_typenum(v)
-      end
-      ti.fields = r
-      if rt.meta_fields then
-         -- store record metafield info
-         local m = {}
-         for _, k in ipairs(rt.meta_field_order) do
-            local v = rt.meta_fields[k]
-            m[k] = self:get_typenum(v)
-         end
-         ti.meta_fields = m
-      end
-   end
-
-   if rt is ArrayLikeType then
-      ti.elements = self:get_typenum(rt.elements)
-   end
-
-   if rt is MapType then
-      ti.keys = self:get_typenum(rt.keys)
-      ti.values = self:get_typenum(rt.values)
-   elseif rt is EnumType then
-      ti.enums = mark_array(sorted_keys(rt.enumset))
-   elseif rt is FunctionType then
-      self:store_function(ti, rt)
-   elseif rt is AggregateType then
-      local tis = {}
-      for _, pt in ipairs(rt.types) do
-         table.insert(tis, self:get_typenum(pt))
-      end
-      ti.types = mark_array(tis)
-   end
-
-   return n
-end
-
-function TypeReporter:add_field(rtype: RecordLikeType, fname: string, ftype: Type)
-   local n = self:get_typenum(rtype)
-   local ti = self.tr.types[n]
-   assert(ti.fields)
-   ti.fields[fname] = self:get_typenum(ftype)
-end
-
-function TypeReporter:set_ref(nom: NominalType, resolved: Type)
-   local n = self:get_typenum(nom)
-   local ti = self.tr.types[n]
-   ti.ref = self:get_typenum(resolved)
-end
-
-local record TypeCollector
-   record Symbol
-      x: integer
-      y: integer
-      name: string
-      typ: Type
-      skip: boolean
-   end
-
-   filename: string
-   symbol_list: {Symbol}
-
-   store_type: function(y: integer, x: integer, typ: Type)
-   reserve_symbol_list_slot: function(Node)
-   add_to_symbol_list: function(node: Node, name: string, t: Type)
-   begin_symbol_list_scope: function(node: Node)
-   rollback_symbol_list_scope: function()
-   end_symbol_list_scope: function(node: Node)
-end
-
-function TypeReporter:get_collector(filename: string): TypeCollector
-   local collector: TypeCollector = {
-      filename = filename,
-      symbol_list = {},
-   }
-
-   local ft: {integer:{integer:integer}} = {}
-   self.tr.by_pos[filename] = ft
-
-   local symbol_list = collector.symbol_list
-   local symbol_list_n = 0
-
-   collector.store_type = function(y: integer, x: integer, typ: Type)
-      if not typ or skip_types[typ.typename] then
-         return
-      end
-
-      local yt = ft[y]
-      if not yt then
-         yt = {}
-         ft[y] = yt
-      end
-
-      yt[x] = self:get_typenum(typ)
-   end
-
-   collector.reserve_symbol_list_slot = function(node: Node)
-      symbol_list_n = symbol_list_n + 1
-      node.symbol_list_slot = symbol_list_n
-   end
-
-   collector.add_to_symbol_list = function(node: Node, name: string, t: Type)
-      if not node then
-         return
-      end
-      local slot: integer
-      if node.symbol_list_slot then
-         slot = node.symbol_list_slot
-      else
-         symbol_list_n = symbol_list_n + 1
-         slot = symbol_list_n
-      end
-      symbol_list[slot] = { y = node.y, x = node.x, name = name, typ = t }
-   end
-
-   collector.begin_symbol_list_scope = function(node: Node)
-      symbol_list_n = symbol_list_n + 1
-      symbol_list[symbol_list_n] = { y = node.y, x = node.x, name = "@{" }
-   end
-
-   collector.rollback_symbol_list_scope = function()
-      while symbol_list[symbol_list_n].name ~= "@{" do
-         symbol_list[symbol_list_n] = nil
-         symbol_list_n = symbol_list_n - 1
-      end
-   end
-
-   collector.end_symbol_list_scope = function(node: Node)
-      if symbol_list[symbol_list_n].name == "@{" then
-         symbol_list[symbol_list_n] = nil
-         symbol_list_n = symbol_list_n - 1
-      else
-         symbol_list_n = symbol_list_n + 1
-         symbol_list[symbol_list_n] = { y = assert(node.yend), x = assert(node.xend), name = "@}" }
-      end
-   end
-
-   return collector
-end
-
-function TypeReporter:store_result(collector: TypeCollector, globals: {string:Variable})
-   local tr = self.tr
-
-   local filename = collector.filename
-   local symbol_list = collector.symbol_list
-
-   tr.by_pos[filename][0] = nil
-
-   -- mark unneeded scope blocks to be skipped
-   do
-      local n = 0 -- number of symbols in current scope
-      local p = 0 -- opening position of current scope block
-      local n_stack, p_stack = {}, {}
-      local level = 0
-      for i, s in ipairs(symbol_list) do
-         if s.typ then
-            n = n + 1
-         elseif s.name == "@{" then
-            level = level + 1
-            n_stack[level], p_stack[level] = n, p -- push current scope
-            n, p = 0, i -- begin new scope
-         else
-            if n == 0 then -- nothing declared in this scope
-               symbol_list[p].skip = true -- skip @{
-               s.skip = true -- skip @}
-            end
-            n, p = n_stack[level], p_stack[level] -- pop previous scope
-            level = level - 1
-         end
-      end
-   end
-
-   local symbols: {TypeReport.Symbol} = mark_array {}
-   tr.symbols_by_file[filename] = symbols
-
-   -- resolve scope cross references, skipping unneeded scope blocks
-   do
-      local stack = {}
-      local level = 0
-      local i = 0
-      for _, s in ipairs(symbol_list) do
-         if not s.skip then
-            i = i + 1
-            local id: integer
-            if s.typ then
-               id = self:get_typenum(s.typ)
-            elseif s.name == "@{" then
-               level = level + 1
-               stack[level] = i
-               id = -1 -- will be overwritten
-            else
-               local other = stack[level]
-               level = level - 1
-               symbols[other][4] = i -- overwrite id from @{
-               id = other - 1
-            end
-            local sym = mark_array({ s.y, s.x, s.name, id })
-            table.insert(symbols, sym)
-         end
-      end
-   end
-
-   local gkeys = sorted_keys(globals)
-   for _, name in ipairs(gkeys) do
-      if name:sub(1, 1) ~= "@" then
-         local var = globals[name]
-         tr.globals[name] = self:get_typenum(var.t)
-      end
-   end
-
-   if not tr.symbols then
-      tr.symbols = tr.symbols_by_file[filename]
-   end
-end
-
-function TypeReporter:get_report(): TypeReport
-   return self.tr
-end
-
-
---------------------------------------------------------------------------------
--- Report types
---------------------------------------------------------------------------------
-
-function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
-   local function find(symbols: {TypeReport.Symbol}, at_y: integer, at_x: integer): integer
-      local function le(a: {integer, integer}, b: {integer, integer}): boolean
-         return a[1] < b[1]
-            or (a[1] == b[1] and a[2] <= b[2])
-      end
-      return binary_search(symbols, {at_y, at_x}, le) or 0
-   end
-
-   local ret: {string:integer} = {}
-
-   local symbols = tr.symbols_by_file[filename]
-   if not symbols then
-      return ret
-   end
-
-   local n = find(symbols, y, x)
-
-   while n >= 1 do
-      local s = symbols[n]
-      local symbol_name = s[3]
-      if symbol_name == "@{" then
-         n = n - 1
-      elseif symbol_name == "@}" then
-         n = s[4]
-      else
-         if ret[symbol_name] == nil then
-            ret[symbol_name] = s[4]
-         end
-         n = n - 1
-      end
-   end
-
-   return ret
 end
 
 --------------------------------------------------------------------------------
@@ -3680,7 +2333,7 @@ do
                table.insert(stack, s)
             end
          else
-            if primitive[t.typename] and (flatten_constants or (t is StringType and not t.literal)) then
+            if types.lua_primitives[t.typename] and (flatten_constants or (t is StringType and not t.literal)) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
                   table.insert(ts, t)
@@ -9460,7 +8113,7 @@ do
       end
 
       if env.report_types then
-         env.reporter = env.reporter or tl.new_type_reporter()
+         env.reporter = env.reporter or type_reporter.new()
          self.collector = env.reporter:get_collector(filename)
       end
 
@@ -9643,7 +8296,7 @@ tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?:
    end
 
    local code: string
-   code, result.gen_error = tl.generate(result.ast, env.defaults.gen_target, opts)
+   code, result.gen_error = lua_generator.generate(result.ast, env.defaults.gen_target, opts)
    return code, result
 end
 
@@ -9678,7 +8331,7 @@ local function tl_package_loader(module_name: string): any, any
 
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
-      local code = assert(tl.generate(program, opts.defaults.gen_target, fast_generate_opts))
+      local code = assert(tl.generate(program, opts.defaults.gen_target, lua_generator.fast_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname: string, loader_data: string): any
@@ -9747,7 +8400,7 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
       mode = mode:gsub("c", "") as LoadMode
    end
 
-   local code, err = tl.generate(program, opts.defaults.gen_target, fast_generate_opts)
+   local code, err = lua_generator.generate(program, opts.defaults.gen_target, lua_generator.fast_opts)
    if not code then
       return nil, err
    end
@@ -9800,12 +8453,12 @@ tl.pretty_print_ast = function(ast: Node, gen_target?: tl.TargetMode, mode?: boo
    if mode is tl.PrettyPrintOptions then
       opts = mode
    elseif mode == true then
-      opts = fast_generate_opts
+      opts = lua_generator.fast_opts
    else
-      opts = default_generate_opts
+      opts = lua_generator.default_opts
    end
 
-   return tl.generate(ast, gen_target, opts)
+   return lua_generator.generate(ast, gen_target, opts)
 end
 
 tl.process = function(filename: string, env?: Env, fd?: FILE): Result, string
