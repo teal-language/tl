@@ -298,7 +298,9 @@ describe("store comments in syntax tree", function()
             ["bar"] = {"-- this is a comment", "-- another comment"}
         }
         for field_name, _ in pairs(record_def.fields) do
-            for i = 1, #record_def.field_comments[field_name] do
+            local n = #record_def.field_comments[field_name]
+            assert.same(2, n)
+            for i = 1, n do
                 if not expected_comments[field_name][i] then 
                     assert.same({}, record_def.field_comments[field_name][i])
                 else
@@ -433,7 +435,9 @@ describe("store comments in syntax tree", function()
             ["bar"] = {"-- this is a comment", "-- another comment"}
         }
         for field_name, _ in pairs(interface_def.fields) do
-            for i = 1, #interface_def.field_comments[field_name] do
+            local n = #interface_def.field_comments[field_name]
+            assert.same(2, n)
+            for i = 1, n do
                 if not expected_comments[field_name][i] then 
                     assert.same({}, interface_def.field_comments[field_name][i])
                 else
@@ -486,7 +490,9 @@ describe("store comments in syntax tree", function()
             ["f"] = {nil, "--- it can be a boolean too", nil}
         }
         for field_name, _ in pairs(record_def.fields) do
-            for i = 1, #record_def.field_comments[field_name] do
+            local n = #record_def.field_comments[field_name]
+            assert.same(3, n)
+            for i = 1, n do
                 if not expected_comments[field_name][i] then 
                     assert.same({}, record_def.field_comments[field_name][i])
                 else
