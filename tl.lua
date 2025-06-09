@@ -3871,6 +3871,11 @@ do
 
       if comments and not field_comments then
          field_comments = {}
+         if meta then
+            def.meta_field_comments = field_comments
+         else
+            def.field_comments = field_comments
+         end
       end
 
       if not fields[field_name] then
@@ -3895,7 +3900,7 @@ do
                end
             end
             table.insert(field_comments[field_name], comments)
-         elseif field_comments[field_name] then
+         elseif field_comments and field_comments[field_name] then
             table.insert(field_comments[field_name], {})
          end
       end
@@ -3958,14 +3963,18 @@ do
 
    parse_enum_body = function(ps, i, def)
       def.enumset = {}
-      def.value_comments = {}
       while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
          local item
          i, item = verify_kind(ps, i, "string", "string")
          if item then
             local name = unquote(item.tk)
             def.enumset[name] = true
-            def.value_comments[name] = item.comments
+            if item.comments then
+               if not def.value_comments then
+                  def.value_comments = {}
+               end
+               def.value_comments[name] = item.comments
+            end
          end
       end
       return i, true
@@ -4094,7 +4103,6 @@ do
    parse_record_body = function(ps, i, def)
       def.fields = {}
       def.field_order = {}
-      def.field_comments = {}
 
       if ps.tokens[i].tk == "{" then
          local atype

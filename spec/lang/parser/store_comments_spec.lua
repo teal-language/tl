@@ -274,7 +274,7 @@ describe("store comments in syntax tree", function()
             ["__call"] = "-- this is a comment",
             ["__add"] = "-- another comment",
         }
-        for field_name, _ in pairs(record_def.fields) do
+        for field_name, _ in pairs(record_def.meta_fields) do
             assert.same(expected_comments[field_name], record_def.meta_field_comments[field_name][1][1].text)
         end
     end)
@@ -409,7 +409,7 @@ describe("store comments in syntax tree", function()
             ["__call"] = "-- this is a comment",
             ["__add"] = "-- another comment",
         }
-        for field_name, _ in pairs(interface_def.fields) do
+        for field_name, _ in pairs(interface_def.meta_fields) do
             assert.same(expected_comments[field_name], interface_def.meta_field_comments[field_name][1][1].text)
         end
     end)
