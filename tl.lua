@@ -2100,7 +2100,6 @@ end
 
 
 
-
 local TruthyFact = {}
 
 
@@ -2449,6 +2448,10 @@ end
 local function node_is_funcall(node)
    return node.kind == "op" and node.op.op == "@funcall"
 end
+
+
+
+
 
 
 
@@ -3858,7 +3861,18 @@ do
       return i, node
    end
 
-   local function store_field_in_record(ps, i, field_name, newt, comments, fields, field_order, field_comments)
+   local function store_field_in_record(ps, i, field_name, newt, def, comments, meta)
+      local field_order, fields, field_comments
+      if meta then
+         field_order, fields, field_comments = def.meta_field_order, def.meta_fields, def.meta_field_comments
+      else
+         field_order, fields, field_comments = def.field_order, def.fields, def.field_comments
+      end
+
+      if comments and not field_comments then
+         field_comments = {}
+      end
+
       if not fields[field_name] then
          fields[field_name] = newt
          if comments then
@@ -3868,25 +3882,34 @@ do
          return true
       end
 
-      if comments then
-         if not field_comments[field_name] then
-            field_comments[field_name] = {}
-         end
-         table.insert(field_comments[field_name], comments)
-      end
-
       local oldt = fields[field_name]
       local oldf = oldt.typename == "generic" and oldt.t or oldt
       local newf = newt.typename == "generic" and newt.t or newt
+
+      local function store_comment_for_poly(poly)
+         if comments then
+            if not field_comments[field_name] then
+               field_comments[field_name] = {}
+               for idx = 1, #poly.types - 1 do
+                  field_comments[field_name][idx] = {}
+               end
+            end
+            table.insert(field_comments[field_name], comments)
+         elseif field_comments[field_name] then
+            table.insert(field_comments[field_name], {})
+         end
+      end
 
       if newf.typename == "function" then
          if oldf.typename == "function" then
             local p = new_type(ps, i, "poly")
             p.types = { oldt, newt }
             fields[field_name] = p
+            store_comment_for_poly(p)
             return true
          elseif oldt.typename == "poly" then
             table.insert(oldt.types, newt)
+            store_comment_for_poly(oldt)
             return true
          end
       end
@@ -3929,7 +3952,7 @@ do
 
       nt.newtype = new_typedecl(ps, istart, ndef)
 
-      store_field_in_record(ps, iv, v.tk, nt.newtype, ps.tokens[istart].comments, def.fields, def.field_order, def.field_comments)
+      store_field_in_record(ps, iv, v.tk, nt.newtype, def, ps.tokens[istart].comments)
       return i
    end
 
@@ -4123,8 +4146,7 @@ do
 
          def.meta_fields = {}
          def.meta_field_order = {}
-         def.meta_field_comments = {}
-         store_field_in_record(ps, i, "__is", typ, {}, def.meta_fields, def.meta_field_order, def.meta_field_comments)
+         store_field_in_record(ps, i, "__is", typ, def, nil, "meta")
       end
 
       while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
@@ -4164,7 +4186,7 @@ do
                ntt.is_nested_alias = true
             end
 
-            store_field_in_record(ps, iv, v.tk, nt.newtype, comments, def.fields, def.field_order, def.field_comments)
+            store_field_in_record(ps, iv, v.tk, nt.newtype, def, comments)
          elseif parse_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
             if def.typename == "interface" and tn == "record" then
                i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
@@ -4206,18 +4228,11 @@ do
                end
 
                local field_name = v.conststr or v.tk
-               local fields = def.fields
-               local field_order = def.field_order
-               local field_comments = def.field_comments
                if is_metamethod then
                   if not def.meta_fields then
                      def.meta_fields = {}
                      def.meta_field_order = {}
-                     def.meta_field_comments = {}
                   end
-                  fields = def.meta_fields
-                  field_order = def.meta_field_order
-                  field_comments = def.meta_field_comments
                   if not metamethod_names[field_name] then
                      fail(ps, i - 1, "not a valid metamethod: " .. field_name)
                   end
@@ -4233,7 +4248,7 @@ do
                   end
                end
 
-               store_field_in_record(ps, iv, field_name, t, comments, fields, field_order, field_comments)
+               store_field_in_record(ps, iv, field_name, t, def, comments, is_metamethod and "meta" or nil)
             elseif ps.tokens[i].tk == "=" then
                local next_word = ps.tokens[i + 1].tk
                if next_word == "record" or next_word == "enum" then
@@ -4685,10 +4700,6 @@ do
    end
 
 end
-
-
-
-
 
 
 
@@ -8170,6 +8181,7 @@ do
 
             copy.fields = {}
             copy.field_order = {}
+            copy.field_comments = t.field_comments
             for i, k in ipairs(t.field_order) do
                copy.field_order[i] = k
                copy.fields[k], same = resolve(t.fields[k], same)
@@ -8178,6 +8190,7 @@ do
             if t.meta_fields then
                copy.meta_fields = {}
                copy.meta_field_order = {}
+               copy.meta_field_comments = t.meta_field_comments
                for i, k in ipairs(t.meta_field_order) do
                   copy.meta_field_order[i] = k
                   copy.meta_fields[k], same = resolve(t.meta_fields[k], same)

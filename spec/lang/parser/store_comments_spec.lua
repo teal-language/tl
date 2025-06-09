@@ -297,10 +297,14 @@ describe("store comments in syntax tree", function()
         local expected_comments = {
             ["bar"] = {"-- this is a comment", "-- another comment"}
         }
-        local i = 1
         for field_name, _ in pairs(record_def.fields) do
-            assert.same(expected_comments[field_name][i], record_def.field_comments[field_name][i][1].text)
-            i = i + 1
+            for i = 1, #record_def.field_comments[field_name] do
+                if not expected_comments[field_name][i] then 
+                    assert.same({}, record_def.field_comments[field_name][i])
+                else
+                    assert.same(expected_comments[field_name][i], record_def.field_comments[field_name][i][1].text)
+                end
+            end
         end
     end)
     it("comments before interface fields", function() 
@@ -428,10 +432,14 @@ describe("store comments in syntax tree", function()
         local expected_comments = {
             ["bar"] = {"-- this is a comment", "-- another comment"}
         }
-        local i = 1
         for field_name, _ in pairs(interface_def.fields) do
-            assert.same(expected_comments[field_name][i], interface_def.field_comments[field_name][i][1].text)
-            i = i + 1
+            for i = 1, #interface_def.field_comments[field_name] do
+                if not expected_comments[field_name][i] then 
+                    assert.same({}, interface_def.field_comments[field_name][i])
+                else
+                    assert.same(expected_comments[field_name][i], interface_def.field_comments[field_name][i][1].text)
+                end
+            end
         end
     end)
     it("comments before enum values", function() 
@@ -456,6 +464,35 @@ describe("store comments in syntax tree", function()
         }
         for _, value_name in ipairs(enum_def.enumset) do
             assert.same(expected_comments[value_name], enum_def.value_comments[value_name][1].text)
+        end
+    end)
+    it("comments attach to the correct entry in polymorphic function", function() 
+        local result = tl.process_string([[
+            local record MyRecord
+                f: function(integer)
+                --- it can be a boolean too
+                f: function(boolean)
+                f: function(number)
+            end
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_type", result.ast[1].kind)
+        assert.same("newtype", result.ast[1].value.kind)
+        local record_def = result.ast[1].value.newtype.def
+        assert.same("record", record_def.typename)
+        local expected_comments = {
+            ["f"] = {nil, "--- it can be a boolean too", nil}
+        }
+        for field_name, _ in pairs(record_def.fields) do
+            for i = 1, #record_def.field_comments[field_name] do
+                if not expected_comments[field_name][i] then 
+                    assert.same({}, record_def.field_comments[field_name][i])
+                else
+                    assert.same(expected_comments[field_name][i], record_def.field_comments[field_name][i][1].text)
+                end
+            end
         end
     end)
 end)
