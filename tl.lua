@@ -5482,6 +5482,28 @@ function tl.generate(ast, gen_target, opts)
       return n.is_longstring
    end
 
+
+   local function get_next_nonws(o)
+      for i = 1, #o do
+         local sub = o[i]
+         if type(sub) == "string" then
+            local a = sub:find("%S")
+            if a then
+               return sub:sub(a)
+            end
+         else
+            local res = get_next_nonws(sub)
+            if res then return res end
+         end
+      end
+   end
+
+   local function starts_with_open_bracket(output)
+      if not output then return false end
+      local nex = get_next_nonws(output)
+      return nex and nex:sub(1, 1) == "("
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_, node, children)
@@ -5495,7 +5517,7 @@ function tl.generate(ast, gen_target, opts)
             local space
             for i, child in ipairs(children) do
                add_child(out, child, space, indent)
-               if node[i].semicolon then
+               if node[i].semicolon or starts_with_open_bracket(children[i + 1]) then
                   table.insert(out, ";")
                   space = " "
                else
@@ -5733,7 +5755,7 @@ function tl.generate(ast, gen_target, opts)
             local out = { y = node.y, h = 0 }
             if node.key_parsed ~= "implicit" then
                if node.key_parsed == "short" then
-                  children[1][1] = children[1][1]:sub(2, -2)
+                  children[1][1] = (children[1][1]):sub(2, -2)
                   add_child(out, children[1])
                   table.insert(out, " = ")
                else

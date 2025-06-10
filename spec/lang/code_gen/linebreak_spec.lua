@@ -28,6 +28,37 @@ describe("improved line break heuristics", function()
          (t):meth1()
       end
    ]]))
+   it("adds a semi for disambiguation even with macroexps", util.gen([[
+      local record Obj
+         prt: function(self)
+         call_prt: function(self)
+            = macroexp(o: Obj) return (o):prt() end
+      end
+      function Obj:prt()
+         print("hehe")
+      end
+
+      local t: Obj = setmetatable({}, { __index = Obj })
+      do
+         t:call_prt()
+         t:call_prt()
+      end
+   ]], [[
+      local Obj = {}
+
+
+
+
+      function Obj:prt()
+         print("hehe")
+      end
+
+      local t = setmetatable({}, { __index = Obj })
+      do
+         (t):prt();
+         (t):prt()
+      end
+   ]]))
    it("break line correctly in multiline method declarations (regression test for #807)", util.gen([[
       local record Foo
       end
