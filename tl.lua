@@ -442,10 +442,11 @@ do
       getmetatable: function<T>(T): metatable<T>
       ipairs: function<A>({A}): (function():(integer, A)) --[[special_function]]
 
-      load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
-      load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
+      load: function((string | LoadFunction), ? string, ? LoadMode, ? {any:any}): (function, string)
+      load: function((string | LoadFunction), ? string, ? string,   ? {any:any}): (function, string)
 
-      loadfile: function(? string, ? string, ? {any:any}): (function, string)
+      loadfile: function(? string, ? LoadMode, ? {any:any}): (function, string)
+      loadfile: function(? string, ? string,   ? {any:any}): (function, string)
 
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
