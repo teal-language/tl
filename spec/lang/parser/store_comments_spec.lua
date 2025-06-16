@@ -466,7 +466,7 @@ describe("store comments in syntax tree", function()
             ["A"] = "-- this is a comment",
             ["B"] = "-- another comment"
         }
-        for _, value_name in ipairs(enum_def.enumset) do
+        for value_name, _ in pairs(enum_def.enumset) do
             assert.same(expected_comments[value_name], enum_def.value_comments[value_name][1].text)
         end
     end)
@@ -500,5 +500,132 @@ describe("store comments in syntax tree", function()
                 end
             end
         end
+    end)
+
+    it("only attaches consecutive comments", function()
+        local result = tl.process_string([[
+            -- this is a comment
+            -- this is another comment
+
+            -- this is a third comment
+            local foo = 47
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("-- this is a third comment", result.ast[1].comments[1].text)
+        assert.same(2, #result.unattached_comments)
+        assert.same("-- this is a comment", result.unattached_comments[1].text)
+        assert.same("-- this is another comment", result.unattached_comments[2].text)
+    end)    
+
+    it("only attaches comment that start just before the statement", function()
+        local result = tl.process_string([[
+            -- this is a comment
+            --[=[this is a long comment]=]
+
+            local foo = 47
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(nil, result.ast[1].comments)
+        assert.same(2, #result.unattached_comments)
+        assert.same("-- this is a comment", result.unattached_comments[1].text)
+        assert.same("--[=[this is a long comment]=]", result.unattached_comments[2].text)
+    end)
+
+    it("only attaches comments to declarations", function()
+        local result = tl.process_string([[
+            -- this is a comment
+            local foo = 47
+            --[=[this is a long comment]=]
+            foo = 48
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(2, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("-- this is a comment", result.ast[1].comments[1].text)
+        assert.same(1, #result.unattached_comments)
+        assert.same("--[=[this is a long comment]=]", result.unattached_comments[1].text)
+    end)
+    it("only attaches long comments that end just before the statement", function()
+        local result = tl.process_string([[
+            --[=[
+                this is a long comment
+                that spans multiple lines
+            ]=]
+            local foo = 47
+        
+            --[=[
+                this is another long comment
+                that spans multiple lines
+            ]=]
+
+            local bar = 48
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(2, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("--[=[\n                this is a long comment\n                that spans multiple lines\n            ]=]", result.ast[1].comments[1].text)
+        assert.same(1, #result.unattached_comments)
+        assert.same("--[=[\n                this is another long comment\n                that spans multiple lines\n            ]=]", result.unattached_comments[1].text)
+    end)
+    it("only attaches at most one long comment", function()
+        local result = tl.process_string([[
+            --[=[
+                this is a long comment
+                that spans multiple lines
+            ]=]
+            --[=[
+                this is another long comment
+                that spans multiple lines
+            ]=]
+            local foo = 47
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("--[=[\n                this is another long comment\n                that spans multiple lines\n            ]=]", result.ast[1].comments[1].text)
+        assert.same(1, #result.unattached_comments)
+        assert.same("--[=[\n                this is a long comment\n                that spans multiple lines\n            ]=]", result.unattached_comments[1].text)
+    end)
+    it("does not mix different comment types", function()
+        local result = tl.process_string([[
+            -- this is a comment
+            --[=[this is a long comment]=]
+            -- this is another comment
+            local foo = 47
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("-- this is another comment", result.ast[1].comments[1].text)
+        assert.same(2, #result.unattached_comments)
+        assert.same("-- this is a comment", result.unattached_comments[1].text)
+        assert.same("--[=[this is a long comment]=]", result.unattached_comments[2].text)
+    end)
+    it("does attach same line long comments", function()
+        local result = tl.process_string([[
+            --[=[this is a long comment]=] local foo = 47
+        ]])
+        assert.same({}, result.syntax_errors)
+        assert.same(1, #result.ast)
+        assert.same("statements", result.ast.kind)
+        assert.same("local_declaration", result.ast[1].kind)
+        assert.same(1, #result.ast[1].comments)
+        assert.same("--[=[this is a long comment]=]", result.ast[1].comments[1].text)
+        assert.same(nil, result.unattached_comments)
     end)
 end)

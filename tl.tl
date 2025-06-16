@@ -582,6 +582,7 @@ local record tl
       warnings: {Error}
       env: Env
       dependencies: {string:string} -- module name, file found
+      unattached_comments: {Comment}
    end
 
    enum WarningKind
@@ -694,8 +695,8 @@ local record tl
    load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
    loader: function()
    new_env: function(? EnvOptions): Env, string
-   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
-   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
+   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}, {Comment}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}, {Comment}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    search_module: function(module_name: string, search_all: boolean): string, FILE, {string}
@@ -2487,7 +2488,7 @@ local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer
 local parse_typeargs_if_any: function(ps: ParseState, i: integer): integer, {TypeArgType}
 local parse_expression: function(ParseState, integer): integer, Node, integer
 local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
-local parse_statements: function(ParseState, integer, ? boolean): integer, Node
+local parse_statements: function(ParseState, integer, ? boolean): integer, Node, {Comment}
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, FirstClassType, integer
@@ -3934,6 +3935,54 @@ local function set_declname(def: Type, declname: string)
    end
 end
 
+local function get_attached_comments(token: Token): {Comment}
+   if not token.comments then
+      return nil
+   end
+
+   local function is_long_comment(c: Comment): boolean 
+      return c.text:match("^%-%-%[(=*)%[") ~= nil
+   end
+   local last_comment = token.comments[#token.comments]
+   
+   -- special case for long comments
+   if is_long_comment(last_comment) then
+      local _, newlines = string.gsub(last_comment.text, "\n", "")
+      local diff_y = token.y - last_comment.y - newlines
+      -- we want to attach only long comments that end just before the token 
+      if diff_y >= 0 and diff_y <= 1 then 
+         return {last_comment}
+      else
+         return nil
+      end
+   end
+
+   local diff_y = token.y - last_comment.y
+   if diff_y < 0 or diff_y > 1 then
+      return nil
+   end
+   local attached_comments = {last_comment}
+   for i = #token.comments - 1, 1, -1 do
+      local c = token.comments[i]
+      if is_long_comment(c) then
+         break
+      end
+      -- we want to attach only consecutive comments
+      if attached_comments[#attached_comments].y - c.y > 1 then
+         break
+      end
+      table.insert(attached_comments, c)
+   end
+
+   local attached_cnt = #attached_comments
+   -- reverse to preserve the order
+   for i = 1, attached_cnt // 2 do
+      attached_comments[i], attached_comments[attached_cnt - i + 1] = attached_comments[attached_cnt - i + 1], attached_comments[i]
+   end
+
+   return attached_comments
+end
+
 local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, tn: BodyTypeName): integer, boolean
    local istart = i
    i = i + 1 -- skip 'record' or 'enum'
@@ -3957,7 +4006,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
 
    nt.newtype = new_typedecl(ps, istart, ndef)
 
-   store_field_in_record(ps, iv, v.tk, nt.newtype, def, ps.tokens[istart].comments)
+   store_field_in_record(ps, iv, v.tk, nt.newtype, def, get_attached_comments(ps.tokens[istart]))
    return i
 end
 
@@ -3969,11 +4018,12 @@ parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, 
       if item then
          local name = unquote(item.tk)
          def.enumset[name] = true
-         if item.comments then 
+         local comments = get_attached_comments(ps.tokens[i - 1])
+         if comments then 
             if not def.value_comments then
                def.value_comments = {}
             end
-            def.value_comments[name] = item.comments
+            def.value_comments[name] = comments
          end
       end
    end
@@ -4169,7 +4219,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       elseif ps.tokens[i].tk == "{" then
          return fail(ps, i, "syntax error: this syntax is no longer valid; declare array interface at the top with 'is {...}'")
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
-         local comments = ps.tokens[i].comments
+         local comments = get_attached_comments(ps.tokens[i])
          i = i + 1
          local iv = i
 
@@ -4202,7 +4252,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             i = parse_nested_type(ps, i, def, tn)
          end
       else
-         local comments = ps.tokens[i].comments
+         local comments = get_attached_comments(ps.tokens[i])
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
             is_metamethod = true
@@ -4528,7 +4578,7 @@ local function parse_local_macroexp(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_local(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
    
@@ -4551,7 +4601,7 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_global(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
 
@@ -4574,7 +4624,7 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_record_function(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local node: Node
    i, node = parse_function(ps, i, "record")
    if node then
@@ -4631,9 +4681,10 @@ local needs_local_or_global: {string : function(ParseState, integer):(integer, N
    ["enum"] = type_needs_local_or_global,
 }
 
-parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): integer, Node
+parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): integer, Node, {Comment}
    local node = new_node(ps, i, "statements")
    local item: Node
+   local unattached_comments: {Comment}
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
@@ -4645,7 +4696,8 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
       if ps.tokens[i].kind == "$EOF$" then
          break
       end
-      local tk = ps.tokens[i].tk
+      local token = ps.tokens[i]
+      local tk = token.tk
       if (not toplevel) and stop_statement_list[tk] then
          break
       end
@@ -4663,6 +4715,26 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
       i, item = fn(ps, i)
 
       if item then
+         -- store unattached comments
+         if toplevel and token.comments then
+            for _, tc in ipairs(token.comments) do
+               local is_attached = false
+               if item.comments then
+                  for _, nc in ipairs(item.comments) do
+                     if tc == nc then
+                        is_attached = true
+                        break
+                     end
+                  end
+               end
+               if not is_attached then
+                  if not unattached_comments then
+                     unattached_comments = {}
+                  end
+                  table.insert(unattached_comments, tc)
+               end
+            end
+         end
          table.insert(node, item)
       elseif i > 1 then
          -- heuristic to resync at the next line after an invalid statement
@@ -4674,10 +4746,10 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    end
 
    end_at(node, ps.tokens[i])
-   return i, node
+   return i, node, unattached_comments
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}, {Comment}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
@@ -4692,19 +4764,19 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, par
       hashbang = ps.tokens[i].tk
       i = i + 1
    end
-   local _, node = parse_statements(ps, i, true)
+   local _, node, unattached_comments = parse_statements(ps, i, true)
    if hashbang then
       node.hashbang = hashbang
    end
 
    clear_redundant_errors(errs)
-   return node, ps.required_modules
+   return node, ps.required_modules, unattached_comments
 end
 
-function tl.parse(input: string, filename: string, parse_lang?: ParseLang): tl.Node, {Error}, {string}
+function tl.parse(input: string, filename: string, parse_lang?: ParseLang): tl.Node, {Error}, {string}, {Comment}
    local tokens, errs = tl.lex(input, filename)
-   local node, required_modules = tl.parse_program(tokens, errs, filename, parse_lang)
-   return node, errs, required_modules
+   local node, required_modules, unattached_comments = tl.parse_program(tokens, errs, filename, parse_lang)
+   return node, errs, required_modules, unattached_comments
 end
 
 end ----------------------------------------------------------------------------
@@ -14974,7 +15046,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
    end
    filename = filename or ""
 
-   local program, syntax_errors = tl.parse(input, filename, parse_lang)
+   local program, syntax_errors, _, unattached_comments = tl.parse(input, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
@@ -14984,6 +15056,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
          type_errors = {},
          syntax_errors = syntax_errors,
          env = env,
+         unattached_comments = unattached_comments
       }
       env.loaded[filename] = result
       table.insert(env.loaded_order, filename)
@@ -14993,6 +15066,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
    local result = tl.check(program, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
+   result.unattached_comments = unattached_comments
 
    return result
 end
