@@ -3976,7 +3976,7 @@ do
 
       local attached_cnt = #attached_comments
 
-      for i = 1, attached_cnt // 2 do
+      for i = 1, math.floor(attached_cnt / 2) do
          attached_comments[i], attached_comments[attached_cnt - i + 1] = attached_comments[attached_cnt - i + 1], attached_comments[i]
       end
 
