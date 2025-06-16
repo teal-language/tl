@@ -1208,7 +1208,7 @@ do
          })
       end
 
-      local function add_comment(text: string) 
+      local function add_comment(text: string)
          if not comments then
             comments = {}
          end
@@ -2190,6 +2190,8 @@ local record Node
    symbol_list_slot: integer
    semicolon: boolean
    hashbang: string
+
+   unattached_comments: {Comment}
 
    is_longstring: boolean
 
@@ -3869,7 +3871,7 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
       field_order, fields, field_comments = def.field_order, def.fields, def.field_comments
    end
 
-   if comments and not field_comments then 
+   if comments and not field_comments then
       field_comments = {}
       if meta then
          def.meta_field_comments = field_comments
@@ -3891,7 +3893,7 @@ local function store_field_in_record(ps: ParseState, i: integer, field_name: str
    local oldf = oldt is GenericType and oldt.t or oldt
    local newf = newt is GenericType and newt.t or newt
 
-   local function store_comment_for_poly(poly: PolyType) 
+   local function store_comment_for_poly(poly: PolyType)
       if comments then
          if not field_comments[field_name] then
             field_comments[field_name] = {}
@@ -3934,6 +3936,52 @@ local function set_declname(def: Type, declname: string)
    end
 end
 
+local function get_attached_comments(token: Token): {Comment}
+   if not token.comments then
+      return nil
+   end
+
+   local function is_long_comment(c: Comment): boolean
+      return c.text:match("^%-%-%[(=*)%[") ~= nil
+   end
+   local last_comment = token.comments[#token.comments]
+
+   -- special case for long comments
+   if is_long_comment(last_comment) then
+      local _, newlines = string.gsub(last_comment.text, "\n", "")
+      local diff_y = token.y - last_comment.y - newlines
+      -- we want to attach only long comments that end just before the token
+      if diff_y >= 0 and diff_y <= 1 then
+         return {last_comment}
+      else
+         return nil
+      end
+   end
+
+   local diff_y = token.y - last_comment.y
+   if diff_y < 0 or diff_y > 1 then
+      return nil
+   end
+   local first_n = 1
+   for i = #token.comments, 2, -1 do
+      local prev = token.comments[i - 1]
+      if is_long_comment(prev) then
+         first_n = i
+         break
+      end
+      -- we want to attach only consecutive comments
+      if token.comments[i].y - prev.y > 1 then
+         first_n = i
+         break
+      end
+   end
+
+   local attached_comments =
+      table.move(token.comments, first_n, #token.comments, 1, {})
+
+   return attached_comments
+end
+
 local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType, tn: BodyTypeName): integer, boolean
    local istart = i
    i = i + 1 -- skip 'record' or 'enum'
@@ -3957,7 +4005,7 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
 
    nt.newtype = new_typedecl(ps, istart, ndef)
 
-   store_field_in_record(ps, iv, v.tk, nt.newtype, def, ps.tokens[istart].comments)
+   store_field_in_record(ps, iv, v.tk, nt.newtype, def, get_attached_comments(ps.tokens[istart]))
    return i
 end
 
@@ -3969,11 +4017,12 @@ parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, 
       if item then
          local name = unquote(item.tk)
          def.enumset[name] = true
-         if item.comments then 
+         local comments = get_attached_comments(ps.tokens[i - 1])
+         if comments then
             if not def.value_comments then
                def.value_comments = {}
             end
-            def.value_comments[name] = item.comments
+            def.value_comments[name] = comments
          end
       end
    end
@@ -4169,7 +4218,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
       elseif ps.tokens[i].tk == "{" then
          return fail(ps, i, "syntax error: this syntax is no longer valid; declare array interface at the top with 'is {...}'")
       elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
-         local comments = ps.tokens[i].comments
+         local comments = get_attached_comments(ps.tokens[i])
          i = i + 1
          local iv = i
 
@@ -4202,7 +4251,7 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             i = parse_nested_type(ps, i, def, tn)
          end
       else
-         local comments = ps.tokens[i].comments
+         local comments = get_attached_comments(ps.tokens[i])
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
             is_metamethod = true
@@ -4528,10 +4577,10 @@ local function parse_local_macroexp(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_local(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
-   
+
    local node: Node
    if ntk == "function" then
       i, node = parse_local_function(ps, i)
@@ -4544,14 +4593,14 @@ local function parse_local(ps: ParseState, i: integer): integer, Node
    else
       i, node = parse_variable_declarations(ps, i + 1, "local_declaration")
    end
-   if node then 
+   if node then
       node.comments = comments
    end
    return i, node
 end
 
 local function parse_global(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local ntk = ps.tokens[i + 1].tk
    local tn = ntk as TypeName
 
@@ -4564,7 +4613,7 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
       i, node = parse_type_constructor(ps, i, "global_type", tn as BodyTypeName)
    elseif ps.tokens[i+1].kind == "identifier" then
       i, node = parse_variable_declarations(ps, i + 1, "global_declaration")
-   else 
+   else
       return parse_call_or_assignment(ps, i) -- global is a soft keyword
    end
    if node then
@@ -4574,7 +4623,7 @@ local function parse_global(ps: ParseState, i: integer): integer, Node
 end
 
 local function parse_record_function(ps: ParseState, i: integer): integer, Node
-   local comments = ps.tokens[i].comments
+   local comments = get_attached_comments(ps.tokens[i])
    local node: Node
    i, node = parse_function(ps, i, "record")
    if node then
@@ -4631,6 +4680,28 @@ local needs_local_or_global: {string : function(ParseState, integer):(integer, N
    ["enum"] = type_needs_local_or_global,
 }
 
+local function store_unattached_comments(node: Node, token: Token, item: Node)
+   for _, tc in ipairs(token.comments) do
+      local is_attached = false
+      if item.comments then
+         for _, nc in ipairs(item.comments) do
+            if tc == nc then
+               is_attached = true
+               break
+            end
+         end
+      end
+      if not is_attached then
+         if not node.unattached_comments then
+            node.unattached_comments = {}
+         end
+         table.insert(node.unattached_comments, tc)
+      else
+         break
+      end
+   end
+end
+
 parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): integer, Node
    local node = new_node(ps, i, "statements")
    local item: Node
@@ -4645,7 +4716,8 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
       if ps.tokens[i].kind == "$EOF$" then
          break
       end
-      local tk = ps.tokens[i].tk
+      local token = ps.tokens[i]
+      local tk = token.tk
       if (not toplevel) and stop_statement_list[tk] then
          break
       end
@@ -4663,6 +4735,9 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
       i, item = fn(ps, i)
 
       if item then
+         if toplevel and token.comments then
+            store_unattached_comments(node, token, item)
+         end
          table.insert(node, item)
       elseif i > 1 then
          -- heuristic to resync at the next line after an invalid statement
@@ -14983,7 +15058,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
          syntax_errors = syntax_errors,
-         env = env,
+         env = env
       }
       env.loaded[filename] = result
       table.insert(env.loaded_order, filename)

@@ -2289,6 +2289,8 @@ local Node = { ExpectedContext = {} }
 
 
 
+
+
 local show_type
 
 local type_mt = {
@@ -3934,6 +3936,52 @@ do
       end
    end
 
+   local function get_attached_comments(token)
+      if not token.comments then
+         return nil
+      end
+
+      local function is_long_comment(c)
+         return c.text:match("^%-%-%[(=*)%[") ~= nil
+      end
+      local last_comment = token.comments[#token.comments]
+
+
+      if is_long_comment(last_comment) then
+         local _, newlines = string.gsub(last_comment.text, "\n", "")
+         local diff_y = token.y - last_comment.y - newlines
+
+         if diff_y >= 0 and diff_y <= 1 then
+            return { last_comment }
+         else
+            return nil
+         end
+      end
+
+      local diff_y = token.y - last_comment.y
+      if diff_y < 0 or diff_y > 1 then
+         return nil
+      end
+      local first_n = 1
+      for i = #token.comments, 2, -1 do
+         local prev = token.comments[i - 1]
+         if is_long_comment(prev) then
+            first_n = i
+            break
+         end
+
+         if token.comments[i].y - prev.y > 1 then
+            first_n = i
+            break
+         end
+      end
+
+      local attached_comments =
+      table.move(token.comments, first_n, #token.comments, 1, {})
+
+      return attached_comments
+   end
+
    local function parse_nested_type(ps, i, def, tn)
       local istart = i
       i = i + 1
@@ -3957,7 +4005,7 @@ do
 
       nt.newtype = new_typedecl(ps, istart, ndef)
 
-      store_field_in_record(ps, iv, v.tk, nt.newtype, def, ps.tokens[istart].comments)
+      store_field_in_record(ps, iv, v.tk, nt.newtype, def, get_attached_comments(ps.tokens[istart]))
       return i
    end
 
@@ -3969,11 +4017,12 @@ do
          if item then
             local name = unquote(item.tk)
             def.enumset[name] = true
-            if item.comments then
+            local comments = get_attached_comments(ps.tokens[i - 1])
+            if comments then
                if not def.value_comments then
                   def.value_comments = {}
                end
-               def.value_comments[name] = item.comments
+               def.value_comments[name] = comments
             end
          end
       end
@@ -4169,7 +4218,7 @@ do
          elseif ps.tokens[i].tk == "{" then
             return fail(ps, i, "syntax error: this syntax is no longer valid; declare array interface at the top with 'is {...}'")
          elseif ps.tokens[i].tk == "type" and ps.tokens[i + 1].tk ~= ":" then
-            local comments = ps.tokens[i].comments
+            local comments = get_attached_comments(ps.tokens[i])
             i = i + 1
             local iv = i
 
@@ -4202,7 +4251,7 @@ do
                i = parse_nested_type(ps, i, def, tn)
             end
          else
-            local comments = ps.tokens[i].comments
+            local comments = get_attached_comments(ps.tokens[i])
             local is_metamethod = false
             if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
                is_metamethod = true
@@ -4528,7 +4577,7 @@ do
    end
 
    local function parse_local(ps, i)
-      local comments = ps.tokens[i].comments
+      local comments = get_attached_comments(ps.tokens[i])
       local ntk = ps.tokens[i + 1].tk
       local tn = ntk
 
@@ -4551,7 +4600,7 @@ do
    end
 
    local function parse_global(ps, i)
-      local comments = ps.tokens[i].comments
+      local comments = get_attached_comments(ps.tokens[i])
       local ntk = ps.tokens[i + 1].tk
       local tn = ntk
 
@@ -4574,7 +4623,7 @@ do
    end
 
    local function parse_record_function(ps, i)
-      local comments = ps.tokens[i].comments
+      local comments = get_attached_comments(ps.tokens[i])
       local node
       i, node = parse_function(ps, i, "record")
       if node then
@@ -4631,6 +4680,28 @@ do
       ["enum"] = type_needs_local_or_global,
    }
 
+   local function store_unattached_comments(node, token, item)
+      for _, tc in ipairs(token.comments) do
+         local is_attached = false
+         if item.comments then
+            for _, nc in ipairs(item.comments) do
+               if tc == nc then
+                  is_attached = true
+                  break
+               end
+            end
+         end
+         if not is_attached then
+            if not node.unattached_comments then
+               node.unattached_comments = {}
+            end
+            table.insert(node.unattached_comments, tc)
+         else
+            break
+         end
+      end
+   end
+
    parse_statements = function(ps, i, toplevel)
       local node = new_node(ps, i, "statements")
       local item
@@ -4645,7 +4716,8 @@ do
          if ps.tokens[i].kind == "$EOF$" then
             break
          end
-         local tk = ps.tokens[i].tk
+         local token = ps.tokens[i]
+         local tk = token.tk
          if (not toplevel) and stop_statement_list[tk] then
             break
          end
@@ -4663,6 +4735,9 @@ do
          i, item = fn(ps, i)
 
          if item then
+            if toplevel and token.comments then
+               store_unattached_comments(node, token, item)
+            end
             table.insert(node, item)
          elseif i > 1 then
 
