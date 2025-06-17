@@ -5,35 +5,7 @@ local errors = require("teal.errors")
 local type Error = errors.Error
 
 local types = require("teal.types")
-local type Type = types.Type
-local type GenericType = types.GenericType
-local type FirstOrderType = types.FirstOrderType
-local type StructuralType = types.StructuralType
-local type TypeDeclType = types.TypeDeclType
-local type NominalType = types.NominalType
-local type SelfType = types.SelfType
-local type ArrayType = types.ArrayType
-local type RecordLikeType = types.RecordLikeType
-local type RecordType = types.RecordType
-local type InterfaceType = types.InterfaceType
-local type TupleType = types.TupleType
-local type TypeArgType = types.TypeArgType
-local type MapType = types.MapType
-local type NilType = types.NilType
-local type FunctionType = types.FunctionType
-local type UnionType = types.UnionType
-local type TupleTableType = types.TupleTableType
-local type PolyType = types.PolyType
-local type EnumType = types.EnumType
-local type FirstClassType = types.FirstClassType
-local type TypeName = types.TypeName
 local type Where = types.Where
-local a_type = types.a_type
-local raw_type = types.raw_type
-local simple_types = types.simple_types
-
-local facts = require("teal.facts")
-local type Fact = facts.Fact
 
 local lexer = require("teal.lexer")
 local type Token = lexer.Token
@@ -85,6 +57,18 @@ local enum BlockKind
    "interface"
    "pragma"
    "error_block"
+
+   "typeargs"
+   "typelist"
+   "generic_type"
+   "typedecl"
+   "tuple_type"
+   "nominal_type"
+   "map_type"
+   "array_type"
+   "union_type"
+   "argument_type"
+   "interface_list"
 end
 
 local record Block
@@ -98,16 +82,17 @@ local record Block
 
    tk: string
    kind: BlockKind
-   symbol_list_slot: integer
+
+   -- symbol_list_slot: integer
    semicolon: boolean
    hashbang: string
 
-   is_longstring: boolean
+   -- is_longstring: boolean
 
    yend: integer
    xend: integer
 
-   known: Fact
+   -- known: Fact
 
    -- bidirectional inference
    -- expected: Type
@@ -115,12 +100,12 @@ local record Block
 
    -- key: Block
    -- value: Block
-   key_parsed: KeyParsed
+   -- key_parsed: KeyParsed
 
-   typeargs: {TypeArgType}
+   -- typeargs: {TypeArgType}
    -- min_arity: integer
    -- args: Block
-   rets: TupleType
+   -- rets: TupleType
    -- body: Block
    -- implicit_global_function: boolean
    -- is_predeclared_local_function: boolean
@@ -154,7 +139,7 @@ local record Block
    -- exps: Block
 
    -- newtype
-   newtype: TypeDeclType
+   -- newtype: TypeDeclType
    -- elide_type: boolean
 
    -- expressions
@@ -165,7 +150,7 @@ local record Block
    conststr: string
    failstore: boolean
    discarded_tuple: boolean
-   receiver: Type
+   -- receiver: Type
 
    -- table literal
    array_len: integer
@@ -178,7 +163,7 @@ local record Block
    -- label
    used_label: boolean
 
-   casttype: Type
+   -- casttype: Type
 
    -- variable
    is_lvalue: boolean
@@ -187,9 +172,9 @@ local record Block
    -- macrodef: Block
    expanded: Block
 
-   argtype: Type
-   itemtype: Type
-   decltuple: TupleType
+   -- argtype: Type
+   -- itemtype: Type
+   -- decltuple: TupleType
 
    -- pragma
    pkey: string
@@ -197,7 +182,7 @@ local record Block
 
    opt: boolean
 
-   debug_type: Type
+   -- debug_type: Type
 end
 
 local enum BlockLang
@@ -279,28 +264,21 @@ local enum BlockTypeListMode
    "casttype"
 end
 
--- type names used by read_type_body_fns
-local enum BodyTypeName
-   "interface"
-   "record"
-   "enum"
-end
-
-local read_type_list: function(ReadState, integer, BlockTypeListMode): integer, TupleType
-local read_typeargs_if_any: function(ps: ReadState, i: integer): integer, {TypeArgType}
+local read_type_list: function(ReadState, integer, BlockTypeListMode): integer, Block
+local read_typeargs_if_any: function(ps: ReadState, i: integer): integer, Block
 local read_expression: function(ReadState, integer): integer, Block, integer
 local read_expression_and_tk: function(ps: ReadState, i: integer, tk: string): integer, Block
 local read_statements: function(ReadState, integer, ? boolean): integer, Block
 local read_argument_list: function(ReadState, integer): integer, Block, integer
-local read_argument_type_list: function(ReadState, integer): integer, TupleType, boolean, integer
-local read_type: function(ReadState, integer): integer, FirstClassType, integer
+local read_argument_type_list: function(ReadState, integer): integer, Block, integer
+local read_type: function(ReadState, integer): integer, Block, integer
 local read_type_declaration: function(ps: ReadState, i: integer, node_name: BlockKind): integer, Block
-local read_interface_name: function(ps: ReadState, i: integer): integer, Type, integer
+local read_interface_name: function(ps: ReadState, i: integer): integer, Block, integer
 
-local type ParseBody = function(ps: ReadState, i: integer, def: Type): integer, boolean
-local read_enum_body: function(ps: ReadState, i: integer, def: EnumType): integer, boolean
-local read_record_body: function(ps: ReadState, i: integer, def: Type): integer, boolean
-local read_type_body_fns: {BodyTypeName:ParseBody}
+local type ParseBody = function(ps: ReadState, i: integer, def: Block): integer, boolean
+local read_enum_body: function(ps: ReadState, i: integer, def: Block): integer, boolean
+local read_record_body: function(ps: ReadState, i: integer, def: Block): integer, boolean
+local read_type_body_fns: {BlockKind:ParseBody}
 
 local function fail(ps: ReadState, i: integer, msg: string): integer
    if not ps.tokens[i] then
@@ -355,39 +333,49 @@ local function new_block(ps: ReadState, i: integer, kind?: BlockKind): Block
    return setmetatable({ f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as BlockKind) }, node_mt)
 end
 
-local function new_type(ps: ReadState, i: integer, typename: TypeName): Type
+local function new_type(ps: ReadState, i: integer, typename: BlockKind): Block
    local token = ps.tokens[i]
-   return raw_type(ps.filename, token.y, token.x, typename)
+   return setmetatable({
+      f = ps.filename,
+      y = token.y,
+      x = token.x,
+      tk = token.tk,
+      kind = typename,
+      yend = token.y,
+      xend = token.x + #token.tk - 1,
+   }, node_mt)
 end
 
-local function new_first_order_type(ps: ReadState, i: integer, tn: BodyTypeName): FirstOrderType
-   return new_type(ps, i, tn as TypeName) as FirstOrderType
-end
-
-local function new_generic(ps: ReadState, i: integer, typeargs: {TypeArgType}, typ: FirstOrderType): GenericType
-   local gt = new_type(ps, i, "generic") as GenericType
-   gt.typeargs = typeargs
-   gt.t = typ
+local function new_generic(ps: ReadState, i: integer, typeargs: Block, typ: Block): Block
+   local gt = new_type(ps, i, "generic_type")
+   gt[1] = typeargs
+   gt[2] = typ
    return gt
 end
 
-local function new_typedecl(ps: ReadState, i: integer, def: FirstClassType): TypeDeclType
-   local t = new_type(ps, i, "typedecl") as TypeDeclType
-   t.def = def
+local function new_typedecl(ps: ReadState, i: integer, def: Block): Block
+   local t = new_type(ps, i, "typedecl")
+   t[1] = def
    return t
 end
 
-local function new_tuple(ps: ReadState, i: integer, typelist?: {Type}, is_va?: boolean): TupleType, {Type}
-   local t = new_type(ps, i, "tuple") as TupleType
-   t.is_va = is_va
-   t.tuple = typelist or {}
-   return t, t.tuple
+local function new_tuple(ps: ReadState, i: integer, typelist?: Block, is_va?: boolean): Block, Block
+   local t = new_type(ps, i, "tuple_type")
+   if is_va then
+      t[1] = new_block(ps, i, "...")
+      t[2] = typelist or new_block(ps, i, "typelist")
+      return t, t[2]
+   else
+      t[1] = typelist or new_block(ps, i, "typelist")
+      return t, t[1]
+   end
 end
 
-local function new_nominal(ps: ReadState, i: integer, name?: string): NominalType
-   local t = new_type(ps, i, "nominal") as NominalType
+local function new_nominal(ps: ReadState, i: integer, name?: string): Block
+   local t = new_type(ps, i, "nominal_type")
    if name then
-      t.names = { name }
+      t[1] = new_block(ps, i, "identifier")
+      t[1].tk = name
    end
    return t
 end
@@ -418,12 +406,12 @@ local function failskip(ps: ReadState, i: integer, msg: string, skip_fn: SkipFun
    return skip_i
 end
 
-local function read_type_body(ps: ReadState, i: integer, istart: integer, node: Block, tn: BodyTypeName): integer, GenericType | FirstOrderType
-   local typeargs: {TypeArgType}
-   local def: FirstOrderType
+local function read_type_body(ps: ReadState, i: integer, istart: integer, node: Block, tn: BlockKind): integer, Block
+   local typeargs: Block
+   local def: Block
    i, typeargs = read_typeargs_if_any(ps, i)
 
-   def = new_first_order_type(ps, istart, tn)
+   def = new_type(ps, istart, tn)
 
    local ok: boolean
    i, ok = read_type_body_fns[tn](ps, i, def)
@@ -441,7 +429,7 @@ local function read_type_body(ps: ReadState, i: integer, istart: integer, node: 
 end
 
 local function skip_type_body(ps: ReadState, i: integer): integer, boolean
-   local tn = ps.tokens[i].tk as BodyTypeName
+   local tn = ps.tokens[i].tk as BlockKind
    i = i + 1
    assert(read_type_body_fns[tn], tn .. " has no parse body function")
    local ii, tt = read_type_body(ps, i, i - 1, {}, tn)
@@ -478,7 +466,7 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
    end
 
    if ps.tokens[i].tk == "[" then
-      node.key_parsed = "long"
+      -- node.key_parsed = "long"
       i = i + 1
       i, node[1] = read_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
@@ -486,7 +474,7 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i+1].tk == "=" then
-         node.key_parsed = "short"
+         -- node.key_parsed = "short"
          i, node[1] = verify_kind(ps, i, "identifier", "string")
          node[2].conststr = node[1].tk
          node[1].tk = '"' .. node[1].tk .. '"'
@@ -494,7 +482,7 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
          i, node[2] = read_table_value(ps, i)
          return i, node, n
       elseif ps.tokens[i+1].tk == ":" then
-         node.key_parsed = "short"
+         -- node.key_parsed = "short"
          local orig_i = i
          local try_ps: ReadState = {
             filename = ps.filename,
@@ -507,11 +495,11 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
          node[1].conststr = node[1].tk
          node[1].tk = '"' .. node[1].tk .. '"'
          i = verify_tk(try_ps, i, ":")
-         i, node.itemtype = read_type(try_ps, i)
-         if node.itemtype and ps.tokens[i].tk == "=" then
+         i, node[2] = read_type(try_ps, i)
+         if node[2] and ps.tokens[i].tk == "=" then
             i = verify_tk(try_ps, i, "=")
-            i, node[2] = read_table_value(try_ps, i)
-            if node[2] then
+            i, node[3] = read_table_value(try_ps, i)
+            if node[3] then
                for _, e in ipairs(try_ps.errs) do
                   table.insert(ps.errs, e)
                end
@@ -519,13 +507,13 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
             end
          end
          -- backtrack:
-         node.itemtype = nil
+         table.remove(node, 2) -- remove type
          i = orig_i
       end
    end
 
    node[1] = new_block(ps, i, "integer")
-   node.key_parsed = "implicit"
+   -- node.key_parsed = "implicit"
    node[1].constnum = n
    node[1].tk = tostring(n)
    i, node[2] = read_expression(ps, i)
@@ -633,7 +621,7 @@ local function read_trying_list<T>(ps: ReadState, i: integer, list: {T}, read_it
    return i, list
 end
 
-local function read_anglebracket_list<T is Type>(ps: ReadState, i: integer, read_item: ReadItem<T>): integer, {T}
+local function read_anglebracket_list(ps: ReadState, i: integer, read_item: ReadItem<Block>): integer, Block
    local second = ps.tokens[i+1]
    if second.tk == ">" then
       return fail(ps, i+1, "type argument list cannot be empty")
@@ -644,7 +632,7 @@ local function read_anglebracket_list<T is Type>(ps: ReadState, i: integer, read
       return i+1
    end
 
-   local typelist: {T} = {}
+   local typelist: Block = new_type(ps, i, "typelist")
    i = verify_tk(ps, i, "<")
    i = read_list(ps, i, typelist, { [">"] = true, [">>"] = true, }, "sep", read_item)
    if ps.tokens[i].tk == ">" then
@@ -658,52 +646,56 @@ local function read_anglebracket_list<T is Type>(ps: ReadState, i: integer, read
    return i, typelist
 end
 
-local function read_typearg(ps: ReadState, i: integer): integer, TypeArgType, integer
+local function read_typearg(ps: ReadState, i: integer): integer, Block, integer
    local name = ps.tokens[i].tk
-   local constraint: Type
-   local t = new_type(ps, i, "typearg") as TypeArgType
+   local constraint: Block
+   local t = new_type(ps, i, "typeargs")
    i = verify_kind(ps, i, "identifier")
    if ps.tokens[i].tk == "is" then
       i = i + 1
       i, constraint = read_interface_name(ps, i) -- FIXME what about generic interfaces
    end
-   t.typearg = name
-   t.constraint = constraint
+   t[1] = new_block(ps, i, "identifier")
+   t[1].tk = name
+   t[2] = constraint
    return i, t
 end
 
-local function read_return_types(ps: ReadState, i: integer): integer, TupleType
+local function read_return_types(ps: ReadState, i: integer): integer, Block
    local iprev = i - 1
-   local t: TupleType
+   local t: Block
+   --MARK: here
    i, t = read_type_list(ps, i, "rets")
-   if #t.tuple == 0 then
+   if #t[2] == 0 then
       t.x = ps.tokens[iprev].x
       t.y = ps.tokens[iprev].y
    end
    return i, t
 end
 
-read_typeargs_if_any = function(ps: ReadState, i: integer): integer, {TypeArgType}
+read_typeargs_if_any = function(ps: ReadState, i: integer): integer, Block
    if ps.tokens[i].tk == "<" then
       return read_anglebracket_list(ps, i, read_typearg)
    end
    return i
 end
 
-local function read_function_type(ps: ReadState, i: integer): integer, GenericType | FunctionType
-   local typeargs: {TypeArgType}
-   local typ = new_type(ps, i, "function") as FunctionType
+local function read_function_type(ps: ReadState, i: integer): integer, Block
+   local typeargs: Block
+   local typ = new_type(ps, i, "function")
    i = i + 1
 
    i, typeargs = read_typeargs_if_any(ps, i)
    if ps.tokens[i].tk == "(" then
-      i, typ.args, typ.maybe_method, typ.min_arity = read_argument_type_list(ps, i)
-      i, typ.rets = read_return_types(ps, i)
+      i, typ[1] = read_argument_type_list(ps, i)
+      i, typ[2] = read_return_types(ps, i)
    else
-      typ.args = new_tuple(ps, i, { new_type(ps, i, "any") }, true)
-      typ.rets = new_tuple(ps, i, { new_type(ps, i, "any") }, true)
+      local any = new_type(ps, i, "nominal_type")
+      any.tk = "any"
+      typ[1] = new_tuple(ps, i, { any }, true)
+      typ[2] = new_tuple(ps, i, { any }, true)
       typ.is_method = false
-      typ.min_arity = 0
+      -- typ.min_arity = 0
    end
 
    if typeargs then
@@ -713,15 +705,14 @@ local function read_function_type(ps: ReadState, i: integer): integer, GenericTy
    return i, typ
 end
 
-local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, FirstOrderType
+local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, Block
    local tk = ps.tokens[i].tk
-   local st = simple_types[tk as TypeName]
-   if st then
-      return i + 1, new_type(ps, i, tk as TypeName) as StructuralType
-   elseif tk == "table" and ps.tokens[i + 1].tk ~= "."  then
-      local typ = new_type(ps, i, "map") as MapType
-      typ.keys = new_type(ps, i, "any")
-      typ.values = new_type(ps, i, "any")
+   if tk == "table" and ps.tokens[i + 1].tk ~= "."  then
+      local typ = new_type(ps, i, "map_type")
+      local any = new_type(ps, i, "nominal_type")
+      any.tk = "any"
+      typ[1] = any
+      typ[2] = any
       return i + 1, typ
    end
 
@@ -730,7 +721,9 @@ local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, 
    while ps.tokens[i].tk == "." do
       i = i + 1
       if ps.tokens[i].kind == "identifier" then
-         table.insert(typ.names, ps.tokens[i].tk)
+         local nom = new_block(ps, i, "identifier")
+         nom.tk = ps.tokens[i].tk
+         table.insert(typ, nom)
          i = i + 1
       else
          return fail(ps, i, "syntax error, expected identifier")
@@ -738,37 +731,39 @@ local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, 
    end
 
    if ps.tokens[i].tk == "<" then
-      i, typ.typevals = read_anglebracket_list(ps, i, read_type)
+      local t: Block
+      i, t = read_anglebracket_list(ps, i, read_type)
+      table.insert(typ, t)
    end
    return i, typ
 end
 
-local function read_base_type(ps: ReadState, i: integer): integer, FirstClassType, integer
+local function read_base_type(ps: ReadState, i: integer): integer, Block, integer
    local tk = ps.tokens[i].tk
    if ps.tokens[i].kind == "identifier" then
       return read_simple_type_or_nominal(ps, i)
    elseif tk == "{" then
       local istart = i
       i = i + 1
-      local t: Type
+      local t: Block
       i, t = read_type(ps, i)
       if not t then
          return i
       end
       if ps.tokens[i].tk == "}" then
-         local decl = new_type(ps, istart, "array") as ArrayType
-         decl.elements = t
+         local decl = new_type(ps, istart, "array_type")
+         decl[1] = t
          end_at(decl as Block, ps.tokens[i])
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == "," then
-         local decl = new_type(ps, istart, "tupletable") as TupleTableType
-         decl.types = { t }
+         local decl = new_type(ps, istart, "typelist")
+         decl[1] = t
          local n = 2
          repeat
             i = i + 1
-            i, decl.types[n] = read_type(ps, i)
-            if not decl.types[n] then
+            i, decl[n] = read_type(ps, i)
+            if not decl[n] then
                break
             end
             n = n + 1
@@ -777,11 +772,11 @@ local function read_base_type(ps: ReadState, i: integer): integer, FirstClassTyp
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == ":" then
-         local decl = new_type(ps, istart, "map") as MapType
+         local decl = new_type(ps, istart, "map_type")
          i = i + 1
-         decl.keys = t
-         i, decl.values = read_type(ps, i)
-         if not decl.values then
+         decl[1] = t
+         i, decl[2] = read_type(ps, i)
+         if not decl[2] then
             return i
          end
          end_at(decl as Block, ps.tokens[i])
@@ -792,43 +787,43 @@ local function read_base_type(ps: ReadState, i: integer): integer, FirstClassTyp
    elseif tk == "function" then
       return read_function_type(ps, i)
    elseif tk == "nil" then
-      return i + 1, new_type(ps, i, "nil") as NilType
+      return i + 1, new_type(ps, i, "nil")
    end
    return fail(ps, i, "expected a type")
 end
 
-read_type = function(ps: ReadState, i: integer): integer, FirstClassType, integer
+read_type = function(ps: ReadState, i: integer): integer, Block, integer
    if ps.tokens[i].tk == "(" then
       i = i + 1
-      local t: Type
+      local t: Block
       i, t = read_type(ps, i)
       i = verify_tk(ps, i, ")")
       return i, t
    end
 
-   local bt: FirstClassType
+   local bt: Block
    local istart = i
    i, bt = read_base_type(ps, i)
    if not bt then
       return i
    end
    if ps.tokens[i].tk == "|" then
-      local u = new_type(ps, istart, "union") as UnionType
-      u.types = { bt }
+      local u = new_type(ps, istart, "union_type")
+      u[1] = bt
       while ps.tokens[i].tk == "|" do
          i = i + 1
          i, bt = read_base_type(ps, i)
          if not bt then
             return i
          end
-         table.insert(u.types, bt)
+         table.insert(u, bt)
       end
       bt = u
    end
    return i, bt
 end
 
-read_type_list = function(ps: ReadState, i: integer, mode: BlockTypeListMode): integer, TupleType
+read_type_list = function(ps: ReadState, i: integer, mode: BlockTypeListMode): integer, Block
    local t, list = new_tuple(ps, i)
 
    local first_token = ps.tokens[i].tk
@@ -856,7 +851,8 @@ read_type_list = function(ps: ReadState, i: integer, mode: BlockTypeListMode): i
       i = i + 1
       local nrets = #list
       if nrets > 0 then
-         t.is_va = true
+         -- t.is_va = true
+         table.insert(t, new_block(ps, i - 1, "..."))
       else
          fail(ps, i, "unexpected '...'")
       end
@@ -872,10 +868,10 @@ end
 local function read_function_args_rets_body(ps: ReadState, i: integer, node: Block): integer, Block
    local istart = i - 1
    --TODO: integrate types
-   i, node.typeargs = read_typeargs_if_any(ps, i)
+   i, node[2] = read_typeargs_if_any(ps, i)
    --node[2] will be typeargs
    i, node[3] --[[, node.min_arity]] = read_argument_list(ps, i)
-   i, node.rets = read_return_types(ps, i)
+   i, node[4] = read_return_types(ps, i)
    --node[4] will be .rets
    i, node[5] = read_statements(ps, i)
    end_at(node, ps.tokens[i])
@@ -906,7 +902,7 @@ local function read_literal(ps: ReadState, i: integer): integer, Block
       return verify_kind(ps, i, "identifier", "variable")
    elseif kind == "string" then
       local node = new_block(ps, i, "string")
-      node.conststr, node.is_longstring = unquote(tk)
+      node.conststr = unquote(tk)
       return i + 1, node
    elseif kind == "number" or kind == "integer" then
       local n = tonumber(tk)
@@ -1172,11 +1168,11 @@ do
             i = i + 1
             local cast = new_block(ps, i, "cast")
             if ps.tokens[i].tk == "(" then
-               i, cast.casttype = read_type_list(ps, i, "casttype")
+               i, cast[1] = read_type_list(ps, i, "casttype")
             else
-               i, cast.casttype = read_type(ps, i)
+               i, cast[1] = read_type(ps, i)
             end
-            if not cast.casttype then
+            if not cast[1] then
                return i, failstore(ps, tkop, e1)
             end
             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = "op", op = op, [1] = e1, [2] = cast, conststr = e1.conststr }
@@ -1303,12 +1299,13 @@ local function read_argument(ps: ReadState, i: integer): integer, Block, integer
    end
    if ps.tokens[i].tk == ":" then
       i = i + 1
-      local argtype: Type
+      local argtype: Block
 
       i, argtype = read_type(ps, i)
 
       if node then
-         node.argtype = argtype
+         -- node.argtype = argtype
+         table.insert(node, argtype)
       end
    end
    return i, node, 0
@@ -1336,15 +1333,7 @@ read_argument_list = function(ps: ReadState, i: integer): integer, Block, intege
    return i, node, min_arity
 end
 
-local record ArgumentInfo
-   i: integer
-   type: Type
-   is_va: boolean
-   is_self: boolean
-   opt: boolean
-end
-
-local function read_argument_type(ps: ReadState, i: integer): integer, ArgumentInfo, integer
+local function read_argument_type(ps: ReadState, i: integer): integer, Block, integer
    local opt = 0
    local is_va = false
    local is_self = false
@@ -1376,7 +1365,7 @@ local function read_argument_type(ps: ReadState, i: integer): integer, ArgumentI
       end
    end
 
-   local typ: Type; i, typ = read_type(ps, i)
+   local typ: Block; i, typ = read_type(ps, i)
    if typ then
       if not is_va and ps.tokens[i].tk == "..." then
          i = i + 1
@@ -1391,28 +1380,32 @@ local function read_argument_type(ps: ReadState, i: integer): integer, ArgumentI
       end
    end
 
-   return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = (opt > 0) or is_va }, 0
+   local t = new_type(ps, i, "argument_type")
+   t[1] = typ
+   if is_va then t[2] = new_block(ps, i, "...") end
+
+   return i, t, 0
 end
 
-read_argument_type_list = function(ps: ReadState, i: integer): integer, Type, boolean, integer
-   local ars: {ArgumentInfo} = {}
+read_argument_type_list = function(ps: ReadState, i: integer): integer, Block, integer
+   local ars: Block = {}
    i = read_bracket_list(ps, i, ars, "(", ")", "sep", read_argument_type)
    local t, list = new_tuple(ps, i)
-   local n = #ars
+
    local min_arity = 0
    for l, ar in ipairs(ars) do
-      list[l] = ar.type
-      if ar.is_va and l < n then
-         fail(ps, ar.i, "'...' can only be last argument")
-      end
+      list[l] = ar
+      -- if ar.is_va and l < n then
+      --    fail(ps, ar.i, "'...' can only be last argument")
+      -- end
       if not ar.opt then
          min_arity = min_arity + 1
       end
    end
-   if n > 0 and ars[n].is_va then
-      t.is_va = true
-   end
-   return i, t, (n > 0 and ars[1].is_self), min_arity
+   -- if n > 0 and ars[n].is_va then
+   --    t.is_va = true
+   -- end
+   return i, t, min_arity
 end
 
 local function read_identifier(ps: ReadState, i: integer): integer, Block, integer
@@ -1661,45 +1654,45 @@ local function read_return(ps: ReadState, i: integer): integer, Block
    return i, node
 end
 
-local function store_field_in_record(ps: ReadState, i: integer, field_name: string, newt: Type, fields: {string: Type}, field_order: {string}): boolean
-   if not fields[field_name] then
-      fields[field_name] = newt
-      table.insert(field_order, field_name)
-      return true
-   end
+-- local function store_field_in_record(ps: ReadState, i: integer, field_name: string, newt: Block, fields: {string: Block}, field_order: {string}): boolean
+--    if not fields[field_name] then
+--       fields[field_name] = newt
+--       table.insert(field_order, field_name)
+--       return true
+--    end
 
-   local oldt = fields[field_name]
-   local oldf = oldt is GenericType and oldt.t or oldt
-   local newf = newt is GenericType and newt.t or newt
+--    local oldt = fields[field_name]
+--    local oldf = oldt.kind == "generic_type" and oldt[1] or oldt
+--    local newf = newt.kind == "generic_type" and newt[1] or newt
 
-   if newf is FunctionType then
-      if oldf is FunctionType then
-         local p = new_type(ps, i, "poly") as PolyType
-         p.types = { oldt as FunctionType, newt as FunctionType }
-         fields[field_name] = p
-         return true
-      elseif oldt is PolyType then
-         table.insert(oldt.types, newt as FunctionType)
-         return true
-      end
-   end
-   fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
-   return false
-end
+--    if newf.kind == "function" then
+--       if oldf.kind == "function" then
+--          local p = new_type(ps, i, "poly") as PolyType
+--          p.types = { oldt as FunctionType, newt as FunctionType }
+--          fields[field_name] = p
+--          return true
+--       elseif oldt is PolyType then
+--          table.insert(oldt.types, newt as FunctionType)
+--          return true
+--       end
+--    end
+--    fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
+--    return false
+-- end
 
-local function set_declname(def: Type, declname: string)
-   if def is GenericType then
-      def = def.t
-   end
+-- local function set_declname(def: Type, declname: string)
+--    if def is GenericType then
+--       def = def.t
+--    end
 
-   if def is RecordType or def is InterfaceType or def is EnumType then
-      if not def.declname then
-         def.declname = declname
-      end
-   end
-end
+--    if def is RecordType or def is InterfaceType or def is EnumType then
+--       if not def.declname then
+--          def.declname = declname
+--       end
+--    end
+-- end
 
-local function read_nested_type(ps: ReadState, i: integer, def: RecordLikeType, tn: BodyTypeName): integer, boolean
+local function read_nested_type(ps: ReadState, i: integer, def: Block, tn: BlockKind): integer, boolean
    local istart = i
    i = i + 1 -- skip 'record' or 'enum'
    local iv = i
@@ -1712,27 +1705,26 @@ local function read_nested_type(ps: ReadState, i: integer, def: RecordLikeType, 
 
    local nt: Block = new_block(ps, istart, "newtype")
 
-   local ndef: Type
+   local ndef: Block
    i, ndef = read_type_body(ps, i, istart, nt, tn)
    if not ndef then
       return i
    end
 
-   set_declname(ndef, v.tk)
+   -- set_declname(ndef, v.tk)
 
-   nt.newtype = new_typedecl(ps, istart, ndef)
+   table.insert(nt, v)
 
-   store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
+   -- store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
    return i
 end
 
-read_enum_body = function(ps: ReadState, i: integer, def: EnumType): integer, boolean
-   def.enumset = {}
+read_enum_body = function(ps: ReadState, i: integer, def: Block): integer, boolean
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Block
       i, item = verify_kind(ps, i, "string", "string")
       if item then
-         def.enumset[unquote(item.tk)] = true
+         table.insert(def, item)
       end
    end
    return i, true
@@ -1773,15 +1765,13 @@ local function read_macroexp(ps: ReadState, istart: integer, iargs: integer): in
 
    local i: integer
    if ps.tokens[istart + 1].tk == "<" then
-      i, node.typeargs = read_anglebracket_list(ps, istart + 1, read_typearg)
+      i, node[1] = read_anglebracket_list(ps, istart + 1, read_typearg)
    else
       i = iargs
    end
 
-   --node[1] will be typeargs
    i, node[2] --[[, node.min_arity]] = read_argument_list(ps, i)
-   i, node.rets = read_return_types(ps, i)
-   --node[3] will be .rets
+   i, node[3] = read_return_types(ps, i)
    i = verify_tk(ps, i, "return")
    i, node[4] = read_expression(ps, i)
    end_at(node, ps.tokens[i])
@@ -1789,41 +1779,42 @@ local function read_macroexp(ps: ReadState, istart: integer, iargs: integer): in
    return i, node
 end
 
-local function read_where_clause(ps: ReadState, i: integer, def: RecordLikeType): integer, Block
+local function read_where_clause(ps: ReadState, i: integer, def: Block): integer, Block
    local node = new_block(ps, i, "macroexp")
 
    node.is_method = true
    node[1] = new_block(ps, i, "argument_list")
    node[1][1] = new_block(ps, i, "argument")
    node[1][1].tk = "self"
-   node[1][1].argtype = new_type(ps, i, "self")
-   (node[1][1].argtype as SelfType).display_type = def
+   node[1][1][1] = new_type(ps, i, "nominal_type")
+   node[1][1][1].tk = "self"
+   node[1][1][1][1] = def
    -- node.min_arity = 1
-   node.rets = new_tuple(ps, i)
-   node.rets.tuple[1] = new_type(ps, i, "boolean")
+   node[2] = new_tuple(ps, i)
+   node[2][1] = new_type(ps, i, "boolean")
    i, node[3] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
    return i, node
 end
 
-read_interface_name = function(ps: ReadState, i: integer): integer, FirstOrderType, integer
+read_interface_name = function(ps: ReadState, i: integer): integer, Block, integer
    local istart = i
-   local typ: FirstOrderType
+   local typ: Block
    i, typ = read_simple_type_or_nominal(ps, i)
-   if not typ is NominalType then
+   if typ.kind ~= "nominal_type" then
       return fail(ps, istart, "expected an interface")
    end
    return i, typ
 end
 
-local function read_array_interface_type(ps: ReadState, i: integer, def: RecordLikeType): integer, ArrayType
+local function read_array_interface_type(ps: ReadState, i: integer, def: Block): integer, Block
    if def.interface_list then
       local first = def.interface_list[1]
       if first is ArrayType then
          return failskip(ps, i, "duplicated declaration of array element type", read_type as SkipFunction)
       end
    end
-   local t: Type
+   local t: Block
    i, t = read_base_type(ps, i)
    if not t then
       return i
@@ -1860,7 +1851,7 @@ local function extract_userdata_from_interface_list(ps: ReadState, i: integer, d
    end
 end
 
-read_record_body = function(ps: ReadState, i: integer, def: RecordLikeType): integer, boolean
+read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boolean
    def.fields = {}
    def.field_order = {}
 
