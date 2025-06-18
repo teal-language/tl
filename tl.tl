@@ -1605,7 +1605,7 @@ local function binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): bool
    local mid: integer
    local s, e = 1, len
    while s <= e do
-      mid = math.floor((s + e) / 2)
+      mid = (s + e) // 2
       local val <const> = list[mid]
       local res <const> = cmp(val, item)
       if res then
