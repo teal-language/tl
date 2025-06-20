@@ -478,7 +478,7 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
       if ps.tokens[i+1].tk == "=" then
          -- node.key_parsed = "short"
          i, node[1] = verify_kind(ps, i, "identifier", "string")
-         node[2].conststr = node[1].tk
+         node[1].conststr = node[1].tk
          node[1].tk = '"' .. node[1].tk .. '"'
          i = verify_tk(ps, i, "=")
          i, node[2] = read_table_value(ps, i)
