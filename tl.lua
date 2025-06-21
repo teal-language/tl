@@ -106,43 +106,14 @@ local has_var_been_used = variables.has_var_been_used
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
-local tl = { CheckOptions = {}, Env = {}, Result = {}, EnvOptions = {}, TypeCheckOptions = {} }
+local environment = require("teal.environment")
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 
@@ -243,11 +214,6 @@ tl.get_token_at = lexer.get_token_at
 tl.parse = parser.parse
 tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
-
-
-
-
-
 
 
 
