@@ -6,7 +6,7 @@ else
 	BUSTED = busted --suppress-pending
 endif
 
-SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl tl.tl
+SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl teal/environment.tl tl.tl
 
 all: selfbuild suite
 

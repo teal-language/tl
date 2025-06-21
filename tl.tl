@@ -106,6 +106,13 @@ local has_var_been_used = variables.has_var_been_used
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
+local environment = require("teal.environment")
+local type CheckOptions = environment.CheckOptions
+local type Env = environment.Env
+local type Feat = environment.Feat
+local type GenCompat = environment.GenCompat
+local type Result = environment.Result
+
 local record tl
    enum LoadMode
       "b"
@@ -117,48 +124,6 @@ local record tl
    end
    type LoadFunction = function(...:any): any...
 
-   enum GenCompat
-      "off"
-      "optional"
-      "required"
-   end
-
-   enum Feat
-      "on"
-      "off"
-   end
-
-   record CheckOptions
-      feat_lax: Feat
-      feat_arity: Feat
-      gen_compat: GenCompat
-      gen_target: lua_generator.Target
-      run_internal_compiler_checks: boolean
-   end
-
-   record Env
-      globals: {string:Variable}
-      modules: {string:Type}
-      module_filenames: {string:string}
-      loaded: {string:Result}
-      loaded_order: {string}
-      reporter: TypeReporter
-      keep_going: boolean
-      report_types: boolean
-      defaults: CheckOptions
-   end
-
-   record Result
-      filename: string
-      ast: Node
-      type: Type
-      syntax_errors: {Error}
-      type_errors: {Error}
-      gen_error: string
-      warnings: {Error}
-      env: Env
-      dependencies: {string:string} -- module name, file found
-   end
 
    record EnvOptions
       defaults: CheckOptions
@@ -167,6 +132,12 @@ local record tl
 
    -- abstract type
    type Node = types.Node
+
+   type GenCompat = environment.GenCompat
+   type Feat = environment.Feat
+   type CheckOptions = environment.CheckOptions
+   type Env = environment.Env
+   type Result = environment.Result
 
    -----------------------------------------------------------------------------
    -- Re-exported entries
@@ -244,16 +215,11 @@ tl.parse = parser.parse
 tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
 
-local type Env = tl.Env
 local type EnvOptions = tl.EnvOptions
-local type Feat = tl.Feat
-local type GenCompat = tl.GenCompat
 local type GenTarget = tl.GenTarget
 local type LoadFunction = tl.LoadFunction
 local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
-local type Result = tl.Result
-local type CheckOptions = tl.CheckOptions
 
 local DEFAULT_GEN_COMPAT <const>: GenCompat = "optional"
 local DEFAULT_GEN_TARGET <const>: GenTarget = "5.3"
