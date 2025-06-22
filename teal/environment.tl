@@ -13,6 +13,7 @@ local type ParseLang = parser.ParseLang
 
 local types = require("teal.types")
 local type Type = types.Type
+local type Where = types.Where
 local type TypeDeclType = types.TypeDeclType
 
 local type_reporter = require("teal.type_reporter")
@@ -44,6 +45,8 @@ local record environment
       run_internal_compiler_checks: boolean
    end
 
+   type RequireModuleFn = function(env: Env, w: Where, module_name: string, opts: CheckOptions): Type, string
+
    record Env
       globals: {string:Variable}
       modules: {string:Type}
@@ -54,6 +57,7 @@ local record environment
       keep_going: boolean
       report_types: boolean
       defaults: CheckOptions
+      require_module: RequireModuleFn
    end
 
    record Result
@@ -78,6 +82,24 @@ local type CheckOptions = environment.CheckOptions
 local type Env = environment.Env
 local type GenCompat = environment.GenCompat
 
+local require_module: environment.RequireModuleFn
+
+function environment.set_require_module_fn(fn: environment.RequireModuleFn)
+   require_module = fn
+end
+
+function environment.empty(check_opts?: CheckOptions): Env
+   return {
+      modules = {},
+      module_filenames = {},
+      loaded = {},
+      loaded_order = {},
+      globals = {},
+      defaults = check_opts or {},
+      require_module = require_module,
+   }
+end
+
 function environment.default(parse_lang?: ParseLang, runtime?: boolean): Env, string
    local gen_target = runtime and target_from_lua_version(_VERSION) or environment.DEFAULT_GEN_TARGET
    local gen_compat: GenCompat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
@@ -88,16 +110,12 @@ function environment.default(parse_lang?: ParseLang, runtime?: boolean): Env, st
       run_internal_compiler_checks = false,
    }
 
-   local env: Env = {
-      modules = {},
-      module_filenames = {},
-      loaded = {},
-      loaded_order = {},
-      globals = {},
-      defaults = defaults,
-   }
+   local env = environment.empty(defaults)
 
    if not environment.stdlib_globals then
+      -- TODO This type of state data which is currently "globally"
+      -- stored in module tables and closures should move to the
+      -- Env object, eventually.
       environment.stdlib_globals = default_env.globals as {string:Variable}
       types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end

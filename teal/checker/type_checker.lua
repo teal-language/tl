@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
@@ -54,7 +54,6 @@ local parser = require("teal.parser")
 
 local Node = parser.Node
 
-
 local node_is_funcall = parser.node_is_funcall
 
 local facts = require("teal.facts")
@@ -90,7 +89,6 @@ local has_var_been_used = variables.has_var_been_used
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
-local read_file_skipping_bom = util.read_file_skipping_bom
 
 local errors = require("teal.errors")
 
@@ -109,10 +107,6 @@ local type_checker = {}
 
 
 
-
-
-
-
 local function shallow_copy_table(t)
    local copy = {}
    for k, v in pairs(t) do
@@ -120,10 +114,6 @@ local function shallow_copy_table(t)
    end
    return copy
 end
-
-
-
-
 
 
 
@@ -422,81 +412,6 @@ local flip_binop_to_metamethod = {
    [">"] = "__lt",
    [">="] = "__le",
 }
-
-local function search_for(module_name, suffix, path, tried)
-   for entry in path:gmatch("[^;]+") do
-      local slash_name = module_name:gsub("%.", "/")
-      local filename = entry:gsub("?", slash_name)
-      local tl_filename = filename:gsub("%.lua$", suffix)
-      local fd = io.open(tl_filename, "rb")
-      if fd then
-         return tl_filename, fd, tried
-      end
-      table.insert(tried, "no file '" .. tl_filename .. "'")
-   end
-   return nil, nil, tried
-end
-
-type_checker.search_module = function(module_name, search_all)
-   local found
-   local fd
-   local tried = {}
-   local path = os.getenv("TL_PATH") or package.path
-   if search_all then
-      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
-      if found then
-         return found, fd
-      end
-   end
-   found, fd, tried = search_for(module_name, ".tl", path, tried)
-   if found then
-      return found, fd
-   end
-   if search_all then
-      found, fd, tried = search_for(module_name, ".lua", path, tried)
-      if found then
-         return found, fd
-      end
-   end
-   return nil, nil, tried
-end
-
-function type_checker.require_module(w, module_name, opts, env)
-   local mod = env.modules[module_name]
-   if mod then
-      return mod, env.module_filenames[module_name]
-   end
-
-   local found, fd = type_checker.search_module(module_name, true)
-   if found and (opts.feat_lax == "on" or found:match("tl$")) then
-
-      env.module_filenames[module_name] = found
-      env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
-
-      local save_defaults = env.defaults
-      local defaults = {
-         feat_lax = opts.feat_lax or save_defaults.feat_lax,
-         feat_arity = opts.feat_arity or save_defaults.feat_arity,
-         gen_compat = opts.gen_compat or save_defaults.gen_compat,
-         gen_target = opts.gen_target or save_defaults.gen_target,
-         run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
-      }
-      env.defaults = defaults
-
-      local found_result, err = type_checker.check_file(found, env, fd)
-      assert(found_result, err)
-
-      env.defaults = save_defaults
-
-      env.modules[module_name] = found_result.type
-
-      return found_result.type, found
-   elseif fd then
-      fd:close()
-   end
-
-   return a_type(w, "invalid", {}), found
-end
 
 local compat_code_cache = {}
 
@@ -1048,6 +963,10 @@ do
 
          return var
       end
+   end
+
+   function TypeChecker:add_self_type(w, def)
+      self:add_var(nil, "@self", a_type(w, "typedecl", { def = def }))
    end
 
 
@@ -2967,7 +2886,7 @@ a.types[i], b.types[i]), }
                if selftype.typename == "self" then
                   selftype = self:type_of_self(selftype)
                end
-               self:add_var(nil, "@self", a_type(w, "typedecl", { def = selftype }))
+               self:add_self_type(w, selftype)
             end
 
             local fargs = (or_args or f.args).tuple
@@ -4509,7 +4428,7 @@ a.types[i], b.types[i]), }
             feat_lax = self.feat_lax and "on" or "off",
             feat_arity = self.feat_arity and "on" or "off",
          }
-         local t, module_filename = type_checker.require_module(node, module_name, tc_opts, self.env)
+         local t, module_filename = self.env:require_module(node, module_name, tc_opts)
 
          if t.typename == "invalid" then
             if not module_filename then
@@ -5885,7 +5804,7 @@ self:expand_type(node, values, elements) })
 
             if decltype.fields then
                self:begin_scope()
-               self:add_var(nil, "@self", a_type(node, "typedecl", { def = decltype }))
+               self:add_self_type(node, decltype)
                decltype = self:resolve_self(decltype, true)
                self:end_scope()
             end
@@ -6160,7 +6079,7 @@ self:expand_type(node, values, elements) })
                end
                args.tuple[1] = a_type(node, "self", { display_type = selftype })
                self:add_var(nil, "self", selftype)
-               self:add_var(nil, "@self", a_type(node, "typedecl", { def = selftype }))
+               self:add_self_type(node, selftype)
                if self.collector then
                   self.collector.add_to_symbol_list(node.fn_owner, "self", selftype)
                end
@@ -7027,7 +6946,7 @@ self:expand_type(node, values, elements) })
    end
 
    function TypeChecker:begin_temporary_record_types(typ)
-      self:add_var(nil, "@self", a_type(typ, "typedecl", { def = typ }))
+      self:add_self_type(typ, typ)
 
       for fname, ftype in fields_of(typ) do
          if ftype.typename == "typedecl" then
@@ -7521,61 +7440,6 @@ self:expand_type(node, values, elements) })
 
       return result
    end
-end
-
-type_checker.check_file = function(filename, env, fd)
-   if env and env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-
-   local input, err
-
-   if not fd then
-      fd, err = io.open(filename, "rb")
-      if not fd then
-         return nil, "could not open " .. filename .. ": " .. err
-      end
-   end
-
-   input, err = read_file_skipping_bom(fd)
-   fd:close()
-   if not input then
-      return nil, "could not read " .. filename .. ": " .. err
-   end
-
-   return type_checker.check_string(input, env, filename)
-end
-
-function type_checker.check_string(input, env, filename, parse_lang)
-   parse_lang = parse_lang or parser.lang_heuristic(filename, input)
-   env = env or environment.default(parse_lang)
-
-   if env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-   filename = filename or ""
-
-   local program, syntax_errors = parser.parse(input, filename, parse_lang)
-
-   if (not env.keep_going) and #syntax_errors > 0 then
-      local result = {
-         ok = false,
-         filename = filename,
-         type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
-         type_errors = {},
-         syntax_errors = syntax_errors,
-         env = env,
-      }
-      env.loaded[filename] = result
-      table.insert(env.loaded_order, filename)
-      return result
-   end
-
-   local result = type_checker.check(program, filename, env.defaults, env)
-
-   result.syntax_errors = syntax_errors
-
-   return result
 end
 
 return type_checker
