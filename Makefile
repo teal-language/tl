@@ -7,7 +7,7 @@ else
 endif
 
 PRECOMPILED = teal/precompiled/default_env.lua
-SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl teal/environment.tl teal/checker/type_checker.tl teal/checker/file_checker.tl teal/checker/string_checker.tl teal/checker/require_file.tl tl.tl
+SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl teal/environment.tl teal/checker/checker.tl teal/checker/type_checker.tl teal/checker/file_checker.tl teal/checker/string_checker.tl teal/checker/require_file.tl tl.tl
 
 all: selfbuild suite
 
@@ -34,7 +34,7 @@ replace1:
 build2: $(addsuffix .lua.2,$(basename $(SOURCES)))
 
 selfbuild: build1 replace1 build2
-	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}; done && make cleantemp
+	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}; done
 
 suite:
 	${BUSTED} -v $(TESTFLAGS) spec/lang

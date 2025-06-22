@@ -1,9 +1,11 @@
+local attributes = require("teal.attributes")
+
+
 local types = require("teal.types")
 
 
 
 local parser = require("teal.parser")
-
 
 
 local variables = { Variable = {}, Scope = {} }

@@ -1086,6 +1086,80 @@ do
    end
 end
 
+
+
+
+
+
+
+function types.untuple(t)
+   local rt = t
+   if rt.typename == "tuple" then
+      rt = rt.tuple[1]
+   end
+   if rt == nil then
+      return a_type(t, "nil", {})
+   end
+   return rt
+end
+
+function types.unite(w, typs, flatten_constants)
+   if #typs == 1 then
+      return typs[1]
+   end
+
+   local ts = {}
+   local stack = {}
+
+
+   local types_seen = {}
+
+   types_seen["nil"] = true
+
+   local i = 1
+   while typs[i] or stack[1] do
+      local t
+      if stack[1] then
+         t = table.remove(stack)
+      else
+         t = typs[i]
+         i = i + 1
+      end
+      t = types.untuple(t)
+      if t.typename == "union" then
+         for _, s in ipairs(t.types) do
+            table.insert(stack, s)
+         end
+      else
+         if types.lua_primitives[t.typename] and (flatten_constants or (t.typename == "string" and not t.literal)) then
+            if not types_seen[t.typename] then
+               types_seen[t.typename] = true
+               table.insert(ts, t)
+            end
+         else
+            local typeid = t.typeid
+            if t.typename == "nominal" and t.found then
+               typeid = t.found.typeid
+            end
+            if not types_seen[typeid] then
+               types_seen[typeid] = true
+               table.insert(ts, t)
+            end
+         end
+      end
+   end
+
+   if types_seen["invalid"] then
+      return a_type(w, "invalid", {})
+   end
+
+   if #ts == 1 then
+      return ts[1]
+   else
+      return a_type(w, "union", { types = ts })
+   end
+end
+
 function types.resolve_for_special_function(t)
    if t.typename == "poly" then
       t = t.types[1]

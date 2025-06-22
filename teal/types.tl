@@ -1086,6 +1086,80 @@ do
    end
 end
 
+-- If type is a tuple, return the first item.
+-- If there is no first item, return a `NilType`.
+-- If type is not a tuple, return the type itself.
+-- This essentially ensures the resulting type
+-- is unary (discarding an extras from multiple
+-- return values or multiple assignments).
+function types.untuple(t: Type): Type
+   local rt = t
+   if rt is TupleType then
+      rt = rt.tuple[1]
+   end
+   if rt == nil then
+      return a_type(t, "nil", {})
+   end
+   return rt
+end
+
+function types.unite(w: Where, typs: {Type}, flatten_constants?: boolean): Type
+   if #typs == 1 then
+      return typs[1]
+   end
+
+   local ts: {Type} = {}
+   local stack: {Type} = {}
+
+   -- Make things like number | number resolve to number
+   local types_seen: {(integer|string):boolean} = {}
+   -- but never add nil as a type in the union
+   types_seen["nil"] = true
+
+   local i = 1
+   while typs[i] or stack[1] do
+      local t: Type
+      if stack[1] then
+         t = table.remove(stack)
+      else
+         t = typs[i]
+         i = i + 1
+      end
+      t = types.untuple(t)
+      if t is UnionType then
+         for _, s in ipairs(t.types) do
+            table.insert(stack, s)
+         end
+      else
+         if types.lua_primitives[t.typename] and (flatten_constants or (t is StringType and not t.literal)) then
+            if not types_seen[t.typename] then
+               types_seen[t.typename] = true
+               table.insert(ts, t)
+            end
+         else
+            local typeid = t.typeid
+            if t is NominalType and t.found then
+               typeid = t.found.typeid
+            end
+            if not types_seen[typeid] then
+               types_seen[typeid] = true
+               table.insert(ts, t)
+            end
+         end
+      end
+   end
+
+   if types_seen["invalid"] then
+      return a_type(w, "invalid", {})
+   end
+
+   if #ts == 1 then
+      return ts[1]
+   else
+      return a_type(w, "union", { types = ts } as UnionType)
+   end
+end
+
 function types.resolve_for_special_function(t: Type): FunctionType
    if t is PolyType then
       t = t.types[1]
