@@ -214,6 +214,7 @@ tl.get_token_at = lexer.get_token_at
 tl.parse = parser.parse
 tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
+tl.target_from_lua_version = lua_generator.target_from_lua_version
 
 local type EnvOptions = tl.EnvOptions
 local type GenTarget = tl.GenTarget
@@ -7882,17 +7883,6 @@ tl.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
    end
 
    return tl.check_string(input, env, filename)
-end
-
-function tl.target_from_lua_version(str: string): GenTarget
-   if str == "Lua 5.1"
-      or str == "Lua 5.2" then
-      return "5.1"
-   elseif str == "Lua 5.3" then
-      return "5.3"
-   elseif str == "Lua 5.4" then
-      return "5.4"
-   end
 end
 
 function tl.check_string(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
