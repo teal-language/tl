@@ -7,7 +7,7 @@ else
 endif
 
 PRECOMPILED = teal/precompiled/default_env.lua
-SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl teal/environment.tl teal/checker/type_checker.tl tl.tl
+SOURCES = teal/debug.tl teal/errors.tl teal/lexer.tl teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl teal/type_errors.tl teal/environment.tl teal/checker/type_checker.tl teal/checker/file_checker.tl teal/checker/string_checker.tl teal/checker/require_file.tl tl.tl
 
 all: selfbuild suite
 
