@@ -825,4 +825,15 @@ function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Opti
    return (concat_output(code):gsub(" *\n", "\n"))
 end
 
+function lua_generator.target_from_lua_version(str: string): Target
+   if str == "Lua 5.1"
+      or str == "Lua 5.2" then
+      return "5.1"
+   elseif str == "Lua 5.3" then
+      return "5.3"
+   elseif str == "Lua 5.4" then
+      return "5.4"
+   end
+end
+
 return lua_generator
