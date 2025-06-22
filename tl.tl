@@ -10,8 +10,6 @@ local type Error = errors.Error
 
 local lexer = require("teal.lexer")
 
-local default_env = require("teal.precompiled.default_env")
-
 local types = require("teal.types")
 local type Type = types.Type
 local type GenericType = types.GenericType
@@ -215,15 +213,13 @@ tl.parse = parser.parse
 tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
 tl.target_from_lua_version = lua_generator.target_from_lua_version
+tl.default_env = environment.default
 
 local type EnvOptions = tl.EnvOptions
 local type GenTarget = tl.GenTarget
 local type LoadFunction = tl.LoadFunction
 local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
-
-local DEFAULT_GEN_COMPAT <const>: GenCompat = "optional"
-local DEFAULT_GEN_TARGET <const>: GenTarget = "5.3"
 
 local function shallow_copy_table<T>(t: T): T
    local copy: {any:any} = {}
@@ -733,8 +729,6 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
    node.e2[4] = e2
 end
 
-local stdlib_globals: {string:Variable} = nil
-
 local function assert_no_errors(errs: {Error}, msg: string)
    if #errs ~= 0 then
       local out = {}
@@ -778,6 +772,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
    end
 
+   local stdlib_globals = environment.stdlib_globals
    if not stdlib_globals then
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
@@ -799,6 +794,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       end
 
       stdlib_globals = env.globals
+      environment.stdlib_globals = env.globals
 
       TL_DEBUG = tl_debug
 
@@ -861,44 +857,6 @@ tl.new_env = function(opts?: EnvOptions): Env, string
          if module_type is InvalidType then
             return nil, string.format("Error: could not predefine module '%s'", name)
          end
-      end
-   end
-
-   return env
-end
-
-tl.default_env = function(parse_lang?: ParseLang, runtime?: boolean): Env, string
-   local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
-   local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
-   local defaults: CheckOptions = {
-      feat_lax = parse_lang == "lua" and "on" or "off",
-      gen_target = gen_target,
-      gen_compat = gen_compat,
-      run_internal_compiler_checks = false,
-   }
-
-   local env: Env = {
-      modules = {},
-      module_filenames = {},
-      loaded = {},
-      loaded_order = {},
-      globals = {},
-      defaults = defaults,
-   }
-
-   if not stdlib_globals then
-      stdlib_globals = default_env.globals as {string:Variable}
-      types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
-   end
-
-   local stdlib_compat = get_stdlib_compat()
-   for name, var in pairs(stdlib_globals) do
-      env.globals[name] = var
-      var.needs_compat = stdlib_compat[name]
-      local t = var.t
-      if t is TypeDeclType then
-         -- make standard library tables available as modules for require()
-         env.modules[name] = t
       end
    end
 
@@ -7701,7 +7659,7 @@ do
 
       if not env then
          local err: string
-         env, err = tl.default_env()
+         env, err = environment.default()
          env.defaults = opts
          if err then
             return nil, err
@@ -7734,8 +7692,8 @@ do
 
       self.feat_lax   = set_feat(opts.feat_lax   or env.defaults.feat_lax,   false)
       self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
-      self.gen_compat = opts.gen_compat or env.defaults.gen_compat or DEFAULT_GEN_COMPAT
-      self.gen_target = opts.gen_target or env.defaults.gen_target or DEFAULT_GEN_TARGET
+      self.gen_compat = opts.gen_compat or env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
+      self.gen_target = opts.gen_target or env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
 
       if self.feat_lax then
          self.feat_arity = false
@@ -7887,7 +7845,7 @@ end
 
 function tl.check_string(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    parse_lang = parse_lang or lang_heuristic(filename, input)
-   env = env or tl.default_env(parse_lang)
+   env = env or environment.default(parse_lang)
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -7919,7 +7877,7 @@ end
 
 tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
    parse_lang = parse_lang or lang_heuristic(nil, input)
-   env = env or assert(tl.default_env(parse_lang), "Default environment initialization failed")
+   env = env or assert(environment.default(parse_lang), "Default environment initialization failed")
    local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
@@ -7947,7 +7905,7 @@ local function tl_package_loader(module_name: string): any, any
 
       local env = tl.package_loader_env
       if not env then
-         tl.package_loader_env = assert(tl.default_env(parse_lang, true), "Default environment initialization failed")
+         tl.package_loader_env = assert(environment.default(parse_lang, true), "Default environment initialization failed")
          env = tl.package_loader_env
       end
       local defaults = env.defaults
@@ -7995,7 +7953,7 @@ local function env_for(parse_lang: ParseLang, env_tbl: {any:any}): Env
       tl.load_envs = setmetatable({}, { __mode = "k" })
    end
 
-   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.default_env(parse_lang, true)
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or environment.default(parse_lang, true)
    return tl.load_envs[env_tbl]
 end
 
@@ -8007,7 +7965,7 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
    end
 
    if not tl.package_loader_env then
-      tl.package_loader_env = tl.default_env(parse_lang, true)
+      tl.package_loader_env = environment.default(parse_lang, true)
    end
    local defaults = tl.package_loader_env.defaults
 
