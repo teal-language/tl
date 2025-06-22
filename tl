@@ -172,7 +172,14 @@ local function setup_env(tlconfig, filename)
       predefined_modules = tlconfig._init_env_modules,
    }
 
-   local env, err = tl.new_env(opts)
+   local env, err
+   if #tlconfig._init_env_modules == 0 then
+      env, err = tl.default_env()
+      env.defaults = opts.defaults
+   else
+      env, err = tl.new_env(opts)
+   end
+
    if not env then
       die(err)
    end
