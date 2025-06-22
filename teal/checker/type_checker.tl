@@ -1,6 +1,16 @@
+local attributes = require("teal.attributes")
+local type Attribute = attributes.Attribute
+
+local checker = require("teal.checker.checker")
+local type Checker = checker.Checker
+local type VarUse = checker.VarUse
+
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
-local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
+
+local errors = require("teal.errors")
+local type Error = errors.Error
+local type WarningKind = errors.WarningKind
 
 local types = require("teal.types")
 local type Type = types.Type
@@ -49,22 +59,23 @@ local shallow_copy_new_type = types.shallow_copy_new_type
 local show_type = types.show_type
 local show_type_base = types.show_type_base
 local simple_types = types.simple_types
+local untuple = types.untuple
 
 local parser = require("teal.parser")
-local type Attribute = parser.Attribute
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 local node_is_funcall = parser.node_is_funcall
 
 local facts = require("teal.facts")
 local type Fact = facts.Fact
-local type FactType = facts.FactType
 local type IsFact = facts.IsFact
 local type EqFact = facts.EqFact
-local type AndFact = facts.AndFact
 local type OrFact = facts.OrFact
-local type NotFact = facts.NotFact
-local type TruthyFact = facts.TruthyFact
+local eval_fact = facts.eval_fact
+local facts_and = facts.facts_and
+local facts_or = facts.facts_or
+local facts_not = facts.facts_not
+local FACT_TRUTHY = facts.FACT_TRUTHY
 
 local traversal = require("teal.traversal")
 local type VisitorAfter = traversal.VisitorAfter
@@ -89,9 +100,6 @@ local has_var_been_used = variables.has_var_been_used
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
-
-local errors = require("teal.errors")
-local type Error = errors.Error
 
 local environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
@@ -518,7 +526,7 @@ do
    local type TypeRelations = {TypeName:{TypeName:CompareTypes}}
    local type InvalidOrTupleType = InvalidType | TupleType
 
-   local record TypeChecker
+   local record TypeChecker is Checker
       env: Env
       st: {Scope}
 
@@ -541,9 +549,6 @@ do
       feat_arity: boolean
       feat_lax: boolean
 
-      same_type: function(self, Type, Type): boolean, {Error}
-      is_a: function(self, Type, Type): boolean, {Error}
-
       type_check_funcall: function(TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
 
       expand_type: function(TypeChecker, w: Where, old: Type, new: Type): Type
@@ -552,11 +557,12 @@ do
       get_rets: function(TupleType): TupleType
    end
 
-   local enum VarUse
-      "use"
-      "lvalue"
-      "use_type"
-      "check_only"
+   function TypeChecker:add_error(w: Where, msg: string, t?: Type, ...:Type)
+      self.errs:add(w, msg, t, ...)
+   end
+
+   function TypeChecker:add_warning(tag: WarningKind, w: Where, fmt: string, ...: any)
+      self.errs:add_warning(tag, w, fmt, ...)
    end
 
    local function get_real_var_from_lower_scope(st: {Scope}, i: integer, name: string): Variable
@@ -825,17 +831,6 @@ do
             scope.vars[emptytable.assigned_to] = { t = fresh_t }
          end
       end
-   end
-
-   local function resolve_tuple(t: Type): Type
-      local rt = t
-      if rt is TupleType then
-         rt = rt.tuple[1]
-      end
-      if rt == nil then
-         return a_type(t, "nil", {})
-      end
-      return rt
    end
 
    function TypeChecker:check_if_redeclaration(new_name: string, node: Node, t: Type)
@@ -1598,7 +1593,7 @@ do
             t = typs[i]
             i = i + 1
          end
-         t = resolve_tuple(t)
+         t = untuple(t)
          if t is UnionType then
             for _, s in ipairs(t.types) do
                table.insert(stack, s)
@@ -2070,7 +2065,7 @@ do
             return true
          end,
          ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
-            return self:is_a(resolve_tuple(a), b)
+            return self:is_a(untuple(a), b)
          end,
       },
       ["typevar"] = {
@@ -2527,8 +2522,8 @@ do
    end
 
    function TypeChecker:assert_is_a(w: Where, t1: Type, t2: Type, ctx?: string | Node, name?: string): boolean
-      t1 = resolve_tuple(t1)
-      t2 = resolve_tuple(t2)
+      t1 = untuple(t1)
+      t2 = untuple(t2)
       if self.feat_lax and (is_unknown(t1) or t2 is UnknownType) then
          return true
       end
@@ -3119,7 +3114,7 @@ do
 
          local mtdelta = metamethod is FunctionType and metamethod.is_method and -1 or 0
          local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, nil, nil, node, e2)
-         local ret_unary <const> = resolve_tuple(ret_call)
+         local ret_unary <const> = untuple(ret_call)
          local ret <const> = self:to_structural(ret_unary)
          return ret, meta_on_operator
       else
@@ -3360,7 +3355,7 @@ do
 
       -- get all arguments except the last...
       for i = 1, n_vals - 1 do
-         rt[i] = resolve_tuple(vt[i])
+         rt[i] = untuple(vt[i])
       end
 
       local last = vt[n_vals]
@@ -3674,289 +3669,22 @@ do
       end
    end
 
-   -- Inference engine for 'is' operator
-   local facts_and: function(w: Where, f1: Fact, f2: Fact): Fact
-   local facts_or: function(w: Where, f1: Fact, f2: Fact): Fact
-   local facts_not: function(w: Where, f1: Fact): Fact
-   local FACT_TRUTHY: Fact
-   do
-
-      FACT_TRUTHY = TruthyFact {}
-
-      facts_and = function(w: Where, f1: Fact, f2: Fact): Fact
-         if not f1 and not f2 then
-            return
-         end
-         return AndFact { f1 = f1, f2 = f2, w = w }
+   function TypeChecker:apply_facts(w: Where, known: Fact)
+      if not known then
+         return
       end
 
-      facts_or = function(w: Where, f1: Fact, f2: Fact): Fact
-         return OrFact({ f1 = f1 or FACT_TRUTHY, f2 = f2 or FACT_TRUTHY, w = w })
-      end
+      local fcts = eval_fact(self, known)
 
-      facts_not = function(w: Where, f1: Fact): Fact
-         if f1 then
-            return NotFact { f1 = f1, w = w }
-         else
-            return nil
+      for v, f in pairs(fcts) do
+         if f.typ.typename == "invalid" then
+            self.errs:add(w, "cannot resolve a type for " .. v .. " here")
          end
-      end
-
-      -- t1 ∪ t2
-      local function unite_types(w: Where, t1: Type, t2: Type): Type, string
-         return unite(w, {t2, t1})
-      end
-
-      -- t1 ∩ t2
-      local function intersect_types(self: TypeChecker, w: Where, t1: Type, t2: Type): Type, string
-         if t2 is UnionType then
-            t1, t2 = t2, t1
+         local t = f.no_infer and f.typ or self:infer_at(w, f.typ)
+         if f.no_infer then
+            t.inferred_at = nil
          end
-         if t1 is UnionType then
-            local out = {}
-            for _, t in ipairs(t1.types) do
-               if self:is_a(t, t2) then
-                  table.insert(out, t)
-               end
-            end
-            if #out > 0 then
-               return unite(w, out)
-            end
-         end
-         if self:is_a(t1, t2) then
-            return t1
-         elseif self:is_a(t2, t1) then
-            return t2
-         else
-            return a_type(w, "nil", {}) -- because of implicit nil in all unions
-         end
-      end
-
-      function TypeChecker:resolve_if_union(t: Type): Type
-         local rt = self:to_structural(t)
-         if rt is UnionType then
-            return rt
-         end
-         return t
-      end
-
-      -- t1 - t2
-      local function subtract_types(self: TypeChecker, w: Where, t1: Type, t2: Type): Type
-         local typs: {Type} = {}
-
-         t1 = self:resolve_if_union(t1)
-
-         -- poly are not first-class, so we don't handle them here
-         if not t1 is UnionType then
-            return t1
-         end
-
-         t2 = self:resolve_if_union(t2)
-         local t2types = t2 is UnionType and t2.types or { t2 }
-
-         for _, at in ipairs(t1.types) do
-            local not_present = true
-            for _, bt in ipairs(t2types) do
-               if self:same_type(at, bt) then
-                  not_present = false
-                  break
-               end
-            end
-            if not_present then
-               table.insert(typs, at)
-            end
-         end
-
-         if #typs == 0 then
-            return a_type(w, "nil", {}) -- because of implicit nil in all unions
-         end
-
-         return unite(w, typs)
-      end
-
-      local eval_not: function(TypeChecker, f: Fact): {string:IsFact|EqFact}
-      local not_facts: function(TypeChecker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-      local or_facts: function(TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-      local and_facts: function(TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-      local eval_fact: function(TypeChecker, f: Fact): {string:IsFact|EqFact}
-
-      local function invalid_from(f: IsFact): IsFact
-         return IsFact { fact = "is", var = f.var, typ = a_type(f.w, "invalid", {}), w = f.w }
-      end
-
-      not_facts = function(self: TypeChecker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-         local ret: {string:IsFact|EqFact} = {}
-         for var, f in pairs(fs) do
-            local typ = self:find_var_type(f.var, "check_only")
-
-            if not typ then
-               ret[var] = EqFact { var = var, typ = an_invalid(f.w), w = f.w, no_infer = f.no_infer }
-            elseif f is EqFact then
-               -- nothing is known from negation of equality; widen back
-               ret[var] = EqFact { var = var, typ = typ, w = f.w, no_infer = true }
-            elseif typ is TypeVarType then
-               assert(f.fact == "is")
-               -- nothing is known from negation on typeargs; widen back
-               ret[var] = EqFact { var = var, typ = typ, w = f.w, no_infer = true }
-            elseif not self:is_a(f.typ, typ) then
-               assert(f.fact == "is")
-               self.errs:add_warning("branch", f.w, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
-               ret[var] = EqFact { var = var, typ = an_invalid(f.w), w = f.w, no_infer = f.no_infer }
-            else
-               assert(f.fact == "is")
-               ret[var] = IsFact { var = var, typ = subtract_types(self, f.w, typ, f.typ), w = f.w, no_infer = f.no_infer }
-            end
-         end
-         return ret
-      end
-
-      eval_not = function(self: TypeChecker, f: Fact): {string:IsFact|EqFact}
-         if not f then
-            return {}
-         elseif f is IsFact then
-            return not_facts(self, {[f.var] = f})
-         elseif f is NotFact then
-            return eval_fact(self, f.f1)
-         elseif f is AndFact and f.f2 and f.f2.fact == "truthy" then
-            return eval_not(self, f.f1)
-         elseif f is OrFact and f.f2 and f.f2.fact == "truthy" then
-            return eval_not(self, f.f1)
-         elseif f is AndFact then
-            return or_facts(self, eval_not(self, f.f1), eval_not(self, f.f2))
-         elseif f is OrFact then
-            return and_facts(self, eval_not(self, f.f1), eval_not(self, f.f2))
-         else
-            return not_facts(self, eval_fact(self, f))
-         end
-      end
-
-      or_facts = function(_self: TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-         local ret: {string:IsFact|EqFact} = {}
-
-         for var, f in pairs(fs2) do
-            if fs1[var] then
-               local united = unite_types(f.w, f.typ, fs1[var].typ)
-               if fs1[var].fact == "is" and f.fact == "is" then
-                  ret[var] = IsFact { var = var, typ = united, w = f.w }
-               else
-                  ret[var] = EqFact { var = var, typ = united, w = f.w }
-               end
-            end
-         end
-
-         return ret
-      end
-
-      and_facts = function(self: TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-         local ret: {string:IsFact|EqFact} = {}
-         local has: {FactType:boolean} = {}
-
-         for var, f in pairs(fs1) do
-            local rt: Type
-            local ctor: IsFact | EqFact = EqFact
-            if fs2[var] then
-               if fs2[var].fact == "is" and f.fact == "is" then
-                  ctor = IsFact
-               end
-               rt = intersect_types(self, f.w, f.typ, fs2[var].typ)
-            else
-               rt = f.typ
-            end
-            local ff = ctor { var = var, typ = rt, w = f.w, no_infer = f.no_infer }
-            ret[var] = ff
-            has[ff.fact] = true
-         end
-
-         for var, f in pairs(fs2) do
-            if not fs1[var] then
-               ret[var] = EqFact { var = var, typ = f.typ, w = f.w, no_infer = f.no_infer }
-               has["=="] = true
-            end
-         end
-
-         if has["is"] and has["=="] then
-            for _, f in pairs(ret) do
-               f.fact = "=="
-            end
-         end
-
-         return ret
-      end
-
-      eval_fact = function(self: TypeChecker, f: Fact): {string:IsFact|EqFact}
-         if not f then
-            return {}
-         elseif f is IsFact then
-            local typ = self:find_var_type(f.var, "check_only")
-            if not typ then
-               return { [f.var] = invalid_from(f) }
-            end
-            if not typ is TypeVarType then
-               if self:is_a(typ, f.typ) then
-                  -- drop this warning because of implicit nil in all unions
-                  -- self.errs:add_warning("branch", f.w, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
-                  return { [f.var] = f }
-               elseif not self:is_a(f.typ, typ) then
-                  self.errs:add(f.w, f.var .. " (of type %s) can never be a %s", typ, f.typ)
-                  return { [f.var] = invalid_from(f) }
-               end
-            end
-            return { [f.var] = f }
-         elseif f is EqFact then
-            return { [f.var] = f }
-         elseif f is NotFact then
-            return eval_not(self, f.f1)
-         elseif f is TruthyFact then
-            return {}
-         elseif f is AndFact and f.f2 and f.f2.fact == "truthy" then
-            return eval_fact(self, f.f1)
-         elseif f is OrFact and f.f2 and f.f2.fact == "truthy" then
-            return eval_not(self, f.f1)
-         elseif f is AndFact then
-            return and_facts(self, eval_fact(self, f.f1), eval_fact(self, f.f2))
-         elseif f is OrFact then
-            return or_facts(self, eval_fact(self, f.f1), eval_fact(self, f.f2))
-         end
-      end
-
-      function TypeChecker:apply_facts(w: Where, known: Fact)
-         if not known then
-            return
-         end
-
-         local fcts = eval_fact(self, known)
-
-         for v, f in pairs(fcts) do
-            if f.typ.typename == "invalid" then
-               self.errs:add(w, "cannot resolve a type for " .. v .. " here")
-            end
-            local t = f.no_infer and f.typ or self:infer_at(w, f.typ)
-            if f.no_infer then
-               t.inferred_at = nil
-            end
-            self:add_var(nil, v, t, "const", "narrow")
-         end
-      end
-
-      if TL_DEBUG_FACTS then
-         local eval_indent = -1
-         local real_eval_fact = eval_fact
-         eval_fact = function(self: TypeChecker, known: Fact): {string: IsFact|EqFact}
-            eval_indent = eval_indent + 1
-            io.stderr:write(("   "):rep(eval_indent))
-            io.stderr:write("eval fact: ", tostring(known), "\n")
-            local fcts = real_eval_fact(self, known)
-            if fcts then
-               for _, k in ipairs(sorted_keys(fcts)) do
-                  local f = fcts[k]
-                  io.stderr:write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
-               end
-            else
-               io.stderr:write(("   "):rep(eval_indent), "=> .\n")
-            end
-            eval_indent = eval_indent - 1
-            return fcts
-         end
+         self:add_var(nil, v, t, "const", "narrow")
       end
    end
 
@@ -4761,7 +4489,7 @@ do
 
          self.errs:check_redeclared_key(node[i], nil, seen_keys, key)
 
-         local uvtype = resolve_tuple(child.vtype)
+         local uvtype = untuple(child.vtype)
          if ck then
             is_record = true
             if not fields then
@@ -4785,7 +4513,7 @@ do
                   -- need to expand last item in an array (e.g { 1, 2, 3, f() })
                   for _, c in ipairs(cv.tuple) do
                      elements = self:expand_type(node, elements, c)
-                     typs[last_array_idx] = resolve_tuple(c)
+                     typs[last_array_idx] = untuple(c)
                      last_array_idx = last_array_idx + 1
                   end
                else
@@ -5020,7 +4748,7 @@ do
             and n.e1.kind == "variable"
             and n.e1.tk == "require"
          then
-            local ty = resolve_tuple(
+            local ty = untuple(
                special_functions["require"](
                   self, n, self:find_var_type("require"),
                   a_tuple(n.e2, { a_type(n.e2[1], "string", {}) })
@@ -5141,7 +4869,7 @@ do
       if b is TupleType then
          node.discarded_tuple = true
       end
-      return resolve_tuple(t)
+      return untuple(t)
    end
 
    local visit_node: Visitor<TypeChecker, NodeKind, Node, Type> = {}
@@ -5535,8 +5263,8 @@ do
          before_statements = function(self: TypeChecker, node: Node, children: {Type})
             self:widen_all_unions(node)
             self:begin_scope(node)
-            local from_t = self:to_structural(resolve_tuple(children[2]))
-            local to_t = self:to_structural(resolve_tuple(children[3]))
+            local from_t = self:to_structural(untuple(children[2]))
+            local to_t = self:to_structural(untuple(children[3]))
             local step_t = children[4] and self:to_structural(children[4])
             local typename: TypeName = (from_t is IntegerType and
                                         to_t is IntegerType and
@@ -5566,7 +5294,7 @@ do
             local expected = self:find_var_type("@return") as TupleType
             if not expected then
                -- if at the toplevel
-               local module_type = resolve_tuple(got)
+               local module_type = untuple(got)
                if module_type is NominalType then
                   self:resolve_nominal(module_type)
                   self.module_type = module_type.resolved
@@ -5605,7 +5333,7 @@ do
             for i = 1, n_got do
                local e = expected_t[i] or vatype
                if e then
-                  e = resolve_tuple(e)
+                  e = untuple(e)
                   local w = (node.exps[i] and node.exps[i].x)
                             and node.exps[i]
                             or  node.exps
@@ -5733,7 +5461,7 @@ do
             local seen_keys: {CheckableKey:Where} = {}
 
             for i, child in ipairs(children) do
-               local cvtype = resolve_tuple(child.vtype)
+               local cvtype = untuple(child.vtype)
                local ck = child.kname
                local cktype = child.ktype
                local n = node[i].key.constnum
@@ -6148,7 +5876,7 @@ do
          end,
          after = function(_self: TypeChecker, node: Node, children: {Type}): Type
             node.known = node.e1 and node.e1.known
-            return resolve_tuple(children[1])
+            return untuple(children[1])
          end,
       },
       ["op"] = {
@@ -6226,7 +5954,7 @@ do
             local gb: Type = children[3]
 
             -- unary a and b: not TupleType
-            local ua = resolve_tuple(ga)
+            local ua = untuple(ga)
             local ub: Type
 
             -- resolved a and b: not NominalType
@@ -6269,7 +5997,7 @@ do
             -- "@funcall" and "as" are the only operators that use tuples, and always in the b position;
             -- after they are handled above, we can resolve b's tuple and only use that instead.
             if gb then
-               ub = resolve_tuple(gb)
+               ub = untuple(gb)
                rb = self:to_structural(ub)
                ok, err = ensure_not_abstract(rb)
                if not ok then
@@ -6371,7 +6099,7 @@ do
             if node.op.op == "or" then
                local t: Type
 
-               local expected = node.expected and self:to_structural(resolve_tuple(node.expected))
+               local expected = node.expected and self:to_structural(untuple(node.expected))
 
                if ub is NilType then
                   node.known = nil

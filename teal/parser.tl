@@ -1,6 +1,10 @@
 --------------------------------------------------------------------------------
 -- Recursive descent parser
 --------------------------------------------------------------------------------
+local attributes = require("teal.attributes")
+local type Attribute = attributes.Attribute
+local is_attribute = attributes.is_attribute
+
 local errors = require("teal.errors")
 local type Error = errors.Error
 
@@ -227,14 +231,7 @@ local enum KeyParsed
    "implicit"
 end
 
-local enum Attribute
-   "const"
-   "close"
-   "total"
-end
-
 local record parser
-   type Attribute = Attribute
    type Node = Node
    type NodeKind = NodeKind
    type ParseLang = ParseLang
@@ -242,13 +239,6 @@ local record parser
    parse: function(input: string, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    operator: function(Node, integer, string): Operator
 end
-
-local attributes <total>: {Attribute: boolean} = {
-   ["const"] = true,
-   ["close"] = true,
-   ["total"] = true,
-}
-local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
 function parser.node_is_require_call(n: Node): string
    if not (n.e1 and n.e2) then
