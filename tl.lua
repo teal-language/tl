@@ -7,6 +7,8 @@ local TL_DEBUG = tldebug.TL_DEBUG
 local errors = require("teal.errors")
 
 
+local file_checker = require("teal.checker.file_checker")
+
 local lexer = require("teal.lexer")
 
 local types = require("teal.types")
@@ -24,6 +26,10 @@ local parser = require("teal.parser")
 
 
 local lua_generator = require("teal.gen.lua_generator")
+
+local require_file = require("teal.checker.require_file")
+
+local string_checker = require("teal.checker.string_checker")
 
 local type_checker = require("teal.checker.type_checker")
 
@@ -136,9 +142,9 @@ local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 tl.check = type_checker.check
-tl.check_file = type_checker.check_file
-tl.check_string = type_checker.check_string
-tl.search_module = type_checker.search_module
+tl.check_file = file_checker.check
+tl.check_string = string_checker.check
+tl.search_module = require_file.search_module
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
 tl.generate = lua_generator.generate
@@ -148,6 +154,8 @@ tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
 tl.target_from_lua_version = lua_generator.target_from_lua_version
 tl.default_env = environment.default
+
+environment.set_require_module_fn(require_file.require_module)
 
 
 
@@ -281,6 +289,8 @@ tl.new_env = function(opts)
       end
    end
 
+   env.require_module = require_file.require_module
+
    if opts.predefined_modules then
       for _, name in ipairs(opts.predefined_modules) do
          local tc_opts = {
@@ -288,7 +298,7 @@ tl.new_env = function(opts)
             feat_arity = env.defaults.feat_arity,
          }
          local w = { f = "@predefined", x = 1, y = 1 }
-         local module_type = type_checker.require_module(w, name, tc_opts, env)
+         local module_type = env:require_module(w, name, tc_opts)
 
          if module_type.typename == "invalid" then
             return nil, string.format("Error: could not predefine module '%s'", name)

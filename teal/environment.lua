@@ -15,6 +15,7 @@ local types = require("teal.types")
 
 
 
+
 local type_reporter = require("teal.type_reporter")
 
 
@@ -71,12 +72,33 @@ local environment = { CheckOptions = {}, Env = {}, Result = {} }
 
 
 
+
+
+
 environment.DEFAULT_GEN_COMPAT = "optional"
 environment.DEFAULT_GEN_TARGET = "5.3"
 
 
 
 
+
+local require_module
+
+function environment.set_require_module_fn(fn)
+   require_module = fn
+end
+
+function environment.empty(check_opts)
+   return {
+      modules = {},
+      module_filenames = {},
+      loaded = {},
+      loaded_order = {},
+      globals = {},
+      defaults = check_opts or {},
+      require_module = require_module,
+   }
+end
 
 function environment.default(parse_lang, runtime)
    local gen_target = runtime and target_from_lua_version(_VERSION) or environment.DEFAULT_GEN_TARGET
@@ -88,16 +110,12 @@ function environment.default(parse_lang, runtime)
       run_internal_compiler_checks = false,
    }
 
-   local env = {
-      modules = {},
-      module_filenames = {},
-      loaded = {},
-      loaded_order = {},
-      globals = {},
-      defaults = defaults,
-   }
+   local env = environment.empty(defaults)
 
    if not environment.stdlib_globals then
+
+
+
       environment.stdlib_globals = default_env.globals
       types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end

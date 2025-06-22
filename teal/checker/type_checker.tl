@@ -54,7 +54,6 @@ local parser = require("teal.parser")
 local type Attribute = parser.Attribute
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
-local type ParseLang = parser.ParseLang
 local node_is_funcall = parser.node_is_funcall
 
 local facts = require("teal.facts")
@@ -90,7 +89,6 @@ local has_var_been_used = variables.has_var_been_used
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
-local read_file_skipping_bom = util.read_file_skipping_bom
 
 local errors = require("teal.errors")
 local type Error = errors.Error
@@ -107,10 +105,6 @@ local type GenTarget = lua_generator.Target
 
 local record type_checker
    check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
-   check_file: function(filename: string, env?: Env, fd?: FILE): Result, string
-   check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
-   require_module: function(w: Where, module_name: string, opts: CheckOptions, env: Env): Type, string
-   search_module: function(module_name: string, search_all: boolean): string, FILE, {string}
 end
 
 local function shallow_copy_table<T>(t: T): T
@@ -119,10 +113,6 @@ local function shallow_copy_table<T>(t: T): T
       copy[k] = v
    end
    return copy as T
-end
-
-local macroexp a_typedecl(w: Where, def: Type): TypeDeclType
-   return a_type(w, "typedecl", { def = def } as TypeDeclType)
 end
 
 local macroexp a_union(w: Where, t: {Type}): UnionType
@@ -422,81 +412,6 @@ local flip_binop_to_metamethod: {string:string} = {
    [">"] = "__lt",
    [">="] = "__le",
 }
-
-local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
-   for entry in path:gmatch("[^;]+") do
-      local slash_name = module_name:gsub("%.", "/")
-      local filename = entry:gsub("?", slash_name)
-      local tl_filename = filename:gsub("%.lua$", suffix)
-      local fd = io.open(tl_filename, "rb")
-      if fd then
-         return tl_filename, fd, tried
-      end
-      table.insert(tried, "no file '" .. tl_filename .. "'")
-   end
-   return nil, nil, tried
-end
-
-type_checker.search_module = function(module_name: string, search_all: boolean): string, FILE, {string}
-   local found: string
-   local fd: FILE
-   local tried: {string} = {}
-   local path = os.getenv("TL_PATH") or package.path -- FIXME tl.path
-   if search_all then
-      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
-      if found then
-         return found, fd
-      end
-   end
-   found, fd, tried = search_for(module_name, ".tl", path, tried)
-   if found then
-      return found, fd
-   end
-   if search_all then
-      found, fd, tried = search_for(module_name, ".lua", path, tried)
-      if found then
-         return found, fd
-      end
-   end
-   return nil, nil, tried
-end
-
-function type_checker.require_module(w: Where, module_name: string, opts: CheckOptions, env: Env): Type, string
-   local mod = env.modules[module_name]
-   if mod then
-      return mod, env.module_filenames[module_name]
-   end
-
-   local found, fd = type_checker.search_module(module_name, true)
-   if found and (opts.feat_lax == "on" or found:match("tl$") as boolean) then
-
-      env.module_filenames[module_name] = found
-      env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
-
-      local save_defaults = env.defaults
-      local defaults <total>: CheckOptions = {
-         feat_lax = opts.feat_lax or save_defaults.feat_lax,
-         feat_arity = opts.feat_arity or save_defaults.feat_arity,
-         gen_compat = opts.gen_compat or save_defaults.gen_compat,
-         gen_target = opts.gen_target or save_defaults.gen_target,
-         run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
-      }
-      env.defaults = defaults
-
-      local found_result, err: Result, string = type_checker.check_file(found, env, fd)
-      assert(found_result, err)
-
-      env.defaults = save_defaults
-
-      env.modules[module_name] = found_result.type
-
-      return found_result.type, found
-   elseif fd then
-      fd:close()
-   end
-
-   return an_invalid(w), found
-end
 
 local compat_code_cache: {string:Node} = {}
 
@@ -1048,6 +963,10 @@ do
 
          return var
       end
+   end
+
+   function TypeChecker:add_self_type(w: Where, def: Type)
+      self:add_var(nil, "@self", a_type(w, "typedecl", { def = def } as TypeDeclType))
    end
 
    local type CompareTypes = function(TypeChecker, Type, Type): boolean, {Error}
@@ -2967,7 +2886,7 @@ do
                if selftype is SelfType then
                   selftype = self:type_of_self(selftype)
                end
-               self:add_var(nil, "@self", a_typedecl(w, selftype))
+               self:add_self_type(w, selftype)
             end
 
             local fargs = (or_args or f.args).tuple
@@ -4509,7 +4428,7 @@ do
             feat_lax = self.feat_lax and "on" or "off",
             feat_arity = self.feat_arity and "on" or "off",
          }
-         local t, module_filename = type_checker.require_module(node, module_name, tc_opts, self.env)
+         local t, module_filename = self.env:require_module(node, module_name, tc_opts)
 
          if t is InvalidType then
             if not module_filename then
@@ -5883,7 +5802,7 @@ do
 
             if decltype is RecordLikeType then
                self:begin_scope()
-               self:add_var(nil, "@self", a_typedecl(node, decltype))
+               self:add_self_type(node, decltype)
                decltype = self:resolve_self(decltype, true)
                self:end_scope()
             end
@@ -6158,7 +6077,7 @@ do
                end
                args.tuple[1] = a_self(node, selftype)
                self:add_var(nil, "self", selftype)
-               self:add_var(nil, "@self", a_typedecl(node, selftype))
+               self:add_self_type(node, selftype)
                if self.collector then
                   self.collector.add_to_symbol_list(node.fn_owner, "self", selftype)
                end
@@ -7025,7 +6944,7 @@ do
    end
 
    function TypeChecker:begin_temporary_record_types(typ: RecordType)
-      self:add_var(nil, "@self", a_typedecl(typ, typ))
+      self:add_self_type(typ, typ)
 
       for fname, ftype in fields_of(typ) do
          if ftype is TypeDeclType then
@@ -7519,61 +7438,6 @@ do
 
       return result
    end
-end
-
-type_checker.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
-   if env and env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-
-   local input, err: string, string
-
-   if not fd then
-      fd, err = io.open(filename, "rb")
-      if not fd then
-         return nil, "could not open " .. filename .. ": " .. err
-      end
-   end
-
-   input, err = read_file_skipping_bom(fd)
-   fd:close()
-   if not input then
-      return nil, "could not read " .. filename .. ": " .. err
-   end
-
-   return type_checker.check_string(input, env, filename)
-end
-
-function type_checker.check_string(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
-   parse_lang = parse_lang or parser.lang_heuristic(filename, input)
-   env = env or environment.default(parse_lang)
-
-   if env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-   filename = filename or ""
-
-   local program, syntax_errors = parser.parse(input, filename, parse_lang)
-
-   if (not env.keep_going) and #syntax_errors > 0 then
-      local result = {
-         ok = false,
-         filename = filename,
-         type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
-         type_errors = {},
-         syntax_errors = syntax_errors,
-         env = env,
-      }
-      env.loaded[filename] = result
-      table.insert(env.loaded_order, filename)
-      return result
-   end
-
-   local result = type_checker.check(program as Node, filename, env.defaults, env)
-
-   result.syntax_errors = syntax_errors
-
-   return result
 end
 
 return type_checker
