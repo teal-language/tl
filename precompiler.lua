@@ -165,11 +165,10 @@ do
 end
 
 local out = persist(env.globals)
-local next_type = types.a_type({ x = 0, y = 0 }, "any", {})
-local typevar_ctr = tl.internal_typevar_ctr()
+local typeid_ctr, typevar_ctr = types.internal_get_state()
 
-put(out, "\nreturn { globals = T1, next_typeid = ")
-put(out, tostring(next_type.typeid))
+put(out, "\nreturn { globals = T1, typeid_ctr = ")
+put(out, tostring(typeid_ctr))
 put(out, ", typevar_ctr = ")
 put(out, tostring(typevar_ctr))
 put(out, "}\n")

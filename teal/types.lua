@@ -688,15 +688,13 @@ local type_mt = {
    end,
 }
 
-local last_typeid = 0
+
+local fresh_typevar_ctr = 1
+local fresh_typeid_ctr = 0
 
 local function new_typeid()
-   last_typeid = last_typeid + 1
-   return last_typeid
-end
-
-function types.internal_force_next_typeid(n)
-   last_typeid = n - 1
+   fresh_typeid_ctr = fresh_typeid_ctr + 1
+   return fresh_typeid_ctr
 end
 
 local function a_type(w, typename, t)
@@ -1039,6 +1037,62 @@ types.map = function(self, ty, fns)
    end
 
    return copy
+end
+
+do
+   function types.internal_typevar_ctr()
+      return fresh_typevar_ctr
+   end
+
+
+   local fresh_typevar_fns = {
+      ["typevar"] = function(typeargs, t, resolve)
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typevar then
+               return a_type(t, "typevar", {
+                  typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint and resolve(t.constraint, false),
+               }), true
+            end
+         end
+         return t, false
+      end,
+      ["typearg"] = function(typeargs, t, resolve)
+         for _, ta in ipairs(typeargs) do
+            if ta.typearg == t.typearg then
+               return a_type(t, "typearg", {
+                  typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
+                  constraint = t.constraint and resolve(t.constraint, false),
+               }), true
+            end
+         end
+         return t, false
+      end,
+   }
+
+   function types.fresh_typeargs(g)
+      fresh_typevar_ctr = fresh_typevar_ctr + 1
+
+      local newg, errs = types.map(g.typeargs, g, fresh_typevar_fns)
+      if newg.typename == "invalid" then
+         return newg, errs
+      end
+
+      assert(newg.typename == "generic", "Internal Compiler Error: error creating fresh type variables")
+      assert(newg ~= g)
+      newg.fresh = true
+
+      return newg
+   end
+end
+
+function types.internal_get_state()
+   return fresh_typeid_ctr, fresh_typevar_ctr
+end
+
+function types.internal_force_state(typeid_ctr, typevar_ctr)
+   fresh_typeid_ctr = typeid_ctr
+   fresh_typevar_ctr = typevar_ctr
 end
 
 types.globals_typeid = new_typeid()
