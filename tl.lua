@@ -733,11 +733,6 @@ local function convert_node_to_compat_mt_call(node, mt_name, which_self, e1, e2)
 end
 
 local stdlib_globals = nil
-local fresh_typevar_ctr = 1
-
-function tl.internal_typevar_ctr()
-   return fresh_typevar_ctr
-end
 
 local function assert_no_errors(errs, msg)
    if #errs ~= 0 then
@@ -892,8 +887,7 @@ tl.default_env = function(parse_lang, runtime)
 
    if not stdlib_globals then
       stdlib_globals = default_env.globals
-      fresh_typevar_ctr = default_env.typevar_ctr
-      types.internal_force_next_typeid(default_env.next_typeid)
+      types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end
 
    local stdlib_compat = get_stdlib_compat()
@@ -1019,44 +1013,12 @@ do
       }, nil
    end
 
-
-   local fresh_typevar_fns = {
-      ["typevar"] = function(typeargs, t, resolve)
-         for _, ta in ipairs(typeargs) do
-            if ta.typearg == t.typevar then
-               return a_type(t, "typevar", {
-                  typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint and resolve(t.constraint, false),
-               }), true
-            end
-         end
-         return t, false
-      end,
-      ["typearg"] = function(typeargs, t, resolve)
-         for _, ta in ipairs(typeargs) do
-            if ta.typearg == t.typearg then
-               return a_type(t, "typearg", {
-                  typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint and resolve(t.constraint, false),
-               }), true
-            end
-         end
-         return t, false
-      end,
-   }
-
    local function fresh_typeargs(self, g)
-      fresh_typevar_ctr = fresh_typevar_ctr + 1
-
-      local newg, errs = types.map(g.typeargs, g, fresh_typevar_fns)
+      local newg, errs = types.fresh_typeargs(g)
       if newg.typename == "invalid" then
          self.errs:collect(errs)
          return g
       end
-      assert(newg.typename == "generic", "Internal Compiler Error: error creating fresh type variables")
-      assert(newg ~= g)
-      newg.fresh = true
-
       return newg
    end
 

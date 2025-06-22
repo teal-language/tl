@@ -733,11 +733,6 @@ local function convert_node_to_compat_mt_call(node: Node, mt_name: string, which
 end
 
 local stdlib_globals: {string:Variable} = nil
-local fresh_typevar_ctr = 1
-
-function tl.internal_typevar_ctr(): integer
-   return fresh_typevar_ctr
-end
 
 local function assert_no_errors(errs: {Error}, msg: string)
    if #errs ~= 0 then
@@ -892,8 +887,7 @@ tl.default_env = function(parse_lang?: ParseLang, runtime?: boolean): Env, strin
 
    if not stdlib_globals then
       stdlib_globals = default_env.globals as {string:Variable}
-      fresh_typevar_ctr = default_env.typevar_ctr
-      types.internal_force_next_typeid(default_env.next_typeid)
+      types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end
 
    local stdlib_compat = get_stdlib_compat()
@@ -1019,44 +1013,12 @@ do
       }, nil
    end
 
-   local type ResolveFunction = function<T is Type>(t: T, all_same: boolean): T, boolean
-   local fresh_typevar_fns: types.TypeFunctionMap<{TypeArgType}> = {
-      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType, resolve: ResolveFunction<Type>): Type, boolean
-         for _, ta in ipairs(typeargs) do
-            if ta.typearg == t.typevar then
-               return a_type(t, "typevar", {
-                  typevar = (t.typevar:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint and resolve(t.constraint, false),
-               } as TypeVarType), true
-            end
-         end
-         return t, false
-      end,
-      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType, resolve: ResolveFunction<Type>): Type, boolean
-         for _, ta in ipairs(typeargs) do
-            if ta.typearg == t.typearg then
-               return a_type(t, "typearg", {
-                  typearg = (t.typearg:gsub("@.*", "")) .. "@" .. fresh_typevar_ctr,
-                  constraint = t.constraint and resolve(t.constraint, false),
-               } as TypeArgType), true
-            end
-         end
-         return t, false
-      end,
-   }
-
    local function fresh_typeargs(self: TypeChecker, g: GenericType): GenericType
-      fresh_typevar_ctr = fresh_typevar_ctr + 1
-
-      local newg, errs = types.map(g.typeargs, g, fresh_typevar_fns)
+      local newg, errs = types.fresh_typeargs(g)
       if newg is InvalidType then
          self.errs:collect(errs)
          return g
       end
-      assert(newg is GenericType, "Internal Compiler Error: error creating fresh type variables")
-      assert(newg ~= g)
-      newg.fresh = true
-
       return newg
    end
 

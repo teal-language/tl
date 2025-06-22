@@ -1,6 +1,6 @@
 local record default_env
    globals: {any:any}
-   next_typeid: integer
+   typeid_ctr: integer
    typevar_ctr: integer
 end
 
