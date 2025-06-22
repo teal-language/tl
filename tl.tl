@@ -164,6 +164,7 @@ local record tl
    load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
    loader: function()
    new_env: function(? EnvOptions): Env, string
+   default_env: function(parse_lang?: ParseLang, runtime?: boolean): Env, string
    parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
    parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
@@ -865,6 +866,19 @@ tl.new_env = function(opts?: EnvOptions): Env, string
    return env
 end
 
+tl.default_env = function(parse_lang?: ParseLang, runtime?: boolean): Env, string
+   local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
+   local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
+   local opts: EnvOptions = {
+      defaults = {
+         feat_lax = parse_lang == "lua" and "on" or "off",
+         gen_target = gen_target,
+         gen_compat = gen_compat,
+         run_internal_compiler_checks = false,
+      }
+   }
+   return tl.new_env(opts)
+end
 
 do
    local type TypeRelations = {TypeName:{TypeName:CompareTypes}}
@@ -7694,7 +7708,8 @@ do
 
       if not env then
          local err: string
-         env, err = tl.new_env({ defaults = opts })
+         env, err = tl.default_env()
+         env.defaults = opts
          if err then
             return nil, err
          end
@@ -7854,10 +7869,6 @@ local function lang_heuristic(filename?: string, input?: string): ParseLang
    return "tl"
 end
 
-local function feat_lax_heuristic(lang: ParseLang): Feat
-   return lang == "tl" and "off" or "on"
-end
-
 tl.check_file = function(filename: string, env?: Env, fd?: FILE): Result, string
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -7892,22 +7903,9 @@ function tl.target_from_lua_version(str: string): GenTarget
    end
 end
 
-local function default_env_opts(runtime: boolean, parse_lang: ParseLang): EnvOptions
-   local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
-   local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
-   return {
-      defaults = {
-         feat_lax = feat_lax_heuristic(parse_lang),
-         gen_target = gen_target,
-         gen_compat = gen_compat,
-         run_internal_compiler_checks = false,
-      }
-   }
-end
-
 function tl.check_string(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    parse_lang = parse_lang or lang_heuristic(filename, input)
-   env = env or tl.new_env(default_env_opts(false, parse_lang))
+   env = env or tl.default_env(parse_lang)
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -7939,7 +7937,7 @@ end
 
 tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
    parse_lang = parse_lang or lang_heuristic(nil, input)
-   env = env or assert(tl.new_env(default_env_opts(false, parse_lang)), "Default environment initialization failed")
+   env = env or assert(tl.default_env(parse_lang), "Default environment initialization failed")
    local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
@@ -7967,22 +7965,21 @@ local function tl_package_loader(module_name: string): any, any
 
       local env = tl.package_loader_env
       if not env then
-         tl.package_loader_env = assert(tl.new_env(), "Default environment initialization failed")
+         tl.package_loader_env = assert(tl.default_env(parse_lang, true), "Default environment initialization failed")
          env = tl.package_loader_env
       end
-
-      local opts = default_env_opts(true, parse_lang)
+      local defaults = env.defaults
 
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_typedecl(w, a_type(w, "circular_require", {}))
 
-      local result = tl.check(program, found_filename, opts.defaults, env)
+      local result = tl.check(program, found_filename, defaults, env)
 
       env.modules[module_name] = result.type
 
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
-      local code = assert(tl.generate(program, opts.defaults.gen_target, lua_generator.fast_opts))
+      local code = assert(tl.generate(program, defaults.gen_target, lua_generator.fast_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname: string, loader_data: string): any
@@ -8007,19 +8004,16 @@ function tl.loader()
    end
 end
 
-local function env_for(opts: EnvOptions, env_tbl: {any:any}): Env
+local function env_for(parse_lang: ParseLang, env_tbl: {any:any}): Env
    if not env_tbl then
-      if not tl.package_loader_env then
-         tl.package_loader_env = tl.new_env(opts)
-      end
-      return tl.package_loader_env
+      return assert(tl.package_loader_env)
    end
 
    if not tl.load_envs then
       tl.load_envs = setmetatable({}, { __mode = "k" })
    end
 
-   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.new_env(opts)
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.default_env(parse_lang, true)
    return tl.load_envs[env_tbl]
 end
 
@@ -8030,14 +8024,13 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
-   local opts = default_env_opts(true, parse_lang)
-
    if not tl.package_loader_env then
-      tl.package_loader_env = tl.new_env(opts)
+      tl.package_loader_env = tl.default_env(parse_lang, true)
    end
+   local defaults = tl.package_loader_env.defaults
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = tl.check(program, filename, opts.defaults, env_for(opts, ...))
+   local result = tl.check(program, filename, defaults, env_for(parse_lang, ...))
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -8051,7 +8044,7 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
       mode = mode:gsub("c", "") as LoadMode
    end
 
-   local code, err = lua_generator.generate(program, opts.defaults.gen_target, lua_generator.fast_opts)
+   local code, err = lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts)
    if not code then
       return nil, err
    end
