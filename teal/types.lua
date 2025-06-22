@@ -1086,6 +1086,18 @@ do
    end
 end
 
+function types.resolve_for_special_function(t)
+   if t.typename == "poly" then
+      t = t.types[1]
+   end
+   if t.typename == "generic" then
+      t = t.t
+   end
+   if t.typename == "function" then
+      return t
+   end
+end
+
 function types.internal_get_state()
    return fresh_typeid_ctr, fresh_typevar_ctr
 end

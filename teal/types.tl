@@ -1086,6 +1086,18 @@ do
    end
 end
 
+function types.resolve_for_special_function(t: Type): FunctionType
+   if t is PolyType then
+      t = t.types[1]
+   end
+   if t is GenericType then
+      t = t.t
+   end
+   if t is FunctionType then
+      return t
+   end
+end
+
 function types.internal_get_state(): integer, integer
    return fresh_typeid_ctr, fresh_typevar_ctr
 end
