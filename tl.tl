@@ -10,8 +10,7 @@ local type Error = errors.Error
 
 local lexer = require("teal.lexer")
 
-local prelude = require("teal.embed.prelude")
-local stdlib = require("teal.embed.stdlib")
+local default_env = require("teal.precompiled.default_env")
 
 local types = require("teal.types")
 local type Type = types.Type
@@ -736,6 +735,10 @@ end
 local stdlib_globals: {string:Variable} = nil
 local fresh_typevar_ctr = 1
 
+function tl.internal_typevar_ctr(): integer
+   return fresh_typevar_ctr
+end
+
 local function assert_no_errors(errs: {Error}, msg: string)
    if #errs ~= 0 then
       local out = {}
@@ -784,6 +787,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       TL_DEBUG = nil
 
       do
+         local prelude = require("teal.embed.prelude")
          local program, syntax_errors = tl.parse(prelude, "prelude.d.tl", "tl")
          assert_no_errors(syntax_errors, "prelude contains syntax errors")
          local result = tl.check(program, "@prelude", {}, env)
@@ -791,6 +795,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       end
 
       do
+         local stdlib = require("teal.embed.stdlib")
          local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
          assert_no_errors(syntax_errors, "standard library contains syntax errors")
          local result = tl.check(program, "@stdlib", {}, env)
@@ -869,15 +874,40 @@ end
 tl.default_env = function(parse_lang?: ParseLang, runtime?: boolean): Env, string
    local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
    local gen_compat: GenCompat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
-   local opts: EnvOptions = {
-      defaults = {
-         feat_lax = parse_lang == "lua" and "on" or "off",
-         gen_target = gen_target,
-         gen_compat = gen_compat,
-         run_internal_compiler_checks = false,
-      }
+   local defaults: CheckOptions = {
+      feat_lax = parse_lang == "lua" and "on" or "off",
+      gen_target = gen_target,
+      gen_compat = gen_compat,
+      run_internal_compiler_checks = false,
    }
-   return tl.new_env(opts)
+
+   local env: Env = {
+      modules = {},
+      module_filenames = {},
+      loaded = {},
+      loaded_order = {},
+      globals = {},
+      defaults = defaults,
+   }
+
+   if not stdlib_globals then
+      stdlib_globals = default_env.globals as {string:Variable}
+      fresh_typevar_ctr = default_env.typevar_ctr
+      types.internal_force_next_typeid(default_env.next_typeid)
+   end
+
+   local stdlib_compat = get_stdlib_compat()
+   for name, var in pairs(stdlib_globals) do
+      env.globals[name] = var
+      var.needs_compat = stdlib_compat[name]
+      local t = var.t
+      if t is TypeDeclType then
+         -- make standard library tables available as modules for require()
+         env.modules[name] = t
+      end
+   end
+
+   return env
 end
 
 do

@@ -695,6 +695,10 @@ local function new_typeid()
    return last_typeid
 end
 
+function types.internal_force_next_typeid(n)
+   last_typeid = n - 1
+end
+
 local function a_type(w, typename, t)
    t.typeid = new_typeid()
    t.f = w.f
