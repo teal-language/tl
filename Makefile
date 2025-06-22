@@ -17,24 +17,25 @@ precompiler.lua: precompiler.tl
 teal/precompiled/default_env.lua: precompiler.lua teal/embed/prelude.tl teal/embed/stdlib.tl tl.tl
 	lua precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
 
-%.lua.bak: %.lua
+_temp/%.lua.bak: %.lua
 	cp $< $@
 
-%.lua.1: %.tl $(PRECOMPILED)
+_temp/%.lua.1: %.tl $(PRECOMPILED)
+	mkdir -p `dirname $@`
 	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { rm $@; exit 1; }
 
-%.lua.2: %.tl %.lua.1 $(PRECOMPILED)
-	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}
+_temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
+	$(LUA) ./tl gen --check --gen-target=5.1 $< -o $@ || { for bak in $$(find _temp -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's,^_temp/\(.*\).bak$$,\1,'`; done; for l in `find _temp -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}
 
-build1: $(addsuffix .lua.1,$(basename $(SOURCES)))
+build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
 
 replace1:
-	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; cp $$l $$l.bak; cp $$f $$l; done
+	for f in $$(find _temp -name '*.lua.1'); do l=`echo "$$f" | sed 's,^_temp/\(.*\).1$$,\1,'`; cp $$l _temp/$$l.bak; cp $$f $$l; done
 
-build2: $(addsuffix .lua.2,$(basename $(SOURCES)))
+build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
 
 selfbuild: build1 replace1 build2
-	for f in $$(find . -name '*.lua.1'); do l=`echo "$$f" | sed 's/.1$$//'`; diff $$f $$l.2 || { for bak in $$(find . -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's/.bak$$//'`; done; for l in `find . -name '*.lua.1'`; do mv $$l $$l.err; done; exit 1 ;}; done
+	for f in $$(find _temp -name '*.lua.1'); do l=`echo "$$f" | sed 's,^_temp/\(.*\).1$$,\1,'`; diff $$f _temp/$$l.2 || { for bak in $$(find _temp -name '*.lua.bak'); do cp $$bak `echo "$$bak" | sed 's,^_temp/\(.*\).bak$$,\1,'`; done; for l in `find . -name '*.lua.1'`; do mv $$l _temp/$$l.err; done; exit 1 ;}; done
 
 suite:
 	${BUSTED} -v $(TESTFLAGS) spec/lang
@@ -48,9 +49,6 @@ cov:
 	cat luacov.report.out
 
 cleantemp:
-	for f in $$(find . -name '*.lua.1'); do rm $$f; done
-	for f in $$(find . -name '*.lua.1.err'); do rm $$f; done
-	for f in $$(find . -name '*.lua.2'); do rm $$f; done
-	for f in $$(find . -name '*.lua.bak'); do rm $$f; done
+	rm -rf _temp
 
 clean: cleantemp
