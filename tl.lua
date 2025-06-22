@@ -207,6 +207,7 @@ local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 
+
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
 tl.generate = lua_generator.generate
@@ -865,6 +866,19 @@ tl.new_env = function(opts)
    return env
 end
 
+tl.default_env = function(parse_lang, runtime)
+   local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
+   local gen_compat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
+   local opts = {
+      defaults = {
+         feat_lax = parse_lang == "lua" and "on" or "off",
+         gen_target = gen_target,
+         gen_compat = gen_compat,
+         run_internal_compiler_checks = false,
+      },
+   }
+   return tl.new_env(opts)
+end
 
 do
 
@@ -7694,7 +7708,8 @@ self:expand_type(node, values, elements) })
 
       if not env then
          local err
-         env, err = tl.new_env({ defaults = opts })
+         env, err = tl.default_env()
+         env.defaults = opts
          if err then
             return nil, err
          end
@@ -7854,10 +7869,6 @@ local function lang_heuristic(filename, input)
    return "tl"
 end
 
-local function feat_lax_heuristic(lang)
-   return lang == "tl" and "off" or "on"
-end
-
 tl.check_file = function(filename, env, fd)
    if env and env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -7892,22 +7903,9 @@ function tl.target_from_lua_version(str)
    end
 end
 
-local function default_env_opts(runtime, parse_lang)
-   local gen_target = runtime and tl.target_from_lua_version(_VERSION) or DEFAULT_GEN_TARGET
-   local gen_compat = (gen_target == "5.4") and "off" or DEFAULT_GEN_COMPAT
-   return {
-      defaults = {
-         feat_lax = feat_lax_heuristic(parse_lang),
-         gen_target = gen_target,
-         gen_compat = gen_compat,
-         run_internal_compiler_checks = false,
-      },
-   }
-end
-
 function tl.check_string(input, env, filename, parse_lang)
    parse_lang = parse_lang or lang_heuristic(filename, input)
-   env = env or tl.new_env(default_env_opts(false, parse_lang))
+   env = env or tl.default_env(parse_lang)
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
@@ -7939,7 +7937,7 @@ end
 
 tl.gen = function(input, env, opts, parse_lang)
    parse_lang = parse_lang or lang_heuristic(nil, input)
-   env = env or assert(tl.new_env(default_env_opts(false, parse_lang)), "Default environment initialization failed")
+   env = env or assert(tl.default_env(parse_lang), "Default environment initialization failed")
    local result = tl.check_string(input, env)
 
    if (not result.ast) or #result.syntax_errors > 0 then
@@ -7967,22 +7965,21 @@ local function tl_package_loader(module_name)
 
       local env = tl.package_loader_env
       if not env then
-         tl.package_loader_env = assert(tl.new_env(), "Default environment initialization failed")
+         tl.package_loader_env = assert(tl.default_env(parse_lang, true), "Default environment initialization failed")
          env = tl.package_loader_env
       end
-
-      local opts = default_env_opts(true, parse_lang)
+      local defaults = env.defaults
 
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 
-      local result = tl.check(program, found_filename, opts.defaults, env)
+      local result = tl.check(program, found_filename, defaults, env)
 
       env.modules[module_name] = result.type
 
 
 
-      local code = assert(tl.generate(program, opts.defaults.gen_target, lua_generator.fast_opts))
+      local code = assert(tl.generate(program, defaults.gen_target, lua_generator.fast_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname, loader_data)
@@ -8007,19 +8004,16 @@ function tl.loader()
    end
 end
 
-local function env_for(opts, env_tbl)
+local function env_for(parse_lang, env_tbl)
    if not env_tbl then
-      if not tl.package_loader_env then
-         tl.package_loader_env = tl.new_env(opts)
-      end
-      return tl.package_loader_env
+      return assert(tl.package_loader_env)
    end
 
    if not tl.load_envs then
       tl.load_envs = setmetatable({}, { __mode = "k" })
    end
 
-   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.new_env(opts)
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or tl.default_env(parse_lang, true)
    return tl.load_envs[env_tbl]
 end
 
@@ -8030,14 +8024,13 @@ tl.load = function(input, chunkname, mode, ...)
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
-   local opts = default_env_opts(true, parse_lang)
-
    if not tl.package_loader_env then
-      tl.package_loader_env = tl.new_env(opts)
+      tl.package_loader_env = tl.default_env(parse_lang, true)
    end
+   local defaults = tl.package_loader_env.defaults
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = tl.check(program, filename, opts.defaults, env_for(opts, ...))
+   local result = tl.check(program, filename, defaults, env_for(parse_lang, ...))
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -8051,7 +8044,7 @@ tl.load = function(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code, err = lua_generator.generate(program, opts.defaults.gen_target, lua_generator.fast_opts)
+   local code, err = lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts)
    if not code then
       return nil, err
    end
