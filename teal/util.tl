@@ -36,4 +36,17 @@ function util.sorted_keys<A,B>(m: {A:B}):{A}
    return keys
 end
 
+function util.read_file_skipping_bom(fd: FILE): string, string
+   local bom <const> = "\239\187\191" -- "\xEF\xBB\xBF"
+   local content, err = fd:read("*a")
+   if not content then
+      return nil, err
+   end
+
+   if content:sub(1, bom:len()) == bom then
+      content = content:sub(bom:len() + 1)
+   end
+   return content, err
+end
+
 return util

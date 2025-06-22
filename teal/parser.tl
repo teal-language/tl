@@ -2585,4 +2585,22 @@ function parser.parse(input: string, filename: string, parse_lang?: ParseLang): 
    return node, errs, required_modules
 end
 
+function parser.lang_heuristic(filename?: string, input?: string): ParseLang
+   if filename then
+      local pattern <const> = "(.*)%.([a-z]+)$"
+      local _, extension = filename:match(pattern)
+      extension = extension and extension:lower()
+
+      if extension == "tl" then
+         return "tl"
+      elseif extension == "lua" then
+         return "lua"
+      end
+   end
+   if input then
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
+   end
+   return "tl"
+end
+
 return parser
