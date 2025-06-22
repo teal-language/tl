@@ -5,14 +5,26 @@ package.path = "./?.lua;" .. package.path
 local tl = require("tl")
 local types = require("teal.types")
 local env = tl.new_env()
+local typeid_ctr, typevar_ctr = types.internal_get_state()
 
 local put = table.insert
 local format = string.format
 
+local SHORT_NAME <const> = 5
+local N_LOCAL_STRINGS <const> = 50
+local STRING_RC_LIMIT <const> = 3
+
 local record PersistState
-   ctr: integer
-   seen: {any: string}
-   out: {string}
+   table_ctr: integer
+   table_map: {any: integer}
+   table_inits: {{string}}
+   table_subtables: {{string}}
+   table_rc: {any: integer}
+   string_ctr: integer
+   string_map: {string: integer}
+   string_arr: {string}
+   string_rc: {string: integer}
+   string_ks: integer
    dot: {string: boolean}
 end
 
@@ -71,7 +83,8 @@ end
 
 local persist: function(tbl: {any:any}): {string}
 do
-   local function is_dot(k: string, ps: PersistState): boolean
+   -- Can a string key be used in a table with dot notation?
+   local function is_dot(ps: PersistState, k: string): boolean
       if ps.dot[k] then
          return true
       end
@@ -83,91 +96,249 @@ do
       end
       ps.dot[k] = true
       return true
-    end
+   end
 
-   local function recurse(tbl: {any:any}, ps: PersistState): string
-      if ps.seen[tbl] then
-         return ps.seen[tbl]
+   -- Calculate reference counts for strings and tables
+   local function calc_rc(ps: PersistState, obj: any)
+      if obj is table then
+         if ps.table_rc[obj] then
+            ps.table_rc[obj] = ps.table_rc[obj] + 1
+            return
+         end
+         ps.table_rc[obj] = 1
+
+         for k, v in pairs(obj) do
+            if k is string then
+               calc_rc(ps, k)
+            end
+            if v is table or v is string then
+               calc_rc(ps, v)
+            end
+         end
+      elseif obj is string then
+         if ps.string_rc[obj] then
+            ps.string_rc[obj] = ps.string_rc[obj] + 1
+            return
+         end
+         ps.string_rc[obj] = 1
       end
-      ps.ctr = ps.ctr + 1
-      local name = "T" .. tostring(ps.ctr)
-      ps.seen[tbl] = name
+   end
 
+   -- Determine if string should be used inline:
+   -- if it is too short or not reused enough.
+   local function should_inline_string(ps: PersistState, k: string): boolean
+      return #k < SHORT_NAME or ps.string_rc[k] < STRING_RC_LIMIT
+   end
+
+   -- Pre-load the top `N_LOCAL_STRINGS` most used strings
+   -- to be referenced as local variables.
+   local function load_top_strings(ps: PersistState): integer
+      local strings = {}
+      for k, _ in pairs(ps.string_rc) do
+         if not should_inline_string(ps, k) then
+            table.insert(strings, k)
+         end
+      end
+      table.sort(strings, function(a: string, b: string): boolean
+         if ps.string_rc[a] == ps.string_rc[b] then
+            return a > b
+         end
+         return ps.string_rc[a] > ps.string_rc[b]
+      end)
+      for i = #strings, N_LOCAL_STRINGS + 1, -1 do
+         table.remove(strings, i)
+      end
+      for i, s in ipairs(strings) do
+         ps.string_map[s] = i
+      end
+      ps.string_arr = strings
+      ps.string_ctr = #strings
+   end
+
+   -- Get the proper representation for a string: inlined,
+   -- as a local variable or as a table key.
+   local function get_string(ps: PersistState, k: string): string
+      if should_inline_string(ps, k) then
+         return string.format("%q", k)
+      end
+
+      local n = ps.string_map[k]
+      if not n then
+         n = ps.string_ctr + 1
+         ps.string_arr[n] = k
+         ps.string_map[k] = n
+         ps.string_ctr = n
+      end
+      if n <= N_LOCAL_STRINGS then
+         return "K" .. tostring(n)
+      else
+         return "K[" .. tostring(n - N_LOCAL_STRINGS) .. "]"
+      end
+   end
+
+   local recurse: function(ps: PersistState, tbl: {any:any}): string
+
+   -- Emit a key-value assignment.
+   local function put_k_v(ps: PersistState, out: {string}, k: any, v: any, do_dot: boolean)
+      local val: string
+      if v is table then
+         val = recurse(ps, v)
+      elseif v is string then
+         val = get_string(ps, v)
+      else
+         val = tostring(v)
+      end
+      if k is string and #k < SHORT_NAME and is_dot(ps, k) then
+         if do_dot then
+            put(out, ".")
+         end
+         put(out, k)
+      else
+         put(out, "[")
+         if k is string then
+            put(out, get_string(ps, k))
+         else
+            put(out, tostring(k))
+         end
+         put(out, "]")
+      end
+      put(out, "=")
+      put(out, val)
+   end
+
+   local function print_table_to(out: {string}, tbl: {any:any}, ps: PersistState, do_subtables: boolean): boolean
+      put(out, "{")
       local any_subtable = false
-      local out = ps.out
-      put(out, name)
-      put(out, "={")
       for k, v in sortedpairs(tbl) do
-         if v is table then
+         if (v is table) and (not do_subtables) then
             any_subtable = true
          else
-            local val: string
-            if v is string then
-               val = format("%q", v)
-            else
-               val = tostring(v)
-            end
-            if k is string and is_dot(k, ps) then
-               put(out, k)
-            else
-               put(out, "[")
-               if k is string then
-                  put(out, format("%q", k))
-               else
-                  put(out, tostring(k))
-               end
-               put(out, "]")
-            end
-            put(out, "=")
-            put(out, val)
+            put_k_v(ps, out, k, v, false)
             put(out, ",")
          end
       end
-      put(out, "}\n")
+      put(out, "}")
+      return any_subtable
+   end
+
+   recurse = function(ps: PersistState, tbl: {any:any}): string
+      if ps.table_map[tbl] then
+         return "T" .. tostring(ps.table_map[tbl])
+      end
+
+      if ps.table_rc[tbl] == 1 then
+         local imm = {}
+         print_table_to(imm, tbl, ps, true)
+         return table.concat(imm)
+      end
+
+      ps.table_ctr = ps.table_ctr + 1
+      local n = ps.table_ctr
+      local name = "T" .. tostring(n)
+      ps.table_map[tbl] = n
+
+      local inits = {}
+      local any_subtable = false
+      put(inits, "local ")
+      put(inits, name)
+      put(inits, " = ")
+      any_subtable = print_table_to(inits, tbl, ps, false)
+      put(inits, "\n")
+      ps.table_inits[n] = inits
 
       if any_subtable then
+         local subtables = {}
          for k, v in sortedpairs(tbl) do
             if v is table then
-               local val = recurse(v, ps)
-               put(out, name)
-               if k is string and is_dot(k, ps) then
-                  put(out, ".")
-                  put(out, k)
-               else
-                  put(out, "[")
-                  if k is string then
-                     put(out, format("%q", k))
-                  else
-                     put(out, tostring(k))
-                  end
-                  put(out, "]")
-               end
-               put(out, "=")
-               put(out, val)
-               put(out, "\n")
+               put(subtables, name)
+               put_k_v(ps, subtables, k, v, true)
+               put(subtables, "\n")
             end
          end
+         ps.table_subtables[n] = subtables
       end
 
       return name
    end
 
+   local function flush_vars_vals(out: {string}, vars: {string}, vals: {string}, top: boolean)
+      if #vals == 0 then
+         return
+      end
+      if top then
+         put(out, "local ")
+         put(out, table.concat(vars, ","))
+         put(out, "=")
+         put(out, table.concat(vals, ","))
+         put(out, "\n")
+      else
+         put(out, "local K={")
+         put(out, table.concat(vals, ","))
+         put(out, "}\n")
+      end
+   end
+
    persist = function(tbl: {any:any}): {string}
       local ps: PersistState = {
-         ctr = 0,
-         seen = {},
-         out = {},
+         table_ctr = 0,
+         table_map = {},
+         table_inits = {},
+         table_subtables = {},
+         table_rc = {},
          dot = {},
+         string_ctr = 0,
+         string_map = {},
+         string_arr = {},
+         string_rc = {},
       }
-      recurse(tbl, ps)
-      return ps.out
+      calc_rc(ps, tbl)
+      load_top_strings(ps)
+
+      local t = recurse(ps, tbl)
+
+      local out = {}
+      local vars, vals = {}, {}
+      local top = true
+      for i, k in ipairs(ps.string_arr) do
+         if top and i > N_LOCAL_STRINGS then
+            flush_vars_vals(out, vars, vals, top)
+            vars, vals = {}, {}
+            top = false
+         end
+         table.insert(vals, format("%q", k))
+         if top then
+            table.insert(vars, "K" .. tostring(i))
+            if i % 10 == 0 then
+               flush_vars_vals(out, vars, vals, top)
+               vars, vals = {}, {}
+            end
+         end
+      end
+      flush_vars_vals(out, vars, vals, top)
+
+      for _, cs in ipairs(ps.table_inits) do
+         for _, c in ipairs(cs) do
+            table.insert(out, c)
+         end
+      end
+      table.insert(out, "local T0 = ")
+      table.insert(out, t)
+      table.insert(out, "\n")
+      for i = 1, #ps.table_inits do
+         local cs = ps.table_subtables[i]
+         if cs then
+            for _, c in ipairs(cs) do
+               table.insert(out, c)
+            end
+         end
+      end
+      return out
    end
 end
 
 local out = persist(env.globals as {any:any})
-local typeid_ctr, typevar_ctr = types.internal_get_state()
 
-put(out, "\nreturn { globals = T1, typeid_ctr = ")
+put(out, "\nreturn { globals = T0, typeid_ctr = ")
 put(out, tostring(typeid_ctr))
 put(out, ", typevar_ctr = ")
 put(out, tostring(typevar_ctr))
