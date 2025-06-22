@@ -5668,5 +5668,5 @@ T2764.rets=T2785
 T2763.t=T2764
 T1.xpcall=T2763
 
-return { globals = T1, next_typeid = 2845, typevar_ctr = 53}
+return { globals = T1, typeid_ctr = 2844, typevar_ctr = 53}
 
