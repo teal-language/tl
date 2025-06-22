@@ -1,6 +1,9 @@
 --------------------------------------------------------------------------------
 -- Lua code generation
 --------------------------------------------------------------------------------
+local attributes = require("teal.attributes")
+local type Attribute = attributes.Attribute
+
 local types = require("teal.types")
 local type Type = types.Type
 local type TypeName = types.TypeName
@@ -11,7 +14,6 @@ local type RecordType = types.RecordType
 local type RecordLikeType = types.RecordLikeType
 
 local parser = require("teal.parser")
-local type Attribute = parser.Attribute
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 
