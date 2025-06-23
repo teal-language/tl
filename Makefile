@@ -8,8 +8,7 @@ endif
 
 PRECOMPILED = teal/precompiled/default_env.lua
 SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
-	teal/util.tl teal/embed/prelude.tl teal/embed/stdlib.tl \
-	teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
+	teal/util.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
 	teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl \
 	teal/type_errors.tl teal/environment.tl teal/checker/checker.tl \
 	teal/checker/type_checker.tl teal/checker/file_checker.tl \
@@ -20,7 +19,7 @@ all: selfbuild suite
 precompiler.lua: precompiler.tl
 	$(LUA) ./tl gen $< -o $@ || { rm $@; exit 1; }
 
-teal/precompiled/default_env.lua: precompiler.lua teal/embed/prelude.tl teal/embed/stdlib.tl tl.tl
+teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal/default/stdlib.d.tl tl.tl
 	lua precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
