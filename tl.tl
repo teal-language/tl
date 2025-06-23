@@ -582,7 +582,6 @@ local record tl
       warnings: {Error}
       env: Env
       dependencies: {string:string} -- module name, file found
-      unattached_comments: {Comment}
    end
 
    enum WarningKind
@@ -695,8 +694,8 @@ local record tl
    load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
    loader: function()
    new_env: function(? EnvOptions): Env, string
-   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}, {Comment}
-   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}, {Comment}
+   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    search_module: function(module_name: string, search_all: boolean): string, FILE, {string}
@@ -2192,6 +2191,8 @@ local record Node
    semicolon: boolean
    hashbang: string
 
+   unattached_comments: {Comment}
+
    is_longstring: boolean
 
    yend: integer
@@ -2488,7 +2489,7 @@ local parse_type_list: function(ParseState, integer, ParseTypeListMode): integer
 local parse_typeargs_if_any: function(ps: ParseState, i: integer): integer, {TypeArgType}
 local parse_expression: function(ParseState, integer): integer, Node, integer
 local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string): integer, Node
-local parse_statements: function(ParseState, integer, ? boolean): integer, Node, {Comment}
+local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, FirstClassType, integer
@@ -3961,24 +3962,22 @@ local function get_attached_comments(token: Token): {Comment}
    if diff_y < 0 or diff_y > 1 then
       return nil
    end
-   local attached_comments = {last_comment}
-   for i = #token.comments - 1, 1, -1 do
-      local c = token.comments[i]
-      if is_long_comment(c) then
+   local first_n = 1
+   for i = #token.comments, 2, -1 do
+      local prev = token.comments[i - 1]
+      if is_long_comment(prev) then
+         first_n = i
          break
       end
       -- we want to attach only consecutive comments
-      if attached_comments[#attached_comments].y - c.y > 1 then
+      if token.comments[i].y - prev.y > 1 then
+         first_n = i
          break
       end
-      table.insert(attached_comments, c)
    end
 
-   local attached_cnt = #attached_comments
-   -- reverse to preserve the order
-   for i = 1, math.floor(attached_cnt / 2) do
-      attached_comments[i], attached_comments[attached_cnt - i + 1] = attached_comments[attached_cnt - i + 1], attached_comments[i]
-   end
+   local attached_comments =
+      table.move(token.comments, first_n, #token.comments, 1, {})
 
    return attached_comments
 end
@@ -4681,10 +4680,31 @@ local needs_local_or_global: {string : function(ParseState, integer):(integer, N
    ["enum"] = type_needs_local_or_global,
 }
 
-parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): integer, Node, {Comment}
+local function store_unattached_comments(node: Node, token: Token, item: Node)
+   for _, tc in ipairs(token.comments) do
+      local is_attached = false
+      if item.comments then
+         for _, nc in ipairs(item.comments) do
+            if tc == nc then
+               is_attached = true
+               break
+            end
+         end
+      end
+      if not is_attached then
+         if not node.unattached_comments then
+            node.unattached_comments = {}
+         end
+         table.insert(node.unattached_comments, tc)
+      else 
+         break
+      end
+   end
+end
+
+parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): integer, Node
    local node = new_node(ps, i, "statements")
    local item: Node
-   local unattached_comments: {Comment}
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
@@ -4715,25 +4735,8 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
       i, item = fn(ps, i)
 
       if item then
-         -- store unattached comments
          if toplevel and token.comments then
-            for _, tc in ipairs(token.comments) do
-               local is_attached = false
-               if item.comments then
-                  for _, nc in ipairs(item.comments) do
-                     if tc == nc then
-                        is_attached = true
-                        break
-                     end
-                  end
-               end
-               if not is_attached then
-                  if not unattached_comments then
-                     unattached_comments = {}
-                  end
-                  table.insert(unattached_comments, tc)
-               end
-            end
+            store_unattached_comments(node, token, item)
          end
          table.insert(node, item)
       elseif i > 1 then
@@ -4746,10 +4749,10 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    end
 
    end_at(node, ps.tokens[i])
-   return i, node, unattached_comments
+   return i, node
 end
 
-function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}, {Comment}
+function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
@@ -4764,19 +4767,19 @@ function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, par
       hashbang = ps.tokens[i].tk
       i = i + 1
    end
-   local _, node, unattached_comments = parse_statements(ps, i, true)
+   local _, node = parse_statements(ps, i, true)
    if hashbang then
       node.hashbang = hashbang
    end
 
    clear_redundant_errors(errs)
-   return node, ps.required_modules, unattached_comments
+   return node, ps.required_modules
 end
 
-function tl.parse(input: string, filename: string, parse_lang?: ParseLang): tl.Node, {Error}, {string}, {Comment}
+function tl.parse(input: string, filename: string, parse_lang?: ParseLang): tl.Node, {Error}, {string}
    local tokens, errs = tl.lex(input, filename)
-   local node, required_modules, unattached_comments = tl.parse_program(tokens, errs, filename, parse_lang)
-   return node, errs, required_modules, unattached_comments
+   local node, required_modules = tl.parse_program(tokens, errs, filename, parse_lang)
+   return node, errs, required_modules
 end
 
 end ----------------------------------------------------------------------------
@@ -15046,7 +15049,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
    end
    filename = filename or ""
 
-   local program, syntax_errors, _, unattached_comments = tl.parse(input, filename, parse_lang)
+   local program, syntax_errors, _ = tl.parse(input, filename, parse_lang)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
@@ -15055,8 +15058,7 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
          syntax_errors = syntax_errors,
-         env = env,
-         unattached_comments = unattached_comments
+         env = env
       }
       env.loaded[filename] = result
       table.insert(env.loaded_order, filename)
@@ -15066,7 +15068,6 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
    local result = tl.check(program, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
-   result.unattached_comments = unattached_comments
 
    return result
 end
