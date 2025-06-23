@@ -5,7 +5,6 @@ local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local errors = require("teal.errors")
-local type Error = errors.Error
 
 local file_checker = require("teal.checker.file_checker")
 
@@ -163,16 +162,6 @@ local type LoadFunction = tl.LoadFunction
 local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
 
-local function assert_no_errors(errs: {Error}, msg: string)
-   if #errs ~= 0 then
-      local out = {}
-      for _, err in ipairs(errs) do
-         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
-      end
-      error("Internal Compiler Error: " .. msg .. ":\n" .. table.concat(out), 2)
-   end
-end
-
 local function get_stdlib_compat(): {string:boolean}
    return {
       ["io"] = true,
@@ -201,16 +190,7 @@ local function set_special_function(t: Type, fname: SpecialFunctionName)
 end
 
 tl.new_env = function(opts?: EnvOptions): Env, string
-   opts = opts or {}
-
-   local env: Env = {
-      modules = {},
-      module_filenames = {},
-      loaded = {},
-      loaded_order = {},
-      globals = {},
-      defaults = opts.defaults or {},
-   }
+   local env = environment.empty(opts and opts.defaults)
 
    if env.defaults.gen_target == "5.4" and env.defaults.gen_compat ~= "off" then
       return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
@@ -221,21 +201,13 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      do
-         local prelude = require("teal.embed.prelude")
-         local program, syntax_errors = tl.parse(prelude, "prelude.d.tl", "tl")
-         assert_no_errors(syntax_errors, "prelude contains syntax errors")
-         local result = tl.check(program, "@prelude", {}, env)
-         assert_no_errors(result.type_errors, "prelude contains type errors")
-      end
+      local w: Where = { f = "@prelude", x = 1, y = 1 }
 
-      do
-         local stdlib = require("teal.embed.stdlib")
-         local program, syntax_errors = tl.parse(stdlib, "stdlib.d.tl", "tl")
-         assert_no_errors(syntax_errors, "standard library contains syntax errors")
-         local result = tl.check(program, "@stdlib", {}, env)
-         assert_no_errors(result.type_errors, "standard library contains type errors")
-      end
+      local typ = env:require_module(w, "teal.default.prelude", {})
+      assert(not typ is InvalidType, "prelude contains errors")
+
+      typ = env:require_module(w, "teal.default.stdlib", {})
+      assert(not typ is InvalidType, "standard library contains errors")
 
       stdlib_globals = env.globals
       environment.stdlib_globals = env.globals
@@ -271,7 +243,6 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       -- only global scope and vararg functions accept `...`:
       -- `@is_va` is an internal sentinel value which is
       -- `any` if `...` is accepted in this scope or `nil` if it isn't.
-      local w: Where = { f = "@prelude", x = 1, y = 1 }
       stdlib_globals["..."] = { t = a_type(w, "tuple", { tuple = { a_type(w, "string", {}) }, is_va = true } as TupleType) }
       stdlib_globals["@is_va"] = { t = a_type(w, "any", {}) }
 
@@ -289,9 +260,8 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       end
    end
 
-   env.require_module = require_file.require_module
 
-   if opts.predefined_modules then
+   if opts and opts.predefined_modules then
       for _, name in ipairs(opts.predefined_modules) do
          local tc_opts = {
             feat_lax = env.defaults.feat_lax,
