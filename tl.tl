@@ -8075,6 +8075,10 @@ do
          local ret = shallow_copy_new_type(t)
          ret.literal = nil
          return ret
+      elseif t.needs_compat then
+         local ret = shallow_copy_new_type(t)
+         ret.needs_compat = nil
+         return ret
       end
       return t
    end

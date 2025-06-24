@@ -1404,4 +1404,22 @@ describe("require", function()
       assert.same({}, result.type_errors)
    end)
 
+   it("needs_compat annotations do not propagate across module interfaces", function ()
+      util.mock_io(finally, {
+         ["foo.tl"] = [[
+            local VALUE = math.maxinteger
+
+            return { VALUE = VALUE }
+         ]],
+      })
+      local output, result = tl.gen([[
+         local foo = require("foo")
+
+         local foo_value = foo.VALUE
+      ]])
+      assert.same({}, result.syntax_errors)
+      assert.same({}, result.type_errors)
+      assert.same("op", result.ast[#result.ast].exps[1].kind)
+   end)
+
 end)
