@@ -3,14 +3,18 @@ local util = {
    os_sep    = win32 and "\\" or "/",
    os_tmp    = win32 and os.getenv("TEMP") or "/tmp",
    os_null   = win32 and "NUL" or "/dev/null",
-   os_join   = win32 and " & " or "",
-   os_set    = win32 and "set " or "",
+   os_join   = win32 and " & " or " ",
    os_cat    = win32 and "type " or "cat ",
 }
 
 function util.os_path(path)
-   return win32 and path:gsub("/", "\\\\") or path
+   return win32 and path:gsub("/", "\\") or path
 end
+
+function util.os_set(k, v)
+   return win32 and ("set \"" .. k .. "=" .. v:sub(2, -2) .."\"") or (k .. "=" .. string.format("%q", v))
+end
+
 
 if jit then
    jit.off()
@@ -176,9 +180,9 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
-local vars_prefix = { string.format(util.os_set .. "LUA_PATH=%q" .. util.os_join, package.path) }
+local vars_prefix = { util.os_set("LUA_PATH", util.os_path(package.path)) .. util.os_join }
 for i = 1, 4 do
-   table.insert(vars_prefix, string.format(util.os_set .. "LUA_PATH_5_%d=%q" .. util.os_join, i, package.path))
+   table.insert(vars_prefix, util.os_set("LUA_PATH_5_" .. tostring(i), util.os_path(package.path)) .. util.os_join)
 end
 
 local first_arg = 0
@@ -775,7 +779,7 @@ end
 --- removes leading whitespace from every line of a multiline string
 function util.dedent(s)
    local min, lines = math.huge, {}
-  
+
    for line in s:gmatch("([^\n]*)\n?") do
       local indent = line:match("^(%s*)%S")
       if indent then min = math.min(min, #indent) end
