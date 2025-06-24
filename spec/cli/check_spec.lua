@@ -33,6 +33,20 @@ describe("tl check", function()
          assert.match("0 errors detected", output, 1, true)
       end)
 
+      it("works if TL_DEBUG is set", function()
+         local name = util.write_tmp_file(finally, [[
+            local function add(a: number, b: number): number
+               return a + b
+            end
+
+            print(add(10, 20))
+         ]])
+         local pd = io.popen(util.os_set("TL_DEBUG", "1") .. util.os_join .. util.tl_cmd("check", name) .. " 2>" .. util.os_null, "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         assert.match("0 errors detected", output, 1, true)
+      end)
+
       it("reports number of errors in stderr and code 1 on type errors", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number
