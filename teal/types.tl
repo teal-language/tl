@@ -4,6 +4,9 @@ local TL_DEBUG = tldebug.TL_DEBUG
 local errors = require("teal.errors")
 local type Error = errors.Error
 
+local lexer = require("teal.lexer")
+local type Comment = lexer.Comment
+
 -- FIXME because of the module split, this needs to be global
 global is_numeric_type: function(t: Type): boolean
 
@@ -178,8 +181,10 @@ local record types
       interfaces_expanded: boolean
       fields: {string: Type}
       field_order: {string}
+      field_comments: {string: {{Comment}}}
       meta_fields: {string: Type}
       meta_field_order: {string}
+      meta_field_comments: {string: {{Comment}}}
       is_userdata: boolean
    end
 
@@ -334,6 +339,7 @@ local record types
       where self.typename == "enum"
 
       enumset: {string:boolean}
+      value_comments: {string:{Comment}}
    end
 
    lua_primitives: {TypeName:string}
