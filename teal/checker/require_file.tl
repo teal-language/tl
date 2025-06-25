@@ -79,7 +79,7 @@ function require_file.require_module(env: Env, w: Where, module_name: string, op
       }
       env.defaults = defaults
 
-      local found_result, err: Result, string = file_checker.check(found, env, fd)
+      local found_result, err: Result, string = file_checker.check(env, found, fd)
       assert(found_result, err)
 
       env.defaults = save_defaults

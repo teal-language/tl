@@ -5,3 +5,4 @@ tl.lua.bak
 /lua
 /lua_modules
 /.luarocks
+/_temp

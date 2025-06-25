@@ -6961,16 +6961,14 @@ self:expand_type(node, values, elements) })
    type_checker.check = function(ast, filename, opts, env)
       filename = filename or "?"
 
-      opts = opts or {}
-
       if not env then
          local err
-         env, err = environment.default()
-         env.defaults = opts
+         env, err = environment.new(opts)
          if err then
             return nil, err
          end
       end
+      opts = opts or env.defaults
 
       local self = {
          filename = filename,

@@ -6961,16 +6961,14 @@ do
    type_checker.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
       filename = filename or "?"
 
-      opts = opts or {}
-
       if not env then
          local err: string
-         env, err = environment.default()
-         env.defaults = opts
+         env, err = environment.new(opts)
          if err then
             return nil, err
          end
       end
+      opts = opts or env.defaults
 
       local self: TypeChecker = {
          filename = filename,
