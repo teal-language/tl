@@ -14,9 +14,8 @@ local type Result = environment.Result
 local record string_checker
 end
 
-function string_checker.check(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
+function string_checker.check(env: Env, input: string, filename?: string, parse_lang?: ParseLang): Result
    parse_lang = parse_lang or parser.lang_heuristic(filename, input)
-   env = env or environment.default(parse_lang)
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]

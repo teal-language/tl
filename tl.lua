@@ -1,8 +1,5 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
 local VERSION = "0.24.7+dev"
-
-local tldebug = require("teal.debug")
-local TL_DEBUG = tldebug.TL_DEBUG
 
 local errors = require("teal.errors")
 
@@ -11,12 +8,6 @@ local file_checker = require("teal.checker.file_checker")
 local lexer = require("teal.lexer")
 
 local types = require("teal.types")
-
-
-
-
-
-
 
 local a_type = types.a_type
 
@@ -139,10 +130,7 @@ local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 
-
 tl.check = type_checker.check
-tl.check_file = file_checker.check
-tl.check_string = string_checker.check
 tl.search_module = require_file.search_module
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
@@ -152,7 +140,6 @@ tl.parse = parser.parse
 tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
 tl.target_from_lua_version = lua_generator.target_from_lua_version
-tl.default_env = environment.default
 
 environment.set_require_module_fn(require_file.require_module)
 
@@ -162,131 +149,43 @@ environment.set_require_module_fn(require_file.require_module)
 
 
 
-local function get_stdlib_compat()
-   return {
-      ["io"] = true,
-      ["math"] = true,
-      ["string"] = true,
-      ["table"] = true,
-      ["utf8"] = true,
-      ["coroutine"] = true,
-      ["os"] = true,
-      ["package"] = true,
-      ["debug"] = true,
-      ["load"] = true,
-      ["loadfile"] = true,
-      ["assert"] = true,
-      ["pairs"] = true,
-      ["ipairs"] = true,
-      ["pcall"] = true,
-      ["xpcall"] = true,
-      ["rawlen"] = true,
-   }
+
+
+
+
+
+tl.check_file = function(filename, env, fd)
+   env = env or environment.new()
+   return file_checker.check(env, filename, fd)
 end
 
-local function set_special_function(t, fname)
-   t = types.resolve_for_special_function(t)
-   t.special_function_handler = fname
+tl.check_string = function(input, env, filename, parse_lang)
+   env = env or environment.new()
+   env.defaults.feat_lax = parse_lang == "lua" and "on" or "off"
+   return string_checker.check(env, input, filename)
 end
 
 tl.new_env = function(opts)
-   local env = environment.empty(opts and opts.defaults)
-
-   if env.defaults.gen_target == "5.4" and env.defaults.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   local env, err = environment.new(opts and opts.defaults)
+   if not env then
+      return nil, err
    end
 
-   local stdlib_globals = environment.stdlib_globals
-   if not stdlib_globals then
-      local tl_debug = TL_DEBUG
-      TL_DEBUG = nil
-
-      local w = { f = "@prelude", x = 1, y = 1 }
-
-      local typ = env:require_module(w, "teal.default.prelude", {})
-      assert(not (typ.typename == "invalid"), "prelude contains errors")
-
-      typ = env:require_module(w, "teal.default.stdlib", {})
-      assert(not (typ.typename == "invalid"), "standard library contains errors")
-
-      stdlib_globals = env.globals
-      environment.stdlib_globals = env.globals
-
-      TL_DEBUG = tl_debug
-
-
-      local math_t = (stdlib_globals["math"].t).def
-      local table_t = (stdlib_globals["table"].t).def
-      math_t.fields["maxinteger"].needs_compat = true
-      math_t.fields["mininteger"].needs_compat = true
-      table_t.fields["pack"].needs_compat = true
-      table_t.fields["unpack"].needs_compat = true
-
-
-      local string_t = (stdlib_globals["string"].t).def
-      set_special_function(string_t.fields["find"], "string.find")
-      set_special_function(string_t.fields["format"], "string.format")
-      set_special_function(string_t.fields["gmatch"], "string.gmatch")
-      set_special_function(string_t.fields["gsub"], "string.gsub")
-      set_special_function(string_t.fields["match"], "string.match")
-      set_special_function(string_t.fields["pack"], "string.pack")
-      set_special_function(string_t.fields["unpack"], "string.unpack")
-
-      set_special_function(stdlib_globals["assert"].t, "assert")
-      set_special_function(stdlib_globals["ipairs"].t, "ipairs")
-      set_special_function(stdlib_globals["pairs"].t, "pairs")
-      set_special_function(stdlib_globals["pcall"].t, "pcall")
-      set_special_function(stdlib_globals["xpcall"].t, "xpcall")
-      set_special_function(stdlib_globals["rawget"].t, "rawget")
-      set_special_function(stdlib_globals["require"].t, "require")
-
-
-
-
-      stdlib_globals["..."] = { t = a_type(w, "tuple", { tuple = { a_type(w, "string", {}) }, is_va = true }) }
-      stdlib_globals["@is_va"] = { t = a_type(w, "any", {}) }
-
-      env.globals = {}
-   end
-
-   local stdlib_compat = get_stdlib_compat()
-   for name, var in pairs(stdlib_globals) do
-      env.globals[name] = var
-      var.needs_compat = stdlib_compat[name]
-      local t = var.t
-      if t.typename == "typedecl" then
-
-         env.modules[name] = t
-      end
-   end
-
-
-   if opts and opts.predefined_modules then
-      for _, name in ipairs(opts.predefined_modules) do
-         local tc_opts = {
-            feat_lax = env.defaults.feat_lax,
-            feat_arity = env.defaults.feat_arity,
-         }
-         local w = { f = "@predefined", x = 1, y = 1 }
-         local module_type = env:require_module(w, name, tc_opts)
-
-         if module_type.typename == "invalid" then
-            return nil, string.format("Error: could not predefine module '%s'", name)
-         end
+   if opts.predefined_modules then
+      local ok
+      ok, err = environment.predefine(env, opts.predefined_modules)
+      if not ok then
+         return nil, err
       end
    end
 
    return env
 end
 
-
-
-
-
 tl.gen = function(input, env, opts, parse_lang)
-   parse_lang = parse_lang or parser.lang_heuristic(nil, input)
-   env = env or assert(environment.default(parse_lang), "Default environment initialization failed")
-   local result = tl.check_string(input, env)
+   env = env or environment.new()
+   env.defaults.feat_lax = parse_lang == "lua" and "on" or "off"
+   local result = string_checker.check(env, input)
 
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
@@ -313,7 +212,7 @@ local function tl_package_loader(module_name)
 
       local env = tl.package_loader_env
       if not env then
-         tl.package_loader_env = assert(environment.default(parse_lang, true), "Default environment initialization failed")
+         tl.package_loader_env = assert(environment.for_runtime(parse_lang), "Default environment initialization failed")
          env = tl.package_loader_env
       end
       local defaults = env.defaults
@@ -361,7 +260,7 @@ local function env_for(parse_lang, env_tbl)
       tl.load_envs = setmetatable({}, { __mode = "k" })
    end
 
-   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or environment.default(parse_lang, true)
+   tl.load_envs[env_tbl] = tl.load_envs[env_tbl] or environment.for_runtime(parse_lang)
    return tl.load_envs[env_tbl]
 end
 
@@ -373,7 +272,7 @@ tl.load = function(input, chunkname, mode, ...)
    end
 
    if not tl.package_loader_env then
-      tl.package_loader_env = environment.default(parse_lang, true)
+      tl.package_loader_env = environment.for_runtime(parse_lang)
    end
    local defaults = tl.package_loader_env.defaults
 

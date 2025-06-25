@@ -14,9 +14,8 @@ local environment = require("teal.environment")
 local string_checker = {}
 
 
-function string_checker.check(input, env, filename, parse_lang)
+function string_checker.check(env, input, filename, parse_lang)
    parse_lang = parse_lang or parser.lang_heuristic(filename, input)
-   env = env or environment.default(parse_lang)
 
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]

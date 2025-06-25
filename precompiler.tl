@@ -3,8 +3,9 @@
 package.path = "./?.lua;" .. package.path
 
 local tl = require("tl")
+local environment = require("teal.environment")
+local env = environment.construct()
 local types = require("teal.types")
-local env = tl.new_env()
 local typeid_ctr, typevar_ctr = types.internal_get_state()
 
 local put = table.insert

@@ -10,8 +10,8 @@ local read_file_skipping_bom = util.read_file_skipping_bom
 local file_checker = {}
 
 
-function file_checker.check(filename, env, fd)
-   if env and env.loaded and env.loaded[filename] then
+function file_checker.check(env, filename, fd)
+   if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
 
@@ -30,7 +30,7 @@ function file_checker.check(filename, env, fd)
       return nil, "could not read " .. filename .. ": " .. err
    end
 
-   return string_checker.check(input, env, filename)
+   return string_checker.check(env, input, filename)
 end
 
 return file_checker
