@@ -8,8 +8,8 @@ local file_checker = require("teal.checker.file_checker")
 local lexer = require("teal.lexer")
 
 local types = require("teal.types")
-local type TypeDeclType = types.TypeDeclType
-local a_type = types.a_type
+
+local package_loader = require("teal.package_loader")
 
 local parser = require("teal.parser")
 local type Node = parser.Node
@@ -26,9 +26,6 @@ local type_checker = require("teal.checker.type_checker")
 local type_reporter = require("teal.type_reporter")
 local type TypeReporter = type_reporter.TypeReporter
 local type TypeReport = type_reporter.TypeReport
-
-local util = require("teal.util")
-local read_file_skipping_bom = util.read_file_skipping_bom
 
 local environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
@@ -126,7 +123,6 @@ local record tl
    -- Private data:
    -----------------------------------------------------------------------------
 
-   package_loader_env: Env
    load_envs: { {any:any} : Env }
 end
 
@@ -134,6 +130,7 @@ tl.check = type_checker.check
 tl.search_module = require_file.search_module
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
+tl.loader = package_loader.install_loader
 tl.generate = lua_generator.generate
 tl.get_token_at = lexer.get_token_at
 tl.parse = parser.parse
@@ -148,7 +145,6 @@ local type GenTarget = tl.GenTarget
 local type LoadFunction = tl.LoadFunction
 local type LoadMode = tl.LoadMode
 local type GenerateOptions = tl.GenerateOptions
-
 
 --------------------------------------------------------------------------------
 -- High-level API
@@ -196,64 +192,9 @@ tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?:
    return code, result
 end
 
-local function tl_package_loader(module_name: string): any, any
-   local found_filename, fd, tried = tl.search_module(module_name, false)
-   if found_filename then
-      local parse_lang = parser.lang_heuristic(found_filename)
-      local input = read_file_skipping_bom(fd)
-      if not input then
-         return table.concat(tried, "\n\t")
-      end
-      fd:close()
-      local program, errs = tl.parse(input, found_filename, parse_lang)
-      if #errs > 0 then
-         error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
-      end
-
-      local env = tl.package_loader_env
-      if not env then
-         tl.package_loader_env = assert(environment.for_runtime(parse_lang), "Default environment initialization failed")
-         env = tl.package_loader_env
-      end
-      local defaults = env.defaults
-
-      local w = { f = found_filename, x = 1, y = 1 }
-      env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) } as TypeDeclType)
-
-      local result = tl.check(program, found_filename, defaults, env)
-
-      env.modules[module_name] = result.type
-
-      -- TODO: should this be a hard error? this seems analogous to
-      -- finding a lua file with a syntax error in it
-      local code = assert(tl.generate(program, defaults.gen_target, lua_generator.fast_opts))
-      local chunk, err = load(code, "@" .. found_filename, "t")
-      if chunk then
-         return function(modname: string, loader_data: string): any
-            if loader_data == nil then
-               loader_data = found_filename
-            end
-            local ret = chunk(modname, loader_data)
-            return ret
-         end, found_filename
-      else
-         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
-      end
-   end
-   return table.concat(tried, "\n\t")
-end
-
-function tl.loader()
-   if package.searchers then
-      table.insert(package.searchers, 2, tl_package_loader)
-   else
-      table.insert(package.loaders, 2, tl_package_loader)
-   end
-end
-
 local function env_for(parse_lang: ParseLang, env_tbl: {any:any}): Env
    if not env_tbl then
-      return assert(tl.package_loader_env)
+      return assert(package_loader.env)
    end
 
    if not tl.load_envs then
@@ -271,10 +212,10 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
-   if not tl.package_loader_env then
-      tl.package_loader_env = environment.for_runtime(parse_lang)
+   if not package_loader.env then
+      package_loader.env = environment.for_runtime(parse_lang)
    end
-   local defaults = tl.package_loader_env.defaults
+   local defaults = package_loader.env.defaults
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
    local result = tl.check(program, filename, defaults, env_for(parse_lang, ...))
