@@ -12,7 +12,8 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/gen/lua_generator.tl teal/variables.tl teal/type_reporter.tl \
 	teal/type_errors.tl teal/environment.tl teal/checker/checker.tl \
 	teal/checker/type_checker.tl teal/checker/file_checker.tl \
-	teal/checker/string_checker.tl teal/checker/require_file.tl tl.tl
+	teal/checker/string_checker.tl teal/checker/require_file.tl \
+	teal/package_loader.tl tl.tl
 
 all: selfbuild suite
 
