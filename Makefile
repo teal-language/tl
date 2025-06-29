@@ -12,11 +12,11 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/gen/lua_generator.tl teal/gen/lua_compat.tl teal/variables.tl teal/type_reporter.tl \
 	teal/macroexps.tl teal/metamethods.tl \
 	teal/type_errors.tl teal/environment.tl \
-	teal/checker/context.tl teal/checker/visitors.tl \
-	teal/checker/relations.tl teal/checker/special_functions.tl \
-	teal/checker/type_checker.tl teal/checker/node_checker.tl \
-	teal/checker/file_checker.tl teal/checker/string_checker.tl \
-	teal/checker/require_file.tl teal/package_loader.tl tl.tl
+	teal/check/context.tl teal/check/visitors.tl \
+	teal/check/relations.tl teal/check/special_functions.tl \
+	teal/check/type_checker.tl teal/check/node_checker.tl \
+	teal/check/file_checker.tl teal/check/string_checker.tl \
+	teal/check/require_file.tl teal/package_loader.tl tl.tl
 
 all: selfbuild suite
 

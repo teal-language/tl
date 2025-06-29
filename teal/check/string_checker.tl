@@ -1,4 +1,4 @@
-local visitors = require("teal.checker.visitors")
+local visitors = require("teal.check.visitors")
 
 local types = require("teal.types")
 local a_type = types.a_type
