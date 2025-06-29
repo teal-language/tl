@@ -1,4 +1,10 @@
 local record errors
+   interface Where
+      f: string
+      y: integer
+      x: integer
+   end
+
    enum WarningKind
       "unknown"
       "unused"
@@ -21,9 +27,36 @@ local record errors
       -- used temporarily for stable-sorting
       i: integer
    end
+
+   record ErrorContext
+      kind: string
+      name: string
+   end
 end
 
 local type Error = errors.Error
+local type Where = errors.Where
+
+function errors.new(msg: string): Error
+   return { msg = msg }
+end
+
+function errors.at(w: Where, msg: string): Error
+   return {
+      msg = msg,
+      x = assert(w.x),
+      y = assert(w.y),
+      filename = assert(w.f),
+   }
+end
+
+function errors.any(all_errs: {Error}): boolean, {Error}
+   if #all_errs == 0 then
+      return true
+   else
+      return false, all_errs
+   end
+end
 
 function errors.clear_redundant_errors(errs: {Error})
    local redundant: {integer} = {}

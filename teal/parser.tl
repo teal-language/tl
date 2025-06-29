@@ -6,6 +6,7 @@ local type Attribute = attributes.Attribute
 local is_attribute = attributes.is_attribute
 
 local errors = require("teal.errors")
+local type Where = errors.Where
 local type Error = errors.Error
 
 local types = require("teal.types")
@@ -31,13 +32,9 @@ local type PolyType = types.PolyType
 local type EnumType = types.EnumType
 local type FirstClassType = types.FirstClassType
 local type TypeName = types.TypeName
-local type Where = types.Where
 local a_type = types.a_type
 local raw_type = types.raw_type
 local simple_types = types.simple_types
-
-local facts = require("teal.facts")
-local type Fact = facts.Fact
 
 local lexer = require("teal.lexer")
 local type Token = lexer.Token
@@ -118,8 +115,6 @@ local record Node
 
    yend: integer
    xend: integer
-
-   known: Fact
 
    -- bidirectional inference
    expected: Type
@@ -223,6 +218,8 @@ local record Operator
    arity: integer
    op: string
    prec: integer
+   meta_on_operand: integer
+   needs_compat: boolean
 end
 
 local enum KeyParsed
@@ -2591,6 +2588,13 @@ function parser.lang_heuristic(filename?: string, input?: string): ParseLang
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
+end
+
+function parser.node_at(w: Where, n: Node): Node
+   n.f = assert(w.f)
+   n.x = w.x
+   n.y = w.y
+   return n
 end
 
 return parser

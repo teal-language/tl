@@ -6,6 +6,7 @@ local default_env = require("teal.precompiled.default_env")
 local errors = require("teal.errors")
 
 
+
 local lua_generator = require("teal.gen.lua_generator")
 
 local target_from_lua_version = lua_generator.target_from_lua_version
@@ -21,7 +22,6 @@ local types = require("teal.types")
 
 
 
-
 local a_type = types.a_type
 
 local type_reporter = require("teal.type_reporter")
@@ -31,6 +31,8 @@ local variables = require("teal.variables")
 
 
 local environment = { CheckOptions = {}, Env = {}, Result = {} }
+
+
 
 
 
