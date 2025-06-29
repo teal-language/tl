@@ -9,7 +9,6 @@ local types = require("teal.types")
 
 
 
-
 local a_type = types.a_type
 
 local parser = require("teal.parser")
@@ -18,6 +17,7 @@ local parser = require("teal.parser")
 
 
 local errors = require("teal.errors")
+
 
 
 
@@ -83,10 +83,21 @@ type_errors.context_name = {
    ["literal_table_item"] = "in table item",
 }
 
+function Errors:node_context(ctx, name)
+   assert(ctx)
+   local ec = ctx.expected_context
+   local cn = type_errors.context_name[ec and ec.kind or ctx.kind]
+   return (cn and cn .. ": " or "") .. (ec and ec.name and ec.name .. ": " or "") .. (name and name .. ": " or "")
+end
+
+function Errors:string_context(ctx, name)
+   assert(ctx)
+   local cn = ctx
+   return (cn .. ": " or "") .. (name and name .. ": " or "")
+end
+
 function Errors:get_context(ctx, name)
-   if not ctx then
-      return ""
-   end
+   assert(ctx)
    local ec = (ctx.kind ~= nil) and ctx.expected_context
    local cn = (type(ctx) == "string") and ctx or
    (ctx.kind ~= nil) and type_errors.context_name[ec and ec.kind or ctx.kind]
@@ -94,8 +105,10 @@ function Errors:get_context(ctx, name)
 end
 
 function Errors:add_in_context(w, ctx, msg, ...)
-   local prefix = self:get_context(ctx)
-   msg = prefix .. msg
+   if ctx then
+      local prefix = self:get_context(ctx)
+      msg = prefix .. msg
+   end
    return self:add(w, msg, ...)
 end
 
@@ -122,8 +135,8 @@ function Errors:invalid_at(w, msg, ...)
    return a_type(w, "invalid", {})
 end
 
-function Errors:add_unknown(node, name)
-   self:add_warning("unknown", node, "unknown variable: %s", name)
+function Errors:add_unknown(w, name)
+   self:add_warning("unknown", w, "unknown variable: %s", name)
 end
 
 function Errors:redeclaration_warning(at, var_name, var_kind, old_var)
@@ -305,10 +318,10 @@ function Errors:check_var_usage(scope, is_global)
    end
 end
 
-function Errors:add_unknown_dot(node, name)
+function Errors:add_unknown_dot(w, name)
    if not self.unknown_dots[name] then
       self.unknown_dots[name] = true
-      self:add_unknown(node, name)
+      self:add_unknown(w, name)
    end
 end
 

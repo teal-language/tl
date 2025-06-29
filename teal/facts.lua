@@ -1,8 +1,10 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
-local types = require("teal.types")
+local errors = require("teal.errors")
 
+
+local types = require("teal.types")
 
 
 
@@ -11,13 +13,17 @@ local a_type = types.a_type
 local show_type = types.show_type
 local unite = types.unite
 
-local checker = require("teal.checker.checker")
+local type_checker = require("teal.checker.type_checker")
 
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
-local facts = { TruthyFact = {}, NotFact = {}, AndFact = {}, OrFact = {}, EqFact = {}, IsFact = {} }
+local facts = { TruthyFact = {}, NotFact = {}, AndFact = {}, OrFact = {}, EqFact = {}, IsFact = {}, FactDatabase = {} }
+
+
+
+
 
 
 
@@ -107,6 +113,7 @@ local AndFact = facts.AndFact
 local OrFact = facts.OrFact
 local NotFact = facts.NotFact
 local TruthyFact = facts.TruthyFact
+local FactDatabase = facts.FactDatabase
 
 local IsFact_mt = {
    __tostring = function(f)
@@ -450,6 +457,52 @@ if TL_DEBUG_FACTS then
       eval_indent = eval_indent - 1
       return fcts
    end
+end
+
+function FactDatabase.new()
+   local self = {
+      db = {},
+   }
+   setmetatable(self, { __index = FactDatabase })
+   return self
+end
+
+function FactDatabase:set_truthy(w)
+   self.db[w] = FACT_TRUTHY
+end
+
+function FactDatabase:set_is(w, var, typ)
+   self.db[w] = IsFact({ var = var, typ = typ, w = w })
+end
+
+function FactDatabase:set_eq(w, var, typ)
+   self.db[w] = EqFact({ var = var, typ = typ, w = w })
+end
+
+function FactDatabase:set_or(w, e1, e2)
+   self.db[w] = OrFact({ f1 = self.db[e1] or FACT_TRUTHY, f2 = self.db[e2] or FACT_TRUTHY, w = w })
+end
+
+function FactDatabase:set_not(w, e1)
+   self.db[w] = facts.facts_not(w, self.db[e1])
+end
+
+function FactDatabase:set_and(w, e1, e2)
+   self.db[w] = facts.facts_and(w, self.db[e1], self.db[e2])
+end
+
+function FactDatabase:set_from(w, from)
+   if from then
+      self.db[w] = self.db[from]
+   end
+end
+
+function FactDatabase:unset(w)
+   self.db[w] = nil
+end
+
+function FactDatabase:get(w)
+   return self.db[w]
 end
 
 return facts

@@ -27,6 +27,14 @@ function util.binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boole
    end
 end
 
+function util.shallow_copy_table<T>(t: T): T
+   local copy: {any:any} = {}
+   for k, v in pairs(t as {any:any}) do
+      copy[k] = v
+   end
+   return copy as T
+end
+
 function util.sorted_keys<A,B>(m: {A:B}):{A}
    local keys = {}
    for k, _ in pairs(m) do
