@@ -79,7 +79,7 @@ local record tl
    -----------------------------------------------------------------------------
 
    check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
-   compat: function(result: Result)
+   apply_compat: function(result: Result)
    gen: function(string, ? Env, ? GenerateOptions): string, Result
    generate: function(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
    get_token_at: function(tks: {Token}, y: integer, x: integer): string
@@ -181,7 +181,7 @@ tl.new_env = function(opts: EnvOptions): Env, string
    return env
 end
 
-tl.compat = function(result: Result)
+tl.apply_compat = function(result: Result)
    if result.compat_applied then
       return
    end
