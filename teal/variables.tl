@@ -3,7 +3,9 @@ local type Attribute = attributes.Attribute
 
 local types = require("teal.types")
 local type Type = types.Type
+local type TypeDeclType = types.TypeDeclType
 local type NominalType = types.NominalType
+local type RecordLikeType = types.RecordLikeType
 
 local parser = require("teal.parser")
 local type Node = parser.Node
@@ -43,10 +45,35 @@ local record variables
    end
 end
 
+local type Scope = variables.Scope
 local type Variable = variables.Variable
 
 function variables.has_var_been_used(var: Variable): boolean
    return var.has_been_read_from or var.has_been_written_to
+end
+
+local function close_nested_records(t: TypeDeclType)
+   if t.closed then
+      return
+   end
+   local tdef = t.def
+   if tdef is RecordLikeType then
+      t.closed = true
+      for _, ft in pairs(tdef.fields) do
+         if ft is TypeDeclType then
+            close_nested_records(ft)
+         end
+      end
+   end
+end
+
+function variables.close_types(scope: Scope)
+   for _, var in pairs(scope.vars) do
+      local t = var.t
+      if t is TypeDeclType then
+         close_nested_records(t)
+      end
+   end
 end
 
 return variables

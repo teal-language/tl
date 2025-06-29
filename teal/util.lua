@@ -27,6 +27,14 @@ function util.binary_search(list, item, cmp)
    end
 end
 
+function util.shallow_copy_table(t)
+   local copy = {}
+   for k, v in pairs(t) do
+      copy[k] = v
+   end
+   return copy
+end
+
 function util.sorted_keys(m)
    local keys = {}
    for k, _ in pairs(m) do

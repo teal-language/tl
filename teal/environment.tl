@@ -5,6 +5,7 @@ local default_env = require("teal.precompiled.default_env")
 
 local errors = require("teal.errors")
 local type Error = errors.Error
+local type Where = errors.Where
 
 local lua_generator = require("teal.gen.lua_generator")
 local type GenTarget = lua_generator.Target
@@ -16,7 +17,6 @@ local type ParseLang = parser.ParseLang
 
 local types = require("teal.types")
 local type Type = types.Type
-local type Where = types.Where
 local type InvalidType = types.InvalidType
 local type RecordType = types.RecordType
 local type TupleType = types.TupleType
@@ -78,6 +78,8 @@ local record environment
       warnings: {Error}
       env: Env
       dependencies: {string:string} -- module name, file found
+      needs_compat: {string:boolean}
+      compat_applied: boolean
    end
 
    stdlib_globals: {string:Variable}

@@ -1,9 +1,11 @@
 local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
+local errors = require("teal.errors")
+local type Where = errors.Where
+
 local types = require("teal.types")
 local type InvalidType = types.InvalidType
-local type Where = types.Where
 local type Type = types.Type
 local type TypeVarType = types.TypeVarType
 local type UnionType = types.UnionType
@@ -11,8 +13,8 @@ local a_type = types.a_type
 local show_type = types.show_type
 local unite = types.unite
 
-local checker = require("teal.checker.checker")
-local type Checker = checker.Checker
+local type_checker = require("teal.checker.type_checker")
+local type TypeChecker = type_checker.TypeChecker
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
@@ -96,7 +98,11 @@ local record facts
    facts_not: function(w: Where, f1: Fact): Fact
    FACT_TRUTHY: TruthyFact
 
-   eval_fact: function(ck: Checker, f: Fact): {string:IsFact|EqFact}
+   record FactDatabase
+      db: {Where: Fact}
+   end
+
+   eval_fact: function(ck: TypeChecker, f: Fact): {string:IsFact|EqFact}
 end
 
 local type Fact = facts.Fact
@@ -107,6 +113,7 @@ local type AndFact = facts.AndFact
 local type OrFact = facts.OrFact
 local type NotFact = facts.NotFact
 local type TruthyFact = facts.TruthyFact
+local type FactDatabase = facts.FactDatabase
 
 local IsFact_mt: metatable<IsFact> = {
    __tostring = function(f: IsFact): string
@@ -217,7 +224,7 @@ local function unite_types(w: Where, t1: Type, t2: Type): Type, string
 end
 
 -- t1 ∩ t2
-local function intersect_types(ck: Checker, w: Where, t1: Type, t2: Type): Type, string
+local function intersect_types(ck: TypeChecker, w: Where, t1: Type, t2: Type): Type, string
    if t2 is UnionType then
       t1, t2 = t2, t1
    end
@@ -241,7 +248,7 @@ local function intersect_types(ck: Checker, w: Where, t1: Type, t2: Type): Type,
    end
 end
 
-local function resolve_if_union(ck: Checker, t: Type): Type
+local function resolve_if_union(ck: TypeChecker, t: Type): Type
    local rt = ck:to_structural(t)
    if rt is UnionType then
       return rt
@@ -250,7 +257,7 @@ local function resolve_if_union(ck: Checker, t: Type): Type
 end
 
 -- t1 - t2
-local function subtract_types(ck: Checker, w: Where, t1: Type, t2: Type): Type
+local function subtract_types(ck: TypeChecker, w: Where, t1: Type, t2: Type): Type
    local typs: {Type} = {}
 
    t1 = resolve_if_union(ck, t1)
@@ -283,10 +290,10 @@ local function subtract_types(ck: Checker, w: Where, t1: Type, t2: Type): Type
    return unite(w, typs)
 end
 
-local eval_not: function(Checker, f: Fact): {string:IsFact|EqFact}
-local not_facts: function(Checker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-local or_facts: function(Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
-local and_facts: function(Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+local eval_not: function(TypeChecker, f: Fact): {string:IsFact|EqFact}
+local not_facts: function(TypeChecker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+local or_facts: function(TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+local and_facts: function(TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
 
 local function invalid_from(f: IsFact): IsFact
    return IsFact { fact = "is", var = f.var, typ = a_type(f.w, "invalid", {}), w = f.w }
@@ -296,7 +303,7 @@ local macroexp an_invalid(w: Where): InvalidType
    return a_type(w, "invalid", {} as InvalidType)
 end
 
-not_facts = function(ck: Checker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+not_facts = function(ck: TypeChecker, fs: {string:IsFact|EqFact}): {string:IsFact|EqFact}
    local ret: {string:IsFact|EqFact} = {}
    for var, f in pairs(fs) do
       local typ = ck:find_var_type(f.var, "check_only")
@@ -322,7 +329,7 @@ not_facts = function(ck: Checker, fs: {string:IsFact|EqFact}): {string:IsFact|Eq
    return ret
 end
 
-eval_not = function(ck: Checker, f: Fact): {string:IsFact|EqFact}
+eval_not = function(ck: TypeChecker, f: Fact): {string:IsFact|EqFact}
    if not f then
       return {}
    elseif f is IsFact then
@@ -342,7 +349,7 @@ eval_not = function(ck: Checker, f: Fact): {string:IsFact|EqFact}
    end
 end
 
-or_facts = function(_ck: Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+or_facts = function(_ck: TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
    local ret: {string:IsFact|EqFact} = {}
 
    for var, f in pairs(fs2) do
@@ -359,7 +366,7 @@ or_facts = function(_ck: Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFa
    return ret
 end
 
-and_facts = function(ck: Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
+and_facts = function(ck: TypeChecker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFact|EqFact}): {string:IsFact|EqFact}
    local ret: {string:IsFact|EqFact} = {}
    local has: {FactType:boolean} = {}
 
@@ -395,7 +402,7 @@ and_facts = function(ck: Checker, fs1: {string:IsFact|EqFact}, fs2: {string:IsFa
    return ret
 end
 
-function facts.eval_fact(ck: Checker, f: Fact): {string:IsFact|EqFact}
+function facts.eval_fact(ck: TypeChecker, f: Fact): {string:IsFact|EqFact}
    if not f then
       return {}
    elseif f is IsFact then
@@ -434,7 +441,7 @@ end
 if TL_DEBUG_FACTS then
    local eval_indent = -1
    local real_eval_fact = facts.eval_fact
-   facts.eval_fact = function(self: Checker, known: Fact): {string: IsFact|EqFact}
+   facts.eval_fact = function(self: TypeChecker, known: Fact): {string: IsFact|EqFact}
       eval_indent = eval_indent + 1
       io.stderr:write(("   "):rep(eval_indent))
       io.stderr:write("eval fact: ", tostring(known), "\n")
@@ -450,6 +457,52 @@ if TL_DEBUG_FACTS then
       eval_indent = eval_indent - 1
       return fcts
    end
+end
+
+function FactDatabase.new(): FactDatabase
+   local self = {
+      db = {}
+   }
+   setmetatable(self, { __index = FactDatabase })
+   return self
+end
+
+function FactDatabase:set_truthy(w: Where)
+   self.db[w] = FACT_TRUTHY
+end
+
+function FactDatabase:set_is(w: Where, var: string, typ: Type)
+   self.db[w] = IsFact { var = var, typ = typ, w = w }
+end
+
+function FactDatabase:set_eq(w: Where, var: string, typ: Type)
+   self.db[w] = EqFact { var = var, typ = typ, w = w }
+end
+
+function FactDatabase:set_or(w: Where, e1: Where, e2: Where)
+   self.db[w] = OrFact { f1 = self.db[e1] or FACT_TRUTHY, f2 = self.db[e2] or FACT_TRUTHY, w = w }
+end
+
+function FactDatabase:set_not(w: Where, e1: Where)
+   self.db[w] = facts.facts_not(w, self.db[e1])
+end
+
+function FactDatabase:set_and(w: Where, e1: Where, e2: Where)
+   self.db[w] = facts.facts_and(w, self.db[e1], self.db[e2])
+end
+
+function FactDatabase:set_from(w: Where, from: Where)
+   if from then
+      self.db[w] = self.db[from]
+   end
+end
+
+function FactDatabase:unset(w: Where)
+   self.db[w] = nil
+end
+
+function FactDatabase:get(w: Where): Fact
+   return self.db[w]
 end
 
 return facts

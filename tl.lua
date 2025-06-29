@@ -17,11 +17,13 @@ local parser = require("teal.parser")
 
 local lua_generator = require("teal.gen.lua_generator")
 
+local lua_compat = require("teal.gen.lua_compat")
+
 local require_file = require("teal.checker.require_file")
 
 local string_checker = require("teal.checker.string_checker")
 
-local type_checker = require("teal.checker.type_checker")
+local visitors = require("teal.checker.visitors")
 
 local type_reporter = require("teal.type_reporter")
 
@@ -126,7 +128,8 @@ local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 
-tl.check = type_checker.check
+
+tl.check = visitors.check
 tl.search_module = require_file.search_module
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
@@ -176,6 +179,27 @@ tl.new_env = function(opts)
    end
 
    return env
+end
+
+tl.compat = function(result)
+   if result.compat_applied then
+      return
+   end
+   result.compat_applied = true
+
+   local gen_compat = result.env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
+   local gen_target = result.env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
+
+   local ok, errs = lua_compat.adjust_code(result.filename, result.ast, result.needs_compat, gen_compat, gen_target)
+   if not ok then
+      if not result.type_errors then
+         result.type_errors = {}
+      end
+      for _, err in ipairs(errs.errors) do
+         table.insert(result.type_errors, err)
+      end
+      errors.clear_redundant_errors(result.type_errors)
+   end
 end
 
 tl.gen = function(input, env, opts, parse_lang)

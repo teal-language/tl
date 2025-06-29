@@ -8,8 +8,8 @@ local is_attribute = attributes.is_attribute
 local errors = require("teal.errors")
 
 
-local types = require("teal.types")
 
+local types = require("teal.types")
 
 
 
@@ -35,9 +35,6 @@ local types = require("teal.types")
 local a_type = types.a_type
 local raw_type = types.raw_type
 local simple_types = types.simple_types
-
-local facts = require("teal.facts")
-
 
 local lexer = require("teal.lexer")
 
@@ -2591,6 +2588,13 @@ function parser.lang_heuristic(filename, input)
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
+end
+
+function parser.node_at(w, n)
+   n.f = assert(w.f)
+   n.x = w.x
+   n.y = w.y
+   return n
 end
 
 return parser

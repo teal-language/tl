@@ -2,6 +2,7 @@ local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local errors = require("teal.errors")
+local type Where = errors.Where
 local type Error = errors.Error
 
 local lexer = require("teal.lexer")
@@ -12,12 +13,6 @@ global is_numeric_type: function(t: Type): boolean
 
 local record types
    interface Node
-   end
-
-   interface Where
-      f: string
-      y: integer
-      x: integer
    end
 
    enum TypeName
@@ -342,12 +337,19 @@ local record types
       value_comments: {string:{Comment}}
    end
 
+   type InvalidOrTupleType = InvalidType | TupleType
+   type InvalidOrTypeDeclType = InvalidType | TypeDeclType
+
    lua_primitives: {TypeName:string}
    simple_types: {TypeName:boolean}
    table_types: {TypeName:boolean}
 
    a_type: function<T is Type>(w: Where, typename: TypeName, t: T): T
+   a_function: function(w: Where, t: FunctionType): FunctionType
+   a_vararg: function(w: Where, t: {Type}): TupleType
+
    edit_type: function(w: Where, t: Type, typename: TypeName): Type
+   ensure_not_method: function<T is Type>(t: T): T
    is_unknown: function(t: Type): boolean
    inferred_msg: function(t: Type, prefix?: string): string
    raw_type: function(f: string, y: integer, x: integer, typename: TypeName): Type
@@ -387,7 +389,6 @@ local type TupleTableType = types.TupleTableType
 local type PolyType = types.PolyType
 local type EnumType = types.EnumType
 local type TypeName = types.TypeName
-local type Where = types.Where
 
 global function is_numeric_type(t: Type): boolean
    return t.typename == "number" or t.typename == "integer"
@@ -708,6 +709,21 @@ local function a_type<T is Type>(w: Where, typename: TypeName, t: T): T
       setmetatable(ty, type_mt)
    end
    return t
+end
+
+local function a_function(w: Where, t: FunctionType): FunctionType
+   assert(t.min_arity)
+   return a_type(w, "function", t)
+end
+
+local macroexp a_tuple(w: Where, t: {Type}): TupleType
+   return a_type(w, "tuple", { tuple = t } as TupleType)
+end
+
+local function a_vararg(w: Where, t: {Type}): TupleType
+   local typ = a_tuple(w, t)
+   typ.is_va = true
+   return typ
 end
 
 local function raw_type(f: string, y: integer, x: integer, typename: TypeName): Type
@@ -1172,6 +1188,86 @@ function types.resolve_for_special_function(t: Type): FunctionType
    end
 end
 
+function types.drop_constant_value(t: Type): Type
+   if t is StringType and t.literal then
+      local ret = shallow_copy_new_type(t)
+      ret.literal = nil
+      return ret
+   elseif t.needs_compat then
+      local ret = shallow_copy_new_type(t)
+      ret.needs_compat = nil
+      return ret
+   end
+   return t
+end
+
+function types.type_at<T is Type>(w: Where, t: T): T
+   t.x = w.x
+   t.y = w.y
+   return t
+end
+
+function types.wrap_generic_if_typeargs<T is Type>(typeargs: {TypeArgType}, t: T): T | GenericType
+   if not typeargs then
+      return t
+   end
+
+   assert(not t is TypeDeclType)
+
+   local gt = a_type(t, "generic", { t = t } as GenericType)
+   gt.typeargs = typeargs
+   return gt
+end
+
+function types.show_arity(f: FunctionType): string
+   local nfargs = #f.args.tuple
+   if f.min_arity < nfargs then
+      if f.min_arity > 0 then
+         return "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. nfargs)
+      else
+         return (f.args.is_va and "any number" or "at most " .. nfargs)
+      end
+   else
+      return tostring(nfargs or 0)
+   end
+end
+
+function types.typedecl_to_nominal(w: Where, name: string, t: TypeDeclType, resolved?: Type): Type
+   local typevals: {TypeVarType}
+   local def = t.def
+   if def is GenericType then
+      typevals = {}
+      for _, a in ipairs(def.typeargs) do
+         table.insert(typevals, a_type(a, "typevar", {
+            typevar = a.typearg,
+            constraint = a.constraint,
+         } as TypeVarType))
+      end
+   end
+   local nom = a_type(w, "nominal", { names = { name } } as NominalType)
+   nom.typevals = typevals
+   nom.found = t
+   nom.resolved = resolved
+   return nom
+end
+
+local function ensure_not_method<T is Type>(t: T): T
+   if t is GenericType then
+      local tt = ensure_not_method(t.t)
+      if tt ~= t.t then
+         local gg = shallow_copy_new_type(t)
+         gg.t = tt
+         return gg
+      end
+   end
+
+   if t is FunctionType and t.is_method then
+      t = shallow_copy_new_type(t)
+      (t as FunctionType).is_method = false
+   end
+   return t
+end
+
 function types.internal_get_state(): integer, integer
    return fresh_typeid_ctr, fresh_typevar_ctr
 end
@@ -1185,7 +1281,10 @@ types.globals_typeid = new_typeid()
 types.simple_types = simple_types
 types.table_types = table_types
 types.a_type = a_type
+types.a_function = a_function
+types.a_vararg = a_vararg
 types.edit_type = edit_type
+types.ensure_not_method = ensure_not_method
 types.is_unknown = is_unknown
 types.inferred_msg = inferred_msg
 types.raw_type = raw_type
