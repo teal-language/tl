@@ -1,7 +1,7 @@
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 local type VarUse = type_checker.VarUse
 
-local context = require("teal.checker.context")
+local context = require("teal.check.context")
 local type Context = context.Context
 
 local tldebug = require("teal.debug")

@@ -1,31 +1,31 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local attributes = require("teal.attributes")
+local attributes = require("teal.attributes")
+local type Attribute = attributes.Attribute
 
+local type_checker = require("teal.check.type_checker")
+local type TypeChecker = type_checker.TypeChecker
+local type VarUse = type_checker.VarUse
+local type ArgCheckMode = type_checker.ArgCheckMode
+local type VarianceMode = type_checker.VarianceMode
 
-local type_checker = require("teal.checker.type_checker")
-
-
-
-
-
-local node_checker = require("teal.checker.node_checker")
-
+local node_checker = require("teal.check.node_checker")
+local type NodeChecker = node_checker.NodeChecker
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local environment = require("teal.environment")
-
-
-
+local type CheckOptions = environment.CheckOptions
+local type Env = environment.Env
+local type Feat = environment.Feat
 
 local errors = require("teal.errors")
-
-
-
+local type Error = errors.Error
+local type WarningKind = errors.WarningKind
+local type Where = errors.Where
 
 local facts = require("teal.facts")
-
-local FactDatabase = facts.FactDatabase
+local type Fact = facts.Fact
+local type FactDatabase = facts.FactDatabase
 local eval_fact = facts.eval_fact
 local facts_and = facts.facts_and
 local facts_not = facts.facts_not
@@ -33,40 +33,40 @@ local facts_not = facts.facts_not
 local macroexps = require("teal.macroexps")
 
 local types = require("teal.types")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+local type Type = types.Type
+local type GenericType = types.GenericType
+local type FirstOrderType = types.FirstOrderType
+local type StringType = types.StringType
+local type NumericType = types.NumericType
+local type IntegerType = types.IntegerType
+local type TypeDeclType = types.TypeDeclType
+local type NominalType = types.NominalType
+local type SelfType = types.SelfType
+local type ArrayLikeType = types.ArrayLikeType
+local type ArrayType = types.ArrayType
+local type RecordLikeType = types.RecordLikeType
+local type RecordType = types.RecordType
+local type InterfaceType = types.InterfaceType
+local type InvalidType = types.InvalidType
+local type InvalidOrTupleType = types.InvalidOrTupleType
+local type InvalidOrTypeDeclType = types.InvalidOrTypeDeclType
+local type UnknownType = types.UnknownType
+local type TupleType = types.TupleType
+local type TypeArgType = types.TypeArgType
+local type UnresolvedTypeArgType = types.UnresolvedTypeArgType
+local type UnresolvableTypeArgType = types.UnresolvableTypeArgType
+local type TypeVarType = types.TypeVarType
+local type MapType = types.MapType
+local type NilType = types.NilType
+local type EmptyTableType = types.EmptyTableType
+local type UnresolvedEmptyTableValueType = types.UnresolvedEmptyTableValueType
+local type FunctionType = types.FunctionType
+local type UnionType = types.UnionType
+local type TupleTableType = types.TupleTableType
+local type PolyType = types.PolyType
+local type EnumType = types.EnumType
+local type FirstClassType = types.FirstClassType
+local type TypeName = types.TypeName
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -84,25 +84,25 @@ local typedecl_to_nominal = types.typedecl_to_nominal
 local wrap_generic_if_typeargs = types.wrap_generic_if_typeargs
 
 local parser = require("teal.parser")
-
-
+local type Node = parser.Node
+local type NodeKind = parser.NodeKind
 local node_is_funcall = parser.node_is_funcall
 
-local relations = require("teal.checker.relations")
+local relations = require("teal.check.relations")
 
-local special_functions = require("teal.checker.special_functions")
+local special_functions = require("teal.check.special_functions")
 
 local traversal = require("teal.traversal")
-
-
+local type Visitor = traversal.Visitor
+local type MetaMode = traversal.MetaMode
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
 
 local type_reporter = require("teal.type_reporter")
-
+local type TypeCollector = type_reporter.TypeCollector
 
 local type_errors = require("teal.type_errors")
-local Errors = type_errors.Errors
+local type Errors = type_errors.Errors
 local ensure_not_abstract = type_errors.ensure_not_abstract
 
 local util = require("teal.util")
@@ -110,91 +110,91 @@ local sorted_keys = util.sorted_keys
 local shallow_copy_table = util.shallow_copy_table
 
 local variables = require("teal.variables")
-
-
-
+local type Variable = variables.Variable
+local type Scope = variables.Scope
+local type Specialization = variables.Specialization
 local has_var_been_used = variables.has_var_been_used
 
+--------------------------------------------------------------------------------
 
+local macroexp an_array(w: Where, t: Type): ArrayType
+   return a_type(w, "array", { elements = t } as ArrayType)
+end
 
+local macroexp a_map(w: Where, k: Type, v: Type): MapType
+   return a_type(w, "map", { keys = k, values = v } as MapType)
+end
 
+local macroexp an_invalid(w: Where): InvalidType
+   return a_type(w, "invalid", {} as InvalidType)
+end
 
+local macroexp a_tuple(w: Where, t: {Type}): TupleType
+   return a_type(w, "tuple", { tuple = t } as TupleType)
+end
 
+local macroexp an_unknown(w: Where): UnknownType
+   return a_type(w, "unknown", {} as UnknownType)
+end
 
+--------------------------------------------------------------------------------
 
+local record context
+   record Context is TypeChecker, NodeChecker
+      env: Env
+      st: {Scope}
+      fdb: FactDatabase
 
+      filename: string
+      errs: Errors
+      module_type: Type
 
+      subtype_relations: relations.TypeRelations
+      eqtype_relations: relations.TypeRelations
+      type_priorities: {TypeName:integer}
 
+      needs_compat: {string:boolean}
+      dependencies: {string:string}
+      collector: TypeCollector
 
+      cache_std_metatable_type: Type
 
+      feat_arity: boolean
+      feat_lax: boolean
 
+      type_check_funcall: function(self, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
 
+      expand_type: function(self, w: Where, old: Type, new: Type): Type
+      resolve_self: function(self, Type, resolve_interface?: boolean): Type, {Error}
 
+      get_rets: function(TupleType): TupleType
+   end
+end
 
+--------------------------------------------------------------------------------
 
+local type Context = context.Context
 
+--------------------------------------------------------------------------------
 
-
-
-
-
-
-local context = { Context = {} }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local Context = context.Context
-
-
-
-function Context:add_error(w, msg, t, ...)
+function Context:add_error(w: Where, msg: string, t?: Type, ...:Type)
    self.errs:add(w, msg, t, ...)
 end
 
-function Context:invalid_at(w, msg, ...)
+function Context:invalid_at(w: Where, msg: string, ...: Type): InvalidType
    return self.errs:invalid_at(w, msg, ...)
 end
 
-function Context:add_errors_prefixing(w, src, prefix, dst)
+function Context:add_errors_prefixing(w: Where, src: {Error}, prefix: string, dst?: {Error})
    self.errs:add_prefixing(w, src, prefix, dst)
 end
 
-function Context:add_warning(tag, w, fmt, ...)
+function Context:add_warning(tag: WarningKind, w: Where, fmt: string, ...: any)
    self.errs:add_warning(tag, w, fmt, ...)
 end
 
 do
-   local function get_real_var_from_lower_scope(st, i, name)
+   local function get_real_var_from_lower_scope(st: {Scope}, i: integer, name: string): Variable
       for j = i - 1, 1, -1 do
          local scope = st[j]
          local sv = scope.vars[name]
@@ -204,7 +204,7 @@ do
       end
    end
 
-   function Context:find_var(name, use)
+   function Context:find_var(name: string, use?: VarUse): Variable, integer, Attribute
       for i = #self.st, 1, -1 do
          local scope = self.st[i]
          local var = scope.vars[name]
@@ -224,14 +224,14 @@ do
                   real_var = get_real_var_from_lower_scope(self.st, i, name) or real_var
                end
                if use == "use_type" then
-
+                  --var.used_as_type = true
                   real_var.used_as_type = true
                elseif use ~= "check_only" then
                   if use == "lvalue" then
-
+                     --var.has_been_written_to = true
                      real_var.has_been_written_to = true
                   else
-
+                     --var.has_been_read_from = true
                      real_var.has_been_read_from = true
                   end
                end
@@ -243,11 +243,11 @@ do
    end
 end
 
-function Context:simulate_g()
-
-   local globals = {}
+function Context:simulate_g(): RecordType, Attribute
+   -- this is a static approximation of _G
+   local globals: {string:Type} = {}
    for k, v in pairs(self.st[1].vars) do
-      if k:sub(1, 1) ~= "@" then
+      if k:sub(1,1) ~= "@" then
          globals[k] = v.t
       end
    end
@@ -260,22 +260,22 @@ function Context:simulate_g()
 end
 
 do
-   local function unwrap_for_find_type(typ)
-      if typ.typename == "nominal" and typ.found then
+   local function unwrap_for_find_type(typ: Type): Type
+      if typ is NominalType and typ.found then
          return unwrap_for_find_type(typ.found)
-      elseif typ.typename == "typedecl" then
+      elseif typ is TypeDeclType then
          return unwrap_for_find_type(typ.def)
-      elseif typ.typename == "generic" then
+      elseif typ is GenericType then
          return unwrap_for_find_type(typ.t)
       end
       return typ
    end
 
-   function Context:find_type(names)
+   function Context:find_type(names: {string}): TypeDeclType, TypeArgType
       local typ = self:find_var_type(names[1], "use_type")
       if not typ then
          if #names == 1 and names[1] == "metatable" then
-            return self:find_type({ "_metatable" })
+            return self:find_type({"_metatable"})
          end
          return nil
       end
@@ -285,7 +285,7 @@ do
             return nil
          end
 
-         local fields = typ.fields and typ.fields
+         local fields = typ is RecordLikeType and typ.fields
          if not fields then
             return nil
          end
@@ -296,47 +296,47 @@ do
          end
       end
 
-
-      if typ and typ.typename == "nominal" then
+      -- FIXME doing this at the and lets all nominals be used as types (see #891)
+      if typ and typ is NominalType then
          typ = typ.found
       end
       if typ == nil then
          return nil
       end
 
-      if typ.typename == "typedecl" then
+      if typ is TypeDeclType then
          return typ
-      elseif typ.typename == "typearg" then
+      elseif typ is TypeArgType then
          return nil, typ
       end
    end
 end
 
-function Context:assert_resolved_typevars_at(w, t)
+function Context:assert_resolved_typevars_at(w: Where, t: Type): Type
    local ret, errs = self:resolve_typevars(t)
    if errs then
       assert(w.y)
       self.errs:add_prefixing(w, errs, "")
    end
 
-
+   -- recurse until fixed point
    if ret.typeid ~= t.typeid then
       return self:assert_resolved_typevars_at(w, ret)
    end
 
-   if ret == t or t.typename == "typevar" then
+   if ret == t or t is TypeVarType then
       ret = shallow_copy_new_type(ret)
    end
    return type_at(w, ret)
 end
 
-function Context:infer_at(w, t)
+function Context:infer_at<T is Type>(w: Where, t: T): T
    local ret = self:assert_resolved_typevars_at(w, t)
-   if ret.typename == "invalid" then
-      ret = t
+   if ret is InvalidType then
+      ret = t -- errors are produced by assert_resolved_typevars_at
    end
 
-   if ret == t or t.typename == "typevar" then
+   if ret == t or t is TypeVarType then
       ret = shallow_copy_new_type(ret)
    end
    assert(w.f)
@@ -344,7 +344,7 @@ function Context:infer_at(w, t)
    return ret
 end
 
-function Context:infer_emptytable(emptytable, fresh_t)
+function Context:infer_emptytable(emptytable: EmptyTableType, fresh_t: Type)
    local nst = emptytable.is_global and 1 or #self.st
    for i = nst, 1, -1 do
       local scope = self.st[i]
@@ -354,21 +354,21 @@ function Context:infer_emptytable(emptytable, fresh_t)
    end
 end
 
-function Context:infer_emptytable_from_unresolved_value(w, u, values)
+function Context:infer_emptytable_from_unresolved_value(w: Where, u: UnresolvedEmptyTableValueType, values: Type)
    local et = u.emptytable_type
-   assert(et.typename == "emptytable", u.typename)
+   assert(et is EmptyTableType, u.typename)
    local keys = et.keys
-   if not (values.typename == "emptytable" or values.typename == "unresolved_emptytable_value") then
-      local infer_to = is_numeric_type(keys) and
-      a_type(w, "array", { elements = values }) or
-      a_type(w, "map", { keys = keys, values = values })
+   if not (values is EmptyTableType or values is UnresolvedEmptyTableValueType) then
+      local infer_to = keys is NumericType -- ideally integer only
+                       and an_array(w, values)
+                       or  a_map(w, keys, values)
       self:infer_emptytable(et, self:infer_at(w, infer_to))
    end
 end
 
-function Context:check_if_redeclaration(new_name, node, t)
-   local old
-   if simple_types[new_name] then
+function Context:check_if_redeclaration(new_name: string, node: Node, t: Type)
+   local old: Variable
+   if simple_types[new_name as TypeName] then
       if t.typename ~= "typedecl" then
          return
       end
@@ -388,13 +388,13 @@ function Context:check_if_redeclaration(new_name, node, t)
 end
 
 do
+   local record ResolveTypeVarState
+      ctx: Context
+      resolved: {string:Type}
+   end
 
-
-
-
-
-   local resolve_typevar_fns = {
-      ["typevar"] = function(s, t)
+   local resolve_typevar_fns: types.TypeFunctionMap<ResolveTypeVarState> = {
+      ["typevar"] = function(s: ResolveTypeVarState, t: TypeVarType): Type, boolean
          local rt = s.ctx:find_var_type(t.typevar)
          if not rt then
             return t, false
@@ -407,7 +407,7 @@ do
       end,
    }
 
-   local function clear_resolved_typeargs(copy, resolved)
+   local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
       for i = #copy.typeargs, 1, -1 do
          local r = resolved[copy.typeargs[i].typearg]
          if r then
@@ -420,26 +420,26 @@ do
       return copy
    end
 
-   function Context:resolve_typevars(t)
-      local state = {
+   function Context:resolve_typevars(t: Type): FirstClassType, {Error}
+      local state: ResolveTypeVarState = {
          ctx = self,
          resolved = {},
       }
       local rt, errs = types.map(state, t, resolve_typevar_fns)
       if errs then
-         return rt, errs
+         return rt as FirstClassType, errs
       end
 
-      if rt.typename == "generic" then
+      if rt is GenericType then
          rt = clear_resolved_typeargs(rt, state.resolved)
       end
 
-      return rt
+      return rt as FirstClassType
    end
 end
 
 do
-   local function specialize_var(scope, node, name, t, attribute, specialization)
+   local function specialize_var(scope: Scope, node: Node, name: string, t: Type, attribute: Attribute, specialization: Specialization): Variable
       local var = scope.vars[name]
       if var then
          if var.is_specialized then
@@ -466,7 +466,7 @@ do
       return var
    end
 
-   function Context:add_var(node, name, t, attribute, specialization)
+   function Context:add_var(node: Node, name: string, t: Type, attribute?: Attribute, specialization?: Specialization): Variable
       if self.feat_lax and node and is_unknown(t) and (name ~= "self" and name ~= "...") and not specialization then
          self.errs:add_unknown(node, name)
       end
@@ -478,7 +478,7 @@ do
          self.collector.add_to_symbol_list(node, name, t)
       end
 
-      local scope = self.st[#self.st]
+      local scope <const> = self.st[#self.st]
       if specialization then
          return specialize_var(scope, node, name, t, attribute, specialization)
       end
@@ -494,8 +494,8 @@ do
 
       local var = scope.vars[name]
       if var and not has_var_been_used(var) then
-
-
+         -- the old var is removed from the scope and won't be checked when it closes,
+         -- so check it here
          self.errs:unused_warning(name, var)
       end
 
@@ -505,29 +505,29 @@ do
       return var
    end
 
-   function Context:add_implied_var(name, t)
+   function Context:add_implied_var(name: string, t: Type)
       self:add_var(nil, name, t)
    end
 end
 
-function Context:fresh_typeargs(g)
+function Context:fresh_typeargs(g: GenericType): GenericType
    local newg, errs = types.fresh_typeargs(g)
-   if newg.typename == "invalid" then
+   if newg is InvalidType then
       self.errs:collect(errs)
       return g
    end
    return newg
 end
 
-function Context:find_var_type(name, use)
+function Context:find_var_type(name: string, use?: VarUse): Type, Attribute, Type
    local var = self:find_var(name, use)
    if var then
       local t = var.t
-      if t.typename == "unresolved_typearg" then
+      if t is UnresolvedTypeArgType then
          return nil, nil, t.constraint
       end
 
-      if t.typename == "generic" then
+      if t is GenericType then
          t = self:fresh_typeargs(t)
       end
 
@@ -536,17 +536,17 @@ function Context:find_var_type(name, use)
 end
 
 do
-   local function unresolved_typeargs_for(g)
+   local function unresolved_typeargs_for(g: GenericType): {Type}
       local ts = {}
       for _, ta in ipairs(g.typeargs) do
          table.insert(ts, a_type(ta, "unresolved_typearg", {
-            constraint = ta.constraint,
-         }))
+            constraint = ta.constraint
+         } as UnresolvedTypeArgType))
       end
       return ts
    end
 
-   function Context:apply_generic(w, g, typeargs)
+   function Context:apply_generic(w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType, {TypeArgType}
       if not g.fresh then
          g = self:fresh_typeargs(g)
       end
@@ -566,7 +566,7 @@ do
          return nil
       end
 
-      if applied.typename == "generic" then
+      if applied is GenericType then
          return applied.t, g.typeargs
       else
          return applied, g.typeargs
@@ -574,19 +574,19 @@ do
    end
 end
 
-function Context:add_self_type(w, def)
-   self:add_var(nil, "@self", a_type(w, "typedecl", { def = def }))
+function Context:add_self_type(w: Where, def: Type)
+   self:add_var(nil, "@self", a_type(w, "typedecl", { def = def } as TypeDeclType))
 end
 
-function Context:widen_in_scope(n, var)
+function Context:widen_in_scope(n: integer, var: string): boolean
    local scope = self.st[n]
    local v = scope.vars[var]
    assert(v, "no " .. var .. " in scope")
    local specialization = scope.vars[var].is_specialized
-   if (not specialization) or
-      not (specialization == "narrow" or
-      specialization == "narrowed_declaration") then
-
+   if (not specialization)
+      or not (specialization == "narrow"
+      or specialization == "narrowed_declaration")
+   then
       return false
    end
 
@@ -594,7 +594,7 @@ function Context:widen_in_scope(n, var)
    if n ~= top then
       local t = v.specialized_from
       if not t then
-         local old
+         local old: Variable
          for i = n - 1, 1, -1 do
             old = self.st[i].vars[var]
             if old then
@@ -608,7 +608,7 @@ function Context:widen_in_scope(n, var)
             end
          end
 
-
+         -- this should only trigger in generated compat code
          if not t then
             return false
          end
@@ -633,7 +633,7 @@ function Context:widen_in_scope(n, var)
 end
 
 
-function Context:widen_back_var(name)
+function Context:widen_back_var(name: string): boolean
    local widened = false
    for i = #self.st, 1, -1 do
       local scope = self.st[i]
@@ -648,7 +648,7 @@ function Context:widen_back_var(name)
    return widened
 end
 
-function Context:collect_if_widens(widens)
+function Context:collect_if_widens(widens: {string:boolean}): {string:boolean}
    local st = self.st
    local scope = st[#st]
    if scope.widens then
@@ -661,7 +661,7 @@ function Context:collect_if_widens(widens)
    return widens
 end
 
-function Context:widen_all(widens, widen_types)
+function Context:widen_all(widens: {string:boolean}, widen_types: {string:Type})
    for name, _ in pairs(widens) do
       local curr = self:find_var(name, "check_only")
       local prev = widen_types[name]
@@ -671,7 +671,7 @@ function Context:widen_all(widens, widen_types)
    end
 end
 
-function Context:begin_scope(node)
+function Context:begin_scope(node: Node)
    table.insert(self.st, { vars = {} })
 
    if self.collector and node then
@@ -683,11 +683,11 @@ function Context:begin_implied_scope()
    self:begin_scope(nil)
 end
 
-function Context:end_scope(node)
+function Context:end_scope(node: Node)
    local st = self.st
    local scope = st[#st]
 
-   local widen_types
+   local widen_types: {string:Type}
    if scope.widens then
       widen_types = {}
       for name, _ in pairs(scope.widens) do
@@ -747,7 +747,7 @@ function Context:end_implied_scope()
    self:end_scope(nil)
 end
 
-function Context:begin_scope_transaction(node)
+function Context:begin_scope_transaction(node: Node)
    self:begin_scope(node)
    local st = self.st
    st[#st].is_transaction = true
@@ -768,7 +768,7 @@ function Context:rollback_scope_transaction()
    end
 end
 
-function Context:commit_scope_transaction(node)
+function Context:commit_scope_transaction(node: Node)
    local st = self.st
    local scope = st[#st]
    local next_scope = st[#st - 1]
@@ -791,7 +791,7 @@ function Context:commit_scope_transaction(node)
 end
 
 do
-   local function find_nominal_type_decl(self, t)
+   local function find_nominal_type_decl(self: Context, t: NominalType): Type, TypeDeclType
       if t.resolved then
          return t.resolved
       end
@@ -801,29 +801,29 @@ do
          return self.errs:invalid_at(t, "unknown type %s", t)
       end
 
-      if found.typename == "typedecl" and found.is_alias then
+      if found is TypeDeclType and found.is_alias then
          local def = found.def
-         if def.typename == "nominal" then
+         if def is NominalType then
             found = def.found
          end
-
+         -- if found.def is GenericType, return found as-is
       end
 
       if not found then
          return self.errs:invalid_at(t, table.concat(t.names, ".") .. " is not a resolved type")
       end
 
-      if not (found.typename == "typedecl") then
+      if not found is TypeDeclType then
          return self.errs:invalid_at(t, table.concat(t.names, ".") .. " is not a type")
       end
 
       local def = found.def
       if def.typename == "circular_require" then
-
+         -- return, but do not store resolution
          return def
       end
 
-      assert(not (def.typename == "nominal"))
+      assert(not def is NominalType)
 
       t.found = found
 
@@ -834,10 +834,10 @@ do
       return nil, found
    end
 
-   local resolve_decl_in_nominal
+   local resolve_decl_in_nominal: function(self: Context, t: NominalType, found: TypeDeclType): Type
    do
-      local function check_metatable_contract(self, tv, ret)
-         if not ret or not (tv.typename == "nominal") then
+      local function check_metatable_contract(self: Context, tv: Type, ret: Type)
+         if not ret or not tv is NominalType then
             return
          end
          local found = tv.found
@@ -845,7 +845,7 @@ do
             return
          end
          local rec = found.def
-         if not (rec.fields and rec.meta_fields and ret.fields) then
+         if not (rec is RecordLikeType and rec.meta_fields and ret is RecordLikeType) then
             return
          end
          for fname, ftype in pairs(rec.meta_fields) do
@@ -858,11 +858,11 @@ do
          end
       end
 
-      local function match_typevals(self, t, def)
+      local function match_typevals(self: Context, t: NominalType, def: GenericType): Type
          if not t.typevals then
-
+            -- HACK: accept function nominal without arguments
             local deft = def.t
-            if (not (deft.typename == "function")) and (not (deft.typename == "poly")) then
+            if (not deft is FunctionType) and (not deft is PolyType) then
                self.errs:add(t, "missing type arguments in %s", def)
                return nil
             end
@@ -883,13 +883,13 @@ do
          return ret
       end
 
-      resolve_decl_in_nominal = function(self, t, found)
+      resolve_decl_in_nominal = function(self: Context, t: NominalType, found: TypeDeclType): Type
          local def = found.def
-         local resolved
-         if def.typename == "generic" then
+         local resolved: Type
+         if def is GenericType then
             resolved = match_typevals(self, t, def)
             if not resolved then
-               resolved = a_type(t, "invalid", {})
+               resolved = an_invalid(t)
             end
          elseif t.typevals then
             resolved = self.errs:invalid_at(t, "unexpected type argument")
@@ -903,7 +903,7 @@ do
       end
    end
 
-   function Context:resolve_nominal(t)
+   function Context:resolve_nominal(t: NominalType): Type
       local immediate, found = find_nominal_type_decl(self, t)
       if immediate then
          return immediate
@@ -912,51 +912,51 @@ do
       return resolve_decl_in_nominal(self, t, found)
    end
 
-   function Context:resolve_typealias(ta)
+   function Context:resolve_typealias(ta: TypeDeclType): InvalidOrTypeDeclType
       local def = ta.def
 
       local nom = def
-      if def.typename == "generic" then
+      if def is GenericType then
          nom = def.t
       end
 
-      if not (nom.typename == "nominal") then
+      if not nom is NominalType then
          return ta
       end
-
+      -- given a typealias that points to a nominal,
 
       local immediate, found = find_nominal_type_decl(self, nom)
-
-      if immediate and (immediate.typename == "invalid" or immediate.typename == "typedecl") then
+      -- if it was previously resolved (or a circular require, or an error), return that;
+      if immediate and immediate is InvalidOrTypeDeclType then
          return immediate
       end
 
-
+      -- if nominal has no type arguments, resolve alias to that;
       if not nom.typevals then
          nom.resolved = found
          return found
       end
 
+      -- otherwise, this can't be an alias.
 
-
-
+      -- resolve the nominal into a structural type
       local struc = resolve_decl_in_nominal(self, nom, found or nom.found)
 
-      if def.typename == "generic" then
+      if def is GenericType then
          struc = wrap_generic_if_typeargs(def.typeargs, struc)
       end
 
-
-      local td = a_type(ta, "typedecl", { def = struc })
+      -- wrap it into a new non-alias typedecl
+      local td = a_type(ta, "typedecl", { def = struc } as TypeDeclType)
       nom.resolved = td
 
-
+      -- and return it
       return td
    end
 end
 
-function Context:arg_check(w, all_errs, a, b, v, mode, n)
-   local ok, err, errs
+function Context:arg_check(w: Where, all_errs: {Error}, a: Type, b: Type, v: VarianceMode, mode: ArgCheckMode, n?: integer): boolean
+   local ok, err, errs: boolean, string, {Error}
 
    if v == "covariant" then
       ok, errs = self:is_a(a, b)
@@ -975,7 +975,7 @@ function Context:arg_check(w, all_errs, a, b, v, mode, n)
       ok, errs = self:same_type(a, b)
    end
 
-   if ok and b.typename == "nominal" then
+   if ok and b is NominalType then
       local rb = self:resolve_nominal(b)
       ok, err = ensure_not_abstract(rb)
       if not ok then
@@ -990,30 +990,30 @@ function Context:arg_check(w, all_errs, a, b, v, mode, n)
    return true
 end
 
-function Context:to_structural(t)
-   assert(not (t.typename == "tuple"))
-   if t.typename == "typevar" and t.constraint then
+function Context:to_structural(t: Type): Type
+   assert(not t is TupleType)
+   if t is TypeVarType and t.constraint then
       t = t.constraint
    end
-   if t.typename == "nominal" then
+   if t is NominalType then
       t = self:resolve_nominal(t)
    end
    return t
 end
 
-function Context:arraytype_from_tuple(w, tupletype)
-
+function Context:arraytype_from_tuple(w: Where, tupletype: TupleTableType): ArrayType, {Error}
+   -- first just try a basic union
    local element_type = unite(w, tupletype.types, true)
-   local valid = (not (element_type.typename == "union")) and true or is_valid_union(element_type)
+   local valid = (not element_type is UnionType) and true or is_valid_union(element_type)
    if valid then
-      return a_type(w, "array", { elements = element_type })
+      return an_array(w, element_type)
    end
 
-
-   local arr_type = a_type(w, "array", { elements = tupletype.types[1] })
+   -- failing a basic union, expand the types
+   local arr_type = an_array(w, tupletype.types[1])
    for i = 2, #tupletype.types do
-      local expanded = self:expand_type(w, arr_type, a_type(w, "array", { elements = tupletype.types[i] }))
-      if not (expanded.typename == "array") then
+      local expanded = self:expand_type(w, arr_type, an_array(w, tupletype.types[i]))
+      if not expanded is ArrayType then
          return nil, { types.error("unable to convert tuple %s to array", tupletype) }
       end
       arr_type = expanded
@@ -1021,30 +1021,30 @@ function Context:arraytype_from_tuple(w, tupletype)
    return arr_type
 end
 
-function Context:type_of_self(w)
+function Context:type_of_self(w: Where): Type, TypeDeclType
    local t = self:find_var_type("@self")
    if not t then
-      return a_type(w, "invalid", {}), nil
+      return an_invalid(w), nil
    end
-   assert(t.typename == "typedecl")
+   assert(t is TypeDeclType)
    return t.def, t
 end
 
-
-function Context:is_a(t1, t2)
+-- subtyping comparison
+function Context:is_a(t1: Type, t2: Type): boolean, {Error}
    return relations.compare_types(self, self.type_priorities, self.subtype_relations, t1, t2)
 end
 
-
-function Context:same_type(t1, t2)
-
-
+-- invariant type comparison
+function Context:same_type(t1: Type, t2: Type): boolean, {Error}
+   -- except for error messages, behavior is the same as
+   -- `return (is_a(t1, t2) and self:is_a(t2, t1))`
    return relations.compare_types(self, self.type_priorities, self.eqtype_relations, t1, t2)
 end
 
 if TL_DEBUG then
    local orig_is_a = Context.is_a
-   Context.is_a = function(self, t1, t2)
+   Context.is_a = function(self: Context, t1: Type, t2: Type): boolean, {Error}
       assert(type(t1) == "table")
       assert(type(t2) == "table")
 
@@ -1058,7 +1058,7 @@ if TL_DEBUG then
    end
 end
 
-function Context:same_in_all_union_entries(u, check)
+function Context:same_in_all_union_entries<T is Type, F is Type>(u: UnionType, check: function(Type): (T, F)): F
    assert(#u.types > 0)
 
    local t1, f = check(u.types[1])
@@ -1074,13 +1074,13 @@ function Context:same_in_all_union_entries(u, check)
    return f
 end
 
-function Context:same_call_mt_in_all_union_entries(u)
-   return self:same_in_all_union_entries(u, function(t)
+function Context:same_call_mt_in_all_union_entries(u: UnionType): FunctionType
+   return self:same_in_all_union_entries(u, function(t: Type): (TupleType, FunctionType)
       t = self:to_structural(t)
-      if t.fields then
+      if t is RecordLikeType then
          local call_mt = t.meta_fields and t.meta_fields["__call"]
-         if call_mt.typename == "function" then
-            local args_tuple = a_type(u, "tuple", { tuple = {} })
+         if call_mt is FunctionType then
+            local args_tuple = a_tuple(u, {})
             for i = 2, #call_mt.args.tuple do
                table.insert(args_tuple.tuple, call_mt.args.tuple[i])
             end
@@ -1090,46 +1090,46 @@ function Context:same_call_mt_in_all_union_entries(u)
    end)
 end
 
-function Context:resolve_for_call(func, args, is_method)
-
+function Context:resolve_for_call(func: Type, args: TupleType, is_method: boolean): Type, boolean
+   -- resolve unknown in lax mode, produce a general unknown function
    if self.feat_lax and is_unknown(func) then
       local unk = func
       func = a_function(func, {
          min_arity = 0,
          args = a_vararg(func, { unk }),
-         rets = a_vararg(func, { unk }),
+         rets = a_vararg(func, { unk })
       })
    end
-
+   -- unwrap if tuple, resolve if nominal
    func = self:to_structural(func)
 
-   if func.typename == "generic" then
+   if func is GenericType then
       func = self:apply_generic(func, func)
    end
 
-   if func.typename == "function" or func.typename == "poly" then
+   if func is FunctionType or func is PolyType then
       return func, is_method
    end
 
-
-   if func.typename == "union" then
+   -- resolve if union
+   if func is UnionType then
       local r = self:same_call_mt_in_all_union_entries(func)
       if r then
-         table.insert(args.tuple, 1, func.types[1])
+         table.insert(args.tuple, 1, func.types[1]) -- FIXME: is this right?
          return r, true
       end
-
-   elseif func.typename == "typedecl" then
+   -- resolve if prototype
+   elseif func is TypeDeclType then
       return self:resolve_for_call(func.def, args, is_method)
-
-   elseif func.fields and func.meta_fields and func.meta_fields["__call"] then
+   -- resolve if metatable
+   elseif func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
       table.insert(args.tuple, 1, func)
       func = func.meta_fields["__call"]
       func = self:to_structural(func)
       is_method = true
    end
 
-   if func.typename == "generic" then
+   if func is GenericType then
       func = self:apply_generic(func, func)
    end
 
@@ -1137,31 +1137,31 @@ function Context:resolve_for_call(func, args, is_method)
 end
 
 do
-   local function mark_invalid_typeargs(self, typeargs)
+   local function mark_invalid_typeargs(self: Context, typeargs: {TypeArgType})
       for _, a in ipairs(typeargs) do
          if not self:find_var_type(a.typearg) then
             if a.constraint then
                self:add_var(nil, a.typearg, a.constraint)
             else
-               self:add_var(nil, a.typearg, self.feat_lax and a_type(a, "unknown", {}) or a_type(a, "unresolvable_typearg", {
-                  typearg = a.typearg,
-               }))
+               self:add_var(nil, a.typearg, self.feat_lax and an_unknown(a) or a_type(a, "unresolvable_typearg", {
+                  typearg = a.typearg
+               } as UnresolvableTypeArgType))
             end
          end
       end
    end
 
-   local function infer_emptytables(self, w, wheres, xs, ys, delta)
+   local function infer_emptytables(self: Context, w: Where, wheres: {Where}, xs: TupleType, ys: TupleType, delta: integer)
       local xt, yt = xs.tuple, ys.tuple
       local n_xs = #xt
       local n_ys = #yt
-
+      -- resolve inference of emptytables used as arguments or returns
       for i = 1, n_xs do
          local x = xt[i]
-         if x.typename == "emptytable" then
+         if x is EmptyTableType then
             local y = yt[i] or (ys.is_va and yt[n_ys])
-            if y then
-               local iw = wheres and wheres[i + delta] or w
+            if y then -- y may not be present when inferring returns
+               local iw = wheres and wheres[i + delta] or w -- for self, a + argdelta is 0
                local inferred_y = self:infer_at(iw, y)
                self:infer_emptytable(x, inferred_y)
                xt[i] = inferred_y
@@ -1170,18 +1170,18 @@ do
       end
    end
 
+   local enum CallMode
+      "method"   -- a method colon-call, e.g. `my_object:my_method()`
+      "plain"    -- a plain call or a dot-call, e.g `my_func()` or `my_object.my_func()`
+      "type_dot" -- a dot-call where the receiver is a type, e.g. `MyRecord.my_func()`
+   end
 
-
-
-
-
-
-   local check_call
+   local check_call: function(self: Context, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
    do
-      local check_args_rets
+      local check_args_rets: function(Context, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
       do
-
-         local function check_func_type_list(self, w, wheres, xs, ys, from, delta, v, mode)
+         -- check if a tuple `xs` matches tuple `ys`
+         local function check_func_type_list(self: Context, w: Where, wheres: {Where}, xs: TupleType, ys: TupleType, from: integer, delta: integer, v: VarianceMode, mode: ArgCheckMode): boolean, {Error}
             local errs = {}
             local xt, yt = xs.tuple, ys.tuple
             local n_xs = #xt
@@ -1202,9 +1202,9 @@ do
             return true
          end
 
-         check_args_rets = function(self, w, wargs, f, args, expected_rets, argdelta, or_args, or_rets)
+         check_args_rets = function(self: Context, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
             local rets_ok = true
-            local args_ok, args_errs = true, nil
+            local args_ok, args_errs: boolean, {Error} = true, nil
 
             local fargs = or_args or f.args
             local frets = or_rets or f.rets
@@ -1214,7 +1214,7 @@ do
                from = 2
                local errs = {}
                local first = fargs.tuple[1]
-               if (not (first.typename == "self")) and not self:arg_check(w, errs, first, args.tuple[1], "contravariant", "self") then
+               if (not first is SelfType) and not self:arg_check(w, errs, first, args.tuple[1], "contravariant", "self") then
                   return nil, errs
                end
             end
@@ -1237,7 +1237,7 @@ do
          end
       end
 
-      local function is_method_mismatch(self, w, arg1, farg1, cm)
+      local function is_method_mismatch(self: Context, w: Where, arg1: Type, farg1: Type, cm: CallMode): boolean
          if cm == "method" or not farg1 then
             return false
          end
@@ -1251,11 +1251,11 @@ do
          return false
       end
 
-      check_call = function(self, w, wargs, f, args, expected_rets, cm, argdelta, or_args, or_rets)
+      check_call = function(self: Context, w: Where, wargs: {Where}, f: FunctionType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): boolean, {Error}
          local arg1 = args.tuple[1]
          if cm == "method" and arg1 then
             local selftype = arg1
-            if selftype.typename == "self" then
+            if selftype is SelfType then
                selftype = self:type_of_self(selftype)
             end
             self:add_self_type(w, selftype)
@@ -1278,47 +1278,47 @@ do
       end
    end
 
-   function Context:iterate_poly(p)
+   function Context:iterate_poly(p: PolyType): function(): integer, FunctionType
       local i = 0
-      return function()
+      return function(): integer, FunctionType
          i = i + 1
          local fg = p.types[i]
          if not fg then
             return
-         elseif fg.typename == "function" then
+         elseif fg is FunctionType then
             return i, fg
-         elseif fg.typename == "generic" then
-            return i, self:apply_generic(p, fg)
+         elseif fg is GenericType then
+            return i, self:apply_generic(p, fg) as FunctionType
          end
       end
    end
 
-   local check_poly_call
+   local check_poly_call: function(self: Context, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
    do
-      local function fail_poly_call_arity(self, w, p, given)
-         local expects = {}
+      local function fail_poly_call_arity(self: Context, w: Where, p: PolyType, given: integer): {Error}
+         local expects: {string} = {}
          for _, f in self:iterate_poly(p) do
             table.insert(expects, types.show_arity(f))
          end
          table.sort(expects)
          for i = #expects, 1, -1 do
-            if expects[i] == expects[i + 1] then
+            if expects[i] == expects[i+1] then
                table.remove(expects, i)
             end
          end
          return { errors.at(w, "wrong number of arguments (given " .. given .. ", expects " .. table.concat(expects, " or ") .. ")") }
       end
 
-      check_poly_call = function(self, w, wargs, p, args, expected_rets, cm, argdelta, or_args, or_rets)
+      check_poly_call = function(self: Context, w: Where, wargs: {Where}, p: PolyType, args: TupleType, expected_rets: TupleType, cm: CallMode, argdelta: integer, or_args: TupleType, or_rets: TupleType): FunctionType, TupleType, {Error}
          local given = #args.tuple
 
-         local tried = {}
-         local first_rets
-         local first_errs
+         local tried: {integer:boolean} = {}
+         local first_rets: TupleType
+         local first_errs: {Error}
 
          for pass = 1, 3 do
             for i, f in self:iterate_poly(p) do
-               assert(f.typename == "function", f.typename)
+               assert(f is FunctionType, f.typename)
                assert(f.args)
                first_rets = first_rets or or_rets or f.rets
 
@@ -1326,18 +1326,18 @@ do
                local min_arity = self.feat_arity and f.min_arity or 0
 
                if (not tried[i]) and
-
-                  ((pass == 1 and given == wanted) or
-
-                  (pass == 2 and (given < wanted and given >= min_arity)) or
-
-                  (pass == 3 and (f.args.is_va and given > wanted))) then
-
+                  -- try exact arity matches first
+                  (  (pass == 1 and given == wanted)
+                  -- then try adjusting with nils to missing arguments or using '...'
+                  or (pass == 2 and (given < wanted and given >= min_arity))
+                  -- then finally try vararg functions
+                  or (pass == 3 and (f.args.is_va and given > wanted)) )
+               then
                   local ok, errs = check_call(self, w, wargs, f, args, expected_rets, cm, argdelta, or_args, or_rets)
                   if ok then
                      return f, or_rets or f.rets
                   elseif expected_rets then
-
+                     -- revert inferred returns
                      infer_emptytables(self, w, wargs, or_rets or f.rets, or_rets or f.rets, argdelta)
                   end
 
@@ -1357,15 +1357,15 @@ do
       end
    end
 
-   local function should_warn_dot(node, e1, is_method)
+   local function should_warn_dot(node: Node, e1: Node, is_method: boolean): CallMode
       if is_method then
          return "method"
       end
       if node_is_funcall(node) and e1 and e1.receiver then
          local receiver = e1.receiver
-         if receiver.typename == "nominal" then
+         if receiver is NominalType then
             local resolved = receiver.resolved
-            if resolved and resolved.typename == "typedecl" then
+            if resolved and resolved is TypeDeclType then
                return "type_dot"
             end
          end
@@ -1373,30 +1373,30 @@ do
       return "plain"
    end
 
-   function Context:type_check_function_call(node, func, args, argdelta, or_args, or_rets, e1, e2)
+   function Context:type_check_function_call(node: Node, func: Type, args: TupleType, argdelta: integer, or_args ?: TupleType, or_rets ?: TupleType, e1?: Node, e2?: {Node}): InvalidOrTupleType, FunctionType
       e1 = e1 or node.e1
       e2 = e2 or node.e2
 
       local expected = node.expected
-      local expected_rets
-      if expected and expected.typename == "tuple" then
+      local expected_rets: TupleType
+      if expected and expected is TupleType then
          expected_rets = expected
       else
-         expected_rets = a_type(node, "tuple", { tuple = { node.expected } })
+         expected_rets = a_tuple(node, { node.expected })
       end
 
       self:begin_scope_transaction(node)
 
-      local g
-      local typeargs
-      if func.typename == "generic" then
+      local g: GenericType
+      local typeargs: {TypeArgType}
+      if func is GenericType then
          g = func
          func, typeargs = self:apply_generic(node, func)
       end
 
       local is_method = (argdelta == -1)
 
-      if not (func.typename == "function" or func.typename == "poly") then
+      if not (func is FunctionType or func is PolyType) then
          func, is_method = self:resolve_for_call(func, args, is_method)
          if is_method then
             argdelta = -1
@@ -1405,13 +1405,13 @@ do
 
       local cm = should_warn_dot(node, e1, is_method)
 
-      local errs
-      local f, ret
+      local errs: {Error}
+      local f, ret: FunctionType, InvalidOrTupleType
 
-      if func.typename == "poly" then
+      if func is PolyType then
          f, ret, errs = check_poly_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
-      elseif func.typename == "function" then
-         local _
+      elseif func is FunctionType then
+         local _: boolean
          _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
          f, ret = func, or_rets or func.rets
       else
@@ -1428,19 +1428,19 @@ do
 
       self:commit_scope_transaction(node)
 
-      ret = self:assert_resolved_typevars_at(node, ret)
+      ret = self:assert_resolved_typevars_at(node, ret) as InvalidOrTupleType
 
       if self.collector then
          self.collector.store_type(e1.y, e1.x, f)
       end
 
       if f and f.macroexp then
-         local argexps
+         local argexps: {Node}
          if is_method then
             argexps = {}
-            if e1.kind == "op" then
+            if e1.kind == "op" then -- obj:method
                table.insert(argexps, e1.e1)
-            else
+            else -- __call metamethod
                table.insert(argexps, e1)
             end
             for _, e in ipairs(e2) do
@@ -1456,16 +1456,16 @@ do
    end
 end
 
-function Context:resolve_self(t, resolve_interface)
+function Context:resolve_self(t: Type, resolve_interface?: boolean): Type, {Error}
    local selftype, selfdecl = self:type_of_self(t)
    local checktype = selftype
-   if selftype.typename == "generic" then
+   if selftype is GenericType then
       checktype = selftype.t
    end
 
-   if (resolve_interface and checktype.typename == "interface") or checktype.typename == "record" then
+   if (resolve_interface and checktype is InterfaceType) or checktype is RecordType then
       return types.map(self, t, {
-         ["self"] = function(_, typ)
+         ["self"] = function(_: Context, typ: SelfType): Type, boolean
             return typedecl_to_nominal(typ, checktype.declname, selfdecl)
          end,
       })
@@ -1475,16 +1475,16 @@ function Context:resolve_self(t, resolve_interface)
 end
 
 do
-   local function add_interface_fields(self, fields, field_order, resolved, named, list)
+   local function add_interface_fields(self: Context, fields: {string:Type}, field_order: {string}, resolved: RecordLikeType, named: NominalType, list?: MetaMode)
       for fname, ftype in fields_of(resolved, list) do
          if fields[fname] then
             if not self:is_a(fields[fname], ftype) then
                local what = list == "meta" and "metamethod" or "field"
-               self.errs:add(fields[fname], what .. " '" .. fname .. "' does not match definition in interface %s", named)
+               self.errs:add(fields[fname], what .." '" .. fname .. "' does not match definition in interface %s", named)
             end
          else
             table.insert(field_order, fname)
-            if ftype.typename == "typedecl" then
+            if ftype is TypeDeclType then
                fields[fname] = ftype
             else
                fields[fname] = self:resolve_self(ftype)
@@ -1493,12 +1493,12 @@ do
       end
    end
 
-   local function collect_interfaces(self, list, t, seen)
+   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}
       if t.interface_list then
          for _, iface in ipairs(t.interface_list) do
-            if iface.typename == "nominal" then
+            if iface is NominalType then
                local ri = self:resolve_nominal(iface)
-               if ri.typename == "interface" then
+               if ri is InterfaceType then
                   table.insert(list, iface)
                   if ri.interfaces_expanded and not seen[ri] then
                      seen[ri] = true
@@ -1518,7 +1518,7 @@ do
       return list
    end
 
-   function Context:expand_interfaces(t)
+   function Context:expand_interfaces(t: RecordLikeType)
       if t.interfaces_expanded then
          return
       end
@@ -1527,9 +1527,9 @@ do
       t.interface_list = collect_interfaces(self, {}, t, {})
 
       for _, iface in ipairs(t.interface_list) do
-         if iface.typename == "nominal" then
+         if iface is NominalType then
             local ri = self:resolve_nominal(iface)
-            assert(ri.typename == "interface")
+            assert(ri is InterfaceType)
             add_interface_fields(self, t.fields, t.field_order, ri, iface)
             if ri.meta_fields then
                t.meta_fields = t.meta_fields or {}
@@ -1549,13 +1549,13 @@ do
    end
 end
 
-function Context:begin_temporary_record_types(typ)
+function Context:begin_temporary_record_types(typ: RecordType)
    self:add_self_type(typ, typ)
 
    for fname, ftype in fields_of(typ) do
-      if ftype.typename == "typedecl" then
+      if ftype is TypeDeclType then
          local def = ftype.def
-         if def.typename == "nominal" then
+         if def is NominalType then
             assert(ftype.is_alias)
             self:resolve_nominal(def)
          end
@@ -1564,32 +1564,32 @@ function Context:begin_temporary_record_types(typ)
    end
 end
 
-function Context:end_temporary_record_types(typ)
-
-
+function Context:end_temporary_record_types(typ: RecordType)
+   -- drop @self and nested records from scope
+   -- to avoid closing them prematurely in end_scope()
    local scope = self.st[#self.st]
    scope.vars["@self"] = nil
    for fname, ftype in fields_of(typ) do
-      if ftype.typename == "typedecl" then
+      if ftype is TypeDeclType then
          scope.vars[fname] = nil
       end
    end
 end
 
-function Context:check_metamethod(node, method_name, a, b, orig_a, orig_b, flipped)
+function Context:check_metamethod(node: Node, method_name: string, a: Type, b: Type, orig_a: Type, orig_b: Type, flipped?: boolean): Type, integer
    if self.feat_lax and ((a and is_unknown(a)) or (b and is_unknown(b))) then
-      return a_type(node, "unknown", {}), nil
+      return an_unknown(node), nil
    end
 
-   local ameta = a.fields and a.meta_fields
-   local bmeta = b and b.fields and b.meta_fields
+   local ameta = a is RecordLikeType and a.meta_fields
+   local bmeta = b and b is RecordLikeType and b.meta_fields
 
    if not ameta and not bmeta then
       return nil, nil
    end
 
    local meta_on_operator = 1
-   local metamethod
+   local metamethod: Type
    if method_name ~= "__is" then
       metamethod = ameta and ameta[method_name or ""]
    end
@@ -1600,7 +1600,7 @@ function Context:check_metamethod(node, method_name, a, b, orig_a, orig_b, flipp
 
    if metamethod then
       local e2 = { node.e1 }
-      local args = a_type(node, "tuple", { tuple = { orig_a } })
+      local args = a_tuple(node, { orig_a })
       if b and method_name ~= "__is" then
          e2[2] = node.e2
          args.tuple[2] = orig_b
@@ -1609,35 +1609,35 @@ function Context:check_metamethod(node, method_name, a, b, orig_a, orig_b, flipp
          e2[2], e2[1] = e2[1], e2[2]
       end
 
-      local mtdelta = metamethod.typename == "function" and metamethod.is_method and -1 or 0
-      local ret_call = self:type_check_function_call(node, metamethod, args, mtdelta, nil, nil, node, e2)
-      local ret_unary = untuple(ret_call)
-      local ret = self:to_structural(ret_unary)
+      local mtdelta = metamethod is FunctionType and metamethod.is_method and -1 or 0
+      local ret_call <const> = self:type_check_function_call(node, metamethod, args, mtdelta, nil, nil, node, e2)
+      local ret_unary <const> = untuple(ret_call)
+      local ret <const> = self:to_structural(ret_unary)
       return ret, meta_on_operator
    else
       return nil, nil
    end
 end
 
-function Context:match_record_key(t, rec, key)
+function Context:match_record_key(t: Type, rec: Node, key: string): Type, string
    t = self:to_structural(t)
 
-   if t.typename == "self" then
+   if t is SelfType then
       t = self:type_of_self(t)
    end
 
-   if t.typename == "string" or t.typename == "enum" then
-
+   if t is StringType or t is EnumType then
+      -- simulate string metatable
       t = self.env.modules["string"]
       self.needs_compat["string"] = true
    end
 
-   if t.typename == "typedecl" then
+   if t is TypeDeclType then
       if t.is_nested_alias then
          return nil, "cannot use a nested type alias as a concrete value"
       end
       local def = t.def
-      if def.typename == "nominal" then
+      if def is NominalType then
          assert(t.is_alias)
          t = self:resolve_nominal(def)
       else
@@ -1645,12 +1645,12 @@ function Context:match_record_key(t, rec, key)
       end
    end
 
-   if t.typename == "generic" then
+   if t is GenericType then
       t = self:apply_generic(t, t)
    end
 
-   if t.typename == "union" then
-      local ty = self:same_in_all_union_entries(t, function(typ)
+   if t is UnionType then
+      local ty = self:same_in_all_union_entries(t, function(typ: Type): (Type, Type)
          local v = self:match_record_key(typ, rec, key)
          return v, v
       end)
@@ -1659,7 +1659,7 @@ function Context:match_record_key(t, rec, key)
       end
    end
 
-   if (t.typename == "typevar" or t.typename == "typearg") and t.constraint then
+   if (t is TypeVarType or t is TypeArgType) and t.constraint then
       local ty = self:match_record_key(t.constraint, rec, key)
       if ty then
          return ty
@@ -1668,7 +1668,7 @@ function Context:match_record_key(t, rec, key)
 
    local keyg = key:gsub("%%", "%%%%")
 
-   if t.fields then
+   if t is RecordLikeType then
       assert(t.fields, "record has no fields!?")
 
       if t.fields[key] then
@@ -1682,7 +1682,7 @@ function Context:match_record_key(t, rec, key)
       end
 
       if rec.kind == "variable" then
-         if t.typename == "interface" then
+         if t is InterfaceType then
             return nil, "invalid key '" .. keyg .. "' in '" .. rec.tk .. "' of interface type %s"
          else
             return nil, "invalid key '" .. keyg .. "' in record '" .. rec.tk .. "' of type %s"
@@ -1690,9 +1690,9 @@ function Context:match_record_key(t, rec, key)
       else
          return nil, "invalid key '" .. keyg .. "' in type %s"
       end
-   elseif t.typename == "emptytable" or is_unknown(t) then
+   elseif t is EmptyTableType or is_unknown(t) then
       if self.feat_lax then
-         return a_type(rec, "unknown", {})
+         return an_unknown(rec)
       end
       return nil, "cannot index a value of unknown type"
    end
@@ -1705,42 +1705,42 @@ function Context:match_record_key(t, rec, key)
 end
 
 do
-   local function assigned_anywhere(name, root)
-      local visit_node = {
+   local function assigned_anywhere(name: string, root: Node): boolean
+      local visit_node: Visitor<nil, NodeKind, Node, boolean> = {
          cbs = {
             ["assignment"] = {
-               after = function(_, node, _children)
+               after = function(_: nil, node: Node, _children: {boolean}): boolean
                   for _, v in ipairs(node.vars) do
                      if v.kind == "variable" and v.tk == name then
                         return true
                      end
                   end
                   return false
-               end,
-            },
+               end
+            }
          },
-         after = function(_, _node, children, ret)
+         after = function(_: nil, _node: Node, children: {boolean}, ret: boolean): boolean
             ret = ret or false
             for _, c in ipairs(children) do
-               local ca = c
-               if type(ca) == "boolean" then
+               local ca = c as any
+               if ca is boolean then
                   ret = ret or c
                end
             end
             return ret
-         end,
+         end
       }
 
-      local visit_type = {
-         after = function()
+      local visit_type: Visitor<nil, TypeName, Type, boolean> = {
+         after = function(): boolean
             return false
-         end,
+         end
       }
 
       return traverse_nodes(nil, root, visit_node, visit_type)
    end
 
-   function Context:widen_all_unions(node)
+   function Context:widen_all_unions(node?: Node)
       for i = #self.st, 1, -1 do
          local scope = self.st[i]
          if scope.narrows then
@@ -1754,7 +1754,7 @@ do
    end
 end
 
-function Context:add_global(node, varname, valtype, is_assigning)
+function Context:add_global(node: Node, varname: string, valtype: Type, is_assigning?: boolean): Variable
    if self.feat_lax and is_unknown(valtype) and (varname ~= "self" and varname ~= "...") then
       self.errs:add_unknown(node, varname)
    end
@@ -1782,9 +1782,9 @@ function Context:add_global(node, varname, valtype, is_assigning)
    return var
 end
 
-function Context:add_internal_function_variables(node, args)
+function Context:add_internal_function_variables(node: Node, args: TupleType)
    self:add_var(nil, "@is_va", a_type(node, args.is_va and "any" or "nil", {}))
-   self:add_var(nil, "@return", node.rets or a_type(node, "tuple", { tuple = {} }))
+   self:add_var(nil, "@return", node.rets or a_tuple(node, {}))
 
    if node.typeargs then
       for _, t in ipairs(node.typeargs) do
@@ -1796,7 +1796,7 @@ function Context:add_internal_function_variables(node, args)
    end
 end
 
-function Context:add_function_definition_for_recursion(node, fnargs, feat_arity)
+function Context:add_function_definition_for_recursion(node: Node, fnargs: TupleType, feat_arity: boolean)
    self:add_var(nil, node.name.tk, wrap_generic_if_typeargs(node.typeargs, a_function(node, {
       min_arity = feat_arity and node.min_arity or 0,
       args = fnargs,
@@ -1804,13 +1804,13 @@ function Context:add_function_definition_for_recursion(node, fnargs, feat_arity)
    })))
 end
 
-function Context:end_function_scope(node)
+function Context:end_function_scope(node: Node)
    self.errs:fail_unresolved_labels(self.st[#self.st])
    self:end_scope(node)
 end
 
-function Context:match_all_record_field_names(node, a, field_names, errmsg)
-   local t
+function Context:match_all_record_field_names(node: Node, a: RecordLikeType, field_names: {string}, errmsg: string): Type
+   local t: Type
    for _, k in ipairs(field_names) do
       local f = a.fields[k]
       if not t then
@@ -1830,9 +1830,9 @@ function Context:match_all_record_field_names(node, a, field_names, errmsg)
    end
 end
 
-function Context:type_check_index(anode, bnode, a, b)
-   assert(not (a.typename == "tuple"))
-   assert(not (b.typename == "tuple"))
+function Context:type_check_index(anode: Node, bnode: Node, a: Type, b: Type): Type
+   assert(not a is TupleType)
+   assert(not b is TupleType)
 
    local ra = self:to_structural(a)
    local rb = self:to_structural(b)
@@ -1841,18 +1841,18 @@ function Context:type_check_index(anode, bnode, a, b)
       return a
    end
 
-   local errm
-   local erra
-   local errb
+   local errm: string
+   local erra: Type
+   local errb: Type
 
-   if ra.typename == "typedecl" then
+   if ra is TypeDeclType then
       ra = ra.def
    end
 
-   if ra.typename == "tupletable" and rb.typename == "integer" then
+   if ra is TupleTableType and rb is IntegerType then
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
-            return ra.types[bnode.constnum]
+            return ra.types[bnode.constnum as integer]
          end
 
          errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
@@ -1864,44 +1864,44 @@ function Context:type_check_index(anode, bnode, a, b)
 
          errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
       end
-   elseif ra.typename == "self" then
+   elseif ra is SelfType then
       return self:type_check_index(anode, bnode, self:type_of_self(a), b)
-   elseif ra.elements and rb.typename == "integer" then
+   elseif ra is ArrayLikeType and rb is IntegerType then
       return ra.elements
-   elseif ra.typename == "emptytable" then
+   elseif ra is EmptyTableType then
       if ra.keys == nil then
          ra.keys = self:infer_at(bnode, b)
       end
 
       if self:is_a(b, ra.keys) then
          return a_type(anode, "unresolved_emptytable_value", {
-            emptytable_type = ra,
-         })
+            emptytable_type = ra
+         } as UnresolvedEmptyTableValueType)
       end
 
       errm, erra, errb = "inconsistent index type: got %s, expected %s" .. types.inferred_msg(ra.keys, "type of keys "), b, ra.keys
-   elseif ra.typename == "unresolved_emptytable_value" then
-      local et = a_type(ra, "emptytable", { keys = b })
+   elseif ra is UnresolvedEmptyTableValueType then
+      local et = a_type(ra, "emptytable", { keys = b } as EmptyTableType)
       self:infer_emptytable_from_unresolved_value(a, ra, et)
       return a_type(anode, "unresolved_emptytable_value", {
-         emptytable_type = et,
-      })
-   elseif ra.typename == "map" then
+         emptytable_type = et
+      } as UnresolvedEmptyTableValueType)
+   elseif ra is MapType then
       if self:is_a(b, ra.keys) then
          return ra.values
       end
 
       errm, erra, errb = "wrong index type: got %s, expected %s", b, ra.keys
-   elseif rb.typename == "string" and rb.literal then
+   elseif rb is StringType and rb.literal then
       local t, e = self:match_record_key(a, anode, rb.literal)
       if t then
 
-         if t.typename == "function" and t.is_method then
+         if t is FunctionType and t.is_method then
             local t2 = shallow_copy_new_type(t)
             t2.args = shallow_copy_new_type(t.args)
             t2.args.tuple = shallow_copy_table(t2.args.tuple)
             for i, p in ipairs(t2.args.tuple) do
-               if p.typename == "self" then
+               if p is SelfType then
                   t2.args.tuple[i] = a
                end
             end
@@ -1912,9 +1912,9 @@ function Context:type_check_index(anode, bnode, a, b)
       end
 
       errm, erra = e, a
-   elseif ra.fields then
-      if rb.typename == "enum" then
-         local field_names = sorted_keys(rb.enumset)
+   elseif ra is RecordLikeType then
+      if rb is EnumType then
+         local field_names: {string} = sorted_keys(rb.enumset)
          for _, k in ipairs(field_names) do
             if not ra.fields[k] then
                errm, erra = "enum value '" .. k:gsub("%%", "%%%%") .. "' is not a field in %s", ra
@@ -1923,9 +1923,9 @@ function Context:type_check_index(anode, bnode, a, b)
          end
          if not errm then
             return self:match_all_record_field_names(bnode, ra, field_names,
-            "cannot index, not all enum values map to record fields of the same type")
+                      "cannot index, not all enum values map to record fields of the same type")
          end
-      elseif rb.typename == "string" then
+      elseif rb is StringType then
          errm, erra = "cannot index object of type %s with a string, consider using an enum", a
       else
          errm, erra, errb = "cannot index object of type %s with %s", a, b
@@ -1942,25 +1942,25 @@ function Context:type_check_index(anode, bnode, a, b)
    return self.errs:invalid_at(bnode, errm, erra, errb)
 end
 
-function Context:expand_type(w, old, new)
-   if not old or old.typename == "nil" then
+function Context:expand_type(w: Where, old: Type, new: Type): Type
+   if not old or old is NilType then
       return new
    end
    if self:is_a(new, old) then
       return old
    end
 
-   if new.fields and (old.typename == "map" or old.fields) then
-      local keys
-      local values
-      if old.typename == "map" then
+   if new is RecordLikeType and (old is MapType or old is RecordLikeType) then
+      local keys: Type
+      local values: Type
+      if old is MapType then
          keys = old.keys
-         if not (keys.typename == "string") then
+         if not keys is StringType then
             self.errs:add(w, "cannot determine table literal type")
             return old
          end
          values = old.values
-      elseif old.fields then
+      elseif old is RecordLikeType then
          keys = a_type(w, "string", {})
          for _, ftype in fields_of(old) do
             values = self:expand_type(w, values, ftype)
@@ -1971,14 +1971,14 @@ function Context:expand_type(w, old, new)
          values = self:expand_type(w, values, ftype)
       end
 
-      return a_type(w, "map", { keys = keys, values = values })
+      return a_map(w, keys, values)
    end
 
    return unite(w, { old, new }, true)
 end
 
-function Context:find_record_to_extend(exp)
-
+function Context:find_record_to_extend(exp: Node): Type, Variable, string
+   -- base
    if exp.kind == "type_identifier" then
       local v = self:find_var(exp.tk)
       if not v then
@@ -1986,7 +1986,7 @@ function Context:find_record_to_extend(exp)
       end
 
       local t = v.t
-      if t.typename == "typedecl" then
+      if t is TypeDeclType then
          if t.closed then
             return nil, nil, exp.tk
          end
@@ -1995,22 +1995,22 @@ function Context:find_record_to_extend(exp)
       end
 
       return t, v, exp.tk
-
-   elseif exp.kind == "op" then
+   -- recurse
+   elseif exp.kind == "op" then -- assert(exp.op.op == ".")
       local t, v, rname = self:find_record_to_extend(exp.e1)
       local fname = exp.e2.tk
       local dname = rname .. "." .. fname
       if not t then
          return nil, nil, dname
       end
-      if not t.fields then
+      if not t is RecordLikeType then
          return nil, nil, dname
       end
       t = t.fields[fname]
 
-      if t.typename == "typedecl" then
+      if t is TypeDeclType then
          local def = t.def
-         if def.typename == "nominal" then
+         if def is NominalType then
             assert(t.is_alias)
             t = def.resolved
          else
@@ -2022,35 +2022,35 @@ function Context:find_record_to_extend(exp)
    end
 end
 
-function Context:get_self_type(exp)
-
+function Context:get_self_type(exp: Node): Type
+   -- base
    if exp.kind == "type_identifier" then
       local t = self:find_var_type(exp.tk)
       if not t then
          return nil
       end
 
-      if t.typename == "typedecl" then
+      if t is TypeDeclType then
          return typedecl_to_nominal(exp, exp.tk, t)
       else
          return t
       end
-
-   elseif exp.kind == "op" then
+   -- recurse
+   elseif exp.kind == "op" then -- assert(exp.op.op == ".")
       local t = self:get_self_type(exp.e1)
       if not t then
          return nil
       end
 
-      if t.typename == "nominal" then
+      if t is NominalType then
          local found = t.found
          if found then
-            if found.typename == "typedecl" then
+            if found is TypeDeclType then
                local def = found.def
-               if def.fields and def.fields[exp.e2.tk] then
+               if def is RecordLikeType and def.fields[exp.e2.tk] then
                   table.insert(t.names, exp.e2.tk)
                   local ft = def.fields[exp.e2.tk]
-                  if ft.typename == "typedecl" then
+                  if ft is TypeDeclType then
                      t.found = ft
                   else
                      return nil
@@ -2058,14 +2058,14 @@ function Context:get_self_type(exp)
                end
             end
          end
-      elseif t.fields then
+      elseif t is RecordLikeType then
          return t.fields and t.fields[exp.e2.tk]
       end
       return t
    end
 end
 
-function Context:apply_facts(w, known)
+function Context:apply_facts(w: Where, known: Fact)
    if not known then
       return
    end
@@ -2084,11 +2084,11 @@ function Context:apply_facts(w, known)
    end
 end
 
-function Context:apply_facts_from(w, from)
+function Context:apply_facts_from(w: Where, from?: Where)
    self:apply_facts(w, self.fdb:get(from or w))
 end
 
-function Context:dismiss_unresolved(name)
+function Context:dismiss_unresolved(name: string)
    for i = #self.st, 1, -1 do
       local scope = self.st[i]
       local uses = scope.pending_nominals and scope.pending_nominals[name]
@@ -2102,7 +2102,7 @@ function Context:dismiss_unresolved(name)
    end
 end
 
-function Context:type_check_funcall(node, a, b, argdelta)
+function Context:type_check_funcall(node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
    if node.e1.op and node.e1.op.op == ":" then
       table.insert(b.tuple, 1, node.e1.receiver)
       argdelta = -1
@@ -2121,9 +2121,9 @@ function Context:type_check_funcall(node, a, b, argdelta)
    return (self:type_check_function_call(node, a, b, argdelta))
 end
 
-function Context:missing_initializer(node, i, name)
+function Context:missing_initializer(node: Node, i: integer, name: string): (InvalidType | UnknownType)
    if self.feat_lax then
-      return a_type(node, "unknown", {})
+      return an_unknown(node)
    else
       if node.exps then
          return self.errs:invalid_at(node.vars[i], "assignment in declaration did not produce an initial value for variable '" .. name .. "'")
@@ -2133,7 +2133,7 @@ function Context:missing_initializer(node, i, name)
    end
 end
 
-function Context:infer_negation_of_if_blocks(w, ifnode, n)
+function Context:infer_negation_of_if_blocks(w: Where, ifnode: Node, n: integer)
    local f = facts_not(w, self.fdb:get(ifnode.if_blocks[1].exp))
    for e = 2, n do
       local b = ifnode.if_blocks[e]
@@ -2144,25 +2144,25 @@ function Context:infer_negation_of_if_blocks(w, ifnode, n)
    self:apply_facts(w, f)
 end
 
-function Context:determine_declaration_type(var, node, infertypes, i)
+function Context:determine_declaration_type(var: Node, node: Node, infertypes: TupleType, i: integer): boolean, Type, boolean
    local ok = true
    local name = var.tk
    local infertype = infertypes and infertypes.tuple[i]
-   if self.feat_lax and infertype and infertype.typename == "nil" then
+   if self.feat_lax and infertype and infertype is NilType then
       infertype = nil
    end
 
    local decltype = node.decltuple and node.decltuple.tuple[i]
    if decltype then
       local rdecltype = self:to_structural(decltype)
-      if rdecltype.typename == "invalid" then
+      if rdecltype is InvalidType then
          decltype = rdecltype
       end
 
       if infertype then
          local w = node.exps and node.exps[i] or node.vars[i]
 
-         local errs
+         local errs: {Error}
          ok, errs = self:is_a(infertype, decltype)
          if not ok then
             self.errs:add_prefixing(w, errs, self.errs:get_context(node, name))
@@ -2170,13 +2170,13 @@ function Context:determine_declaration_type(var, node, infertypes, i)
       end
    else
       if infertype then
-         if infertype.typename == "unresolvable_typearg" then
+         if infertype is UnresolvableTypeArgType then
             ok = false
             infertype = self.errs:invalid_at(node.vars[i], "cannot infer declaration type; an explicit type annotation is necessary")
          else
-
-
-
+            -- If we assign a method to a variable, e.g:
+            -- `local myfunc = myobj.dothing`,
+            -- the variable should not be treated as a method
             infertype = ensure_not_method(infertype)
          end
       end
@@ -2184,7 +2184,7 @@ function Context:determine_declaration_type(var, node, infertypes, i)
 
    if var.attribute == "total" then
       local rd = decltype and self:to_structural(decltype)
-      if rd and (not (rd.typename == "map")) and (not (rd.typename == "record")) then
+      if rd and (not rd is MapType) and (not rd is RecordType) then
          self.errs:add(var, "attribute <total> only applies to maps and records")
          ok = false
       elseif not infertype then
@@ -2202,10 +2202,10 @@ function Context:determine_declaration_type(var, node, infertypes, i)
                   missing = " (missing: " .. table.concat(valnode.missing, ", ") .. ")"
                end
                local ri = self:to_structural(infertype)
-               if ri.typename == "map" then
+               if ri is MapType then
                   self.errs:add(var, "map variable declared <total> does not declare values for all possible keys" .. missing)
                   ok = false
-               elseif ri.typename == "record" then
+               elseif ri is RecordType then
                   self.errs:add(var, "record variable declared <total> does not declare values for all fields" .. missing)
                   ok = false
                end
@@ -2217,15 +2217,15 @@ function Context:determine_declaration_type(var, node, infertypes, i)
    local t = decltype or infertype
    if t == nil then
       t = self:missing_initializer(node, i, name)
-   elseif t.typename == "emptytable" then
+   elseif t is EmptyTableType then
       t.is_global = node.kind == "global_declaration"
       t.assigned_to = name
-   elseif t.elements then
+   elseif t is ArrayLikeType then
       t.inferred_len = nil
-   elseif t.typename == "nominal" then
+   elseif t is NominalType then
       self:resolve_nominal(t)
       local rt = t.resolved
-      if rt and rt.typename == "typedecl" then
+      if rt and rt is TypeDeclType then
          t.resolved = rt.def
       end
    end
@@ -2233,11 +2233,11 @@ function Context:determine_declaration_type(var, node, infertypes, i)
    return ok, t, infertype ~= nil
 end
 
+local enum MissingError
+   "missing"
+end
 
-
-
-
-function Context:check_assignment(varnode, vartype, valtype)
+function Context:check_assignment(varnode: Node, vartype: Type, valtype: Type): Type, Type, MissingError
    local varname = varnode.tk
    local attr = varnode.attribute
 
@@ -2256,7 +2256,7 @@ function Context:check_assignment(varnode, vartype, valtype)
    end
 
    local var = self:to_structural(vartype)
-   if var.typename == "typedecl" then
+   if var is TypeDeclType then
       self.errs:add(varnode, "cannot reassign a type")
       return nil
    end
@@ -2266,7 +2266,7 @@ function Context:check_assignment(varnode, vartype, valtype)
       return nil, nil, "missing"
    end
 
-   if vartype.typename == "emptytable" then
+   if vartype is EmptyTableType then
       vartype = type_at(varnode, vartype)
    end
 
@@ -2281,48 +2281,48 @@ function Context:check_assignment(varnode, vartype, valtype)
 end
 
 do
-   local function aliasing_variable(self, def)
-      if def.typename == "nominal" then
+   local function aliasing_variable(self: Context, def: Type): Variable
+      if def is NominalType then
          return (self:find_var(def.names[1], "use_type"))
       end
 
-      if def.typename == "generic" then
+      if def is GenericType then
          local nom = def.t
-         if nom.typename == "nominal" then
+         if nom is NominalType then
             return (self:find_var(nom.names[1], "use_type"))
          end
       end
    end
 
-   local function recurse_type_declaration(self, n)
+   local function recurse_type_declaration(self: Context, n: Node): InvalidOrTypeDeclType, Variable
       if n.kind == "op" then
-
+         -- recursive case: e1.e2
          if n.op.op == "." then
             local ty = recurse_type_declaration(self, n.e1)
-            if not (ty.typename == "typedecl") then
+            if not ty is TypeDeclType then
                return ty
             end
             local def = ty.def
-            if not (def.typename == "record") then
+            if not def is RecordType then
                return self.errs:invalid_at(n.e1, "type is not a record")
             end
             local t = def.fields[n.e2.tk]
-            if t and t.typename == "typedecl" then
+            if t and t is TypeDeclType then
                return t
             end
             return self.errs:invalid_at(n.e2, "nested type '" .. n.e2.tk .. "' not found in record")
-
-         elseif n.op.op == "@funcall" and
-            n.e1.kind == "variable" and
-            n.e1.tk == "require" then
-
+         -- base case: require(e2)
+         elseif n.op.op == "@funcall"
+            and n.e1.kind == "variable"
+            and n.e1.tk == "require"
+         then
             local ty = untuple(
-            special_functions["require"](
-            self, n, self:find_var_type("require"),
-            a_type(n.e2, "tuple", { tuple = { a_type(n.e2[1], "string", {}) } })))
-
-
-            if not (ty.typename == "typedecl") then
+               special_functions["require"](
+                  self, n, self:find_var_type("require"),
+                  a_tuple(n.e2, { a_type(n.e2[1], "string", {}) })
+               )
+            )
+            if not ty is TypeDeclType then
                return self.errs:invalid_at(n.e1, "'require' did not return a type, got %s", ty)
             end
             if ty.is_alias then
@@ -2331,7 +2331,7 @@ do
             return ty
          end
       end
-
+      -- base case: type
       local newtype = n.newtype
       if newtype.is_alias then
          return self:resolve_typealias(newtype), aliasing_variable(self, newtype.def)
@@ -2339,16 +2339,16 @@ do
       return newtype, nil
    end
 
-   function Context:get_typedecl(value)
+   function Context:get_typedecl(value: Node): InvalidOrTypeDeclType, Variable
       local resolved, aliasing = recurse_type_declaration(self, value)
       local nt = value.newtype
-      if nt and nt.is_alias and resolved.typename == "typedecl" then
+      if nt and nt.is_alias and resolved is TypeDeclType then
          local ntdef = nt.def
          local rdef = resolved.def
-         if ntdef.typename == "generic" and rdef.typename == "generic" then
-
-
-
+         if ntdef is GenericType and rdef is GenericType then
+            -- FIXME this looks sketchy; not sure if just overwriting the
+            -- type variables in a resolved alias won't have bad side-effects.
+            -- Is it guaranteed to be a fresh type?
             ntdef.typeargs = rdef.typeargs
          end
       end
@@ -2356,13 +2356,13 @@ do
    end
 end
 
-function Context:is_pending_global(name)
+function Context:is_pending_global(name: string): boolean
    local global_scope = self.st[1]
    return not not global_scope.pending_global_types[name]
 end
 
 do
-   local function set_feat(feat, default)
+   local function set_feat(feat: Feat, default: boolean): boolean
       if feat then
          return (feat == "on")
       else
@@ -2370,8 +2370,8 @@ do
       end
    end
 
-   function Context.new(env, filename, opts)
-      local self = {
+   function Context.new(env: Env, filename: string, opts: CheckOptions): Context
+      local self: Context = {
          filename = filename,
          env = env,
          st = {
@@ -2389,9 +2389,9 @@ do
          type_priorities = relations.type_priorities,
       }
 
-      self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t).def
+      self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
 
-      self.feat_lax = set_feat(opts.feat_lax or env.defaults.feat_lax, false)
+      self.feat_lax   = set_feat(opts.feat_lax   or env.defaults.feat_lax,   false)
       self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
       if self.feat_lax then
          self.feat_arity = false
@@ -2400,27 +2400,27 @@ do
       if self.feat_lax then
          self.type_priorities = relations.lax_type_priorities()
          self.subtype_relations = relations.lax_subtype_relations()
-         self.get_rets = function(rets)
+         self.get_rets = function(rets: TupleType): TupleType
             if #rets.tuple == 0 then
-               return a_vararg(rets, { a_type(rets, "unknown", {}) })
+               return a_vararg(rets, { an_unknown(rets) })
             end
             return rets
          end
       else
-         self.get_rets = function(rets)
+         self.get_rets = function(rets: TupleType): TupleType
             return rets
          end
       end
 
       setmetatable(self, {
          __index = Context,
-         __tostring = function() return "Context" end,
+         __tostring = function(): string return "Context" end,
       })
 
       return self
    end
 end
 
-
+--------------------------------------------------------------------------------
 
 return context
