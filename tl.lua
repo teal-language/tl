@@ -181,7 +181,7 @@ tl.new_env = function(opts)
    return env
 end
 
-tl.compat = function(result)
+tl.apply_compat = function(result)
    if result.compat_applied then
       return
    end

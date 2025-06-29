@@ -721,7 +721,7 @@ local function gen(lax, code, expected, gen_target, type_errors)
       local gen_compat = gen_target == "5.4" and "off" or nil
       local result = tl.check(ast, "foo.tl", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
 
-      tl.compat(result)
+      tl.apply_compat(result)
 
       if type_errors then
          local batch = batch_assertions()
