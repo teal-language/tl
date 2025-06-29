@@ -269,9 +269,7 @@ local function type_check_and_load(tlconfig, filename)
       os.exit(1)
    end
 
-   if tl.compat then
-      tl.compat(result)
-   end
+   tl.apply_compat(result)
 
    local chunk; chunk, err = (loadstring or load)(tl.generate(result.ast, tlconfig.gen_target), "@" .. filename)
    if err then
@@ -300,9 +298,7 @@ local function write_out(tlconfig, result, output_file, pp_opts)
       die("cannot write " .. prettyname .. ": " .. err)
    end
 
-   if tl.compat then
-      tl.compat(result)
-   end
+   tl.apply_compat(result)
 
    local _
    _, err = ofd:write(tl.generate(result.ast, tlconfig.gen_target, pp_opts) .. "\n")
