@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local errors = { Error = {} }
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local errors = { Error = {}, ErrorContext = {} }
 
 
 
@@ -24,6 +24,39 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+function errors.new(msg)
+   return { msg = msg }
+end
+
+function errors.at(w, msg)
+   return {
+      msg = msg,
+      x = assert(w.x),
+      y = assert(w.y),
+      filename = assert(w.f),
+   }
+end
+
+function errors.any(all_errs)
+   if #all_errs == 0 then
+      return true
+   else
+      return false, all_errs
+   end
+end
 
 function errors.clear_redundant_errors(errs)
    local redundant = {}

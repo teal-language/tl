@@ -269,6 +269,10 @@ local function type_check_and_load(tlconfig, filename)
       os.exit(1)
    end
 
+   if tl.compat then
+      tl.compat(result)
+   end
+
    local chunk; chunk, err = (loadstring or load)(tl.generate(result.ast, tlconfig.gen_target), "@" .. filename)
    if err then
       die("Internal Compiler Error: Teal generator produced invalid Lua. " ..
@@ -294,6 +298,10 @@ local function write_out(tlconfig, result, output_file, pp_opts)
 
    if not ofd then
       die("cannot write " .. prettyname .. ": " .. err)
+   end
+
+   if tl.compat then
+      tl.compat(result)
    end
 
    local _

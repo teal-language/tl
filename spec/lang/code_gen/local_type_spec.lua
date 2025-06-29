@@ -1,6 +1,14 @@
 local util = require("spec.util")
 
 describe("local type code generation", function()
+   for _, gen_target in ipairs{"5.1", "5.3"} do
+      it("rejected for non 5.4 target (" .. gen_target .. ")", util.gen([[
+         local x <close> = io.open("foobar", "r")
+      ]], nil, gen_target, {
+         { msg = "only valid for Lua 5.4" }
+      }))
+   end
+
    it("elides local function type used only as type", util.gen([[
       local type MyFun = function(integer, integer): integer
 

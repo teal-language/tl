@@ -4,6 +4,7 @@ local TL_DEBUG = tldebug.TL_DEBUG
 local errors = require("teal.errors")
 
 
+
 local lexer = require("teal.lexer")
 
 
@@ -710,6 +711,21 @@ local function a_type(w, typename, t)
    return t
 end
 
+local function a_function(w, t)
+   assert(t.min_arity)
+   return a_type(w, "function", t)
+end
+
+
+
+
+
+local function a_vararg(w, t)
+   local typ = a_type(w, "tuple", { tuple = t })
+   typ.is_va = true
+   return typ
+end
+
 local function raw_type(f, y, x, typename)
    local t = setmetatable({}, type_mt)
    t.typeid = new_typeid()
@@ -1172,6 +1188,86 @@ function types.resolve_for_special_function(t)
    end
 end
 
+function types.drop_constant_value(t)
+   if t.typename == "string" and t.literal then
+      local ret = shallow_copy_new_type(t)
+      ret.literal = nil
+      return ret
+   elseif t.needs_compat then
+      local ret = shallow_copy_new_type(t)
+      ret.needs_compat = nil
+      return ret
+   end
+   return t
+end
+
+function types.type_at(w, t)
+   t.x = w.x
+   t.y = w.y
+   return t
+end
+
+function types.wrap_generic_if_typeargs(typeargs, t)
+   if not typeargs then
+      return t
+   end
+
+   assert(not (t.typename == "typedecl"))
+
+   local gt = a_type(t, "generic", { t = t })
+   gt.typeargs = typeargs
+   return gt
+end
+
+function types.show_arity(f)
+   local nfargs = #f.args.tuple
+   if f.min_arity < nfargs then
+      if f.min_arity > 0 then
+         return "at least " .. f.min_arity .. (f.args.is_va and "" or " and at most " .. nfargs)
+      else
+         return (f.args.is_va and "any number" or "at most " .. nfargs)
+      end
+   else
+      return tostring(nfargs or 0)
+   end
+end
+
+function types.typedecl_to_nominal(w, name, t, resolved)
+   local typevals
+   local def = t.def
+   if def.typename == "generic" then
+      typevals = {}
+      for _, a in ipairs(def.typeargs) do
+         table.insert(typevals, a_type(a, "typevar", {
+            typevar = a.typearg,
+            constraint = a.constraint,
+         }))
+      end
+   end
+   local nom = a_type(w, "nominal", { names = { name } })
+   nom.typevals = typevals
+   nom.found = t
+   nom.resolved = resolved
+   return nom
+end
+
+local function ensure_not_method(t)
+   if t.typename == "generic" then
+      local tt = ensure_not_method(t.t)
+      if tt ~= t.t then
+         local gg = shallow_copy_new_type(t)
+         gg.t = tt
+         return gg
+      end
+   end
+
+   if t.typename == "function" and t.is_method then
+      t = shallow_copy_new_type(t);
+      (t).is_method = false
+   end
+   return t
+end
+
 function types.internal_get_state()
    return fresh_typeid_ctr, fresh_typevar_ctr
 end
@@ -1185,7 +1281,10 @@ types.globals_typeid = new_typeid()
 types.simple_types = simple_types
 types.table_types = table_types
 types.a_type = a_type
+types.a_function = a_function
+types.a_vararg = a_vararg
 types.edit_type = edit_type
+types.ensure_not_method = ensure_not_method
 types.is_unknown = is_unknown
 types.inferred_msg = inferred_msg
 types.raw_type = raw_type

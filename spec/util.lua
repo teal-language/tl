@@ -721,6 +721,8 @@ local function gen(lax, code, expected, gen_target, type_errors)
       local gen_compat = gen_target == "5.4" and "off" or nil
       local result = tl.check(ast, "foo.tl", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
 
+      tl.compat(result)
+
       if type_errors then
          local batch = batch_assertions()
          local result_type_errors = combine_result(result, "type_errors")
@@ -732,17 +734,19 @@ local function gen(lax, code, expected, gen_target, type_errors)
 
       local output_code = tl.pretty_print_ast(ast, gen_target)
 
-      local expected_ast, expected_errors = tl.parse(expected, "foo.tl")
-      assert.same({}, expected_errors, "Code was not expected to have syntax errors")
-      local expected_code = tl.pretty_print_ast(expected_ast, gen_target)
+      if expected then
+         local expected_ast, expected_errors = tl.parse(expected, "foo.tl")
+         assert.same({}, expected_errors, "Code was not expected to have syntax errors")
+         local expected_code = tl.pretty_print_ast(expected_ast, gen_target)
 
-      assert.same(expected_code, output_code)
+         assert.same(expected_code, output_code)
+      end
    end
 end
 
 function util.gen(code, expected, gen_target, type_errors)
    assert(type(code) == "string")
-   assert(type(expected) == "string")
+   assert(type(expected) == "string" or expected == nil)
 
    return gen(false, code, expected, gen_target, type_errors)
 end

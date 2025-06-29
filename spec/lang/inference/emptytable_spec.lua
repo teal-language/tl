@@ -72,7 +72,7 @@ describe("empty table without type annotation", function()
          return t
       end
    ]], {
-      { msg = [[cannot index key 'foo' in variable 't' of type {integer} (inferred at foo.tl:5:13)]] },
+      { y = 7, msg = [[cannot index key 'foo' in variable 't' of type {integer} (inferred at foo.tl:5:13)]] },
    }))
 
    it("inferred type is not const by default (#383)", util.check([[
