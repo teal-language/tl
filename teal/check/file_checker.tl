@@ -1,21 +1,21 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string_checker = require("teal.checker.string_checker")
+local string_checker = require("teal.check.string_checker")
 
 local environment = require("teal.environment")
-
-
+local type Env = environment.Env
+local type Result = environment.Result
 
 local util = require("teal.util")
 local read_file_skipping_bom = util.read_file_skipping_bom
 
-local file_checker = {}
+local record file_checker
+end
 
-
-function file_checker.check(env, filename, fd)
+function file_checker.check(env: Env, filename: string, fd?: FILE): Result, string
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
 
-   local input, err
+   local input, err: string, string
 
    if not fd then
       fd, err = io.open(filename, "rb")

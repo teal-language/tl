@@ -33,7 +33,7 @@ local show_arity = types.show_arity
 local show_type = types.show_type
 local untuple = types.untuple
 
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 
 
 local util = require("teal.util")

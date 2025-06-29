@@ -1,7 +1,7 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local load = _tl_compat and _tl_compat.load or load; local package = _tl_compat and _tl_compat.package or package; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
 
 
-local require_file = require("teal.checker.require_file")
+local require_file = require("teal.check.require_file")
 local search_module = require_file.search_module
 
 local lua_generator = require("teal.gen.lua_generator")
@@ -12,7 +12,7 @@ local types = require("teal.types")
 
 local a_type = types.a_type
 
-local visitors = require("teal.checker.visitors")
+local visitors = require("teal.check.visitors")
 
 local util = require("teal.util")
 local read_file_skipping_bom = util.read_file_skipping_bom

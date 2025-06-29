@@ -1,13 +1,13 @@
 local attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 local type VarUse = type_checker.VarUse
 local type ArgCheckMode = type_checker.ArgCheckMode
 local type VarianceMode = type_checker.VarianceMode
 
-local node_checker = require("teal.checker.node_checker")
+local node_checker = require("teal.check.node_checker")
 local type NodeChecker = node_checker.NodeChecker
 
 local tldebug = require("teal.debug")
@@ -88,9 +88,9 @@ local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 local node_is_funcall = parser.node_is_funcall
 
-local relations = require("teal.checker.relations")
+local relations = require("teal.check.relations")
 
-local special_functions = require("teal.checker.special_functions")
+local special_functions = require("teal.check.special_functions")
 
 local traversal = require("teal.traversal")
 local type Visitor = traversal.Visitor
