@@ -14,7 +14,7 @@ local type InvalidOrTupleType = types.InvalidOrTupleType
 local type RecordLikeType = types.RecordLikeType
 local type TupleType = types.TupleType
 
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 
 local record node_checker

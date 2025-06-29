@@ -1,4 +1,4 @@
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 
 local parser = require("teal.parser")

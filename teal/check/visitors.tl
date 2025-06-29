@@ -1,47 +1,47 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
+local type VarUse = type_checker.VarUse
 
-
-local context = require("teal.checker.context")
-local Context = context.Context
+local context = require("teal.check.context")
+local type Context = context.Context
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local errors = require("teal.errors")
-
+local type Where = errors.Where
 
 local types = require("teal.types")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+local type Type = types.Type
+local type GenericType = types.GenericType
+local type StringType = types.StringType
+local type NumericType = types.NumericType
+local type IntegerType = types.IntegerType
+local type BooleanType = types.BooleanType
+local type BooleanContextType = types.BooleanContextType
+local type TypeDeclType = types.TypeDeclType
+local type LiteralTableItemType = types.LiteralTableItemType
+local type NominalType = types.NominalType
+local type SelfType = types.SelfType
+local type ArrayLikeType = types.ArrayLikeType
+local type ArrayType = types.ArrayType
+local type RecordLikeType = types.RecordLikeType
+local type RecordType = types.RecordType
+local type InterfaceType = types.InterfaceType
+local type InvalidType = types.InvalidType
+local type UnknownType = types.UnknownType
+local type TupleType = types.TupleType
+local type TypeArgType = types.TypeArgType
+local type TypeVarType = types.TypeVarType
+local type MapType = types.MapType
+local type NilType = types.NilType
+local type EmptyTableType = types.EmptyTableType
+local type FunctionType = types.FunctionType
+local type UnionType = types.UnionType
+local type TupleTableType = types.TupleTableType
+local type PolyType = types.PolyType
+local type EnumType = types.EnumType
+local type FirstClassType = types.FirstClassType
+local type TypeName = types.TypeName
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -59,13 +59,13 @@ local untuple = types.untuple
 local wrap_generic_if_typeargs = types.wrap_generic_if_typeargs
 
 local parser = require("teal.parser")
-
-
+local type Node = parser.Node
+local type NodeKind = parser.NodeKind
 local node_at = parser.node_at
 local node_is_funcall = parser.node_is_funcall
 
 local facts = require("teal.facts")
-local IsFact = facts.IsFact
+local type IsFact = facts.IsFact
 local facts_not = facts.facts_not
 
 local macroexps = require("teal.macroexps")
@@ -76,63 +76,63 @@ local binop_to_metamethod = metamethods.binop_to_metamethod
 local flip_binop_to_metamethod = metamethods.flip_binop_to_metamethod
 
 local traversal = require("teal.traversal")
-
-
+local type VisitorAfter = traversal.VisitorAfter
+local type Visitor = traversal.Visitor
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
 
 local type_reporter = require("teal.type_reporter")
 
 local type_errors = require("teal.type_errors")
-
+local type CheckableKey = type_errors.CheckableKey
 local ensure_not_abstract = type_errors.ensure_not_abstract
 
 local variables = require("teal.variables")
-
+local type Variable = variables.Variable
 
 local util = require("teal.util")
 local shallow_copy_table = util.shallow_copy_table
 local sorted_keys = util.sorted_keys
 
 local environment = require("teal.environment")
+local type CheckOptions = environment.CheckOptions
+local type Env = environment.Env
+local type Result = environment.Result
+
+--------------------------------------------------------------------------------
+
+local record visitors
+   check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
+end
+
+--------------------------------------------------------------------------------
+
+local macroexp a_self(w: Where, display_type: Type): SelfType
+   return a_type(w, "self", { display_type = display_type } as SelfType)
+end
+
+local macroexp a_tuple(w: Where, t: {Type}): TupleType
+   return a_type(w, "tuple", { tuple = t } as TupleType)
+end
+
+local macroexp an_array(w: Where, t: Type): ArrayType
+   return a_type(w, "array", { elements = t } as ArrayType)
+end
+
+local macroexp a_map(w: Where, k: Type, v: Type): MapType
+   return a_type(w, "map", { keys = k, values = v } as MapType)
+end
+
+local macroexp an_invalid(w: Where): InvalidType
+   return a_type(w, "invalid", {} as InvalidType)
+end
+
+local macroexp an_unknown(w: Where): UnknownType
+   return a_type(w, "unknown", {} as UnknownType)
+end
 
 
-
-
-
-
-local visitors = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+--------------------------------------------------------------------------------
 
 local numeric_binop = {
    ["number"] = {
@@ -221,10 +221,10 @@ local equality_binop = {
    ["thread"] = {
       ["thread"] = "boolean",
       ["nil"] = "boolean",
-   },
+   }
 }
 
-local unop_types = {
+local unop_types: {string:{TypeName:TypeName}} = {
    ["#"] = {
       ["enum"] = "integer",
       ["string"] = "integer",
@@ -255,7 +255,7 @@ local unop_types = {
    },
 }
 
-local binop_types = {
+local binop_types: {string:{TypeName:{TypeName:TypeName}}} = {
    ["+"] = numeric_binop,
    ["-"] = numeric_binop,
    ["*"] = numeric_binop,
@@ -310,7 +310,7 @@ local binop_types = {
       },
       ["thread"] = {
          ["boolean"] = "boolean",
-      },
+      }
    },
    [".."] = {
       ["string"] = {
@@ -336,30 +336,30 @@ local binop_types = {
          ["integer"] = "string",
          ["string"] = "string",
          ["enum"] = "string",
-      },
+      }
    },
 }
 
-local function resolve_typedecl(t)
-   if t.typename == "typedecl" then
+local function resolve_typedecl(t: Type): Type
+   if t is TypeDeclType then
       return t.def
    else
       return t
    end
 end
 
-
+-- This type must never be used for any values
 local NONE = a_type({ f = "@none", x = -1, y = -1 }, "none", {})
 
-local function end_scope_and_none_type(self, node, _children)
+local function end_scope_and_none_type(self: Context, node: Node, _children: {Type}): Type
    self:end_scope(node)
    return NONE
 end
 
-local is_lua_table_type
+local is_lua_table_type: function(t: Type): boolean
 
 do
-   local known_table_types = {
+   local known_table_types: {TypeName:boolean} = {
       array = true,
       map = true,
       record = true,
@@ -367,40 +367,40 @@ do
       interface = true,
    }
 
-
-   is_lua_table_type = function(t)
-      return known_table_types[t.typename] and
-      not (t.fields and t.is_userdata)
+   -- Is the type represented concretely as a Lua table?
+   is_lua_table_type = function(t: Type): boolean
+      return known_table_types[t.typename]
+             and not (t is RecordLikeType and t.is_userdata)
    end
 end
 
-local function type_is_closable(t)
-   if t.typename == "invalid" then
+local function type_is_closable(t: Type): boolean
+   if t is InvalidType then
       return false
    end
-   if t.typename == "nil" then
+   if t is NilType then
       return true
    end
-   if t.typename == "nominal" then
+   if t is NominalType then
       t = assert(t.resolved)
    end
-   if t.fields then
+   if t is RecordLikeType then
       return t.meta_fields and t.meta_fields["__close"] ~= nil
    end
 end
 
-local definitely_not_closable_exprs = {
+local definitely_not_closable_exprs <const>: {NodeKind:boolean} = {
    ["string"] = true,
    ["number"] = true,
    ["integer"] = true,
    ["boolean"] = true,
    ["literal_table"] = true,
 }
-local function expr_is_definitely_not_closable(e)
+local function expr_is_definitely_not_closable(e: Node): boolean
    return definitely_not_closable_exprs[e.kind]
 end
 
-local function make_is_node(self, var, v, t)
+local function make_is_node(self: Context, var: Node, v: Type, t: Type): Node, integer
    local node = node_at(var, { kind = "op", op = { op = "is", arity = 2, prec = 3 } })
    node.e1 = var
    node.e2 = node_at(var, { kind = "cast", casttype = self:infer_at(var, t) })
@@ -412,18 +412,18 @@ local function make_is_node(self, var, v, t)
    return node, has
 end
 
-local function convert_is_of_union_to_or_of_is(self, node, v, u)
+local function convert_is_of_union_to_or_of_is(self: Context, node: Node, v: Type, u: UnionType): boolean
    local var = node.e1
    node.op.op = "or"
    node.op.arity = 2
    node.op.prec = 1
-   local has_any = nil
+   local has_any: integer = nil
    node.e1, has_any = make_is_node(self, var, v, u.types[1])
    local at = node
    local n = #u.types
    for i = 2, n - 1 do
       at.e2 = node_at(var, { kind = "op", op = { op = "or", arity = 2, prec = 1 } })
-      local has
+      local has: integer
       at.e2.e1, has = make_is_node(self, var, v, u.types[i])
       has_any = has_any or has
       self.fdb:set_or(node, at.e1, at.e2)
@@ -434,23 +434,23 @@ local function convert_is_of_union_to_or_of_is(self, node, v, u)
    return not not has_any
 end
 
-local function flat_tuple(w, vt)
+local function flat_tuple(w: Where, vt: {FirstClassType | TupleType}): TupleType
    local n_vals = #vt
-   local ret = a_type(w, "tuple", { tuple = {} })
+   local ret = a_tuple(w, {})
    local rt = ret.tuple
 
    if n_vals == 0 then
       return ret
    end
 
-
+   -- get all arguments except the last...
    for i = 1, n_vals - 1 do
       rt[i] = untuple(vt[i])
    end
 
    local last = vt[n_vals]
-   if last.typename == "tuple" then
-
+   if last is TupleType then
+      -- ...then unpack the last tuple
       local lt = last.tuple
       for _, v in ipairs(lt) do
          table.insert(rt, v)
@@ -463,18 +463,18 @@ local function flat_tuple(w, vt)
    return ret
 end
 
-local function get_assignment_values(w, vals, wanted)
+local function get_assignment_values(w: Where, vals: TupleType, wanted: integer): TupleType
    if vals == nil then
-      return a_type(w, "tuple", { tuple = {} })
+      return a_tuple(w, {})
    end
 
-
+   -- ...if the last is vararg, repeat its type until it matches the number of wanted args
    if vals.is_va then
       local vt = vals.tuple
       local n_vals = #vt
       if n_vals > 0 and n_vals < wanted then
          local last = vt[n_vals]
-         local ret = a_type(w, "tuple", { tuple = {} })
+         local ret = a_tuple(w, {})
          local rt = ret.tuple
          for i = 1, n_vals do
             table.insert(rt, vt[i])
@@ -488,27 +488,27 @@ local function get_assignment_values(w, vals, wanted)
    return vals
 end
 
-
-local function is_localizing_a_variable(node, i)
-   return node.exps and
-   node.exps[i] and
-   node.exps[i].kind == "variable" and
-   node.exps[i].tk == node.vars[i].tk
+-- is the i-th assignment in a local declaration of the form `x = x` ?
+local function is_localizing_a_variable(node: Node, i: integer): boolean
+   return node.exps
+      and node.exps[i]
+      and node.exps[i].kind == "variable"
+      and node.exps[i].tk == node.vars[i].tk
 end
 
-local function set_expected_types_to_decltuple(self, node, children)
+local function set_expected_types_to_decltuple(self: Context, node: Node, children: {Type})
    local decltuple = node.kind == "assignment" and children[1] or node.decltuple
-   assert(decltuple.typename == "tuple")
+   assert(decltuple is TupleType)
    local decls = decltuple.tuple
    if decls and node.exps then
       local ndecl = #decls
       local nexps = #node.exps
       for i = 1, nexps do
-         local typ
+         local typ: Type
          typ = decls[i]
          if typ then
             if i == nexps and ndecl > nexps and node_is_funcall(node.exps[i]) then
-               typ = a_type(node, "tuple", { tuple = {} })
+               typ = a_tuple(node, {})
                for a = i, ndecl do
                   table.insert(typ.tuple, decls[a])
                end
@@ -528,11 +528,11 @@ local function set_expected_types_to_decltuple(self, node, children)
    end
 end
 
-local function is_positive_int(n)
+local function is_positive_int(n: number): boolean
    return n and n >= 1 and math.floor(n) == n
 end
 
-local function infer_table_literal(self, node, children)
+local function infer_table_literal(self: Context, node: Node, children: {LiteralTableItemType}): Type
    local is_record = false
    local is_array = false
    local is_map = false
@@ -543,23 +543,23 @@ local function infer_table_literal(self, node, children)
    local last_array_idx = 1
    local largest_array_idx = -1
 
-   local seen_keys = {}
+   local seen_keys: {CheckableKey:Where} = {}
 
-
-   local typs
-
-   local fields
-   local field_order
-
-   local elements
-
-   local keys, values
+   -- array, tupletable
+   local typs: {Type}
+   -- record
+   local fields: {string:Type}
+   local field_order: {string}
+   -- array, record
+   local elements: Type
+   -- map
+   local keys, values: Type, Type
 
    for i, child in ipairs(children) do
       local ck = child.kname
       local cktype = child.ktype
-      local key = ck
-      local n
+      local key: CheckableKey = ck
+      local n: number
       if not key then
          n = node[i].key.constnum
          key = n
@@ -579,7 +579,7 @@ local function infer_table_literal(self, node, children)
          end
          fields[ck] = uvtype
          table.insert(field_order, ck)
-      elseif is_numeric_type(cktype) then
+      elseif cktype is NumericType then
          is_array = true
          if not is_not_tuple then
             is_tuple = true
@@ -590,8 +590,8 @@ local function infer_table_literal(self, node, children)
 
          if node[i].key_parsed == "implicit" then
             local cv = child.vtype
-            if i == #children and cv.typename == "tuple" then
-
+            if i == #children and cv is TupleType then
+               -- need to expand last item in an array (e.g { 1, 2, 3, f() })
                for _, c in ipairs(cv.tuple) do
                   elements = self:expand_type(node, elements, c)
                   typs[last_array_idx] = untuple(c)
@@ -602,14 +602,14 @@ local function infer_table_literal(self, node, children)
                last_array_idx = last_array_idx + 1
                elements = self:expand_type(node, elements, uvtype)
             end
-         else
+         else -- explicit
             if not is_positive_int(n) then
                elements = self:expand_type(node, elements, uvtype)
                is_not_tuple = true
             elseif n then
-               typs[n] = uvtype
+               typs[n as integer] = uvtype
                if n > largest_array_idx then
-                  largest_array_idx = n
+                  largest_array_idx = n as integer
                end
                elements = self:expand_type(node, elements, uvtype)
             end
@@ -628,38 +628,38 @@ local function infer_table_literal(self, node, children)
       end
    end
 
-   local t
+   local t: Type
 
    if is_array and is_map then
       self.errs:add(node, "cannot determine type of table literal")
-      t = a_type(node, "map", { keys =
-self:expand_type(node, keys, a_type(node, "integer", {})), values =
-
-self:expand_type(node, values, elements) })
+      t = a_map(node,
+         self:expand_type(node, keys, a_type(node, "integer", {})),
+         self:expand_type(node, values, elements)
+      )
    elseif is_record and is_array then
       t = a_type(node, "record", {
          fields = fields,
          field_order = field_order,
          elements = elements,
          interface_list = {
-            a_type(node, "array", { elements = elements }),
-         },
-      })
-
+            an_array(node, elements)
+         }
+      } as RecordType)
+      -- TODO adopt logic from self:is_array below when we accept tupletable as an interface
    elseif is_record and is_map then
-      if keys.typename == "string" then
+      if keys is StringType then
          for _, fname in ipairs(field_order) do
             values = self:expand_type(node, values, fields[fname])
          end
-         t = a_type(node, "map", { keys = keys, values = values })
+         t = a_map(node, keys, values)
       else
          self.errs:add(node, "cannot determine type of table literal")
       end
    elseif is_array then
       local pure_array = true
       if not is_not_tuple then
-         local last_t
-         for _, current_t in pairs(typs) do
+         local last_t: Type
+         for _, current_t in pairs(typs as {integer:Type}) do
             if last_t then
                if not self:same_type(last_t, current_t) then
                   pure_array = false
@@ -670,22 +670,22 @@ self:expand_type(node, values, elements) })
          end
       end
       if pure_array then
-         t = a_type(node, "array", { elements = elements })
+         t = an_array(node, elements)
          t.consttypes = typs
          t.inferred_len = largest_array_idx - 1
       else
-         t = a_type(node, "tupletable", { inferred_at = node })
+         t = a_type(node, "tupletable", { inferred_at = node }) as TupleTableType
          t.types = typs
       end
    elseif is_record then
       t = a_type(node, "record", {
          fields = fields,
          field_order = field_order,
-      })
+      } as RecordType)
    elseif is_map then
-      t = a_type(node, "map", { keys = keys, values = values })
+      t = a_map(node, keys, values)
    elseif is_tuple then
-      t = a_type(node, "tupletable", { inferred_at = node })
+      t = a_type(node, "tupletable", { inferred_at = node }) as TupleTableType
       t.types = typs
       if not typs or #typs == 0 then
          self.errs:add(node, "cannot determine type of tuple elements")
@@ -699,7 +699,7 @@ self:expand_type(node, values, elements) })
    return type_at(node, t)
 end
 
-local function total_check_key(key, seen_keys, is_total, missing)
+local function total_check_key(key: CheckableKey, seen_keys: {CheckableKey:Where}, is_total: boolean, missing: {string}): boolean, {string}
    if not seen_keys[key] then
       missing = missing or {}
       table.insert(missing, tostring(key))
@@ -708,26 +708,26 @@ local function total_check_key(key, seen_keys, is_total, missing)
    return is_total, missing
 end
 
-local function total_record_check(t, seen_keys)
+local function total_record_check(t: RecordLikeType, seen_keys: {CheckableKey:Where}): boolean, {string}
    local is_total = true
-   local missing
+   local missing: {string}
    for _, key in ipairs(t.field_order) do
       local ftype = t.fields[key]
-      if not (ftype.typename == "typedecl" or (ftype.typename == "function" and ftype.is_record_function)) then
+      if not (ftype is TypeDeclType or (ftype is FunctionType and ftype.is_record_function)) then
          is_total, missing = total_check_key(key, seen_keys, is_total, missing)
       end
    end
    return is_total, missing
 end
 
-local function total_map_check(keys, seen_keys)
+local function total_map_check(keys: Type, seen_keys: {CheckableKey:Where}): boolean, {string}
    local is_total = true
-   local missing
-   if keys.typename == "enum" then
+   local missing: {string}
+   if keys is EnumType then
       for _, key in ipairs(sorted_keys(keys.enumset)) do
          is_total, missing = total_check_key(key, seen_keys, is_total, missing)
       end
-   elseif keys.typename == "boolean" then
+   elseif keys is BooleanType then
       for _, key in ipairs({ true, false }) do
          is_total, missing = total_check_key(key, seen_keys, is_total, missing)
       end
@@ -737,19 +737,19 @@ local function total_map_check(keys, seen_keys)
    return is_total, missing
 end
 
-local function discard_tuple(node, t, b)
-   if b.typename == "tuple" then
+local function discard_tuple(node: Node, t: Type, b: Type): Type
+   if b is TupleType then
       node.discarded_tuple = true
    end
    return untuple(t)
 end
 
-local function assert_is_a(ctx, w, t1, t2, ectx, name)
+local function assert_is_a(ctx: Context, w: Where, t1: Type, t2: Type, ectx?: Node|string, name?: string): boolean
    t1 = untuple(t1)
    t2 = untuple(t2)
 
-   if t2.typename == "emptytable" then
-      t2 = type_at(w, t2)
+   if t2 is EmptyTableType then
+      t2 = type_at(w, t2) -- minor hack: tweak point of inference
    end
 
    local ok, errs = ctx:is_a(t1, t2)
@@ -759,15 +759,15 @@ local function assert_is_a(ctx, w, t1, t2, ectx, name)
    return ok
 end
 
-local visit_node = {}
+local visit_node: Visitor<Context, NodeKind, Node, Type> = {}
 
 visit_node.cbs = {
    ["statements"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:begin_scope(node)
       end,
-      after = function(self, node, _children)
-
+      after = function(self: Context, node: Node, _children: {Type}): Type
+         -- if at the top level
          if #self.st == 2 then
             self.errs:fail_unresolved_labels(self.st[2])
             self.errs:fail_unresolved_nominals(self.st[2], self.st[1])
@@ -778,10 +778,10 @@ visit_node.cbs = {
          end
 
          return NONE
-      end,
+      end
    },
    ["local_type"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          local name = node.var.tk
          local resolved, aliasing = self:get_typedecl(node.value)
          local var = self:add_var(node.var, name, resolved, node.var.attribute)
@@ -789,19 +789,19 @@ visit_node.cbs = {
             var.aliasing = aliasing
          end
       end,
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          self:dismiss_unresolved(node.var.tk)
          return NONE
       end,
    },
    ["global_type"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          local global_scope = self.st[1]
          local name = node.var.tk
          if node.value then
             local resolved, aliasing = self:get_typedecl(node.value)
             local added = self:add_global(node.var, name, resolved)
-            if resolved.typename == "invalid" then
+            if resolved is InvalidType then
                return
             end
             node.value.newtype = resolved
@@ -818,13 +818,13 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          self:dismiss_unresolved(node.var.tk)
          return NONE
       end,
    },
    ["local_declaration"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          if self.collector then
             for _, var in ipairs(node.vars) do
                self.collector.reserve_symbol_list_slot(var)
@@ -832,8 +832,8 @@ visit_node.cbs = {
          end
       end,
       before_exp = set_expected_types_to_decltuple,
-      after = function(self, node, children)
-         local valtuple = children[3]
+      after = function(self: Context, node: Node, children: {Type}): Type
+         local valtuple = children[3] as TupleType -- may be nil
 
          local encountered_close = false
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
@@ -867,10 +867,10 @@ visit_node.cbs = {
                local w = node.exps[i] or node.exps
 
                local rt = self:to_structural(t)
-               if (not (rt.typename == "enum")) and
-                  ((not (t.typename == "nominal")) or (rt.typename == "union")) and
-                  not self:same_type(t, infertype) then
-
+               if (not rt is EnumType)
+                  and ((not t is NominalType) or (rt is UnionType))
+                  and not self:same_type(t, infertype)
+               then
                   t = self:infer_at(w, infertype)
                   self:add_var(w, var.tk, t, "const", "narrowed_declaration")
                end
@@ -887,8 +887,8 @@ visit_node.cbs = {
    },
    ["global_declaration"] = {
       before_exp = set_expected_types_to_decltuple,
-      after = function(self, node, children)
-         local valtuple = children[3]
+      after = function(self: Context, node: Node, children: {Type}): Type
+         local valtuple = children[3] as TupleType -- may be nil
 
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
@@ -910,12 +910,12 @@ visit_node.cbs = {
    },
    ["assignment"] = {
       before_exp = set_expected_types_to_decltuple,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local vartuple = children[1]
-         assert(vartuple.typename == "tuple")
+         assert(vartuple is TupleType)
          local vartypes = vartuple.tuple
          local valtuple = children[3]
-         assert(valtuple.typename == "tuple")
+         assert(valtuple is TupleType)
          local valtypes = get_assignment_values(node, valtuple, #vartypes)
          for i, vartype in ipairs(vartypes) do
             local varnode = node.vars[i]
@@ -924,21 +924,21 @@ visit_node.cbs = {
             local rvar, rval, err = self:check_assignment(varnode, vartype, valtype)
             if err == "missing" then
                if #node.exps == 1 and node_is_funcall(node.exps[1]) then
-                  local msg = #valtuple.tuple == 1 and
-                  "only 1 value is returned by the function" or
-                  ("only " .. #valtuple.tuple .. " values are returned by the function")
+                  local msg = #valtuple.tuple == 1
+                              and "only 1 value is returned by the function"
+                              or ("only " .. #valtuple.tuple .. " values are returned by the function")
                   self.errs:add_warning("hint", varnode, msg)
                end
             end
 
             if rval and rvar then
-
-               if rval.typename == "function" then
+               -- assigning a function
+               if rval is FunctionType then
                   self:widen_all_unions()
                end
 
-               if varname and (rvar.typename == "union" or rvar.typename == "interface") then
-
+               if varname and (rvar is UnionType or rvar is InterfaceType) then
+                  -- narrow unions and interfaces
                   self:add_var(varnode, varname, valtype, nil, "narrow")
                end
 
@@ -952,10 +952,10 @@ visit_node.cbs = {
       end,
    },
    ["if"] = {
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          if node.if_widens then
-
-
+            -- TODO we could collect the types from each if_block
+            -- and narrow the type to their union
             self:widen_all(node.if_widens, {})
          end
 
@@ -975,7 +975,7 @@ visit_node.cbs = {
       end,
    },
    ["if_block"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:begin_scope(node)
          if node.if_block_n > 1 then
             self:infer_negation_of_if_blocks(node, node.if_parent, node.if_block_n - 1)
@@ -984,12 +984,12 @@ visit_node.cbs = {
             node.exp.expected = a_type(node, "boolean_context", {})
          end
       end,
-      before_statements = function(self, node)
+      before_statements = function(self: Context, node: Node)
          if node.exp then
             self:apply_facts_from(node.exp)
          end
       end,
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          node.if_parent.if_widens = self:collect_if_widens(node.if_parent.if_widens)
 
          self:end_scope(node)
@@ -999,23 +999,23 @@ visit_node.cbs = {
          end
 
          return NONE
-      end,
+      end
    },
    ["while"] = {
-      before = function(self, node)
-
+      before = function(self: Context, node: Node)
+         -- widen all narrowed variables because we don't calculate a fixpoint yet
          self:widen_all_unions(node)
          node.exp.expected = a_type(node, "boolean_context", {})
       end,
-      before_statements = function(self, node)
+      before_statements = function(self: Context, node: Node)
          self:begin_scope(node)
          self:apply_facts_from(node.exp)
       end,
       after = end_scope_and_none_type,
    },
    ["label"] = {
-      before = function(self, node)
-
+      before = function(self: Context, node: Node)
+         -- widen all narrowed variables because we don't calculate a fixpoint yet
          self:widen_all_unions()
          local label_id = node.label
          do
@@ -1028,23 +1028,23 @@ visit_node.cbs = {
             end
          end
 
-
-         local scope = self.st[#self.st]
-         if scope.pending_labels and scope.pending_labels[label_id] then
-            node.used_label = true
-            scope.pending_labels[label_id] = nil
-
-         end
-
+         --for i = #self.st, 1, -1 do
+            local scope = self.st[#self.st]
+            if scope.pending_labels and scope.pending_labels[label_id] then
+               node.used_label = true
+               scope.pending_labels[label_id] = nil
+               --break
+            end
+         --end
       end,
-      after = function()
+      after = function(): Type
          return NONE
-      end,
+      end
    },
    ["goto"] = {
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          local label_id = node.label
-         local found_label
+         local found_label: Node
          for i = #self.st, 1, -1 do
             local scope = self.st[i]
             if scope.labels and scope.labels[label_id] then
@@ -1066,21 +1066,21 @@ visit_node.cbs = {
       end,
    },
    ["repeat"] = {
-      before = function(self, node)
-
+      before = function(self: Context, node: Node)
+         -- widen all narrowed variables because we don't calculate a fixpoint yet
          self:widen_all_unions(node)
          node.exp.expected = a_type(node, "boolean_context", {})
       end,
-
+      -- only end scope after checking `until`, `statements` in repeat body has is_repeat == true
       after = end_scope_and_none_type,
    },
    ["forin"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:begin_scope(node)
       end,
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          local exptuple = children[2]
-         assert(exptuple.typename == "tuple")
+         assert(exptuple is TupleType)
          local exptypes = exptuple.tuple
 
          local exp1 = node.exps[1]
@@ -1091,15 +1091,15 @@ visit_node.cbs = {
 
          self:widen_all_unions(node)
 
-         local args = a_type(node.exps, "tuple", { tuple = {
+         local args = a_tuple(node.exps, {
             node.exps[2] and exptypes[2],
-            node.exps[3] and exptypes[3],
-         } })
+            node.exps[3] and exptypes[3]
+         })
          local exp1type = self:resolve_for_call(exptypes[1], args, false)
 
-         if exp1type.typename == "poly" then
-            local _r, f
-            _r, f = self:type_check_function_call(exp1, exp1type, args, 0, nil, nil, exp1, { node.exps[2], node.exps[3] })
+         if exp1type is PolyType then
+            local _r, f: Type, Type
+            _r, f = self:type_check_function_call(exp1, exp1type, args, 0, nil, nil, exp1, {node.exps[2], node.exps[3]})
             if f then
                exp1type = f
             else
@@ -1107,9 +1107,9 @@ visit_node.cbs = {
             end
          end
 
-         if exp1type.typename == "function" then
-
-            local last
+         if exp1type is FunctionType then
+            -- TODO: check that exp1's arguments match with (optional self, explicit iterator, state)
+            local last: Type
             local rets = exp1type.rets
             for i, v in ipairs(node.vars) do
                local r = rets.tuple[i]
@@ -1117,7 +1117,7 @@ visit_node.cbs = {
                   if rets.is_va then
                      r = last
                   else
-                     r = self.feat_lax and a_type(v, "unknown", {}) or a_type(v, "invalid", {})
+                     r = self.feat_lax and an_unknown(v) or an_invalid(v)
                   end
                end
                self:add_var(v, v.tk, r)
@@ -1143,42 +1143,42 @@ visit_node.cbs = {
       after = end_scope_and_none_type,
    },
    ["fornum"] = {
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          self:widen_all_unions(node)
          self:begin_scope(node)
          local from_t = self:to_structural(untuple(children[2]))
          local to_t = self:to_structural(untuple(children[3]))
          local step_t = children[4] and self:to_structural(children[4])
-         local typename = (from_t.typename == "integer" and
-         to_t.typename == "integer" and
-         (not step_t or step_t.typename == "integer")) and
-         "integer" or
-         "number"
+         local typename: TypeName = (from_t is IntegerType and
+                                     to_t is IntegerType and
+                                     (not step_t or step_t is IntegerType))
+                                    and "integer"
+                                    or  "number"
          self:add_var(node.var, node.var.tk, a_type(node.var, typename, {}))
       end,
       after = end_scope_and_none_type,
    },
    ["return"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          local rets = self:find_var_type("@return")
-         if rets and rets.typename == "tuple" then
+         if rets and rets is TupleType then
             for i, exp in ipairs(node.exps) do
                exp.expected = rets.tuple[i]
             end
          end
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local got = children[1]
-         assert(got.typename == "tuple")
+         assert(got is TupleType)
          local got_t = got.tuple
          local n_got = #got_t
 
          node.block_returns = true
-         local expected = self:find_var_type("@return")
+         local expected = self:find_var_type("@return") as TupleType
          if not expected then
-
+            -- if at the toplevel
             local module_type = untuple(got)
-            if module_type.typename == "nominal" then
+            if module_type is NominalType then
                self:resolve_nominal(module_type)
                self.module_type = module_type.resolved
             else
@@ -1196,20 +1196,20 @@ visit_node.cbs = {
          end
 
          local n_expected = #expected_t
-         local vatype
+         local vatype: Type
          if n_expected > 0 then
             vatype = expected.is_va and expected.tuple[n_expected]
          end
 
          if n_got > n_expected and (not self.feat_lax) and not vatype then
-            self.errs:add(node, what .. ": excess return values, expected " .. n_expected .. " %s, got " .. n_got .. " %s", expected, got)
+            self.errs:add(node, what ..": excess return values, expected " .. n_expected .. " %s, got " .. n_got .. " %s", expected, got)
          end
 
-         if n_expected > 1 and
-            #node.exps == 1 and
-            node.exps[1].kind == "op" and
-            (node.exps[1].op.op == "and" or node.exps[1].op.op == "or") and
-            node.exps[1].discarded_tuple then
+         if n_expected > 1
+         and #node.exps == 1
+         and node.exps[1].kind == "op"
+         and (node.exps[1].op.op == "and" or node.exps[1].op.op == "or")
+         and node.exps[1].discarded_tuple then
             self.errs:add_warning("hint", node.exps[1].e2, "additional return values are being discarded due to '" .. node.exps[1].op.op .. "' expression; suggest parentheses if intentional")
          end
 
@@ -1217,9 +1217,9 @@ visit_node.cbs = {
             local e = expected_t[i] or vatype
             if e then
                e = untuple(e)
-               local w = (node.exps[i] and node.exps[i].x) and
-               node.exps[i] or
-               node.exps
+               local w = (node.exps[i] and node.exps[i].x)
+                         and node.exps[i]
+                         or  node.exps
                assert(w and w.x)
                assert_is_a(self, w, got_t[i], e, what)
             end
@@ -1229,7 +1229,7 @@ visit_node.cbs = {
       end,
    },
    ["variable_list"] = {
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {FirstClassType | TupleType}): Type
          local tuple = flat_tuple(node, children)
 
          for i, t in ipairs(tuple.tuple) do
@@ -1243,39 +1243,39 @@ visit_node.cbs = {
       end,
    },
    ["literal_table"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          if node.expected then
             local decltype = self:to_structural(node.expected)
 
-            if decltype.typename == "typevar" and decltype.constraint then
+            if decltype is TypeVarType and decltype.constraint then
                decltype = resolve_typedecl(self:to_structural(decltype.constraint))
             end
 
-            if decltype.typename == "generic" then
+            if decltype is GenericType then
                decltype = self:apply_generic(node, decltype)
             end
 
-            if decltype.typename == "tupletable" then
+            if decltype is TupleTableType then
                for _, child in ipairs(node) do
                   local n = child.key.constnum
                   if n and is_positive_int(n) then
-                     child.value.expected = decltype.types[n]
+                     child.value.expected = decltype.types[n as integer]
                   end
                end
-            elseif decltype.elements then
+            elseif decltype is ArrayLikeType then
                for _, child in ipairs(node) do
                   if child.key.constnum then
                      child.value.expected = decltype.elements
                   end
                end
-            elseif decltype.typename == "map" then
+            elseif decltype is MapType then
                for _, child in ipairs(node) do
                   child.key.expected = decltype.keys
                   child.value.expected = decltype.values
                end
             end
 
-            if decltype.fields then
+            if decltype is RecordLikeType then
                for _, child in ipairs(node) do
                   if child.key.conststr then
                      child.value.expected = decltype.fields[child.key.conststr]
@@ -1284,7 +1284,7 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
          self.fdb:set_truthy(node)
 
          if not node.expected then
@@ -1293,25 +1293,25 @@ visit_node.cbs = {
 
          local decltype = self:to_structural(node.expected)
 
-         local constraint
-         if decltype.typename == "typevar" and decltype.constraint then
+         local constraint: Type
+         if decltype is TypeVarType and decltype.constraint then
             constraint = resolve_typedecl(decltype.constraint)
             decltype = self:to_structural(constraint)
          end
 
-         if decltype.typename == "generic" then
+         if decltype is GenericType then
             decltype = self:apply_generic(node, decltype)
          end
 
-         if decltype.typename == "union" then
-            local single_table_type
-            local single_table_rt
+         if decltype is UnionType then
+            local single_table_type: Type
+            local single_table_rt: Type
 
             for _, t in ipairs(decltype.types) do
                local rt = self:to_structural(t)
                if is_lua_table_type(rt) then
                   if single_table_type then
-
+                     -- multiple table types in union, give up
                      single_table_type = nil
                      single_table_rt = nil
                      break
@@ -1332,40 +1332,40 @@ visit_node.cbs = {
             return infer_table_literal(self, node, children)
          end
 
-         if decltype.fields then
+         if decltype is RecordLikeType then
             self:begin_implied_scope()
             self:add_self_type(node, decltype)
             decltype = self:resolve_self(decltype, true)
             self:end_implied_scope()
          end
 
-         local force_array = nil
+         local force_array: Type = nil
 
-         local seen_keys = {}
+         local seen_keys: {CheckableKey:Where} = {}
 
          for i, child in ipairs(children) do
             local cvtype = untuple(child.vtype)
             local ck = child.kname
             local cktype = child.ktype
             local n = node[i].key.constnum
-            local b = nil
-            if cktype.typename == "boolean" then
+            local b: boolean = nil
+            if cktype is BooleanType then
                b = (node[i].key.tk == "true")
             end
             self.errs:check_redeclared_key(node[i], node, seen_keys, ck or n or b)
-            if decltype.fields and ck then
+            if decltype is RecordLikeType and ck then
                local df = decltype.fields[ck]
                if not df then
                   self.errs:add_in_context(node[i], node, "unknown field " .. ck)
                else
-                  if df.typename == "typedecl" then
+                  if df is TypeDeclType then
                      self.errs:add_in_context(node[i], node, "cannot reassign a type")
                   else
                      assert_is_a(self, node[i], cvtype, df, "in record field", ck)
                   end
                end
-            elseif decltype.typename == "tupletable" and is_numeric_type(cktype) then
-               local dt = decltype.types[n]
+            elseif decltype is TupleTableType and cktype is NumericType then
+               local dt = decltype.types[n as integer]
                if not n then
                   self.errs:add_in_context(node[i], node, "unknown index in tuple %s", decltype)
                elseif not dt then
@@ -1373,10 +1373,10 @@ visit_node.cbs = {
                else
                   assert_is_a(self, node[i], cvtype, dt, node, "in tuple: at index " .. tostring(n))
                end
-            elseif decltype.elements and is_numeric_type(cktype) then
+            elseif decltype is ArrayLikeType and cktype is NumericType then
                local cv = child.vtype
-               if cv.typename == "tuple" and i == #children and node[i].key_parsed == "implicit" then
-
+               if cv is TupleType and i == #children and node[i].key_parsed == "implicit" then
+                  -- need to expand last item in an array (e.g { 1, 2, 3, f() })
                   for ti, tt in ipairs(cv.tuple) do
                      assert_is_a(self, node[i], tt, decltype.elements, node, "expected an array: at index " .. tostring(i + ti - 1))
                   end
@@ -1384,12 +1384,12 @@ visit_node.cbs = {
                   assert_is_a(self, node[i], cvtype, decltype.elements, node, "expected an array: at index " .. tostring(n))
                end
             elseif node[i].key_parsed == "implicit" then
-               if decltype.typename == "map" then
+               if decltype is MapType then
                   assert_is_a(self, node[i].key, a_type(node[i].key, "integer", {}), decltype.keys, node, "in map key")
                   assert_is_a(self, node[i].value, cvtype, decltype.values, node, "in map value")
                end
                force_array = self:expand_type(node[i], force_array, child.vtype)
-            elseif decltype.typename == "map" then
+            elseif decltype is MapType then
                force_array = nil
                assert_is_a(self, node[i].key, cktype, decltype.keys, node, "in map key")
                assert_is_a(self, node[i].value, cvtype, decltype.values, node, "in map value")
@@ -1398,17 +1398,17 @@ visit_node.cbs = {
             end
          end
 
-         local t = force_array and a_type(node, "array", { elements = force_array }) or node.expected
+         local t = force_array and an_array(node, force_array) or node.expected
          t = self:infer_at(node, t)
 
-         if decltype.typename == "record" then
+         if decltype is RecordType then
             local rt = self:to_structural(t)
-            if rt.typename == "record" then
+            if rt is RecordType then
                node.is_total, node.missing = total_record_check(decltype, seen_keys)
             end
-         elseif decltype.typename == "map" then
+         elseif decltype is MapType then
             local rt = self:to_structural(t)
-            if rt.typename == "map" then
+            if rt is MapType then
                local rk = self:to_structural(rt.keys)
                node.is_total, node.missing = total_map_check(rk, seen_keys)
             end
@@ -1422,7 +1422,7 @@ visit_node.cbs = {
       end,
    },
    ["literal_table_item"] = {
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local kname = node.key.conststr
          local ktype = children[1]
          local vtype = children[2]
@@ -1430,37 +1430,37 @@ visit_node.cbs = {
             vtype = node.itemtype
             assert_is_a(self, node.value, children[2], node.itemtype, node)
          end
-
-
-
+         -- If we assign a method to a table item, e.g.
+         -- `local a = { myfunc = myobj.dothing }`
+         -- the table item should not be treated as a method
          vtype = ensure_not_method(vtype)
          return a_type(node, "literal_table_item", {
             kname = kname,
             ktype = ktype,
             vtype = vtype,
-         })
+         } as LiteralTableItemType)
       end,
    },
    ["local_function"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions()
          if self.collector then
             self.collector.reserve_symbol_list_slot(node)
          end
          self:begin_scope(node)
       end,
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          local args = children[2]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
 
          self:add_internal_function_variables(node, args)
          self:add_function_definition_for_recursion(node, args, self.feat_arity)
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local args = children[2]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[3]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          self:end_function_scope(node)
 
@@ -1475,18 +1475,18 @@ visit_node.cbs = {
       end,
    },
    ["local_macroexp"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions()
          if self.collector then
             self.collector.reserve_symbol_list_slot(node)
          end
          self:begin_scope(node)
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local args = children[2]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[3]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          self:end_function_scope(node)
 
@@ -1504,13 +1504,13 @@ visit_node.cbs = {
       end,
    },
    ["global_function"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions()
          self:begin_scope(node)
          if node.implicit_global_function then
             local typ = self:find_var_type(node.name.tk)
             if typ then
-               if typ.typename == "function" then
+               if typ is FunctionType then
                   node.is_predeclared_local_function = true
                elseif not self.feat_lax then
                   self.errs:add(node, "cannot declare function: type of " .. node.name.tk .. " is %s", typ)
@@ -1520,18 +1520,18 @@ visit_node.cbs = {
             end
          end
       end,
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          local args = children[2]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
 
          self:add_internal_function_variables(node, args)
          self:add_function_definition_for_recursion(node, args, self.feat_arity)
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local args = children[2]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[3]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          self:end_function_scope(node)
          if node.is_predeclared_local_function then
@@ -1548,33 +1548,33 @@ visit_node.cbs = {
       end,
    },
    ["record_function"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions()
          self:begin_scope(node)
       end,
-      before_arguments = function(self, _node, children)
+      before_arguments = function(self: Context, _node: Node, children: {Type})
          local rtype = self:to_structural(resolve_typedecl(children[1]))
 
-
-         if rtype.typename == "generic" then
+         -- add type arguments from the record implicitly
+         if rtype is GenericType then
             for _, typ in ipairs(rtype.typeargs) do
                self:add_var(nil, typ.typearg, a_type(typ, "typearg", {
                   typearg = typ.typearg,
                   constraint = typ.constraint,
-               }))
+               } as TypeArgType))
             end
          end
       end,
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          local args = children[3]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[4]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          local t = children[1]
          local rtype = self:to_structural(resolve_typedecl(t))
 
-         if rtype.typename == "generic" then
+         if rtype is GenericType then
             rtype = rtype.t
          end
 
@@ -1585,18 +1585,18 @@ visit_node.cbs = {
             end
          end
 
-         if self.feat_lax and rtype.typename == "unknown" then
+         if self.feat_lax and rtype is UnknownType then
             return
          end
 
-         if rtype.typename == "emptytable" then
+         if rtype is EmptyTableType then
             edit_type(rtype, rtype, "record")
-            local r = rtype
+            local r = rtype as RecordType
             r.fields = {}
             r.field_order = {}
          end
 
-         if not rtype.fields then
+         if not rtype is RecordLikeType then
             self.errs:add(node, "not a record: %s", rtype)
             return
          end
@@ -1607,7 +1607,7 @@ visit_node.cbs = {
                self.errs:add(node, "could not resolve type of self")
                return
             end
-            args.tuple[1] = a_type(node, "self", { display_type = selftype })
+            args.tuple[1] = a_self(node, selftype)
             self:add_var(nil, "self", selftype)
             self:add_self_type(node, selftype)
             if self.collector then
@@ -1633,15 +1633,15 @@ visit_node.cbs = {
                self.errs:redeclaration_warning(node, node.name.tk, "function")
             end
 
-            if fn_type.typename == "generic" and not (rfieldtype.typename == "generic") then
+            if fn_type is GenericType and not rfieldtype is GenericType then
                self:begin_implied_scope()
-               fn_type = self:apply_generic(node, fn_type)
+               fn_type = self:apply_generic(node, fn_type) as FunctionType
                self:end_implied_scope()
             end
 
             local ok, err = self:same_type(fn_type, rfieldtype)
             if not ok then
-               if rfieldtype.typename == "poly" then
+               if rfieldtype is PolyType then
                   self.errs:add_prefixing(node, err, "type signature does not match declaration: field has multiple function definitions (such polymorphic declarations are intended for Lua module interoperability): ")
                   return
                end
@@ -1652,14 +1652,14 @@ visit_node.cbs = {
                return
             end
          else
-            if open_t and open_t.typename == "generic" then
+            if open_t and open_t is GenericType then
                open_t = open_t.t
             end
             if self.feat_lax or rtype == open_t then
-
-
-
-
+               -- TODO is this needed?
+               -- if fn_type is GenericType then
+               --    fn_type = fresh_typeargs(self, fn_type)
+               -- end
 
                rtype.fields[node.name.tk] = fn_type
                table.insert(rtype.field_order, node.name.tk)
@@ -1683,18 +1683,18 @@ visit_node.cbs = {
 
          self:add_internal_function_variables(node, args)
       end,
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          self:end_function_scope(node)
          return NONE
       end,
    },
    ["function"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions(node)
          self:begin_scope(node)
 
          local expected = node.expected
-         if expected and expected.typename == "function" then
+         if expected and expected is FunctionType then
             for i, t in ipairs(expected.args.tuple) do
                if node.args[i] then
                   node.args[i].expected = t
@@ -1702,17 +1702,17 @@ visit_node.cbs = {
             end
          end
       end,
-      before_statements = function(self, node, children)
+      before_statements = function(self: Context, node: Node, children: {Type})
          local args = children[1]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
 
          self:add_internal_function_variables(node, args)
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local args = children[1]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[2]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          self:end_function_scope(node)
 
@@ -1724,21 +1724,21 @@ visit_node.cbs = {
       end,
    },
    ["macroexp"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:widen_all_unions(node)
          self:begin_scope(node)
       end,
-      before_exp = function(self, node, children)
+      before_exp = function(self: Context, node: Node, children: {Type})
          local args = children[1]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
 
          self:add_internal_function_variables(node, args)
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local args = children[1]
-         assert(args.typename == "tuple")
+         assert(args is TupleType)
          local rets = children[2]
-         assert(rets.typename == "tuple")
+         assert(rets is TupleType)
 
          self:end_function_scope(node)
          return wrap_generic_if_typeargs(node.typeargs, a_function(node, {
@@ -1749,21 +1749,21 @@ visit_node.cbs = {
       end,
    },
    ["cast"] = {
-      after = function(_self, node, _children)
+      after = function(_self: Context, node: Node, _children: {Type}): Type
          return node.casttype
-      end,
+      end
    },
    ["paren"] = {
-      before = function(_self, node)
+      before = function(_self: Context, node: Node)
          node.e1.expected = node.expected
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          self.fdb:set_from(node, node.e1)
          return untuple(children[1])
       end,
    },
    ["op"] = {
-      before = function(self, node)
+      before = function(self: Context, node: Node)
          self:begin_implied_scope()
          if node.expected then
             if node.op.op == "and" then
@@ -1779,7 +1779,7 @@ visit_node.cbs = {
             node.e1.expected = a_type(node, "boolean_context", {})
          end
       end,
-      before_e2 = function(self, node, children)
+      before_e2 = function(self: Context, node: Node, children: {Type})
          local e1type = children[1]
 
          if node.op.op == "and" then
@@ -1787,25 +1787,25 @@ visit_node.cbs = {
          elseif node.op.op == "or" then
             self:apply_facts(node, facts_not(node, self.fdb:get(node.e1)))
 
-
-            if node.e1.kind == "op" and node.e1.op.op == "and" and
-               node.e1.e1.kind == "op" and node.e1.e1.op.op == "is" and
-               node.e1.e2.kind == "variable" and
-               node.e1.e2.tk == node.e1.e1.e1.tk and
-               node.e1.e1.e2.casttype.typename ~= "boolean" and
-               node.e1.e1.e2.casttype.typename ~= "nil" then
-
-               self:apply_facts(node, facts_not(node, IsFact({ var = node.e1.e1.e1.tk, typ = node.e1.e1.e2.casttype, w = node })))
+            -- special-case `v is T and v or _` when T is a truthy type
+            if node.e1.kind == "op" and node.e1.op.op == "and"
+               and node.e1.e1.kind == "op" and node.e1.e1.op.op == "is"
+               and node.e1.e2.kind == "variable"
+               and node.e1.e2.tk == node.e1.e1.e1.tk
+               and node.e1.e1.e2.casttype.typename ~= "boolean"
+               and node.e1.e1.e2.casttype.typename ~= "nil"
+            then
+               self:apply_facts(node, facts_not(node, IsFact { var = node.e1.e1.e1.tk, typ = node.e1.e1.e2.casttype, w = node }))
             end
 
          elseif node.op.op == "@funcall" then
-            if e1type.typename == "generic" then
+            if e1type is GenericType then
                e1type = self:apply_generic(node, e1type)
             end
-            if e1type.typename == "function" then
+            if e1type is FunctionType then
                local argdelta = (node.e1.op and node.e1.op.op == ":") and -1 or 0
                if node.expected then
-
+                  -- this forces typevars in function return types
                   self:is_a(e1type.rets, node.expected)
                end
                local e1args = e1type.args.tuple
@@ -1824,27 +1824,27 @@ visit_node.cbs = {
                end
             end
          elseif node.op.op == "@index" then
-            if e1type.typename == "map" then
+            if e1type is MapType then
                node.e2.expected = e1type.keys
             end
          end
       end,
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          self:end_implied_scope()
 
+         -- given a and b: may be TupleType
+         local ga: Type = children[1]
+         local gb: Type = children[3]
 
-         local ga = children[1]
-         local gb = children[3]
-
-
+         -- unary a and b: not TupleType
          local ua = untuple(ga)
-         local ub
+         local ub: Type
 
+         -- resolved a and b: not NominalType
+         local ra: Type = self:to_structural(ua)
+         local rb: Type
 
-         local ra = self:to_structural(ua)
-         local rb
-
-         if ra.typename == "circular_require" or (ra.typename == "typedecl" and ra.def and ra.def.typename == "circular_require") then
+         if ra.typename == "circular_require" or (ra is TypeDeclType and ra.def and ra.def.typename == "circular_require") then
             return self.errs:invalid_at(node, "cannot dereference a type from a circular require")
          end
 
@@ -1854,7 +1854,7 @@ visit_node.cbs = {
                   self.errs:add_unknown_dot(node, node.e1.e1.tk .. "." .. node.e1.e2.tk)
                end
             end
-            assert(gb.typename == "tuple")
+            assert(gb is TupleType)
             local t = self:type_check_funcall(node, ua, gb)
             return t
 
@@ -1865,7 +1865,7 @@ visit_node.cbs = {
             end
             return gb
 
-         elseif node.op.op == "is" and ra.typename == "typedecl" then
+         elseif node.op.op == "is" and ra is TypeDeclType then
             return self.errs:invalid_at(node, "can only use 'is' on variables, not types")
          end
 
@@ -1873,12 +1873,12 @@ visit_node.cbs = {
          if not ok then
             return self.errs:invalid_at(node.e1, err)
          end
-         if ra.typename == "typedecl" and ra.def.typename == "record" then
+         if ra is TypeDeclType and ra.def.typename == "record" then
             ra = ra.def
          end
 
-
-
+         -- "@funcall" and "as" are the only operators that use tuples, and always in the b position;
+         -- after they are handled above, we can resolve b's tuple and only use that instead.
          if gb then
             ub = untuple(gb)
             rb = self:to_structural(ub)
@@ -1886,7 +1886,7 @@ visit_node.cbs = {
             if not ok then
                return self.errs:invalid_at(node.e2, err)
             end
-            if rb.typename == "typedecl" and rb.def.typename == "record" then
+            if rb is TypeDeclType and rb.def.typename == "record" then
                rb = rb.def
             end
          end
@@ -1895,11 +1895,11 @@ visit_node.cbs = {
             node.receiver = ua
 
             assert(node.e2.kind == "identifier")
-            local bnode = node_at(node.e2, {
+            local bnode: Node = node_at(node.e2, {
                tk = node.e2.tk,
                kind = "string",
             })
-            local btype = a_type(node.e2, "string", { literal = node.e2.tk })
+            local btype = a_type(node.e2, "string", { literal = node.e2.tk } as StringType)
             local t = self:type_check_index(node.e1, bnode, ua, btype)
             if t.needs_compat then
                node.op.needs_compat = true
@@ -1913,10 +1913,10 @@ visit_node.cbs = {
          end
 
          if node.op.op == "is" then
-            if ra.typename == "typedecl" then
+            if ra is TypeDeclType then
                self.errs:add(node, "can only use 'is' on variables, not types")
             elseif node.e1.kind == "variable" then
-               if rb.typename == "union" then
+               if rb is UnionType then
                   convert_is_of_union_to_or_of_is(self, node, ra, rb)
                else
                   self:check_metamethod(node, "__is", ra, resolve_typedecl(rb), ua, ub)
@@ -1931,13 +1931,13 @@ visit_node.cbs = {
          if node.op.op == ":" then
             node.receiver = ua
 
-
-
-            if self.feat_lax and (is_unknown(ua) or ua.typename == "typevar") then
+            -- we handle ':' separately from '.' because ':' is specific to records,
+            -- so we produce different error messages
+            if self.feat_lax and (is_unknown(ua) or ua is TypeVarType) then
                if node.e1.kind == "variable" then
                   self.errs:add_unknown_dot(node.e1, node.e1.tk .. "." .. node.e2.tk)
                end
-               return a_type(node, "unknown", {})
+               return an_unknown(node)
             end
 
             local t, e = self:match_record_key(ra, node.e1, node.e2.conststr or node.e2.tk)
@@ -1959,59 +1959,59 @@ visit_node.cbs = {
          end
 
          if node.op.op == "or" then
-            local t
+            local t: Type
 
             local expected = node.expected and self:to_structural(untuple(node.expected))
 
-            if ub.typename == "nil" then
+            if ub is NilType then
                self.fdb:unset(node)
                t = ua
 
-            elseif is_lua_table_type(ra) and rb.typename == "emptytable" then
+            elseif is_lua_table_type(ra) and rb is EmptyTableType then
                self.fdb:unset(node)
                t = ua
 
-            elseif ((ra.typename == "enum" and rb.typename == "string" and self:is_a(rb, ra)) or
-               (ra.typename == "string" and rb.typename == "enum" and self:is_a(ra, rb))) then
+            elseif ((ra is EnumType and rb is StringType and self:is_a(rb, ra))
+               or (ra is StringType and rb is EnumType and self:is_a(ra, rb))) then
                self.fdb:unset(node)
-               t = (ra.typename == "enum" and ra or rb)
+               t = (ra is EnumType and ra or rb)
 
-            elseif expected and expected.typename == "union" then
-
+            elseif expected and expected is UnionType then
+               -- must be checked after string/enum above
                self.fdb:set_or(node, node.e1, node.e2)
-               local u = unite(node, { ra, rb }, true)
-               if u.typename == "union" then
+               local u = unite(node, {ra, rb}, true)
+               if u is UnionType then
                   ok, err = is_valid_union(u)
                   if not ok then
-                     u = err and self.errs:invalid_at(node, err, u) or a_type(node, "invalid", {})
+                     u = err and self.errs:invalid_at(node, err, u) or an_invalid(node)
                   end
                end
                t = u
 
-
-            elseif ra.typename == "union" and not (rb.typename == "union") and self:is_a(rb, ra) then
-
+            -- prefer the union type if it already works and the other one isn't a union
+            elseif ra is UnionType and not (rb is UnionType) and self:is_a(rb, ra) then
+               -- convert it to the union type
                t = drop_constant_value(ra)
 
-            elseif rb.typename == "union" and not (ra.typename == "union") and self:is_a(ra, rb) then
-
+            elseif rb is UnionType and not (ra is UnionType) and self:is_a(ra, rb) then
+               -- convert it to the union type
                t = drop_constant_value(rb)
 
             else
-
-
+               -- these compare using the unresolved type to prevent nominal types resolving into
+               -- each other.
                local a_ge_b = self:is_a(ub, ua)
                local b_ge_a = self:is_a(ua, ub)
                self.fdb:set_or(node, node.e1, node.e2)
-
-
+               -- TODO: change this to use unresolved types, but make sure that it works with
+               -- table literal and nominal type
                local is_same = self:same_type(ra, rb)
 
-
+               -- we can have some types that can be converted into either
                local ambiguous = a_ge_b and b_ge_a and not is_same
 
-
-
+               -- prefer a type that we can easily work out rather than defaulting to the expected one
+               -- (the expected one might need to be collapsed later with special functions)
                if is_same then
                   t = ua
                elseif (a_ge_b or b_ge_a) and not ambiguous then
@@ -2026,14 +2026,14 @@ visit_node.cbs = {
                      self.errs:add_warning("debug", node, "the resulting type is ambiguous: %s or %s", ua, ub)
                      self.errs:add_warning("debug", node, "currently choosing %s", ub)
                   end
-
+                  -- workaround to keep existing code working
                   t = ub
                end
                if t then
                   t = drop_constant_value(t)
                end
 
-               if expected and expected.typename == "boolean_context" then
+               if expected and expected is BooleanContextType then
                   t = a_type(node, "boolean", {})
                end
             end
@@ -2041,7 +2041,7 @@ visit_node.cbs = {
             if t then
                return discard_tuple(node, t, gb)
             end
-
+            -- else fallthrough to general binop handler
          end
 
          if node.op.op == "==" or node.op.op == "~=" then
@@ -2049,22 +2049,22 @@ visit_node.cbs = {
                self:check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb, ua, ub)
             end
 
-            if ra.typename == "enum" and rb.typename == "string" then
+            if ra is EnumType and rb is StringType then
                if not (rb.literal and ra.enumset[rb.literal]) then
                   return self.errs:invalid_at(node, "%s is not a member of %s", ub, ua)
                end
-            elseif ra.typename == "tupletable" and rb.typename == "tupletable" and #ra.types ~= #rb.types then
+            elseif ra is TupleTableType and rb is TupleTableType and #ra.types ~= #rb.types then
                return self.errs:invalid_at(node, "tuples are not the same size")
-            elseif self:is_a(ub, ua) or ua.typename == "typevar" then
+            elseif self:is_a(ub, ua) or ua is TypeVarType then
                if node.op.op == "==" and node.e1.kind == "variable" then
                   self.fdb:set_eq(node, node.e1.tk, ub)
                end
-            elseif self:is_a(ua, ub) or ub.typename == "typevar" then
+            elseif self:is_a(ua, ub) or ub is TypeVarType then
                if node.op.op == "==" and node.e2.kind == "variable" then
                   self.fdb:set_eq(node, node.e2.tk, ua)
                end
             elseif self.feat_lax and (is_unknown(ua) or is_unknown(ub)) then
-               return a_type(node, "unknown", {})
+               return an_unknown(node)
             else
                return self.errs:invalid_at(node, "types are not comparable for equality: %s and %s", ua, ub)
             end
@@ -2073,8 +2073,8 @@ visit_node.cbs = {
          end
 
          if node.op.arity == 1 and unop_types[node.op.op] then
-            if ra.typename == "union" then
-               ra = unite(node, ra.types, true)
+            if ra is UnionType then
+               ra = unite(node, ra.types, true) -- squash unions of string constants
             end
 
             local types_op = unop_types[node.op.op]
@@ -2082,7 +2082,7 @@ visit_node.cbs = {
             local tn = types_op[ra.typename]
             local t = tn and a_type(node, tn, {})
 
-            if not t and ra.fields then
+            if not t and ra is RecordLikeType then
                if ra.interface_list then
                   for _, iface in ipairs(ra.interface_list) do
                      if types_op[iface.typename] then
@@ -2100,11 +2100,11 @@ visit_node.cbs = {
                end
             end
 
-            if ra.typename == "map" then
+            if ra is MapType then
                if ra.keys.typename == "number" or ra.keys.typename == "integer" then
-                  self.errs:add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
+                   self.errs:add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
                else
-                  self.errs:add(node, "using the '#' operator on this map will always return 0")
+                   self.errs:add(node, "using the '#' operator on this map will always return 0")
                end
             end
 
@@ -2112,7 +2112,7 @@ visit_node.cbs = {
                return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
             end
 
-            if not (t.typename == "boolean" or is_unknown(t)) then
+            if not (t is BooleanType or is_unknown(t)) then
                self.fdb:set_truthy(node)
             end
 
@@ -2124,11 +2124,11 @@ visit_node.cbs = {
                self.fdb:set_or(node, node.e1, node.e2)
             end
 
-            if ra.typename == "union" then
-               ra = unite(ra, ra.types, true)
+            if ra is UnionType then
+               ra = unite(ra, ra.types, true) -- squash unions of string constants
             end
-            if rb.typename == "union" then
-               rb = unite(rb, rb.types, true)
+            if rb is UnionType then
+               rb = unite(rb, rb.types, true) -- squash unions of string constants
             end
 
             local types_op = binop_types[node.op.op]
@@ -2156,7 +2156,7 @@ visit_node.cbs = {
                end
             end
 
-            if (not t) and ua.typename == "nominal" and ub.typename == "nominal" and not node.op.meta_on_operand then
+            if (not t) and ua is NominalType and ub is NominalType and not node.op.meta_on_operand then
                if self:is_a(ua, ub) then
                   t = ua
                end
@@ -2168,8 +2168,8 @@ visit_node.cbs = {
 
             if not t then
                if node.op.op == "or" then
-                  local u = unite(node, { ua, ub })
-                  if u.typename == "union" and is_valid_union(u) then
+                  local u = unite(node, {ua, ub})
+                  if u is UnionType and is_valid_union(u) then
                      self.errs:add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
                   end
                end
@@ -2183,31 +2183,31 @@ visit_node.cbs = {
       end,
    },
    ["variable"] = {
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          if node.tk == "..." then
             local va_sentinel = self:find_var_type("@is_va")
-            if not va_sentinel or va_sentinel.typename == "nil" then
+            if not va_sentinel or va_sentinel is NilType then
                return self.errs:invalid_at(node, "cannot use '...' outside a vararg function")
             end
          end
 
-         local t
+         local t: Type
          if node.tk == "_G" then
             t, node.attribute = self:simulate_g()
          else
-            local use = node.is_lvalue and "lvalue" or "use"
+            local use: VarUse = node.is_lvalue and "lvalue" or "use"
             t, node.attribute = self:find_var_type(node.tk, use)
          end
          if not t then
             if self.feat_lax then
                self.errs:add_unknown(node, node.tk)
-               return a_type(node, "unknown", {})
+               return an_unknown(node)
             end
 
             return self.errs:invalid_at(node, "unknown variable: " .. node.tk)
          end
 
-         if t.typename == "typedecl" then
+         if t is TypeDeclType then
             t = typedecl_to_nominal(node, node.tk, t, t)
          end
 
@@ -2215,7 +2215,7 @@ visit_node.cbs = {
       end,
    },
    ["type_identifier"] = {
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          local typ, attr = self:find_var_type(node.tk)
          node.attribute = attr
          if typ then
@@ -2224,22 +2224,22 @@ visit_node.cbs = {
 
          if self.feat_lax then
             self.errs:add_unknown(node, node.tk)
-            return a_type(node, "unknown", {})
+            return an_unknown(node)
          end
 
          return self.errs:invalid_at(node, "unknown variable: " .. node.tk)
       end,
    },
    ["argument"] = {
-      after = function(self, node, children)
+      after = function(self: Context, node: Node, children: {Type}): Type
          local t = children[1]
          if not t then
             if node.expected and node.tk == "self" then
                t = node.expected
             else
-               t = self.feat_lax and
-               a_type(node, "unknown", {}) or
-               a_type(node, "any", {})
+               t = self.feat_lax
+                   and an_unknown(node)
+                   or  a_type(node, "any", {})
             end
          end
          if node.tk == "..." then
@@ -2250,17 +2250,17 @@ visit_node.cbs = {
       end,
    },
    ["identifier"] = {
-      after = function(_self, _node, _children)
-         return NONE
+      after = function(_self: Context, _node: Node, _children: {Type}): Type
+         return NONE -- type is resolved elsewhere
       end,
    },
    ["newtype"] = {
-      after = function(_self, node, _children)
+      after = function(_self: Context, node: Node, _children: {Type}): Type
          return node.newtype
       end,
    },
    ["pragma"] = {
-      after = function(self, node, _children)
+      after = function(self: Context, node: Node, _children: {Type}): Type
          if node.pkey == "arity" then
             if node.pvalue == "on" then
                self.feat_arity = true
@@ -2276,31 +2276,31 @@ visit_node.cbs = {
       end,
    },
    ["error_node"] = {
-      after = function(_self, node, _children)
-         return a_type(node, "invalid", {})
+      after = function(_self: Context, node: Node, _children: {Type}): Type
+         return an_invalid(node)
       end,
-   },
+   }
 }
 
 visit_node.cbs["break"] = {
-   after = function(_self, _node, _children)
+   after = function(_self: Context, _node: Node, _children: {Type}): Type
       return NONE
    end,
 }
 visit_node.cbs["do"] = visit_node.cbs["break"]
 
-local function after_literal(self, node)
+local function after_literal(self: Context, node: Node): Type
    self.fdb:set_truthy(node)
-   return a_type(node, node.kind, {})
+   return a_type(node, node.kind as TypeName, {})
 end
 
 visit_node.cbs["string"] = {
-   after = function(self, node, _children)
-      local t = after_literal(self, node)
+   after = function(self: Context, node: Node, _children: {Type}): Type
+      local t = after_literal(self, node) as StringType
       t.literal = node.conststr
 
       local expected = node.expected and self:to_structural(node.expected)
-      if expected and expected.typename == "enum" and self:is_a(t, expected) then
+      if expected and expected is EnumType and self:is_a(t, expected) then
          return node.expected
       end
 
@@ -2311,7 +2311,7 @@ visit_node.cbs["number"] = { after = after_literal }
 visit_node.cbs["integer"] = { after = after_literal }
 
 visit_node.cbs["boolean"] = {
-   after = function(self, node, _children)
+   after = function(self: Context, node: Node, _children: {Type}): Type
       local t = after_literal(self, node)
       if node.tk == "true" then
          self.fdb:set_truthy(node)
@@ -2327,7 +2327,7 @@ visit_node.cbs["..."] = visit_node.cbs["variable"]
 visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
 visit_node.cbs["expression_list"] = visit_node.cbs["variable_list"]
 
-visit_node.after = function(_self, node, _children, t)
+visit_node.after = function(_self: Context, node: Node, _children: {Type}, t: Type): Type
    if node.expanded then
       macroexps.apply(node)
    end
@@ -2337,11 +2337,11 @@ end
 
 
 
-local function ensure_is_method_self(typ, selfarg, g)
-   if selfarg.typename == "self" then
+local function ensure_is_method_self(typ: RecordLikeType, selfarg: Type, g?: GenericType): boolean
+   if selfarg is SelfType then
       return true
    end
-   if not (selfarg.typename == "nominal") then
+   if not selfarg is NominalType then
       return false
    end
 
@@ -2358,9 +2358,9 @@ local function ensure_is_method_self(typ, selfarg, g)
          return false
       end
 
-      for j = 1, #g.typeargs do
+      for j=1,#g.typeargs do
          local tv = selfarg.typevals[j]
-         if not (tv and tv.typename == "typevar" and tv.typevar == g.typeargs[j].typearg) then
+         if not (tv and tv is TypeVarType and tv.typevar == g.typeargs[j].typearg) then
             return false
          end
       end
@@ -2369,7 +2369,7 @@ local function ensure_is_method_self(typ, selfarg, g)
    return true
 end
 
-local metamethod_is_method = {
+local metamethod_is_method: {string: boolean} = {
    ["__bnot"] = true,
    ["__call"] = true,
    ["__close"] = true,
@@ -2383,42 +2383,42 @@ local metamethod_is_method = {
    ["__unm"] = true,
 }
 
-local visit_type
+local visit_type: Visitor<Context, TypeName, Type, Type>
 visit_type = {
    cbs = {
       ["generic"] = {
-         before = function(self, typ)
+         before = function(self: Context, typ: GenericType)
             self:begin_implied_scope()
             self:add_var(nil, "@generic", typ)
          end,
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: GenericType, _children: {Type}): Type
             self:end_implied_scope()
             return self:fresh_typeargs(typ)
          end,
       },
       ["function"] = {
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: FunctionType, _children: {Type}): Type
             if self.feat_arity == false then
                typ.min_arity = 0
             end
             return typ
-         end,
+         end
       },
       ["record"] = {
-         before = function(self, typ)
+         before = function(self: Context, typ: RecordType)
             self:begin_implied_scope()
             self:begin_temporary_record_types(typ)
          end,
-         after = function(self, typ, children)
+         after = function(self: Context, typ: RecordType, children: {Type}): Type
             local i = 1
             if typ.interface_list then
                for j, _ in ipairs(typ.interface_list) do
                   local iface = children[i]
-                  if iface.typename == "array" then
+                  if iface is ArrayType then
                      typ.interface_list[j] = iface
-                  elseif iface.typename == "nominal" then
+                  elseif iface is NominalType then
                      local ri = self:resolve_nominal(iface)
-                     if ri.typename == "interface" then
+                     if ri is InterfaceType then
                         typ.interface_list[j] = iface
                      else
                         self.errs:add(children[i], "%s is not an interface", children[i])
@@ -2431,11 +2431,11 @@ visit_type = {
                typ.elements = children[i]
                i = i + 1
             end
-            local fmacros
-            local g
+            local fmacros: {FunctionType}
+            local g: Variable
             for name, _ in fields_of(typ) do
                local ftype = children[i]
-               if ftype.typename == "function" then
+               if ftype is FunctionType then
                   if ftype.macroexp then
                      fmacros = fmacros or {}
                      table.insert(fmacros, ftype)
@@ -2447,13 +2447,13 @@ visit_type = {
                         if not g then
                            g = self:find_var("@generic")
                         end
-                        ftype.is_method = ensure_is_method_self(typ, fargs[1], g and g.t)
+                        ftype.is_method = ensure_is_method_self(typ, fargs[1], g and g.t as GenericType)
                         if ftype.is_method then
-                           fargs[1] = a_type(fargs[1], "self", { display_type = typ })
+                           fargs[1] = a_self(fargs[1], typ)
                         end
                      end
                   end
-               elseif ftype.typename == "typedecl" and ftype.is_alias then
+               elseif ftype is TypeDeclType and ftype.is_alias then
                   self:resolve_typealias(ftype)
                end
 
@@ -2462,7 +2462,7 @@ visit_type = {
             end
             for name, _ in fields_of(typ, "meta") do
                local ftype = children[i]
-               if ftype.typename == "function" then
+               if ftype is FunctionType then
                   if ftype.macroexp then
                      fmacros = fmacros or {}
                      table.insert(fmacros, ftype)
@@ -2487,7 +2487,7 @@ visit_type = {
                for _, t in ipairs(fmacros) do
                   local macroexp_type = traverse_nodes(self, t.macroexp, visit_node, visit_type)
 
-                  macroexps.check_arg_use(self, t.macroexp)
+                  macroexps.check_arg_use(self, t.macroexp as Node)
 
                   if not self:is_a(macroexp_type, t) then
                      self.errs:add(macroexp_type, "macroexp type does not match declaration")
@@ -2502,25 +2502,25 @@ visit_type = {
          end,
       },
       ["typearg"] = {
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: TypeArgType, _children: {Type}): Type
             local name = typ.typearg
-            local old = self:find_var(name, "check_only")
+            local old <const> = self:find_var(name, "check_only")
             if old then
                self.errs:redeclaration_warning(typ, name, "type argument", old)
             end
-            if simple_types[name] then
+            if simple_types[name as TypeName] then
                self.errs:add(typ, "cannot use base type name '" .. name .. "' as a type variable")
             end
 
             self:add_var(nil, name, a_type(typ, "typearg", {
                typearg = name,
                constraint = typ.constraint,
-            }))
+            } as TypeArgType))
             return typ
          end,
       },
       ["typevar"] = {
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: TypeVarType, _children: {Type}): Type
             if not self:find_var_type(typ.typevar) then
                self.errs:add(typ, "undefined type variable " .. typ.typevar)
             end
@@ -2528,7 +2528,7 @@ visit_type = {
          end,
       },
       ["nominal"] = {
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: NominalType, _children: {Type}): Type
             if typ.found then
                return typ
             end
@@ -2537,20 +2537,20 @@ visit_type = {
             if t then
                local def = t.def
                if t.is_alias then
-                  if def.typename == "generic" then
+                  if def is GenericType then
                      def = def.t
                   end
-                  if def.typename == "nominal" then
+                  if def is NominalType then
                      typ.found = def.found
                   end
                elseif def.typename ~= "circular_require" then
                   typ.found = t
                end
             elseif typearg then
-
+               -- convert nominal into a typevar
                typ.names = nil
                edit_type(typ, typ, "typevar")
-               local tv = typ
+               local tv = typ as TypeVarType
                tv.typevar = typearg.typearg
                tv.constraint = typearg.constraint
             else
@@ -2564,19 +2564,19 @@ visit_type = {
          end,
       },
       ["union"] = {
-         after = function(self, typ, _children)
+         after = function(self: Context, typ: UnionType, _children: {Type}): Type
             local _, err = is_valid_union(typ)
             if err then
                return self.errs:invalid_at(typ, err, typ)
             end
             return typ
-         end,
+         end
       },
    },
 }
 
 local default_type_visitor = {
-   after = function(_self, typ, _children)
+   after = function(_self: Context, typ: Type, _children: {Type}): Type
       return typ
    end,
 }
@@ -2605,28 +2605,28 @@ visit_type.cbs["unknown"] = default_type_visitor
 visit_type.cbs["invalid"] = default_type_visitor
 visit_type.cbs["none"] = default_type_visitor
 
+local type VisitorAfterPatcher = function<S, N, T>(VisitorAfter<S, N, T>): VisitorAfter<S, N, T>
 
-
-local function internal_compiler_check(fn)
-   return function(s, n, children, t)
+local function internal_compiler_check<S, N>(fn: VisitorAfter<S, N, Type>): VisitorAfter<S, N, Type>
+   return function(s: S, n: N, children: {Type}, t: Type): Type
       t = fn and fn(s, n, children, t) or t
 
       if type(t) ~= "table" then
-         error(((n).kind or (n).typename) .. " did not produce a type")
+         error(((n as Node).kind or (n as Type).typename) .. " did not produce a type")
       end
       if type(t.typename) ~= "string" then
-         error(((n).kind or (n).typename) .. " type does not have a typename")
+         error(((n as Node).kind or (n as Type).typename) .. " type does not have a typename")
       end
 
       return t
    end
 end
 
-local function store_type_after(fn)
-   return function(self, n, children, t)
+local function store_type_after<N>(fn: VisitorAfter<Context, N, Type>): VisitorAfter<Context, N, Type>
+   return function(self: Context, n: N, children: {Type}, t: Type): Type
       t = fn and fn(self, n, children, t) or t
 
-      local w = n
+      local w = n as Where
 
       if w.y then
          self.collector.store_type(w.y, w.x, t)
@@ -2636,8 +2636,8 @@ local function store_type_after(fn)
    end
 end
 
-local function debug_type_after(fn)
-   return function(s, node, children, t)
+local function debug_type_after<S>(fn: VisitorAfter<S, Node, Type>): VisitorAfter<S, Node, Type>
+   return function(s: S, node: Node, children: {Type}, t: Type): Type
       t = fn and fn(s, node, children, t) or t
 
       node.debug_type = t
@@ -2645,12 +2645,12 @@ local function debug_type_after(fn)
    end
 end
 
-local function patch_visitors(my_visit_node,
-   after_node,
-   my_visit_type,
-   after_type)
-
-
+local function patch_visitors(my_visit_node: Visitor<Context, NodeKind, Node, Type>,
+                              after_node: VisitorAfterPatcher<Context, Node, Type>,
+                              my_visit_type?: Visitor<Context, TypeName, Type, Type>,
+                              after_type?: VisitorAfterPatcher<Context, Type, Type>):
+                              Visitor<Context, NodeKind, Node, Type>,
+                              Visitor<Context, TypeName, Type, Type>
    if my_visit_node == visit_node then
       my_visit_node = shallow_copy_table(my_visit_node)
    end
@@ -2667,11 +2667,11 @@ local function patch_visitors(my_visit_node,
 end
 
 
-visitors.check = function(ast, filename, opts, env)
+visitors.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
    filename = filename or "?"
 
    if not env then
-      local err
+      local err: string
       env, err = environment.new(opts)
       if err then
          return nil, err
@@ -2689,20 +2689,20 @@ visitors.check = function(ast, filename, opts, env)
    local visit_node, visit_type = visit_node, visit_type
    if opts.run_internal_compiler_checks then
       visit_node, visit_type = patch_visitors(
-      visit_node, internal_compiler_check,
-      visit_type, internal_compiler_check)
-
+         visit_node, internal_compiler_check,
+         visit_type, internal_compiler_check
+      )
    end
    if self.collector then
       visit_node, visit_type = patch_visitors(
-      visit_node, store_type_after,
-      visit_type, store_type_after)
-
+         visit_node, store_type_after,
+         visit_type, store_type_after
+      )
    end
    if TL_DEBUG then
       visit_node, visit_type = patch_visitors(
-      visit_node, debug_type_after)
-
+         visit_node, debug_type_after
+      )
    end
 
    assert(ast.kind == "statements")

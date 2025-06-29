@@ -1,23 +1,23 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_checker = require("teal.checker.file_checker")
+local file_checker = require("teal.check.file_checker")
 
 local errors = require("teal.errors")
-
+local type Where = errors.Where
 
 local types = require("teal.types")
-
-
-
+local type InvalidType = types.InvalidType
+local type Type = types.Type
+local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
 
 local environment = require("teal.environment")
+local type CheckOptions = environment.CheckOptions
+local type Env = environment.Env
+local type Result = environment.Result
 
+local record require_file
+end
 
-
-
-local require_file = {}
-
-
-local function search_for(module_name, suffix, path, tried)
+local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
       local filename = entry:gsub("?", slash_name)
@@ -31,11 +31,11 @@ local function search_for(module_name, suffix, path, tried)
    return nil, nil, tried
 end
 
-function require_file.search_module(module_name, search_all)
-   local found
-   local fd
-   local tried = {}
-   local path = os.getenv("TL_PATH") or package.path
+function require_file.search_module(module_name: string, search_all: boolean): string, FILE, {string}
+   local found: string
+   local fd: FILE
+   local tried: {string} = {}
+   local path = os.getenv("TL_PATH") or package.path -- FIXME tl.path
    if search_all then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
@@ -55,24 +55,24 @@ function require_file.search_module(module_name, search_all)
    return nil, nil, tried
 end
 
-local function a_circular_require(w)
-   return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
+local function a_circular_require(w: Where): TypeDeclType
+   return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) } as TypeDeclType)
 end
 
-function require_file.require_module(env, w, module_name, opts)
+function require_file.require_module(env: Env, w: Where, module_name: string, opts: CheckOptions): Type, string
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local found, fd = require_file.search_module(module_name, true)
-   if found and (opts.feat_lax == "on" or found:match("tl$")) then
+   if found and (opts.feat_lax == "on" or found:match("tl$") as boolean) then
 
       env.module_filenames[module_name] = found
       env.modules[module_name] = a_circular_require(w)
 
       local save_defaults = env.defaults
-      local defaults = {
+      local defaults <total>: CheckOptions = {
          feat_lax = opts.feat_lax or save_defaults.feat_lax,
          feat_arity = opts.feat_arity or save_defaults.feat_arity,
          gen_compat = opts.gen_compat or save_defaults.gen_compat,
@@ -81,7 +81,7 @@ function require_file.require_module(env, w, module_name, opts)
       }
       env.defaults = defaults
 
-      local found_result, err = file_checker.check(env, found, fd)
+      local found_result, err: Result, string = file_checker.check(env, found, fd)
       assert(found_result, err)
 
       env.defaults = save_defaults
@@ -93,7 +93,7 @@ function require_file.require_module(env, w, module_name, opts)
       fd:close()
    end
 
-   return a_type(w, "invalid", {}), found
+   return a_type(w, "invalid", {} as InvalidType), found
 end
 
 return require_file

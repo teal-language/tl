@@ -1,7 +1,7 @@
 local environment = require("teal.environment")
 local type Env = environment.Env
 
-local require_file = require("teal.checker.require_file")
+local require_file = require("teal.check.require_file")
 local search_module = require_file.search_module
 
 local lua_generator = require("teal.gen.lua_generator")
@@ -12,7 +12,7 @@ local types = require("teal.types")
 local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
 
-local visitors = require("teal.checker.visitors")
+local visitors = require("teal.check.visitors")
 
 local util = require("teal.util")
 local read_file_skipping_bom = util.read_file_skipping_bom

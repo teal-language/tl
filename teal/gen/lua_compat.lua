@@ -20,7 +20,7 @@ local traverse_nodes = traversal.traverse_nodes
 local type_errors = require("teal.type_errors")
 local Errors = type_errors.Errors
 
-local visitors = require("teal.checker.visitors")
+local visitors = require("teal.check.visitors")
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys

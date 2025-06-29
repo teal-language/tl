@@ -1,4 +1,4 @@
-local node_checker = require("teal.checker.node_checker")
+local node_checker = require("teal.check.node_checker")
 local type NodeChecker = node_checker.NodeChecker
 
 local environment = require("teal.environment")

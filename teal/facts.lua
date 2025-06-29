@@ -13,7 +13,7 @@ local a_type = types.a_type
 local show_type = types.show_type
 local unite = types.unite
 
-local type_checker = require("teal.checker.type_checker")
+local type_checker = require("teal.check.type_checker")
 
 
 local util = require("teal.util")
