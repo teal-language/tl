@@ -12,7 +12,7 @@ local types = require("teal.types")
 local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
 
-local visitors = require("teal.check.visitors")
+local check = require("teal.check.check")
 
 local util = require("teal.util")
 local read_file_skipping_bom = util.read_file_skipping_bom
@@ -45,7 +45,7 @@ local function tl_package_loader(module_name: string): any, any
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) } as TypeDeclType)
 
-      local result = visitors.check(program as parser.Node, found_filename, defaults, env)
+      local result = check.check(program as parser.Node, found_filename, defaults, env)
 
       env.modules[module_name] = result.type
 

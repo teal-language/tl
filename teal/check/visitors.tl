@@ -76,12 +76,9 @@ local binop_to_metamethod = metamethods.binop_to_metamethod
 local flip_binop_to_metamethod = metamethods.flip_binop_to_metamethod
 
 local traversal = require("teal.traversal")
-local type VisitorAfter = traversal.VisitorAfter
 local type Visitor = traversal.Visitor
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
-
-local type_reporter = require("teal.type_reporter")
 
 local type_errors = require("teal.type_errors")
 local type CheckableKey = type_errors.CheckableKey
@@ -91,19 +88,19 @@ local variables = require("teal.variables")
 local type Variable = variables.Variable
 
 local util = require("teal.util")
-local shallow_copy_table = util.shallow_copy_table
 local sorted_keys = util.sorted_keys
-
-local environment = require("teal.environment")
-local type CheckOptions = environment.CheckOptions
-local type Env = environment.Env
-local type Result = environment.Result
 
 --------------------------------------------------------------------------------
 
 local record visitors
-   check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
+   visit_node: Visitor<Context, NodeKind, Node, Type>
+   visit_type: Visitor<Context, TypeName, Type, Type>
 end
+
+visitors.visit_node = {}
+visitors.visit_type = {}
+local visit_node = visitors.visit_node
+local visit_type = visitors.visit_type
 
 --------------------------------------------------------------------------------
 
@@ -758,8 +755,6 @@ local function assert_is_a(ctx: Context, w: Where, t1: Type, t2: Type, ectx?: No
    end
    return ok
 end
-
-local visit_node: Visitor<Context, NodeKind, Node, Type> = {}
 
 visit_node.cbs = {
    ["statements"] = {
@@ -2383,195 +2378,192 @@ local metamethod_is_method: {string: boolean} = {
    ["__unm"] = true,
 }
 
-local visit_type: Visitor<Context, TypeName, Type, Type>
-visit_type = {
-   cbs = {
-      ["generic"] = {
-         before = function(self: Context, typ: GenericType)
-            self:begin_implied_scope()
-            self:add_var(nil, "@generic", typ)
-         end,
-         after = function(self: Context, typ: GenericType, _children: {Type}): Type
-            self:end_implied_scope()
-            return self:fresh_typeargs(typ)
-         end,
-      },
-      ["function"] = {
-         after = function(self: Context, typ: FunctionType, _children: {Type}): Type
-            if self.feat_arity == false then
-               typ.min_arity = 0
-            end
-            return typ
+visit_type.cbs = {
+   ["generic"] = {
+      before = function(self: Context, typ: GenericType)
+         self:begin_implied_scope()
+         self:add_var(nil, "@generic", typ)
+      end,
+      after = function(self: Context, typ: GenericType, _children: {Type}): Type
+         self:end_implied_scope()
+         return self:fresh_typeargs(typ)
+      end,
+   },
+   ["function"] = {
+      after = function(self: Context, typ: FunctionType, _children: {Type}): Type
+         if self.feat_arity == false then
+            typ.min_arity = 0
          end
-      },
-      ["record"] = {
-         before = function(self: Context, typ: RecordType)
-            self:begin_implied_scope()
-            self:begin_temporary_record_types(typ)
-         end,
-         after = function(self: Context, typ: RecordType, children: {Type}): Type
-            local i = 1
-            if typ.interface_list then
-               for j, _ in ipairs(typ.interface_list) do
-                  local iface = children[i]
-                  if iface is ArrayType then
+         return typ
+      end
+   },
+   ["record"] = {
+      before = function(self: Context, typ: RecordType)
+         self:begin_implied_scope()
+         self:begin_temporary_record_types(typ)
+      end,
+      after = function(self: Context, typ: RecordType, children: {Type}): Type
+         local i = 1
+         if typ.interface_list then
+            for j, _ in ipairs(typ.interface_list) do
+               local iface = children[i]
+               if iface is ArrayType then
+                  typ.interface_list[j] = iface
+               elseif iface is NominalType then
+                  local ri = self:resolve_nominal(iface)
+                  if ri is InterfaceType then
                      typ.interface_list[j] = iface
-                  elseif iface is NominalType then
-                     local ri = self:resolve_nominal(iface)
-                     if ri is InterfaceType then
-                        typ.interface_list[j] = iface
-                     else
-                        self.errs:add(children[i], "%s is not an interface", children[i])
+                  else
+                     self.errs:add(children[i], "%s is not an interface", children[i])
+                  end
+               end
+               i = i + 1
+            end
+         end
+         if typ.elements then
+            typ.elements = children[i]
+            i = i + 1
+         end
+         local fmacros: {FunctionType}
+         local g: Variable
+         for name, _ in fields_of(typ) do
+            local ftype = children[i]
+            if ftype is FunctionType then
+               if ftype.macroexp then
+                  fmacros = fmacros or {}
+                  table.insert(fmacros, ftype)
+               end
+
+               if ftype.is_method then
+                  local fargs = ftype.args.tuple
+                  if fargs[1] then
+                     if not g then
+                        g = self:find_var("@generic")
+                     end
+                     ftype.is_method = ensure_is_method_self(typ, fargs[1], g and g.t as GenericType)
+                     if ftype.is_method then
+                        fargs[1] = a_self(fargs[1], typ)
                      end
                   end
-                  i = i + 1
+               end
+            elseif ftype is TypeDeclType and ftype.is_alias then
+               self:resolve_typealias(ftype)
+            end
+
+            typ.fields[name] = ftype
+            i = i + 1
+         end
+         for name, _ in fields_of(typ, "meta") do
+            local ftype = children[i]
+            if ftype is FunctionType then
+               if ftype.macroexp then
+                  fmacros = fmacros or {}
+                  table.insert(fmacros, ftype)
+               end
+               ftype.is_method = metamethod_is_method[name]
+            end
+            typ.meta_fields[name] = ftype
+            i = i + 1
+         end
+
+         if typ.interface_list then
+            self:expand_interfaces(typ)
+
+            if self.collector then
+               for fname, ftype in fields_of(typ) do
+                  self.env.reporter:add_field(typ, fname, ftype)
                end
             end
-            if typ.elements then
-               typ.elements = children[i]
-               i = i + 1
-            end
-            local fmacros: {FunctionType}
-            local g: Variable
-            for name, _ in fields_of(typ) do
-               local ftype = children[i]
-               if ftype is FunctionType then
-                  if ftype.macroexp then
-                     fmacros = fmacros or {}
-                     table.insert(fmacros, ftype)
-                  end
+         end
 
-                  if ftype.is_method then
-                     local fargs = ftype.args.tuple
-                     if fargs[1] then
-                        if not g then
-                           g = self:find_var("@generic")
-                        end
-                        ftype.is_method = ensure_is_method_self(typ, fargs[1], g and g.t as GenericType)
-                        if ftype.is_method then
-                           fargs[1] = a_self(fargs[1], typ)
-                        end
-                     end
-                  end
-               elseif ftype is TypeDeclType and ftype.is_alias then
-                  self:resolve_typealias(ftype)
-               end
+         if fmacros then
+            for _, t in ipairs(fmacros) do
+               local macroexp_type = traverse_nodes(self, t.macroexp, visit_node, visit_type)
 
-               typ.fields[name] = ftype
-               i = i + 1
-            end
-            for name, _ in fields_of(typ, "meta") do
-               local ftype = children[i]
-               if ftype is FunctionType then
-                  if ftype.macroexp then
-                     fmacros = fmacros or {}
-                     table.insert(fmacros, ftype)
-                  end
-                  ftype.is_method = metamethod_is_method[name]
-               end
-               typ.meta_fields[name] = ftype
-               i = i + 1
-            end
+               macroexps.check_arg_use(self, t.macroexp as Node)
 
-            if typ.interface_list then
-               self:expand_interfaces(typ)
-
-               if self.collector then
-                  for fname, ftype in fields_of(typ) do
-                     self.env.reporter:add_field(typ, fname, ftype)
-                  end
+               if not self:is_a(macroexp_type, t) then
+                  self.errs:add(macroexp_type, "macroexp type does not match declaration")
                end
             end
+         end
 
-            if fmacros then
-               for _, t in ipairs(fmacros) do
-                  local macroexp_type = traverse_nodes(self, t.macroexp, visit_node, visit_type)
+         self:end_temporary_record_types(typ)
+         self:end_implied_scope()
 
-                  macroexps.check_arg_use(self, t.macroexp as Node)
+         return typ
+      end,
+   },
+   ["typearg"] = {
+      after = function(self: Context, typ: TypeArgType, _children: {Type}): Type
+         local name = typ.typearg
+         local old <const> = self:find_var(name, "check_only")
+         if old then
+            self.errs:redeclaration_warning(typ, name, "type argument", old)
+         end
+         if simple_types[name as TypeName] then
+            self.errs:add(typ, "cannot use base type name '" .. name .. "' as a type variable")
+         end
 
-                  if not self:is_a(macroexp_type, t) then
-                     self.errs:add(macroexp_type, "macroexp type does not match declaration")
-                  end
-               end
-            end
-
-            self:end_temporary_record_types(typ)
-            self:end_implied_scope()
-
-            return typ
-         end,
-      },
-      ["typearg"] = {
-         after = function(self: Context, typ: TypeArgType, _children: {Type}): Type
-            local name = typ.typearg
-            local old <const> = self:find_var(name, "check_only")
-            if old then
-               self.errs:redeclaration_warning(typ, name, "type argument", old)
-            end
-            if simple_types[name as TypeName] then
-               self.errs:add(typ, "cannot use base type name '" .. name .. "' as a type variable")
-            end
-
-            self:add_var(nil, name, a_type(typ, "typearg", {
-               typearg = name,
-               constraint = typ.constraint,
-            } as TypeArgType))
-            return typ
-         end,
-      },
-      ["typevar"] = {
-         after = function(self: Context, typ: TypeVarType, _children: {Type}): Type
-            if not self:find_var_type(typ.typevar) then
-               self.errs:add(typ, "undefined type variable " .. typ.typevar)
-            end
-            return typ
-         end,
-      },
-      ["nominal"] = {
-         after = function(self: Context, typ: NominalType, _children: {Type}): Type
-            if typ.found then
-               return typ
-            end
-
-            local t, typearg = self:find_type(typ.names)
-            if t then
-               local def = t.def
-               if t.is_alias then
-                  if def is GenericType then
-                     def = def.t
-                  end
-                  if def is NominalType then
-                     typ.found = def.found
-                  end
-               elseif def.typename ~= "circular_require" then
-                  typ.found = t
-               end
-            elseif typearg then
-               -- convert nominal into a typevar
-               typ.names = nil
-               edit_type(typ, typ, "typevar")
-               local tv = typ as TypeVarType
-               tv.typevar = typearg.typearg
-               tv.constraint = typearg.constraint
-            else
-               local name = typ.names[1]
-               local scope = self.st[#self.st]
-               scope.pending_nominals = scope.pending_nominals or {}
-               scope.pending_nominals[name] = scope.pending_nominals[name] or {}
-               table.insert(scope.pending_nominals[name], typ)
-            end
-            return typ
-         end,
-      },
-      ["union"] = {
-         after = function(self: Context, typ: UnionType, _children: {Type}): Type
-            local _, err = is_valid_union(typ)
-            if err then
-               return self.errs:invalid_at(typ, err, typ)
-            end
+         self:add_var(nil, name, a_type(typ, "typearg", {
+            typearg = name,
+            constraint = typ.constraint,
+         } as TypeArgType))
+         return typ
+      end,
+   },
+   ["typevar"] = {
+      after = function(self: Context, typ: TypeVarType, _children: {Type}): Type
+         if not self:find_var_type(typ.typevar) then
+            self.errs:add(typ, "undefined type variable " .. typ.typevar)
+         end
+         return typ
+      end,
+   },
+   ["nominal"] = {
+      after = function(self: Context, typ: NominalType, _children: {Type}): Type
+         if typ.found then
             return typ
          end
-      },
+
+         local t, typearg = self:find_type(typ.names)
+         if t then
+            local def = t.def
+            if t.is_alias then
+               if def is GenericType then
+                  def = def.t
+               end
+               if def is NominalType then
+                  typ.found = def.found
+               end
+            elseif def.typename ~= "circular_require" then
+               typ.found = t
+            end
+         elseif typearg then
+            -- convert nominal into a typevar
+            typ.names = nil
+            edit_type(typ, typ, "typevar")
+            local tv = typ as TypeVarType
+            tv.typevar = typearg.typearg
+            tv.constraint = typearg.constraint
+         else
+            local name = typ.names[1]
+            local scope = self.st[#self.st]
+            scope.pending_nominals = scope.pending_nominals or {}
+            scope.pending_nominals[name] = scope.pending_nominals[name] or {}
+            table.insert(scope.pending_nominals[name], typ)
+         end
+         return typ
+      end,
+   },
+   ["union"] = {
+      after = function(self: Context, typ: UnionType, _children: {Type}): Type
+         local _, err = is_valid_union(typ)
+         if err then
+            return self.errs:invalid_at(typ, err, typ)
+         end
+         return typ
+      end
    },
 }
 
@@ -2604,136 +2596,5 @@ visit_type.cbs["any"] = default_type_visitor
 visit_type.cbs["unknown"] = default_type_visitor
 visit_type.cbs["invalid"] = default_type_visitor
 visit_type.cbs["none"] = default_type_visitor
-
-local type VisitorAfterPatcher = function<S, N, T>(VisitorAfter<S, N, T>): VisitorAfter<S, N, T>
-
-local function internal_compiler_check<S, N>(fn: VisitorAfter<S, N, Type>): VisitorAfter<S, N, Type>
-   return function(s: S, n: N, children: {Type}, t: Type): Type
-      t = fn and fn(s, n, children, t) or t
-
-      if type(t) ~= "table" then
-         error(((n as Node).kind or (n as Type).typename) .. " did not produce a type")
-      end
-      if type(t.typename) ~= "string" then
-         error(((n as Node).kind or (n as Type).typename) .. " type does not have a typename")
-      end
-
-      return t
-   end
-end
-
-local function store_type_after<N>(fn: VisitorAfter<Context, N, Type>): VisitorAfter<Context, N, Type>
-   return function(self: Context, n: N, children: {Type}, t: Type): Type
-      t = fn and fn(self, n, children, t) or t
-
-      local w = n as Where
-
-      if w.y then
-         self.collector.store_type(w.y, w.x, t)
-      end
-
-      return t
-   end
-end
-
-local function debug_type_after<S>(fn: VisitorAfter<S, Node, Type>): VisitorAfter<S, Node, Type>
-   return function(s: S, node: Node, children: {Type}, t: Type): Type
-      t = fn and fn(s, node, children, t) or t
-
-      node.debug_type = t
-      return t
-   end
-end
-
-local function patch_visitors(my_visit_node: Visitor<Context, NodeKind, Node, Type>,
-                              after_node: VisitorAfterPatcher<Context, Node, Type>,
-                              my_visit_type?: Visitor<Context, TypeName, Type, Type>,
-                              after_type?: VisitorAfterPatcher<Context, Type, Type>):
-                              Visitor<Context, NodeKind, Node, Type>,
-                              Visitor<Context, TypeName, Type, Type>
-   if my_visit_node == visit_node then
-      my_visit_node = shallow_copy_table(my_visit_node)
-   end
-   my_visit_node.after = after_node(my_visit_node.after)
-   if my_visit_type then
-      if my_visit_type == visit_type then
-         my_visit_type = shallow_copy_table(my_visit_type)
-      end
-      my_visit_type.after = after_type(my_visit_type.after)
-   else
-      my_visit_type = visit_type
-   end
-   return my_visit_node, my_visit_type
-end
-
-
-visitors.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
-   filename = filename or "?"
-
-   if not env then
-      local err: string
-      env, err = environment.new(opts)
-      if err then
-         return nil, err
-      end
-   end
-   opts = opts or env.defaults
-
-   local self = Context.new(env, filename, opts)
-
-   if env.report_types then
-      env.reporter = env.reporter or type_reporter.new()
-      self.collector = env.reporter:get_collector(filename)
-   end
-
-   local visit_node, visit_type = visit_node, visit_type
-   if opts.run_internal_compiler_checks then
-      visit_node, visit_type = patch_visitors(
-         visit_node, internal_compiler_check,
-         visit_type, internal_compiler_check
-      )
-   end
-   if self.collector then
-      visit_node, visit_type = patch_visitors(
-         visit_node, store_type_after,
-         visit_type, store_type_after
-      )
-   end
-   if TL_DEBUG then
-      visit_node, visit_type = patch_visitors(
-         visit_node, debug_type_after
-      )
-   end
-
-   assert(ast.kind == "statements")
-   traverse_nodes(self, ast, visit_node, visit_type)
-
-   local global_scope = self.st[1]
-   variables.close_types(global_scope)
-   self.errs:check_var_usage(global_scope, true)
-
-   errors.clear_redundant_errors(self.errs.errors)
-
-
-   local result = {
-      ast = ast,
-      env = env,
-      type = self.module_type or a_type(ast, "boolean", {}),
-      filename = filename,
-      warnings = self.errs.warnings,
-      type_errors = self.errs.errors,
-      dependencies = self.dependencies,
-      needs_compat = self.needs_compat,
-   }
-
-   env.loaded[filename] = result
-   table.insert(env.loaded_order, filename or "")
-
-   if self.collector then
-      env.reporter:store_result(self.collector, env.globals)
-   end
-
-   return result
-end
 
 return visitors

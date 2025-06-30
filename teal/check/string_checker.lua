@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local table = _tl_compat and _tl_compat.table or table; local visitors = require("teal.check.visitors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
 
 local types = require("teal.types")
 local a_type = types.a_type
@@ -38,7 +38,7 @@ function string_checker.check(env, input, filename, parse_lang)
       return result
    end
 
-   local result = visitors.check(program, filename, env.defaults, env)
+   local result = check.check(program, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
 
