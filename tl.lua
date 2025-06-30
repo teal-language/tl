@@ -23,7 +23,7 @@ local require_file = require("teal.check.require_file")
 
 local string_checker = require("teal.check.string_checker")
 
-local visitors = require("teal.check.visitors")
+local check = require("teal.check.check")
 
 local type_reporter = require("teal.type_reporter")
 
@@ -129,7 +129,7 @@ local tl = { EnvOptions = {}, TypeCheckOptions = {} }
 
 
 
-tl.check = visitors.check
+tl.check = check.check
 tl.search_module = require_file.search_module
 tl.warning_kinds = errors.warning_kinds
 tl.lex = lexer.lex
