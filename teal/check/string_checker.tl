@@ -1,4 +1,4 @@
-local visitors = require("teal.check.visitors")
+local check = require("teal.check.check")
 
 local types = require("teal.types")
 local a_type = types.a_type
@@ -38,7 +38,7 @@ function string_checker.check(env: Env, input: string, filename?: string, parse_
       return result
    end
 
-   local result = visitors.check(program as Node, filename, env.defaults, env)
+   local result = check.check(program as Node, filename, env.defaults, env)
 
    result.syntax_errors = syntax_errors
 

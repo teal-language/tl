@@ -20,7 +20,7 @@ local traverse_nodes = traversal.traverse_nodes
 local type_errors = require("teal.type_errors")
 local Errors = type_errors.Errors
 
-local visitors = require("teal.check.visitors")
+local check = require("teal.check.check")
 
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
@@ -47,7 +47,7 @@ local function add_compat_entries(program, used_set, gen_compat)
       local code = compat_code_cache[name]
       if not code then
          code = parser.parse(text, "@internal", "lua")
-         visitors.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
+         check.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
