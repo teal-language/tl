@@ -1,11 +1,11 @@
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 local type Error = errors.Error
 
-local lexer = require("teal.lexer")
+local type lexer = require("teal.lexer")
 local type Comment = lexer.Comment
 
 -- FIXME because of the module split, this needs to be global

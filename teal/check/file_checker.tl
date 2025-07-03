@@ -1,6 +1,6 @@
 local string_checker = require("teal.check.string_checker")
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type Env = environment.Env
 local type Result = environment.Result
 

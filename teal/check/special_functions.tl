@@ -1,10 +1,10 @@
-local node_checker = require("teal.check.node_checker")
+local type node_checker = require("teal.check.node_checker")
 local type NodeChecker = node_checker.NodeChecker
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 
 local parser = require("teal.parser")

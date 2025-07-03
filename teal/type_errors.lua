@@ -16,7 +16,7 @@ local parser = require("teal.parser")
 
 
 
-local errors = require("teal.errors")
+
 
 
 

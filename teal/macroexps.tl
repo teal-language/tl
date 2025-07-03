@@ -1,4 +1,4 @@
-local type_checker = require("teal.check.type_checker")
+local type type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 
 local parser = require("teal.parser")
@@ -11,7 +11,7 @@ local type VisitorAfter = traversal.VisitorAfter
 local type Visitor = traversal.Visitor
 local traverse_nodes = traversal.traverse_nodes
 
-local types = require("teal.types")
+local type types = require("teal.types")
 
 local util = require("teal.util")
 local shallow_copy_table = util.shallow_copy_table
