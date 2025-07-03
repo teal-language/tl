@@ -45,6 +45,12 @@ suite:
 	${BUSTED} -v $(TESTFLAGS) spec/api
 	${BUSTED} -v $(TESTFLAGS) spec/cli
 
+bin:
+	$(MAKE) STABLE_TL=_binary/build/tl
+
+revert:
+	git checkout $(PRECOMPILED) $(addsuffix .lua,$(basename $(SOURCES)))
+
 cov:
 	rm -f luacov.stats.out luacov.report.out
 	${BUSTED} -c
