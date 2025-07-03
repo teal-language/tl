@@ -1,6 +1,7 @@
 LUA ?=
 STABLE_TL ?= $(LUA) ./tl
 NEW_TL ?= $(LUA) ./tl
+TLGENFLAGS = --check --gen-target=5.1
 BUSTED = busted --suppress-pending
 
 PRECOMPILED = teal/precompiled/default_env.lua
@@ -17,6 +18,10 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 
 all: selfbuild suite
 
+########################################
+# Multi-stage bootstrap process:
+########################################
+
 precompiler.lua: precompiler.tl
 	$(STABLE_TL) gen $< -o $@ || { rm $@; exit 1; }
 
@@ -25,10 +30,10 @@ teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
 	@mkdir -p `dirname $@`
-	$(STABLE_TL) gen --check --gen-target=5.1 $< -o $@ || { rm $@; exit 1; }
+	$(STABLE_TL) gen $(TLGENFLAGS) $< -o $@ || { rm $@; exit 1; }
 
 _temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
-	$(NEW_TL) gen --check --gen-target=5.1 $< -o $@ || extras/make.sh revert
+	$(NEW_TL) gen $(TLGENFLAGS) $< -o $@ || extras/make.sh revert
 
 build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
 
@@ -40,13 +45,24 @@ build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
 selfbuild: build1 replace1 build2
 	extras/make.sh diff_1_and_2 || extras/make.sh revert
 
+########################################
+# Test suite:
+########################################
+
 suite:
 	${BUSTED} -v $(TESTFLAGS) spec/lang
 	${BUSTED} -v $(TESTFLAGS) spec/api
 	${BUSTED} -v $(TESTFLAGS) spec/cli
 
+########################################
+# Utility targets:
+########################################
+
 bin:
 	$(MAKE) STABLE_TL=_binary/build/tl
+
+binary:
+	extras/binary.sh --clean
 
 revert:
 	git checkout $(PRECOMPILED) $(addsuffix .lua,$(basename $(SOURCES)))
@@ -61,3 +77,10 @@ cleantemp:
 	rm -rf _temp
 
 clean: cleantemp
+
+########################################
+# Makefile administrivia
+########################################
+
+.PHONY: all build1 replace1 build2 selfbuild \
+	suite bin binary cov revert cov cleantemp clean
