@@ -20,6 +20,7 @@ export NM="${NM:-nm}"
 export RANLIB="${RANLIB:-ranlib}"
 export STRIP="${STRIP:-strip}"
 LUA="${LUA:-lua}"
+LUA_DEFINES="-DLUA_USE_POSIX"
 MYCFLAGS=("-Os" "-rdynamic" "-ldl" "-lpthread" "-lm")
 
 sourcedir="$(pwd)"
@@ -37,6 +38,7 @@ do
       export AR=x86_64-w64-mingw32-ar
       export RANLIB=x86_64-w64-mingw32-ranlib
       export STRIP=x86_64-w64-mingw32-strip
+      LUA_DEFINES="-DLUA_USE_WINDOWS"
       MYCFLAGS=("-Os" "-lm")
       executable="tl.exe"
       ;;
@@ -169,7 +171,7 @@ function build_dep() {
 }
 
 function lua_builder() (
-   "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS= SYSLIBS= SYSLDFLAGS= "liblua.a"
+   "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS="${LUA_DEFINES}" SYSLIBS= SYSLDFLAGS= "liblua.a"
 )
 
 build_dep "${root}/deps/lua-${lua_version}" "src/liblua.a" lua_builder
