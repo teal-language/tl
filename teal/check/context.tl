@@ -1,19 +1,19 @@
-local attributes = require("teal.attributes")
+local type attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
-local type_checker = require("teal.check.type_checker")
+local type type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 local type VarUse = type_checker.VarUse
 local type ArgCheckMode = type_checker.ArgCheckMode
 local type VarianceMode = type_checker.VarianceMode
 
-local node_checker = require("teal.check.node_checker")
+local type node_checker = require("teal.check.node_checker")
 local type NodeChecker = node_checker.NodeChecker
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
 local type Env = environment.Env
 local type Feat = environment.Feat
@@ -98,7 +98,7 @@ local type MetaMode = traversal.MetaMode
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
 
-local type_reporter = require("teal.type_reporter")
+local type type_reporter = require("teal.type_reporter")
 local type TypeCollector = type_reporter.TypeCollector
 
 local type_errors = require("teal.type_errors")

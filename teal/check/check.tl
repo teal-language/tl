@@ -4,19 +4,19 @@ local type Context = context.Context
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
 local type Env = environment.Env
 local type Result = environment.Result
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 
-local traversal = require("teal.traversal")
+local type traversal = require("teal.traversal")
 local type VisitorAfter = traversal.VisitorAfter
 local type Visitor = traversal.Visitor
 local traverse_nodes = traversal.traverse_nodes

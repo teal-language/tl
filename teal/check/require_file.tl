@@ -1,6 +1,6 @@
 local file_checker = require("teal.check.file_checker")
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 
 local types = require("teal.types")
@@ -9,7 +9,7 @@ local type Type = types.Type
 local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type CheckOptions = environment.CheckOptions
 local type Env = environment.Env
 local type Result = environment.Result

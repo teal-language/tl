@@ -1,13 +1,3 @@
-local attributes = require("teal.attributes")
-
-
-local errors = require("teal.errors")
-
-
-
-
-
-local types = require("teal.types")
 
 
 
@@ -21,7 +11,17 @@ local types = require("teal.types")
 
 
 
-local variables = require("teal.variables")
+
+
+
+
+
+
+
+
+
+
+
 
 
 

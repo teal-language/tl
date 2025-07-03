@@ -1,7 +1,7 @@
 local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 
 local types = require("teal.types")
@@ -13,7 +13,7 @@ local a_type = types.a_type
 local show_type = types.show_type
 local unite = types.unite
 
-local type_checker = require("teal.check.type_checker")
+local type type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 
 local util = require("teal.util")

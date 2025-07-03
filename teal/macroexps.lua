@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local type_checker = require("teal.check.type_checker")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs
 
 
 local parser = require("teal.parser")
@@ -11,7 +11,7 @@ local traversal = require("teal.traversal")
 
 local traverse_nodes = traversal.traverse_nodes
 
-local types = require("teal.types")
+
 
 local util = require("teal.util")
 local shallow_copy_table = util.shallow_copy_table

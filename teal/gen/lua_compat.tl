@@ -1,7 +1,7 @@
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type GenCompat = environment.GenCompat
 
 local parser = require("teal.parser")

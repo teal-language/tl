@@ -5,7 +5,7 @@ local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 local TL_DEBUG_MAXLINE = tldebug.TL_DEBUG_MAXLINE
 
-local types = require("teal.types")
+local type types = require("teal.types")
 local type Type = types.Type
 local type GenericType = types.GenericType
 local type TypeDeclType = types.TypeDeclType
@@ -21,7 +21,7 @@ local type AggregateType = types.AggregateType
 local type TypeName = types.TypeName
 local show_type = types.show_type
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 

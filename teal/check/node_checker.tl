@@ -1,20 +1,20 @@
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type Env = environment.Env
 
-local facts = require("teal.facts")
+local type facts = require("teal.facts")
 local type FactDatabase = facts.FactDatabase
 
 local type parser = require("teal.parser")
 local type Node = parser.Node
 
-local types = require("teal.types")
+local type types = require("teal.types")
 local type Type = types.Type
 local type FunctionType = types.FunctionType
 local type InvalidOrTupleType = types.InvalidOrTupleType
 local type RecordLikeType = types.RecordLikeType
 local type TupleType = types.TupleType
 
-local type_checker = require("teal.check.type_checker")
+local type type_checker = require("teal.check.type_checker")
 local type TypeChecker = type_checker.TypeChecker
 
 local record node_checker

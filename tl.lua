@@ -7,7 +7,7 @@ local file_checker = require("teal.check.file_checker")
 
 local lexer = require("teal.lexer")
 
-local types = require("teal.types")
+
 
 local package_loader = require("teal.package_loader")
 

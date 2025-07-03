@@ -1,19 +1,19 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local attributes = require("teal.attributes")
-
-
-local type_checker = require("teal.check.type_checker")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
 
 
 
 
 
-local node_checker = require("teal.check.node_checker")
+
+
+
+
 
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local environment = require("teal.environment")
+
 
 
 
@@ -98,7 +98,7 @@ local traversal = require("teal.traversal")
 local traverse_nodes = traversal.traverse_nodes
 local fields_of = traversal.fields_of
 
-local type_reporter = require("teal.type_reporter")
+
 
 
 local type_errors = require("teal.type_errors")
