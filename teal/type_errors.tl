@@ -1,7 +1,7 @@
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local types = require("teal.types")
+local type types = require("teal.types")
 local type Type = types.Type
 local type GenericType = types.GenericType
 local type TypeDeclType = types.TypeDeclType
@@ -11,17 +11,17 @@ local type InvalidType = types.InvalidType
 local type FunctionType = types.FunctionType
 local a_type = types.a_type
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 
 local type NodeKind = parser.NodeKind
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Error = errors.Error
 local type WarningKind = errors.WarningKind
 local type Where = errors.Where
 
-local variables = require("teal.variables")
+local type variables = require("teal.variables")
 local type Scope = variables.Scope
 local type Variable = variables.Variable
 local has_var_been_used = variables.has_var_been_used

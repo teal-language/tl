@@ -1,13 +1,13 @@
-local attributes = require("teal.attributes")
+local type attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Error = errors.Error
 local type ErrorContext = errors.ErrorContext
 local type WarningKind = errors.WarningKind
 local type Where = errors.Where
 
-local types = require("teal.types")
+local type types = require("teal.types")
 local type Type = types.Type
 local type FirstClassType = types.FirstClassType
 local type NominalType = types.NominalType
@@ -21,7 +21,7 @@ local type TypeArgType = types.TypeArgType
 local type TypeDeclType = types.TypeDeclType
 local type UnresolvedEmptyTableValueType = types.UnresolvedEmptyTableValueType
 
-local variables = require("teal.variables")
+local type variables = require("teal.variables")
 local type Variable = variables.Variable
 
 --------------------------------------------------------------------------------

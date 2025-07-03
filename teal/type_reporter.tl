@@ -13,10 +13,10 @@ local type AggregateType = types.AggregateType
 local type EnumType = types.EnumType
 local show_type = types.show_type
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 
-local variables = require("teal.variables")
+local type variables = require("teal.variables")
 local type Variable = variables.Variable
 
 local util = require("teal.util")

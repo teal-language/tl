@@ -1,13 +1,13 @@
-local attributes = require("teal.attributes")
+local type attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
-local types = require("teal.types")
+local type types = require("teal.types")
 local type Type = types.Type
 local type TypeDeclType = types.TypeDeclType
 local type NominalType = types.NominalType
 local type RecordLikeType = types.RecordLikeType
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 
 local record variables

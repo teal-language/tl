@@ -1,13 +1,13 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type_checker = require("teal.check.type_checker")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
-local context = require("teal.check.context")
+
 
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local errors = require("teal.errors")
+
 
 
 local types = require("teal.types")
@@ -84,7 +84,7 @@ local type_errors = require("teal.type_errors")
 
 local ensure_not_abstract = type_errors.ensure_not_abstract
 
-local variables = require("teal.variables")
+
 
 
 local util = require("teal.util")

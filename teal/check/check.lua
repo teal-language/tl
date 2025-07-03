@@ -12,7 +12,7 @@ local environment = require("teal.environment")
 local errors = require("teal.errors")
 
 
-local parser = require("teal.parser")
+
 
 
 
