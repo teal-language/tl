@@ -54,6 +54,9 @@ do
       shift
       root="$1"
       ;;
+   --clean)
+      do_clean=1
+      ;;
    --help)
       what_to_do="help"
       ;;
@@ -103,7 +106,11 @@ ${LUA} -v &> /dev/null || {
    exit 1
 }
 
-rm -rf "${root}/deps"
+if [ "$do_clean" = 1 ]
+then
+   rm -rf "${root}/deps"
+fi
+
 rm -rf "${root}/src"
 
 # Let's prepare the environment
@@ -133,8 +140,8 @@ function download() {
 
 (
    cd "${root}/deps"
-   tar zxvpf "../downloads/lua-${lua_version}.tar.gz"
-   tar zxvpf "../downloads/argparse-${argparse_version}.tar.gz"
+   tar zxpf "../downloads/lua-${lua_version}.tar.gz"
+   tar zxpf "../downloads/argparse-${argparse_version}.tar.gz"
 )
 
 # Let's build our dependencies:
@@ -148,22 +155,29 @@ function check() {
    }
 }
 
-(
-   cd "${root}/deps/lua-${lua_version}"
+function build_dep() {
+   at="$1"
+   target="$2"
+   builder="$3"
+
+   cd "$at"
+   [ -e "$target" ] && return
+
+   "$builder"
+
+   check "$target"
+}
+
+function lua_builder() (
    "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS= SYSLIBS= SYSLDFLAGS= "liblua.a"
-   check "src/liblua.a"
 )
 
-(
-   cd "${root}/deps/argparse-${argparse_version}"
-   check "src/argparse.lua"
-)
+build_dep "${root}/deps/lua-${lua_version}" "src/liblua.a" lua_builder
+
+build_dep "${root}/deps/argparse-${argparse_version}" "src/argparse.lua" true
 
 LIBLUA_A="${root}/deps/lua-${lua_version}/src/liblua.a"
 ARGPARSE_LUA="${root}/deps/argparse-${argparse_version}/src/argparse.lua"
-
-check "${LIBLUA_A}"
-check "${ARGPARSE_LUA}"
 
 # Let's prepare our sources
 
