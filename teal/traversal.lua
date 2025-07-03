@@ -21,7 +21,7 @@ local types = require("teal.types")
 
 local show_type = types.show_type
 
-local parser = require("teal.parser")
+
 
 
 

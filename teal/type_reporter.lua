@@ -13,10 +13,10 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 local show_type = types.show_type
 
-local parser = require("teal.parser")
 
 
-local variables = require("teal.variables")
+
+
 
 
 local util = require("teal.util")

@@ -7,7 +7,7 @@ local parser = require("teal.parser")
 local type Node = parser.Node
 local type ParseLang = parser.ParseLang
 
-local environment = require("teal.environment")
+local type environment = require("teal.environment")
 local type Env = environment.Env
 local type Result = environment.Result
 

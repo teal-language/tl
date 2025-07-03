@@ -3,7 +3,7 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 local default_env = require("teal.precompiled.default_env")
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Error = errors.Error
 local type Where = errors.Where
 
@@ -11,7 +11,7 @@ local lua_generator = require("teal.gen.lua_generator")
 local type GenTarget = lua_generator.Target
 local target_from_lua_version = lua_generator.target_from_lua_version
 
-local parser = require("teal.parser")
+local type parser = require("teal.parser")
 local type Node = parser.Node
 local type ParseLang = parser.ParseLang
 
@@ -24,10 +24,10 @@ local type TypeDeclType = types.TypeDeclType
 local type SpecialFunctionName = types.SpecialFunctionName
 local a_type = types.a_type
 
-local type_reporter = require("teal.type_reporter")
+local type type_reporter = require("teal.type_reporter")
 local type TypeReporter = type_reporter.TypeReporter
 
-local variables = require("teal.variables")
+local type variables = require("teal.variables")
 local type Variable = variables.Variable
 
 local record environment

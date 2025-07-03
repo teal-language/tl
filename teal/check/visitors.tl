@@ -1,13 +1,13 @@
-local type_checker = require("teal.check.type_checker")
+local type type_checker = require("teal.check.type_checker")
 local type VarUse = type_checker.VarUse
 
-local context = require("teal.check.context")
+local type context = require("teal.check.context")
 local type Context = context.Context
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Where = errors.Where
 
 local types = require("teal.types")
@@ -84,7 +84,7 @@ local type_errors = require("teal.type_errors")
 local type CheckableKey = type_errors.CheckableKey
 local ensure_not_abstract = type_errors.ensure_not_abstract
 
-local variables = require("teal.variables")
+local type variables = require("teal.variables")
 local type Variable = variables.Variable
 
 local util = require("teal.util")
