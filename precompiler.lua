@@ -2,8 +2,8 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 package.path = "./?.lua;" .. package.path
 
-local tl = require("tl")
 local environment = require("teal.environment")
+environment.set_require_module_fn(require("teal.check.require_file").require_module)
 local env = environment.construct()
 local types = require("teal.types")
 local typeid_ctr, typevar_ctr = types.internal_get_state()
