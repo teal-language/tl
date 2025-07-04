@@ -3,6 +3,9 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 local type environment = require("teal.environment")
 local type GenCompat = environment.GenCompat
+local type Result = environment.Result
+
+local errors = require("teal.errors")
 
 local parser = require("teal.parser")
 local type Node = parser.Node
@@ -202,6 +205,27 @@ function lua_compat.adjust_code(filename: string, ast: Node, needs_compat: {stri
    add_compat_entries(ast, needs_compat, gen_compat)
 
    return true
+end
+
+function lua_compat.apply(result: Result)
+   if result.compat_applied then
+      return
+   end
+   result.compat_applied = true
+
+   local gen_compat = result.env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
+   local gen_target = result.env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
+
+   local ok, errs = lua_compat.adjust_code(result.filename, result.ast, result.needs_compat, gen_compat, gen_target)
+   if not ok then
+      if not result.type_errors then
+         result.type_errors = {}
+      end
+      for _, err in ipairs(errs.errors) do
+         table.insert(result.type_errors, err)
+      end
+      errors.clear_redundant_errors(result.type_errors)
+   end
 end
 
 return lua_compat
