@@ -1,9 +1,9 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
-describe("store comments in syntax tree", function() 
-    it("comments before implicit global function", function() 
-        local result = tl.process_string([[
+describe("store comments in syntax tree", function()
+    it("comments before implicit global function", function()
+        local result = tl.check_string([[
             -- this is a comment
             function --[==[ignore me]==] foo() end
         ]])
@@ -13,8 +13,8 @@ describe("store comments in syntax tree", function()
         assert.same("global_function", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local function", function() 
-        local result = tl.process_string([[
+    it("comments before local function", function()
+        local result = tl.check_string([[
             -- this is a comment
             local function --[==[ignore me]==] foo() end
         ]])
@@ -24,8 +24,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_function", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local variable declaration", function() 
-        local result = tl.process_string([[
+    it("comments before local variable declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] x = 42
         ]])
@@ -35,8 +35,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_declaration", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local type declaration", function() 
-        local result = tl.process_string([[
+    it("comments before local type declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] type Foo = number
         ]])
@@ -46,8 +46,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_type", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local macroexp", function() 
-        local result = tl.process_string([[
+    it("comments before local macroexp", function()
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] macroexp foo(): number
                 return 2
@@ -59,8 +59,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_macroexp", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local record declaration", function() 
-        local result = tl.process_string([[
+    it("comments before local record declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] record Foo
                 x: number
@@ -73,7 +73,7 @@ describe("store comments in syntax tree", function()
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
     it("comments before local enum declaration", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] enum Foo
                 "A"
@@ -86,8 +86,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_type", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before local interface declaration", function() 
-        local result = tl.process_string([[
+    it("comments before local interface declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             local --[==[ignore me]==] interface Foo
                 x: number
@@ -99,8 +99,8 @@ describe("store comments in syntax tree", function()
         assert.same("local_type", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before global function", function() 
-        local result = tl.process_string([[
+    it("comments before global function", function()
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] function foo() end
         ]])
@@ -111,7 +111,7 @@ describe("store comments in syntax tree", function()
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
     it("comments before global variable declaration", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] x = 42
         ]])
@@ -121,8 +121,8 @@ describe("store comments in syntax tree", function()
         assert.same("global_declaration", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before global type declaration", function() 
-        local result = tl.process_string([[
+    it("comments before global type declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] type Foo = number
         ]])
@@ -132,8 +132,8 @@ describe("store comments in syntax tree", function()
         assert.same("global_type", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before global record declaration", function() 
-        local result = tl.process_string([[
+    it("comments before global record declaration", function()
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] record Foo
                 x: number
@@ -146,7 +146,7 @@ describe("store comments in syntax tree", function()
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
     it("comments before global enum declaration", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] enum Foo
                 "A"
@@ -160,7 +160,7 @@ describe("store comments in syntax tree", function()
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
     it("comments before global interface declaration", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             global --[==[ignore me]==] interface Foo
                 x: number
@@ -172,8 +172,8 @@ describe("store comments in syntax tree", function()
         assert.same("global_type", result.ast[1].kind)
         assert.same("-- this is a comment", result.ast[1].comments[1].text)
     end)
-    it("comments before record fields", function() 
-        local result = tl.process_string([[
+    it("comments before record fields", function()
+        local result = tl.check_string([[
             local record Foo
                 -- this is a comment
                 x: number
@@ -196,8 +196,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], record_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before record type fields", function() 
-        local result = tl.process_string([[
+    it("comments before record type fields", function()
+        local result = tl.check_string([[
             local record Foo
                 -- this is a comment
                 type x = number
@@ -220,8 +220,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], record_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before record nested declarations", function() 
-        local result = tl.process_string([[
+    it("comments before record nested declarations", function()
+        local result = tl.check_string([[
             local record Foo
                 -- this is a comment
                 record Bar
@@ -254,8 +254,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], record_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before record metafields", function() 
-        local result = tl.process_string([[
+    it("comments before record metafields", function()
+        local result = tl.check_string([[
             local record Foo
                 -- this is a comment
                 metamethod __call: function(Foo, string, number): string
@@ -278,8 +278,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], record_def.meta_field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before record overloaded functions", function() 
-        local result = tl.process_string([[
+    it("comments before record overloaded functions", function()
+        local result = tl.check_string([[
             local record Foo
                 -- this is a comment
                 bar: function(string): string
@@ -301,7 +301,7 @@ describe("store comments in syntax tree", function()
             local n = #record_def.field_comments[field_name]
             assert.same(2, n)
             for i = 1, n do
-                if not expected_comments[field_name][i] then 
+                if not expected_comments[field_name][i] then
                     assert.same({}, record_def.field_comments[field_name][i])
                 else
                     assert.same(expected_comments[field_name][i], record_def.field_comments[field_name][i][1].text)
@@ -309,8 +309,8 @@ describe("store comments in syntax tree", function()
             end
         end
     end)
-    it("comments before interface fields", function() 
-        local result = tl.process_string([[
+    it("comments before interface fields", function()
+        local result = tl.check_string([[
             local interface Foo
                 -- this is a comment
                 x: number
@@ -333,8 +333,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], interface_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before interface type fields", function() 
-        local result = tl.process_string([[
+    it("comments before interface type fields", function()
+        local result = tl.check_string([[
             local interface Foo
                 -- this is a comment
                 type x = number
@@ -357,8 +357,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], interface_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before interface nested declarations", function() 
-        local result = tl.process_string([[
+    it("comments before interface nested declarations", function()
+        local result = tl.check_string([[
             local interface Foo
                 -- this is a comment
                 interface Bar
@@ -391,8 +391,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], interface_def.field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before interface metafields", function() 
-        local result = tl.process_string([[
+    it("comments before interface metafields", function()
+        local result = tl.check_string([[
             local interface Foo
                 -- this is a comment
                 metamethod __call: function(Foo, string, number): string
@@ -415,8 +415,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[field_name], interface_def.meta_field_comments[field_name][1][1].text)
         end
     end)
-    it("comments before interface overloaded functions", function() 
-        local result = tl.process_string([[
+    it("comments before interface overloaded functions", function()
+        local result = tl.check_string([[
             local interface Foo
                 -- this is a comment
                 bar: function(string): string
@@ -438,7 +438,7 @@ describe("store comments in syntax tree", function()
             local n = #interface_def.field_comments[field_name]
             assert.same(2, n)
             for i = 1, n do
-                if not expected_comments[field_name][i] then 
+                if not expected_comments[field_name][i] then
                     assert.same({}, interface_def.field_comments[field_name][i])
                 else
                     assert.same(expected_comments[field_name][i], interface_def.field_comments[field_name][i][1].text)
@@ -446,8 +446,8 @@ describe("store comments in syntax tree", function()
             end
         end
     end)
-    it("comments before enum values", function() 
-        local result = tl.process_string([[
+    it("comments before enum values", function()
+        local result = tl.check_string([[
             local enum Foo
                 -- this is a comment
                 "A"
@@ -470,8 +470,8 @@ describe("store comments in syntax tree", function()
             assert.same(expected_comments[value_name], enum_def.value_comments[value_name][1].text)
         end
     end)
-    it("comments attach to the correct entry in polymorphic function", function() 
-        local result = tl.process_string([[
+    it("comments attach to the correct entry in polymorphic function", function()
+        local result = tl.check_string([[
             local record MyRecord
                 f: function(integer)
                 --- it can be a boolean too
@@ -493,7 +493,7 @@ describe("store comments in syntax tree", function()
             local n = #record_def.field_comments[field_name]
             assert.same(3, n)
             for i = 1, n do
-                if not expected_comments[field_name][i] then 
+                if not expected_comments[field_name][i] then
                     assert.same({}, record_def.field_comments[field_name][i])
                 else
                     assert.same(expected_comments[field_name][i], record_def.field_comments[field_name][i][1].text)
@@ -503,7 +503,7 @@ describe("store comments in syntax tree", function()
     end)
 
     it("only attaches consecutive comments", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             -- this is another comment
 
@@ -519,10 +519,10 @@ describe("store comments in syntax tree", function()
         assert.same(2, #result.ast.unattached_comments)
         assert.same("-- this is a comment", result.ast.unattached_comments[1].text)
         assert.same("-- this is another comment", result.ast.unattached_comments[2].text)
-    end)    
+    end)
 
     it("only attaches comment that start just before the statement", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             --[=[this is a long comment]=]
 
@@ -539,7 +539,7 @@ describe("store comments in syntax tree", function()
     end)
 
     it("only attaches comments to declarations", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             local foo = 47
             --[=[this is a long comment]=]
@@ -555,13 +555,13 @@ describe("store comments in syntax tree", function()
         assert.same("--[=[this is a long comment]=]", result.ast.unattached_comments[1].text)
     end)
     it("only attaches long comments that end just before the statement", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             --[=[
                 this is a long comment
                 that spans multiple lines
             ]=]
             local foo = 47
-        
+
             --[=[
                 this is another long comment
                 that spans multiple lines
@@ -579,7 +579,7 @@ describe("store comments in syntax tree", function()
         assert.same("--[=[\n                this is another long comment\n                that spans multiple lines\n            ]=]", result.ast.unattached_comments[1].text)
     end)
     it("only attaches at most one long comment", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             --[=[
                 this is a long comment
                 that spans multiple lines
@@ -600,7 +600,7 @@ describe("store comments in syntax tree", function()
         assert.same("--[=[\n                this is a long comment\n                that spans multiple lines\n            ]=]", result.ast.unattached_comments[1].text)
     end)
     it("does not mix different comment types", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             -- this is a comment
             --[=[this is a long comment]=]
             -- this is another comment
@@ -617,7 +617,7 @@ describe("store comments in syntax tree", function()
         assert.same("--[=[this is a long comment]=]", result.ast.unattached_comments[2].text)
     end)
     it("does attach same line long comments", function()
-        local result = tl.process_string([[
+        local result = tl.check_string([[
             --[=[this is a long comment]=] local foo = 47
         ]])
         assert.same({}, result.syntax_errors)

@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("tl.gen", function()
@@ -69,7 +69,7 @@ describe("tl.gen", function()
          print(math.floor(2))
       ]]
 
-      local env = tl.init_env(true, false)
+      local env = tl.new_env({ defaults = { feat_lax = true, gen_compat = "off" } })
       local output, result = tl.gen(input, env)
 
       assert.equal('print(math.floor(2))', output)
@@ -83,7 +83,7 @@ describe("tl.gen", function()
 
 print(math.floor(2))]]
 
-      local env = tl.init_env(true, false)
+      local env = tl.new_env({ defaults = { feat_lax = true, gen_compat = "off" } })
       local output, result = tl.gen(input, env)
 
       assert.equal(input, output)

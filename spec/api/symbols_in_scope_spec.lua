@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 local function resolve_type_ref(tr, type_number)
    local type_info = tr.types[type_number]
@@ -38,12 +38,10 @@ local function assert_types(tr, type_locations)
 end
 
 local function assert_scope_and_types(sample_code, type_locations)
-   local is_lua = false
-
-   local env = assert(tl.init_env(is_lua))
+   local env = assert(tl.new_env())
    env.report_types = true
 
-   tl.process_string(sample_code, is_lua, env, DUMMY_FILENAME)
+   tl.check_string(sample_code, env, DUMMY_FILENAME)
 
    local tr = env.reporter.tr
 

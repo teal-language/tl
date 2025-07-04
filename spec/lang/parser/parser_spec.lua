@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 local function strip_typeids(t)
    local copy = {}
@@ -14,7 +14,7 @@ end
 
 describe("parser", function()
    it("accepts an empty file (regression test for #43)", function ()
-      local result = tl.process_string("")
+      local result = tl.check_string("")
       assert.same({}, result.syntax_errors)
       assert.same({
          kind = "statements",
@@ -28,21 +28,21 @@ describe("parser", function()
    end)
 
    it("accepts 'return;' (regression test for #52)", function ()
-      local result = tl.process_string("return;")
+      local result = tl.check_string("return;")
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.ast)
       assert.same("return", result.ast[1].kind)
    end)
 
    it("does not accept statements after 'return;' (regression test for #495)", function ()
-      local result = tl.process_string([[
+      local result = tl.check_string([[
          return;
          print("")
       ]])
       assert.same(1, #result.syntax_errors)
       assert.same(result.syntax_errors[1].msg, "return must be the last statement of its block")
 
-      local result = tl.process_string([[
+      local result = tl.check_string([[
          local function get_foo(): string
             if true then
                return "foo";
@@ -55,7 +55,7 @@ describe("parser", function()
    end)
 
    it("accepts semicolons in tables (regression test for #54)", function ()
-      local result = tl.process_string([[
+      local result = tl.check_string([[
          local t = {
             foo = "bar";
             foo = "baz";
@@ -65,7 +65,7 @@ describe("parser", function()
       assert.same(1, #result.ast)
       assert.same("local_declaration", result.ast[1].kind)
 
-      local result2 = tl.process_string([[
+      local result2 = tl.check_string([[
          local t = {
             foo = "bar",
             foo = "baz",
@@ -77,7 +77,7 @@ describe("parser", function()
    end)
 
    it("records the fact that a table item has implicit key", function ()
-      local result = tl.process_string("return { ... }")
+      local result = tl.check_string("return { ... }")
       assert.same({}, result.syntax_errors)
       assert.same("statements", result.ast.kind)
       assert.same("return", result.ast[1].kind)
@@ -87,7 +87,7 @@ describe("parser", function()
    end)
 
    it("accepts nested type arguments", function ()
-      local result = tl.process_string([[
+      local result = tl.check_string([[
          local record List<T>
             items: {T}
          end

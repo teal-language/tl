@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 local function map(f, xs)
    local rs = {}

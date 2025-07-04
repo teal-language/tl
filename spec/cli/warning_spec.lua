@@ -1,6 +1,6 @@
 local assert = require("luassert")
 local util = require("spec.util")
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("tl warnings", function()
    it("reports existing warning types when given no arguments", function()

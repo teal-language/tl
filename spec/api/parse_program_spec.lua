@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("tl.parse_program", function()
    it("returns a list of all require arguments", function()

@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("record method", function()
@@ -117,8 +117,8 @@ describe("record method", function()
             local ok = r:f(3, "abc")
          ]],
       })
-      local result, err = tl.process("foo.tl")
-      local output = tl.pretty_print_ast(result.ast)
+      local result, err = tl.check_file("foo.tl")
+      local output = tl.generate(result.ast)
       util.assert_line_by_line([[
          local r = {
             x = 2,
@@ -198,10 +198,10 @@ describe("record method", function()
             a:print()
          ]]
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      local output = tl.pretty_print_ast(result.ast)
+      local output = tl.generate(result.ast)
       util.assert_line_by_line([[
          local Point = {}
 
@@ -273,10 +273,10 @@ describe("record method", function()
             pt:move(3, 4)
          ]]
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
-      local output = tl.pretty_print_ast(result.ast)
+      local output = tl.generate(result.ast)
       util.assert_line_by_line([[
          local Point = {}
 
@@ -625,8 +625,8 @@ describe("record method", function()
             ]],
          })
 
-         local env = tl.init_env()
-         local _, err = tl.process("top.tl", env)
+         local env = tl.new_env()
+         local _, err = tl.check_file("top.tl", env)
 
          assert.same(nil, err)
          assert.same(4, #env.loaded_order)

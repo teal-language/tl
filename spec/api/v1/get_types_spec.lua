@@ -1,10 +1,10 @@
-local tl = require("tl")
+local tl = require("teal.api.v1")
 
 describe("tl.get_types", function()
    it("skips over label nodes (#393)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local function a()
             ::continue::
          end
@@ -18,7 +18,7 @@ describe("tl.get_types", function()
    it("reports resolved type on poly function calls", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record R
             f: function(string)
             f: function(integer)
@@ -47,7 +47,7 @@ describe("tl.get_types", function()
    it("reports record functions in record field list", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record Point
             x: number
             y: number
@@ -75,7 +75,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 1 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -119,7 +119,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 2 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -163,7 +163,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 3 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -207,7 +207,7 @@ describe("tl.get_types", function()
    it("reports reference of a nominal type", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record Operator
              operator: string
          end
@@ -240,7 +240,7 @@ describe("tl.get_types", function()
    it("reports self of a record function (#884)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record mod
              foo1: function(self)
              foo2: function(self)
@@ -275,7 +275,7 @@ describe("tl.get_types", function()
    it("exposes metafields", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record rec
             metamethod __eq: function(rec, rec): boolean
          end
@@ -295,7 +295,7 @@ describe("tl.get_types", function()
    it("reports typeargs of records", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record R<T, U>
          end
       ]], env))
@@ -316,7 +316,7 @@ describe("tl.get_types", function()
    it("reports typeargs of interfaces", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface I<T, U>
          end
       ]], env))
@@ -337,7 +337,7 @@ describe("tl.get_types", function()
    it("reports typeargs of generic functions", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local function f<T, U>()
          end
       ]], env))
@@ -358,7 +358,7 @@ describe("tl.get_types", function()
    it("reports constrained typeargs of generic functions", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface I
          end
 

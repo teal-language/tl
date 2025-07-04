@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 
@@ -11,8 +11,8 @@ describe("singlequote string", function()
    it("accepts", util.check [[local foo = 'bar']])
 
    it("export Lua", function()
-      local result = tl.process_string([[local foo = 'bar']])
-      local lua = tl.pretty_print_ast(result.ast)
+      local result = tl.check_string([[local foo = 'bar']])
+      local lua = tl.generate(result.ast)
       assert.equal([[local foo = 'bar']], string_trim(lua))
    end)
 end)
