@@ -8,7 +8,7 @@ do
    local save_package_path = package.path
    package.path = script_path .. "/?.lua;" .. package.path
 
-   tl = require("tl")
+   tl = require("teal.api.v2")
 
    -- but otherwise don't pollute package.path inadvertedly
    package.path = save_package_path
@@ -245,7 +245,7 @@ local function process_module(filename, env)
       module_name = filename_to_module_name(filename)
       -- let tl.process handle opening the file and nice errors
    end
-   local result, err = tl.process(filename, env, fd)
+   local result, err = tl.check_file(filename, env, fd)
    if result then
       env.modules[module_name] = result.type
    end
@@ -268,8 +268,6 @@ local function type_check_and_load(tlconfig, filename)
    if is_tl and type_err then
       os.exit(1)
    end
-
-   tl.apply_compat(result)
 
    local chunk; chunk, err = (loadstring or load)(tl.generate(result.ast, tlconfig.gen_target), "@" .. filename)
    if err then
@@ -297,8 +295,6 @@ local function write_out(tlconfig, result, output_file, pp_opts)
    if not ofd then
       die("cannot write " .. prettyname .. ": " .. err)
    end
-
-   tl.apply_compat(result)
 
    local _
    _, err = ofd:write(tl.generate(result.ast, tlconfig.gen_target, pp_opts) .. "\n")

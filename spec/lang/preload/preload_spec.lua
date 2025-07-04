@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("preload", function()
@@ -22,7 +22,8 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
+      local env = assert(tl.new_env({ predefined_modules = {"love"} }))
+      local result, err = tl.check_file("foo.tl", env)
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -62,7 +63,8 @@ describe("preload", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love", "hate"})))
+      local env = assert(tl.new_env({ predefined_modules = {"love", "hate"} }))
+      local result, err = tl.check_file("foo.tl", env)
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)

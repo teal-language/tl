@@ -14,7 +14,7 @@ describe("tl.loader", function()
             }
             ]],
             ["main.lua"] = [[
-            local tl = require("tl")
+            local tl = require("teal.api.v2")
             tl.loader()
             file1 = require("file1")
             print(file1.get_src())
