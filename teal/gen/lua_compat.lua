@@ -1,8 +1,11 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
+local environment = require("teal.environment")
 
 
+
+local errors = require("teal.errors")
 
 local parser = require("teal.parser")
 
@@ -202,6 +205,27 @@ function lua_compat.adjust_code(filename, ast, needs_compat, gen_compat, gen_tar
    add_compat_entries(ast, needs_compat, gen_compat)
 
    return true
+end
+
+function lua_compat.apply(result)
+   if result.compat_applied then
+      return
+   end
+   result.compat_applied = true
+
+   local gen_compat = result.env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
+   local gen_target = result.env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
+
+   local ok, errs = lua_compat.adjust_code(result.filename, result.ast, result.needs_compat, gen_compat, gen_target)
+   if not ok then
+      if not result.type_errors then
+         result.type_errors = {}
+      end
+      for _, err in ipairs(errs.errors) do
+         table.insert(result.type_errors, err)
+      end
+      errors.clear_redundant_errors(result.type_errors)
+   end
 end
 
 return lua_compat
