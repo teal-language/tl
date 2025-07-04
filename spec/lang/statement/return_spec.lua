@@ -1,3 +1,4 @@
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("return", function()
@@ -121,8 +122,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
-         local result, err = tl.process("foo.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("foo.tl")
 
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
@@ -154,8 +154,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
-         local result, err = tl.process("foo.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("foo.tl")
 
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
@@ -183,8 +182,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
-         local result, err = tl.process("main.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("main.tl")
 
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
@@ -213,8 +211,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
-         local result, err = tl.process("main.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("main.tl")
 
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
@@ -242,8 +239,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
-         local result, err = tl.process("main.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("main.tl")
 
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
@@ -277,8 +273,7 @@ describe("return", function()
          ]],
       })
 
-      local tl = require("tl")
-      local result, err = tl.process("foo.tl", assert(tl.init_env()))
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)

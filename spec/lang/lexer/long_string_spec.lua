@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 
@@ -73,13 +73,13 @@ describe("long string", function()
    }))
 
    it("export Lua", function()
-      local result = tl.process_string([==[
+      local result = tl.check_string([==[
          local foo = [=[
                long string line 1
                long string line 2
             ]=]
       ]==])
-      local lua = tl.pretty_print_ast(result.ast)
+      local lua = tl.generate(result.ast)
       assert.equal([==[local foo = [=[
                long string line 1
                long string line 2
@@ -87,11 +87,11 @@ describe("long string", function()
    end)
 
    it("can use long strings and preserve spacing on table items", function()
-      local result = tl.process_string([==[
+      local result = tl.check_string([==[
          local t: {string: boolean} = {
             [ [["random_string"]] ] = true,
          }]==])
-      local lua = tl.pretty_print_ast(result.ast)
+      local lua = tl.generate(result.ast)
       assert.equal(multitrim([==[
          local t = {
             [ [["random_string"]] ] = true,
@@ -100,13 +100,13 @@ describe("long string", function()
    end)
 
    it("can use long strings and preserve spacing on indices", function()
-      local result = tl.process_string([==[
+      local result = tl.check_string([==[
          local t: {string: boolean} = {}
          t[ [["random_string"]] ] = true
          t[ [["random_string"]] .. 'test' ] = true
          t[ [["random_string"]] .. 'test' .. 'other' ] = true
       ]==])
-      local lua = tl.pretty_print_ast(result.ast)
+      local lua = tl.generate(result.ast)
       assert.equal(multitrim([==[
          local t = {}
          t[ [["random_string"]] ] = true

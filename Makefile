@@ -14,7 +14,10 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/check/relations.tl teal/check/special_functions.tl \
 	teal/check/type_checker.tl teal/check/node_checker.tl \
 	teal/check/file_checker.tl teal/check/string_checker.tl \
-	teal/check/require_file.tl teal/package_loader.tl tl.tl
+	teal/check/require_file.tl \
+	teal/package_loader.tl teal/loader.tl \
+	teal/api/v2.tl teal/api/v1.tl \
+	tl.tl
 
 all: selfbuild suite
 
