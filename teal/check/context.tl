@@ -1483,10 +1483,8 @@ do
                self.errs:add(fields[fname], what .." '" .. fname .. "' does not match definition in interface %s", named)
             end
          else
-            table.insert(field_order, fname)
-            if ftype is TypeDeclType then
-               fields[fname] = ftype
-            else
+            if not ftype is TypeDeclType then
+               table.insert(field_order, fname)
                fields[fname] = self:resolve_self(ftype)
             end
          end
