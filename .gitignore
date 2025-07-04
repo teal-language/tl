@@ -6,3 +6,5 @@ tl.lua.bak
 /lua_modules
 /.luarocks
 /_temp
+/_binary
+docs/book

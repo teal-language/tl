@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("global", function()
@@ -320,7 +320,7 @@ describe("global", function()
                local obj: Class = { data = 2 }
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same({}, result.syntax_errors)
          assert.same({}, result.type_errors)
@@ -339,7 +339,7 @@ describe("global", function()
                local obj: Class = { invalid = 2 }
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same({}, result.syntax_errors)
          assert.same({

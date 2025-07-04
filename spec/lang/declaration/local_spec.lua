@@ -1,5 +1,5 @@
 local util = require("spec.util")
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("local", function()
    describe("declaration", function()
@@ -447,7 +447,7 @@ describe("local", function()
                assert(x)
             ]],
          })
-         local result, err = tl.process("bar.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("bar.tl")
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
          assert.same({}, result.type_errors)

@@ -1,3 +1,6 @@
+
+local VERSION = "0.24.6+dev"
+
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
@@ -31,6 +34,7 @@ local type variables = require("teal.variables")
 local type Variable = variables.Variable
 
 local record environment
+   VERSION: string
    DEFAULT_GEN_COMPAT: GenCompat
    DEFAULT_GEN_TARGET: GenTarget
 
@@ -85,6 +89,7 @@ local record environment
    stdlib_globals: {string:Variable}
 end
 
+environment.VERSION = VERSION
 environment.DEFAULT_GEN_COMPAT = "optional"
 environment.DEFAULT_GEN_TARGET = "5.3"
 

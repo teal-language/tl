@@ -21,7 +21,7 @@ if jit then
 end
 collectgarbage("stop")
 
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local assert = require("luassert")
 local lfs = require("lfs")
 local initial_dir = assert(lfs.currentdir(), "unable to get current dir")
@@ -656,7 +656,7 @@ function util.check_warnings(code, warnings, type_errors)
    assert(type(warnings) == "table")
 
    return function()
-      local result = tl.process_string(code)
+      local result = tl.check_string(code)
       assert.same({}, result.syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       batch_compare(batch, "warnings", warnings, result.warnings or {})
@@ -684,7 +684,7 @@ function util.check_types(code, types)
       local ast, syntax_errors = tl.parse(code, "foo.tl")
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
-      local env = tl.init_env()
+      local env = tl.new_env()
       env.report_types = true
       local result = tl.check(ast, "foo.tl", { feat_lax = "off" }, env)
       batch:add(assert.same, {}, result.type_errors, "Code was not expected to have type errors")
@@ -721,8 +721,6 @@ local function gen(lax, code, expected, gen_target, type_errors)
       local gen_compat = gen_target == "5.4" and "off" or nil
       local result = tl.check(ast, "foo.tl", { feat_lax = lax and "on" or "off", gen_target = gen_target, gen_compat = gen_compat })
 
-      tl.apply_compat(result)
-
       if type_errors then
          local batch = batch_assertions()
          local result_type_errors = combine_result(result, "type_errors")
@@ -732,12 +730,12 @@ local function gen(lax, code, expected, gen_target, type_errors)
          assert.same({}, result.type_errors)
       end
 
-      local output_code = tl.pretty_print_ast(ast, gen_target)
+      local output_code = tl.generate(ast, gen_target)
 
       if expected then
          local expected_ast, expected_errors = tl.parse(expected, "foo.tl")
          assert.same({}, expected_errors, "Code was not expected to have syntax errors")
-         local expected_code = tl.pretty_print_ast(expected_ast, gen_target)
+         local expected_code = tl.generate(expected_ast, gen_target)
 
          assert.same(expected_code, output_code)
       end

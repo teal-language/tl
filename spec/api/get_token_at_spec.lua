@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("tl.get_token_at", function()
    it("should find the token at the given position", function()

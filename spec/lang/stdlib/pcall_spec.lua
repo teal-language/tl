@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("pcall", function()
@@ -63,7 +63,7 @@ describe("pcall", function()
             assert(d == 123)
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)

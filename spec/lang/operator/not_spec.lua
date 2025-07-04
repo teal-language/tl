@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 local function trim_code(c)
@@ -40,8 +40,8 @@ describe("not", function()
          local x = not not a == not not b
       ]]
 
-      local result = tl.process_string(code)
-      local output = tl.pretty_print_ast(result.ast, true)
+      local result = tl.check_string(code)
+      local output = tl.generate(result.ast, true)
 
       assert.same(trim_code(code), trim_code(output))
    end)
@@ -60,8 +60,8 @@ describe("not", function()
          end
       ]]
 
-      local result = tl.process_string(code)
-      local output = tl.pretty_print_ast(result.ast, true)
+      local result = tl.check_string(code)
+      local output = tl.generate(result.ast, true)
 
       assert.same(trim_code(code), trim_code(output))
    end)

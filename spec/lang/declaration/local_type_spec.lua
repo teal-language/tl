@@ -1,5 +1,5 @@
 local util = require("spec.util")
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("local type", function()
    it("can declare a type alias for table", util.check([[
@@ -24,7 +24,7 @@ describe("local type", function()
             print(var.dato)
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -56,7 +56,7 @@ describe("local type", function()
             local c: Boo = { field = { something = 123 } }
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -131,7 +131,7 @@ describe("local type", function()
             local obj: Class = { data = 2 }
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -150,7 +150,7 @@ describe("local type", function()
             local obj: Class = { invalid = 2 }
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -176,7 +176,7 @@ describe("local type", function()
             local obj2: Glob = { invalid = 2 }
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({

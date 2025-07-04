@@ -1,5 +1,23 @@
 #!/usr/bin/env bash
 
+function change_version() {
+   local version="$1"
+
+   sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'"/' teal/environment.tl
+   sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'"/' teal/environment.lua
+
+   git status --porcelain teal/environment.tl | grep -q " M " || {
+      echo "Failed to update the version number in teal/environment.tl."
+      exit 1
+   }
+
+   git status --porcelain teal/environment.lua | grep -q " M " || {
+      echo "Failed to update the version number in teal/environment.lua."
+      exit 1
+   }
+}
+
+
 version="$1"
 
 [ "$version" ] || {
@@ -21,18 +39,7 @@ git stash
 
 git checkout .
 
-sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'"/' tl.tl
-sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'"/' tl.lua
-
-git status --porcelain tl.tl | grep -q " M " || {
-   echo "Failed to update the version number in tl.tl."
-   exit 1
-}
-
-git status --porcelain tl.lua | grep -q " M " || {
-   echo "Failed to update the version number in tl.lua."
-   exit 1
-}
+change_version "$version"
 
 cat <<EOF > _binary/tlconfig.lua
 return {
@@ -142,20 +149,9 @@ fi
 
 echo "*** tl $version is now released on GitHub Releases! ***"
 
-sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'+dev"/' tl.tl
-sed -i 's/^local VERSION = .*/local VERSION = "'"$version"'+dev"/' tl.lua
+change_version "${version}+dev"
 
-git status --porcelain tl.tl | grep -q " M " || {
-   echo "Failed to update the version number in tl.tl."
-   exit 1
-}
-
-git status --porcelain tl.lua | grep -q " M " || {
-   echo "Failed to update the version number in tl.lua."
-   exit 1
-}
-
-git commit tl.tl tl.lua -m "Update version_string"
+git commit tl.tl tl.lua -m "Update version string"
 
 git push || {
    echo "Failed to push the post-release commit."
