@@ -90,6 +90,7 @@ local type Node = v2.Node
 local type ParseLang = v2.ParseLang
 local type Result = v2.Result
 local type Token = v2.Token
+local type TypeReport = v2.TypeReport
 
 --------------------------------------------------------------------------------
 -- Functions
@@ -237,7 +238,9 @@ v2.search_module = function(module_name: string, search_all: boolean): string, F
    return require_file.search_module(module_name, search_all and require_file.all_extensions)
 end
 
-v2.symbols_in_scope = type_reporter.symbols_in_scope
+v2.symbols_in_scope = function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
+   return tr:symbols_in_scope(filename, y, x)
+end
 
 v2.target_from_lua_version = targets.detect
 
