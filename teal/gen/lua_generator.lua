@@ -4,6 +4,9 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
+local targets = require("teal.gen.targets")
+
+
 local types = require("teal.types")
 
 
@@ -22,13 +25,6 @@ local traversal = require("teal.traversal")
 
 
 local lua_generator = { Options = {} }
-
-
-
-
-
-
-
 
 
 
@@ -815,17 +811,6 @@ function lua_generator.generate(ast, gen_target, opts)
       code = out
    end
    return (concat_output(code):gsub(" *\n", "\n"))
-end
-
-function lua_generator.target_from_lua_version(str)
-   if str == "Lua 5.1" or
-      str == "Lua 5.2" then
-      return "5.1"
-   elseif str == "Lua 5.3" then
-      return "5.3"
-   elseif str == "Lua 5.4" then
-      return "5.4"
-   end
 end
 
 return lua_generator

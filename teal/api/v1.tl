@@ -13,6 +13,7 @@ local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local type Node = parser.Node
 local require_file = require("teal.check.require_file")
+local targets = require("teal.gen.targets")
 local type_reporter = require("teal.type_reporter")
 local type TypeReport = type_reporter.TypeReport
 local type TypeReporter = type_reporter.TypeReporter
@@ -31,7 +32,7 @@ local record v1
    type PrettyPrintOpts = v2.GenerateOptions
    type Result = environment.Result
    type Symbol = type_reporter.TypeCollector.Symbol
-   type TargetMode = lua_generator.Target
+   type TargetMode = targets.GenTarget
    type TypeInfo = type_reporter.TypeInfo
    type TypeReport = type_reporter.TypeReport
    type WarningKind = errors.WarningKind
@@ -94,6 +95,10 @@ v1.init_env = function(lax?: boolean, gen_compat?: boolean | GenCompat, gen_targ
       predefined_modules = predefined,
    }
 
+   if opts.defaults.gen_target == "5.4" and opts.defaults.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   end
+
    local env, err = v2.new_env(opts)
    if env then
       env.report_types = true
@@ -140,7 +145,7 @@ v1.search_module = require_file.search_module
 
 v1.symbols_in_scope = type_reporter.symbols_in_scope
 
-v1.target_from_lua_version = lua_generator.target_from_lua_version
+v1.target_from_lua_version = targets.detect
 
 v1.type_check = function(ast: Node, tc_opts?: v1.TypeCheckOptions): Result, string
    local opts: v2.CheckOptions = {
