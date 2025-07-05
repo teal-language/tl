@@ -7,7 +7,7 @@ BUSTED = busted --suppress-pending
 PRECOMPILED = teal/precompiled/default_env.lua
 SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/util.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
-	teal/gen/lua_generator.tl teal/gen/lua_compat.tl teal/variables.tl teal/type_reporter.tl \
+	teal/variables.tl teal/type_reporter.tl \
 	teal/macroexps.tl teal/metamethods.tl \
 	teal/type_errors.tl teal/environment.tl \
 	teal/check/context.tl teal/check/visitors.tl teal/check/check.tl \
@@ -15,6 +15,7 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/check/type_checker.tl teal/check/node_checker.tl \
 	teal/check/file_checker.tl teal/check/string_checker.tl \
 	teal/check/require_file.tl \
+	teal/gen/targets.tl teal/gen/lua_generator.tl teal/gen/lua_compat.tl \
 	teal/package_loader.tl teal/loader.tl \
 	teal/api/v2.tl teal/api/v1.tl \
 	tl.tl

@@ -10,9 +10,8 @@ local type errors = require("teal.errors")
 local type Error = errors.Error
 local type Where = errors.Where
 
-local lua_generator = require("teal.gen.lua_generator")
-local type GenTarget = lua_generator.Target
-local target_from_lua_version = lua_generator.target_from_lua_version
+local type targets = require("teal.gen.targets")
+local type GenTarget = targets.GenTarget
 
 local type parser = require("teal.parser")
 local type Node = parser.Node
@@ -53,7 +52,7 @@ local record environment
       feat_lax: Feat
       feat_arity: Feat
       gen_compat: GenCompat
-      gen_target: lua_generator.Target
+      gen_target: GenTarget
       run_internal_compiler_checks: boolean
    end
 
@@ -134,11 +133,7 @@ local function load_precompiled_default_env(env: Env)
 end
 
 --- Build a default environment.
-function environment.new(check_opts?: CheckOptions): Env, string
-   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
-   end
-
+function environment.new(check_opts?: CheckOptions): Env
    local env = empty_environment()
    env.defaults = check_opts or env.defaults
    load_precompiled_default_env(env)
@@ -149,8 +144,8 @@ end
 --
 -- This is used by the APIs that are meant to run embedded in a
 -- client application, such as `tl.load` and the Teal package loader.
-function environment.for_runtime(parse_lang?: ParseLang): Env, string
-   local gen_target = target_from_lua_version(_VERSION)
+function environment.for_runtime(parse_lang?: ParseLang): Env
+   local gen_target = targets.detect()
    local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
       feat_lax = parse_lang == "lua" and "on" or "off",

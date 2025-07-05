@@ -106,11 +106,7 @@ function check.check(ast, filename, opts, env)
    filename = filename or "?"
 
    if not env then
-      local err
-      env, err = environment.new(opts)
-      if err then
-         return nil, err
-      end
+      env = environment.new(opts)
    end
    opts = opts or env.defaults
 
