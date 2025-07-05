@@ -18,7 +18,13 @@ local type_reporter = require("teal.type_reporter")
 
 
 
-local v2 = { EnvOptions = {} }
+local v2 = { CheckOptions = {}, EnvOptions = {} }
+
+
+
+
+
+
 
 
 
@@ -91,8 +97,46 @@ v2.typecodes = type_reporter.typecodes
 
 
 
+local function env_from_check_options(opts)
+   return environment.new(opts and {
+      feat_lax = opts.feat_lax,
+      feat_arity = opts.feat_arity,
+      gen_compat = opts.gen_compat,
+      gen_target = opts.gen_target,
+   })
+end
+
 v2.check = function(ast, filename, opts, env)
-   local result = check.check(ast, filename, opts, env)
+   if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   end
+
+   if opts and env then
+
+
+
+
+
+
+
+
+      if opts.feat_lax and env.opts.feat_lax and opts.feat_lax ~= env.opts.feat_lax then
+         return nil, "opts.feat_lax does not match environment setting"
+      end
+      if opts.feat_arity and env.opts.feat_arity and opts.feat_arity ~= env.opts.feat_arity then
+         return nil, "opts.feat_arity does not match environment setting"
+      end
+      if opts.gen_compat and env.opts.gen_compat and opts.gen_compat ~= env.opts.gen_compat then
+         return nil, "opts.gen_compat does not match environment setting"
+      end
+      if opts.gen_target and env.opts.gen_target and opts.gen_target ~= env.opts.gen_target then
+         return nil, "opts.gen_target does not match environment setting"
+      end
+   elseif opts or not env then
+      env = env_from_check_options(opts)
+   end
+
+   local result = check.check(ast, env, filename or "?")
    if result and result.ast then
       lua_compat.apply(result)
    end
@@ -111,31 +155,36 @@ v2.check_file = function(filename, env, fd)
    return result
 end
 
-v2.check_string = function(input, env, filename, parse_lang)
+local function run_adjusting_env(env, parse_lang, f)
    env = env or environment.new()
-   env.defaults = env.defaults or {}
-   env.defaults.feat_lax = parse_lang == "lua" and "on" or "off"
-   local result = string_checker.check(env, input, filename)
-   if result and result.ast then
-      lua_compat.apply(result)
-   end
-   return result
+   env.opts = env.opts or {}
+   local save_feat_lax = env.opts.feat_lax
+   env.opts.feat_lax = parse_lang == "lua" and "on" or "off"
+   local r, s = f(env)
+   env.opts.feat_lax = save_feat_lax
+   return r, s
 end
 
-v2.gen = function(input, env, opts, parse_lang)
-   env = env or environment.new()
-   env.defaults = env.defaults or {}
-   env.defaults.feat_lax = parse_lang == "lua" and "on" or "off"
-   local result = string_checker.check(env, input)
+v2.check_string = function(input, e, filename, parse_lang)
+   return run_adjusting_env(e, parse_lang, function(env)
+      local result = string_checker.check(env, input, filename)
+      if result and result.ast then
+         lua_compat.apply(result)
+      end
+      return result
+   end)
+end
 
-   if (not result.ast) or #result.syntax_errors > 0 then
-      return nil, result
-   end
-
-   lua_compat.apply(result)
-
-   local code = lua_generator.generate(result.ast, env.defaults.gen_target, opts)
-   return code, result
+v2.gen = function(input, e, opts, parse_lang)
+   return run_adjusting_env(e, parse_lang, function(env)
+      local result = string_checker.check(env, input)
+      if (not result.ast) or #result.syntax_errors > 0 then
+         return nil, result
+      end
+      lua_compat.apply(result)
+      local code = lua_generator.generate(result.ast, env.opts.gen_target, opts)
+      return code, result
+   end)
 end
 
 v2.generate = function(ast, gen_target, opts)
@@ -162,7 +211,7 @@ local function predefine_modules(env, predefined_modules)
 end
 
 v2.new_env = function(opts)
-   local env = environment.new(opts and opts.defaults)
+   local env = env_from_check_options(opts and opts.defaults)
 
    if opts and opts.predefined_modules then
       local ok, err = predefine_modules(env, opts.predefined_modules)

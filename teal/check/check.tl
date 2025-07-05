@@ -5,7 +5,6 @@ local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local type environment = require("teal.environment")
-local type CheckOptions = environment.CheckOptions
 local type Env = environment.Env
 local type Result = environment.Result
 
@@ -38,7 +37,7 @@ local visit_node = visitors.visit_node
 local visit_type = visitors.visit_type
 
 local record check
-   check: function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result
+   check: function(ast: Node, env: Env, filename: string): Result
 end
 
 local type VisitorAfterPatcher = function<S, N, T>(VisitorAfter<S, N, T>): VisitorAfter<S, N, T>
@@ -102,15 +101,10 @@ local function patch_visitors(my_visit_node: Visitor<Context, NodeKind, Node, Ty
    return my_visit_node, my_visit_type
 end
 
-function check.check(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result
-   filename = filename or "?"
+function check.check(ast: Node, env: Env, filename: string): Result
+   assert(filename)
 
-   if not env then
-      env = environment.new(opts)
-   end
-   opts = opts or env.defaults
-
-   local self = Context.new(env, filename, opts)
+   local self = Context.new(env, filename)
 
    if env.report_types then
       env.reporter = env.reporter or type_reporter.new()
@@ -118,7 +112,7 @@ function check.check(ast: Node, filename?: string, opts?: CheckOptions, env?: En
    end
 
    local visit_node, visit_type = visit_node, visit_type
-   if opts.run_internal_compiler_checks then
+   if env.opts.run_internal_compiler_checks then
       visit_node, visit_type = patch_visitors(
          visit_node, internal_compiler_check,
          visit_type, internal_compiler_check

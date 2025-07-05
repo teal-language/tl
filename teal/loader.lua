@@ -46,10 +46,9 @@ function loader.load(input, chunkname, mode, ...)
    if not package_loader.env then
       package_loader.env = environment.for_runtime(parse_lang)
    end
-   local defaults = package_loader.env.defaults
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = check.check(program, filename, defaults, env_for(parse_lang, ...))
+   local result = check.check(program, env_for(parse_lang, ...), filename)
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -63,7 +62,7 @@ function loader.load(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code = lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts)
+   local code = lua_generator.generate(program, package_loader.env.opts.gen_target, lua_generator.fast_opts)
    return load(code, chunkname, mode, ...)
 end
 
