@@ -40,18 +40,17 @@ local function tl_package_loader(module_name)
          package_loader.env = assert(environment.for_runtime(parse_lang), "Default environment initialization failed")
          env = package_loader.env
       end
-      local defaults = env.defaults
 
       local w = { f = found_filename, x = 1, y = 1 }
       env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 
-      local result = check.check(program, found_filename, defaults, env)
+      local result = check.check(program, env, found_filename)
 
       env.modules[module_name] = result.type
 
 
 
-      local code = assert(lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts))
+      local code = assert(lua_generator.generate(program, env.opts.gen_target, lua_generator.fast_opts))
       local chunk, err = load(code, "@" .. found_filename, "t")
       if chunk then
          return function(modname, loader_data)

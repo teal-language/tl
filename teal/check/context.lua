@@ -17,7 +17,6 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 
 
-
 local errors = require("teal.errors")
 
 
@@ -2368,7 +2367,7 @@ do
       end
    end
 
-   function Context.new(env, filename, opts)
+   function Context.new(env, filename)
       local self = {
          filename = filename,
          env = env,
@@ -2389,8 +2388,8 @@ do
 
       self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t).def
 
-      self.feat_lax = set_feat(opts.feat_lax or env.defaults.feat_lax, false)
-      self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
+      self.feat_lax = set_feat(env.opts.feat_lax, false)
+      self.feat_arity = set_feat(env.opts.feat_arity, true)
       if self.feat_lax then
          self.feat_arity = false
       end

@@ -4,9 +4,6 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
-
-
-
 local parser = require("teal.parser")
 
 local node_at = parser.node_at
@@ -433,11 +430,7 @@ local special_functions = {
       end
 
       local module_name = assert(node.e2[1].conststr)
-      local tc_opts = {
-         feat_lax = self.feat_lax and "on" or "off",
-         feat_arity = self.feat_arity and "on" or "off",
-      }
-      local t, module_filename = self.env:require_module(node, module_name, tc_opts)
+      local t, module_filename = self.env:require_module(node, module_name)
 
       if t.typename == "invalid" then
          if not module_filename then
