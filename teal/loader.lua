@@ -63,11 +63,7 @@ function loader.load(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code, err = lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts)
-   if not code then
-      return nil, err
-   end
-
+   local code = lua_generator.generate(program, defaults.gen_target, lua_generator.fast_opts)
    return load(code, chunkname, mode, ...)
 end
 

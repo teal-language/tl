@@ -95,8 +95,7 @@ lua_generator.fast_opts = {
    preserve_hashbang = false,
 }
 
-function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Options): string, string
-   local err: string
+function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Options): string
    local indent = 0
 
    opts = opts or lua_generator.default_opts
@@ -273,14 +272,8 @@ function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Opti
                   add_string(out, ", ")
                end
                add_string(out, var.tk)
-               if var.attribute then
-                  if gen_target ~= "5.4" and var.attribute == "close" then
-                     err = "attempt to emit a <close> attribute for a non 5.4 target"
-                  end
-
-                  if gen_target == "5.4" then
-                     add_string(out, lua_54_attribute[var.attribute])
-                  end
+               if var.attribute and gen_target == "5.4" then
+                  add_string(out, lua_54_attribute[var.attribute])
                end
             end
             if children[3] then
@@ -813,9 +806,6 @@ function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Opti
    visit_node.cbs["argument_list"] = visit_node.cbs["variable_list"]
 
    local out = traversal.traverse_nodes(nil, ast, visit_node, visit_type)
-   if err then
-      return nil, err
-   end
 
    local code: Output
    if opts.preserve_newlines then
