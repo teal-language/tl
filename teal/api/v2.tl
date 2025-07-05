@@ -147,6 +147,21 @@ v2.load = loader.load
 
 v2.loader = package_loader.install_loader
 
+local function predefine_modules(env: Env, predefined_modules: {string}): boolean, string
+   local opts = {
+      feat_lax = env.defaults.feat_lax,
+      feat_arity = env.defaults.feat_arity,
+   }
+   for _, name in ipairs(predefined_modules) do
+      local ok, err = environment.load_module(env, name, opts)
+      if not ok then
+         return nil, err
+      end
+   end
+
+   return true
+end
+
 v2.new_env = function(opts?: EnvOptions): Env, string
    local env, err = environment.new(opts and opts.defaults)
    if not env then
@@ -155,7 +170,7 @@ v2.new_env = function(opts?: EnvOptions): Env, string
 
    if opts and opts.predefined_modules then
       local ok: boolean
-      ok, err = environment.predefine(env, opts.predefined_modules)
+      ok, err = predefine_modules(env, opts.predefined_modules)
       if not ok then
          return nil, err
       end

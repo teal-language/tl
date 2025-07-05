@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string
 local VERSION = "0.24.6+dev"
 
 local tldebug = require("teal.debug")
@@ -102,18 +102,14 @@ function environment.set_require_module_fn(fn)
    require_module = fn
 end
 
-function environment.empty(check_opts)
-   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
-   end
-
+local function empty_environment()
    return {
       modules = {},
       module_filenames = {},
       loaded = {},
       loaded_order = {},
       globals = {},
-      defaults = check_opts or {},
+      defaults = {},
       require_module = require_module,
    }
 end
@@ -139,10 +135,12 @@ end
 
 
 function environment.new(check_opts)
-   local env, err = environment.empty(check_opts)
-   if not env then
-      return nil, err
+   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
    end
+
+   local env = empty_environment()
+   env.defaults = check_opts or env.defaults
    load_precompiled_default_env(env)
    return env
 end
@@ -200,10 +198,12 @@ do
 
 
    function environment.construct(check_opts, prelude, stdlib)
-      local env, err = environment.empty(check_opts)
-      if not env then
-         return nil, err
+      if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
       end
+
+      local env = empty_environment()
+      env.defaults = check_opts or env.defaults
 
       local stdlib_globals = environment.stdlib_globals
       if not stdlib_globals then
@@ -213,10 +213,14 @@ do
          local w = { f = "@prelude", x = 1, y = 1 }
 
          local typ = env:require_module(w, prelude or "teal.default.prelude", {})
-         assert(not (typ.typename == "invalid"), "prelude contains errors")
+         if typ.typename == "invalid" then
+            return nil, "prelude contains errors"
+         end
 
          typ = env:require_module(w, stdlib or "teal.default.stdlib", {})
-         assert(not (typ.typename == "invalid"), "standard library contains errors")
+         if typ.typename == "invalid" then
+            return nil, "standard library contains errors"
+         end
 
          stdlib_globals = env.globals
          environment.stdlib_globals = env.globals
@@ -273,18 +277,12 @@ do
    end
 end
 
-function environment.predefine(env, predefined_modules)
-   local opts = {
-      feat_lax = env.defaults.feat_lax,
-      feat_arity = env.defaults.feat_arity,
-   }
-   for _, name in ipairs(predefined_modules) do
-      local w = { f = "@predefined", x = 1, y = 1 }
-      local module_type = env:require_module(w, name, opts)
+function environment.load_module(env, name, opts)
+   local w = { f = "@predefined", x = 1, y = 1 }
+   local module_type = env:require_module(w, name, opts)
 
-      if module_type.typename == "invalid" then
-         return false, string.format("Error: could not predefine module '%s'", name)
-      end
+   if module_type.typename == "invalid" then
+      return false, string.format("Error: could not predefine module '%s'", name)
    end
 
    return true
