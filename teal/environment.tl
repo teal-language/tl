@@ -102,18 +102,14 @@ function environment.set_require_module_fn(fn: environment.RequireModuleFn)
    require_module = fn
 end
 
-function environment.empty(check_opts?: CheckOptions): Env, string
-   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
-   end
-
+local function empty_environment(): Env
    return {
       modules = {},
       module_filenames = {},
       loaded = {},
       loaded_order = {},
       globals = {},
-      defaults = check_opts or {},
+      defaults = {},
       require_module = require_module,
    }
 end
@@ -139,10 +135,12 @@ end
 
 --- Build a default environment.
 function environment.new(check_opts?: CheckOptions): Env, string
-   local env, err = environment.empty(check_opts)
-   if not env then
-      return nil, err
+   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
    end
+
+   local env = empty_environment()
+   env.defaults = check_opts or env.defaults
    load_precompiled_default_env(env)
    return env
 end
@@ -200,10 +198,12 @@ do
    -- This is used by the precompiler when building
    -- `teal.precompiled.default_env`.
    function environment.construct(check_opts?: CheckOptions, prelude?: string, stdlib?: string): Env, string
-      local env, err = environment.empty(check_opts)
-      if not env then
-         return nil, err
+      if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
       end
+
+      local env = empty_environment()
+      env.defaults = check_opts or env.defaults
 
       local stdlib_globals = environment.stdlib_globals
       if not stdlib_globals then
@@ -213,10 +213,14 @@ do
          local w: Where = { f = "@prelude", x = 1, y = 1 }
 
          local typ = env:require_module(w, prelude or "teal.default.prelude", {})
-         assert(not typ is InvalidType, "prelude contains errors")
+         if typ is InvalidType then
+            return nil, "prelude contains errors"
+         end
 
          typ = env:require_module(w, stdlib or "teal.default.stdlib", {})
-         assert(not typ is InvalidType, "standard library contains errors")
+         if typ is InvalidType then
+            return nil, "standard library contains errors"
+         end
 
          stdlib_globals = env.globals
          environment.stdlib_globals = env.globals
@@ -273,18 +277,12 @@ do
    end
 end
 
-function environment.predefine(env: Env, predefined_modules: {string}): boolean, string
-   local opts = {
-      feat_lax = env.defaults.feat_lax,
-      feat_arity = env.defaults.feat_arity,
-   }
-   for _, name in ipairs(predefined_modules) do
-      local w: Where = { f = "@predefined", x = 1, y = 1 }
-      local module_type = env:require_module(w, name, opts)
+function environment.load_module(env: Env, name: string, opts: CheckOptions): boolean, string
+   local w: Where = { f = "@predefined", x = 1, y = 1 }
+   local module_type = env:require_module(w, name, opts)
 
-      if module_type is InvalidType then
-         return false, string.format("Error: could not predefine module '%s'", name)
-      end
+   if module_type is InvalidType then
+      return false, string.format("Error: could not predefine module '%s'", name)
    end
 
    return true
