@@ -1,4 +1,4 @@
-local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
 local file_checker = require("teal.check.file_checker")
@@ -147,6 +147,21 @@ v2.load = loader.load
 
 v2.loader = package_loader.install_loader
 
+local function predefine_modules(env, predefined_modules)
+   local opts = {
+      feat_lax = env.defaults.feat_lax,
+      feat_arity = env.defaults.feat_arity,
+   }
+   for _, name in ipairs(predefined_modules) do
+      local ok, err = environment.load_module(env, name, opts)
+      if not ok then
+         return nil, err
+      end
+   end
+
+   return true
+end
+
 v2.new_env = function(opts)
    local env, err = environment.new(opts and opts.defaults)
    if not env then
@@ -155,7 +170,7 @@ v2.new_env = function(opts)
 
    if opts and opts.predefined_modules then
       local ok
-      ok, err = environment.predefine(env, opts.predefined_modules)
+      ok, err = predefine_modules(env, opts.predefined_modules)
       if not ok then
          return nil, err
       end
