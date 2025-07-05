@@ -172,6 +172,10 @@ local function setup_env(tlconfig, filename)
       predefined_modules = tlconfig._init_env_modules,
    }
 
+   if opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
+      die("gen-compat must be explicitly 'off' when gen-target is '5.4'")
+   end
+
    local env, err = tl.new_env(opts)
    if not env then
       die(err)

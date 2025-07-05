@@ -5,8 +5,6 @@ local environment = require("teal.environment")
 
 
 
-local errors = require("teal.errors")
-
 local parser = require("teal.parser")
 
 
@@ -19,9 +17,6 @@ local binop_to_metamethod = metamethods.binop_to_metamethod
 local traversal = require("teal.traversal")
 
 local traverse_nodes = traversal.traverse_nodes
-
-local type_errors = require("teal.type_errors")
-local Errors = type_errors.Errors
 
 local check = require("teal.check.check")
 
@@ -125,28 +120,14 @@ local bit_operators = {
    ["<<"] = "lshift",
 }
 
-function lua_compat.adjust_code(filename, ast, needs_compat, gen_compat, gen_target)
+local function adjust_code(ast, needs_compat, gen_compat, gen_target)
    if gen_target == "5.4" then
-      return true
+      return
    end
-
-   local errs = Errors.new(filename)
 
    local visit_node = {
       cbs = {},
    }
-
-   if gen_target ~= "5.4" then
-      visit_node.cbs["local_declaration"] = {
-         after = function(_, node, _children)
-            for _, var in ipairs(node.vars) do
-               if var.attribute == "close" then
-                  errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(gen_target) .. ")")
-               end
-            end
-         end,
-      }
-   end
 
    if gen_compat ~= "off" then
       visit_node.cbs["op"] = {
@@ -198,13 +179,7 @@ function lua_compat.adjust_code(filename, ast, needs_compat, gen_compat, gen_tar
 
    traverse_nodes(nil, ast, visit_node, {})
 
-   if #errs.errors > 0 then
-      return false, errs
-   end
-
    add_compat_entries(ast, needs_compat, gen_compat)
-
-   return true
 end
 
 function lua_compat.apply(result)
@@ -216,16 +191,7 @@ function lua_compat.apply(result)
    local gen_compat = result.env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
    local gen_target = result.env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
 
-   local ok, errs = lua_compat.adjust_code(result.filename, result.ast, result.needs_compat, gen_compat, gen_target)
-   if not ok then
-      if not result.type_errors then
-         result.type_errors = {}
-      end
-      for _, err in ipairs(errs.errors) do
-         table.insert(result.type_errors, err)
-      end
-      errors.clear_redundant_errors(result.type_errors)
-   end
+   adjust_code(result.ast, result.needs_compat, gen_compat, gen_target)
 end
 
 return lua_compat

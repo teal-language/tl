@@ -13,6 +13,7 @@ local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 
 local require_file = require("teal.check.require_file")
+local targets = require("teal.gen.targets")
 local type_reporter = require("teal.type_reporter")
 
 
@@ -94,6 +95,10 @@ v1.init_env = function(lax, gen_compat, gen_target, predefined)
       predefined_modules = predefined,
    }
 
+   if opts.defaults.gen_target == "5.4" and opts.defaults.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   end
+
    local env, err = v2.new_env(opts)
    if env then
       env.report_types = true
@@ -140,7 +145,7 @@ v1.search_module = require_file.search_module
 
 v1.symbols_in_scope = type_reporter.symbols_in_scope
 
-v1.target_from_lua_version = lua_generator.target_from_lua_version
+v1.target_from_lua_version = targets.detect
 
 v1.type_check = function(ast, tc_opts)
    local opts = {

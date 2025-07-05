@@ -10,6 +10,7 @@ local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local require_file = require("teal.check.require_file")
 local string_checker = require("teal.check.string_checker")
+local targets = require("teal.gen.targets")
 
 local type_reporter = require("teal.type_reporter")
 
@@ -91,20 +92,23 @@ v2.typecodes = type_reporter.typecodes
 
 
 v2.check = function(ast, filename, opts, env)
-   local result, err = check.check(ast, filename, opts, env)
+   local result = check.check(ast, filename, opts, env)
    if result and result.ast then
       lua_compat.apply(result)
    end
-   return result, err
+   return result
 end
 
 v2.check_file = function(filename, env, fd)
    env = env or environment.new()
    local result, err = file_checker.check(env, filename, fd)
-   if result and result.ast then
+   if not result then
+      return nil, err
+   end
+   if result.ast then
       lua_compat.apply(result)
    end
-   return result, err
+   return result
 end
 
 v2.check_string = function(input, env, filename, parse_lang)
@@ -158,14 +162,10 @@ local function predefine_modules(env, predefined_modules)
 end
 
 v2.new_env = function(opts)
-   local env, err = environment.new(opts and opts.defaults)
-   if not env then
-      return nil, err
-   end
+   local env = environment.new(opts and opts.defaults)
 
    if opts and opts.predefined_modules then
-      local ok
-      ok, err = predefine_modules(env, opts.predefined_modules)
+      local ok, err = predefine_modules(env, opts.predefined_modules)
       if not ok then
          return nil, err
       end
@@ -190,7 +190,7 @@ v2.search_module = require_file.search_module
 
 v2.symbols_in_scope = type_reporter.symbols_in_scope
 
-v2.target_from_lua_version = lua_generator.target_from_lua_version
+v2.target_from_lua_version = targets.detect
 
 v2.version = function()
    return environment.VERSION
