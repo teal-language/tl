@@ -148,12 +148,8 @@ v2.load = loader.load
 v2.loader = package_loader.install_loader
 
 local function predefine_modules(env, predefined_modules)
-   local opts = {
-      feat_lax = env.defaults.feat_lax,
-      feat_arity = env.defaults.feat_arity,
-   }
    for _, name in ipairs(predefined_modules) do
-      local ok, err = environment.load_module(env, name, opts)
+      local ok, err = environment.load_module(env, name)
       if not ok then
          return nil, err
       end

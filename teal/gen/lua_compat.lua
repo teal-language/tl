@@ -136,17 +136,17 @@ function lua_compat.adjust_code(filename, ast, needs_compat, gen_compat, gen_tar
       cbs = {},
    }
 
-   visit_node.cbs["local_declaration"] = {
-      after = function(_, node, _children)
-         for _, var in ipairs(node.vars) do
-            if var.attribute == "close" then
-               if gen_target ~= "5.4" then
+   if gen_target ~= "5.4" then
+      visit_node.cbs["local_declaration"] = {
+         after = function(_, node, _children)
+            for _, var in ipairs(node.vars) do
+               if var.attribute == "close" then
                   errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(gen_target) .. ")")
                end
             end
-         end
-      end,
-   }
+         end,
+      }
+   end
 
    if gen_compat ~= "off" then
       visit_node.cbs["op"] = {
