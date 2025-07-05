@@ -15,6 +15,7 @@ local record string_checker
 end
 
 function string_checker.check(env: Env, input: string, filename?: string, parse_lang?: ParseLang): Result
+   assert(env)
    parse_lang = parse_lang or parser.lang_heuristic(filename, input)
 
    if env.loaded and env.loaded[filename] then
@@ -38,7 +39,7 @@ function string_checker.check(env: Env, input: string, filename?: string, parse_
       return result
    end
 
-   local result = check.check(program as Node, filename, env.defaults, env)
+   local result = check.check(program as Node, env, filename)
 
    result.syntax_errors = syntax_errors
 

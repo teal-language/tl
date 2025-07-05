@@ -834,8 +834,8 @@ visit_node.cbs = {
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
             if var.attribute == "close" then
-               if self.env.defaults.gen_target ~= "5.4" then
-                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(self.env.defaults.gen_target) .. ")")
+               if self.env.opts.gen_target ~= "5.4" then
+                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(self.env.opts.gen_target) .. ")")
                end
                if encountered_close then
                   self.errs:add(var, "only one <close> per declaration is allowed")
@@ -2262,8 +2262,10 @@ visit_node.cbs = {
          if node.pkey == "arity" then
             if node.pvalue == "on" then
                self.feat_arity = true
+               self.env.opts.feat_arity = "on"
             elseif node.pvalue == "off" then
                self.feat_arity = false
+               self.env.opts.feat_arity = "off"
             else
                return self.errs:invalid_at(node, "invalid value for pragma 'arity': " .. node.pvalue)
             end

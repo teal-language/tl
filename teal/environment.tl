@@ -48,7 +48,7 @@ local record environment
       "off"
    end
 
-   record CheckOptions
+   record EnvOptions
       feat_lax: Feat
       feat_arity: Feat
       gen_compat: GenCompat
@@ -56,7 +56,7 @@ local record environment
       run_internal_compiler_checks: boolean
    end
 
-   type RequireModuleFn = function(env: Env, w: Where, module_name: string, opts: CheckOptions): Type, string
+   type RequireModuleFn = function(env: Env, w: Where, module_name: string): Type, string
 
    record Env
       globals: {string:Variable}
@@ -67,7 +67,9 @@ local record environment
       reporter: TypeReporter
       keep_going: boolean
       report_types: boolean
-      defaults: CheckOptions
+
+      -- private:
+      opts: EnvOptions
       require_module: RequireModuleFn
    end
 
@@ -92,7 +94,7 @@ environment.VERSION = VERSION
 environment.DEFAULT_GEN_COMPAT = "optional"
 environment.DEFAULT_GEN_TARGET = "5.3"
 
-local type CheckOptions = environment.CheckOptions
+local type EnvOptions = environment.EnvOptions
 local type Env = environment.Env
 
 local require_module: environment.RequireModuleFn
@@ -108,7 +110,7 @@ local function empty_environment(): Env
       loaded = {},
       loaded_order = {},
       globals = {},
-      defaults = {},
+      opts = {},
       require_module = require_module,
    }
 end
@@ -133,9 +135,9 @@ local function load_precompiled_default_env(env: Env)
 end
 
 --- Build a default environment.
-function environment.new(check_opts?: CheckOptions): Env
+function environment.new(opts?: EnvOptions): Env
    local env = empty_environment()
-   env.defaults = check_opts or env.defaults
+   env.opts = opts or env.opts
    load_precompiled_default_env(env)
    return env
 end
@@ -192,13 +194,13 @@ do
    --
    -- This is used by the precompiler when building
    -- `teal.precompiled.default_env`.
-   function environment.construct(check_opts?: CheckOptions, prelude?: string, stdlib?: string): Env, string
-      if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+   function environment.construct(opts?: EnvOptions, prelude?: string, stdlib?: string): Env, string
+      if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
          return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
       end
 
       local env = empty_environment()
-      env.defaults = check_opts or env.defaults
+      env.opts = opts or env.opts
 
       local stdlib_globals = environment.stdlib_globals
       if not stdlib_globals then
@@ -207,12 +209,12 @@ do
 
          local w: Where = { f = "@prelude", x = 1, y = 1 }
 
-         local typ = env:require_module(w, prelude or "teal.default.prelude", {})
+         local typ = env:require_module(w, prelude or "teal.default.prelude")
          if typ is InvalidType then
             return nil, "prelude contains errors"
          end
 
-         typ = env:require_module(w, stdlib or "teal.default.stdlib", {})
+         typ = env:require_module(w, stdlib or "teal.default.stdlib")
          if typ is InvalidType then
             return nil, "standard library contains errors"
          end
@@ -274,7 +276,7 @@ end
 
 function environment.load_module(env: Env, name: string): boolean, string
    local w: Where = { f = "@predefined", x = 1, y = 1 }
-   local module_type = env:require_module(w, name, env.defaults)
+   local module_type = env:require_module(w, name)
 
    if module_type is InvalidType then
       return false, string.format("Error: could not predefine module '%s'", name)

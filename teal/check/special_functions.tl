@@ -1,9 +1,6 @@
 local type node_checker = require("teal.check.node_checker")
 local type NodeChecker = node_checker.NodeChecker
 
-local type environment = require("teal.environment")
-local type CheckOptions = environment.CheckOptions
-
 local type errors = require("teal.errors")
 local type Where = errors.Where
 
@@ -433,11 +430,7 @@ local special_functions <total>: {SpecialFunctionName : function(NodeChecker, No
       end
 
       local module_name = assert(node.e2[1].conststr)
-      local tc_opts: CheckOptions = {
-         feat_lax = self.feat_lax and "on" or "off",
-         feat_arity = self.feat_arity and "on" or "off",
-      }
-      local t, module_filename = self.env:require_module(node, module_name, tc_opts)
+      local t, module_filename = self.env:require_module(node, module_name)
 
       if t is InvalidType then
          if not module_filename then

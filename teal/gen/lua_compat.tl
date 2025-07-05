@@ -40,12 +40,14 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
 
    local compat_loaded = false
 
+   local internal_env = environment.new({ feat_lax = "off", gen_compat = "off" })
+
    local n = 1
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
          code = parser.parse(text, "@internal", "lua") as Node
-         check.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
+         check.check(code, internal_env, "@internal")
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
@@ -188,8 +190,8 @@ function lua_compat.apply(result: Result)
    end
    result.compat_applied = true
 
-   local gen_compat = result.env.defaults.gen_compat or environment.DEFAULT_GEN_COMPAT
-   local gen_target = result.env.defaults.gen_target or environment.DEFAULT_GEN_TARGET
+   local gen_compat = result.env.opts.gen_compat or environment.DEFAULT_GEN_COMPAT
+   local gen_target = result.env.opts.gen_target or environment.DEFAULT_GEN_TARGET
 
    adjust_code(result.ast, result.needs_compat, gen_compat, gen_target)
 end

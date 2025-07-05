@@ -150,10 +150,9 @@ v1.target_from_lua_version = targets.detect
 v1.type_check = function(ast: Node, tc_opts?: v1.TypeCheckOptions): Result, string
    local opts: v2.CheckOptions = {
       feat_lax = tc_opts.lax and "on" or "off",
-      feat_arity = tc_opts.env and tc_opts.env.defaults.feat_arity or "on",
+      feat_arity = tc_opts.env and tc_opts.env.opts.feat_arity or "on",
       gen_compat = tc_opts.gen_compat,
       gen_target = tc_opts.gen_target,
-      run_internal_compiler_checks = tc_opts.run_internal_compiler_checks,
    }
    return v2.check(ast as v2.Node, tc_opts.filename, opts, tc_opts.env)
 end
