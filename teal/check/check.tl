@@ -38,7 +38,7 @@ local visit_node = visitors.visit_node
 local visit_type = visitors.visit_type
 
 local record check
-   check: function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
+   check: function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result
 end
 
 local type VisitorAfterPatcher = function<S, N, T>(VisitorAfter<S, N, T>): VisitorAfter<S, N, T>
@@ -102,15 +102,11 @@ local function patch_visitors(my_visit_node: Visitor<Context, NodeKind, Node, Ty
    return my_visit_node, my_visit_type
 end
 
-function check.check(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
+function check.check(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result
    filename = filename or "?"
 
    if not env then
-      local err: string
-      env, err = environment.new(opts)
-      if err then
-         return nil, err
-      end
+      env = environment.new(opts)
    end
    opts = opts or env.defaults
 

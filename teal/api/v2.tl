@@ -10,6 +10,7 @@ local type package_loader = require("teal.package_loader")
 local type parser = require("teal.parser")
 local type require_file = require("teal.check.require_file")
 local type string_checker = require("teal.check.string_checker")
+local type targets = require("teal.gen.targets")
 local type type_errors = require("teal.type_errors")
 local type type_reporter = require("teal.type_reporter")
 
@@ -24,7 +25,7 @@ local record v2
    type Feat = environment.Feat
    type GenCompat = environment.GenCompat
    type GenerateOptions = lua_generator.Options
-   type GenTarget = lua_generator.Target
+   type GenTarget = targets.GenTarget
    type LoadFunction = loader.LoadFunction
    type LoadMode = loader.LoadMode
    type ParseLang = parser.ParseLang
@@ -91,20 +92,23 @@ local type Token = v2.Token
 --------------------------------------------------------------------------------
 
 v2.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
-   local result, err = check.check(ast as parser.Node, filename, opts, env)
+   local result = check.check(ast as parser.Node, filename, opts, env)
    if result and result.ast then
       lua_compat.apply(result)
    end
-   return result, err
+   return result
 end
 
 v2.check_file = function(filename: string, env?: Env, fd?: FILE): (Result, string)
    env = env or environment.new()
    local result, err = file_checker.check(env, filename, fd)
-   if result and result.ast then
+   if not result then
+      return nil, err
+   end
+   if result.ast then
       lua_compat.apply(result)
    end
-   return result, err
+   return result
 end
 
 v2.check_string = function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
@@ -158,14 +162,10 @@ local function predefine_modules(env: Env, predefined_modules: {string}): boolea
 end
 
 v2.new_env = function(opts?: EnvOptions): Env, string
-   local env, err = environment.new(opts and opts.defaults)
-   if not env then
-      return nil, err
-   end
+   local env = environment.new(opts and opts.defaults)
 
    if opts and opts.predefined_modules then
-      local ok: boolean
-      ok, err = predefine_modules(env, opts.predefined_modules)
+      local ok, err = predefine_modules(env, opts.predefined_modules)
       if not ok then
          return nil, err
       end
@@ -190,7 +190,7 @@ v2.search_module = require_file.search_module
 
 v2.symbols_in_scope = type_reporter.symbols_in_scope
 
-v2.target_from_lua_version = lua_generator.target_from_lua_version
+v2.target_from_lua_version = targets.detect
 
 v2.version = function(): string
    return environment.VERSION

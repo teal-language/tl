@@ -10,9 +10,8 @@ local default_env = require("teal.precompiled.default_env")
 
 
 
-local lua_generator = require("teal.gen.lua_generator")
+local targets = require("teal.gen.targets")
 
-local target_from_lua_version = lua_generator.target_from_lua_version
 
 
 
@@ -135,10 +134,6 @@ end
 
 
 function environment.new(check_opts)
-   if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
-   end
-
    local env = empty_environment()
    env.defaults = check_opts or env.defaults
    load_precompiled_default_env(env)
@@ -150,7 +145,7 @@ end
 
 
 function environment.for_runtime(parse_lang)
-   local gen_target = target_from_lua_version(_VERSION)
+   local gen_target = targets.detect()
    local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
       feat_lax = parse_lang == "lua" and "on" or "off",

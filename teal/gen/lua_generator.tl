@@ -4,6 +4,9 @@
 local type attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
+local targets = require("teal.gen.targets")
+local type GenTarget = targets.GenTarget
+
 local types = require("teal.types")
 local type Type = types.Type
 local type TypeName = types.TypeName
@@ -28,18 +31,11 @@ local record lua_generator
       preserve_hashbang: boolean
    end
 
-   enum Target
-      "5.1"
-      "5.3"
-      "5.4"
-   end
-
    default_opts: Options
    fast_opts: Options
 end
 
 local type Options = lua_generator.Options
-local type Target = lua_generator.Target
 
 local tight_op: {integer:{string:boolean}} = {
    [1] = {
@@ -95,7 +91,7 @@ lua_generator.fast_opts = {
    preserve_hashbang = false,
 }
 
-function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Options): string
+function lua_generator.generate(ast: types.Node, gen_target: GenTarget, opts?: Options): string
    local indent = 0
 
    opts = opts or lua_generator.default_opts
@@ -815,17 +811,6 @@ function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Opti
       code = out
    end
    return (concat_output(code):gsub(" *\n", "\n"))
-end
-
-function lua_generator.target_from_lua_version(str: string): Target
-   if str == "Lua 5.1"
-      or str == "Lua 5.2" then
-      return "5.1"
-   elseif str == "Lua 5.3" then
-      return "5.3"
-   elseif str == "Lua 5.4" then
-      return "5.4"
-   end
 end
 
 return lua_generator
