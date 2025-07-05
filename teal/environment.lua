@@ -277,9 +277,9 @@ do
    end
 end
 
-function environment.load_module(env, name, opts)
+function environment.load_module(env, name)
    local w = { f = "@predefined", x = 1, y = 1 }
-   local module_type = env:require_module(w, name, opts)
+   local module_type = env:require_module(w, name, env.defaults)
 
    if module_type.typename == "invalid" then
       return false, string.format("Error: could not predefine module '%s'", name)
