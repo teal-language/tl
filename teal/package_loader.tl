@@ -22,7 +22,7 @@ local record package_loader
 end
 
 local function tl_package_loader(module_name: string): any, any
-   local found_filename, fd, tried = search_module(module_name, false)
+   local found_filename, fd, tried = search_module(module_name)
    if found_filename then
       local parse_lang = parser.lang_heuristic(found_filename)
       local input = read_file_skipping_bom(fd)

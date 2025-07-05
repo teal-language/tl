@@ -59,9 +59,6 @@ local record environment
    type RequireModuleFn = function(env: Env, w: Where, module_name: string): Type, string
 
    record Env
-      globals: {string:Variable}
-      modules: {string:Type}
-      module_filenames: {string:string}
       loaded: {string:Result}
       loaded_order: {string}
       reporter: TypeReporter
@@ -70,6 +67,9 @@ local record environment
 
       -- private:
       opts: EnvOptions
+      globals: {string:Variable}
+      modules: {string:Type}
+      module_filenames: {string:string}
       require_module: RequireModuleFn
    end
 

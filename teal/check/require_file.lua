@@ -16,6 +16,21 @@ local a_type = types.a_type
 local require_file = {}
 
 
+
+
+
+
+
+
+
+
+
+require_file.all_extensions = {
+   [".d.tl"] = true,
+   [".tl"] = true,
+   [".lua"] = true,
+}
+
 local function search_for(module_name, suffix, path, tried)
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
@@ -30,22 +45,24 @@ local function search_for(module_name, suffix, path, tried)
    return nil, nil, tried
 end
 
-function require_file.search_module(module_name, search_all)
+function require_file.search_module(module_name, extension_set)
    local found
    local fd
    local tried = {}
    local path = os.getenv("TL_PATH") or package.path
-   if search_all then
+   if extension_set and extension_set[".d.tl"] then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
       end
    end
-   found, fd, tried = search_for(module_name, ".tl", path, tried)
-   if found then
-      return found, fd
+   if (not extension_set) or extension_set[".tl"] then
+      found, fd, tried = search_for(module_name, ".tl", path, tried)
+      if found then
+         return found, fd
+      end
    end
-   if search_all then
+   if extension_set and extension_set[".lua"] then
       found, fd, tried = search_for(module_name, ".lua", path, tried)
       if found then
          return found, fd
@@ -64,7 +81,7 @@ function require_file.require_module(env, w, module_name)
       return mod, env.module_filenames[module_name]
    end
 
-   local found, fd = require_file.search_module(module_name, true)
+   local found, fd = require_file.search_module(module_name, require_file.all_extensions)
    if found and (env.opts.feat_lax == "on" or found:match("tl$")) then
 
       env.module_filenames[module_name] = found

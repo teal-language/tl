@@ -14,7 +14,22 @@ local type Env = environment.Env
 local type Result = environment.Result
 
 local record require_file
+   enum Extension
+      ".d.tl"
+      ".tl"
+      ".lua"
+   end
+
+   all_extensions: {Extension:boolean}
 end
+
+local type Extension = require_file.Extension
+
+require_file.all_extensions = {
+   [".d.tl"] = true,
+   [".tl"] = true,
+   [".lua"] = true,
+}
 
 local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
    for entry in path:gmatch("[^;]+") do
@@ -30,22 +45,24 @@ local function search_for(module_name: string, suffix: string, path: string, tri
    return nil, nil, tried
 end
 
-function require_file.search_module(module_name: string, search_all: boolean): string, FILE, {string}
+function require_file.search_module(module_name: string, extension_set?: {Extension:boolean}): string, FILE, {string}
    local found: string
    local fd: FILE
    local tried: {string} = {}
    local path = os.getenv("TL_PATH") or package.path
-   if search_all then
+   if extension_set and extension_set[".d.tl"] then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
          return found, fd
       end
    end
-   found, fd, tried = search_for(module_name, ".tl", path, tried)
-   if found then
-      return found, fd
+   if (not extension_set) or extension_set[".tl"] then
+      found, fd, tried = search_for(module_name, ".tl", path, tried)
+      if found then
+         return found, fd
+      end
    end
-   if search_all then
+   if extension_set and extension_set[".lua"] then
       found, fd, tried = search_for(module_name, ".lua", path, tried)
       if found then
          return found, fd
@@ -64,7 +81,7 @@ function require_file.require_module(env: Env, w: Where, module_name: string): T
       return mod, env.module_filenames[module_name]
    end
 
-   local found, fd = require_file.search_module(module_name, true)
+   local found, fd = require_file.search_module(module_name, require_file.all_extensions)
    if found and (env.opts.feat_lax == "on" or found:match("tl$") as boolean) then
 
       env.module_filenames[module_name] = found

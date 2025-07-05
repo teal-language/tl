@@ -233,7 +233,9 @@ end
 
 v2.process = v2.check_file
 
-v2.search_module = require_file.search_module
+v2.search_module = function(module_name: string, search_all: boolean): string, FILE, {string}
+   return require_file.search_module(module_name, search_all and require_file.all_extensions)
+end
 
 v2.symbols_in_scope = type_reporter.symbols_in_scope
 
