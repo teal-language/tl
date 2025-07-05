@@ -73,8 +73,6 @@ local record v2
    symbols_in_scope: function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
    target_from_lua_version: function(str: string): GenTarget
    version: function(): string
-
-   path: string -- if set be the user, this overrides package.path for Teal
 end
 
 environment.set_require_module_fn(require_file.require_module)

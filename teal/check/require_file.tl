@@ -34,7 +34,7 @@ function require_file.search_module(module_name: string, search_all: boolean): s
    local found: string
    local fd: FILE
    local tried: {string} = {}
-   local path = os.getenv("TL_PATH") or package.path -- FIXME tl.path
+   local path = os.getenv("TL_PATH") or package.path
    if search_all then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
