@@ -130,8 +130,7 @@ v2.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?:
 
    lua_compat.apply(result)
 
-   local code: string
-   code, result.gen_error = lua_generator.generate(result.ast, env.defaults.gen_target, opts)
+   local code = lua_generator.generate(result.ast, env.defaults.gen_target, opts)
    return code, result
 end
 
