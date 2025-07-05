@@ -13,7 +13,6 @@ local a_type = types.a_type
 
 
 
-
 local require_file = {}
 
 
@@ -59,32 +58,20 @@ local function a_circular_require(w)
    return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 end
 
-function require_file.require_module(env, w, module_name, opts)
+function require_file.require_module(env, w, module_name)
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local found, fd = require_file.search_module(module_name, true)
-   if found and (opts.feat_lax == "on" or found:match("tl$")) then
+   if found and (env.opts.feat_lax == "on" or found:match("tl$")) then
 
       env.module_filenames[module_name] = found
       env.modules[module_name] = a_circular_require(w)
 
-      local save_defaults = env.defaults
-      local defaults = {
-         feat_lax = opts.feat_lax or save_defaults.feat_lax,
-         feat_arity = opts.feat_arity or save_defaults.feat_arity,
-         gen_compat = opts.gen_compat or save_defaults.gen_compat,
-         gen_target = opts.gen_target or save_defaults.gen_target,
-         run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
-      }
-      env.defaults = defaults
-
       local found_result, err = file_checker.check(env, found, fd)
       assert(found_result, err)
-
-      env.defaults = save_defaults
 
       env.modules[module_name] = found_result.type
 

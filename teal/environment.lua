@@ -32,7 +32,9 @@ local a_type = types.a_type
 
 
 
-local environment = { CheckOptions = {}, Env = {}, Result = {} }
+local environment = { EnvOptions = {}, Env = {}, Result = {} }
+
+
 
 
 
@@ -108,7 +110,7 @@ local function empty_environment()
       loaded = {},
       loaded_order = {},
       globals = {},
-      defaults = {},
+      opts = {},
       require_module = require_module,
    }
 end
@@ -133,9 +135,9 @@ local function load_precompiled_default_env(env)
 end
 
 
-function environment.new(check_opts)
+function environment.new(opts)
    local env = empty_environment()
-   env.defaults = check_opts or env.defaults
+   env.opts = opts or env.opts
    load_precompiled_default_env(env)
    return env
 end
@@ -192,13 +194,13 @@ do
 
 
 
-   function environment.construct(check_opts, prelude, stdlib)
-      if check_opts and check_opts.gen_target == "5.4" and check_opts.gen_compat ~= "off" then
+   function environment.construct(opts, prelude, stdlib)
+      if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
          return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
       end
 
       local env = empty_environment()
-      env.defaults = check_opts or env.defaults
+      env.opts = opts or env.opts
 
       local stdlib_globals = environment.stdlib_globals
       if not stdlib_globals then
@@ -207,12 +209,12 @@ do
 
          local w = { f = "@prelude", x = 1, y = 1 }
 
-         local typ = env:require_module(w, prelude or "teal.default.prelude", {})
+         local typ = env:require_module(w, prelude or "teal.default.prelude")
          if typ.typename == "invalid" then
             return nil, "prelude contains errors"
          end
 
-         typ = env:require_module(w, stdlib or "teal.default.stdlib", {})
+         typ = env:require_module(w, stdlib or "teal.default.stdlib")
          if typ.typename == "invalid" then
             return nil, "standard library contains errors"
          end
@@ -274,7 +276,7 @@ end
 
 function environment.load_module(env, name)
    local w = { f = "@predefined", x = 1, y = 1 }
-   local module_type = env:require_module(w, name, env.defaults)
+   local module_type = env:require_module(w, name)
 
    if module_type.typename == "invalid" then
       return false, string.format("Error: could not predefine module '%s'", name)

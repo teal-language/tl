@@ -4,7 +4,6 @@ local Context = context.Context
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-local environment = require("teal.environment")
 
 
 
@@ -102,15 +101,10 @@ local function patch_visitors(my_visit_node,
    return my_visit_node, my_visit_type
 end
 
-function check.check(ast, filename, opts, env)
-   filename = filename or "?"
+function check.check(ast, env, filename)
+   assert(filename)
 
-   if not env then
-      env = environment.new(opts)
-   end
-   opts = opts or env.defaults
-
-   local self = Context.new(env, filename, opts)
+   local self = Context.new(env, filename)
 
    if env.report_types then
       env.reporter = env.reporter or type_reporter.new()
@@ -118,7 +112,7 @@ function check.check(ast, filename, opts, env)
    end
 
    local visit_node, visit_type = visit_node, visit_type
-   if opts.run_internal_compiler_checks then
+   if env.opts.run_internal_compiler_checks then
       visit_node, visit_type = patch_visitors(
       visit_node, internal_compiler_check,
       visit_type, internal_compiler_check)
