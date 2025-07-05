@@ -91,7 +91,7 @@ lua_generator.fast_opts = {
    preserve_hashbang = false,
 }
 
-function lua_generator.generate(ast: types.Node, gen_target: GenTarget, opts?: Options): string
+function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options): string
    local indent = 0
 
    opts = opts or lua_generator.default_opts
