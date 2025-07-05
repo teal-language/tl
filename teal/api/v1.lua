@@ -12,7 +12,6 @@ local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 
-local require_file = require("teal.check.require_file")
 local targets = require("teal.gen.targets")
 local type_reporter = require("teal.type_reporter")
 
@@ -141,11 +140,9 @@ v1.process_string = function(input, is_lua, env, filename, _module_name)
    return v2.check_string(input, env or v1.init_env(is_lua), filename)
 end
 
-v1.search_module = function(module_name, search_all)
-   return require_file.search_module(module_name, search_all and require_file.all_extensions)
-end
+v1.search_module = v2.search_module
 
-v1.symbols_in_scope = type_reporter.symbols_in_scope
+v1.symbols_in_scope = v2.symbols_in_scope
 
 v1.target_from_lua_version = targets.detect
 

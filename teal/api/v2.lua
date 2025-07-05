@@ -95,6 +95,7 @@ v2.typecodes = type_reporter.typecodes
 
 
 
+
 local function env_from_check_options(opts)
    return environment.new(opts and {
       feat_lax = opts.feat_lax,
@@ -237,7 +238,9 @@ v2.search_module = function(module_name, search_all)
    return require_file.search_module(module_name, search_all and require_file.all_extensions)
 end
 
-v2.symbols_in_scope = type_reporter.symbols_in_scope
+v2.symbols_in_scope = function(tr, y, x, filename)
+   return tr:symbols_in_scope(filename, y, x)
+end
 
 v2.target_from_lua_version = targets.detect
 
