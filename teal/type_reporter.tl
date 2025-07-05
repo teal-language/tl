@@ -196,12 +196,12 @@ function type_reporter.new(): TypeReporter
       next_num = 1,
       typeid_to_num = {},
       typename_to_num = {},
-      tr = {
+      tr = setmetatable({
          by_pos = {},
          types = {},
          symbols_by_file = {},
          globals = {},
-      },
+      }, { __index = TypeReport }),
    }, { __index = TypeReporter })
 
    local names = {}
@@ -505,12 +505,11 @@ function TypeReporter:get_report(): TypeReport
    return self.tr
 end
 
-
 --------------------------------------------------------------------------------
--- Report types
+-- Type report
 --------------------------------------------------------------------------------
 
-function type_reporter.symbols_in_scope(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
+function TypeReport:symbols_in_scope(filename: string, y: integer, x: integer): {string:integer}
    local function find(symbols: {TypeReport.Symbol}, at_y: integer, at_x: integer): integer
       local function le(a: {integer, integer}, b: {integer, integer}): boolean
          return a[1] < b[1]
@@ -521,7 +520,7 @@ function type_reporter.symbols_in_scope(tr: TypeReport, y: integer, x: integer, 
 
    local ret: {string:integer} = {}
 
-   local symbols = tr.symbols_by_file[filename]
+   local symbols = self.symbols_by_file[filename]
    if not symbols then
       return ret
    end

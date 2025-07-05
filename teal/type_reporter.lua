@@ -90,7 +90,7 @@ local type_reporter = { TypeCollector = { Symbol = {} }, TypeInfo = {}, TypeRepo
 
 
 
-
+local TypeReport = type_reporter.TypeReport
 local TypeReporter = type_reporter.TypeReporter
 
 
@@ -196,12 +196,12 @@ function type_reporter.new()
       next_num = 1,
       typeid_to_num = {},
       typename_to_num = {},
-      tr = {
+      tr = setmetatable({
          by_pos = {},
          types = {},
          symbols_by_file = {},
          globals = {},
-      },
+      }, { __index = TypeReport }),
    }, { __index = TypeReporter })
 
    local names = {}
@@ -509,8 +509,7 @@ end
 
 
 
-
-function type_reporter.symbols_in_scope(tr, y, x, filename)
+function TypeReport:symbols_in_scope(filename, y, x)
    local function find(symbols, at_y, at_x)
       local function le(a, b)
          return a[1] < b[1] or
@@ -521,7 +520,7 @@ function type_reporter.symbols_in_scope(tr, y, x, filename)
 
    local ret = {}
 
-   local symbols = tr.symbols_by_file[filename]
+   local symbols = self.symbols_by_file[filename]
    if not symbols then
       return ret
    end
