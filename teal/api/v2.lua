@@ -75,8 +75,6 @@ local v2 = { CheckOptions = {}, EnvOptions = {} }
 
 
 
-
-
 environment.set_require_module_fn(require_file.require_module)
 
 v2.warning_kinds = errors.warning_kinds
