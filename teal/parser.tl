@@ -233,7 +233,7 @@ local record parser
    type NodeKind = NodeKind
    type ParseLang = ParseLang
 
-   parse: function(input: string, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
    operator: function(Node, integer, string): Operator
 end
 
@@ -2542,7 +2542,7 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    return i, node
 end
 
-function parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
+function parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    errs = errs or {}
    local ps: ParseState = {
       tokens = tokens as {Token},
@@ -2566,7 +2566,7 @@ function parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string,
    return node, ps.required_modules
 end
 
-function parser.parse(input: string, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+function parser.parse(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
    local tokens, errs = lexer.lex(input, filename)
    local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
    return node, errs, required_modules

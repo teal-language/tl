@@ -141,7 +141,9 @@ v1.process_string = function(input: string, is_lua: boolean, env: Env, filename:
    return v2.check_string(input, env or v1.init_env(is_lua), filename)
 end
 
-v1.search_module = require_file.search_module
+v1.search_module = function(module_name: string, search_all: boolean): string, FILE, {string}
+   return require_file.search_module(module_name, search_all and require_file.all_extensions)
+end
 
 v1.symbols_in_scope = type_reporter.symbols_in_scope
 
