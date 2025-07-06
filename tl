@@ -252,6 +252,10 @@ local function process_module(filename, env)
    local result, err = tl.check_file(filename, env, fd)
    if result then
       env.modules[module_name] = result.type
+      if module_name:match("%.init$") then
+         module_name = module_name:sub(1, -6) -- remove trailing ".init"
+         env.modules[module_name] = result.type
+      end
    end
    return result, err
 end
