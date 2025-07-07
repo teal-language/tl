@@ -1,10 +1,10 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local table = _tl_compat and _tl_compat.table or table; local context = require("teal.check.context")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local context = require("teal.check.context")
 local Context = context.Context
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
-
+local environment = require("teal.environment")
 
 
 
@@ -24,8 +24,6 @@ local types = require("teal.types")
 
 
 local a_type = types.a_type
-
-local type_reporter = require("teal.type_reporter")
 
 local util = require("teal.util")
 local shallow_copy_table = util.shallow_copy_table
@@ -106,11 +104,6 @@ function check.check(ast, env, filename)
 
    local self = Context.new(env, filename)
 
-   if env.report_types then
-      env.reporter = env.reporter or type_reporter.new()
-      self.collector = env.reporter:get_collector(filename)
-   end
-
    local visit_node, visit_type = visit_node, visit_type
    if env.opts.run_internal_compiler_checks then
       visit_node, visit_type = patch_visitors(
@@ -150,8 +143,7 @@ function check.check(ast, env, filename)
       needs_compat = self.needs_compat,
    }
 
-   env.loaded[filename] = result
-   table.insert(env.loaded_order, filename or "")
+   environment.register(env, filename, result)
 
    if self.collector then
       env.reporter:store_result(self.collector, env.globals)

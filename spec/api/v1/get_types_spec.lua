@@ -35,12 +35,12 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 9
       local x = 11
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert.same(tr.types[type_at_y_x].str, "function(string)")
 
       y = 11
       x = 21
-      type_at_y_x = tr.by_pos[""][y][x]
+      type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert.same(tr.types[type_at_y_x].str, "function(integer, T): T")
    end)
 
@@ -62,7 +62,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Point")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -106,7 +106,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -150,7 +150,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -194,7 +194,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -227,7 +227,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 7
       local x = 24
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       local ti = tr.types[type_at_y_x]
       assert(ti)
       assert.same(ti.str, "Operator")
@@ -284,7 +284,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local rec_type_id = tr.by_pos[""][y][x]
+      local rec_type_id = tr.by_pos["<input>.tl"][y][x]
       local rec_type = tr.types[rec_type_id]
       assert(rec_type)
       assert.same(rec_type.str, "rec")
@@ -303,7 +303,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "R<T, U>")
       assert(tr.types[type_at_y_x].typeargs)
       assert(tr.types[type_at_y_x].typeargs[1])
@@ -324,7 +324,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "I<T, U>")
       assert(tr.types[type_at_y_x].typeargs)
       assert(tr.types[type_at_y_x].typeargs[1])
@@ -345,7 +345,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "function<T, U>()")
       assert(tr.types[type_at_y_x].typeargs)
       assert(tr.types[type_at_y_x].typeargs[1])
@@ -369,11 +369,11 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local cy = 4
       local cx = 32
-      local constraint_type_at_y_x = tr.by_pos[""][cy][cx]
+      local constraint_type_at_y_x = tr.by_pos["<input>.tl"][cy][cx]
       assert(tr.types[constraint_type_at_y_x].str == "I")
       local fy = 4
       local fx = 10
-      local func_type_at_y_x = tr.by_pos[""][fy][fx]
+      local func_type_at_y_x = tr.by_pos["<input>.tl"][fy][fx]
       assert(tr.types[func_type_at_y_x].str == "function<T is I, U>()")
       assert(tr.types[func_type_at_y_x].typeargs)
       assert(tr.types[func_type_at_y_x].typeargs[1])

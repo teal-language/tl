@@ -98,7 +98,6 @@ v2.typecodes = type_reporter.typecodes
 
 local function env_from_check_options(opts)
    return environment.new(opts and {
-      feat_lax = opts.feat_lax,
       feat_arity = opts.feat_arity,
       gen_compat = opts.gen_compat,
       gen_target = opts.gen_target,
@@ -119,9 +118,8 @@ v2.check = function(ast, filename, opts, env)
 
 
 
-      if opts.feat_lax and env.opts.feat_lax and opts.feat_lax ~= env.opts.feat_lax then
-         return nil, "opts.feat_lax does not match environment setting"
-      end
+
+
       if opts.feat_arity and env.opts.feat_arity and opts.feat_arity ~= env.opts.feat_arity then
          return nil, "opts.feat_arity does not match environment setting"
       end
@@ -135,7 +133,7 @@ v2.check = function(ast, filename, opts, env)
       env = env_from_check_options(opts)
    end
 
-   local result = check.check(ast, env, filename or "?")
+   local result = check.check(ast, env, filename or "<input>.tl")
    if result and result.ast then
       lua_compat.apply(result)
    end
@@ -154,36 +152,27 @@ v2.check_file = function(filename, env, fd)
    return result
 end
 
-local function run_adjusting_env(env, parse_lang, f)
+v2.check_string = function(input, env, filename, parse_lang)
    env = env or environment.new()
-   env.opts = env.opts or {}
-   local save_feat_lax = env.opts.feat_lax
-   env.opts.feat_lax = parse_lang == "lua" and "on" or "off"
-   local r, s = f(env)
-   env.opts.feat_lax = save_feat_lax
-   return r, s
-end
-
-v2.check_string = function(input, e, filename, parse_lang)
-   return run_adjusting_env(e, parse_lang, function(env)
-      local result = string_checker.check(env, input, filename)
-      if result and result.ast then
-         lua_compat.apply(result)
-      end
-      return result
-   end)
-end
-
-v2.gen = function(input, e, opts, parse_lang)
-   return run_adjusting_env(e, parse_lang, function(env)
-      local result = string_checker.check(env, input)
-      if (not result.ast) or #result.syntax_errors > 0 then
-         return nil, result
-      end
+   if not filename and parse_lang == "lua" then
+      filename = "<input>.lua"
+   end
+   local result = string_checker.check(env, input, filename)
+   if result and result.ast then
       lua_compat.apply(result)
-      local code = lua_generator.generate(result.ast, env.opts.gen_target, opts)
-      return code, result
-   end)
+   end
+   return result
+end
+
+v2.gen = function(input, env, opts, _parse_lang)
+   env = env or environment.new()
+   local result = string_checker.check(env, input)
+   if (not result.ast) or #result.syntax_errors > 0 then
+      return nil, result
+   end
+   lua_compat.apply(result)
+   local code = lua_generator.generate(result.ast, env.opts.gen_target, opts)
+   return code, result
 end
 
 v2.generate = function(ast, gen_target, opts)
@@ -222,8 +211,8 @@ v2.new_env = function(opts)
    return env
 end
 
-v2.parse = function(input, filename, parse_lang)
-   local ast, errs, required_modules = parser.parse(input, filename, parse_lang)
+v2.parse = function(input, filename, _parse_lang)
+   local ast, errs, required_modules = parser.parse(input, filename)
    return ast, errs, required_modules
 end
 

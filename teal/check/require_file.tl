@@ -4,7 +4,6 @@ local type errors = require("teal.errors")
 local type Where = errors.Where
 
 local types = require("teal.types")
-local type InvalidType = types.InvalidType
 local type Type = types.Type
 local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
@@ -81,23 +80,21 @@ function require_file.require_module(env: Env, w: Where, module_name: string): T
       return mod, env.module_filenames[module_name]
    end
 
-   local found, fd = require_file.search_module(module_name, require_file.all_extensions)
-   if found and (env.opts.feat_lax == "on" or found:match("tl$") as boolean) then
-
-      env.module_filenames[module_name] = found
-      env.modules[module_name] = a_circular_require(w)
-
-      local found_result, err: Result, string = file_checker.check(env, found, fd)
-      assert(found_result, err)
-
-      env.modules[module_name] = found_result.type
-
-      return found_result.type, found
-   elseif fd then
-      fd:close()
+   local extensions = require_file.all_extensions
+   local found, fd = require_file.search_module(module_name, extensions)
+   if not found then
+      return nil
    end
 
-   return a_type(w, "invalid", {} as InvalidType), found
+   env.module_filenames[module_name] = found
+   env.modules[module_name] = a_circular_require(w)
+
+   local found_result, err: Result, string = file_checker.check(env, found, fd)
+   assert(found_result, err)
+
+   env.modules[module_name] = found_result.type
+
+   return found_result.type, found
 end
 
 return require_file

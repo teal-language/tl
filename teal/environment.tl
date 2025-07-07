@@ -15,7 +15,6 @@ local type GenTarget = targets.GenTarget
 
 local type parser = require("teal.parser")
 local type Node = parser.Node
-local type ParseLang = parser.ParseLang
 
 local types = require("teal.types")
 local type Type = types.Type
@@ -49,7 +48,6 @@ local record environment
    end
 
    record EnvOptions
-      feat_lax: Feat
       feat_arity: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
@@ -96,6 +94,7 @@ environment.DEFAULT_GEN_TARGET = "5.3"
 
 local type EnvOptions = environment.EnvOptions
 local type Env = environment.Env
+local type Result = environment.Result
 
 local require_module: environment.RequireModuleFn
 
@@ -146,11 +145,10 @@ end
 --
 -- This is used by the APIs that are meant to run embedded in a
 -- client application, such as `tl.load` and the Teal package loader.
-function environment.for_runtime(parse_lang?: ParseLang): Env
+function environment.for_runtime(): Env
    local gen_target = targets.detect()
    local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
-      feat_lax = parse_lang == "lua" and "on" or "off",
       gen_target = gen_target,
       gen_compat = gen_compat,
       run_internal_compiler_checks = false,
@@ -278,11 +276,31 @@ function environment.load_module(env: Env, name: string): boolean, string
    local w: Where = { f = "@predefined", x = 1, y = 1 }
    local module_type = env:require_module(w, name)
 
-   if module_type is InvalidType then
+   if not module_type then
       return false, string.format("Error: could not predefine module '%s'", name)
    end
 
    return true
+end
+
+function environment.register(env: Env, filename: string, result: Result)
+   env.loaded[filename] = result
+   table.insert(env.loaded_order, filename or "")
+end
+
+function environment.register_failed(env: Env, filename: string, syntax_errors: {Error}): Result
+   local result = {
+      ok = false,
+      filename = filename,
+      type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
+      type_errors = {},
+      syntax_errors = syntax_errors,
+      dependencies = {},
+      env = env,
+   }
+   env.loaded[filename] = result
+   table.insert(env.loaded_order, filename)
+   return result
 end
 
 return environment
