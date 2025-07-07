@@ -98,7 +98,6 @@ local type TypeReport = v2.TypeReport
 
 local function env_from_check_options(opts?: CheckOptions): Env
    return environment.new(opts and {
-      feat_lax = opts.feat_lax,
       feat_arity = opts.feat_arity,
       gen_compat = opts.gen_compat,
       gen_target = opts.gen_target,
@@ -118,10 +117,9 @@ v2.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env
       -- inconsistent, and it seems like ther was no real-world usage
       -- of this ability. So it's better to clean up the internals
       -- of the codebase, and explicitly check for any attempts
-      -- to do that here.
-      if opts.feat_lax and env.opts.feat_lax and opts.feat_lax ~= env.opts.feat_lax then
-         return nil, "opts.feat_lax does not match environment setting"
-      end
+      -- to do that here. Also, `feat_lax` is ignored and lax
+      -- mode detection is solely based on the filename extension,
+      -- as this is the behavior exposed by the `tl` CLI anyway.
       if opts.feat_arity and env.opts.feat_arity and opts.feat_arity ~= env.opts.feat_arity then
          return nil, "opts.feat_arity does not match environment setting"
       end
@@ -135,7 +133,7 @@ v2.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env
       env = env_from_check_options(opts)
    end
 
-   local result = check.check(ast as parser.Node, env, filename or "?")
+   local result = check.check(ast as parser.Node, env, filename or "<input>.tl")
    if result and result.ast then
       lua_compat.apply(result)
    end
@@ -154,36 +152,27 @@ v2.check_file = function(filename: string, env?: Env, fd?: FILE): (Result, strin
    return result
 end
 
-local function run_adjusting_env<R, S>(env: Env, parse_lang: ParseLang, f: function(Env):(R, S)): R, S
+v2.check_string = function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    env = env or environment.new()
-   env.opts = env.opts or {}
-   local save_feat_lax = env.opts.feat_lax
-   env.opts.feat_lax = parse_lang == "lua" and "on" or "off"
-   local r, s = f(env)
-   env.opts.feat_lax = save_feat_lax
-   return r, s
-end
-
-v2.check_string = function(input: string, e?: Env, filename?: string, parse_lang?: ParseLang): Result
-   return run_adjusting_env(e, parse_lang, function(env: Env): (Result, nil)
-      local result = string_checker.check(env, input, filename)
-      if result and result.ast then
-         lua_compat.apply(result)
-      end
-      return result
-   end) as Result
-end
-
-v2.gen = function(input: string, e?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
-   return run_adjusting_env(e, parse_lang, function(env: Env): (string, Result)
-      local result = string_checker.check(env, input)
-      if (not result.ast) or #result.syntax_errors > 0 then
-         return nil, result
-      end
+   if not filename and parse_lang == "lua" then
+      filename = "<input>.lua"
+   end
+   local result = string_checker.check(env, input, filename)
+   if result and result.ast then
       lua_compat.apply(result)
-      local code = lua_generator.generate(result.ast, env.opts.gen_target, opts)
-      return code, result
-   end)
+   end
+   return result
+end
+
+v2.gen = function(input: string, env?: Env, opts?: GenerateOptions, _parse_lang?: ParseLang): string, Result
+   env = env or environment.new()
+   local result = string_checker.check(env, input)
+   if (not result.ast) or #result.syntax_errors > 0 then
+      return nil, result
+   end
+   lua_compat.apply(result)
+   local code = lua_generator.generate(result.ast, env.opts.gen_target, opts)
+   return code, result
 end
 
 v2.generate = function(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
@@ -222,8 +211,8 @@ v2.new_env = function(opts?: EnvOptions): Env, string
    return env
 end
 
-v2.parse = function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
-   local ast, errs, required_modules = parser.parse(input, filename, parse_lang)
+v2.parse = function(input: string, filename: string, _parse_lang?: ParseLang): Node, {Error}, {string}
+   local ast, errs, required_modules = parser.parse(input, filename)
    return ast as v2.Node, errs, required_modules
 end
 

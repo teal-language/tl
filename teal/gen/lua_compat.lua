@@ -18,8 +18,6 @@ local traversal = require("teal.traversal")
 
 local traverse_nodes = traversal.traverse_nodes
 
-local check = require("teal.check.check")
-
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
@@ -40,14 +38,11 @@ local function add_compat_entries(program, used_set, gen_compat)
 
    local compat_loaded = false
 
-   local internal_env = environment.new({ feat_lax = "off", gen_compat = "off" })
-
    local n = 1
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-         code = parser.parse(text, "@internal", "lua")
-         check.check(code, internal_env, "@internal")
+         code = parser.parse(text, "@<internal>.lua")
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do

@@ -233,7 +233,7 @@ local record parser
    type NodeKind = NodeKind
    type ParseLang = ParseLang
 
-   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
+   parse: function(input: string, filename: string): Node, {Error}, {string}
    operator: function(Node, integer, string): Operator
 end
 
@@ -2566,13 +2566,7 @@ function parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string,
    return node, ps.required_modules
 end
 
-function parser.parse(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
-   local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
-   return node, errs, required_modules
-end
-
-function parser.lang_heuristic(filename?: string, input?: string): ParseLang
+local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
       local pattern <const> = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
@@ -2588,6 +2582,13 @@ function parser.lang_heuristic(filename?: string, input?: string): ParseLang
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
+end
+
+function parser.parse(input: string, filename: string): Node, {Error}, {string}
+   local parse_lang = lang_heuristic(filename, input)
+   local tokens, errs = lexer.lex(input, filename)
+   local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
+   return node, errs, required_modules
 end
 
 function parser.node_at(w: Where, n: Node): Node
