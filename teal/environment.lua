@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 local VERSION = "0.24.6+dev"
 
 local tldebug = require("teal.debug")
@@ -11,7 +11,6 @@ local default_env = require("teal.precompiled.default_env")
 
 
 local targets = require("teal.gen.targets")
-
 
 
 
@@ -89,10 +88,10 @@ local environment = { EnvOptions = {}, Env = {}, Result = {} }
 
 
 
-
 environment.VERSION = VERSION
 environment.DEFAULT_GEN_COMPAT = "optional"
 environment.DEFAULT_GEN_TARGET = "5.3"
+
 
 
 
@@ -146,11 +145,10 @@ end
 
 
 
-function environment.for_runtime(parse_lang)
+function environment.for_runtime()
    local gen_target = targets.detect()
    local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
-      feat_lax = parse_lang == "lua" and "on" or "off",
       gen_target = gen_target,
       gen_compat = gen_compat,
       run_internal_compiler_checks = false,
@@ -278,11 +276,31 @@ function environment.load_module(env, name)
    local w = { f = "@predefined", x = 1, y = 1 }
    local module_type = env:require_module(w, name)
 
-   if module_type.typename == "invalid" then
+   if not module_type then
       return false, string.format("Error: could not predefine module '%s'", name)
    end
 
    return true
+end
+
+function environment.register(env, filename, result)
+   env.loaded[filename] = result
+   table.insert(env.loaded_order, filename or "")
+end
+
+function environment.register_failed(env, filename, syntax_errors)
+   local result = {
+      ok = false,
+      filename = filename,
+      type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
+      type_errors = {},
+      syntax_errors = syntax_errors,
+      dependencies = {},
+      env = env,
+   }
+   env.loaded[filename] = result
+   table.insert(env.loaded_order, filename)
+   return result
 end
 
 return environment

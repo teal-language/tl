@@ -431,15 +431,15 @@ local special_functions = {
 
       local module_name = assert(node.e2[1].conststr)
       local t, module_filename = self.env:require_module(node, module_name)
+      if not t then
+         return self:invalid_at(node, "module not found: '" .. module_name .. "'")
+      end
 
-      if t.typename == "invalid" then
-         if not module_filename then
-            return self:invalid_at(node, "module not found: '" .. module_name .. "'")
-         end
-
-         if self.feat_lax then
+      if self.feat_lax then
+         if t.typename == "invalid" then
             return a_type(node, "tuple", { tuple = { a_type(node, "unknown", {}) } })
          end
+      elseif module_filename and module_filename:match("%.lua$") then
          return self:invalid_at(node, "no type information for required module: '" .. module_name .. "'")
       end
 

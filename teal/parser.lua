@@ -2566,13 +2566,7 @@ function parser.parse_program(tokens, errs, filename, parse_lang)
    return node, ps.required_modules
 end
 
-function parser.parse(input, filename, parse_lang)
-   local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
-   return node, errs, required_modules
-end
-
-function parser.lang_heuristic(filename, input)
+local function lang_heuristic(filename, input)
    if filename then
       local pattern = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
@@ -2588,6 +2582,13 @@ function parser.lang_heuristic(filename, input)
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
+end
+
+function parser.parse(input, filename)
+   local parse_lang = lang_heuristic(filename, input)
+   local tokens, errs = lexer.lex(input, filename)
+   local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
+   return node, errs, required_modules
 end
 
 function parser.node_at(w, n)

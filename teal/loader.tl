@@ -1,6 +1,5 @@
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
-local type ParseLang = parser.ParseLang
 local lua_generator = require("teal.gen.lua_generator")
 local check = require("teal.check.check")
 local environment = require("teal.environment")
@@ -23,7 +22,7 @@ end
 local type LoadMode = loader.LoadMode
 local type LoadFunction = loader.LoadFunction
 
-local function env_for(parse_lang: ParseLang, env_tbl: {any:any}): Env
+local function env_for(env_tbl: {any:any}): Env
    if not env_tbl then
       return assert(package_loader.env)
    end
@@ -32,23 +31,22 @@ local function env_for(parse_lang: ParseLang, env_tbl: {any:any}): Env
       loader.load_envs = setmetatable({}, { __mode = "k" })
    end
 
-   loader.load_envs[env_tbl] = loader.load_envs[env_tbl] or environment.for_runtime(parse_lang)
+   loader.load_envs[env_tbl] = loader.load_envs[env_tbl] or environment.for_runtime()
    return loader.load_envs[env_tbl]
 end
 
 function loader.load(input: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
-   local parse_lang = parser.lang_heuristic(chunkname)
-   local program, errs = parser.parse(input, chunkname, parse_lang)
+   local program, errs = parser.parse(input, chunkname)
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
 
    if not package_loader.env then
-      package_loader.env = environment.for_runtime(parse_lang)
+      package_loader.env = environment.for_runtime()
    end
 
    local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = check.check(program as parser.Node, env_for(parse_lang, ...), filename)
+   local result = check.check(program as parser.Node, env_for(...), filename)
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then

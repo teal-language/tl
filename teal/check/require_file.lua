@@ -6,7 +6,6 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 local types = require("teal.types")
 
 
-
 local a_type = types.a_type
 
 
@@ -81,23 +80,21 @@ function require_file.require_module(env, w, module_name)
       return mod, env.module_filenames[module_name]
    end
 
-   local found, fd = require_file.search_module(module_name, require_file.all_extensions)
-   if found and (env.opts.feat_lax == "on" or found:match("tl$")) then
-
-      env.module_filenames[module_name] = found
-      env.modules[module_name] = a_circular_require(w)
-
-      local found_result, err = file_checker.check(env, found, fd)
-      assert(found_result, err)
-
-      env.modules[module_name] = found_result.type
-
-      return found_result.type, found
-   elseif fd then
-      fd:close()
+   local extensions = require_file.all_extensions
+   local found, fd = require_file.search_module(module_name, extensions)
+   if not found then
+      return nil
    end
 
-   return a_type(w, "invalid", {}), found
+   env.module_filenames[module_name] = found
+   env.modules[module_name] = a_circular_require(w)
+
+   local found_result, err = file_checker.check(env, found, fd)
+   assert(found_result, err)
+
+   env.modules[module_name] = found_result.type
+
+   return found_result.type, found
 end
 
 return require_file

@@ -24,20 +24,19 @@ local package_loader = {}
 local function tl_package_loader(module_name)
    local found_filename, fd, tried = search_module(module_name)
    if found_filename then
-      local parse_lang = parser.lang_heuristic(found_filename)
       local input = read_file_skipping_bom(fd)
       if not input then
          return table.concat(tried, "\n\t")
       end
       fd:close()
-      local program, errs = parser.parse(input, found_filename, parse_lang)
+      local program, errs = parser.parse(input, found_filename)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end
 
       local env = package_loader.env
       if not env then
-         package_loader.env = assert(environment.for_runtime(parse_lang), "Default environment initialization failed")
+         package_loader.env = environment.for_runtime()
          env = package_loader.env
       end
 
@@ -68,11 +67,8 @@ local function tl_package_loader(module_name)
 end
 
 function package_loader.install_loader()
-   if package.searchers then
-      table.insert(package.searchers, 2, tl_package_loader)
-   else
-      table.insert(package.loaders, 2, tl_package_loader)
-   end
+   local searchers = package.searchers or package.loaders
+   table.insert(searchers, 2, tl_package_loader)
 end
 
 return package_loader

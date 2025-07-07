@@ -25,8 +25,6 @@ local type Type = types.Type
 local type TypeName = types.TypeName
 local a_type = types.a_type
 
-local type_reporter = require("teal.type_reporter")
-
 local util = require("teal.util")
 local shallow_copy_table = util.shallow_copy_table
 
@@ -106,11 +104,6 @@ function check.check(ast: Node, env: Env, filename: string): Result
 
    local self = Context.new(env, filename)
 
-   if env.report_types then
-      env.reporter = env.reporter or type_reporter.new()
-      self.collector = env.reporter:get_collector(filename)
-   end
-
    local visit_node, visit_type = visit_node, visit_type
    if env.opts.run_internal_compiler_checks then
       visit_node, visit_type = patch_visitors(
@@ -150,8 +143,7 @@ function check.check(ast: Node, env: Env, filename: string): Result
       needs_compat = self.needs_compat,
    }
 
-   env.loaded[filename] = result
-   table.insert(env.loaded_order, filename or "")
+   environment.register(env, filename, result)
 
    if self.collector then
       env.reporter:store_result(self.collector, env.globals)
