@@ -18,6 +18,7 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/gen/targets.tl teal/gen/lua_generator.tl teal/gen/lua_compat.tl \
 	teal/package_loader.tl teal/loader.tl \
 	teal/api/v2.tl teal/api/v1.tl \
+	teal/init.tl \
 	tl.tl
 
 all: selfbuild suite
@@ -68,6 +69,9 @@ bin:
 binary:
 	extras/binary.sh --clean
 
+combine:
+	$(STABLE_TL) run extras/combine.tl
+
 revert:
 	git checkout $(PRECOMPILED) $(addsuffix .lua,$(basename $(SOURCES)))
 
@@ -88,3 +92,4 @@ clean: cleantemp
 
 .PHONY: all build1 replace1 build2 selfbuild \
 	suite bin binary cov revert cov cleantemp clean
+
