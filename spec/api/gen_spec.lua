@@ -108,7 +108,7 @@ print(math.floor(2))]]
 
       local output, result = tl.gen(input)
 
-      assert.match("inferred at :", result.type_errors[1].msg, 1, true)
+      assert.match("inferred at <input>.tl:", result.type_errors[1].msg, 1, true)
    end)
 
    it("returns error on syntax errors", function()

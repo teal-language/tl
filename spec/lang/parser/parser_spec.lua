@@ -19,7 +19,7 @@ describe("parser", function()
       assert.same({
          kind = "statements",
          tk = "$EOF$",
-         f = "",
+         f = "<input>.tl",
          x = 1,
          y = 1,
          xend = 5,

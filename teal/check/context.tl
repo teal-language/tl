@@ -2386,15 +2386,18 @@ do
          type_priorities = relations.type_priorities,
       }
 
-      self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
-
-      self.feat_lax   = set_feat(env.opts.feat_lax,   false)
-      self.feat_arity = set_feat(env.opts.feat_arity, true)
-      if self.feat_lax then
-         self.feat_arity = false
+      if env.report_types then
+         env.reporter = env.reporter or type_reporter.new()
+         self.collector = env.reporter:get_collector(filename)
       end
 
+      self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
+
+      self.feat_arity = set_feat(env.opts.feat_arity, true)
+      self.feat_lax = not not filename:match("%.lua$")
+
       if self.feat_lax then
+         self.feat_arity = false
          self.type_priorities = relations.lax_type_priorities()
          self.subtype_relations = relations.lax_subtype_relations()
          self.get_rets = function(rets: TupleType): TupleType
