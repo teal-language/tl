@@ -1,0 +1,757 @@
+local block_parser = require("teal.block-parser")
+local reader = require("teal.reader")
+local assert = require("luassert")
+
+local function strip_locations(t)
+   if type(t) ~= "table" then
+      return t
+   end
+   local copy = {}
+   for k, v in pairs(t) do
+      if type(v) == "table" then
+         copy[k] = strip_locations(v)
+      elseif k ~= "f" and k ~= "y" and k ~= "x" and k ~= "yend" and k ~= "xend" and k ~= "tk" then
+         copy[k] = v
+      end
+   end
+   return copy
+end
+
+local function parse_with_block_parser(input)
+   local block, reader_errors = reader.read(input, "test")
+   if #reader_errors > 0 then
+      return nil, reader_errors
+   end
+   
+   local ast, parser_errors = block_parser.parse(block, "test")
+   return strip_locations(ast), parser_errors
+end
+
+describe("block-parser", function()
+   describe("basic parsing", function()
+      it("parses an empty program", function()
+         local ast, errors = parse_with_block_parser("")
+         assert.same({}, errors)
+         assert.same({
+            kind = "statements",
+         }, ast)
+      end)
+
+      it("handles nil input gracefully", function()
+         local ast, errors = block_parser.parse(nil, "test")
+         assert.is_nil(ast)
+         assert.is_table(errors)
+         assert.is_true(#errors > 0)
+      end)
+   end)
+
+   describe("expressions", function()
+      it("parses string literals", function()
+         local ast, errors = parse_with_block_parser('local x = "hello"')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("string", ast[1].exps[1].kind)
+         assert.same("hello", ast[1].exps[1].conststr)
+      end)
+
+      it("parses number literals", function()
+         local ast, errors = parse_with_block_parser('local x = 42')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("integer", ast[1].exps[1].kind)
+         assert.same(42, ast[1].exps[1].constnum)
+      end)
+
+      it("parses integer literals", function()
+         local ast, errors = parse_with_block_parser('local x = 42//1')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+      end)
+
+      it("parses boolean literals", function()
+         local ast, errors = parse_with_block_parser('local x = true')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("boolean", ast[1].exps[1].kind)
+      end)
+
+      it("parses nil literals", function()
+         local ast, errors = parse_with_block_parser('local x = nil')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("nil", ast[1].exps[1].kind)
+      end)
+
+      it("parses variable references", function()
+         local ast, errors = parse_with_block_parser('local x = y')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("variable", ast[1].exps[1].kind)
+      end)
+
+      it("parses parenthesized expressions", function()
+         local ast, errors = parse_with_block_parser('local x = (42)')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("paren", ast[1].exps[1].kind)
+         assert.same("integer", ast[1].exps[1].e1.kind)
+      end)
+   end)
+
+   describe("operators", function()
+      it("parses unary operators", function()
+         local ast, errors = parse_with_block_parser('local x = -42')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("-", ast[1].exps[1].op.op)
+         assert.same(1, ast[1].exps[1].op.arity)
+      end)
+
+      it("parses binary arithmetic operators", function()
+         local operators = {"+", "-", "*", "/", "//", "%", "^"}
+         for _, op in ipairs(operators) do
+            local input = string.format('local x = 1 %s 2', op)
+            local ast, errors = parse_with_block_parser(input)
+            assert.same({}, errors, "Failed for operator: " .. op)
+            assert.is_not_nil(ast)
+            assert.same("local_declaration", ast[1].kind)
+            assert.same("op", ast[1].exps[1].kind)
+            assert.same(op, ast[1].exps[1].op.op)
+            assert.same(2, ast[1].exps[1].op.arity)
+         end
+      end)
+
+      it("parses binary comparison operators", function()
+         local operators = {"<", ">", "<=", ">=", "==", "~="}
+         for _, op in ipairs(operators) do
+            local input = string.format('local x = 1 %s 2', op)
+            local ast, errors = parse_with_block_parser(input)
+            assert.same({}, errors, "Failed for operator: " .. op)
+            assert.is_not_nil(ast)
+            assert.same("local_declaration", ast[1].kind)
+            assert.same("op", ast[1].exps[1].kind)
+            assert.same(op, ast[1].exps[1].op.op)
+            assert.same(2, ast[1].exps[1].op.arity)
+         end
+      end)
+
+      it("parses logical operators", function()
+         local operators = {"and", "or"}
+         for _, op in ipairs(operators) do
+            local input = string.format('local x = true %s false', op)
+            local ast, errors = parse_with_block_parser(input)
+            assert.same({}, errors, "Failed for operator: " .. op)
+            assert.is_not_nil(ast)
+            assert.same("local_declaration", ast[1].kind)
+            assert.same("op", ast[1].exps[1].kind)
+            assert.same(op, ast[1].exps[1].op.op)
+            assert.same(2, ast[1].exps[1].op.arity)
+         end
+      end)
+
+      it("parses bitwise operators", function()
+         local operators = {"&", "|", "~", "<<", ">>"}
+         for _, op in ipairs(operators) do
+            local input = string.format('local x = 1 %s 2', op)
+            local ast, errors = parse_with_block_parser(input)
+            assert.same({}, errors, "Failed for operator: " .. op)
+            assert.is_not_nil(ast)
+            assert.same("local_declaration", ast[1].kind)
+            assert.same("op", ast[1].exps[1].kind)
+            if op == "~" then
+               assert.is_true(ast[1].exps[1].op.op == "~" or ast[1].exps[1].op.op == "~")
+            else
+               assert.same(op, ast[1].exps[1].op.op)
+            end
+            assert.same(2, ast[1].exps[1].op.arity)
+         end
+      end)
+
+      it("parses string concatenation", function()
+         local ast, errors = parse_with_block_parser('local x = "a" .. "b"')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("..", ast[1].exps[1].op.op)
+         assert.same(2, ast[1].exps[1].op.arity)
+      end)
+
+      it("parses length operator", function()
+         local ast, errors = parse_with_block_parser('local x = #"hello"')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("#", ast[1].exps[1].op.op)
+         assert.same(1, ast[1].exps[1].op.arity)
+      end)
+
+      it("parses not operator", function()
+         local ast, errors = parse_with_block_parser('local x = not true')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("not", ast[1].exps[1].op.op)
+         assert.same(1, ast[1].exps[1].op.arity)
+      end)
+   end)
+
+   describe("function calls", function()
+      it("parses simple function calls", function()
+         local ast, errors = parse_with_block_parser('foo()')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("op", ast[1].kind)
+         assert.same("@funcall", ast[1].op.op)
+         assert.same(2, ast[1].op.arity)
+      end)
+
+      it("parses function calls with arguments", function()
+         local ast, errors = parse_with_block_parser('foo(1, 2, 3)')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("op", ast[1].kind)
+         assert.same("@funcall", ast[1].op.op)
+         assert.same("expression_list", ast[1].e2.kind)
+         assert.same(3, #ast[1].e2)
+      end)
+
+      it("parses method calls", function()
+         local ast, errors = parse_with_block_parser('obj:method()')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("op", ast[1].kind)
+         assert.same("@funcall", ast[1].op.op)
+      end)
+   end)
+
+   describe("table literals", function()
+      it("parses empty table literals", function()
+         local ast, errors = parse_with_block_parser('local x = {}')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("literal_table", ast[1].exps[1].kind)
+         assert.same(0, #ast[1].exps[1])
+      end)
+
+      it("parses array-style table literals", function()
+         local ast, errors = parse_with_block_parser('local x = {1, 2, 3}')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("literal_table", ast[1].exps[1].kind)
+         assert.same(3, #ast[1].exps[1])
+         for i, item in ipairs(ast[1].exps[1]) do
+            assert.same("literal_table_item", item.kind)
+            assert.same("integer", item.value.kind)
+            assert.same(i, item.value.constnum)
+         end
+      end)
+
+      it("parses hash-style table literals", function()
+         local ast, errors = parse_with_block_parser('local x = {foo = "bar", baz = 42}')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("literal_table", ast[1].exps[1].kind)
+         assert.same(2, #ast[1].exps[1])
+      end)
+
+      it("parses mixed table literals", function()
+         local ast, errors = parse_with_block_parser('local x = {1, foo = "bar", 2}')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("literal_table", ast[1].exps[1].kind)
+         assert.same(3, #ast[1].exps[1])
+      end)
+   end)
+
+   describe("function expressions", function()
+      it("parses function expressions", function()
+         local ast, errors = parse_with_block_parser('local f = function() end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("function", ast[1].exps[1].kind)
+      end)
+
+      it("parses function expressions with parameters", function()
+         local ast, errors = parse_with_block_parser('local f = function(a, b) end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("function", ast[1].exps[1].kind)
+         assert.same("argument_list", ast[1].exps[1].args.kind)
+      end)
+
+      it("parses function expressions with body", function()
+         local ast, errors = parse_with_block_parser('local f = function() return 42 end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("function", ast[1].exps[1].kind)
+         assert.same("statements", ast[1].exps[1].body.kind)
+      end)
+   end)
+
+   describe("statements", function()
+      it("parses local variable declarations", function()
+         local ast, errors = parse_with_block_parser('local x, y = 1, 2')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("variable_list", ast[1].vars.kind)
+         assert.same(2, #ast[1].vars)
+         assert.same("expression_list", ast[1].exps.kind)
+         assert.same(2, #ast[1].exps)
+      end)
+
+      it("parses global variable declarations", function()
+         local ast, errors = parse_with_block_parser('global x, y = 1, 2')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("global_declaration", ast[1].kind)
+         assert.same("variable_list", ast[1].vars.kind)
+         assert.same(2, #ast[1].vars)
+         assert.same("expression_list", ast[1].exps.kind)
+         assert.same(2, #ast[1].exps)
+      end)
+
+      it("parses assignments", function()
+         local ast, errors = parse_with_block_parser('x, y = 1, 2')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("assignment", ast[1].kind)
+         assert.same("variable_list", ast[1].vars.kind)
+         assert.same(2, #ast[1].vars)
+         assert.same("expression_list", ast[1].exps.kind)
+         assert.same(2, #ast[1].exps)
+      end)
+
+      it("parses local function declarations", function()
+         local ast, errors = parse_with_block_parser('local function foo() end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_function", ast[1].kind)
+         assert.same("variable", ast[1].name.kind)
+         assert.same("argument_list", ast[1].args.kind)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses global function declarations", function()
+         local ast, errors = parse_with_block_parser('global function foo() end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("global_function", ast[1].kind)
+         assert.same("variable", ast[1].name.kind)
+         assert.same("argument_list", ast[1].args.kind)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses record function declarations", function()
+         local ast, errors = parse_with_block_parser('function obj.method() end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("record_function", ast[1].kind)
+         assert.is_not_nil(ast[1].fn_owner)
+         assert.is_not_nil(ast[1].name)
+         assert.same("argument_list", ast[1].args.kind)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses return statements", function()
+         local ast, errors = parse_with_block_parser('return 1, 2')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("return", ast[1].kind)
+         assert.same("expression_list", ast[1].exps.kind)
+         assert.same(2, #ast[1].exps)
+      end)
+
+      it("parses break statements", function()
+         local ast, errors = parse_with_block_parser('while true do break end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("while", ast[1].kind)
+         assert.same("break", ast[1].body[1].kind)
+      end)
+
+      it("parses goto statements", function()
+         local ast, errors = parse_with_block_parser('goto mylabel')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("goto", ast[1].kind)
+         assert.same("mylabel", ast[1].label)
+      end)
+
+      it("parses label statements", function()
+         local ast, errors = parse_with_block_parser('::mylabel::')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("label", ast[1].kind)
+         assert.same("mylabel", ast[1].label)
+      end)
+   end)
+
+   describe("control flow", function()
+      it("parses if statements", function()
+         local ast, errors = parse_with_block_parser([[
+            if true then
+               print("hello")
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("if", ast[1].kind)
+         assert.same(1, #ast[1].if_blocks)
+         assert.same("if_block", ast[1].if_blocks[1].kind)
+         assert.same("boolean", ast[1].if_blocks[1].exp.kind)
+         assert.same("statements", ast[1].if_blocks[1].body.kind)
+      end)
+
+      it("parses if-else statements", function()
+         local ast, errors = parse_with_block_parser([[
+            if true then
+               print("true")
+            else
+               print("false")
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("if", ast[1].kind)
+         assert.same(2, #ast[1].if_blocks)
+         assert.same("if_block", ast[1].if_blocks[1].kind)
+         assert.same("if_block", ast[1].if_blocks[2].kind)
+
+         assert.is_not_nil(ast[1].if_blocks[1].exp)
+         assert.is_nil(ast[1].if_blocks[2].exp)
+      end)
+
+      it("parses if-elseif-else statements", function()
+         local ast, errors = parse_with_block_parser([[
+            if x == 1 then
+               print("one")
+            elseif x == 2 then
+               print("two")
+            else
+               print("other")
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("if", ast[1].kind)
+         assert.same(3, #ast[1].if_blocks)
+
+         assert.is_not_nil(ast[1].if_blocks[1].exp)
+         assert.is_not_nil(ast[1].if_blocks[2].exp)
+         assert.is_nil(ast[1].if_blocks[3].exp)
+      end)
+
+      it("parses while loops", function()
+         local ast, errors = parse_with_block_parser([[
+            while x < 10 do
+               x = x + 1
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("while", ast[1].kind)
+         assert.same("op", ast[1].exp.kind)
+         assert.same("<", ast[1].exp.op.op)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses numeric for loops", function()
+         local ast, errors = parse_with_block_parser([[
+            for i = 1, 10 do
+               print(i)
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("fornum", ast[1].kind)
+         assert.same("variable", ast[1].var.kind)
+         assert.same("number", ast[1].from.kind)
+         assert.same("number", ast[1].to.kind)
+         assert.is_nil(ast[1].step)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses numeric for loops with step", function()
+         local ast, errors = parse_with_block_parser([[
+            for i = 1, 10, 2 do
+               print(i)
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("fornum", ast[1].kind)
+         assert.same("variable", ast[1].var.kind)
+         assert.same("number", ast[1].from.kind)
+         assert.same("number", ast[1].to.kind)
+         assert.same("number", ast[1].step.kind)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses generic for loops", function()
+         local ast, errors = parse_with_block_parser([[
+            for k, v in pairs(t) do
+               print(k, v)
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("forin", ast[1].kind)
+         assert.same("variable_list", ast[1].vars.kind)
+         assert.same(2, #ast[1].vars)
+         assert.same("expression_list", ast[1].exps.kind)
+         assert.same(1, #ast[1].exps)
+         assert.same("statements", ast[1].body.kind)
+      end)
+
+      it("parses repeat-until loops", function()
+         local ast, errors = parse_with_block_parser([[
+            repeat
+               x = x + 1
+            until x > 10
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("repeat", ast[1].kind)
+         assert.same("statements", ast[1].body.kind)
+         assert.is_true(ast[1].body.is_repeat)
+         assert.same("op", ast[1].exp.kind)
+         assert.same(">", ast[1].exp.op.op)
+      end)
+
+      it("parses do-end blocks", function()
+         local ast, errors = parse_with_block_parser([[
+            do
+               local x = 42
+               print(x)
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("do", ast[1].kind)
+         assert.same("statements", ast[1].body.kind)
+         assert.same(2, #ast[1].body)
+      end)
+   end)
+
+   describe("type declarations", function()
+      it("parses local type declarations", function()
+         local ast, errors = parse_with_block_parser('local type MyType = string')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_type", ast[1].kind)
+         assert.same("type_identifier", ast[1][1].kind)
+         assert.is_not_nil(ast[1][2])
+      end)
+
+      it("parses global type declarations", function()
+         local ast, errors = parse_with_block_parser('global type MyType = string')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("global_type", ast[1].kind)
+         assert.same("type_identifier", ast[1][1].kind)
+         assert.is_not_nil(ast[1][2])
+      end)
+
+      it("parses record type declarations", function()
+         local ast, errors = parse_with_block_parser([[
+            local record Point
+               x: number
+               y: number
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_type", ast[1].kind)
+      end)
+
+      it("parses enum type declarations", function()
+         local ast, errors = parse_with_block_parser([[
+            local enum Color
+               "red"
+               "green"
+               "blue"
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_type", ast[1].kind)
+      end)
+
+      it("parses interface declarations", function()
+         local ast, errors = parse_with_block_parser([[
+            local interface Drawable
+               draw: function()
+            end
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("interface", ast[1].kind)
+      end)
+   end)
+
+   describe("require handling", function()
+      it("detects require calls in type declarations", function()
+         local ast, errors = parse_with_block_parser('local type MyType = require("mymodule")')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_type", ast[1].kind)
+         assert.same("type_identifier", ast[1][1].kind)
+         assert.same("op", ast[1][2].kind)
+         assert.same("@funcall", ast[1][2].op.op)
+      end)
+
+      it("detects chained require calls", function()
+         local ast, errors = parse_with_block_parser('local type MyType = require("mymodule").SomeType')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_type", ast[1].kind)
+         assert.same("op", ast[1][2].kind)
+      end)
+   end)
+
+   describe("error handling", function()
+      it("reports errors for malformed generic for loops", function()
+         local ast, errors = parse_with_block_parser([[
+            for k, v in do
+               print(k, v)
+            end
+         ]])
+
+         assert.is_not_nil(errors)
+         assert.is_true(#errors > 0)
+      end)
+   end)
+
+   describe("complex expressions", function()
+      it("parses nested function calls", function()
+         local ast, errors = parse_with_block_parser('foo(bar(baz()))')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("op", ast[1].kind)
+         assert.same("@funcall", ast[1].op.op)
+      end)
+
+      it("parses table indexing", function()
+         local ast, errors = parse_with_block_parser('local x = t[key]')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("@index", ast[1].exps[1].op.op)
+      end)
+
+      it("parses field access", function()
+         local ast, errors = parse_with_block_parser('local x = obj.field')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same(".", ast[1].exps[1].op.op)
+      end)
+
+      it("parses complex arithmetic expressions", function()
+         local ast, errors = parse_with_block_parser('local x = (a + b) * (c - d) / e')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+      end)
+
+      it("parses ternary-like expressions with and/or", function()
+         local ast, errors = parse_with_block_parser('local x = condition and value1 or value2')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("or", ast[1].exps[1].op.op)
+      end)
+   end)
+
+   describe("type casting", function()
+      it("parses as expressions", function()
+         local ast, errors = parse_with_block_parser('local x = value as string')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("as", ast[1].exps[1].op.op)
+         assert.same("cast", ast[1].exps[1].e2.kind)
+      end)
+
+      it("parses is expressions", function()
+         local ast, errors = parse_with_block_parser('local x = value is string')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("op", ast[1].exps[1].kind)
+         assert.same("is", ast[1].exps[1].op.op)
+         assert.same("cast", ast[1].exps[1].e2.kind)
+      end)
+   end)
+
+   describe("multiple statements", function()
+      it("parses multiple statements in sequence", function()
+         local ast, errors = parse_with_block_parser([[
+            local x = 1
+            local y = 2
+            print(x + y)
+         ]])
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("statements", ast.kind)
+         assert.same(3, #ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("local_declaration", ast[2].kind)
+         assert.same("op", ast[3].kind)
+      end)
+   end)
+
+   describe("edge cases", function()
+      it("handles empty function bodies", function()
+         local ast, errors = parse_with_block_parser('local function f() end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_function", ast[1].kind)
+         assert.same("statements", ast[1].body.kind)
+         assert.same(0, #ast[1].body)
+      end)
+
+      it("handles empty table literals", function()
+         local ast, errors = parse_with_block_parser('local t = {}')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_declaration", ast[1].kind)
+         assert.same("literal_table", ast[1].exps[1].kind)
+         assert.same(0, #ast[1].exps[1])
+      end)
+
+      it("handles varargs in function parameters", function()
+         local ast, errors = parse_with_block_parser('local function f(...) end')
+         assert.same({}, errors)
+         assert.is_not_nil(ast)
+         assert.same("local_function", ast[1].kind)
+         assert.same("argument_list", ast[1].args.kind)
+      end)
+   end)
+end)
+
