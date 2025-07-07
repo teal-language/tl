@@ -1,4 +1,4 @@
-LUA ?=
+LUA ?= lua
 STABLE_TL ?= $(LUA) ./tl
 NEW_TL ?= $(LUA) ./tl
 TLGENFLAGS = --check --gen-target=5.1
@@ -6,6 +6,7 @@ BUSTED = busted --suppress-pending
 
 PRECOMPILED = teal/precompiled/default_env.lua
 SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
+	teal/reader.tl teal/block-parser.tl \
 	teal/util.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
 	teal/gen/lua_generator.tl teal/gen/lua_compat.tl teal/variables.tl teal/type_reporter.tl \
 	teal/macroexps.tl teal/metamethods.tl \
@@ -26,7 +27,7 @@ precompiler.lua: precompiler.tl
 	$(STABLE_TL) gen $< -o $@ || { rm $@; exit 1; }
 
 teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal/default/stdlib.d.tl tl.tl
-	lua precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
+	$(LUA) precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
 	@mkdir -p `dirname $@`
