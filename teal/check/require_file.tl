@@ -49,6 +49,12 @@ function require_file.search_module(module_name: string, extension_set?: {Extens
    local fd: FILE
    local tried: {string} = {}
    local path = os.getenv("TL_PATH") or package.path
+
+   -- work around Lua 5.1/5.2 awkward path defaults
+   if path:find("./?.lua", 1, true) and not path:find("./?/init.lua", 1, true) then
+      path = path .. ";./?/init.lua"
+   end
+
    if extension_set and extension_set[".d.tl"] then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
@@ -67,6 +73,13 @@ function require_file.search_module(module_name: string, extension_set?: {Extens
          return found, fd
       end
    end
+
+   if os.getenv("TL_DEBUG_SEARCHED") then
+      for _, t in ipairs(tried) do
+         print("Searched: ", t)
+      end
+   end
+
    return nil, nil, tried
 end
 

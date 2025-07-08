@@ -46,10 +46,10 @@ teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
 	@mkdir -p `dirname $@`
-	$(STABLE_TL) gen $(TLGENFLAGS) $< -o $@ || { rm $@; exit 1; }
+	TL_DEBUG_SEARCHED=1 $(STABLE_TL) gen $(TLGENFLAGS) $< -o $@ || { rm $@; exit 1; }
 
 _temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
-	$(NEW_TL) gen $(TLGENFLAGS) $< -o $@ || extras/make.sh revert
+	TL_DEBUG_SEARCHED=1 $(NEW_TL) gen $(TLGENFLAGS) $< -o $@ || extras/make.sh revert
 
 build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
 
