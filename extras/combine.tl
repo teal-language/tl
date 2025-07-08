@@ -22,7 +22,7 @@ local content = {}
 for _, k in ipairs(keys) do
    local fn = module_to_files[k]
    local f = assert(io.open(fn, 'rb'))
-   local modcontent = assert(f:read'a')
+   local modcontent = assert(f:read'*a')
    assert(f:close())
 
    table.insert(content,
@@ -36,13 +36,10 @@ end
    )
 end
 
-do
-   local f = assert(io.open('tl.lua', 'rb'))
-   local modcontent = assert(f:read'a')
-   assert(f:close())
-   table.insert(content, modcontent)
-end
+table.insert(content,[[
+return require("teal.api.v2")
+]])
 
-local f = assert(io.open('tl_combined.lua', 'wb'))
+local f = assert(io.open('tl.lua', 'wb'))
 assert(f:write(table.concat(content)))
 assert(f:close())
