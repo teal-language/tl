@@ -58,7 +58,7 @@ replace1:
 
 build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
 
-selfbuild: build1 replace1 build2
+selfbuild: build1 replace1 build2 combine
 	extras/make.sh diff_1_and_2 || extras/make.sh revert
 
 ########################################
