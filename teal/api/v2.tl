@@ -1,7 +1,7 @@
 local type check = require("teal.check.check")
 local type environment = require("teal.environment")
 local type errors = require("teal.errors")
-local type file_checker = require("teal.check.file_checker")
+local type file_input = require("teal.input.file_input")
 local type lexer = require("teal.lexer")
 local type loader = require("teal.loader")
 local type lua_generator = require("teal.gen.lua_generator")
@@ -9,7 +9,7 @@ local type lua_compat = require("teal.gen.lua_compat")
 local type package_loader = require("teal.package_loader")
 local type parser = require("teal.parser")
 local type require_file = require("teal.check.require_file")
-local type string_checker = require("teal.check.string_checker")
+local type string_input = require("teal.input.string_input")
 local type targets = require("teal.gen.targets")
 local type type_errors = require("teal.type_errors")
 local type type_reporter = require("teal.type_reporter")
@@ -142,7 +142,7 @@ end
 
 v2.check_file = function(filename: string, env?: Env, fd?: FILE): (Result, string)
    env = env or environment.new()
-   local result, err = file_checker.check(env, filename, fd)
+   local result, err = file_input.check(env, filename, fd)
    if not result then
       return nil, err
    end
@@ -154,19 +154,20 @@ end
 
 v2.check_string = function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    env = env or environment.new()
-   if not filename and parse_lang == "lua" then
-      filename = "<input>.lua"
+   if not filename then
+      filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_checker.check(env, input, filename)
+   local result = string_input.check(env, filename, input)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input: string, env?: Env, opts?: GenerateOptions, _parse_lang?: ParseLang): string, Result
+v2.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
    env = env or environment.new()
-   local result = string_checker.check(env, input)
+   local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
+   local result = string_input.check(env, filename, input)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
