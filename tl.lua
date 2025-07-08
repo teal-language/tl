@@ -4158,6 +4158,12 @@ function require_file.search_module(module_name, extension_set)
    local fd
    local tried = {}
    local path = os.getenv("TL_PATH") or package.path
+
+
+   if path:find("./?.lua", 1, true) and not path:find("./?/init.lua", 1, true) then
+      path = path .. ";./?/init.lua"
+   end
+
    if extension_set and extension_set[".d.tl"] then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
