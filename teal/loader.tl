@@ -1,8 +1,7 @@
-local package_loader = require("teal.package_loader")
-local parser = require("teal.parser")
-local lua_generator = require("teal.gen.lua_generator")
-local check = require("teal.check.check")
 local environment = require("teal.environment")
+local lua_generator = require("teal.gen.lua_generator")
+local package_loader = require("teal.package_loader")
+local string_input = require("teal.input.string_input")
 local type Env = environment.Env
 
 local record loader
@@ -24,6 +23,9 @@ local type LoadFunction = loader.LoadFunction
 
 local function env_for(env_tbl: {any:any}): Env
    if not env_tbl then
+      if not package_loader.env then
+         package_loader.env = environment.for_runtime()
+      end
       return assert(package_loader.env)
    end
 
@@ -36,17 +38,14 @@ local function env_for(env_tbl: {any:any}): Env
 end
 
 function loader.load(input: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
-   local program, errs = parser.parse(input, chunkname)
+   local env = env_for(...)
+   local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\".tl")
+   local result = string_input.check(env, filename, input)
+
+   local errs = result.syntax_errors
    if #errs > 0 then
       return nil, (chunkname or "") .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg
    end
-
-   if not package_loader.env then
-      package_loader.env = environment.for_runtime()
-   end
-
-   local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\"")
-   local result = check.check(program as parser.Node, env_for(...), filename)
 
    if mode and mode:match("c") then
       if #result.type_errors > 0 then
@@ -60,7 +59,8 @@ function loader.load(input: string, chunkname?: string, mode?: LoadMode, ...: {a
       mode = mode:gsub("c", "") as LoadMode
    end
 
-   local code = lua_generator.generate(program, package_loader.env.opts.gen_target, lua_generator.fast_opts)
+   local code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
+
    return load(code, chunkname, mode, ...)
 end
 
