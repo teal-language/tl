@@ -3027,47 +3027,6 @@ return context
 
 end
 
--- module teal.check.file_checker from teal/check/file_checker.lua
-package.preload["teal.check.file_checker"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string_checker = require("teal.check.string_checker")
-
-
-
-
-
-local util = require("teal.util")
-local read_file_skipping_bom = util.read_file_skipping_bom
-
-local file_checker = {}
-
-
-function file_checker.check(env, filename, fd)
-   if env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-
-   local input, err
-
-   if not fd then
-      fd, err = io.open(filename, "rb")
-      if not fd then
-         return nil, "could not open " .. filename .. ": " .. err
-      end
-   end
-
-   input, err = read_file_skipping_bom(fd)
-   fd:close()
-   if not input then
-      return nil, "could not read " .. filename .. ": " .. err
-   end
-
-   return string_checker.check(env, input, filename)
-end
-
-return file_checker
-
-end
-
 -- module teal.check.node_checker from teal/check/node_checker.lua
 package.preload["teal.check.node_checker"] = function(...)
 
@@ -4958,44 +4917,6 @@ local special_functions = {
 }
 
 return special_functions
-
-end
-
--- module teal.check.string_checker from teal/check/string_checker.lua
-package.preload["teal.check.string_checker"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local check = require("teal.check.check")
-
-local parser = require("teal.parser")
-
-
-local environment = require("teal.environment")
-
-
-
-local string_checker = {}
-
-
-function string_checker.check(env, input, filename)
-   assert(env)
-   if env.loaded and env.loaded[filename] then
-      return env.loaded[filename]
-   end
-   filename = filename or "<input>.tl"
-
-   local program, syntax_errors = parser.parse(input, filename)
-
-   if (not env.keep_going) and #syntax_errors > 0 then
-      return environment.register_failed(env, filename, syntax_errors)
-   end
-
-   local result = check.check(program, env, filename)
-
-   result.syntax_errors = syntax_errors
-
-   return result
-end
-
-return string_checker
 
 end
 
