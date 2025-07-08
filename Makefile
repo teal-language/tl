@@ -19,7 +19,18 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/package_loader.tl teal/loader.tl \
 	teal/api/v2.tl teal/api/v1.tl \
 	teal/init.tl \
-	tl.tl
+	tl.tl \
+	tlcli/configuration.tl \
+	tlcli/report.tl \
+	tlcli/driver.tl \
+	tlcli/perf.tl \
+	tlcli/main.tl \
+	tlcli/commands/run.tl \
+	tlcli/commands/warnings.tl \
+	tlcli/commands/types.tl \
+	tlcli/commands/check.tl \
+	tlcli/commands/gen.tl \
+	tlcli/common.tl
 
 all: selfbuild suite
 
