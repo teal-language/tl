@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table
 
 
 local util = {}
@@ -42,19 +42,6 @@ function util.sorted_keys(m)
    end
    table.sort(keys)
    return keys
-end
-
-function util.read_file_skipping_bom(fd)
-   local bom = "\239\187\191"
-   local content, err = fd:read("*a")
-   if not content then
-      return nil, err
-   end
-
-   if content:sub(1, bom:len()) == bom then
-      content = content:sub(bom:len() + 1)
-   end
-   return content, err
 end
 
 return util
