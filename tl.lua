@@ -18017,17 +18017,27 @@ end
 
 -- module teal.input.file_input from teal/input/file_input.lua
 package.preload["teal.input.file_input"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string_input = require("teal.input.string_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string = _tl_compat and _tl_compat.string or string; local string_input = require("teal.input.string_input")
 
 
 
 
-
-local util = require("teal.util")
-local read_file_skipping_bom = util.read_file_skipping_bom
 
 local file_input = {}
 
+
+local function read_file_skipping_bom(fd)
+   local bom = "\239\187\191"
+   local content, err = fd:read("*a")
+   if not content then
+      return nil, err
+   end
+
+   if content:sub(1, bom:len()) == bom then
+      content = content:sub(bom:len() + 1)
+   end
+   return content, err
+end
 
 function file_input.check(env, filename, fd)
    if env.loaded and env.loaded[filename] then
@@ -19140,18 +19150,13 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 local require_file = require("teal.check.require_file")
 local search_module = require_file.search_module
 
-local lua_generator = require("teal.gen.lua_generator")
+local file_input = require("teal.input.file_input")
 
-local parser = require("teal.parser")
+local lua_generator = require("teal.gen.lua_generator")
 
 local types = require("teal.types")
 
 local a_type = types.a_type
-
-local check = require("teal.check.check")
-
-local util = require("teal.util")
-local read_file_skipping_bom = util.read_file_skipping_bom
 
 local package_loader = {}
 
@@ -19159,47 +19164,46 @@ local package_loader = {}
 
 local function tl_package_loader(module_name)
    local found_filename, fd, tried = search_module(module_name)
-   if found_filename then
-      local input = read_file_skipping_bom(fd)
-      if not input then
-         return table.concat(tried, "\n\t")
-      end
-      fd:close()
-      local program, errs = parser.parse(input, found_filename)
-      if #errs > 0 then
-         error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
-      end
-
-      local env = package_loader.env
-      if not env then
-         package_loader.env = environment.for_runtime()
-         env = package_loader.env
-      end
-
-      local w = { f = found_filename, x = 1, y = 1 }
-      env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
-
-      local result = check.check(program, env, found_filename)
-
-      env.modules[module_name] = result.type
-
-
-
-      local code = assert(lua_generator.generate(program, env.opts.gen_target, lua_generator.fast_opts))
-      local chunk, err = load(code, "@" .. found_filename, "t")
-      if chunk then
-         return function(modname, loader_data)
-            if loader_data == nil then
-               loader_data = found_filename
-            end
-            local ret = chunk(modname, loader_data)
-            return ret
-         end, found_filename
-      else
-         error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
-      end
+   if not found_filename then
+      return table.concat(tried, "\n\t")
    end
-   return table.concat(tried, "\n\t")
+
+   local env = package_loader.env
+   if not env then
+      package_loader.env = environment.for_runtime()
+      env = package_loader.env
+   end
+
+   local w = { f = found_filename, x = 1, y = 1 }
+   env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
+
+   local result, input_err = file_input.check(env, found_filename, fd)
+   if input_err then
+      return table.concat(tried, "\n\t")
+   end
+
+   local errs = result.syntax_errors
+   if #errs > 0 then
+      error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
+   end
+
+   env.modules[module_name] = result.type
+
+
+
+   local code = assert(lua_generator.generate(result.ast, env.opts.gen_target, lua_generator.fast_opts))
+   local chunk, err = load(code, "@" .. found_filename, "t")
+   if not chunk then
+      error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
+   end
+
+   return function(modname, loader_data)
+      if loader_data == nil then
+         loader_data = found_filename
+      end
+      local ret = chunk(modname, loader_data)
+      return ret
+   end, found_filename
 end
 
 function package_loader.install_loader()
@@ -24656,7 +24660,7 @@ end
 
 -- module teal.util from teal/util.lua
 package.preload["teal.util"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table
 
 
 local util = {}
@@ -24700,19 +24704,6 @@ function util.sorted_keys(m)
    end
    table.sort(keys)
    return keys
-end
-
-function util.read_file_skipping_bom(fd)
-   local bom = "\239\187\191"
-   local content, err = fd:read("*a")
-   if not content then
-      return nil, err
-   end
-
-   if content:sub(1, bom:len()) == bom then
-      content = content:sub(bom:len() + 1)
-   end
-   return content, err
 end
 
 return util

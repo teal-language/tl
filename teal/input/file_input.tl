@@ -4,10 +4,20 @@ local type environment = require("teal.environment")
 local type Env = environment.Env
 local type Result = environment.Result
 
-local util = require("teal.util")
-local read_file_skipping_bom = util.read_file_skipping_bom
-
 local record file_input
+end
+
+local function read_file_skipping_bom(fd: FILE): string, string
+   local bom <const> = "\239\187\191" -- "\xEF\xBB\xBF"
+   local content, err = fd:read("*a")
+   if not content then
+      return nil, err
+   end
+
+   if content:sub(1, bom:len()) == bom then
+      content = content:sub(bom:len() + 1)
+   end
+   return content, err
 end
 
 function file_input.check(env: Env, filename: string, fd?: FILE): Result, string
