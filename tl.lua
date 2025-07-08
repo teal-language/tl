@@ -169,7 +169,7 @@ package.preload["teal.api.v2"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
-local file_checker = require("teal.check.file_checker")
+local file_input = require("teal.input.file_input")
 local lexer = require("teal.lexer")
 local loader = require("teal.loader")
 local lua_generator = require("teal.gen.lua_generator")
@@ -177,7 +177,7 @@ local lua_compat = require("teal.gen.lua_compat")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local require_file = require("teal.check.require_file")
-local string_checker = require("teal.check.string_checker")
+local string_input = require("teal.input.string_input")
 local targets = require("teal.gen.targets")
 
 local type_reporter = require("teal.type_reporter")
@@ -310,7 +310,7 @@ end
 
 v2.check_file = function(filename, env, fd)
    env = env or environment.new()
-   local result, err = file_checker.check(env, filename, fd)
+   local result, err = file_input.check(env, filename, fd)
    if not result then
       return nil, err
    end
@@ -322,19 +322,20 @@ end
 
 v2.check_string = function(input, env, filename, parse_lang)
    env = env or environment.new()
-   if not filename and parse_lang == "lua" then
-      filename = "<input>.lua"
+   if not filename then
+      filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_checker.check(env, input, filename)
+   local result = string_input.check(env, filename, input)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input, env, opts, _parse_lang)
+v2.gen = function(input, env, opts, parse_lang)
    env = env or environment.new()
-   local result = string_checker.check(env, input)
+   local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
+   local result = string_input.check(env, filename, input)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
@@ -4107,7 +4108,7 @@ end
 
 -- module teal.check.require_file from teal/check/require_file.lua
 package.preload["teal.check.require_file"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_checker = require("teal.check.file_checker")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
 
 
 
@@ -4211,7 +4212,7 @@ function require_file.require_module(env, w, module_name)
    env.module_filenames[module_name] = found
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result, err = file_checker.check(env, found, fd)
+   local found_result, err = file_input.check(env, found, fd)
    assert(found_result, err)
 
    env.modules[module_name] = found_result.type
@@ -18007,6 +18008,84 @@ function teal.version()
 end
 
 return teal
+
+end
+
+-- module teal.input.file_input from teal/input/file_input.lua
+package.preload["teal.input.file_input"] = function(...)
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string_input = require("teal.input.string_input")
+
+
+
+
+
+local util = require("teal.util")
+local read_file_skipping_bom = util.read_file_skipping_bom
+
+local file_input = {}
+
+
+function file_input.check(env, filename, fd)
+   if env.loaded and env.loaded[filename] then
+      return env.loaded[filename]
+   end
+
+   local input, err
+
+   if not fd then
+      fd, err = io.open(filename, "rb")
+      if not fd then
+         return nil, "could not open " .. filename .. ": " .. err
+      end
+   end
+
+   input, err = read_file_skipping_bom(fd)
+   fd:close()
+   if not input then
+      return nil, "could not read " .. filename .. ": " .. err
+   end
+
+   return string_input.check(env, filename, input)
+end
+
+return file_input
+
+end
+
+-- module teal.input.string_input from teal/input/string_input.lua
+package.preload["teal.input.string_input"] = function(...)
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local check = require("teal.check.check")
+
+local parser = require("teal.parser")
+
+
+local environment = require("teal.environment")
+
+
+
+local string_input = {}
+
+
+function string_input.check(env, filename, input)
+   assert(env)
+   if env.loaded and env.loaded[filename] then
+      return env.loaded[filename]
+   end
+
+   local program, syntax_errors = parser.parse(input, filename)
+
+   if (not env.keep_going) and #syntax_errors > 0 then
+      return environment.register_failed(env, filename, syntax_errors)
+   end
+
+   local result = check.check(program, env, filename)
+
+   result.syntax_errors = syntax_errors
+
+   return result
+end
+
+return string_input
 
 end
 

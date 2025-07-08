@@ -55,7 +55,7 @@ function move_all_lua1_to_lua() {
 }
 
 function restore_backup_and_fail() {
-   restore_all_bakfiles
+   restore_all_bak_files
    move_all_lua1_to_err
    exit 1
 }

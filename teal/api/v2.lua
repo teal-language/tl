@@ -1,7 +1,7 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
-local file_checker = require("teal.check.file_checker")
+local file_input = require("teal.input.file_input")
 local lexer = require("teal.lexer")
 local loader = require("teal.loader")
 local lua_generator = require("teal.gen.lua_generator")
@@ -9,7 +9,7 @@ local lua_compat = require("teal.gen.lua_compat")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local require_file = require("teal.check.require_file")
-local string_checker = require("teal.check.string_checker")
+local string_input = require("teal.input.string_input")
 local targets = require("teal.gen.targets")
 
 local type_reporter = require("teal.type_reporter")
@@ -142,7 +142,7 @@ end
 
 v2.check_file = function(filename, env, fd)
    env = env or environment.new()
-   local result, err = file_checker.check(env, filename, fd)
+   local result, err = file_input.check(env, filename, fd)
    if not result then
       return nil, err
    end
@@ -154,19 +154,20 @@ end
 
 v2.check_string = function(input, env, filename, parse_lang)
    env = env or environment.new()
-   if not filename and parse_lang == "lua" then
-      filename = "<input>.lua"
+   if not filename then
+      filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_checker.check(env, input, filename)
+   local result = string_input.check(env, filename, input)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input, env, opts, _parse_lang)
+v2.gen = function(input, env, opts, parse_lang)
    env = env or environment.new()
-   local result = string_checker.check(env, input)
+   local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
+   local result = string_input.check(env, filename, input)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
