@@ -1,9 +1,8 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local type = type
 
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
-local TL_DEBUG_MAXLINE = tldebug.TL_DEBUG_MAXLINE
 
 local types = require("teal.types")
 
@@ -81,62 +80,6 @@ function traversal.fields_of(t, meta)
    end
 end
 
-local tl_debug_indent = 0
-
-
-
-
-
-
-local tl_debug_entry = nil
-local tl_debug_y = 1
-
-local function tl_debug_loc(y, x)
-   return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
-end
-
-local function tl_debug_indent_push(mark, y, x, fmt, ...)
-   if tl_debug_entry then
-      if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = tl_debug_entry.y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. tl_debug_entry.mark .. " " ..
-      tl_debug_loc(tl_debug_entry.y, tl_debug_entry.x) .. " " ..
-      tl_debug_entry.msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-      tl_debug_indent = tl_debug_indent + 1
-   end
-   tl_debug_entry = {
-      mark = mark,
-      y = y,
-      x = x,
-      msg = fmt:format(...),
-   }
-end
-
-local function tl_debug_indent_pop(mark, single, y, x, fmt, ...)
-   if tl_debug_entry then
-      local msg = tl_debug_entry.msg
-      if fmt then
-         msg = fmt:format(...)
-      end
-      if y and (y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. single .. " " .. tl_debug_loc(y, x) .. " " .. msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-   else
-      tl_debug_indent = tl_debug_indent - 1
-      if fmt then
-         io.stderr:write(("   "):rep(tl_debug_indent) .. mark .. " " .. fmt:format(...) .. "\n")
-         io.stderr:flush()
-      end
-   end
-end
 
 local recurse_type
 
@@ -270,7 +213,7 @@ recurse_type = function(s, ast, visit)
    local kind = ast.typename
 
    if TL_DEBUG then
-      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+      tldebug.indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
    end
 
    local cbs = visit.cbs
@@ -299,7 +242,7 @@ recurse_type = function(s, ast, visit)
    end
 
    if TL_DEBUG then
-      tl_debug_indent_pop("---", "---", ast.y, ast.x)
+      tldebug.indent_pop("---", "---", ast.y, ast.x)
    end
 
    return ret
@@ -553,13 +496,13 @@ function traversal.traverse_nodes(s, root,
       end
 
       if TL_DEBUG then
-         if ast.y > TL_DEBUG_MAXLINE then
+         if ast.y > tldebug.TL_DEBUG_MAXLINE then
             error("Halting execution at input line " .. ast.y)
          end
          kprint = kind == "op" and "op " .. ast.op.op or
          kind == "identifier" and "identifier " .. ast.tk or
          kind
-         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
+         tldebug.indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
       end
 
       local fn = walkers[kind]
@@ -580,7 +523,7 @@ function traversal.traverse_nodes(s, root,
 
       if TL_DEBUG then
          local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
+         tldebug.indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
       end
 
       return ret
