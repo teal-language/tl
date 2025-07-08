@@ -1,4 +1,4 @@
-local file_checker = require("teal.check.file_checker")
+local file_input = require("teal.input.file_input")
 
 local type errors = require("teal.errors")
 local type Where = errors.Where
@@ -102,7 +102,7 @@ function require_file.require_module(env: Env, w: Where, module_name: string): T
    env.module_filenames[module_name] = found
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result, err: Result, string = file_checker.check(env, found, fd)
+   local found_result, err: Result, string = file_input.check(env, found, fd)
    assert(found_result, err)
 
    env.modules[module_name] = found_result.type

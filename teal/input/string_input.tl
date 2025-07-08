@@ -7,15 +7,14 @@ local type environment = require("teal.environment")
 local type Env = environment.Env
 local type Result = environment.Result
 
-local record string_checker
+local record string_input
 end
 
-function string_checker.check(env: Env, input: string, filename?: string): Result
+function string_input.check(env: Env, filename: string, input: string): Result
    assert(env)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
-   filename = filename or "<input>.tl"
 
    local program, syntax_errors = parser.parse(input, filename)
 
@@ -30,5 +29,5 @@ function string_checker.check(env: Env, input: string, filename?: string): Resul
    return result
 end
 
-return string_checker
+return string_input
 
