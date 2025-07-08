@@ -148,8 +148,6 @@ function download() {
 
 # Let's build our dependencies:
 
-set -x
-
 function check() {
    [ -e "$1" ] || {
       echo "Failed building $1. :("
@@ -165,7 +163,9 @@ function build_dep() {
    cd "$at"
    [ -e "$target" ] && return
 
+   set -x
    "$builder"
+   set +x
 
    check "$target"
 }
@@ -380,9 +380,7 @@ local function load_main(out, main_program, program_name)
 end
 
 local function is_dir(filename)
-os.execute("pwd")
    local ret, x, y = os.execute("test -d '" .. filename .. "'")
-print(ret, x, y)
    return ret == true or ret == 0
 end
 
@@ -504,8 +502,10 @@ EOF
 
 # Copy our program sources to src/...
 
-cp "${sourcedir}/tl.lua" "${root}/src/"
-find "${sourcedir}/teal" -name "*.lua" | while read -r file
+(
+   find "${sourcedir}/teal" -name "*.lua"
+   find "${sourcedir}/tlcli" -name "*.lua"
+) | while read -r file
 do
    fromroot="${file#"${sourcedir}"/}"
    newdir="${root}/src/$(dirname "${fromroot}")"
@@ -524,7 +524,7 @@ ${LUA} "${root}/src/gen.lua" \
    "${sourcedir}/tl" \
    "${root}/src" \
    "${root}/src/teal" \
-   "${root}/src/tl.lua" \
+   "${root}/src/tlcli" \
    "${root}/src/argparse.lua"
 
 check "${root}/src/tl.c"
@@ -533,9 +533,9 @@ check "${root}/src/tl.c"
 
 exe_pathname="${root}/build/${executable}"
 
+set -x
 ${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" "${MYCFLAGS[@]}"
 ${STRIP} "$exe_pathname"
-
 set +x
 
 check "$exe_pathname"
