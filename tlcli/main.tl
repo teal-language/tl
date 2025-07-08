@@ -64,10 +64,19 @@ local function get_args_parser(): argparse.Parser
 
    local gen_command = parser:command("gen", "Generate a Lua file for one or more Teal files.")
    gen_command:argument("file", "The Teal source file."):args("+")
+   gen_command:option("--root", "Interpret module paths relative to given root directory.")
+              :argname("<dir>")
    gen_command:flag("-c --check", "Type check and fail on type errors.")
    gen_command:flag("--keep-hashbang", "Preserve hashbang line (#!) at the top of file if present.")
    gen_command:option("-o --output", "Write to <filename> instead.")
               :argname("<filename>")
+   gen_command:option("--output-dir", "Base directory to use for output files. " ..
+                                      "When combined with --root, the tree structure " ..
+                                      "of the input files is preserved.")
+              :argname("<dir>")
+   gen_command:option("--custom-ext", "Use a custom filename extension for generated output.")
+              :argname("<.ext>")
+              :default(".lua")
 
    local run_command = parser:command("run", "Run a Teal script.")
    run_command:argument("script", "The Teal script."):args("+")

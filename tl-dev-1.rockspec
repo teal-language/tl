@@ -17,10 +17,10 @@ dependencies = {
 
    -- needed for the cli tool
    "argparse",
+   "luafilesystem",
 }
 test_dependencies = {
    "dkjson",
-   "luafilesystem",
 }
 build = {
    modules = {
