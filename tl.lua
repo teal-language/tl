@@ -4142,13 +4142,25 @@ require_file.all_extensions = {
 local function search_for(module_name, suffix, path, tried)
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
-      local filename = entry:gsub("?", slash_name)
-      local tl_filename = filename:gsub("%.lua$", suffix)
-      local fd = io.open(tl_filename, "rb")
-      if fd then
-         return tl_filename, fd, tried
+
+
+      if not entry:match("%?[/\\]init%.lua$") then
+         local filename = entry:gsub("?", slash_name)
+         local tl_filename = filename:gsub("%.lua$", suffix)
+         local fd = io.open(tl_filename, "rb")
+         if fd then
+            return tl_filename, fd, tried
+         end
+         table.insert(tried, "no file '" .. tl_filename .. "'")
+
+
+         tl_filename = filename:gsub("%.lua$", "/init" .. suffix)
+         fd = io.open(tl_filename, "rb")
+         if fd then
+            return tl_filename, fd, tried
+         end
+         table.insert(tried, "no file '" .. tl_filename .. "'")
       end
-      table.insert(tried, "no file '" .. tl_filename .. "'")
    end
    return nil, nil, tried
 end
@@ -4158,6 +4170,7 @@ function require_file.search_module(module_name, extension_set)
    local fd
    local tried = {}
    local path = os.getenv("TL_PATH") or package.path
+
    if extension_set and extension_set[".d.tl"] then
       found, fd, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
