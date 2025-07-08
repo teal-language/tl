@@ -1,6 +1,7 @@
 local record Args
    check: boolean
    command: string
+   custom_ext: string
    feat_arity: string
    file: {string}
    gen_target: string
@@ -9,8 +10,10 @@ local record Args
    include_dir: {string}
    keep_hashbang: boolean
    output: string
+   output_dir: string
    position: string
    pretend: boolean
+   root: string
    quiet: boolean
    require: {string}
    script: {string}

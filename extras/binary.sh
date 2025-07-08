@@ -11,6 +11,7 @@ set -e
 
 lua_version="5.4.8"
 argparse_version="0.7.1"
+luafilesystem_version="1.8.0"
 export executable="tl"
 
 export MAKE="${MAKE:-make}"
@@ -136,6 +137,7 @@ function download() {
    cd "${root}/downloads"
    download "https://www.lua.org/ftp/lua-${lua_version}.tar.gz"
    download "https://github.com/luarocks/argparse/archive/${argparse_version}.tar.gz" "argparse-${argparse_version}.tar.gz"
+   download "https://github.com/keplerproject/luafilesystem/archive/v${luafilesystem_version//./_}.tar.gz" "luafilesystem-${luafilesystem_version}.tar.gz"
 )
 
 # Let's extract our dependencies
@@ -144,6 +146,8 @@ function download() {
    cd "${root}/deps"
    tar zxpf "../downloads/lua-${lua_version}.tar.gz"
    tar zxpf "../downloads/argparse-${argparse_version}.tar.gz"
+   tar zxpf "../downloads/luafilesystem-${luafilesystem_version}.tar.gz"
+   [ -e "luafilesystem-$luafilesystem_version" ] || mv "luafilesystem-${luafilesystem_version//./_}" "luafilesystem-$luafilesystem_version"
 )
 
 # Let's build our dependencies:
@@ -176,9 +180,17 @@ function lua_builder() (
 
 build_dep "${root}/deps/lua-${lua_version}" "src/liblua.a" lua_builder
 
+function lfs_builder() {
+   "${CC}" -c -o "lfs.o" -I "../lua-${lua_version}/src" "src/lfs.c"
+   "${AR}" rcu -o "lfs.a" "lfs.o"
+}
+
+build_dep "${root}/deps/luafilesystem-${luafilesystem_version}" "lfs.a" lfs_builder
+
 build_dep "${root}/deps/argparse-${argparse_version}" "src/argparse.lua" true
 
 LIBLUA_A="${root}/deps/lua-${lua_version}/src/liblua.a"
+LFS_A="${root}/deps/luafilesystem-${luafilesystem_version}/lfs.a"
 ARGPARSE_LUA="${root}/deps/argparse-${argparse_version}/src/argparse.lua"
 
 # Let's prepare our sources
@@ -525,7 +537,8 @@ ${LUA} "${root}/src/gen.lua" \
    "${root}/src" \
    "${root}/src/teal" \
    "${root}/src/tlcli" \
-   "${root}/src/argparse.lua"
+   "${root}/src/argparse.lua" \
+   "${LFS_A}"
 
 check "${root}/src/tl.c"
 
@@ -534,7 +547,7 @@ check "${root}/src/tl.c"
 exe_pathname="${root}/build/${executable}"
 
 set -x
-${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" "${MYCFLAGS[@]}"
+${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LFS_A}" "${LIBLUA_A}" "${MYCFLAGS[@]}"
 ${STRIP} "$exe_pathname"
 set +x
 

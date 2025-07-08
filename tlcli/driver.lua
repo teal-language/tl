@@ -58,7 +58,21 @@ function driver.setup_compiler(tlconfig)
    return compiler
 end
 
+local function already_loaded(compiler, input_file)
+   input_file = common.normalize(input_file)
+   for file in compiler:loaded_files() do
+      if common.normalize(file) == input_file then
+         return compiler:recall(file)
+      end
+   end
+end
+
 function driver.process_module(compiler, filename)
+   local module, check_err = already_loaded(compiler, filename)
+   if module then
+      return module, check_err
+   end
+
    local is_stdin = filename == "-"
    local module_name
    local input
