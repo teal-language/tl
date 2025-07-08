@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
 
@@ -443,17 +443,18 @@ if TL_DEBUG_FACTS then
    local real_eval_fact = facts.eval_fact
    facts.eval_fact = function(self, known)
       eval_indent = eval_indent + 1
-      io.stderr:write(("   "):rep(eval_indent))
-      io.stderr:write("eval fact: ", tostring(known), "\n")
+      tldebug.write(("   "):rep(eval_indent))
+      tldebug.write("eval fact: ", tostring(known), "\n")
       local fcts = real_eval_fact(self, known)
       if fcts then
          for _, k in ipairs(sorted_keys(fcts)) do
             local f = fcts[k]
-            io.stderr:write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
+            tldebug.write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
          end
       else
-         io.stderr:write(("   "):rep(eval_indent), "=> .\n")
+         tldebug.write(("   "):rep(eval_indent), "=> .\n")
       end
+      tldebug.flush()
       eval_indent = eval_indent - 1
       return fcts
    end

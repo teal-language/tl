@@ -443,17 +443,18 @@ if TL_DEBUG_FACTS then
    local real_eval_fact = facts.eval_fact
    facts.eval_fact = function(self: TypeChecker, known: Fact): {string: IsFact|EqFact}
       eval_indent = eval_indent + 1
-      io.stderr:write(("   "):rep(eval_indent))
-      io.stderr:write("eval fact: ", tostring(known), "\n")
+      tldebug.write(("   "):rep(eval_indent))
+      tldebug.write("eval fact: ", tostring(known), "\n")
       local fcts = real_eval_fact(self, known)
       if fcts then
          for _, k in ipairs(sorted_keys(fcts)) do
             local f = fcts[k]
-            io.stderr:write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
+            tldebug.write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
          end
       else
-         io.stderr:write(("   "):rep(eval_indent), "=> .\n")
+         tldebug.write(("   "):rep(eval_indent), "=> .\n")
       end
+      tldebug.flush()
       eval_indent = eval_indent - 1
       return fcts
    end
