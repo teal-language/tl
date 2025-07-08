@@ -58,7 +58,7 @@ local function insert_error(self: Errors, y: integer, x: integer, f: string, err
    err.filename = assert(f)
 
    if TL_DEBUG then
-      io.stderr:write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
+      tldebug.write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
    end
 
    table.insert(self.errors, err)

@@ -3,7 +3,6 @@
 --------------------------------------------------------------------------------
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
-local TL_DEBUG_MAXLINE = tldebug.TL_DEBUG_MAXLINE
 
 local type types = require("teal.types")
 local type Type = types.Type
@@ -81,62 +80,6 @@ function traversal.fields_of(t: RecordLikeType, meta?: MetaMode): (function(): s
    end
 end
 
-local tl_debug_indent = 0
-local record DebugEntry
-   mark: string
-   y: integer
-   x: integer
-   msg: string
-end
-local tl_debug_entry: DebugEntry = nil
-local tl_debug_y = 1
-
-local function tl_debug_loc(y: integer, x: integer): string
-   return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
-end
-
-local function tl_debug_indent_push(mark: string, y: integer, x: integer, fmt: string, ...: any)
-   if tl_debug_entry then
-      if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = tl_debug_entry.y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. tl_debug_entry.mark .. " " ..
-                      tl_debug_loc(tl_debug_entry.y, tl_debug_entry.x) .. " " ..
-                      tl_debug_entry.msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-      tl_debug_indent = tl_debug_indent + 1
-   end
-   tl_debug_entry = {
-      mark = mark,
-      y = y,
-      x = x,
-      msg = fmt:format(...)
-   }
-end
-
-local function tl_debug_indent_pop(mark: string, single: string, y: integer, x: integer, fmt?: string, ...: any)
-   if tl_debug_entry then
-      local msg = tl_debug_entry.msg
-      if fmt then
-         msg = fmt:format(...)
-      end
-      if y and (y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. single .. " " .. tl_debug_loc(y, x) .. " " .. msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-   else
-      tl_debug_indent = tl_debug_indent - 1
-      if fmt then
-         io.stderr:write(("   "):rep(tl_debug_indent) .. mark .. " " .. fmt:format(...) .. "\n")
-         io.stderr:flush()
-      end
-   end
-end
 
 local recurse_type: function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
 
@@ -270,7 +213,7 @@ recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type,
    local kind = ast.typename
 
    if TL_DEBUG then
-      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+      tldebug.indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
    end
 
    local cbs = visit.cbs
@@ -299,7 +242,7 @@ recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type,
    end
 
    if TL_DEBUG then
-      tl_debug_indent_pop("---", "---", ast.y, ast.x)
+      tldebug.indent_pop("---", "---", ast.y, ast.x)
    end
 
    return ret
@@ -553,13 +496,13 @@ function traversal.traverse_nodes<S, T>(s: S, root: types.Node,
       end
 
       if TL_DEBUG then
-         if ast.y > TL_DEBUG_MAXLINE then
+         if ast.y > tldebug.TL_DEBUG_MAXLINE then
             error("Halting execution at input line " .. ast.y)
          end
          kprint = kind == "op" and "op " .. ast.op.op
                   or kind == "identifier" and "identifier " .. ast.tk
                   or kind
-         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
+         tldebug.indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
       end
 
       local fn = walkers[kind]
@@ -580,7 +523,7 @@ function traversal.traverse_nodes<S, T>(s: S, root: types.Node,
 
       if TL_DEBUG then
          local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
+         tldebug.indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
       end
 
       return ret

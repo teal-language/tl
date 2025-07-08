@@ -14983,18 +14983,34 @@ package.preload["teal.debug"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local string = _tl_compat and _tl_compat.string or string
 
 
-local TL_DEBUG = os.getenv("TL_DEBUG")
-local TL_DEBUG_FACTS = os.getenv("TL_DEBUG_FACTS")
-local TL_DEBUG_MAXLINE = _tl_math_maxinteger
+local tldebug = {}
 
-if TL_DEBUG_FACTS and not TL_DEBUG then
-   TL_DEBUG = "1"
+
+
+
+
+
+
+function tldebug.write(...)
+   io.stderr:write(...)
 end
 
-if TL_DEBUG then
-   local max = assert(tonumber(TL_DEBUG), "TL_DEBUG was defined, but not a number")
+function tldebug.flush()
+   io.stderr:flush()
+end
+
+tldebug.TL_DEBUG = os.getenv("TL_DEBUG")
+tldebug.TL_DEBUG_FACTS = os.getenv("TL_DEBUG_FACTS")
+tldebug.TL_DEBUG_MAXLINE = _tl_math_maxinteger
+
+if tldebug.TL_DEBUG_FACTS and not tldebug.TL_DEBUG then
+   tldebug.TL_DEBUG = "1"
+end
+
+if tldebug.TL_DEBUG then
+   local max = assert(tonumber(tldebug.TL_DEBUG), "TL_DEBUG was defined, but not a number")
    if max < 0 then
-      TL_DEBUG_MAXLINE = math.tointeger(-max)
+      tldebug.TL_DEBUG_MAXLINE = math.tointeger(-max)
    elseif max > 1 then
       local count = 0
       local skip
@@ -15013,8 +15029,8 @@ if TL_DEBUG then
             end
 
             local name = info.name or "<anon>", info.currentline > 0 and "@" .. info.currentline or ""
-            io.stderr:write(name, " :: ", event, "\n")
-            io.stderr:flush()
+            tldebug.write(name, " :: ", event, "\n")
+            tldebug.flush()
          else
             count = count + 100
             if count > max then
@@ -15025,11 +15041,67 @@ if TL_DEBUG then
    end
 end
 
-return {
-   TL_DEBUG = TL_DEBUG,
-   TL_DEBUG_FACTS = TL_DEBUG_FACTS,
-   TL_DEBUG_MAXLINE = TL_DEBUG_MAXLINE,
-}
+do
+
+
+
+
+
+
+
+   local curr_indent = 0
+   local curr_entry = nil
+   local curr_y = 1
+
+   local function loc(y, x)
+      return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
+   end
+
+   function tldebug.indent_push(mark, y, x, fmt, ...)
+      if curr_entry then
+         if curr_entry.y and (curr_entry.y > curr_y) then
+            tldebug.write("\n")
+            curr_y = curr_entry.y
+         end
+         tldebug.write(("   "):rep(curr_indent) .. curr_entry.mark .. " " ..
+         loc(curr_entry.y, curr_entry.x) .. " " ..
+         curr_entry.msg .. "\n")
+         tldebug.flush()
+         curr_entry = nil
+         curr_indent = curr_indent + 1
+      end
+      curr_entry = {
+         mark = mark,
+         y = y,
+         x = x,
+         msg = fmt:format(...),
+      }
+   end
+
+   function tldebug.indent_pop(mark, single, y, x, fmt, ...)
+      if curr_entry then
+         local msg = curr_entry.msg
+         if fmt then
+            msg = fmt:format(...)
+         end
+         if y and (y > curr_y) then
+            tldebug.write("\n")
+            curr_y = y
+         end
+         tldebug.write(("   "):rep(curr_indent) .. single .. " " .. loc(y, x) .. " " .. msg .. "\n")
+         tldebug.flush()
+         curr_entry = nil
+      else
+         curr_indent = curr_indent - 1
+         if fmt then
+            tldebug.write(("   "):rep(curr_indent) .. mark .. " " .. fmt:format(...) .. "\n")
+            tldebug.flush()
+         end
+      end
+   end
+end
+
+return tldebug
 
 end
 
@@ -15970,7 +16042,7 @@ end
 
 -- module teal.facts from teal/facts.lua
 package.preload["teal.facts"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
 
@@ -16415,17 +16487,18 @@ if TL_DEBUG_FACTS then
    local real_eval_fact = facts.eval_fact
    facts.eval_fact = function(self, known)
       eval_indent = eval_indent + 1
-      io.stderr:write(("   "):rep(eval_indent))
-      io.stderr:write("eval fact: ", tostring(known), "\n")
+      tldebug.write(("   "):rep(eval_indent))
+      tldebug.write("eval fact: ", tostring(known), "\n")
       local fcts = real_eval_fact(self, known)
       if fcts then
          for _, k in ipairs(sorted_keys(fcts)) do
             local f = fcts[k]
-            io.stderr:write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
+            tldebug.write(("   "):rep(eval_indent), "=> ", tostring(f), "\n")
          end
       else
-         io.stderr:write(("   "):rep(eval_indent), "=> .\n")
+         tldebug.write(("   "):rep(eval_indent), "=> .\n")
       end
+      tldebug.flush()
       eval_indent = eval_indent - 1
       return fcts
    end
@@ -21738,12 +21811,11 @@ end
 
 -- module teal.traversal from teal/traversal.lua
 package.preload["teal.traversal"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local type = type
 
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
-local TL_DEBUG_MAXLINE = tldebug.TL_DEBUG_MAXLINE
 
 local types = require("teal.types")
 
@@ -21821,62 +21893,6 @@ function traversal.fields_of(t, meta)
    end
 end
 
-local tl_debug_indent = 0
-
-
-
-
-
-
-local tl_debug_entry = nil
-local tl_debug_y = 1
-
-local function tl_debug_loc(y, x)
-   return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
-end
-
-local function tl_debug_indent_push(mark, y, x, fmt, ...)
-   if tl_debug_entry then
-      if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = tl_debug_entry.y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. tl_debug_entry.mark .. " " ..
-      tl_debug_loc(tl_debug_entry.y, tl_debug_entry.x) .. " " ..
-      tl_debug_entry.msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-      tl_debug_indent = tl_debug_indent + 1
-   end
-   tl_debug_entry = {
-      mark = mark,
-      y = y,
-      x = x,
-      msg = fmt:format(...),
-   }
-end
-
-local function tl_debug_indent_pop(mark, single, y, x, fmt, ...)
-   if tl_debug_entry then
-      local msg = tl_debug_entry.msg
-      if fmt then
-         msg = fmt:format(...)
-      end
-      if y and (y > tl_debug_y) then
-         io.stderr:write("\n")
-         tl_debug_y = y
-      end
-      io.stderr:write(("   "):rep(tl_debug_indent) .. single .. " " .. tl_debug_loc(y, x) .. " " .. msg .. "\n")
-      io.stderr:flush()
-      tl_debug_entry = nil
-   else
-      tl_debug_indent = tl_debug_indent - 1
-      if fmt then
-         io.stderr:write(("   "):rep(tl_debug_indent) .. mark .. " " .. fmt:format(...) .. "\n")
-         io.stderr:flush()
-      end
-   end
-end
 
 local recurse_type
 
@@ -22010,7 +22026,7 @@ recurse_type = function(s, ast, visit)
    local kind = ast.typename
 
    if TL_DEBUG then
-      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+      tldebug.indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
    end
 
    local cbs = visit.cbs
@@ -22039,7 +22055,7 @@ recurse_type = function(s, ast, visit)
    end
 
    if TL_DEBUG then
-      tl_debug_indent_pop("---", "---", ast.y, ast.x)
+      tldebug.indent_pop("---", "---", ast.y, ast.x)
    end
 
    return ret
@@ -22293,13 +22309,13 @@ function traversal.traverse_nodes(s, root,
       end
 
       if TL_DEBUG then
-         if ast.y > TL_DEBUG_MAXLINE then
+         if ast.y > tldebug.TL_DEBUG_MAXLINE then
             error("Halting execution at input line " .. ast.y)
          end
          kprint = kind == "op" and "op " .. ast.op.op or
          kind == "identifier" and "identifier " .. ast.tk or
          kind
-         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
+         tldebug.indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
       end
 
       local fn = walkers[kind]
@@ -22320,7 +22336,7 @@ function traversal.traverse_nodes(s, root,
 
       if TL_DEBUG then
          local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
+         tldebug.indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
       end
 
       return ret
@@ -22335,7 +22351,7 @@ end
 
 -- module teal.type_errors from teal/type_errors.lua
 package.preload["teal.type_errors"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local types = require("teal.types")
@@ -22395,7 +22411,7 @@ local function insert_error(self, y, x, f, err)
    err.filename = assert(f)
 
    if TL_DEBUG then
-      io.stderr:write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
+      tldebug.write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
    end
 
    table.insert(self.errors, err)
