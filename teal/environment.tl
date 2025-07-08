@@ -284,9 +284,8 @@ function environment.load_module(env: Env, name: string): boolean, string
 end
 
 function environment.register(env: Env, filename: string, result: Result)
-   assert(filename)
-   assert(result)
    env.loaded[filename] = result
+
    table.insert(env.loaded_order, filename)
 end
 

@@ -46,19 +46,36 @@ teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
 	@mkdir -p `dirname $@`
-	$(STABLE_TL) gen $(TLGENFLAGS) $< -o $@ || { rm $@; exit 1; }
+	@echo $< >> _temp/list1
+	@echo $@ >> _temp/list1.1
+	@touch $@
 
 _temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
-	$(NEW_TL) gen $(TLGENFLAGS) $< -o $@ || extras/make.sh revert
+	@mkdir -p `dirname $@`
+	@echo $< >> _temp/list2
+	@touch $@
 
 build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
+	if [ -e _temp/list1 ]; \
+	then $(STABLE_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.1 --output-dir _temp `cat _temp/list1` || { rm `cat _temp/list1.1`; exit 1; };\
+	fi
 
 replace1:
 	extras/make.sh move_1_to_lua
+	@rm -f _temp/list2
 
 build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
+	if [ -e _temp/list2 ]; \
+	then $(NEW_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.2 --output-dir _temp `cat _temp/list2` || extras/make.sh revert; \
+	fi
 
-selfbuild: build1 replace1 build2 combine
+newlist:
+	@mkdir -p _temp/
+	@rm -f _temp/list1
+	@rm -f _temp/list1.1
+	@rm -f _temp/list1.2
+
+selfbuild: newlist build1 replace1 build2 combine
 	extras/make.sh diff_1_and_2 || extras/make.sh revert
 
 ########################################

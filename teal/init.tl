@@ -246,6 +246,9 @@ function Compiler:recall(filename: string): Module, CheckError
    if not result then
       return nil, nil
    end
+   if result.ast then
+      lua_compat.apply(result)
+   end
    return module_from_result(result)
 end
 
