@@ -58,7 +58,21 @@ function driver.setup_compiler(tlconfig: TlConfig): teal.Compiler
    return compiler
 end
 
+local function already_loaded(compiler: Compiler, input_file: string): teal.Module, teal.CheckError
+   input_file = common.normalize(input_file)
+   for file in compiler:loaded_files() do
+      if common.normalize(file) == input_file then
+         return compiler:recall(file)
+      end
+   end
+end
+
 function driver.process_module(compiler: Compiler, filename: string): teal.Module, teal.CheckError, string
+   local module, check_err = already_loaded(compiler, filename)
+   if module then
+      return module, check_err
+   end
+
    local is_stdin = filename == "-"
    local module_name: string
    local input: teal.Input

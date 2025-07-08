@@ -6,14 +6,30 @@ local common = require("tlcli.common")
 local driver = require("tlcli.driver")
 local perf = require("tlcli.perf")
 local report = require("tlcli.report")
-local teal = require("teal.init")
+local teal = require("teal")
+local lfs = require("lfs")
 
 local type TlConfig = require("tlcli.tlconfig")
 local type Args = require("tlcli.args")
 local type GenOptions = teal.GenOptions
 local type Module = teal.Module
 
-local function write_out(tlconfig: TlConfig, module: Module, output_file: string, gen_opts: GenOptions)
+local mkdir_cache = {}
+
+local function make_dir_for(pathname: string)
+   pathname = common.normalize(pathname)
+   local dirname = pathname:match("(.+)" .. common.sep)
+   if dirname then
+      if mkdir_cache[dirname] then
+         return
+      end
+      make_dir_for(dirname)
+      lfs.mkdir(dirname)
+      mkdir_cache[dirname] = true
+   end
+end
+
+local function write_out(tlconfig: TlConfig, module: Module, output_file: string, gen_opts: GenOptions, tree: boolean)
    assert(module)
    local is_stdout = output_file == "-"
    local prettyname = is_stdout and "<stdout>" or output_file
@@ -26,6 +42,9 @@ local function write_out(tlconfig: TlConfig, module: Module, output_file: string
    if is_stdout then
       ofd = io.output()
    else
+      if tree then
+         make_dir_for(output_file)
+      end
       ofd, err = io.open(output_file, "wb")
    end
    if not ofd then
@@ -73,7 +92,7 @@ return function(tlconfig: TlConfig, args: Args)
 
       table.insert(mods, {
          input_file = input_file,
-         output_file = common.get_output_filename(input_file),
+         output_file = common.get_output_filename(input_file, args["root"], args["output_dir"], args["custom_ext"]),
          module = module,
          check_err = check_err,
       })
@@ -85,7 +104,7 @@ return function(tlconfig: TlConfig, args: Args)
       if #mod.check_err.syntax_errors == 0 then
          local output_filename = args["output"] or mod.output_file
          assert(mod.module)
-         write_out(tlconfig, mod.module, output_filename, gen_opts)
+         write_out(tlconfig, mod.module, output_filename, gen_opts, not not args["root"])
       end
    end
 

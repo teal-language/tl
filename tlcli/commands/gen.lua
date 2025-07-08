@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
 
@@ -6,14 +6,30 @@ local common = require("tlcli.common")
 local driver = require("tlcli.driver")
 local perf = require("tlcli.perf")
 local report = require("tlcli.report")
-local teal = require("teal.init")
+local teal = require("teal")
+local lfs = require("lfs")
 
 
 
 
 
 
-local function write_out(tlconfig, module, output_file, gen_opts)
+local mkdir_cache = {}
+
+local function make_dir_for(pathname)
+   pathname = common.normalize(pathname)
+   local dirname = pathname:match("(.+)" .. common.sep)
+   if dirname then
+      if mkdir_cache[dirname] then
+         return
+      end
+      make_dir_for(dirname)
+      lfs.mkdir(dirname)
+      mkdir_cache[dirname] = true
+   end
+end
+
+local function write_out(tlconfig, module, output_file, gen_opts, tree)
    assert(module)
    local is_stdout = output_file == "-"
    local prettyname = is_stdout and "<stdout>" or output_file
@@ -26,6 +42,9 @@ local function write_out(tlconfig, module, output_file, gen_opts)
    if is_stdout then
       ofd = io.output()
    else
+      if tree then
+         make_dir_for(output_file)
+      end
       ofd, err = io.open(output_file, "wb")
    end
    if not ofd then
@@ -73,7 +92,7 @@ return function(tlconfig, args)
 
       table.insert(mods, {
          input_file = input_file,
-         output_file = common.get_output_filename(input_file),
+         output_file = common.get_output_filename(input_file, args["root"], args["output_dir"], args["custom_ext"]),
          module = module,
          check_err = check_err,
       })
@@ -85,7 +104,7 @@ return function(tlconfig, args)
       if #mod.check_err.syntax_errors == 0 then
          local output_filename = args["output"] or mod.output_file
          assert(mod.module)
-         write_out(tlconfig, mod.module, output_filename, gen_opts)
+         write_out(tlconfig, mod.module, output_filename, gen_opts, not not args["root"])
       end
    end
 
