@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("syntax errors", function()
@@ -214,7 +214,7 @@ describe("syntax errors", function()
             local ccc = require "ccc"
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       local expected = {
          ["bbb.tl"] = {

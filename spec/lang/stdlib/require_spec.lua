@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v2")
 local util = require("spec.util")
 
 describe("require", function()
@@ -26,7 +26,7 @@ describe("require", function()
             Box.foo(123)
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same({
@@ -52,7 +52,7 @@ describe("require", function()
             Box.foo(123)
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
@@ -86,7 +86,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -121,7 +121,7 @@ describe("require", function()
             anotherbox = { x = 10, y = 10, w = 123, h = 120 }
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -184,7 +184,7 @@ describe("require", function()
             use_point(bar.get_point():move(5, 5))
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -242,7 +242,7 @@ describe("require", function()
             }
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -300,7 +300,7 @@ describe("require", function()
             }
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -336,7 +336,7 @@ describe("require", function()
             local b: point2.Point = a
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -374,7 +374,7 @@ describe("require", function()
             point1.f(myp)
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same(1, #result.type_errors)
@@ -398,7 +398,7 @@ describe("require", function()
             Box.foo(123)
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same({}, result.env.loaded["foo.tl"].type_errors)
@@ -432,7 +432,7 @@ describe("require", function()
             box.foo({ x = 10, y = 10, w = 123, h = 120 })
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
@@ -463,7 +463,7 @@ describe("require", function()
             Box.foo({ x = 10, y = 10, w = 123, h = 120 })
          ]],
       })
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
@@ -492,7 +492,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
@@ -521,7 +521,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same(0, #result.syntax_errors)
       assert.same(0, #result.type_errors)
@@ -547,7 +547,7 @@ describe("require", function()
             print(v + 2)
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -577,7 +577,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -608,7 +608,8 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
+      local env = assert(tl.new_env({ predefined_modules = {"love"} }))
+      local result, err = tl.check_file("foo.tl", env)
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -639,7 +640,8 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl", assert(tl.init_env(false, nil, nil, {"love"})))
+      local env = assert(tl.new_env({ predefined_modules = {"love"} }))
+      local result, err = tl.check_file("foo.tl", env)
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -665,7 +667,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -691,7 +693,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("foo.tl")
+      local result, err = tl.check_file("foo.tl")
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -737,7 +739,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("tests.tl")
+      local result, err = tl.check_file("tests.tl")
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -771,7 +773,7 @@ describe("require", function()
          ]],
       })
 
-      local result, err = tl.process("minimal/proof.tl")
+      local result, err = tl.check_file("minimal/proof.tl")
 
       assert.same(nil, err)
       assert.same({}, result.syntax_errors)
@@ -823,7 +825,7 @@ describe("require", function()
             return b
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -888,7 +890,7 @@ describe("require", function()
             return b
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -938,7 +940,7 @@ describe("require", function()
                return House
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same(0, #result.syntax_errors)
          assert.same(0, #result.env.loaded["main.tl"].type_errors)
@@ -987,7 +989,7 @@ describe("require", function()
                return Person
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same(0, #result.syntax_errors)
          assert.same(0, #result.env.loaded["main.tl"].type_errors)
@@ -1065,7 +1067,7 @@ describe("require", function()
                return Person
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same({}, result.syntax_errors)
          assert.same({}, result.env.loaded["main.tl"].type_errors)
@@ -1142,7 +1144,7 @@ describe("require", function()
                return Person
             ]],
          })
-         local result, err = tl.process("main.tl")
+         local result, err = tl.check_file("main.tl")
 
          assert.same({}, result.syntax_errors)
          assert.same({}, result.env.loaded["main.tl"].type_errors)
@@ -1196,7 +1198,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -1212,7 +1214,7 @@ describe("require", function()
             local type Foo = require("mod").Foo
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -1236,7 +1238,7 @@ describe("require", function()
             local type Foo = require("mod").Foo
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -1263,7 +1265,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({
          { filename = "main.tl", x = 30, y = 1, msg = "require() in type declarations cannot be part of larger expressions" }
@@ -1290,7 +1292,7 @@ describe("require", function()
             print(utf8.charpattern)
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -1316,7 +1318,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({
@@ -1346,7 +1348,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -1371,7 +1373,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)
@@ -1398,7 +1400,7 @@ describe("require", function()
             end
          ]],
       })
-      local result, err = tl.process("main.tl")
+      local result, err = tl.check_file("main.tl")
 
       assert.same({}, result.syntax_errors)
       assert.same({}, result.type_errors)

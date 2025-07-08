@@ -1,0 +1,10 @@
+local util = require("spec.util")
+
+describe("tl --version", function()
+   it("reports version number", function()
+      local pd = io.popen(util.tl_cmd("--version"), "r")
+      local output = pd:read("*a")
+      util.assert_popen_close(0, pd:close())
+      assert.match("[0-9]%.", output)
+   end)
+end)

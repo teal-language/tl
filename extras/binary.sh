@@ -9,8 +9,9 @@ set -e
 # To build a Windows executable, install the w64-mingw32
 # cross compiler toolchain and run `extras/binary.sh --windows`.
 
-lua_version="5.4.7"
+lua_version="5.4.8"
 argparse_version="0.7.1"
+luafilesystem_version="1.8.0"
 export executable="tl"
 
 export MAKE="${MAKE:-make}"
@@ -18,7 +19,9 @@ export CC="${CC:-gcc}"
 export AR="${AR:-ar}"
 export NM="${NM:-nm}"
 export RANLIB="${RANLIB:-ranlib}"
+export STRIP="${STRIP:-strip}"
 LUA="${LUA:-lua}"
+LUA_DEFINES="-DLUA_USE_POSIX"
 MYCFLAGS=("-Os" "-rdynamic" "-ldl" "-lpthread" "-lm")
 
 sourcedir="$(pwd)"
@@ -35,6 +38,8 @@ do
       export NM=x86_64-w64-mingw32-nm
       export AR=x86_64-w64-mingw32-ar
       export RANLIB=x86_64-w64-mingw32-ranlib
+      export STRIP=x86_64-w64-mingw32-strip
+      LUA_DEFINES="-DLUA_USE_WINDOWS"
       MYCFLAGS=("-Os" "-lm")
       executable="tl.exe"
       ;;
@@ -51,6 +56,9 @@ do
    --targetdir)
       shift
       root="$1"
+      ;;
+   --clean)
+      do_clean=1
       ;;
    --help)
       what_to_do="help"
@@ -101,7 +109,11 @@ ${LUA} -v &> /dev/null || {
    exit 1
 }
 
-rm -rf "${root}/deps"
+if [ "$do_clean" = 1 ]
+then
+   rm -rf "${root}/deps"
+fi
+
 rm -rf "${root}/src"
 
 # Let's prepare the environment
@@ -125,19 +137,20 @@ function download() {
    cd "${root}/downloads"
    download "https://www.lua.org/ftp/lua-${lua_version}.tar.gz"
    download "https://github.com/luarocks/argparse/archive/${argparse_version}.tar.gz" "argparse-${argparse_version}.tar.gz"
+   download "https://github.com/keplerproject/luafilesystem/archive/v${luafilesystem_version//./_}.tar.gz" "luafilesystem-${luafilesystem_version}.tar.gz"
 )
 
 # Let's extract our dependencies
 
 (
    cd "${root}/deps"
-   tar zxvpf "../downloads/lua-${lua_version}.tar.gz"
-   tar zxvpf "../downloads/argparse-${argparse_version}.tar.gz"
+   tar zxpf "../downloads/lua-${lua_version}.tar.gz"
+   tar zxpf "../downloads/argparse-${argparse_version}.tar.gz"
+   tar zxpf "../downloads/luafilesystem-${luafilesystem_version}.tar.gz"
+   [ -e "luafilesystem-$luafilesystem_version" ] || mv "luafilesystem-${luafilesystem_version//./_}" "luafilesystem-$luafilesystem_version"
 )
 
 # Let's build our dependencies:
-
-set -x
 
 function check() {
    [ -e "$1" ] || {
@@ -146,22 +159,39 @@ function check() {
    }
 }
 
-(
-   cd "${root}/deps/lua-${lua_version}"
-   "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS= SYSLIBS= SYSLDFLAGS= "liblua.a"
-   check "src/liblua.a"
+function build_dep() {
+   at="$1"
+   target="$2"
+   builder="$3"
+
+   cd "$at"
+   [ -e "$target" ] && return
+
+   set -x
+   "$builder"
+   set +x
+
+   check "$target"
+}
+
+function lua_builder() (
+   "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS="${LUA_DEFINES}" SYSLIBS= SYSLDFLAGS= "liblua.a"
 )
 
-(
-   cd "${root}/deps/argparse-${argparse_version}"
-   check "src/argparse.lua"
-)
+build_dep "${root}/deps/lua-${lua_version}" "src/liblua.a" lua_builder
+
+function lfs_builder() {
+   "${CC}" -c -o "lfs.o" -I "../lua-${lua_version}/src" "src/lfs.c"
+   "${AR}" rcu -o "lfs.a" "lfs.o"
+}
+
+build_dep "${root}/deps/luafilesystem-${luafilesystem_version}" "lfs.a" lfs_builder
+
+build_dep "${root}/deps/argparse-${argparse_version}" "src/argparse.lua" true
 
 LIBLUA_A="${root}/deps/lua-${lua_version}/src/liblua.a"
+LFS_A="${root}/deps/luafilesystem-${luafilesystem_version}/lfs.a"
 ARGPARSE_LUA="${root}/deps/argparse-${argparse_version}/src/argparse.lua"
-
-check "${LIBLUA_A}"
-check "${ARGPARSE_LUA}"
 
 # Let's prepare our sources
 
@@ -361,6 +391,30 @@ local function load_main(out, main_program, program_name)
    table.insert(out, [[]])
 end
 
+local function is_dir(filename)
+   local ret, x, y = os.execute("test -d '" .. filename .. "'")
+   return ret == true or ret == 0
+end
+
+local function find_all(dirname, pattern)
+   local pd = io.popen("find '" .. dirname .. "' -name '" .. pattern .. "'")
+   return pd:lines()
+end
+
+local function process_lua_file(out, basename, filename)
+   local name = filename
+   if filename:sub(1, #basename + 1) == basename .. "/" then
+      name = filename:sub(#basename + 2)
+   end
+   local modname = name:gsub("%.lua$", ""):gsub("/", ".")
+   table.insert(out, ("/* %s */"):format(modname))
+   table.insert(out, ("{"))
+   bin2c_file(out, filename)
+   table.insert(out, ("luaL_loadbuffer(L, code, sizeof(code), %q);"):format(filename))
+   table.insert(out, ("lua_setfield(L, 1, %q);"):format(modname))
+   table.insert(out, ("}"))
+end
+
 local function declare_modules(out, basename, files)
    table.insert(out, [[
    static void declare_modules(lua_State* L) {
@@ -372,17 +426,11 @@ local function declare_modules(out, basename, files)
    ]])
    for _, filename in ipairs(files) do
       if filename:match("%.lua$") then
-         local name = filename
-         if filename:sub(1, #basename + 1) == basename .. "/" then
-            name = filename:sub(#basename + 2)
+         process_lua_file(out, basename, filename)
+      elseif is_dir(filename) then
+         for file in find_all(filename, "*.lua") do
+            process_lua_file(out, basename, file)
          end
-         local modname = name:gsub("%.lua$", ""):gsub("/", ".")
-         table.insert(out, ("/* %s */"):format(modname))
-         table.insert(out, ("{"))
-         bin2c_file(out, filename)
-         table.insert(out, ("luaL_loadbuffer(L, code, sizeof(code), %q);"):format(filename))
-         table.insert(out, ("lua_setfield(L, 1, %q);"):format(modname))
-         table.insert(out, ("}"))
       end
    end
    table.insert(out, [[
@@ -466,7 +514,16 @@ EOF
 
 # Copy our program sources to src/...
 
-cp "${sourcedir}/tl.lua" "${root}/src/"
+(
+   find "${sourcedir}/teal" -name "*.lua"
+   find "${sourcedir}/tlcli" -name "*.lua"
+) | while read -r file
+do
+   fromroot="${file#"${sourcedir}"/}"
+   newdir="${root}/src/$(dirname "${fromroot}")"
+   [ -d "$newdir" ] || mkdir "${newdir}"
+   cp "$file" "${newdir}"
+done
 
 # Copy our dependency Lua sources to src/ ...
 
@@ -478,8 +535,10 @@ ${LUA} "${root}/src/gen.lua" \
    "${root}/src/tl.c" \
    "${sourcedir}/tl" \
    "${root}/src" \
-   "${root}/src/tl.lua" \
-   "${root}/src/argparse.lua"
+   "${root}/src/teal" \
+   "${root}/src/tlcli" \
+   "${root}/src/argparse.lua" \
+   "${LFS_A}"
 
 check "${root}/src/tl.c"
 
@@ -487,8 +546,9 @@ check "${root}/src/tl.c"
 
 exe_pathname="${root}/build/${executable}"
 
-${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LIBLUA_A}" "${MYCFLAGS[@]}"
-
+set -x
+${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LFS_A}" "${LIBLUA_A}" "${MYCFLAGS[@]}"
+${STRIP} "$exe_pathname"
 set +x
 
 check "$exe_pathname"

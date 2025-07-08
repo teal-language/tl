@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("teal.api.v1")
 local util = require("spec.util")
 
 describe("tl.pretty_print_ast", function()

@@ -1,10 +1,10 @@
-local tl = require("tl")
+local tl = require("teal.api.v1")
 
 describe("tl.get_types", function()
    it("skips over label nodes (#393)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local function a()
             ::continue::
          end
@@ -18,7 +18,7 @@ describe("tl.get_types", function()
    it("reports resolved type on poly function calls", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record R
             f: function(string)
             f: function(integer)
@@ -35,19 +35,19 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 9
       local x = 11
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert.same(tr.types[type_at_y_x].str, "function(string)")
 
       y = 11
       x = 21
-      type_at_y_x = tr.by_pos[""][y][x]
+      type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert.same(tr.types[type_at_y_x].str, "function(integer, T): T")
    end)
 
    it("reports record functions in record field list", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record Point
             x: number
             y: number
@@ -62,7 +62,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Point")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -75,7 +75,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 1 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -106,7 +106,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -119,7 +119,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 2 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -150,7 +150,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -163,7 +163,7 @@ describe("tl.get_types", function()
    it("reports inherited interface fields in record field list, case 3 (#852)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local interface IFoo
             bar: function(self)
          end
@@ -194,7 +194,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 5
       local x = 10
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       assert(tr.types[type_at_y_x].str == "Foo")
       local fields = {}
       for k, _ in pairs(tr.types[type_at_y_x].fields) do
@@ -207,7 +207,7 @@ describe("tl.get_types", function()
    it("reports reference of a nominal type", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record Operator
              operator: string
          end
@@ -227,7 +227,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 7
       local x = 24
-      local type_at_y_x = tr.by_pos[""][y][x]
+      local type_at_y_x = tr.by_pos["<input>.tl"][y][x]
       local ti = tr.types[type_at_y_x]
       assert(ti)
       assert.same(ti.str, "Operator")
@@ -240,7 +240,7 @@ describe("tl.get_types", function()
    it("reports self of a record function (#884)", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record mod
              foo1: function(self)
              foo2: function(self)
@@ -275,7 +275,7 @@ describe("tl.get_types", function()
    it("exposes metafields", function()
       local env = tl.init_env()
       env.report_types = true
-      local result = assert(tl.check_string([[
+      local result = assert(tl.process_string([[
          local record rec
             metamethod __eq: function(rec, rec): boolean
          end
@@ -284,7 +284,7 @@ describe("tl.get_types", function()
       local tr, trenv = tl.get_types(result)
       local y = 1
       local x = 10
-      local rec_type_id = tr.by_pos[""][y][x]
+      local rec_type_id = tr.by_pos["<input>.tl"][y][x]
       local rec_type = tr.types[rec_type_id]
       assert(rec_type)
       assert.same(rec_type.str, "rec")
