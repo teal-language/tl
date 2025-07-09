@@ -114,6 +114,17 @@ local function empty_environment(): Env
    }
 end
 
+local function declare_globals(env: Env)
+   for name, var in pairs(environment.stdlib_globals) do
+      env.globals[name] = var
+      local t = var.t
+      if t is TypeDeclType then
+         -- make standard library tables available as modules for require()
+         env.modules[name] = t
+      end
+   end
+end
+
 local function load_precompiled_default_env(env: Env)
    if not environment.stdlib_globals then
       -- TODO This type of state data which is currently "globally"
@@ -123,14 +134,7 @@ local function load_precompiled_default_env(env: Env)
       types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end
 
-   for name, var in pairs(environment.stdlib_globals) do
-      env.globals[name] = var
-      local t = var.t
-      if t is TypeDeclType then
-         -- make standard library tables available as modules for require()
-         env.modules[name] = t
-      end
-   end
+   declare_globals(env)
 end
 
 --- Build a default environment.
@@ -156,27 +160,25 @@ function environment.for_runtime(): Env
 end
 
 do
-   local function get_stdlib_compat(): {string:boolean}
-      return {
-         ["io"] = true,
-         ["math"] = true,
-         ["string"] = true,
-         ["table"] = true,
-         ["utf8"] = true,
-         ["coroutine"] = true,
-         ["os"] = true,
-         ["package"] = true,
-         ["debug"] = true,
-         ["load"] = true,
-         ["loadfile"] = true,
-         ["assert"] = true,
-         ["pairs"] = true,
-         ["ipairs"] = true,
-         ["pcall"] = true,
-         ["xpcall"] = true,
-         ["rawlen"] = true,
-      }
-   end
+   local stdlib_compat: {string:boolean} = {
+      ["io"] = true,
+      ["math"] = true,
+      ["string"] = true,
+      ["table"] = true,
+      ["utf8"] = true,
+      ["coroutine"] = true,
+      ["os"] = true,
+      ["package"] = true,
+      ["debug"] = true,
+      ["load"] = true,
+      ["loadfile"] = true,
+      ["assert"] = true,
+      ["pairs"] = true,
+      ["ipairs"] = true,
+      ["pcall"] = true,
+      ["xpcall"] = true,
+      ["rawlen"] = true,
+   }
 
    local function set_special_function(t: Type, fname: SpecialFunctionName)
       t = types.resolve_for_special_function(t)
@@ -257,15 +259,10 @@ do
          env.globals = {}
       end
 
-      local stdlib_compat = get_stdlib_compat()
-      for name, var in pairs(stdlib_globals) do
-         env.globals[name] = var
-         var.needs_compat = stdlib_compat[name]
-         local t = var.t
-         if t is TypeDeclType then
-            -- make standard library tables available as modules for require()
-            env.modules[name] = t
-         end
+      declare_globals(env)
+
+      for name, _ in pairs(stdlib_compat) do
+         env.globals[name].needs_compat = true
       end
 
       return env
