@@ -7,7 +7,7 @@ local type environment = require("teal.environment")
 local type Env = environment.Env
 local type Result = environment.Result
 
-local record string_input
+local record input
 end
 
 local function skip_bom(content: string): string
@@ -19,13 +19,13 @@ local function skip_bom(content: string): string
    return content
 end
 
-function string_input.check(env: Env, filename: string, input: string): Result
+function input.check(env: Env, filename: string, code: string): Result
    assert(env)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
 
-   local program, syntax_errors = parser.parse(skip_bom(input), filename)
+   local program, syntax_errors = parser.parse(skip_bom(code), filename)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       return environment.register_failed(env, filename, syntax_errors)
@@ -38,5 +38,5 @@ function string_input.check(env: Env, filename: string, input: string): Result
    return result
 end
 
-return string_input
+return input
 
