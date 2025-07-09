@@ -115,7 +115,7 @@ function require_file.search_and_load(env, module_name, extension_set)
    return found_result, found
 end
 
-function require_file.require_module(env, _w, module_name)
+function require_file.require_module(env, module_name)
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]

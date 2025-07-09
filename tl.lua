@@ -4237,7 +4237,7 @@ function require_file.search_and_load(env, module_name, extension_set)
    return found_result, found
 end
 
-function require_file.require_module(env, _w, module_name)
+function require_file.require_module(env, module_name)
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
@@ -4690,7 +4690,7 @@ local special_functions = {
       end
 
       local module_name = assert(node.e2[1].conststr)
-      local t, module_filename = self.env:require_module(node, module_name)
+      local t, module_filename = self.env:require_module(module_name)
       if not t then
          return self:invalid_at(node, "module not found: '" .. module_name .. "'")
       end
@@ -15668,7 +15668,6 @@ local default_env = require("teal.precompiled.default_env")
 
 
 
-
 local targets = require("teal.gen.targets")
 
 
@@ -15866,14 +15865,12 @@ do
          local tl_debug = TL_DEBUG
          TL_DEBUG = nil
 
-         local w = { f = "@prelude", x = 1, y = 1 }
-
-         local typ = env:require_module(w, prelude or "teal.default.prelude")
+         local typ = env:require_module(prelude or "teal.default.prelude")
          if typ.typename == "invalid" then
             return nil, "prelude contains errors"
          end
 
-         typ = env:require_module(w, stdlib or "teal.default.stdlib")
+         typ = env:require_module(stdlib or "teal.default.stdlib")
          if typ.typename == "invalid" then
             return nil, "standard library contains errors"
          end
@@ -15912,6 +15909,7 @@ do
 
 
 
+         local w = { filename = "@<stdlib>.tl", y = 1, x = 1 }
          stdlib_globals["..."] = { t = a_type(w, "tuple", { tuple = { a_type(w, "string", {}) }, is_va = true }) }
          stdlib_globals["@is_va"] = { t = a_type(w, "any", {}) }
 
@@ -15929,8 +15927,7 @@ do
 end
 
 function environment.load_module(env, name)
-   local w = { f = "@predefined", x = 1, y = 1 }
-   local module_type = env:require_module(w, name)
+   local module_type = env:require_module(name)
 
    if not module_type then
       return false, string.format("Error: could not predefine module '%s'", name)
@@ -18041,7 +18038,7 @@ end
 
 -- module teal.input from teal/input.lua
 package.preload["teal.input"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
 
 local parser = require("teal.parser")
 
@@ -18063,7 +18060,6 @@ local function skip_bom(content)
 end
 
 function input.check(env, filename, code)
-   assert(env)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end

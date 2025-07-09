@@ -20,7 +20,6 @@ local function skip_bom(content: string): string
 end
 
 function input.check(env: Env, filename: string, code: string): Result
-   assert(env)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
