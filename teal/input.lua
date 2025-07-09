@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
 
 local parser = require("teal.parser")
 
@@ -20,7 +20,6 @@ local function skip_bom(content)
 end
 
 function input.check(env, filename, code)
-   assert(env)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
