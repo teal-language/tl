@@ -8,9 +8,9 @@ local function strip_locations(t)
    end
    local copy = {}
    for k, v in pairs(t) do
-      if type(v) == "table" then
+      if type(v) == "table" and k ~= "if_parent" then
          copy[k] = strip_locations(v)
-      elseif k ~= "f" and k ~= "y" and k ~= "x" and k ~= "yend" and k ~= "xend" and k ~= "tk" then
+      elseif k ~= "f" and k ~= "y" and k ~= "x" and k ~= "yend" and k ~= "xend" and k ~= "tk" and k ~= "if_parent" then
          copy[k] = v
       end
    end
