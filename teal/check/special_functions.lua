@@ -430,7 +430,7 @@ local special_functions = {
       end
 
       local module_name = assert(node.e2[1].conststr)
-      local t, module_filename = self.env:require_module(node, module_name)
+      local t, module_filename = self.env:require_module(module_name)
       if not t then
          return self:invalid_at(node, "module not found: '" .. module_name .. "'")
       end
