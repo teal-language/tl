@@ -1,7 +1,6 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
-local file_input = require("teal.input.file_input")
 local lexer = require("teal.lexer")
 local loader = require("teal.loader")
 local lua_generator = require("teal.gen.lua_generator")
@@ -142,10 +141,19 @@ end
 
 v2.check_file = function(filename, env, fd)
    env = env or environment.new()
-   local result, err = file_input.check(env, filename, fd)
-   if not result then
+   local err
+   if not fd then
+      fd, err = io.open(filename, "rb")
+      if not fd then
+         return nil, err
+      end
+   end
+   local code
+   code, err = fd:read("*a")
+   if not code then
       return nil, err
    end
+   local result = string_input.check(env, filename, code)
    if result.ast then
       lua_compat.apply(result)
    end
@@ -225,7 +233,11 @@ end
 v2.process = v2.check_file
 
 v2.search_module = function(module_name, search_all)
-   return require_file.search_module(module_name, search_all and require_file.all_extensions)
+   local found, _, tried = require_file.search_module(module_name, search_all and require_file.all_extensions)
+   if found then
+      return found, (io.open(found)), nil
+   end
+   return nil, nil, tried
 end
 
 v2.symbols_in_scope = function(tr, y, x, filename)
