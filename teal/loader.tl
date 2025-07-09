@@ -1,7 +1,7 @@
 local environment = require("teal.environment")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
-local string_input = require("teal.input.string_input")
+local input = require("teal.input")
 local type Env = environment.Env
 
 local record loader
@@ -37,10 +37,10 @@ local function env_for(env_tbl: {any:any}): Env
    return loader.load_envs[env_tbl]
 end
 
-function loader.load(input: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
+function loader.load(teal_code: string, chunkname?: string, mode?: LoadMode, ...: {any:any}): LoadFunction, string
    local env = env_for(...)
-   local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\".tl")
-   local result = string_input.check(env, filename, input)
+   local filename = chunkname or ("string \"" .. teal_code:sub(45) .. (#teal_code > 45 and "..." or "") .. "\".tl")
+   local result = input.check(env, filename, teal_code)
 
    local errs = result.syntax_errors
    if #errs > 0 then
@@ -59,9 +59,9 @@ function loader.load(input: string, chunkname?: string, mode?: LoadMode, ...: {a
       mode = mode:gsub("c", "") as LoadMode
    end
 
-   local code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
+   local lua_code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
 
-   return load(code, chunkname, mode, ...)
+   return load(lua_code, chunkname, mode, ...)
 end
 
 return loader

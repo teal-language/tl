@@ -1,7 +1,7 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
-local string_input = require("teal.input.string_input")
+local input = require("teal.input")
 
 
 local loader = {}
@@ -37,10 +37,10 @@ local function env_for(env_tbl)
    return loader.load_envs[env_tbl]
 end
 
-function loader.load(input, chunkname, mode, ...)
+function loader.load(teal_code, chunkname, mode, ...)
    local env = env_for(...)
-   local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\".tl")
-   local result = string_input.check(env, filename, input)
+   local filename = chunkname or ("string \"" .. teal_code:sub(45) .. (#teal_code > 45 and "..." or "") .. "\".tl")
+   local result = input.check(env, filename, teal_code)
 
    local errs = result.syntax_errors
    if #errs > 0 then
@@ -59,9 +59,9 @@ function loader.load(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
+   local lua_code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
 
-   return load(code, chunkname, mode, ...)
+   return load(lua_code, chunkname, mode, ...)
 end
 
 return loader

@@ -8,7 +8,7 @@ local type lua_compat = require("teal.gen.lua_compat")
 local type package_loader = require("teal.package_loader")
 local type parser = require("teal.parser")
 local type require_file = require("teal.check.require_file")
-local type string_input = require("teal.input.string_input")
+local type input = require("teal.input")
 local type targets = require("teal.gen.targets")
 local type type_errors = require("teal.type_errors")
 local type type_reporter = require("teal.type_reporter")
@@ -57,15 +57,15 @@ local record v2
 
    check_file: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
-   check_string: function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
+   check_string: function(teal_code: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    generate: function(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
    gen: function(string, ? Env, ? GenerateOptions): string, Result
    get_token_at: function(tks: {Token}, y: integer, x: integer): string
-   lex: function(input: string, filename: string): {Token}, {Error}
+   lex: function(teal_code: string, filename: string): {Token}, {Error}
    loader: function()
    load: function(string, ? string, ? LoadMode, ...: {any:any}): LoadFunction, string
    new_env: function(? EnvOptions): Env, string
-   parse: function(input: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
+   parse: function(teal_code: string, filename: string, parse_lang?: ParseLang): Node, {Error}, {string}
    parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
    process: function(filename: string, env?: Env, fd?: FILE): (Result, string)
    search_module: function(module_name: string, search_all: boolean): string, FILE, {string}
@@ -153,29 +153,29 @@ v2.check_file = function(filename: string, env?: Env, fd?: FILE): (Result, strin
    if not code then
       return nil, err
    end
-   local result = string_input.check(env, filename, code)
+   local result = input.check(env, filename, code)
    if result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.check_string = function(input: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
+v2.check_string = function(teal_code: string, env?: Env, filename?: string, parse_lang?: ParseLang): Result
    env = env or environment.new()
    if not filename then
       filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
+v2.gen = function(teal_code: string, env?: Env, opts?: GenerateOptions, parse_lang?: ParseLang): string, Result
    env = env or environment.new()
    local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
@@ -220,8 +220,8 @@ v2.new_env = function(opts?: EnvOptions): Env, string
    return env
 end
 
-v2.parse = function(input: string, filename: string, _parse_lang?: ParseLang): Node, {Error}, {string}
-   local ast, errs, required_modules = parser.parse(input, filename)
+v2.parse = function(teal_code: string, filename: string, _parse_lang?: ParseLang): Node, {Error}, {string}
+   local ast, errs, required_modules = parser.parse(teal_code, filename)
    return ast as v2.Node, errs, required_modules
 end
 

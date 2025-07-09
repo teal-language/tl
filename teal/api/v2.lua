@@ -8,7 +8,7 @@ local lua_compat = require("teal.gen.lua_compat")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local require_file = require("teal.check.require_file")
-local string_input = require("teal.input.string_input")
+local input = require("teal.input")
 local targets = require("teal.gen.targets")
 
 local type_reporter = require("teal.type_reporter")
@@ -153,29 +153,29 @@ v2.check_file = function(filename, env, fd)
    if not code then
       return nil, err
    end
-   local result = string_input.check(env, filename, code)
+   local result = input.check(env, filename, code)
    if result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.check_string = function(input, env, filename, parse_lang)
+v2.check_string = function(teal_code, env, filename, parse_lang)
    env = env or environment.new()
    if not filename then
       filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input, env, opts, parse_lang)
+v2.gen = function(teal_code, env, opts, parse_lang)
    env = env or environment.new()
    local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
@@ -220,8 +220,8 @@ v2.new_env = function(opts)
    return env
 end
 
-v2.parse = function(input, filename, _parse_lang)
-   local ast, errs, required_modules = parser.parse(input, filename)
+v2.parse = function(teal_code, filename, _parse_lang)
+   local ast, errs, required_modules = parser.parse(teal_code, filename)
    return ast, errs, required_modules
 end
 
