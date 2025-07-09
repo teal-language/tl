@@ -176,7 +176,7 @@ local lua_compat = require("teal.gen.lua_compat")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 local require_file = require("teal.check.require_file")
-local string_input = require("teal.input.string_input")
+local input = require("teal.input")
 local targets = require("teal.gen.targets")
 
 local type_reporter = require("teal.type_reporter")
@@ -321,29 +321,29 @@ v2.check_file = function(filename, env, fd)
    if not code then
       return nil, err
    end
-   local result = string_input.check(env, filename, code)
+   local result = input.check(env, filename, code)
    if result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.check_string = function(input, env, filename, parse_lang)
+v2.check_string = function(teal_code, env, filename, parse_lang)
    env = env or environment.new()
    if not filename then
       filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if result and result.ast then
       lua_compat.apply(result)
    end
    return result
 end
 
-v2.gen = function(input, env, opts, parse_lang)
+v2.gen = function(teal_code, env, opts, parse_lang)
    env = env or environment.new()
    local filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
-   local result = string_input.check(env, filename, input)
+   local result = input.check(env, filename, teal_code)
    if (not result.ast) or #result.syntax_errors > 0 then
       return nil, result
    end
@@ -388,8 +388,8 @@ v2.new_env = function(opts)
    return env
 end
 
-v2.parse = function(input, filename, _parse_lang)
-   local ast, errs, required_modules = parser.parse(input, filename)
+v2.parse = function(teal_code, filename, _parse_lang)
+   local ast, errs, required_modules = parser.parse(teal_code, filename)
    return ast, errs, required_modules
 end
 
@@ -4120,7 +4120,7 @@ end
 
 -- module teal.check.require_file from teal/check/require_file.lua
 package.preload["teal.check.require_file"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local string_input = require("teal.input.string_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local input = require("teal.input")
 
 
 
@@ -4227,7 +4227,7 @@ function require_file.search_and_load(env, module_name, extension_set)
    local w = { f = found, x = 1, y = 1 }
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result = string_input.check(env, found, code)
+   local found_result = input.check(env, found, code)
    if not found_result then
       return nil, nil, tried
    end
@@ -18043,6 +18043,52 @@ return teal
 
 end
 
+-- module teal.input from teal/input.lua
+package.preload["teal.input"] = function(...)
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
+
+local parser = require("teal.parser")
+
+
+local environment = require("teal.environment")
+
+
+
+local input = {}
+
+
+local function skip_bom(content)
+   local bom = "\239\187\191"
+   local len = bom:len()
+   if content:sub(1, len) == bom then
+      return content:sub(len + 1)
+   end
+   return content
+end
+
+function input.check(env, filename, code)
+   assert(env)
+   if env.loaded and env.loaded[filename] then
+      return env.loaded[filename]
+   end
+
+   local program, syntax_errors = parser.parse(skip_bom(code), filename)
+
+   if (not env.keep_going) and #syntax_errors > 0 then
+      return environment.register_failed(env, filename, syntax_errors)
+   end
+
+   local result = check.check(program, env, filename)
+
+   result.syntax_errors = syntax_errors
+
+   return result
+end
+
+return input
+
+end
+
 -- module teal.input.file_input from teal/input/file_input.lua
 package.preload["teal.input.file_input"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local string = _tl_compat and _tl_compat.string or string; local string_input = require("teal.input.string_input")
@@ -18925,7 +18971,7 @@ package.preload["teal.loader"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
-local string_input = require("teal.input.string_input")
+local input = require("teal.input")
 
 
 local loader = {}
@@ -18961,10 +19007,10 @@ local function env_for(env_tbl)
    return loader.load_envs[env_tbl]
 end
 
-function loader.load(input, chunkname, mode, ...)
+function loader.load(teal_code, chunkname, mode, ...)
    local env = env_for(...)
-   local filename = chunkname or ("string \"" .. input:sub(45) .. (#input > 45 and "..." or "") .. "\".tl")
-   local result = string_input.check(env, filename, input)
+   local filename = chunkname or ("string \"" .. teal_code:sub(45) .. (#teal_code > 45 and "..." or "") .. "\".tl")
+   local result = input.check(env, filename, teal_code)
 
    local errs = result.syntax_errors
    if #errs > 0 then
@@ -18983,9 +19029,9 @@ function loader.load(input, chunkname, mode, ...)
       mode = mode:gsub("c", "")
    end
 
-   local code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
+   local lua_code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
 
-   return load(code, chunkname, mode, ...)
+   return load(lua_code, chunkname, mode, ...)
 end
 
 return loader
