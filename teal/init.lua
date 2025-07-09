@@ -383,11 +383,10 @@ function teal.loader()
 end
 
 function teal.search_module(module_name, extension_set)
-   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   local found, _, tried = require_file.search_module(module_name, extension_set)
    if not found then
       return nil, tried
    end
-   fd:close()
    return found
 end
 

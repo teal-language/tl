@@ -1,7 +1,6 @@
 local type check = require("teal.check.check")
 local type environment = require("teal.environment")
 local type errors = require("teal.errors")
-local type file_input = require("teal.input.file_input")
 local type lexer = require("teal.lexer")
 local type loader = require("teal.loader")
 local type lua_generator = require("teal.gen.lua_generator")
@@ -142,10 +141,19 @@ end
 
 v2.check_file = function(filename: string, env?: Env, fd?: FILE): (Result, string)
    env = env or environment.new()
-   local result, err = file_input.check(env, filename, fd)
-   if not result then
+   local err: string
+   if not fd then
+      fd, err = io.open(filename, "rb")
+      if not fd then
+         return nil, err
+      end
+   end
+   local code: string
+   code, err = fd:read("*a")
+   if not code then
       return nil, err
    end
+   local result = string_input.check(env, filename, code)
    if result.ast then
       lua_compat.apply(result)
    end
@@ -225,7 +233,11 @@ end
 v2.process = v2.check_file
 
 v2.search_module = function(module_name: string, search_all: boolean): string, FILE, {string}
-   return require_file.search_module(module_name, search_all and require_file.all_extensions)
+   local found, _, tried = require_file.search_module(module_name, search_all and require_file.all_extensions)
+   if found then
+      return found, (io.open(found)), nil
+   end
+   return nil, nil, tried
 end
 
 v2.symbols_in_scope = function(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
