@@ -114,6 +114,17 @@ local function empty_environment()
    }
 end
 
+local function declare_globals(env)
+   for name, var in pairs(environment.stdlib_globals) do
+      env.globals[name] = var
+      local t = var.t
+      if t.typename == "typedecl" then
+
+         env.modules[name] = t
+      end
+   end
+end
+
 local function load_precompiled_default_env(env)
    if not environment.stdlib_globals then
 
@@ -123,14 +134,7 @@ local function load_precompiled_default_env(env)
       types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end
 
-   for name, var in pairs(environment.stdlib_globals) do
-      env.globals[name] = var
-      local t = var.t
-      if t.typename == "typedecl" then
-
-         env.modules[name] = t
-      end
-   end
+   declare_globals(env)
 end
 
 
@@ -156,27 +160,25 @@ function environment.for_runtime()
 end
 
 do
-   local function get_stdlib_compat()
-      return {
-         ["io"] = true,
-         ["math"] = true,
-         ["string"] = true,
-         ["table"] = true,
-         ["utf8"] = true,
-         ["coroutine"] = true,
-         ["os"] = true,
-         ["package"] = true,
-         ["debug"] = true,
-         ["load"] = true,
-         ["loadfile"] = true,
-         ["assert"] = true,
-         ["pairs"] = true,
-         ["ipairs"] = true,
-         ["pcall"] = true,
-         ["xpcall"] = true,
-         ["rawlen"] = true,
-      }
-   end
+   local stdlib_compat = {
+      ["io"] = true,
+      ["math"] = true,
+      ["string"] = true,
+      ["table"] = true,
+      ["utf8"] = true,
+      ["coroutine"] = true,
+      ["os"] = true,
+      ["package"] = true,
+      ["debug"] = true,
+      ["load"] = true,
+      ["loadfile"] = true,
+      ["assert"] = true,
+      ["pairs"] = true,
+      ["ipairs"] = true,
+      ["pcall"] = true,
+      ["xpcall"] = true,
+      ["rawlen"] = true,
+   }
 
    local function set_special_function(t, fname)
       t = types.resolve_for_special_function(t)
@@ -257,15 +259,10 @@ do
          env.globals = {}
       end
 
-      local stdlib_compat = get_stdlib_compat()
-      for name, var in pairs(stdlib_globals) do
-         env.globals[name] = var
-         var.needs_compat = stdlib_compat[name]
-         local t = var.t
-         if t.typename == "typedecl" then
+      declare_globals(env)
 
-            env.modules[name] = t
-         end
+      for name, _ in pairs(stdlib_compat) do
+         env.globals[name].needs_compat = true
       end
 
       return env
