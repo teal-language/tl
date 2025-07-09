@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
 
 
 
@@ -87,25 +87,38 @@ local function a_circular_require(w)
    return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 end
 
-function require_file.require_module(env, w, module_name)
+function require_file.search_and_load(env, module_name, extension_set)
+   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   if not found then
+      return nil, nil, tried
+   end
+
+   env.module_filenames[module_name] = found
+
+   local w = { f = found, x = 1, y = 1 }
+   env.modules[module_name] = a_circular_require(w)
+
+   local found_result = file_input.check(env, found, fd)
+   if not found_result then
+      return nil, nil, tried
+   end
+
+   env.modules[module_name] = found_result.type
+
+   return found_result, found
+end
+
+function require_file.require_module(env, _w, module_name)
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local extensions = require_file.all_extensions
-   local found, fd = require_file.search_module(module_name, extensions)
-   if not found then
+   local found_result, found = require_file.search_and_load(env, module_name, extensions)
+   if not found_result then
       return nil
    end
-
-   env.module_filenames[module_name] = found
-   env.modules[module_name] = a_circular_require(w)
-
-   local found_result, err = file_input.check(env, found, fd)
-   assert(found_result, err)
-
-   env.modules[module_name] = found_result.type
 
    return found_result.type, found
 end

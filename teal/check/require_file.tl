@@ -87,25 +87,38 @@ local function a_circular_require(w: Where): TypeDeclType
    return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) } as TypeDeclType)
 end
 
-function require_file.require_module(env: Env, w: Where, module_name: string): Type, string
+function require_file.search_and_load(env: Env, module_name: string, extension_set?: {Extension:boolean}): Result, string, {string}
+   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   if not found then
+      return nil, nil, tried
+   end
+
+   env.module_filenames[module_name] = found
+
+   local w = { f = found, x = 1, y = 1 }
+   env.modules[module_name] = a_circular_require(w)
+
+   local found_result = file_input.check(env, found, fd)
+   if not found_result then
+      return nil, nil, tried
+   end
+
+   env.modules[module_name] = found_result.type
+
+   return found_result, found
+end
+
+function require_file.require_module(env: Env, _w: Where, module_name: string): Type, string
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local extensions = require_file.all_extensions
-   local found, fd = require_file.search_module(module_name, extensions)
-   if not found then
+   local found_result, found = require_file.search_and_load(env, module_name, extensions)
+   if not found_result then
       return nil
    end
-
-   env.module_filenames[module_name] = found
-   env.modules[module_name] = a_circular_require(w)
-
-   local found_result, err: Result, string = file_input.check(env, found, fd)
-   assert(found_result, err)
-
-   env.modules[module_name] = found_result.type
 
    return found_result.type, found
 end
