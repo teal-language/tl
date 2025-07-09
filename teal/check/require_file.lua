@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local string_input = require("teal.input.string_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local input = require("teal.input")
 
 
 
@@ -105,7 +105,7 @@ function require_file.search_and_load(env, module_name, extension_set)
    local w = { f = found, x = 1, y = 1 }
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result = string_input.check(env, found, code)
+   local found_result = input.check(env, found, code)
    if not found_result then
       return nil, nil, tried
    end
