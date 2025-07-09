@@ -8,7 +8,6 @@ local default_env = require("teal.precompiled.default_env")
 
 local type errors = require("teal.errors")
 local type Error = errors.Error
-local type Where = errors.Where
 
 local type targets = require("teal.gen.targets")
 local type GenTarget = targets.GenTarget
@@ -54,7 +53,7 @@ local record environment
       run_internal_compiler_checks: boolean
    end
 
-   type RequireModuleFn = function(env: Env, w: Where, module_name: string): Type, string
+   type RequireModuleFn = function(env: Env, module_name: string): Type, string
 
    record Env
       loaded: {string:Result}
@@ -207,14 +206,12 @@ do
          local tl_debug = TL_DEBUG
          TL_DEBUG = nil
 
-         local w: Where = { f = "@prelude", x = 1, y = 1 }
-
-         local typ = env:require_module(w, prelude or "teal.default.prelude")
+         local typ = env:require_module(prelude or "teal.default.prelude")
          if typ is InvalidType then
             return nil, "prelude contains errors"
          end
 
-         typ = env:require_module(w, stdlib or "teal.default.stdlib")
+         typ = env:require_module(stdlib or "teal.default.stdlib")
          if typ is InvalidType then
             return nil, "standard library contains errors"
          end
@@ -253,6 +250,7 @@ do
          -- only global scope and vararg functions accept `...`:
          -- `@is_va` is an internal sentinel value which is
          -- `any` if `...` is accepted in this scope or `nil` if it isn't.
+         local w = { filename = "@<stdlib>.tl", y = 1, x = 1 }
          stdlib_globals["..."] = { t = a_type(w, "tuple", { tuple = { a_type(w, "string", {}) }, is_va = true } as TupleType) }
          stdlib_globals["@is_va"] = { t = a_type(w, "any", {}) }
 
@@ -270,8 +268,7 @@ do
 end
 
 function environment.load_module(env: Env, name: string): boolean, string
-   local w: Where = { f = "@predefined", x = 1, y = 1 }
-   local module_type = env:require_module(w, name)
+   local module_type = env:require_module(name)
 
    if not module_type then
       return false, string.format("Error: could not predefine module '%s'", name)
