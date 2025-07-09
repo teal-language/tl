@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local string_input = require("teal.input.string_input")
 
 
 
@@ -39,18 +39,25 @@ local function search_for(module_name, suffix, path, tried)
          local filename = entry:gsub("?", slash_name)
          local tl_filename = filename:gsub("%.lua$", suffix)
          local fd = io.open(tl_filename, "rb")
-         if fd then
-            return tl_filename, fd, tried
-         end
-         table.insert(tried, "no file '" .. tl_filename .. "'")
+         if not fd then
+            table.insert(tried, "no file '" .. tl_filename .. "'")
 
 
-         tl_filename = filename:gsub("%.lua$", "/init" .. suffix)
-         fd = io.open(tl_filename, "rb")
-         if fd then
-            return tl_filename, fd, tried
+            tl_filename = filename:gsub("%.lua$", "/init" .. suffix)
+            fd = io.open(tl_filename, "rb")
+            if not fd then
+               table.insert(tried, "no file '" .. tl_filename .. "'")
+            end
          end
-         table.insert(tried, "no file '" .. tl_filename .. "'")
+
+         if fd then
+            local code = fd:read("*a")
+            if not code then
+               return nil, nil, tried
+            end
+            fd:close()
+            return tl_filename, code, tried
+         end
       end
    end
    return nil, nil, tried
@@ -58,26 +65,26 @@ end
 
 function require_file.search_module(module_name, extension_set)
    local found
-   local fd
+   local code
    local tried = {}
    local path = os.getenv("TL_PATH") or package.path
 
    if extension_set and extension_set[".d.tl"] then
-      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
+      found, code, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    if (not extension_set) or extension_set[".tl"] then
-      found, fd, tried = search_for(module_name, ".tl", path, tried)
+      found, code, tried = search_for(module_name, ".tl", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    if extension_set and extension_set[".lua"] then
-      found, fd, tried = search_for(module_name, ".lua", path, tried)
+      found, code, tried = search_for(module_name, ".lua", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    return nil, nil, tried
@@ -88,7 +95,7 @@ local function a_circular_require(w)
 end
 
 function require_file.search_and_load(env, module_name, extension_set)
-   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   local found, code, tried = require_file.search_module(module_name, extension_set)
    if not found then
       return nil, nil, tried
    end
@@ -98,7 +105,7 @@ function require_file.search_and_load(env, module_name, extension_set)
    local w = { f = found, x = 1, y = 1 }
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result = file_input.check(env, found, fd)
+   local found_result = string_input.check(env, found, code)
    if not found_result then
       return nil, nil, tried
    end

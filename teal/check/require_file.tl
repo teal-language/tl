@@ -1,4 +1,4 @@
-local file_input = require("teal.input.file_input")
+local string_input = require("teal.input.string_input")
 
 local type errors = require("teal.errors")
 local type Where = errors.Where
@@ -30,7 +30,7 @@ require_file.all_extensions = {
    [".lua"] = true,
 }
 
-local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
+local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, string, {string}
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
 
@@ -39,45 +39,52 @@ local function search_for(module_name: string, suffix: string, path: string, tri
          local filename = entry:gsub("?", slash_name)
          local tl_filename = filename:gsub("%.lua$", suffix)
          local fd = io.open(tl_filename, "rb")
-         if fd then
-            return tl_filename, fd, tried
-         end
-         table.insert(tried, "no file '" .. tl_filename .. "'")
+         if not fd then
+            table.insert(tried, "no file '" .. tl_filename .. "'")
 
-         -- if the plain entry wasn't found, try the `init` entry
-         tl_filename = filename:gsub("%.lua$", "/init" .. suffix)
-         fd = io.open(tl_filename, "rb")
-         if fd then
-            return tl_filename, fd, tried
+            -- if the plain entry wasn't found, try the `init` entry
+            tl_filename = filename:gsub("%.lua$", "/init" .. suffix)
+            fd = io.open(tl_filename, "rb")
+            if not fd then
+               table.insert(tried, "no file '" .. tl_filename .. "'")
+            end
          end
-         table.insert(tried, "no file '" .. tl_filename .. "'")
+
+         if fd then
+            local code = fd:read("*a")
+            if not code then
+               return nil, nil, tried
+            end
+            fd:close()
+            return tl_filename, code, tried
+         end
       end
    end
    return nil, nil, tried
 end
 
-function require_file.search_module(module_name: string, extension_set?: {Extension:boolean}): string, FILE, {string}
+function require_file.search_module(module_name: string, extension_set?: {Extension:boolean}): string, string, {string}
    local found: string
-   local fd: FILE
+   local code: string
    local tried: {string} = {}
    local path = os.getenv("TL_PATH") or package.path
 
    if extension_set and extension_set[".d.tl"] then
-      found, fd, tried = search_for(module_name, ".d.tl", path, tried)
+      found, code, tried = search_for(module_name, ".d.tl", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    if (not extension_set) or extension_set[".tl"] then
-      found, fd, tried = search_for(module_name, ".tl", path, tried)
+      found, code, tried = search_for(module_name, ".tl", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    if extension_set and extension_set[".lua"] then
-      found, fd, tried = search_for(module_name, ".lua", path, tried)
+      found, code, tried = search_for(module_name, ".lua", path, tried)
       if found then
-         return found, fd
+         return found, code
       end
    end
    return nil, nil, tried
@@ -88,7 +95,7 @@ local function a_circular_require(w: Where): TypeDeclType
 end
 
 function require_file.search_and_load(env: Env, module_name: string, extension_set?: {Extension:boolean}): Result, string, {string}
-   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   local found, code, tried = require_file.search_module(module_name, extension_set)
    if not found then
       return nil, nil, tried
    end
@@ -98,7 +105,7 @@ function require_file.search_and_load(env: Env, module_name: string, extension_s
    local w = { f = found, x = 1, y = 1 }
    env.modules[module_name] = a_circular_require(w)
 
-   local found_result = file_input.check(env, found, fd)
+   local found_result = string_input.check(env, found, code)
    if not found_result then
       return nil, nil, tried
    end
