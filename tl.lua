@@ -4108,7 +4108,7 @@ end
 
 -- module teal.check.require_file from teal/check/require_file.lua
 package.preload["teal.check.require_file"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local file_input = require("teal.input.file_input")
 
 
 
@@ -4197,25 +4197,38 @@ local function a_circular_require(w)
    return a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
 end
 
-function require_file.require_module(env, w, module_name)
+function require_file.search_and_load(env, module_name, extension_set)
+   local found, fd, tried = require_file.search_module(module_name, extension_set)
+   if not found then
+      return nil, nil, tried
+   end
+
+   env.module_filenames[module_name] = found
+
+   local w = { f = found, x = 1, y = 1 }
+   env.modules[module_name] = a_circular_require(w)
+
+   local found_result = file_input.check(env, found, fd)
+   if not found_result then
+      return nil, nil, tried
+   end
+
+   env.modules[module_name] = found_result.type
+
+   return found_result, found
+end
+
+function require_file.require_module(env, _w, module_name)
    local mod = env.modules[module_name]
    if mod then
       return mod, env.module_filenames[module_name]
    end
 
    local extensions = require_file.all_extensions
-   local found, fd = require_file.search_module(module_name, extensions)
-   if not found then
+   local found_result, found = require_file.search_and_load(env, module_name, extensions)
+   if not found_result then
       return nil
    end
-
-   env.module_filenames[module_name] = found
-   env.modules[module_name] = a_circular_require(w)
-
-   local found_result, err = file_input.check(env, found, fd)
-   assert(found_result, err)
-
-   env.modules[module_name] = found_result.type
 
    return found_result.type, found
 end
@@ -15741,6 +15754,17 @@ local function empty_environment()
    }
 end
 
+local function declare_globals(env)
+   for name, var in pairs(environment.stdlib_globals) do
+      env.globals[name] = var
+      local t = var.t
+      if t.typename == "typedecl" then
+
+         env.modules[name] = t
+      end
+   end
+end
+
 local function load_precompiled_default_env(env)
    if not environment.stdlib_globals then
 
@@ -15750,14 +15774,7 @@ local function load_precompiled_default_env(env)
       types.internal_force_state(default_env.typeid_ctr, default_env.typevar_ctr)
    end
 
-   for name, var in pairs(environment.stdlib_globals) do
-      env.globals[name] = var
-      local t = var.t
-      if t.typename == "typedecl" then
-
-         env.modules[name] = t
-      end
-   end
+   declare_globals(env)
 end
 
 
@@ -15783,27 +15800,25 @@ function environment.for_runtime()
 end
 
 do
-   local function get_stdlib_compat()
-      return {
-         ["io"] = true,
-         ["math"] = true,
-         ["string"] = true,
-         ["table"] = true,
-         ["utf8"] = true,
-         ["coroutine"] = true,
-         ["os"] = true,
-         ["package"] = true,
-         ["debug"] = true,
-         ["load"] = true,
-         ["loadfile"] = true,
-         ["assert"] = true,
-         ["pairs"] = true,
-         ["ipairs"] = true,
-         ["pcall"] = true,
-         ["xpcall"] = true,
-         ["rawlen"] = true,
-      }
-   end
+   local stdlib_compat = {
+      ["io"] = true,
+      ["math"] = true,
+      ["string"] = true,
+      ["table"] = true,
+      ["utf8"] = true,
+      ["coroutine"] = true,
+      ["os"] = true,
+      ["package"] = true,
+      ["debug"] = true,
+      ["load"] = true,
+      ["loadfile"] = true,
+      ["assert"] = true,
+      ["pairs"] = true,
+      ["ipairs"] = true,
+      ["pcall"] = true,
+      ["xpcall"] = true,
+      ["rawlen"] = true,
+   }
 
    local function set_special_function(t, fname)
       t = types.resolve_for_special_function(t)
@@ -15884,15 +15899,10 @@ do
          env.globals = {}
       end
 
-      local stdlib_compat = get_stdlib_compat()
-      for name, var in pairs(stdlib_globals) do
-         env.globals[name] = var
-         var.needs_compat = stdlib_compat[name]
-         local t = var.t
-         if t.typename == "typedecl" then
+      declare_globals(env)
 
-            env.modules[name] = t
-         end
+      for name, _ in pairs(stdlib_compat) do
+         env.globals[name].needs_compat = true
       end
 
       return env
@@ -19144,37 +19154,22 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 local require_file = require("teal.check.require_file")
-local search_module = require_file.search_module
-
-local file_input = require("teal.input.file_input")
 
 local lua_generator = require("teal.gen.lua_generator")
-
-local types = require("teal.types")
-
-local a_type = types.a_type
 
 local package_loader = {}
 
 
 
 local function tl_package_loader(module_name)
-   local found_filename, fd, tried = search_module(module_name)
-   if not found_filename then
-      return table.concat(tried, "\n\t")
-   end
-
    local env = package_loader.env
    if not env then
       package_loader.env = environment.for_runtime()
       env = package_loader.env
    end
 
-   local w = { f = found_filename, x = 1, y = 1 }
-   env.modules[module_name] = a_type(w, "typedecl", { def = a_type(w, "circular_require", {}) })
-
-   local result, input_err = file_input.check(env, found_filename, fd)
-   if input_err then
+   local result, found_filename, tried = require_file.search_and_load(env, module_name)
+   if not found_filename then
       return table.concat(tried, "\n\t")
    end
 
@@ -19182,8 +19177,6 @@ local function tl_package_loader(module_name)
    if #errs > 0 then
       error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
    end
-
-   env.modules[module_name] = result.type
 
 
 
