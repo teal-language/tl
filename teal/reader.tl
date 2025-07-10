@@ -1,6 +1,3 @@
---------------------------------------------------------------------------------
--- Recursive descent reader
---------------------------------------------------------------------------------
 local errors = require("teal.errors")
 local type Error = errors.Error
 
@@ -121,108 +118,10 @@ local record Block
 
    tk: string
    kind: BlockKind
-
-   -- symbol_list_slot: integer
-   -- semicolon: boolean
-   -- hashbang: string
-
-   -- is_longstring: boolean
-
    yend: integer
    xend: integer
-
-   -- known: Fact
-
-   -- bidirectional inference
-   -- expected: Type
-   -- expected_context: Block.ExpectedContext
-
-   -- key: Block
-   -- value: Block
-   -- key_parsed: KeyParsed
-
-   -- typeargs: {TypeArgType}
-   -- min_arity: integer
-   -- args: Block
-   -- rets: TupleType
-   -- body: Block
-   -- implicit_global_function: boolean
-   -- is_predeclared_local_function: boolean
-
-   -- name: Block
-
-   -- statements list in a `repeat`, delay closing scope
-   -- is_repeat: boolean
-
-   -- var declaration
-   -- attribute: Attribute
-
-   -- fn_owner: Block
-   -- is_method: boolean
-
-   -- exp: Block
-   -- if_parent: Block
-   -- if_block_n: integer
-   -- if_blocks: {Block}
-   -- if_widens: {string: boolean}
-   -- block_returns: boolean
-
-   -- fornum
-   -- var: Block
-   -- from: Block
-   -- to: Block
-   -- step: Block
-
-   -- forin
-   -- vars: Block
-   -- exps: Block
-
-   -- newtype
-   -- newtype: Block
-   -- elide_type: boolean
-   -- is_alias: boolean
-
-   -- expressions
-   -- e1: Block
-   -- e2: Block
    constnum: number
    conststr: string
-   -- failstore: boolean
-   -- discarded_tuple: boolean
-   -- receiver: Type
-   -- is_userdata: boolean
-
-   -- table literal
-   -- array_len: integer
-   -- is_total: boolean
-   -- missing: {string}
-
-   -- goto
-   -- label: string
-
-   -- label
-   -- used_label: boolean
-
-   -- casttype: Type
-
-   -- variable
-   -- is_lvalue: boolean
-
-   -- macroexp
-   -- macrodef: Block
-   -- expanded: Block
-
-   -- argtype: Type
-   -- itemtype: Type
-   -- decltuple: Block
-
-   -- pragma
-   -- pkey: string
-   -- pvalue: string
-
-   -- opt: boolean
-
-   -- debug_type: Type
 end
 
 local enum BlockLang
@@ -492,7 +391,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
    end
 
    if ps.tokens[i].tk == "[" then
-      -- node.key_parsed = "long"
       i = i + 1
       i, node[1] = read_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
@@ -500,7 +398,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i+1].tk == "=" then
-         -- node.key_parsed = "short"
          i, node[1] = verify_kind(ps, i, "identifier", "string")
          node[1].conststr = node[1].tk
          node[1].tk = '"' .. node[1].tk .. '"'
@@ -508,7 +405,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
          i, node[2] = read_table_value(ps, i)
          return i, node, n
       elseif ps.tokens[i+1].tk == ":" then
-         -- node.key_parsed = "short"
          local orig_i = i
          local try_ps: ReadState = {
             filename = ps.filename,
@@ -539,7 +435,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
    end
 
    node[1] = new_block(ps, i, "integer")
-   -- node.key_parsed = "implicit"
    node[1].constnum = n
    node[1].tk = tostring(n)
    i, node[2] = read_expression(ps, i)
@@ -876,7 +771,6 @@ read_type_list = function(ps: ReadState, i: integer, mode: BlockTypeListMode): i
       i = i + 1
       local nrets = #list
       if nrets > 0 then
-         -- t.is_va = true
          table.insert(t, new_block(ps, i - 1, "..."))
       else
          fail(ps, i, "unexpected '...'")
@@ -1328,7 +1222,6 @@ local function read_variable_name(ps: ReadState, i: integer): integer, Block, in
          if not is_attribute[annotation.tk] then
             fail(ps, i, "unknown variable annotation: " .. annotation.tk)
          end
-         -- node.attribute = annotation.tk as Attribute
          table.insert(node, annotation)
       else
          fail(ps, i, "expected a variable annotation")
@@ -1342,7 +1235,6 @@ local function read_argument(ps: ReadState, i: integer): integer, Block, integer
    local node: Block
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
-      -- node.opt = true
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -1351,7 +1243,6 @@ local function read_argument(ps: ReadState, i: integer): integer, Block, integer
    end
    if ps.tokens[i].tk == "?" then
       i = i + 1
-      -- node.opt = true
    end
    if ps.tokens[i].tk == ":" then
       i = i + 1
@@ -1360,7 +1251,6 @@ local function read_argument(ps: ReadState, i: integer): integer, Block, integer
       i, argtype = read_type(ps, i)
 
       if node then
-         -- node.argtype = argtype
          table.insert(node, argtype)
       end
    end
@@ -1378,8 +1268,6 @@ read_argument_list = function(ps: ReadState, i: integer): integer, Block, intege
             fail(ps, i, "'...' can only be last argument")
             break
          end
-      -- elseif fnarg.opt then
-      --    opts = true
       elseif opts then
          return fail(ps, i, "non-optional arguments cannot follow optional arguments")
       else
@@ -1446,16 +1334,7 @@ read_argument_type_list = function(ps: ReadState, i: integer): integer, Block, i
    local min_arity = 0
    for l, ar in ipairs(ars) do
       list[l] = ar
-      -- if ar.is_va and l < n then
-      --    fail(ps, ar.i, "'...' can only be last argument")
-      -- end
-      -- if not ar.opt then
-      --    min_arity = min_arity + 1
-      -- end
    end
-   -- if n > 0 and ars[n].is_va then
-   --    t.is_va = true
-   -- end
    return i, t, min_arity
 end
 
@@ -1583,7 +1462,6 @@ local function read_repeat(ps: ReadState, i: integer): integer, Block
    local node = new_block(ps, i, "repeat")
    i = verify_tk(ps, i, "repeat")
    i, node[1] = read_statements(ps, i)
-   -- node[1].is_repeat = true
    i = verify_tk(ps, i, "until")
    i, node[2] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
@@ -1653,44 +1531,6 @@ local function read_return(ps: ReadState, i: integer): integer, Block
    end
    return i, node
 end
-
--- local function store_field_in_record(ps: ReadState, i: integer, field_name: string, newt: Block, fields: {string: Block}, field_order: {string}): boolean
---    if not fields[field_name] then
---       fields[field_name] = newt
---       table.insert(field_order, field_name)
---       return true
---    end
-
---    local oldt = fields[field_name]
---    local oldf = oldt.kind == "generic_type" and oldt[1] or oldt
---    local newf = newt.kind == "generic_type" and newt[1] or newt
-
---    if newf.kind == "function" then
---       if oldf.kind == "function" then
---          local p = new_type(ps, i, "poly") as PolyType
---          p.types = { oldt as FunctionType, newt as FunctionType }
---          fields[field_name] = p
---          return true
---       elseif oldt is PolyType then
---          table.insert(oldt.types, newt as FunctionType)
---          return true
---       end
---    end
---    fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
---    return false
--- end
-
--- local function set_declname(def: Type, declname: string)
---    if def is GenericType then
---       def = def.t
---    end
-
---    if def is RecordType or def is InterfaceType or def is EnumType then
---       if not def.declname then
---          def.declname = declname
---       end
---    end
--- end
 
 local function read_nested_type(ps: ReadState, i: integer, tn: BlockKind): integer, Block
    local istart = i
@@ -1894,11 +1734,6 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
       local tn = ps.tokens[i].tk
       if ps.tokens[i].tk == "userdata" and ps.tokens[i+1].tk ~= ":" then
-         -- if def.is_userdata then
-         --    fail(ps, i, "duplicated 'userdata' declaration")
-         -- else
-         --    def.is_userdata = true
-         -- end
          table.insert(def, new_block(ps, i, "userdata"))
          i = i + 1
       elseif ps.tokens[i].tk == "{" then
@@ -2018,7 +1853,6 @@ local function read_newtype(ps: ReadState, i: integer): integer, Block
       return fail(ps, i, "expected a type")
    end
 
-   -- node.newtype = new_typedecl(ps, istart, def)
    table.insert(node, new_typedecl(ps, istart, def))
 
    return i, node
@@ -2043,19 +1877,9 @@ end
 
 local read_call_or_assignment: function(ps: ReadState, i: integer): integer, Block
 do
-   -- local function is_lvalue(node: Block): boolean
-   --    node.is_lvalue = node.kind == "variable"
-   --                     or (node.kind == "op"
-   --                         and (node.op.op == "@index" or node.op.op == "."))
-   --    return node.is_lvalue
-   -- end
-
    local function read_variable(ps: ReadState, i: integer): integer, Block, integer
       local node: Block
       i, node = read_expression(ps, i)
-      -- if not (node and is_lvalue(node)) then
-      --    return fail(ps, i, "expected a variable")
-      -- end
       return i, node
    end
 
@@ -2070,10 +1894,6 @@ do
       if reader.node_is_funcall(exp) then
          return i, exp
       end
-
-      -- if not is_lvalue(exp) then
-      --    return fail(ps, i, "syntax error")
-      -- end
 
       local asgn: Block = new_block(ps, istart, "assignment")
       asgn[1] = new_block(ps, istart, "variable_list")
@@ -2185,20 +2005,6 @@ read_type_declaration = function(ps: ReadState, i: integer, node_name: BlockKind
       return i
    end
 
-   -- local nt = asgn[2].newtype
-   -- if nt.kind == "typedecl" then
-   --    if typeargs then
-   --       local def = nt[1]
-   --       if def.kind == "generic_type" then
-   --          fail(ps, itypeargs, "cannot declare type arguments twice in type declaration")
-   --       else
-   --          nt[1] = new_generic(ps, istart, typeargs, def)
-   --       end
-   --    end
-
-   --    -- set_declname(nt[1], asgn[1].tk)
-   -- end
-
    return i, asgn
 end
 
@@ -2221,9 +2027,6 @@ local function read_type_constructor(ps: ReadState, i: integer, node_name: Block
       return i
    end
 
-   -- set_declname(def, asgn[1].tk)
-
-   -- nt.newtype = new_typedecl(ps, istart, def)
    table.insert(nt, new_typedecl(ps, istart, def))
 
    return i, asgn
@@ -2298,7 +2101,7 @@ local function read_record_function(ps: ReadState, i: integer): integer, Block
 end
 
 local function read_pragma(ps: ReadState, i: integer): integer, Block
-   i = i + 1 -- skip "--#pragma"
+   i = i + 1
    local pragma = new_block(ps, i, "pragma")
 
    if ps.tokens[i].kind ~= "pragma_identifier" then
@@ -2354,7 +2157,6 @@ read_statements = function(ps: ReadState, i: integer, toplevel?: boolean): integ
       while ps.tokens[i].kind == ";" do
          i = i + 1
          if item then
-            -- item.semicolon = true
             table.insert(item, new_block(ps, i - 1, ";"))
          end
       end
@@ -2411,7 +2213,6 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
    end
    local _, node = read_statements(ps, i, true)
    if hashbang then
-      -- node.hashbang = hashbang
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
