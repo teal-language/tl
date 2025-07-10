@@ -1570,30 +1570,32 @@ parse_type = function(state: ParseState, block: Block): Type
    return bt
 end
 
-parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType
+parse_type_list = function(state: ParseState, block: Block, _: ParseTypeListMode): TupleType
    local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist"} as Block) -- Ensure block is not nil for new_tuple
 
    if not block or block.kind ~= "tuple_type" then
-      -- This case might occur if a single type is passed where a list was expected,
-      -- or if the block structure is not as expected.
-      -- For now, treat as an empty list or handle as error appropriately.
-      -- If mode is 'rets' and block is nil (e.g. no return type specified), it's valid for an empty tuple.
-      if mode == "rets" and not block then
+      -- When no tuple was provided simply return an empty tuple
+      if not block then
          return t
       end
-      -- if block is a single type, not a tuple_type block
-      if block and block.kind ~= "typelist" and block.kind ~= "tuple_type" then
-         local single_type = parse_type(state, block)
-         if single_type then
-            table.insert(list, single_type)
+
+      -- typelist are the tuple contents
+      if block.kind == "typelist" then
+         for _, tb in ipairs(block) do
+            local ty = parse_type(state, tb)
+            if ty then
+               table.insert(list, ty)
+            end
          end
          return t
       end
-      -- if it's an empty typelist or some other unexpected structure for non-rets
-      if mode ~= "rets" then
-          fail(state, block or {y=1,x=1, tk="", kind="error_node"} as Block, "expected a type list")
+
+      -- Otherwise consider this a single type and place it in the tuple
+      local single_type = parse_type(state, block)
+      if single_type then
+         table.insert(list, single_type)
       end
-      return t -- Return empty tuple for empty or malformed list unless it's a single type
+      return t
    end
 
    -- block.kind == "tuple_type"
@@ -1607,17 +1609,23 @@ parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListM
    end
 
    if type_container_block and type_container_block.kind == "typelist" then
-      for _, type_block_item in ipairs(type_container_block) do
+      for idx, type_block_item in ipairs(type_container_block) do
          if type_block_item.kind == "argument_type" then -- Used by parse_argument_type_list
-             local arg_type_node = parse_type(state, type_block_item[1])
-             if arg_type_node then
-                table.insert(list, arg_type_node)
-                if type_block_item[2] and type_block_item[2].kind == "..." then
-                   t.is_va = true -- Varargs indicated on the last argument type
-                end
-             else
-                fail(state, type_block_item, "invalid type in list")
-             end
+            local arg_type_node = parse_type(state, type_block_item[1])
+            if arg_type_node then
+               table.insert(list, arg_type_node)
+               if type_block_item[2] and type_block_item[2].kind == "..." then
+                  t.is_va = true -- Varargs indicated on the last argument type
+               end
+            else
+               fail(state, type_block_item, "invalid type in list")
+            end
+         elseif type_block_item.kind == "..." then
+            if idx == #type_container_block then
+               t.is_va = true
+            else
+               fail(state, type_block_item, "'...' can only be last in a type list")
+            end
          else
             local parsed_type = parse_type(state, type_block_item)
             if parsed_type then
@@ -1637,13 +1645,26 @@ parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListM
    end
    
    -- Handle varargs if it's the last element and not already processed from ('...':type)
-   if not is_va_from_block and #list > 0 then
-      local last_block_in_list = type_container_block and type_container_block[#type_container_block]
-      if last_block_in_list and last_block_in_list.kind == "..." then
-          -- This case should ideally be handled by the structure of argument_type or similar
-          -- For now, ensure is_va is true if the block structure indicates it.
-          -- The actual "..." token doesn't become a type, it modifies the tuple.
-          -- If the last type parsed was from a block representing varargs, ensure t.is_va is set.
+   if not is_va_from_block then
+      -- tuple_type = { typelist, "..." }
+      if block and block[2] and block[2].kind == "..." then
+         if #list > 0 then
+            t.is_va = true
+         else
+            fail(state, block[2], "unexpected '...'")
+         end
+      elseif #list > 0 then
+         
+         local last_block_in_list = type_container_block and type_container_block[#type_container_block]
+         if last_block_in_list and last_block_in_list.kind == "..." then
+            if #list > 0 then
+               t.is_va = true
+               -- do not treat '...' as a type in the resulting tuple
+               table.remove(list, #list)
+            else
+               fail(state, last_block_in_list, "unexpected '...'")
+            end
+         end
       end
    end
 
