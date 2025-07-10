@@ -584,7 +584,7 @@ parse_expression = function(state, block)
             if node.e2 and block[2] and block[2][1] then
                node.e2.casttype = parse_type(state, block[2][1])
             end
-         elseif op_info.op == "." then
+         elseif op_info.op == "." or op_info.op == ":" then
 
             node.e2 = new_node(state, block[2], "identifier")
             if not node.e2 then
@@ -1570,7 +1570,7 @@ parse_type = function(state, block)
    return bt
 end
 
-parse_type_list = function(state, block, mode)
+parse_type_list = function(state, block, _)
    local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist" })
 
    if not block or block.kind ~= "tuple_type" then

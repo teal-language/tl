@@ -584,8 +584,8 @@ parse_expression = function(state: ParseState, block: Block): Node
             if node.e2 and block[2] and block[2][1] then
                node.e2.casttype = parse_type(state, block[2][1])
             end
-         elseif op_info.op == "." then
-            -- For dot operations, the right-hand side should be treated as an identifier
+         elseif op_info.op == "." or op_info.op == ":" then
+            -- For dot/: operations, the right-hand side should be treated as an identifier
             node.e2 = new_node(state, block[2], "identifier")
             if not node.e2 then
                local dummy_block = { kind = "identifier", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 } as Block
