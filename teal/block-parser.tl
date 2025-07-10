@@ -737,7 +737,15 @@ parse_fns.assignment = function(state: ParseState, block: Block): Node
       node = new_node(state, dummy_block, "assignment")
    end
    node.vars = parse_variable_list(state, block[1])
-   node.exps = parse_expression_list(state, block[2])
+   node.exps = parse_expression_list(state, block[3]) 
+
+   if node.vars then
+      for _, var_node in ipairs(node.vars) do
+         if var_node.kind == "variable" then
+            var_node.is_lvalue = true
+         end
+      end
+   end
    return node
 end
 
