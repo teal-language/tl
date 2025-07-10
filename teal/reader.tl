@@ -2084,9 +2084,15 @@ local function read_record_function(ps: ReadState, i: integer): integer, Block
    local fn = new_block(ps, i - 1, "record_function")
    i, fn[1] = read_identifier(ps, i)
    
-   if ps.tokens[i] and ps.tokens[i].tk == "." then
-      i = i + 1
-      i, fn[2] = read_identifier(ps, i)
+   if ps.tokens[i] then
+      if ps.tokens[i].tk == "." then
+         i = i + 1
+         i, fn[2] = read_identifier(ps, i)
+      elseif ps.tokens[i].tk == ":" then
+         fn.tk = ":"
+         i = i + 1
+         i, fn[2] = read_identifier(ps, i)
+      end
    end
    
    local istart = i - 1

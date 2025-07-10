@@ -235,6 +235,7 @@ local parse_typeargs_if_any
 
 
 
+
 local block_parser = {}
 
 
@@ -1100,9 +1101,18 @@ parse_fns.record_function = function(state, block)
 
    node.typeargs = parse_typeargs_if_any(state, block[3])
 
-   node.is_method = false
+   node.is_method = block.tk == ":"
    node.args = parse_argument_list(state, block[4])
    node.min_arity = node.args and node.args.min_arity or 0
+   if node.is_method and node.args then
+      local self_node = new_node(state, block[4], "identifier")
+      if self_node then
+         self_node.tk = "self"
+         self_node.is_self = true
+         table.insert(node.args, 1, self_node)
+         node.min_arity = node.min_arity + 1
+      end
+   end
    node.rets = parse_type_list(state, block[5], "rets")
    node.body = parse_statements(state, block[6])
 

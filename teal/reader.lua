@@ -1,7 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
-
-
-local errors = require("teal.errors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 local types = require("teal.types")
@@ -10,104 +7,6 @@ local errors = require("teal.errors")
 
 
 local lexer = require("teal.lexer")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -492,7 +391,6 @@ local function read_table_item(ps, i, n)
    end
 
    if ps.tokens[i].tk == "[" then
-
       i = i + 1
       i, node[1] = read_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
@@ -500,7 +398,6 @@ local function read_table_item(ps, i, n)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i + 1].tk == "=" then
-
          i, node[1] = verify_kind(ps, i, "identifier", "string")
          node[1].conststr = node[1].tk
          node[1].tk = '"' .. node[1].tk .. '"'
@@ -508,7 +405,6 @@ local function read_table_item(ps, i, n)
          i, node[2] = read_table_value(ps, i)
          return i, node, n
       elseif ps.tokens[i + 1].tk == ":" then
-
          local orig_i = i
          local try_ps = {
             filename = ps.filename,
@@ -539,7 +435,6 @@ local function read_table_item(ps, i, n)
    end
 
    node[1] = new_block(ps, i, "integer")
-
    node[1].constnum = n
    node[1].tk = tostring(n)
    i, node[2] = read_expression(ps, i)
@@ -876,7 +771,6 @@ read_type_list = function(ps, i, mode)
       i = i + 1
       local nrets = #list
       if nrets > 0 then
-
          table.insert(t, new_block(ps, i - 1, "..."))
       else
          fail(ps, i, "unexpected '...'")
@@ -1328,7 +1222,6 @@ local function read_variable_name(ps, i)
          if not is_attribute[annotation.tk] then
             fail(ps, i, "unknown variable annotation: " .. annotation.tk)
          end
-
          table.insert(node, annotation)
       else
          fail(ps, i, "expected a variable annotation")
@@ -1342,7 +1235,6 @@ local function read_argument(ps, i)
    local node
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
-
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -1351,7 +1243,6 @@ local function read_argument(ps, i)
    end
    if ps.tokens[i].tk == "?" then
       i = i + 1
-
    end
    if ps.tokens[i].tk == ":" then
       i = i + 1
@@ -1360,7 +1251,6 @@ local function read_argument(ps, i)
       i, argtype = read_type(ps, i)
 
       if node then
-
          table.insert(node, argtype)
       end
    end
@@ -1378,8 +1268,6 @@ read_argument_list = function(ps, i)
             fail(ps, i, "'...' can only be last argument")
             break
          end
-
-
       elseif opts then
          return fail(ps, i, "non-optional arguments cannot follow optional arguments")
       else
@@ -1446,16 +1334,7 @@ read_argument_type_list = function(ps, i)
    local min_arity = 0
    for l, ar in ipairs(ars) do
       list[l] = ar
-
-
-
-
-
-
    end
-
-
-
    return i, t, min_arity
 end
 
@@ -1583,7 +1462,6 @@ local function read_repeat(ps, i)
    local node = new_block(ps, i, "repeat")
    i = verify_tk(ps, i, "repeat")
    i, node[1] = read_statements(ps, i)
-
    i = verify_tk(ps, i, "until")
    i, node[2] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
@@ -1653,44 +1531,6 @@ local function read_return(ps, i)
    end
    return i, node
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function read_nested_type(ps, i, tn)
    local istart = i
@@ -1894,11 +1734,6 @@ read_record_body = function(ps, i, def)
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
       local tn = ps.tokens[i].tk
       if ps.tokens[i].tk == "userdata" and ps.tokens[i + 1].tk ~= ":" then
-
-
-
-
-
          table.insert(def, new_block(ps, i, "userdata"))
          i = i + 1
       elseif ps.tokens[i].tk == "{" then
@@ -2018,7 +1853,6 @@ local function read_newtype(ps, i)
       return fail(ps, i, "expected a type")
    end
 
-
    table.insert(node, new_typedecl(ps, istart, def))
 
    return i, node
@@ -2043,19 +1877,9 @@ end
 
 local read_call_or_assignment
 do
-
-
-
-
-
-
-
    local function read_variable(ps, i)
       local node
       i, node = read_expression(ps, i)
-
-
-
       return i, node
    end
 
@@ -2070,10 +1894,6 @@ do
       if reader.node_is_funcall(exp) then
          return i, exp
       end
-
-
-
-
 
       local asgn = new_block(ps, istart, "assignment")
       asgn[1] = new_block(ps, istart, "variable_list")
@@ -2185,20 +2005,6 @@ read_type_declaration = function(ps, i, node_name)
       return i
    end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    return i, asgn
 end
 
@@ -2220,9 +2026,6 @@ local function read_type_constructor(ps, i, node_name, tn)
    if not def then
       return i
    end
-
-
-
 
    table.insert(nt, new_typedecl(ps, istart, def))
 
@@ -2281,9 +2084,15 @@ local function read_record_function(ps, i)
    local fn = new_block(ps, i - 1, "record_function")
    i, fn[1] = read_identifier(ps, i)
 
-   if ps.tokens[i] and ps.tokens[i].tk == "." then
-      i = i + 1
-      i, fn[2] = read_identifier(ps, i)
+   if ps.tokens[i] then
+      if ps.tokens[i].tk == "." then
+         i = i + 1
+         i, fn[2] = read_identifier(ps, i)
+      elseif ps.tokens[i].tk == ":" then
+         fn.tk = ":"
+         i = i + 1
+         i, fn[2] = read_identifier(ps, i)
+      end
    end
 
    local istart = i - 1
@@ -2354,7 +2163,6 @@ read_statements = function(ps, i, toplevel)
       while ps.tokens[i].kind == ";" do
          i = i + 1
          if item then
-
             table.insert(item, new_block(ps, i - 1, ";"))
          end
       end
@@ -2411,7 +2219,6 @@ function reader.read_program(tokens, errs, filename, read_lang)
    end
    local _, node = read_statements(ps, i, true)
    if hashbang then
-
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
