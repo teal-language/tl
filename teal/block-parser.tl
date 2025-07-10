@@ -437,7 +437,7 @@ local function parse_expression_list(state: ParseState, block: Block): Node
    return parse_list(state, block, node, parse_expression)
 end
 
-local function parse_variable_list(state: ParseState, block: Block): Node
+local function parse_variable_list(state: ParseState, block: Block, as_expression: boolean): Node
    if not block then
       -- Create a dummy block for an empty variable list
       local dummy_block = { kind = "variable_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
@@ -449,15 +449,28 @@ local function parse_variable_list(state: ParseState, block: Block): Node
       node = new_node(state, dummy_block, "variable_list")
    end
    for _, var_block in ipairs(block) do
-      local var_node = new_node(state, var_block)
-      if var_node then
-         if var_block[1] then
-            local annotation = var_block[1]
-            if not is_attribute[annotation.tk] then
-               fail(state, annotation, "unknown variable annotation: " .. annotation.tk)
+      local var_node: Node
+      if var_block.kind == "identifier" then
+         if as_expression then
+            var_node = parse_expression(state, var_block)
+         else
+            var_node = new_node(state, var_block)
+            if var_block[1] then
+               local annotation = var_block[1]
+               if not is_attribute[annotation.tk] then
+                  fail(state, annotation, "unknown variable annotation: " .. annotation.tk)
+               end
+               if var_node then
+                  var_node.attribute = annotation.tk as Attribute
+               end
             end
-            var_node.attribute = annotation.tk as Attribute
          end
+      else
+         -- complex lvalue such as t.x or t[1]
+         var_node = parse_expression(state, var_block)
+      end
+
+      if var_node then
          table.insert(node, var_node)
       end
    end
@@ -529,7 +542,7 @@ end
 
 local function parse_forin(state: ParseState, block: Block): Node
    local node = new_node(state, block, "forin")
-   node.vars = parse_variable_list(state, block[1])
+   node.vars = parse_variable_list(state, block[1], false)
    node.exps = parse_expression_list(state, block[2])
    if #node.exps < 1 then
       fail(state, block[2], "missing iterator expression in generic for")
@@ -725,7 +738,7 @@ parse_fns.local_declaration = function(state: ParseState, block: Block): Node
       local dummy_block = { kind = "local_declaration", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       node = new_node(state, dummy_block, "local_declaration")
    end
-   node.vars = parse_variable_list(state, block[1])
+   node.vars = parse_variable_list(state, block[1], false)
    local next_child = 2
    if block[next_child] and block[next_child].kind == "tuple_type" then
       node.decltuple = parse_type_list(state, block[next_child], "decltuple")
@@ -750,12 +763,14 @@ parse_fns.assignment = function(state: ParseState, block: Block): Node
       local dummy_block = { kind = "assignment", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       node = new_node(state, dummy_block, "assignment")
    end
-   node.vars = parse_variable_list(state, block[1])
+   node.vars = parse_variable_list(state, block[1], true)
    node.exps = parse_expression_list(state, block[3]) 
 
    if node.vars then
       for _, var_node in ipairs(node.vars) do
          if var_node.kind == "variable" then
+            var_node.is_lvalue = true
+         elseif var_node.kind == "op" and var_node.op and (var_node.op.op == "@index" or var_node.op.op == ".") then
             var_node.is_lvalue = true
          end
       end
@@ -893,7 +908,7 @@ parse_fns.forin = function(state: ParseState, block: Block): Node
       local dummy_block = { kind = "forin", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       node = new_node(state, dummy_block, "forin")
    end
-   node.vars = parse_variable_list(state, block[1])
+   node.vars = parse_variable_list(state, block[1], false)
    node.exps = parse_expression_list(state, block[2])
    if node.exps and #node.exps < 1 then
       fail(state, block[2], "missing iterator expression in generic for")
