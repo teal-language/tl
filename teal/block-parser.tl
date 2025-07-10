@@ -480,35 +480,38 @@ local function parse_argument_list(state: ParseState, block: Block): Node
    local has_optional = false
    local has_varargs = false
    
-   for a, arg_block in ipairs(block) do
+  for a, arg_block in ipairs(block) do
       local arg_node = new_node(state, arg_block, "argument")
       if not arg_node then
          fail(state, arg_block, "invalid argument")
       else
-         -- Handle varargs
-         if arg_block.tk == "..." then
+         local type_block = arg_block[1]
+         if type(type_block) == "table" and type_block.kind then
+            arg_node.argtype = parse_type(state, type_block)
+         end
+
+         if arg_node.tk == "..." then
             if a < #block then
                fail(state, arg_block, "'...' can only be the last argument")
             end
             has_varargs = true
             arg_node.kind = "..."
          else
-            local is_optional = false
+            local is_optional = arg_node.opt
             if is_optional then
-               arg_node.opt = true
                has_optional = true
             elseif has_optional and not has_varargs then
                fail(state, arg_block, "non-optional argument follows optional argument")
             end
-            
+
             if not is_optional and not has_varargs then
                min_arity = min_arity + 1
             end
          end
-         
+
          table.insert(node, arg_node)
       end
-   end
+  end
    
    node.min_arity = min_arity
    return node
@@ -646,6 +649,18 @@ local function new_typedecl(state: ParseState, block: Block, def: FirstClassType
    return t
 end
 
+local function set_declname(def: Type, declname: string)
+   if def is GenericType then
+      def = def.t
+   end
+
+   if def is RecordType or def is InterfaceType or def is EnumType then
+      if not def.declname then
+         def.declname = declname
+      end
+   end
+end
+
 local function parse_newtype(state: ParseState, block: Block): Node
    local node = new_node(state, block, "newtype")
    if not node then
@@ -677,7 +692,6 @@ local function parse_newtype(state: ParseState, block: Block): Node
                   enum_type.enumset[value_str] = true
                end
             end
-            enum_type.declname = state.filename or "anonymous" -- Will be set later by the caller
             node.newtype = new_typedecl(state, def_block, enum_type)
          else
             local type_node = parse_type(state, inner_type)
@@ -1111,6 +1125,9 @@ parse_fns.local_type = function(state: ParseState, block: Block): Node
    end
    if block[2] then
       node.value = parse_newtype(state, block[2])
+      if node.value and node.value.newtype and node.var and node.var.tk then
+         set_declname(node.value.newtype.def, node.var.tk)
+      end
    end
    return node
 end
@@ -1125,6 +1142,9 @@ parse_fns.global_type = function(state: ParseState, block: Block): Node
    end
    if block[2] then
       node.value = parse_newtype(state, block[2])
+      if node.value and node.value.newtype and node.var and node.var.tk then
+         set_declname(node.value.newtype.def, node.var.tk)
+      end
    end
    return node
 end
