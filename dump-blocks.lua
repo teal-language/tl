@@ -1,7 +1,5 @@
 #!/usr/bin/env ./lua
 
-assert(os.execute "make selfbuild LUA=./lua" == 0)
-
 if arg[1] == nil then
     print("Usage: dump-blocks.lua <file or - for stdin>")
     os.exit(1)
