@@ -1538,15 +1538,15 @@ local function read_fornum(ps, i)
    i = i + 1
    i, node[1] = read_identifier(ps, i)
    i = verify_tk(ps, i, "=")
-   i, node[1] = read_expression_and_tk(ps, i, ",")
-   i, node[2] = read_expression(ps, i)
+   i, node[2] = read_expression_and_tk(ps, i, ",")
+   i, node[3] = read_expression(ps, i)
    if ps.tokens[i].tk == "," then
       i = i + 1
-      i, node[3] = read_expression_and_tk(ps, i, "do")
+      i, node[4] = read_expression_and_tk(ps, i, "do")
    else
       i = verify_tk(ps, i, "do")
    end
-   i, node[4] = read_statements(ps, i)
+   i, node[5] = read_statements(ps, i)
    i = verify_end(ps, i, istart, node)
    return i, node
 end
@@ -2023,18 +2023,18 @@ local function read_newtype(ps, i)
 end
 
 local function read_assignment_expression_list(ps, i, asgn)
-   asgn[2] = new_block(ps, i, "expression_list")
+   asgn[3] = new_block(ps, i, "expression_list")
    repeat
       i = i + 1
       local val
       i, val = read_expression(ps, i)
       if not val then
-         if #asgn[2] == 0 then
-            asgn[2] = nil
+         if #asgn[3] == 0 then
+            asgn[3] = nil
          end
          return i
       end
-      table.insert(asgn[2], val)
+      table.insert(asgn[3], val)
    until ps.tokens[i].tk ~= ","
    return i, asgn
 end
