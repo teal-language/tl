@@ -1,4 +1,4 @@
-LUA ?= lua
+LUA ?= ./lua
 STABLE_TL ?= $(LUA) ./tl
 NEW_TL ?= $(LUA) ./tl
 TLGENFLAGS = --check --gen-target=5.1
