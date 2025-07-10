@@ -1217,6 +1217,8 @@ end
 local parse_base_type: function(state: ParseState, block: Block): FirstClassType
 local parse_simple_type_or_nominal: function(state: ParseState, block: Block): FirstOrderType
 local parse_function_type: function(state: ParseState, block: Block): FunctionType
+local parse_record_like_type: function(state: ParseState, block: Block, typename: string): RecordLikeType
+local parse_where_clause: function(state: ParseState, block: Block, def: RecordLikeType): Node
 
 parse_typeargs_if_any = function(state: ParseState, block: Block): {TypeArgType}
    local out: {TypeArgType} = {}
@@ -1246,6 +1248,141 @@ parse_function_type = function(state: ParseState, block: Block): FunctionType
    typ.min_arity = 0
 
    return typ
+end
+
+parse_where_clause = function(state: ParseState, block: Block, def: RecordLikeType): Node
+   local node = new_node(state, block, "macroexp")
+   node.is_method = true
+   node.args = new_node(state, block[1] or block, "argument_list")
+   node.args[1] = new_node(state, block[1] and block[1][1] or block, "argument")
+   node.args[1].tk = "self"
+   local selftype = new_type(state, block, "self") as SelfType
+   selftype.display_type = def
+   node.args[1].argtype = selftype
+   node.min_arity = 1
+   local ret_tuple = new_tuple(state, block, { new_type(state, block, "boolean") })
+   node.rets = ret_tuple
+   node.exp = parse_expression(state, block[3])
+   return node
+end
+
+local function store_field_in_record(state: ParseState, block: Block, name: string, newt: Type, def: RecordLikeType, meta: boolean)
+   local fields: {string: Type}
+   local order: {string}
+   if meta then
+      if not def.meta_fields then
+         def.meta_fields = {}
+         def.meta_field_order = {}
+      end
+      fields = def.meta_fields
+      order = def.meta_field_order
+   else
+      fields = def.fields
+      order = def.field_order
+   end
+
+   if not fields[name] then
+      fields[name] = newt
+      table.insert(order, name)
+      return
+   end
+
+   local oldt = fields[name]
+   local function basetype(t: Type): Type
+      if t is GenericType then
+         return t.t
+      else
+         return t
+      end
+   end
+   local oldf = basetype(oldt)
+   local newf = basetype(newt)
+
+   if newf is FunctionType then
+      if oldf is FunctionType then
+         local p = new_type(state, block, "poly") as PolyType
+         p.types = { oldt as FunctionType, newt as FunctionType }
+         fields[name] = p
+      elseif oldt is PolyType then
+         table.insert((oldt as PolyType).types, newt as FunctionType)
+      else
+         fail(state, block, "attempt to redeclare field '" .. name .. "' (only functions can be overloaded)")
+      end
+   else
+      fail(state, block, "attempt to redeclare field '" .. name .. "'")
+   end
+end
+
+parse_record_like_type = function(state: ParseState, block: Block, typename: string): RecordLikeType
+   local decl = new_type(state, block, typename as TypeName) as RecordLikeType
+   decl.fields = {}
+   decl.field_order = {}
+
+   if typename == "interface" then
+      decl.interface_list = {}
+   end
+
+   -- array interface type
+   if block[1] and block[1].kind == "array_type" then
+      local atype = parse_base_type(state, block[1]) as ArrayType
+      decl.elements = atype.elements
+      decl.interface_list = { atype }
+   end
+
+   -- interface list
+   if block[2] and block[2].kind == "interface_list" then
+      decl.interface_list = decl.interface_list or {}
+      for _, iface in ipairs(block[2]) do
+         table.insert(decl.interface_list, parse_type(state, iface) as ArrayType | NominalType)
+      end
+   end
+
+   -- check userdata marker
+   for _, child in ipairs(block) do
+      if child.kind == "userdata" then
+         decl.is_userdata = true
+      end
+   end
+
+   local function parse_field_list(list_block: Block, meta: boolean)
+      if not list_block then return end
+      for _, fld in ipairs(list_block) do
+         if fld.kind == "record_field" then
+            local name_node = fld[1]
+            local field_name = name_node.conststr or name_node.tk
+            local t = parse_type(state, fld[2])
+            if t is FunctionType and t.maybe_method then
+               t.is_method = true
+            end
+            store_field_in_record(state, fld, field_name, t, decl, meta)
+         elseif fld.kind == "local_type" then
+            if fld[1] and fld[2] then
+               local vname = fld[1].tk
+               local nt_node = parse_newtype(state, fld[2])
+               if nt_node and nt_node.newtype then
+                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta)
+               end
+            end
+         end
+      end
+   end
+
+   parse_field_list(block[3], false)
+   parse_field_list(block[4], true)
+
+   if block[5] then
+      local where_macroexp = parse_where_clause(state, block[5], decl)
+      local typ = new_type(state, block[5], "function") as FunctionType
+      typ.is_method = true
+      typ.min_arity = 1
+      local arg = a_type(where_macroexp, "self", { display_type = decl } as SelfType)
+      typ.args = new_tuple(state, block[5], { arg })
+      typ.rets = new_tuple(state, block[5], { new_type(state, block[5], "boolean") })
+      typ.macroexp = where_macroexp
+      store_field_in_record(state, block[5], "__is", typ, decl, true)
+   end
+
+   return decl
 end
 
 parse_simple_type_or_nominal = function(state: ParseState, block: Block): FirstOrderType
@@ -1302,16 +1439,9 @@ parse_base_type = function(state: ParseState, block: Block): FirstClassType
       local base = parse_base_type(state, block[2]) as FirstOrderType
       return new_generic(state, block, typeargs, base)
    elseif block.kind as string == "record" then
-      local decl = new_type(state, block, "record") as RecordType
-      decl.fields = {}
-      decl.field_order = {}
-      return decl
+      return parse_record_like_type(state, block, "record")
    elseif block.kind as string == "interface" then
-      local decl = new_type(state, block, "interface") as InterfaceType
-      decl.fields = {}
-      decl.field_order = {}
-      decl.interface_list = {}
-      return decl
+      return parse_record_like_type(state, block, "interface")
    elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array") as ArrayType
       decl.elements = parse_type(state, block[1])

@@ -1692,7 +1692,7 @@ end
 --    end
 -- end
 
-local function read_nested_type(ps: ReadState, i: integer, tn: BlockKind): integer, boolean
+local function read_nested_type(ps: ReadState, i: integer, tn: BlockKind): integer, Block
    local istart = i
    i = i + 1 -- skip 'record' or 'enum'
 
@@ -1710,12 +1710,11 @@ local function read_nested_type(ps: ReadState, i: integer, tn: BlockKind): integ
       return i
    end
 
-   -- set_declname(ndef, v.tk)
-
-   table.insert(nt, v)
-
-   -- store_field_in_record(ps, i, v.tk, nt.newtype, def.fields, def.field_order)
-   return i
+   table.insert(nt, new_typedecl(ps, istart, ndef))
+   local asgn = new_block(ps, istart, "local_type")
+   asgn[1] = v
+   asgn[2] = nt
+   return i, asgn
 end
 
 read_enum_body = function(ps: ReadState, i: integer, def: Block): integer, boolean
@@ -1883,11 +1882,10 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
       end
    end
 
-   if ps.tokens[i].tk == "where" then
-      i = i + 1
-      -- lcoal
-      -- i, def[5] = read_where_clause(ps, i, def)
-   end
+  if ps.tokens[i].tk == "where" then
+     i = i + 1
+      i, def[5] = read_where_clause(ps, i, def)
+  end
 
    local fields = new_block(ps, i, "record_body")
    def[3] = fields
@@ -1919,7 +1917,11 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
          if def.kind == ("interface" as BlockKind) and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
-            i = read_nested_type(ps, i, tn as BlockKind)
+            local lt: Block
+            i, lt = read_nested_type(ps, i, tn as BlockKind)
+            if lt then
+               table.insert(fields, lt)
+            end
          end
       else
          local is_metamethod = false
