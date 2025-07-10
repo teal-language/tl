@@ -1072,8 +1072,22 @@ parse_fns.record_function = function(state: ParseState, block: Block): Node
       return node
    end
    if not block[2] then
-      fail(state, block, "record function missing name")
-      return node
+      local gblock = {
+         kind = "global_function",
+         tk = block.tk,
+         y = block.y,
+         x = block.x,
+         yend = block.yend,
+         xend = block.xend,
+         [1] = block[1],
+         [2] = block[3],
+         [3] = block[4],
+         [4] = block[5],
+         [5] = block[6],
+      } as Block
+      local gnode = parse_fns.global_function(state, gblock)
+      gnode.implicit_global_function = true
+      return gnode
    end
    if not block[4] then
       fail(state, block, "record function missing argument list")

@@ -614,8 +614,13 @@ local function read_function_type(ps, i)
    else
       local any = new_type(ps, i, "nominal_type")
       any.tk = "any"
-      typ[1] = new_tuple(ps, i, { any }, true)
-      typ[2] = new_tuple(ps, i, { any }, true)
+      local args_typelist = new_block(ps, i, "typelist")
+      args_typelist[1] = any
+      typ[1] = new_tuple(ps, i, args_typelist, true)
+
+      local rets_typelist = new_block(ps, i, "typelist")
+      rets_typelist[1] = any
+      typ[2] = new_tuple(ps, i, rets_typelist, true)
    end
 
    if typeargs then
