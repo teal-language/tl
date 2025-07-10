@@ -1710,12 +1710,11 @@ local function read_nested_type(ps, i, tn)
       return i
    end
 
-
-
-   table.insert(nt, v)
-
-
-   return i
+   table.insert(nt, new_typedecl(ps, istart, ndef))
+   local asgn = new_block(ps, istart, "local_type")
+   asgn[1] = v
+   asgn[2] = nt
+   return i, asgn
 end
 
 read_enum_body = function(ps, i, def)
@@ -1885,8 +1884,7 @@ read_record_body = function(ps, i, def)
 
    if ps.tokens[i].tk == "where" then
       i = i + 1
-
-
+      i, def[5] = read_where_clause(ps, i, def)
    end
 
    local fields = new_block(ps, i, "record_body")
@@ -1919,7 +1917,11 @@ read_record_body = function(ps, i, def)
          if def.kind == ("interface") and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
-            i = read_nested_type(ps, i, tn)
+            local lt
+            i, lt = read_nested_type(ps, i, tn)
+            if lt then
+               table.insert(fields, lt)
+            end
          end
       else
          local is_metamethod = false

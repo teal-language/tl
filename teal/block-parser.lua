@@ -485,17 +485,20 @@ local function parse_argument_list(state, block)
       if not arg_node then
          fail(state, arg_block, "invalid argument")
       else
+         local type_block = arg_block[1]
+         if type(type_block) == "table" and type_block.kind then
+            arg_node.argtype = parse_type(state, type_block)
+         end
 
-         if arg_block.tk == "..." then
+         if arg_node.tk == "..." then
             if a < #block then
                fail(state, arg_block, "'...' can only be the last argument")
             end
             has_varargs = true
             arg_node.kind = "..."
          else
-            local is_optional = false
+            local is_optional = arg_node.opt
             if is_optional then
-               arg_node.opt = true
                has_optional = true
             elseif has_optional and not has_varargs then
                fail(state, arg_block, "non-optional argument follows optional argument")
@@ -646,6 +649,18 @@ local function new_typedecl(state, block, def)
    return t
 end
 
+local function set_declname(def, declname)
+   if def.typename == "generic" then
+      def = def.t
+   end
+
+   if def.typename == "record" or def.typename == "interface" or def.typename == "enum" then
+      if not def.declname then
+         def.declname = declname
+      end
+   end
+end
+
 local function parse_newtype(state, block)
    local node = new_node(state, block, "newtype")
    if not node then
@@ -677,7 +692,6 @@ local function parse_newtype(state, block)
                   enum_type.enumset[value_str] = true
                end
             end
-            enum_type.declname = state.filename or "anonymous"
             node.newtype = new_typedecl(state, def_block, enum_type)
          else
             local type_node = parse_type(state, inner_type)
@@ -737,7 +751,15 @@ parse_fns.assignment = function(state, block)
       node = new_node(state, dummy_block, "assignment")
    end
    node.vars = parse_variable_list(state, block[1])
-   node.exps = parse_expression_list(state, block[2])
+   node.exps = parse_expression_list(state, block[3])
+
+   if node.vars then
+      for _, var_node in ipairs(node.vars) do
+         if var_node.kind == "variable" then
+            var_node.is_lvalue = true
+         end
+      end
+   end
    return node
 end
 
@@ -1103,6 +1125,9 @@ parse_fns.local_type = function(state, block)
    end
    if block[2] then
       node.value = parse_newtype(state, block[2])
+      if node.value and node.value.newtype and node.var and node.var.tk then
+         set_declname(node.value.newtype.def, node.var.tk)
+      end
    end
    return node
 end
@@ -1117,6 +1142,9 @@ parse_fns.global_type = function(state, block)
    end
    if block[2] then
       node.value = parse_newtype(state, block[2])
+      if node.value and node.value.newtype and node.var and node.var.tk then
+         set_declname(node.value.newtype.def, node.var.tk)
+      end
    end
    return node
 end
@@ -1217,22 +1245,38 @@ end
 local parse_base_type
 local parse_simple_type_or_nominal
 local parse_function_type
+local parse_record_like_type
+local parse_where_clause
 
 parse_typeargs_if_any = function(state, block)
    local out = {}
-   if block and block.kind == "typelist" then
-      for _, ta_block in ipairs(block) do
-         if ta_block.kind == "typeargs" then
-            local ta = new_type(state, ta_block, "typearg")
-            if ta_block[1] then
-               ta.typearg = ta_block[1].tk
-            end
-            if ta_block[2] then
-               ta.constraint = parse_type(state, ta_block[2])
-            end
-            table.insert(out, ta)
+   if not block or block.kind ~= "typelist" then
+      return out
+   end
+
+   for _, ta_block_item in ipairs(block) do
+      if ta_block_item.kind == "typeargs" then
+         local ta = new_type(state, ta_block_item, "typearg")
+         if ta_block_item[1] and ta_block_item[1].kind == "identifier" then
+            ta.typearg = ta_block_item[1].tk
+         else
+            fail(state, ta_block_item, "expected type argument name")
+
+            goto continue
          end
+
+         if ta_block_item[2] then
+            local constraint_type = parse_type(state, ta_block_item[2])
+            if constraint_type then
+               ta.constraint = constraint_type
+            else
+               fail(state, ta_block_item[2], "invalid type constraint")
+
+            end
+         end
+         table.insert(out, ta)
       end
+      ::continue::
    end
    return out
 end
@@ -1248,6 +1292,138 @@ parse_function_type = function(state, block)
    return typ
 end
 
+parse_where_clause = function(state, block, def)
+   local node = new_node(state, block, "macroexp")
+   node.is_method = true
+   node.args = new_node(state, block[1] or block, "argument_list")
+   node.args[1] = new_node(state, block[1] and block[1][1] or block, "argument")
+   node.args[1].tk = "self"
+   local selftype = new_type(state, block, "self")
+   selftype.display_type = def
+   node.args[1].argtype = selftype
+   node.min_arity = 1
+   local ret_tuple = new_tuple(state, block, { new_type(state, block, "boolean") })
+   node.rets = ret_tuple
+   node.exp = parse_expression(state, block[3])
+   return node
+end
+
+local function store_field_in_record(state, block, name, newt, def, meta)
+   local fields
+   local order
+   if meta then
+      if not def.meta_fields then
+         def.meta_fields = {}
+         def.meta_field_order = {}
+      end
+      fields = def.meta_fields
+      order = def.meta_field_order
+   else
+      fields = def.fields
+      order = def.field_order
+   end
+
+   if not fields[name] then
+      fields[name] = newt
+      table.insert(order, name)
+      return
+   end
+
+   local oldt = fields[name]
+   local function basetype(t)
+      if t.typename == "generic" then
+         return t.t
+      else
+         return t
+      end
+   end
+   local oldf = basetype(oldt)
+   local newf = basetype(newt)
+
+   if newf.typename == "function" then
+      if oldf.typename == "function" then
+         local p = new_type(state, block, "poly")
+         p.types = { oldt, newt }
+         fields[name] = p
+      elseif oldt.typename == "poly" then
+         table.insert((oldt).types, newt)
+      else
+         fail(state, block, "attempt to redeclare field '" .. name .. "' (only functions can be overloaded)")
+      end
+   else
+      fail(state, block, "attempt to redeclare field '" .. name .. "'")
+   end
+end
+
+parse_record_like_type = function(state, block, typename)
+   local decl = new_type(state, block, typename)
+   decl.fields = {}
+   decl.field_order = {}
+
+   if typename == "interface" then
+      decl.interface_list = {}
+   end
+
+   if block[1] and block[1].kind == "array_type" then
+      local atype = parse_base_type(state, block[1])
+      decl.elements = atype.elements
+      decl.interface_list = { atype }
+   end
+
+   if block[2] and block[2].kind == "interface_list" then
+      decl.interface_list = decl.interface_list or {}
+      for _, iface in ipairs(block[2]) do
+         table.insert(decl.interface_list, parse_type(state, iface))
+      end
+   end
+
+   for _, child in ipairs(block) do
+      if child.kind == "userdata" then
+         decl.is_userdata = true
+      end
+   end
+
+   local function parse_field_list(list_block, meta)
+      if not list_block then return end
+      for _, fld in ipairs(list_block) do
+         if fld.kind == "record_field" then
+            local name_node = fld[1]
+            local field_name = name_node.conststr or name_node.tk
+            local t = parse_type(state, fld[2])
+            if t.typename == "function" and t.maybe_method then
+               t.is_method = true
+            end
+            store_field_in_record(state, fld, field_name, t, decl, meta)
+         elseif fld.kind == "local_type" then
+            if fld[1] and fld[2] then
+               local vname = fld[1].tk
+               local nt_node = parse_newtype(state, fld[2])
+               if nt_node and nt_node.newtype then
+                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta)
+               end
+            end
+         end
+      end
+   end
+
+   parse_field_list(block[3], false)
+   parse_field_list(block[4], true)
+
+   if block[5] then
+      local where_macroexp = parse_where_clause(state, block[5], decl)
+      local typ = new_type(state, block[5], "function")
+      typ.is_method = true
+      typ.min_arity = 1
+      local arg = a_type(where_macroexp, "self", { display_type = decl })
+      typ.args = new_tuple(state, block[5], { arg })
+      typ.rets = new_tuple(state, block[5], { new_type(state, block[5], "boolean") })
+      typ.macroexp = where_macroexp
+      store_field_in_record(state, block[5], "__is", typ, decl, true)
+   end
+
+   return decl
+end
+
 parse_simple_type_or_nominal = function(state, block)
    local tk = block.tk
    local st = simple_types[tk]
@@ -1260,29 +1436,52 @@ parse_simple_type_or_nominal = function(state, block)
       return typ
    end
 
-   local typ = new_nominal(state, block, tk)
-
    if block.kind == "nominal_type" then
-      local idx = 1
-      if block[1] and block[1].kind == "identifier" then
-         typ.names = { block[1].tk }
-         idx = 2
+      local typ = new_nominal(state, block)
+      typ.names = {}
+      local current_block_idx = 1
+
+
+      if block[current_block_idx] and block[current_block_idx].kind == "identifier" then
+         table.insert(typ.names, block[current_block_idx].tk)
+         current_block_idx = current_block_idx + 1
+      elseif block.tk and block.tk ~= "" then
+
+
+
+         table.insert(typ.names, block.tk)
       else
-         typ.names = { tk }
+         fail(state, block, "Nominal type block has no initial name part in tk or first child.")
+         table.insert(typ.names, "unknown_nominal_type")
+         return typ
       end
-      while block[idx] and block[idx].kind == "identifier" do
-         table.insert(typ.names, block[idx].tk)
-         idx = idx + 1
+
+
+      while block[current_block_idx] and block[current_block_idx].kind == "identifier" do
+         table.insert(typ.names, block[current_block_idx].tk)
+         current_block_idx = current_block_idx + 1
       end
-      if block[idx] and block[idx].kind == "typelist" then
+
+
+      if block[current_block_idx] and block[current_block_idx].kind == "typelist" then
          typ.typevals = {}
-         for _, tv in ipairs(block[idx]) do
-            table.insert(typ.typevals, parse_type(state, tv))
+         for _, tv_block in ipairs(block[current_block_idx]) do
+            local parsed_tv = parse_type(state, tv_block)
+            if parsed_tv then
+               table.insert(typ.typevals, parsed_tv)
+            else
+               fail(state, tv_block, "Invalid type argument in nominal type.")
+            end
          end
       end
+      if #typ.names == 0 then
+         fail(state, block, "Nominal type ended up with no name parts.")
+         table.insert(typ.names, block.tk or "unknown_nominal_final")
+      end
+      return typ
    end
 
-   return typ
+   return new_nominal(state, block, tk)
 end
 
 parse_base_type = function(state, block)
@@ -1302,16 +1501,9 @@ parse_base_type = function(state, block)
       local base = parse_base_type(state, block[2])
       return new_generic(state, block, typeargs, base)
    elseif block.kind == "record" then
-      local decl = new_type(state, block, "record")
-      decl.fields = {}
-      decl.field_order = {}
-      return decl
+      return parse_record_like_type(state, block, "record")
    elseif block.kind == "interface" then
-      local decl = new_type(state, block, "interface")
-      decl.fields = {}
-      decl.field_order = {}
-      decl.interface_list = {}
-      return decl
+      return parse_record_like_type(state, block, "interface")
    elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array")
       decl.elements = parse_type(state, block[1])
@@ -1378,28 +1570,81 @@ parse_type = function(state, block)
    return bt
 end
 
-parse_type_list = function(state, block, _mode)
-   local t, list = new_tuple(state, block or { y = 1, x = 1 })
+parse_type_list = function(state, block, mode)
+   local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist" })
 
-   if not block then
+   if not block or block.kind ~= "tuple_type" then
+
+
+
+
+      if mode == "rets" and not block then
+         return t
+      end
+
+      if block and block.kind ~= "typelist" and block.kind ~= "tuple_type" then
+         local single_type = parse_type(state, block)
+         if single_type then
+            table.insert(list, single_type)
+         end
+         return t
+      end
+
+      if mode ~= "rets" then
+         fail(state, block or { y = 1, x = 1, tk = "", kind = "error_node" }, "expected a type list")
+      end
       return t
    end
 
-   if block.kind == "tuple_type" then
-      if block[1] and block[1].kind == "..." then
-         t.is_va = true
-         block = block[2]
+
+   local type_container_block = block[1]
+   local is_va_from_block = false
+
+   if type_container_block and type_container_block.kind == "..." then
+      t.is_va = true
+      is_va_from_block = true
+      type_container_block = block[2]
+   end
+
+   if type_container_block and type_container_block.kind == "typelist" then
+      for _, type_block_item in ipairs(type_container_block) do
+         if type_block_item.kind == "argument_type" then
+            local arg_type_node = parse_type(state, type_block_item[1])
+            if arg_type_node then
+               table.insert(list, arg_type_node)
+               if type_block_item[2] and type_block_item[2].kind == "..." then
+                  t.is_va = true
+               end
+            else
+               fail(state, type_block_item, "invalid type in list")
+            end
+         else
+            local parsed_type = parse_type(state, type_block_item)
+            if parsed_type then
+               table.insert(list, parsed_type)
+            else
+               fail(state, type_block_item, "invalid type in list")
+            end
+         end
+      end
+   elseif type_container_block then
+      local parsed_type = parse_type(state, type_container_block)
+      if parsed_type then
+         table.insert(list, parsed_type)
       else
-         block = block[1]
+         fail(state, type_container_block, "invalid type in tuple")
       end
    end
 
-   if block and block.kind == "typelist" then
-      for _, type_block in ipairs(block) do
-         table.insert(list, parse_type(state, type_block))
+
+   if not is_va_from_block and #list > 0 then
+      local last_block_in_list = type_container_block and type_container_block[#type_container_block]
+      if last_block_in_list and last_block_in_list.kind == "..." then
+
+
+
+
       end
-   else
-      table.insert(list, parse_type(state, block))
    end
 
    return t
