@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("tl-block")
 local util = require("spec.block-util")
 
 local function trim_code(c)

@@ -1,4 +1,4 @@
-local tl = require("tl")
+local tl = require("tl-block")
 
 local function map(f, xs)
    local rs = {}

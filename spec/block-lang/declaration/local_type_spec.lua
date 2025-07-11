@@ -1,5 +1,5 @@
 local util = require("spec.block-util")
-local tl = require("tl")
+local tl = require("tl-block")
 
 describe("local type", function()
    it("can declare a type alias for table", util.check([[
@@ -117,6 +117,10 @@ describe("local type", function()
 
       local type Nested = Foo.Nested
    ]]))
+
+   -- it("can parse a local type require", util.check([[
+   --    local type Class = require("class")
+   -- ]]))
 
    it("can require a module", function ()
       util.mock_io(finally, {

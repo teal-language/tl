@@ -121,7 +121,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
+         local tl = require("tl-block")
          local result, err = tl.process("foo.tl", assert(tl.init_env()))
 
          assert.same(nil, err)
@@ -154,7 +154,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
+         local tl = require("tl-block")
          local result, err = tl.process("foo.tl", assert(tl.init_env()))
 
          assert.same(nil, err)
@@ -183,7 +183,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
+         local tl = require("tl-block")
          local result, err = tl.process("main.tl", assert(tl.init_env()))
 
          assert.same(nil, err)
@@ -213,7 +213,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
+         local tl = require("tl-block")
          local result, err = tl.process("main.tl", assert(tl.init_env()))
 
          assert.same(nil, err)
@@ -242,7 +242,7 @@ describe("return", function()
             ]],
          })
 
-         local tl = require("tl")
+         local tl = require("tl-block")
          local result, err = tl.process("main.tl", assert(tl.init_env()))
 
          assert.same(nil, err)
@@ -277,7 +277,7 @@ describe("return", function()
          ]],
       })
 
-      local tl = require("tl")
+      local tl = require("tl-block")
       local result, err = tl.process("foo.tl", assert(tl.init_env()))
 
       assert.same(nil, err)

@@ -1,5 +1,5 @@
 local util = require("spec.block-util")
-local tl = require("tl")
+local tl = require("tl-block")
 
 describe("local", function()
    describe("declaration", function()
