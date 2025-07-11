@@ -1,6 +1,6 @@
 #!/usr/bin/env ./lua
 
-local ignore_list = { "yend", "xend" }
+local ignore_list = { ["yend"] = true, ["xend"] = true }
 
 local pretty       = require "pl.pretty"
 local reader       = require "teal.reader"
@@ -40,12 +40,12 @@ local function diff(a, b, path)
     if a == b then return end
     local ta, tb = type(a), type(b)
     if ta ~= tb then
-        table.insert(diffs, fmt_path(path) .. ": type " .. ta .. " ≠ " .. tb)
+        table.insert(diffs, fmt_path(path) .. ": type " .. ta .. " ~= " .. tb)
         return
     end
 
     if ta ~= "table" then
-        table.insert(diffs, fmt_path(path) .. ": " .. tostring(a) .. " ≠ " .. tostring(b))
+        table.insert(diffs, fmt_path(path) .. ": " .. tostring(a) .. " ~= " .. tostring(b))
         return
     end
 
@@ -60,7 +60,6 @@ local function diff(a, b, path)
 
     for _, k in ipairs(keys) do
         if ignore_list[k] then
-            --
         else
           local pa, pb = a[k], b[k]
           local new_path = path .. (path == "" and "" or ".") .. tostring(k)
