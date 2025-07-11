@@ -135,6 +135,7 @@ local lexer = require("teal.lexer")
 
 
 
+
 local reader = {}
 
 
@@ -1246,7 +1247,11 @@ local function read_argument(ps, i)
    if ps.tokens[i].tk == "..." then
       fail(ps, i, "'...' needs to be declared as a typed argument")
    end
+   local has_question = false
+   local q_i = i
    if ps.tokens[i].tk == "?" then
+      has_question = true
+      q_i = i
       i = i + 1
    end
    if ps.tokens[i].tk == ":" then
@@ -1258,6 +1263,9 @@ local function read_argument(ps, i)
       if node then
          table.insert(node, argtype)
       end
+   end
+   if has_question then
+      table.insert(node, new_block(ps, q_i, "question"))
    end
    return i, node, 0
 end
@@ -1325,8 +1333,16 @@ local function read_argument_type(ps, i)
    end
 
    local t = new_type(ps, i, "argument_type")
-   t[1] = typ
-   if is_va then t[2] = new_block(ps, i, "...") end
+   local idx = 1
+   if argument_name then
+      local name_block = new_block(ps, i, "identifier")
+      name_block.tk = argument_name
+      t[idx] = name_block
+      idx = idx + 1
+   end
+   t[idx] = typ
+   if is_va then t[idx + 1] = new_block(ps, i, "...") end
+   if opt > 0 then t[#t + 1] = new_block(ps, opt, "question") end
 
    return i, t, 0
 end

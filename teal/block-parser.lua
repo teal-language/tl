@@ -504,14 +504,21 @@ local function parse_argument_list(state, block)
             arg_node.argtype = parse_type(state, type_block)
          end
 
+         local is_optional = false
+         for _, child in ipairs(arg_block) do
+            if type(child) == "table" and child.kind == "question" then
+               is_optional = true
+               break
+            end
+         end
+
          if arg_node.tk == "..." then
             if a < #block then
                fail(state, arg_block, "'...' can only be the last argument")
             end
             has_varargs = true
-            arg_node.kind = "..."
+            is_optional = true
          else
-            local is_optional = arg_node.opt
             if is_optional then
                has_optional = true
             elseif has_optional and not has_varargs then
@@ -523,12 +530,13 @@ local function parse_argument_list(state, block)
             end
          end
 
+         arg_node.opt = is_optional
+
          table.insert(node, arg_node)
       end
    end
 
-   node.min_arity = min_arity
-   return node
+   return node, min_arity
 end
 
 local function parse_statements(state, block)
@@ -596,7 +604,13 @@ parse_expression = function(state, block)
          elseif op_info.op == "as" or op_info.op == "is" then
             node.e2 = new_node(state, block[2], "cast")
             if node.e2 and block[2] and block[2][1] then
-               node.e2.casttype = parse_type(state, block[2][1])
+               local ct_block = block[2][1]
+               if ct_block.kind == "tuple_type" then
+                  local ct = parse_type_list(state, ct_block, "casttype")
+                  node.e2.casttype = ct
+               else
+                  node.e2.casttype = parse_type(state, ct_block)
+               end
             end
          elseif op_info.op == "." or op_info.op == ":" then
 
@@ -643,11 +657,12 @@ parse_expression = function(state, block)
          end
       end
    elseif kind == "function" then
-
-      node.typeargs = {}
-      node.args = parse_argument_list(state, block[3])
-      node.min_arity = node.args and #node.args or 0
-      node.rets = parse_type_list(state, block[4], "rets")
+      node.typeargs = parse_typeargs_if_any(state, block[2])
+      local args, min_arity = parse_argument_list(state, block[3])
+      node.args = args
+      node.min_arity = min_arity
+      local r = parse_type_list(state, block[4], "rets")
+      node.rets = r
       node.body = parse_statements(state, block[5])
    end
    return node
@@ -742,14 +757,16 @@ parse_fns.local_declaration = function(state, block)
    node.vars = parse_variable_list(state, block[1], false)
    local next_child = 2
    if block[next_child] and block[next_child].kind == "tuple_type" then
-      node.decltuple = parse_type_list(state, block[next_child], "decltuple")
+      local dt = parse_type_list(state, block[next_child], "decltuple")
+      node.decltuple = dt
       next_child = 3
    else
 
 
       local dummy_block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       dummy_block[1] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node.decltuple = parse_type_list(state, dummy_block, "decltuple")
+      local dt = parse_type_list(state, dummy_block, "decltuple")
+      node.decltuple = dt
    end
    if block[next_child] then
       node.exps = parse_expression_list(state, block[next_child])
@@ -879,21 +896,11 @@ parse_fns.fornum = function(state, block)
    node.var = new_node(state, block[1], "identifier")
 
    node.from = parse_expression(state, block[2])
-   if node.from and node.from.kind == "integer" then
-      node.from.kind = "number"
-   end
-
    node.to = parse_expression(state, block[3])
-   if node.to and node.to.kind == "integer" then
-      node.to.kind = "number"
-   end
 
    if block[5] then
 
       node.step = parse_expression(state, block[4])
-      if node.step and node.step.kind == "integer" then
-         node.step.kind = "number"
-      end
       node.body = parse_statements(state, block[5])
    else
 
@@ -1009,9 +1016,11 @@ parse_fns.local_function = function(state, block)
    end
 
    node.typeargs = parse_typeargs_if_any(state, block[2])
-   node.args = parse_argument_list(state, block[3])
-   node.min_arity = node.args and node.args.min_arity or 0
-   node.rets = parse_type_list(state, block[4], "rets")
+   local args, min_arity = parse_argument_list(state, block[3])
+   node.args = args
+   node.min_arity = min_arity
+   local r = parse_type_list(state, block[4], "rets")
+   node.rets = r
    node.body = parse_statements(state, block[5])
 
    if not node.body then
@@ -1048,9 +1057,11 @@ parse_fns.global_function = function(state, block)
    end
 
    node.typeargs = parse_typeargs_if_any(state, block[2])
-   node.args = parse_argument_list(state, block[3])
-   node.min_arity = node.args and node.args.min_arity or 0
-   node.rets = parse_type_list(state, block[4], "rets")
+   local args, min_arity = parse_argument_list(state, block[3])
+   node.args = args
+   node.min_arity = min_arity
+   local r = parse_type_list(state, block[4], "rets")
+   node.rets = r
    node.body = parse_statements(state, block[5])
 
    if not node.body then
@@ -1062,9 +1073,15 @@ end
 
 parse_fns.record_function = function(state, block)
    local node = new_node(state, block, "record_function")
+   if node then
+      node.tk = "function"
+   end
    if not node then
       local dummy_block = { kind = "record_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "record_function")
+   end
+   if node then
+      node.tk = "function"
    end
 
    if not block[1] then
@@ -1125,8 +1142,9 @@ parse_fns.record_function = function(state, block)
    node.typeargs = parse_typeargs_if_any(state, block[3])
 
    node.is_method = block.tk == ":"
-   node.args = parse_argument_list(state, block[4])
-   node.min_arity = node.args and node.args.min_arity or 0
+   local args, min_arity = parse_argument_list(state, block[4])
+   node.args = args
+   node.min_arity = min_arity
    if node.is_method and node.args then
       local self_node = new_node(state, block[4], "identifier")
       if self_node then
@@ -1136,7 +1154,8 @@ parse_fns.record_function = function(state, block)
          node.min_arity = node.min_arity + 1
       end
    end
-   node.rets = parse_type_list(state, block[5], "rets")
+   local r = parse_type_list(state, block[5], "rets")
+   node.rets = r
    node.body = parse_statements(state, block[6])
 
    if not node.body then
@@ -1297,10 +1316,11 @@ local parse_record_like_type
 local parse_where_clause
 
 parse_typeargs_if_any = function(state, block)
-   local out = {}
    if not block or block.kind ~= "typelist" then
-      return out
+      return nil
    end
+
+   local out = {}
 
    for _, ta_block_item in ipairs(block) do
       if ta_block_item.kind == "typeargs" then
@@ -1332,7 +1352,7 @@ end
 parse_function_type = function(state, block)
    local typ = new_type(state, block, "function")
 
-   typ.args = parse_type_list(state, block[1], "decltuple")
+   typ.args, typ.maybe_method = parse_type_list(state, block[1], "decltuple")
    typ.rets = parse_type_list(state, block[2], "rets")
    typ.is_method = false
    typ.min_arity = 0
@@ -1620,6 +1640,7 @@ end
 
 parse_type_list = function(state, block, _)
    local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist" })
+   local maybe_method = false
 
    if not block or block.kind ~= "tuple_type" then
 
@@ -1659,10 +1680,18 @@ parse_type_list = function(state, block, _)
    if type_container_block and type_container_block.kind == "typelist" then
       for idx, type_block_item in ipairs(type_container_block) do
          if type_block_item.kind == "argument_type" then
-            local arg_type_node = parse_type(state, type_block_item[1])
+            local idx = 1
+            if type_block_item[1] and type_block_item[1].kind == "identifier" then
+               if idx == 1 and type_block_item[1].tk == "self" and #list == 0 then
+                  maybe_method = true
+               end
+               idx = 2
+            end
+            local arg_type_node = parse_type(state, type_block_item[idx])
             if arg_type_node then
                table.insert(list, arg_type_node)
-               if type_block_item[2] and type_block_item[2].kind == "..." then
+               local next_block = type_block_item[idx + 1]
+               if next_block and next_block.kind == "..." then
                   t.is_va = true
                end
             else
@@ -1716,7 +1745,7 @@ parse_type_list = function(state, block, _)
       end
    end
 
-   return t
+   return t, maybe_method
 end
 
 function block_parser.parse_type(state, block)
