@@ -601,6 +601,18 @@ parse_expression = function(state, block)
       if op_info.arity == 2 then
          if op_info.op == "@funcall" then
             node.e2 = parse_expression_list(state, block[2])
+            local r = node_is_require_call(node)
+            if not r and node.kind == "op" and node.op and node.e1.kind == "variable" and node.e1.tk == "pcall" then
+               if node.e2 and #node.e2 == 2 then
+                  local arg1, arg2 = node.e2[1], node.e2[2]
+                  if arg1.kind == "variable" and arg1.tk == "require" and arg2.kind == "string" and arg2.conststr then
+                     r = arg2.conststr
+                  end
+               end
+            end
+            if r then
+               table.insert(state.required_modules, r)
+            end
          elseif op_info.op == "as" or op_info.op == "is" then
             node.e2 = new_node(state, block[2], "cast")
             if node.e2 and block[2] and block[2][1] then
@@ -638,6 +650,9 @@ parse_expression = function(state, block)
 
    if kind == "string" then
       node.conststr = block.conststr
+      if block.tk and block.tk:match("^%[%=*%[") then
+         node.is_longstring = true
+      end
    elseif kind == "number" or kind == "integer" then
       node.kind = kind
       node.constnum = block.constnum
@@ -651,8 +666,24 @@ parse_expression = function(state, block)
       for _, item_block in ipairs(block) do
          local item_node = new_node(state, item_block, "literal_table_item")
          if item_node then
-            item_node.key = parse_expression(state, item_block[1])
-            item_node.value = parse_expression(state, item_block[2])
+            if item_block.tk == "[" then
+               item_node.key_parsed = "long"
+               item_node.key = parse_expression(state, item_block[1])
+               item_node.value = parse_expression(state, item_block[2])
+            elseif item_block.tk == "..." then
+               item_node.key_parsed = "implicit"
+               item_node.key = parse_expression(state, item_block[1])
+               item_node.value = parse_expression(state, item_block[2])
+            else
+               item_node.key_parsed = "short"
+               item_node.key = parse_expression(state, item_block[1])
+               if item_block[3] then
+                  item_node.itemtype = parse_type(state, item_block[2])
+                  item_node.value = parse_expression(state, item_block[3])
+               else
+                  item_node.value = parse_expression(state, item_block[2])
+               end
+            end
             table.insert(node, item_node)
          end
       end
@@ -728,6 +759,11 @@ local function parse_newtype(state, block)
                node.newtype = new_typedecl(state, def_block, type_node)
                if type_node.typename == "nominal" then
                   node.newtype.is_alias = true
+               elseif type_node.typename == "generic" then
+                  local deft = (type_node).t
+                  if deft and deft.typename == "nominal" then
+                     node.newtype.is_alias = true
+                  end
                end
             end
          end
@@ -737,6 +773,11 @@ local function parse_newtype(state, block)
             node.newtype = new_typedecl(state, block, type_node)
             if type_node.typename == "nominal" then
                node.newtype.is_alias = true
+            elseif type_node.typename == "generic" then
+               local deft = (type_node).t
+               if deft and deft.typename == "nominal" then
+                  node.newtype.is_alias = true
+               end
             end
          end
       end
@@ -1191,9 +1232,13 @@ parse_fns.local_type = function(state, block)
       node.var = new_node(state, block[1])
    end
    if block[2] then
-      node.value = parse_newtype(state, block[2])
-      if node.value and node.value.newtype and node.var and node.var.tk then
-         set_declname(node.value.newtype.def, node.var.tk)
+      if block[2].kind == "newtype" then
+         node.value = parse_newtype(state, block[2])
+         if node.value and node.value.newtype and node.var and node.var.tk then
+            set_declname(node.value.newtype.def, node.var.tk)
+         end
+      else
+         node.value = parse_expression(state, block[2])
       end
    end
    return node
@@ -1208,9 +1253,13 @@ parse_fns.global_type = function(state, block)
       node.var = new_node(state, block[1])
    end
    if block[2] then
-      node.value = parse_newtype(state, block[2])
-      if node.value and node.value.newtype and node.var and node.var.tk then
-         set_declname(node.value.newtype.def, node.var.tk)
+      if block[2].kind == "newtype" then
+         node.value = parse_newtype(state, block[2])
+         if node.value and node.value.newtype and node.var and node.var.tk then
+            set_declname(node.value.newtype.def, node.var.tk)
+         end
+      else
+         node.value = parse_expression(state, block[2])
       end
    end
    return node
