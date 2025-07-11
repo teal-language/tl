@@ -80,7 +80,7 @@ local record tl
 
    check: function(Node, ? string, ? CheckOptions, ? Env): Result, string
    apply_compat: function(result: Result)
-   gen: function(string, ? Env, ? GenerateOptions): string, Result
+   gen: function(string, ? Env, ? GenerateOptions, ? ParseLang): string, Result
    generate: function(ast: Node, gen_target: GenTarget, opts?: GenerateOptions): string, string
    get_token_at: function(tks: {Token}, y: integer, x: integer): string
    lex: function(input: string, filename: string): {Token}, {Error}
