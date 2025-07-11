@@ -2241,11 +2241,11 @@ function Context:check_assignment(varnode: Node, vartype: Type, valtype: Type): 
    local varname = varnode.tk
    local attr = varnode.attribute
 
-   if varname then
+   if varnode.kind == "variable" then
       if self:widen_back_var(varname) then
          vartype, attr = self:find_var_type(varname)
          if not vartype then
-            self.errs:add(varnode, "unknown variable")
+            self.errs:add(varnode, "unknown variable "..tostring(varnode))
             return nil
          end
       end
