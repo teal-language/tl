@@ -1,5 +1,7 @@
 #!/usr/bin/env ./lua
 
+local ignore_list = { "yend", "xend" }
+
 local pretty       = require "pl.pretty"
 local reader       = require "teal.reader"
 local block_parser = require "teal.block-parser"
@@ -57,15 +59,13 @@ local function diff(a, b, path)
     for k in pairs(b) do if not mark[k] then keys[#keys + 1] = k end end
 
     for _, k in ipairs(keys) do
-        local pa = a[k]; local pb = b[k]
-        local new_path = path .. (path == "" and "" or ".") .. tostring(k)
-        -- if pa == nil then
-            -- table.insert(diffs, fmt_path(new_path) .. ": only in parser ast")
-        -- elseif pb == nil then
-            -- table.insert(diffs, fmt_path(new_path) .. ": only in block-parseer AST")
-        -- else
-            diff(pa, pb, new_path)
-        -- end
+        if ignore_list[k] then
+            --
+        else
+          local pa, pb = a[k], b[k]
+          local new_path = path .. (path == "" and "" or ".") .. tostring(k)
+          diff(pa, pb, new_path)
+        end
     end
 end
 
