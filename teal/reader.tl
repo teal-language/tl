@@ -2010,6 +2010,10 @@ read_type_declaration = function(ps: ReadState, i: integer, node_name: BlockKind
       return i
    end
 
+   if typeargs and asgn[2][1] and asgn[2][1][1] then
+      asgn[2][1][1] = new_generic(ps, itypeargs, typeargs, asgn[2][1][1])
+   end
+
    return i, asgn
 end
 
@@ -2087,19 +2091,38 @@ local function read_record_function(ps: ReadState, i: integer): integer, Block
    i = verify_tk(ps, i, "function")
 
    local fn = new_block(ps, i - 1, "record_function")
-   i, fn[1] = read_identifier(ps, i)
-   
-   if ps.tokens[i] then
-      if ps.tokens[i].tk == "." then
-         i = i + 1
-         i, fn[2] = read_identifier(ps, i)
-      elseif ps.tokens[i].tk == ":" then
-         fn.tk = ":"
-         i = i + 1
-         i, fn[2] = read_identifier(ps, i)
-      end
+
+   local names: {Block} = {}
+   local dot_pos: {integer} = {}
+
+   i, names[1] = read_identifier(ps, i)
+
+   while ps.tokens[i] and ps.tokens[i].tk == "." do
+      table.insert(dot_pos, i)
+      i = i + 1
+      i, names[#names + 1] = read_identifier(ps, i)
    end
-   
+
+   if ps.tokens[i] and ps.tokens[i].tk == ":" then
+      fn.tk = ":"
+      i = i + 1
+      i, names[#names + 1] = read_identifier(ps, i)
+   end
+
+   if #names > 1 or fn.tk == ":" then
+      local owner = names[1]
+      for n = 2, #names - 1 do
+         local dot_block = new_block(ps, dot_pos[n - 1], "op_dot")
+         dot_block[1] = owner
+         dot_block[2] = names[n]
+         owner = dot_block
+      end
+      fn[1] = owner
+      fn[2] = names[#names]
+   else
+      fn[1] = names[1]
+   end
+
    local istart = i - 1
    i, fn[3] = read_typeargs_if_any(ps, i)
    i, fn[4] = read_argument_list(ps, i)

@@ -876,7 +876,7 @@ parse_fns.fornum = function(state: ParseState, block: Block): Node
    -- [4] = step expression (optional)
    -- [5] = body statements
    
-   node.var = new_node(state, block[1], "variable")
+   node.var = new_node(state, block[1], "identifier")
    
    node.from = parse_expression(state, block[2])
    if node.from and node.from.kind == "integer" then
@@ -1101,10 +1101,19 @@ parse_fns.record_function = function(state: ParseState, block: Block): Node
    local owner_block = block[1]
    local name_block = block[2]
 
-   node.fn_owner = new_node(state, owner_block, "type_identifier")
+   node.fn_owner = parse_expression(state, owner_block)
    if not node.fn_owner then
       fail(state, owner_block, "invalid function owner")
       return node
+   end
+
+   -- the leftmost identifier represents the record type name
+   local left = node.fn_owner
+   while left.kind == "op" and left.op.op == "." do
+      left = left.e1
+   end
+   if left and left.kind == "variable" then
+      left.kind = "type_identifier"
    end
 
    node.name = new_node(state, name_block, "identifier")
