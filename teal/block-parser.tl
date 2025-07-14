@@ -380,8 +380,12 @@ local node_mt: metatable<Node> = {
 
 local function end_at(node: Node, block: Block)
    if block then
-      node.yend = block.yend or block.y
-      node.xend = block.xend or (block.x + #(block.tk or "") - 1)
+      if block.yend then
+         node.yend = block.yend
+      end
+      if block.xend then
+         node.xend = block.xend
+      end
    end
 end
 
@@ -585,6 +589,7 @@ parse_expression = function(state: ParseState, block: Block): Node
 
    if op_info then
       local node = new_node(state, block, "op")
+      node.tk = nil
       node.op = {
          y = block.y,
          x = block.x,
@@ -648,10 +653,12 @@ parse_expression = function(state: ParseState, block: Block): Node
       node = new_node(state, dummy_block, "error_node")
    end
 
-   if kind == "string" then
+  if kind == "string" then
       node.conststr = block.conststr
-      if block.tk and block.tk:match("^%[%=*%[") then
-         node.is_longstring = true
+      if block.tk then
+         node.is_longstring = not not block.tk:match("^%[%=*%[")
+      else
+         node.is_longstring = false
       end
    elseif kind == "number" or kind == "integer" then
       node.kind = kind as NodeKind

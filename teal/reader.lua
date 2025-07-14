@@ -136,6 +136,7 @@ local lexer = require("teal.lexer")
 
 
 
+
 local reader = {}
 
 
@@ -827,7 +828,7 @@ local function read_literal(ps, i)
       return verify_kind(ps, i, "identifier", "variable")
    elseif kind == "string" then
       local node = new_block(ps, i, "string")
-      node.conststr = unquote(tk)
+      node.conststr, node.is_longstring = unquote(tk)
       return i + 1, node
    elseif kind == "number" or kind == "integer" then
       local n = tonumber(tk)
@@ -1097,7 +1098,7 @@ do
             local argument
             if tkop.kind == "string" then
                argument = new_block(ps, i)
-               argument.conststr = unquote(tkop.tk)
+               argument.conststr, argument.is_longstring = unquote(tkop.tk)
                i = i + 1
             else
                i, argument = read_table_literal(ps, i)
