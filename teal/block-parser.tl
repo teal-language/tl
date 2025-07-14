@@ -1273,19 +1273,39 @@ parse_fns.interface = function(state: ParseState, block: Block): Node
    return node
 end
 parse_fns.local_macroexp = function(state: ParseState, block: Block): Node
-   local node = new_node(state, block)
+   local node = new_node(state, block, "local_macroexp")
    if not node then
       local dummy_block = { kind = "local_macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       node = new_node(state, dummy_block, "local_macroexp")
    end
+
+   if block[1] then
+      node.name = new_node(state, block[1], "identifier")
+   end
+
+   if block[2] then
+      node.macrodef = parse_fns.macroexp(state, block[2])
+   end
+
    return node
 end
 parse_fns.macroexp = function(state: ParseState, block: Block): Node
-   local node = new_node(state, block)
+   local node = new_node(state, block, "macroexp")
    if not node then
       local dummy_block = { kind = "macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       node = new_node(state, dummy_block, "macroexp")
    end
+
+   local idx = 1
+   if block[idx] and block[idx].kind == "typelist" then
+      node.typeargs = parse_typeargs_if_any(state, block[idx])
+      idx = idx + 1
+   end
+
+   node.args, node.min_arity = parse_argument_list(state, block[idx])
+   node.rets = parse_type_list(state, block[idx + 1], "rets")
+   node.exp = parse_expression(state, block[idx + 2])
+
    return node
 end
 
@@ -1405,6 +1425,10 @@ parse_function_type = function(state: ParseState, block: Block): FunctionType
    typ.rets = parse_type_list(state, block[2], "rets")
    typ.is_method = false
    typ.min_arity = 0
+
+   if block[4] then
+      typ.macroexp = parse_fns.macroexp(state, block[4])
+   end
 
    return typ
 end
