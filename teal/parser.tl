@@ -1854,5 +1854,16 @@ function block_parser.parse_type_list(state: ParseState, block: Block, mode: Par
    return parse_type_list(state, block, mode)
 end
 
+function parser.node_is_funcall(node: Node): boolean
+   return node.kind == "op" and node.op.op == "@funcall"
+end
+
+function block_parser.node_at(w: Where, n: Node): Node
+   n.f = assert(w.f)
+   n.x = w.x
+   n.y = w.y
+   return n
+end
+
 return block_parser
 
