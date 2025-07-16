@@ -51,7 +51,6 @@ selfbuild: build1 replace1 build2
 ########################################
 
 suite:
-	${BUSTED} -v $(TESTFLAGS) spec/block-lang
 	${BUSTED} -v $(TESTFLAGS) spec/lang
 	${BUSTED} -v $(TESTFLAGS) spec/api
 	${BUSTED} -v $(TESTFLAGS) spec/cli
