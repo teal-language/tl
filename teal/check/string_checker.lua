@@ -4,7 +4,7 @@ local types = require("teal.types")
 local a_type = types.a_type
 
 local parser = require("teal.parser")
-
+local reader = require("teal.reader")
 
 
 
@@ -22,8 +22,22 @@ function string_checker.check(env, input, filename, parse_lang)
    end
    filename = filename or ""
 
-   local program, syntax_errors = parser.parse(input, filename, parse_lang)
+   local blocks, syntax_errors = reader.read(input, filename, parse_lang)
+   if (not env.keep_going) and #syntax_errors > 0 then
+      local result = {
+         ok = false,
+         filename = filename,
+         type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
+         type_errors = {},
+         syntax_errors = syntax_errors,
+         env = env,
+      }
+      env.loaded[filename] = result
+      table.insert(env.loaded_order, filename)
+      return result
+   end
 
+   local program, syntax_errors = parser.parse(blocks, filename, parse_lang)
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
          ok = false,
