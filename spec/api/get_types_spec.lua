@@ -291,4 +291,96 @@ describe("tl.get_types", function()
       assert(rec_type.meta_fields)
       assert(rec_type.meta_fields.__eq)
    end)
+
+   it("reports typeargs of records", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local record R<T, U>
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 1
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "R<T, U>")
+      assert(tr.types[type_at_y_x].typeargs)
+      assert(tr.types[type_at_y_x].typeargs[1])
+      assert.same(tr.types[type_at_y_x].typeargs[1][1], "T")
+      assert.same(tr.types[type_at_y_x].typeargs[1][2], nil)
+      assert(tr.types[type_at_y_x].typeargs[2])
+      assert.same(tr.types[type_at_y_x].typeargs[2][1], "U")
+      assert.same(tr.types[type_at_y_x].typeargs[2][2], nil)
+   end)
+   it("reports typeargs of interfaces", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local interface I<T, U>
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 1
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "I<T, U>")
+      assert(tr.types[type_at_y_x].typeargs)
+      assert(tr.types[type_at_y_x].typeargs[1])
+      assert.same(tr.types[type_at_y_x].typeargs[1][1], "T")
+      assert.same(tr.types[type_at_y_x].typeargs[1][2], nil)
+      assert(tr.types[type_at_y_x].typeargs[2])
+      assert.same(tr.types[type_at_y_x].typeargs[2][1], "U")
+      assert.same(tr.types[type_at_y_x].typeargs[2][2], nil)
+   end)
+   it("reports typeargs of generic functions", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local function f<T, U>()
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local y = 1
+      local x = 10
+      local type_at_y_x = tr.by_pos[""][y][x]
+      assert(tr.types[type_at_y_x].str == "function<T, U>()")
+      assert(tr.types[type_at_y_x].typeargs)
+      assert(tr.types[type_at_y_x].typeargs[1])
+      assert.same(tr.types[type_at_y_x].typeargs[1][1], "T")
+      assert.same(tr.types[type_at_y_x].typeargs[1][2], nil)
+      assert(tr.types[type_at_y_x].typeargs[2])
+      assert.same(tr.types[type_at_y_x].typeargs[2][1], "U")
+      assert.same(tr.types[type_at_y_x].typeargs[2][2], nil)
+   end)
+   it("reports constrained typeargs of generic functions", function()
+      local env = tl.init_env()
+      env.report_types = true
+      local result = assert(tl.check_string([[
+         local interface I
+         end
+
+         local function f<T is I, U>()
+         end
+      ]], env))
+
+      local tr, trenv = tl.get_types(result)
+      local cy = 4
+      local cx = 32
+      local constraint_type_at_y_x = tr.by_pos[""][cy][cx]
+      assert(tr.types[constraint_type_at_y_x].str == "I")
+      local fy = 4
+      local fx = 10
+      local func_type_at_y_x = tr.by_pos[""][fy][fx]
+      assert(tr.types[func_type_at_y_x].str == "function<T is I, U>()")
+      assert(tr.types[func_type_at_y_x].typeargs)
+      assert(tr.types[func_type_at_y_x].typeargs[1])
+      assert.same(tr.types[func_type_at_y_x].typeargs[1][1], "T")
+      assert.same(tr.types[func_type_at_y_x].typeargs[1][2], constraint_type_at_y_x)
+      assert(tr.types[func_type_at_y_x].typeargs[2])
+      assert.same(tr.types[func_type_at_y_x].typeargs[2][1], "U")
+      assert.same(tr.types[func_type_at_y_x].typeargs[2][2], nil)
+   end)
 end)

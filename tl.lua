@@ -737,6 +737,7 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
 local TypeReporter = {}
 
 
@@ -6284,8 +6285,16 @@ function TypeReporter:get_typenum(t)
       return self:get_typenum(rt.def)
    end
 
-
+   local typeargs
    if rt.typename == "generic" then
+      typeargs = mark_array({})
+      for _, typearg in ipairs(rt.typeargs) do
+         local tn
+         if typearg.constraint then
+            tn = self:get_typenum(typearg.constraint)
+         end
+         table.insert(typeargs, mark_array({ typearg.typearg, tn }))
+      end
       rt = rt.t
    end
 
@@ -6295,6 +6304,7 @@ function TypeReporter:get_typenum(t)
       file = t.f,
       y = t.y,
       x = t.x,
+      typeargs = typeargs,
    }
    tr.types[n] = ti
    self.typeid_to_num[t.typeid] = n
