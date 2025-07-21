@@ -619,6 +619,7 @@ local record tl
       x: integer
       y: integer
       ref: integer -- NOMINAL
+      typeargs: {{string, integer}} -- FUNCTION, RECORD (optional)
       fields: {string: integer} -- RECORD
       meta_fields: {string: integer} -- RECORD (optional)
       enums: {string} -- ENUM
@@ -6284,8 +6285,16 @@ function TypeReporter:get_typenum(t: Type): integer
       return self:get_typenum(rt.def)
    end
 
-   -- CHECK is this sufficient?
+   local typeargs: {{string, integer}}
    if rt is GenericType then
+      typeargs = mark_array {}
+      for _, typearg in ipairs(rt.typeargs) do
+         local tn: integer
+         if typearg.constraint then
+            tn = self:get_typenum(typearg.constraint)
+         end
+         table.insert(typeargs, mark_array { typearg.typearg, tn })
+      end
       rt = rt.t
    end
 
@@ -6295,6 +6304,7 @@ function TypeReporter:get_typenum(t: Type): integer
       file = t.f,
       y = t.y,
       x = t.x,
+      typeargs = typeargs
    }
    tr.types[n] = ti
    self.typeid_to_num[t.typeid] = n
