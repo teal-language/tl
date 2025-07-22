@@ -1,3 +1,35 @@
+# 0.24.7
+
+2025-07-22
+
+Not a lot of changes in this release, but a few important ones! This release
+publishes some useful additions contributed to improve the tooling around
+the language. In the meantime, some major changes are being prepared for the
+next release series -- namely the implementation is being split from one big
+`tl.tl` file into modules, and a new API is in the works. But for now,
+the 0.24.7 keeps things progressing in the '24 series.
+
+This release features commits by Morgan Bartlett, @wu4, Miłosz Koczorowski
+and Hisham Muhammad.
+
+### API/Tooling
+
+* Collect and preserve comments in the AST for use by third-party tooling
+  * Lexer can now preserve comments (#1002)
+  * Parser can now attach comments to AST nodes (#1005)
+    * Parser can also preserve "unattached" top-level comments (#1007)
+* Better type information produced by TypeReporter:
+  * Metatable fields are included in TypeInfo
+  * Generic type arguments are included (#1020)
+
+### Fixes
+
+* Fix code generation by not propagating "needs compat code" marker across
+  module boundaries
+* Adjusted flow check behavior on multiple `if` branches: do not widen
+  back a type if it remains the same on scope exit (#904).
+* Better checks when long strings are used as table indices
+
 # 0.24.6
 
 2025-05-23
