@@ -8,6 +8,8 @@ local lua_generator = require("teal.gen.lua_generator")
 
 local parser = require("teal.parser")
 
+local reader = require("teal.reader")
+
 local types = require("teal.types")
 local type TypeDeclType = types.TypeDeclType
 local a_type = types.a_type
@@ -30,7 +32,11 @@ local function tl_package_loader(module_name: string): any, any
          return table.concat(tried, "\n\t")
       end
       fd:close()
-      local program, errs = parser.parse(input, found_filename, parse_lang)
+      local blocks, read_errs = reader.read(input, found_filename, parse_lang)
+      if #read_errs > 0 then
+         error(found_filename .. ":" .. read_errs[1].y .. ":" .. read_errs[1].x .. ": " .. read_errs[1].msg)
+      end
+      local program, errs = parser.parse(blocks, found_filename, parse_lang)
       if #errs > 0 then
          error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
       end

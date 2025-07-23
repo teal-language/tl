@@ -137,6 +137,9 @@ local lexer = require("teal.lexer")
 
 
 
+
+
+
 local reader = {}
 
 
@@ -1624,16 +1627,20 @@ local function read_macroexp(ps, istart, iargs)
    local node = new_block(ps, istart, "macroexp")
 
    local i
+   local idx = 1
    if ps.tokens[istart + 1].tk == "<" then
-      i, node[1] = read_anglebracket_list(ps, istart + 1, read_typearg)
+      i, node[idx] = read_anglebracket_list(ps, istart + 1, read_typearg)
+      idx = idx + 1
    else
       i = iargs
    end
 
-   i, node[2] = read_argument_list(ps, i)
-   i, node[3] = read_return_types(ps, i)
+   i, node[idx] = read_argument_list(ps, i)
+   idx = idx + 1
+   i, node[idx] = read_return_types(ps, i)
+   idx = idx + 1
    i = verify_tk(ps, i, "return")
-   i, node[4] = read_expression(ps, i)
+   i, node[idx] = read_expression(ps, i)
    end_at(node, ps.tokens[i])
    i = verify_end(ps, i, istart, node)
    return i, node
@@ -1915,6 +1922,10 @@ do
 
       if reader.node_is_funcall(exp) then
          return i, exp
+      end
+
+      if exp.kind ~= "variable" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
+         return fail(ps, i, "syntax error")
       end
 
       local asgn = new_block(ps, istart, "assignment")

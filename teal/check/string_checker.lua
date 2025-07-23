@@ -4,8 +4,9 @@ local types = require("teal.types")
 local a_type = types.a_type
 
 local parser = require("teal.parser")
-local reader = require("teal.reader")
 
+
+local reader = require("teal.reader")
 
 
 
@@ -36,6 +37,7 @@ function string_checker.check(env, input, filename, parse_lang)
       table.insert(env.loaded_order, filename)
       return result
    end
+
 
    local program, syntax_errors = parser.parse(blocks, filename, parse_lang)
    if (not env.keep_going) and #syntax_errors > 0 then

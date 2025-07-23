@@ -9,6 +9,8 @@ local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 local node_at = parser.node_at
 
+local reader = require("teal.reader")
+
 local metamethods = require("teal.metamethods")
 local unop_to_metamethod = metamethods.unop_to_metamethod
 local binop_to_metamethod = metamethods.binop_to_metamethod
@@ -46,7 +48,11 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         code = parser.parse(text, "@internal", "lua") as Node
+         local block, read_errs = reader.read(text, "@internal", "lua")
+         if #read_errs > 0 then
+            error("Failed to read compat code: " .. read_errs[1].msg)
+         end
+         code = parser.parse(block, "@internal", "lua") as Node
          check.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
@@ -67,10 +73,10 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local _tl_table_unpack = unpack or table.unpack")
       elseif name == "table.pack" then
          load_code(name, [[local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end]])
-      elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
-      elseif name == "mt" then
-         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
+        elseif name == "bit32" then
+         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end end")
+        elseif name == "mt" then
+         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end")
       elseif name == "math.maxinteger" then
          load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
       elseif name == "math.mininteger" then
@@ -79,7 +85,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local type = type")
       else
          if not compat_loaded then
-            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
+           load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end end")
             compat_loaded = true
          end
          load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
