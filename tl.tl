@@ -15,6 +15,8 @@ local parser = require("teal.parser")
 local type Node = parser.Node
 local type ParseLang = parser.ParseLang
 
+local reader = require("teal.reader")
+
 local lua_generator = require("teal.gen.lua_generator")
 
 local lua_compat = require("teal.gen.lua_compat")
@@ -136,12 +138,38 @@ tl.lex = lexer.lex
 tl.loader = package_loader.install_loader
 tl.generate = lua_generator.generate
 tl.get_token_at = lexer.get_token_at
-tl.parse = parser.parse
-tl.parse_program = parser.parse_program
 tl.symbols_in_scope = type_reporter.symbols_in_scope
 tl.target_from_lua_version = lua_generator.target_from_lua_version
 
 environment.set_require_module_fn(require_file.require_module)
+
+tl.parse = function(input: string, filename: string, parse_lang?: ParseLang): Node, {tl.Error}, {string}
+   local block, read_errs = reader.read(input, filename, parse_lang)
+
+   local ast, parse_errs, required_modules = parser.parse(block, filename, parse_lang)
+
+   local errs: {tl.Error} = {}
+   for _, e in ipairs(read_errs) do
+      table.insert(errs, e)
+   end
+   for _, e in ipairs(parse_errs) do
+      table.insert(errs, e)
+   end
+
+   return ast as Node, errs, required_modules
+end
+
+tl.parse_program = function(tokens: {tl.Token}, errs: {tl.Error}, filename?: string, parse_lang?: ParseLang): Node, {string}
+   local block, read_required = reader.read_program(tokens, errs, filename, parse_lang)
+   local ast, parse_errs, required_modules = parser.parse(block, filename, parse_lang)
+   for _, e in ipairs(parse_errs) do
+      table.insert(errs, e)
+   end
+   for _, r in ipairs(read_required) do
+      table.insert(required_modules, r)
+   end
+   return ast as Node, required_modules
+end
 
 local type EnvOptions = tl.EnvOptions
 local type GenTarget = tl.GenTarget
