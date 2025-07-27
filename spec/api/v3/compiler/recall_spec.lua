@@ -1,5 +1,5 @@
-local teal = require("teal.init")
 local util = require("spec.util")
+local teal = require("teal")
 local lfs = require("lfs")
 
 describe("Compiler.recall", function()

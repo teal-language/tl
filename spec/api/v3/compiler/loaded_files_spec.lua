@@ -1,5 +1,5 @@
-local teal = require("teal.init")
 local util = require("spec.util")
+local teal = require("teal")
 local lfs = require("lfs")
 
 describe("Compiler.loaded_files", function()
@@ -26,7 +26,7 @@ describe("Compiler.loaded_files", function()
       end
 
       assert.same({
-         util.os_path("./bar.tl"),
+         "./bar.tl",
          "foo.tl"
       }, res)
    end)

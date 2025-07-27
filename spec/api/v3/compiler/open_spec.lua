@@ -1,5 +1,5 @@
-local teal = require("teal.init")
 local util = require("spec.util")
+local teal = require("teal")
 
 describe("Compiler.open", function()
    it("should cache modules by filename to prevent code being loaded more than once (#245)", function()
