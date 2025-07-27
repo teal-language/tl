@@ -39,7 +39,7 @@ do
       return wd
    end
 
-   function common.normalize(filename: string): string
+   function common.normalize(filename: string): string, string
       local drive = ""
 
       if common.sep == "\\" then
@@ -77,7 +77,7 @@ do
          filename = filename:gsub("/", "\\")
       end
 
-      return filename
+      return filename, drive .. common.sep
    end
 end
 
