@@ -17886,16 +17886,12 @@ end
 
 function Input:lex()
    local tokens, errs = lexer.lex(self.teal_code, self.filename)
-   if not tokens then
-      return nil, errs
-   end
-
    return setmetatable({
       filename = self.filename,
       tokens = tokens,
       lexical_errors = errs,
       env = self.env,
-   }, TokenList_mt)
+   }, TokenList_mt), errs
 end
 
 function Input:parse()
@@ -18892,6 +18888,11 @@ do
                state = "number power"
             elseif lex_decimals[c] then
                state = "number power"
+            elseif lex_space[c] then
+               end_token_prev("$ERR$")
+               fwd = false
+               add_syntax_error("malformed number")
+               state = "any"
             else
                end_token_here("$ERR$")
                add_syntax_error("malformed number")

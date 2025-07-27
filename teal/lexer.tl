@@ -719,6 +719,11 @@ do
                state = "number power"
             elseif lex_decimals[c] then
                state = "number power"
+            elseif lex_space[c] then
+               end_token_prev("$ERR$")
+               fwd = false
+               add_syntax_error("malformed number")
+               state = "any"
             else
                end_token_here("$ERR$")
                add_syntax_error("malformed number")
