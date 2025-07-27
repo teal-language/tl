@@ -26,6 +26,7 @@ MYCFLAGS=("-Os" "-rdynamic" "-ldl" "-lpthread" "-lm")
 
 sourcedir="$(pwd)"
 root="$(pwd)/_binary"
+depsdir="${root}/deps"
 
 # Let's parse any command line arguments
 
@@ -41,6 +42,7 @@ do
       export STRIP=x86_64-w64-mingw32-strip
       LUA_DEFINES="-DLUA_USE_WINDOWS"
       MYCFLAGS=("-Os" "-lm")
+      depsdir="${root}/deps-windows"
       executable="tl.exe"
       ;;
    --sourcedir=*)
@@ -111,7 +113,7 @@ ${LUA} -v &> /dev/null || {
 
 if [ "$do_clean" = 1 ]
 then
-   rm -rf "${root}/deps"
+   rm -rf "${depsdir}"
 fi
 
 rm -rf "${root}/src"
@@ -119,7 +121,7 @@ rm -rf "${root}/src"
 # Let's prepare the environment
 
 mkdir -p "${root}/downloads"
-mkdir -p "${root}/deps"
+mkdir -p "${depsdir}"
 mkdir -p "${root}/src"
 mkdir -p "${root}/build"
 
@@ -143,7 +145,7 @@ function download() {
 # Let's extract our dependencies
 
 (
-   cd "${root}/deps"
+   cd "${depsdir}"
    tar zxpf "../downloads/lua-${lua_version}.tar.gz"
    tar zxpf "../downloads/argparse-${argparse_version}.tar.gz"
    tar zxpf "../downloads/luafilesystem-${luafilesystem_version}.tar.gz"
@@ -178,20 +180,20 @@ function lua_builder() (
    "${MAKE}" -C "src" LUA_A="liblua.a" CC="${CC}" AR="${AR} rcu" RANLIB="${RANLIB}" SYSCFLAGS="${LUA_DEFINES}" SYSLIBS= SYSLDFLAGS= "liblua.a"
 )
 
-build_dep "${root}/deps/lua-${lua_version}" "src/liblua.a" lua_builder
+build_dep "${depsdir}/lua-${lua_version}" "src/liblua.a" lua_builder
 
 function lfs_builder() {
    "${CC}" -c -o "lfs.o" -I "../lua-${lua_version}/src" "src/lfs.c"
    "${AR}" rcu -o "lfs.a" "lfs.o"
 }
 
-build_dep "${root}/deps/luafilesystem-${luafilesystem_version}" "lfs.a" lfs_builder
+build_dep "${depsdir}/luafilesystem-${luafilesystem_version}" "lfs.a" lfs_builder
 
-build_dep "${root}/deps/argparse-${argparse_version}" "src/argparse.lua" true
+build_dep "${depsdir}/argparse-${argparse_version}" "src/argparse.lua" true
 
-LIBLUA_A="${root}/deps/lua-${lua_version}/src/liblua.a"
-LFS_A="${root}/deps/luafilesystem-${luafilesystem_version}/lfs.a"
-ARGPARSE_LUA="${root}/deps/argparse-${argparse_version}/src/argparse.lua"
+LIBLUA_A="${depsdir}/lua-${lua_version}/src/liblua.a"
+LFS_A="${depsdir}/luafilesystem-${luafilesystem_version}/lfs.a"
+ARGPARSE_LUA="${depsdir}/argparse-${argparse_version}/src/argparse.lua"
 
 # Let's prepare our sources
 
@@ -547,7 +549,7 @@ check "${root}/src/tl.c"
 exe_pathname="${root}/build/${executable}"
 
 set -x
-${CC} -o "$exe_pathname" -I"${root}/deps/lua-${lua_version}/src" "${root}/src/tl.c" "${LFS_A}" "${LIBLUA_A}" "${MYCFLAGS[@]}"
+${CC} -o "$exe_pathname" -I"${depsdir}/lua-${lua_version}/src" "${root}/src/tl.c" "${LFS_A}" "${LIBLUA_A}" "${MYCFLAGS[@]}"
 ${STRIP} "$exe_pathname"
 set +x
 
