@@ -1,4 +1,5 @@
-local teal = require("teal.init")
+local util = require("spec.util")
+local teal = require("teal")
 
 local function compiler_get_type_report(code)
    local compiler = teal.compiler()

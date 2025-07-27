@@ -1,5 +1,5 @@
-local teal = require("teal.init")
 local util = require("spec.util")
+local teal = require("teal")
 
 describe("Compiler.require", function()
    it("returns a require error when a module is not found", function()
@@ -12,7 +12,7 @@ describe("Compiler.require", function()
 
    it("processes a module file given a Lua module name", function()
       util.mock_io(finally, {
-         ["bar" .. util.os_sep .. "foo.tl"] = [[
+         ["bar/foo.tl"] = [[
             local record Foo<T>
                bar: T
             end
