@@ -6,19 +6,24 @@ local common = require("tlcli.common")
 local driver = require("tlcli.driver")
 local perf = require("tlcli.perf")
 local report = require("tlcli.report")
-local teal = require("teal")
 local lfs = require("lfs")
 
 local type TlConfig = require("tlcli.tlconfig")
 local type Args = require("tlcli.args")
+
+local type teal = require("teal")
 local type GenOptions = teal.GenOptions
 local type Module = teal.Module
 
 local mkdir_cache = {}
 
 local function make_dir_for(pathname: string)
-   pathname = common.normalize(pathname)
-   local dirname = pathname:match("(.+)" .. common.sep)
+   local normalized, root = common.normalize(pathname)
+   local dirname = normalized:match("^(.*" .. common.sep .. ")[^" .. common.sep .. "]+$")
+   -- on Windows, root contains the drive letter and looks like `D:\`
+   if dirname == root then
+      return
+   end
    if dirname then
       if mkdir_cache[dirname] then
          return

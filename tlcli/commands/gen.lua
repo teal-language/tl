@@ -6,8 +6,9 @@ local common = require("tlcli.common")
 local driver = require("tlcli.driver")
 local perf = require("tlcli.perf")
 local report = require("tlcli.report")
-local teal = require("teal")
 local lfs = require("lfs")
+
+
 
 
 
@@ -17,8 +18,12 @@ local lfs = require("lfs")
 local mkdir_cache = {}
 
 local function make_dir_for(pathname)
-   pathname = common.normalize(pathname)
-   local dirname = pathname:match("(.+)" .. common.sep)
+   local normalized, root = common.normalize(pathname)
+   local dirname = normalized:match("^(.*" .. common.sep .. ")[^" .. common.sep .. "]+$")
+
+   if dirname == root then
+      return
+   end
    if dirname then
       if mkdir_cache[dirname] then
          return

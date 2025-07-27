@@ -77,7 +77,7 @@ do
          filename = filename:gsub("/", "\\")
       end
 
-      return filename
+      return filename, drive .. common.sep
    end
 end
 
