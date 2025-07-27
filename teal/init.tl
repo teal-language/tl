@@ -291,11 +291,11 @@ end
 
 function Input:gen(opts?: GenOptions): string, Module, CheckError
    local module, check_error = self:check()
-   if check_error then
+   if #check_error.syntax_errors > 0 then
       return nil, module, check_error
    end
    local output = module:gen(opts)
-   return output, module
+   return output, module, check_error
 end
 
 --------------------------------------------------------------------------------

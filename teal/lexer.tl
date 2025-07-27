@@ -374,6 +374,12 @@ do
          }
       end
 
+      local bom <const> = "\239\187\191" -- "\xEF\xBB\xBF"
+      local bom_len = bom:len()
+      if input:sub(1, bom_len) == bom then
+         input = input:sub(bom_len + 1)
+      end
+
       local len = #input
       if input:sub(1,2) == "#!" then
          begin_token()

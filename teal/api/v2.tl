@@ -198,9 +198,9 @@ v2.loader = package_loader.install_loader
 
 local function predefine_modules(env: Env, predefined_modules: {string}): boolean, string
    for _, name in ipairs(predefined_modules) do
-      local ok, err = environment.load_module(env, name)
+      local ok = environment.load_module(env, name)
       if not ok then
-         return nil, err
+         return nil, "Error: could not predefine module '" .. name .. "'"
       end
    end
 

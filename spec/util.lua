@@ -160,8 +160,8 @@ local function batch_assertions(prefix)
 end
 
 function util.assert_line_by_line(s1, s2)
-   assert(type(s1) == "string")
-   assert(type(s2) == "string")
+   assert(type(s1) == "string", "expected a string, got " .. type(s1))
+   assert(type(s2) == "string", "expected a string, got " .. type(s2))
 
    s1 = unindent(s1)
    s2 = unindent(s2)
