@@ -15,6 +15,7 @@ function util.os_set(k, v)
    return win32 and ("set \"" .. k .. "=" .. v:sub(2, -2) .."\"") or (k .. "=" .. string.format("%q", v))
 end
 
+package.path = "./?.lua;./?/init.lua;" .. package.path
 
 if jit then
    jit.off()

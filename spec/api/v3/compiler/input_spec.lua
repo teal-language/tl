@@ -1,5 +1,5 @@
-local teal = require("teal")
 local util = require("spec.util")
+local teal = require("teal")
 
 describe("Compiler.input", function()
    it("can read Teal strings", function()
