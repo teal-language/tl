@@ -51,7 +51,7 @@ function driver.setup_compiler(tlconfig: TlConfig): teal.Compiler
    for _, name in ipairs(tlconfig._init_env_modules) do
       local _, _, err = compiler:require(name)
       if err then
-         common.die(err)
+         common.die("Error: " .. err)
       end
    end
 
