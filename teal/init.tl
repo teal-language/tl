@@ -258,16 +258,12 @@ end
 
 function Input:lex(): TokenList, LexError
    local tokens, errs = lexer.lex(self.teal_code, self.filename)
-   if not tokens then
-      return nil, errs
-   end
-
    return setmetatable({
       filename = self.filename,
       tokens = tokens,
       lexical_errors = errs,
       env = self.env,
-   }, TokenList_mt)
+   }, TokenList_mt), errs
 end
 
 function Input:parse(): ParseTree, ParseError
