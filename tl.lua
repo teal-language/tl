@@ -366,9 +366,9 @@ v2.loader = package_loader.install_loader
 
 local function predefine_modules(env, predefined_modules)
    for _, name in ipairs(predefined_modules) do
-      local ok, err = environment.load_module(env, name)
+      local ok = environment.load_module(env, name)
       if not ok then
-         return nil, err
+         return nil, "Error: could not predefine module '" .. name .. "'"
       end
    end
 
@@ -15934,7 +15934,7 @@ function environment.load_module(env, name)
    local module_type = env:require_module(name)
 
    if not module_type then
-      return false, string.format("Error: could not predefine module '%s'", name)
+      return false, string.format("could not load module '%s'", name)
    end
 
    return true
@@ -17923,11 +17923,11 @@ end
 
 function Input:gen(opts)
    local module, check_error = self:check()
-   if check_error then
+   if #check_error.syntax_errors > 0 then
       return nil, module, check_error
    end
    local output = module:gen(opts)
-   return output, module
+   return output, module, check_error
 end
 
 
@@ -18042,7 +18042,7 @@ end
 
 -- module teal.input from teal/input.lua
 package.preload["teal.input"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
+local check = require("teal.check.check")
 
 local parser = require("teal.parser")
 
@@ -18054,21 +18054,12 @@ local environment = require("teal.environment")
 local input = {}
 
 
-local function skip_bom(content)
-   local bom = "\239\187\191"
-   local len = bom:len()
-   if content:sub(1, len) == bom then
-      return content:sub(len + 1)
-   end
-   return content
-end
-
 function input.check(env, filename, code)
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end
 
-   local program, syntax_errors = parser.parse(skip_bom(code), filename)
+   local program, syntax_errors = parser.parse(code, filename)
 
    if (not env.keep_going) and #syntax_errors > 0 then
       return environment.register_failed(env, filename, syntax_errors)
@@ -18558,6 +18549,12 @@ do
             y = ty,
             text = text,
          }
+      end
+
+      local bom = "\239\187\191"
+      local bom_len = bom:len()
+      if input:sub(1, bom_len) == bom then
+         input = input:sub(bom_len + 1)
       end
 
       local len = #input

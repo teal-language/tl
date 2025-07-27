@@ -271,7 +271,7 @@ function environment.load_module(env, name)
    local module_type = env:require_module(name)
 
    if not module_type then
-      return false, string.format("Error: could not predefine module '%s'", name)
+      return false, string.format("could not load module '%s'", name)
    end
 
    return true

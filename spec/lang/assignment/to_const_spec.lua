@@ -37,6 +37,28 @@ describe("assignment to const", function()
       { y = 2, x = 13, msg = "to-be-closed variable a has a non-closable type function()" },
       { y = 3, x = 13, msg = "to-be-closed variable b has a non-closable type function<T>(T, metatable<T>): T" },
    }, "5.4"))
+
+   it("close variable can only be used with 5.4+", util.check_type_error([[
+      local record R
+         metamethod __close: function()
+      end
+      local c <close>: R = setmetatable({}, {
+         __close = function() end
+      })
+   ]], {
+      { y = 4, msg = "only valid for Lua 5.4 (current target is 5.1)" },
+   }, "5.1"))
+
+   it("close variable can only be used with 5.4+", util.check_type_error([[
+      local record R
+         metamethod __close: function()
+      end
+      local c <close>: R = setmetatable({}, {
+         __close = function() end
+      })
+   ]], {
+      { y = 4, msg = "only valid for Lua 5.4 (current target is 5.3)" },
+   }, "5.3"))
 end)
 
 describe("attributes syntax", function()
