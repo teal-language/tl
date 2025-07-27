@@ -56,7 +56,7 @@ _temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
 	@touch $@
 
 build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
-	if cat _temp/list1 &>/dev/null; \
+	if [ -e _temp/list1 ]; \
 	then $(STABLE_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.1 --output-dir _temp `cat _temp/list1` || { rm `cat _temp/list1.1`; exit 1; };\
 	fi
 
@@ -65,7 +65,7 @@ replace1:
 	@rm -f _temp/list2
 
 build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
-	if cat _temp/list2 &>/dev/null; \
+	if [ -e _temp/list2 ]; \
 	then $(NEW_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.2 --output-dir _temp `cat _temp/list2` || extras/make.sh revert; \
 	fi
 
