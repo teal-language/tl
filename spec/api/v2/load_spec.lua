@@ -6,7 +6,7 @@ describe("tl.load", function()
       it("works", function()
          local lua_code = [[
             -- test.lua
-            local tl = require('tl')
+            local tl = require('teal.api.v2')
 
             local program, err = tl.load('local a: string = "hey"; return a')
             return program()
@@ -19,7 +19,7 @@ describe("tl.load", function()
       it("can produce type checking errors when using 'c'", function()
          local lua_code = [[
             -- test.lua
-            local tl = require('tl')
+            local tl = require('teal.api.v2')
 
             local program, err = tl.load('local a: string = 123; return a', 'code.tl', 'ct')
             assert(program == nil)
@@ -33,7 +33,7 @@ describe("tl.load", function()
       it("can run even with type check errors if not using 'c'", function()
          local lua_code = [[
             -- test.lua
-            local tl = require('tl')
+            local tl = require('teal.api.v2')
 
             local program, err = tl.load('local a: string = 123; return a', 'code.tl')
             return program()
