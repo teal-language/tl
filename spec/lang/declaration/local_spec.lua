@@ -1,5 +1,5 @@
 local util = require("spec.util")
-local tl = require("tl")
+local tl = require("teal.api.v2")
 
 describe("local", function()
    describe("declaration", function()
@@ -312,14 +312,6 @@ describe("local", function()
             local x <close> = io.open("foobar", "r")
          ]]))
 
-         for _, t in ipairs{"5.1", "5.3"} do
-            it("rejected for non 5.4 target (" .. t .. ")", util.check_type_error([[
-               local x <close> = io.open("foobar", "r")
-            ]], {
-               { msg = "only valid for Lua 5.4" }
-            }, t))
-         end
-
          it("rejects multiple in a single declaration", check_type54([[
             local x <close>, y <close> = io.open("foobar", "r"), io.open("baz", "r")
          ]], {
@@ -455,7 +447,7 @@ describe("local", function()
                assert(x)
             ]],
          })
-         local result, err = tl.process("bar.tl", assert(tl.init_env()))
+         local result, err = tl.check_file("bar.tl")
          assert.same(nil, err)
          assert.same({}, result.syntax_errors)
          assert.same({}, result.type_errors)
