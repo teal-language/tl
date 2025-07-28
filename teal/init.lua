@@ -324,11 +324,15 @@ end
 
 
 function ParseTree:check(module_name)
+   if #self.syntax_errors > 0 and not self.env.keep_going then
+      local result = self.env.loaded[self.filename]
+      local _, check_err = module_from_result(result)
+      return nil, check_err
+   end
+
    local result = check.check(self.ast, self.env, self.filename)
    if result then
-      if self.env.keep_going then
-         result.syntax_errors = self.syntax_errors
-      end
+      result.syntax_errors = self.syntax_errors
 
       if result.ast then
          lua_compat.apply(result)
