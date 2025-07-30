@@ -140,6 +140,9 @@ local lexer = require("teal.lexer")
 
 
 
+
+
+
 local reader = {}
 
 
@@ -176,6 +179,7 @@ end
 function reader.node_is_funcall(node)
    return node.kind == "op_funcall"
 end
+
 
 
 
@@ -525,6 +529,7 @@ local function read_trying_list(ps, i, list, read_item, ret_lookahead)
       errs = {},
       required_modules = ps.required_modules,
       read_lang = ps.read_lang,
+      allow_macro_vars = ps.allow_macro_vars,
    }
    local tryi, item = read_item(try_ps, i)
    if not item then
@@ -814,6 +819,19 @@ local function read_function_value(ps, i)
    return read_function_args_rets_body(ps, i, node)
 end
 
+local function read_macro_quote(ps, i)
+   local token = ps.tokens[i]
+   local node = new_block(ps, i, "macro_quote")
+   local code = token.tk:sub(2, -2)
+   local block, errs = reader.read(code, ps.filename, ps.read_lang, true)
+   for _, e in ipairs(errs) do
+      table.insert(ps.errs, e)
+   end
+   node[1] = block
+   end_at(node, token)
+   return i + 1, node
+end
+
 local function unquote(str)
    local f = str:sub(1, 1)
    if f == '"' or f == "'" then
@@ -847,6 +865,8 @@ local function read_literal(ps, i)
       return verify_kind(ps, i, "keyword", "nil")
    elseif tk == "function" then
       return read_function_value(ps, i)
+   elseif kind == "`" then
+      return read_macro_quote(ps, i)
    elseif tk == "{" then
       return read_table_literal(ps, i)
    elseif kind == "..." then
@@ -997,6 +1017,15 @@ do
             return i
          end
          e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = op_kind, [1] = e1, tk = t1.tk }
+      elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+         local dtk = ps.tokens[i]
+         i = i + 1
+         local ident
+         i, ident = verify_kind(ps, i, "identifier")
+         if not ident then
+            return i
+         end
+         e1 = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
          local prev_i = i
@@ -1220,23 +1249,36 @@ end
 
 local function read_variable_name(ps, i)
    local node
-   i, node = verify_kind(ps, i, "identifier")
-   if not node then
-      return i
-   end
-   if ps.tokens[i].tk == "<" then
+   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+      local dtk = ps.tokens[i]
       i = i + 1
-      local annotation
-      i, annotation = verify_kind(ps, i, "identifier")
-      if annotation then
-         if not is_attribute[annotation.tk] then
-            fail(ps, i, "unknown variable annotation: " .. annotation.tk)
-         end
-         table.insert(node, annotation)
-      else
-         fail(ps, i, "expected a variable annotation")
+      local ident
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return i
       end
-      i = verify_tk(ps, i, ">")
+      node = new_block(ps, i - 1, "macro_var")
+      node[1] = ident
+      end_at(node, ps.tokens[i - 1])
+   else
+      i, node = verify_kind(ps, i, "identifier")
+      if not node then
+         return i
+      end
+      if ps.tokens[i].tk == "<" then
+         i = i + 1
+         local annotation
+         i, annotation = verify_kind(ps, i, "identifier")
+         if annotation then
+            if not is_attribute[annotation.tk] then
+               fail(ps, i, "unknown variable annotation: " .. annotation.tk)
+            end
+            table.insert(node, annotation)
+         else
+            fail(ps, i, "expected a variable annotation")
+         end
+         i = verify_tk(ps, i, ">")
+      end
    end
    return i, node
 end
@@ -2083,12 +2125,24 @@ local function read_local_macroexp(ps, i)
    return i, node
 end
 
+local function read_local_macro(ps, i)
+   local istart = i
+   i = verify_tk(ps, i, "local")
+   i = verify_tk(ps, i, "macro")
+   local node = new_block(ps, istart, "local_macro")
+   i, node[1] = read_identifier(ps, i)
+   i = verify_tk(ps, i, "!")
+   return read_function_args_rets_body(ps, i, node)
+end
+
 local function read_local(ps, i)
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
       return read_local_function(ps, i)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return read_type_declaration(ps, i + 2, "local_type")
+   elseif ntk == "macro" and ps.tokens[i + 2].kind == "identifier" then
+      return read_local_macro(ps, i)
    elseif ntk == "macroexp" and ps.tokens[i + 2].kind == "identifier" then
       return read_local_macroexp(ps, i)
    elseif read_type_body_fns[ntk] and ps.tokens[i + 2].kind == "identifier" then
@@ -2258,7 +2312,7 @@ read_statements = function(ps, i, toplevel)
    return i, node
 end
 
-function reader.read_program(tokens, errs, filename, read_lang)
+function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    errs = errs or {}
    local ps = {
       tokens = tokens,
@@ -2266,6 +2320,7 @@ function reader.read_program(tokens, errs, filename, read_lang)
       filename = filename or "",
       required_modules = {},
       read_lang = read_lang,
+      allow_macro_vars = allow_macro_vars or false,
    }
    local i = 1
    local hashbang
@@ -2282,9 +2337,9 @@ function reader.read_program(tokens, errs, filename, read_lang)
    return node, ps.required_modules
 end
 
-function reader.read(input, filename, read_lang)
+function reader.read(input, filename, read_lang, allow_macro_vars)
    local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang)
+   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    return node, errs, required_modules
 end
 

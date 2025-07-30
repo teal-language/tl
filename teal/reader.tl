@@ -55,6 +55,9 @@ local enum BlockKind
    "paren"
    "macroexp"
    "local_macroexp"
+   "local_macro"
+   "macro_quote"
+   "macro_var"
    "interface"
    "pragma"
    "error_block"
@@ -146,7 +149,7 @@ local record reader
    type BlockKind = BlockKind
    type BlockLang = BlockLang
 
-   read: function(input: string, filename: string, read_lang?: BlockLang): Block, {Error}, {string}
+   read: function(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
 end
 
 local attributes <total>: {Attribute: boolean} = {
@@ -185,6 +188,7 @@ local record ReadState
 
    required_modules: {string}
    read_lang: BlockLang
+   allow_macro_vars: boolean
 end
 
 local enum BlockTypeListMode
@@ -523,9 +527,10 @@ local function read_trying_list<T>(ps: ReadState, i: integer, list: {T}, read_it
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      required_modules = ps.required_modules,
-      read_lang = ps.read_lang
-   }
+   required_modules = ps.required_modules,
+   read_lang = ps.read_lang,
+   allow_macro_vars = ps.allow_macro_vars,
+}
    local tryi, item: integer, T = read_item(try_ps, i)
    if not item then
       return i, list
@@ -814,6 +819,19 @@ local function read_function_value(ps: ReadState, i: integer): integer, Block
    return read_function_args_rets_body(ps, i, node)
 end
 
+local function read_macro_quote(ps: ReadState, i: integer): integer, Block
+   local token = ps.tokens[i]
+   local node = new_block(ps, i, "macro_quote")
+   local code = token.tk:sub(2, -2)
+   local block, errs = reader.read(code, ps.filename, ps.read_lang, true)
+   for _, e in ipairs(errs) do
+      table.insert(ps.errs, e)
+   end
+   node[1] = block
+   end_at(node, token)
+   return i + 1, node
+end
+
 local function unquote(str: string): string, boolean
    local f = str:sub(1, 1)
    if f == '"' or f == "'" then
@@ -847,6 +865,8 @@ local function read_literal(ps: ReadState, i: integer): integer, Block
       return verify_kind(ps, i, "keyword", "nil")
    elseif tk == "function" then
       return read_function_value(ps, i)
+   elseif kind == "`" then
+      return read_macro_quote(ps, i)
    elseif tk == "{" then
       return read_table_literal(ps, i)
    elseif kind == "..." then
@@ -997,6 +1017,15 @@ do
             return i
          end
          e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = op_kind, [1] = e1, tk = t1.tk }
+      elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+         local dtk = ps.tokens[i]
+         i = i + 1
+         local ident: Block
+         i, ident = verify_kind(ps, i, "identifier")
+         if not ident then
+            return i
+         end
+         e1 = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
       elseif ps.tokens[i].tk == "(" then
          i = i + 1
          local prev_i = i
@@ -1220,23 +1249,36 @@ end
 
 local function read_variable_name(ps: ReadState, i: integer): integer, Block, integer
    local node: Block
-   i, node = verify_kind(ps, i, "identifier")
-   if not node then
-      return i
-   end
-   if ps.tokens[i].tk == "<" then
+   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+      local dtk = ps.tokens[i]
       i = i + 1
-      local annotation: Block
-      i, annotation = verify_kind(ps, i, "identifier")
-      if annotation then
-         if not is_attribute[annotation.tk] then
-            fail(ps, i, "unknown variable annotation: " .. annotation.tk)
-         end
-         table.insert(node, annotation)
-      else
-         fail(ps, i, "expected a variable annotation")
+      local ident: Block
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return i
       end
-      i = verify_tk(ps, i, ">")
+      node = new_block(ps, i - 1, "macro_var")
+      node[1] = ident
+      end_at(node, ps.tokens[i - 1])
+   else
+      i, node = verify_kind(ps, i, "identifier")
+      if not node then
+         return i
+      end
+      if ps.tokens[i].tk == "<" then
+         i = i + 1
+         local annotation: Block
+         i, annotation = verify_kind(ps, i, "identifier")
+         if annotation then
+            if not is_attribute[annotation.tk] then
+               fail(ps, i, "unknown variable annotation: " .. annotation.tk)
+            end
+            table.insert(node, annotation)
+         else
+            fail(ps, i, "expected a variable annotation")
+         end
+         i = verify_tk(ps, i, ">")
+      end
    end
    return i, node
 end
@@ -2083,12 +2125,24 @@ local function read_local_macroexp(ps: ReadState, i: integer): integer, Block
    return i, node
 end
 
+local function read_local_macro(ps: ReadState, i: integer): integer, Block
+   local istart = i
+   i = verify_tk(ps, i, "local")
+   i = verify_tk(ps, i, "macro")
+   local node = new_block(ps, istart, "local_macro")
+   i, node[1] = read_identifier(ps, i)
+   i = verify_tk(ps, i, "!")
+   return read_function_args_rets_body(ps, i, node)
+end
+
 local function read_local(ps: ReadState, i: integer): integer, Block
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
       return read_local_function(ps, i)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return read_type_declaration(ps, i + 2, "local_type")
+   elseif ntk == "macro" and ps.tokens[i+2].kind == "identifier" then
+      return read_local_macro(ps, i)
    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
       return read_local_macroexp(ps, i)
    elseif read_type_body_fns[ntk] and ps.tokens[i+2].kind == "identifier" then
@@ -2258,7 +2312,7 @@ read_statements = function(ps: ReadState, i: integer, toplevel?: boolean): integ
    return i, node
 end
 
-function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang): Block, {string}
+function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {string}
    errs = errs or {}
    local ps: ReadState = {
       tokens = tokens as {Token},
@@ -2266,6 +2320,7 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       filename = filename or "",
       required_modules = {},
       read_lang = read_lang,
+      allow_macro_vars = allow_macro_vars or false,
    }
    local i = 1
    local hashbang: string
@@ -2282,9 +2337,9 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
    return node, ps.required_modules
 end
 
-function reader.read(input: string, filename: string, read_lang?: BlockLang): Block, {Error}, {string}
+function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
    local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang)
+   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    return node, errs, required_modules
 end
 

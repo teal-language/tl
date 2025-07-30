@@ -85,6 +85,8 @@ do
 
 
 
+
+
    local last_token_kind = {
       ["start"] = nil,
       ["any"] = nil,
@@ -106,6 +108,8 @@ do
       ["string single got \\"] = "$ERR$",
       ["string double"] = "$ERR$",
       ["string double got \\"] = "$ERR$",
+      ["string backtick"] = "$ERR$",
+      ["string backtick got \\"] = "$ERR$",
       ["string long"] = "$ERR$",
       ["string long got ]"] = "$ERR$",
       ["comment short"] = nil,
@@ -160,6 +164,7 @@ do
       ["="] = "got =",
       ["~"] = "got ~",
       ["["] = "got [",
+      ["`"] = "string backtick",
    }
 
    for c = string.byte("a"), string.byte("z") do
@@ -203,7 +208,7 @@ do
    end
 
    local lex_any_char_kinds = {}
-   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", ";", "?" }
+   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", ";", "?", "!", "$" }
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
@@ -614,6 +619,22 @@ do
             end
             x = x + skip
             state = "string double"
+         elseif state == "string backtick" then
+            if c == "\\" then
+               state = "string backtick got \\"
+            elseif c == "`" then
+               end_token_here("`")
+               state = "any"
+            end
+         elseif state == "string backtick got \\" then
+            local skip, valid = lex_string_escape(input, i, c)
+            i = i + skip
+            if not valid then
+               end_token_here("$ERR$")
+               add_syntax_error("malformed string")
+            end
+            x = x + skip
+            state = "string backtick"
          elseif state == "string single" then
             if c == "\\" then
                state = "string single got \\"

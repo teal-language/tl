@@ -81,6 +81,9 @@ local enum NodeKind
    "paren"
    "macroexp"
    "local_macroexp"
+   "local_macro"
+   "macro_quote"
+   "macro_var"
    "interface"
    "pragma"
    "error_node"
@@ -1116,6 +1119,55 @@ parse_fns.local_function = function(state: ParseState, block: Block): Node
       fail(state, block[5], "invalid function body")
    end
    
+   return node
+end
+
+parse_fns.local_macro = function(state: ParseState, block: Block): Node
+   local node = new_node(state, block, "local_macro")
+   if not node then
+      local dummy_block = { kind = "local_macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      node = new_node(state, dummy_block, "local_macro")
+   end
+
+   if not block[1] then
+      fail(state, block, "local macro missing name")
+      return node
+   end
+   if not block[3] then
+      fail(state, block, "local macro missing argument list")
+      return node
+   end
+   if not block[5] then
+      fail(state, block, "local macro missing body")
+      return node
+   end
+
+   node.name = new_node(state, block[1], "identifier")
+   node.typeargs = parse_typeargs_if_any(state, block[2])
+   local args, min_arity = parse_argument_list(state, block[3])
+   node.args = args
+   node.min_arity = min_arity
+   local r: TupleType
+   r = parse_type_list(state, block[4], "rets")
+   node.rets = r
+   node.body = parse_statements(state, block[5])
+
+   return node
+end
+
+parse_fns.macro_quote = function(state: ParseState, block: Block): Node
+   local node = new_node(state, block, "macro_quote")
+   if block[1] then
+      node.body = parse_statements(state, block[1])
+   end
+   return node
+end
+
+parse_fns.macro_var = function(state: ParseState, block: Block): Node
+   local node = new_node(state, block, "macro_var")
+   if block[1] then
+      node.name = new_node(state, block[1], "identifier")
+   end
    return node
 end
 
