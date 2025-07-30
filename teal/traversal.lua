@@ -532,6 +532,10 @@ function traversal.traverse_nodes(s, root,
             xs[1] = recurse_type(s, ast.argtype, visit_type)
          end
       end,
+
+      ["local_macro"] = function()
+
+      end,
    }
 
    if not visit_node.allow_missing_cbs and not visit_node.cbs then
