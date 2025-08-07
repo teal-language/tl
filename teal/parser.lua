@@ -1206,20 +1206,23 @@ function block_to_constructor(state, block)
       return call
    end
 
+   if block.kind == "integer" then
+      block.kind = "number"
+   end
+
+   if block.kind == "variable" then
+      block.kind = "identifier"
+   end
+
    if block.kind == "assignment" then
-      if block.tk ~= "=" then
-         block.tk = "="
-      end
-      if block[1] and block[1].kind == "variable_list" and #block[1] == 1 then
-         block[1] = block[1][1]
-      end
+      block.tk = nil
       if block[3] then
          block[2] = block[3]
          block[3] = nil
       end
    end
 
-   if block.kind == "expression_list" then
+   if block.kind == "expression_list" or block.kind == "variable_list" then
       block.tk = nil
    end
 

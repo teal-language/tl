@@ -1,4 +1,5 @@
 local tl = require('tl')
+local lua_gen = require('teal.gen.lua_generator')
 
 describe("local macro parsing", function()
    it("parses local macro", function()
@@ -28,8 +29,21 @@ describe("local macro parsing", function()
       ]])
       assert.same({}, errs)
       local quote = ast[1].body[1].exps[1]
-      local lua, err = tl.generate(quote, "5.4")
+      local lua, err = lua_gen.generate(quote, "5.4")
       assert.is_nil(err)
-      assert.same('{ kind = "assignment", tk = "=", [1] = { kind = "variable", tk = "x" }, [2] = { kind = "expression_list", [1] = { kind = "integer", tk = "1" } } }', lua)
+      assert.same('{ kind = "assignment", [1] = { kind = "variable_list", [1] = { kind = "identifier", tk = "x" } }, [2] = { kind = "expression_list", [1] = { kind = "number", tk = "1" } } }', lua)
+   end)
+
+   it("splices variables with clone()", function()
+      local ast, errs = tl.parse([[
+         local macro bar!(x: Block): Block
+            return `y = $x`
+         end
+      ]])
+      assert.same({}, errs)
+      local quote = ast[1].body[1].exps[1]
+      local lua, err = lua_gen.generate(quote, "5.4")
+      assert.is_nil(err)
+      assert.same('{ kind = "assignment", [1] = { kind = "variable_list", [1] = { kind = "identifier", tk = "y" } }, [2] = { kind = "expression_list", [1] = clone(x) } }', lua)
    end)
 end)
