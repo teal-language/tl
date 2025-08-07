@@ -366,6 +366,8 @@ local op_kinds = {
 
 
 
+
+
 local node_mt = {
    __tostring = function(n)
       return n.f .. ":" .. n.y .. ":" .. n.x .. " " .. n.kind
@@ -702,6 +704,11 @@ parse_expression = function(state, block)
       node.kind = kind
    elseif kind == "identifier" or kind == "variable" then
       node.kind = "variable"
+   elseif kind == "macro_var" then
+      if not state.in_macro_quote then
+         fail(state, block, "macro variables can only appear in macro quotes")
+      end
+      node.kind = "macro_var"
    elseif kind == "paren" then
       node.e1 = parse_expression(state, block[1])
    elseif kind == "literal_table" then
@@ -744,12 +751,19 @@ parse_expression = function(state, block)
       node.rets = r
       node.body = parse_statements(state, block[5])
    elseif kind == "macro_quote" then
+      if not state.in_local_macro then
+         fail(state, block, "macro quotes can only appear in local macros")
+      end
       if not block[1] then
          return new_node(state, block, "literal_table")
       end
       local stmts = block[1]
+      local prev_quote = state.in_macro_quote
+      state.in_macro_quote = true
       if #stmts == 1 then
-         return block_to_constructor(state, stmts[1])
+         local res = block_to_constructor(state, stmts[1])
+         state.in_macro_quote = prev_quote
+         return res
       end
       local list = new_node(state, block, "literal_table")
       for i, stmt in ipairs(stmts) do
@@ -761,6 +775,7 @@ parse_expression = function(state, block)
          item.value = block_to_constructor(state, stmt)
          table.insert(list, item)
       end
+      state.in_macro_quote = prev_quote
       return list
    end
    return node
@@ -1171,7 +1186,13 @@ parse_fns.local_macro = function(state, block)
    local r
    r = parse_type_list(state, block[4], "rets")
    node.rets = r
+   local prev_local = state.in_local_macro
+   local prev_quote = state.in_macro_quote
+   state.in_local_macro = true
+   state.in_macro_quote = false
    local body_stmts = parse_statements(state, block[5])
+   state.in_local_macro = prev_local
+   state.in_macro_quote = prev_quote
    local fn = new_node(state, block, "local_function")
    fn.name = node.name
    fn.typeargs = node.typeargs
@@ -1267,6 +1288,9 @@ function block_to_constructor(state, block)
 end
 
 parse_fns.macro_var = function(state, block)
+   if not state.in_macro_quote then
+      fail(state, block, "macro variables can only appear in macro quotes")
+   end
    local node = new_node(state, block, "macro_var")
    if block[1] then
       node.name = new_node(state, block[1], "identifier")
@@ -1563,6 +1587,8 @@ function block_parser.parse(input, filename, parse_lang)
       end_alignment_hint = nil,
       required_modules = {},
       parse_lang = parse_lang or "tl",
+      in_local_macro = false,
+      in_macro_quote = false,
    }
 
    local nodes = parse_statements(state, input)

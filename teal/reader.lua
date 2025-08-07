@@ -197,6 +197,7 @@ end
 
 
 
+
 local read_type_list
 local read_typeargs_if_any
 local read_expression
@@ -891,6 +892,9 @@ local function read_literal(ps, i)
    elseif tk == "function" then
       return read_function_value(ps, i)
    elseif kind == "`" then
+      if not ps.in_local_macro then
+         return fail(ps, i, "macro quotes can only appear in local macros")
+      end
       return read_macro_quote(ps, i)
    elseif tk == "{" then
       return read_table_literal(ps, i)
@@ -2184,7 +2188,14 @@ local function read_local_macro(ps, i)
    local node = new_block(ps, istart, "local_macro")
    i, node[1] = read_identifier(ps, i)
    i = verify_tk(ps, i, "!")
-   return read_function_args_rets_body(ps, i, node)
+   local old_in_macro = ps.in_local_macro
+   local old_allow = ps.allow_macro_vars
+   ps.in_local_macro = true
+   ps.allow_macro_vars = false
+   i, node = read_function_args_rets_body(ps, i, node)
+   ps.in_local_macro = old_in_macro
+   ps.allow_macro_vars = old_allow
+   return i, node
 end
 
 local function read_local(ps, i)
@@ -2374,6 +2385,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       required_modules = {},
       read_lang = read_lang,
       allow_macro_vars = allow_macro_vars or false,
+      in_local_macro = false,
    }
    local i = 1
    local hashbang
