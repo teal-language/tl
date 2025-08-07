@@ -613,6 +613,8 @@ local function node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
+local block_to_constructor: function(state: ParseState, block: Block): Node
+
 parse_expression = function(state: ParseState, block: Block): Node
    if not block then return nil end
 
@@ -741,6 +743,25 @@ parse_expression = function(state: ParseState, block: Block): Node
       local r = parse_type_list(state, block[4], "rets")
       node.rets = r
       node.body = parse_statements(state, block[5])
+   elseif kind == "macro_quote" then
+      if not block[1] then
+         return new_node(state, block, "literal_table")
+      end
+      local stmts = block[1]
+      if #stmts == 1 then
+         return block_to_constructor(state, stmts[1])
+      end
+      local list = new_node(state, block, "literal_table")
+      for i, stmt in ipairs(stmts) do
+         local item = new_node(state, stmt, "literal_table_item")
+         item.key_parsed = "implicit"
+         item.key = new_node(state, stmt, "integer")
+         item.key.tk = tostring(i)
+         item.key.constnum = i
+         item.value = block_to_constructor(state, stmt)
+         table.insert(list, item)
+      end
+      return list
    end
    return node
 end
@@ -1150,16 +1171,95 @@ parse_fns.local_macro = function(state: ParseState, block: Block): Node
    local r: TupleType
    r = parse_type_list(state, block[4], "rets")
    node.rets = r
-   node.body = parse_statements(state, block[5])
+   local body_stmts = parse_statements(state, block[5])
+   local fn = new_node(state, block, "local_function")
+   fn.name = node.name
+   fn.typeargs = node.typeargs
+   fn.args = args
+   fn.min_arity = min_arity
+   fn.rets = r
+   fn.body = body_stmts
+   fn[1] = body_stmts[1]
+   node.body = fn
 
    return node
 end
 
-parse_fns.macro_quote = function(state: ParseState, block: Block): Node
-   local node = new_node(state, block, "macro_quote")
-   if block[1] then
-      node.body = parse_statements(state, block[1])
+function block_to_constructor(state: ParseState, block: Block): Node
+   if not block then return nil end
+
+   if block.kind == "macro_var" then
+      local call = new_node(state, block, "op")
+      call.tk = nil
+      call.op = {
+         y = block.y,
+         x = block.x,
+         arity = 2,
+         op = "@funcall",
+         prec = precedences[2]["@funcall"],
+      }
+      call.e1 = new_node(state, block, "variable")
+      call.e1.tk = "clone"
+      call.e2 = new_node(state, block, "expression_list")
+      call.e2[1] = new_node(state, block[1], "variable")
+      call.e2[1].tk = block[1] and block[1].tk or ""
+      return call
    end
+
+   if block.kind == "assignment" then
+      if block.tk ~= "=" then
+         block.tk = "="
+      end
+      if block[1] and block[1].kind == "variable_list" and #block[1] == 1 then
+         block[1] = block[1][1]
+      end
+      if block[3] then
+         block[2] = block[3]
+         block[3] = nil
+      end
+   end
+
+   if block.kind == "expression_list" then
+      block.tk = nil
+   end
+
+   local node = new_node(state, block, "literal_table")
+   if not node.yend then
+      node.yend = block.yend or block.y
+   end
+
+   local kind_item = new_node(state, block, "literal_table_item")
+   kind_item.key_parsed = "short"
+   kind_item.key = new_node(state, block, "identifier")
+   kind_item.key.tk = "\"kind\""
+   kind_item.value = new_node(state, block, "string")
+   kind_item.value.tk = string.format("%q", block.kind)
+   kind_item.value.conststr = block.kind
+   table.insert(node, kind_item)
+
+   if block.tk then
+      local tk_item = new_node(state, block, "literal_table_item")
+      tk_item.key_parsed = "short"
+      tk_item.key = new_node(state, block, "identifier")
+      tk_item.key.tk = "\"tk\""
+      tk_item.value = new_node(state, block, "string")
+      tk_item.value.tk = string.format("%q", block.tk)
+      tk_item.value.conststr = block.tk
+      table.insert(node, tk_item)
+   end
+
+   for i, child in ipairs(block) do
+      if type(child) == "table" and child.kind then
+         local item = new_node(state, child, "literal_table_item")
+         item.key_parsed = "long"
+         item.key = new_node(state, child, "integer")
+         item.key.tk = tostring(i)
+         item.key.constnum = i
+         item.value = block_to_constructor(state, child)
+         table.insert(node, item)
+      end
+   end
+
    return node
 end
 
@@ -1448,6 +1548,7 @@ parse_block = function(state: ParseState, block: Block): Node
 end
 
 function block_parser.parse(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+   filename = filename or "input"
    if not input then
       return nil, {{ filename = filename, y = 1, x = 1, msg = "input is nil" }}, {}
    end
@@ -1469,6 +1570,7 @@ end
 
 function block_parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
    errs = errs or {}
+   filename = filename or "input"
    local block, read_required = reader.read_program(tokens, errs, filename, parse_lang)
    local ast, parse_errs, required_modules = block_parser.parse(block, filename, parse_lang)
    for _, e in ipairs(parse_errs) do

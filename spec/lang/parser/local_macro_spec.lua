@@ -11,17 +11,6 @@ describe("local macro parsing", function()
       assert.same('local_macro', ast[1].kind)
    end)
 
-   it("parses quotes and macro vars", function()
-      local ast, errs = tl.parse([[
-         local macro bar!(v: Block): Block
-            return `local $v = 1`
-         end
-      ]])
-      assert.same({}, errs)
-      local quote = ast[1].body[1].exps[1]
-      assert.same('macro_quote', quote.kind)
-  end)
-
    it("rejects macro vars outside quotes", function()
       local _, errs = tl.parse([[
          local macro baz!(v: Block): Block
@@ -31,14 +20,16 @@ describe("local macro parsing", function()
       assert.not_same({}, errs)
    end)
 
-   it("handles multiple statements inside quotes", function()
+   it("quotes a simple statement into a constructor", function()
       local ast, errs = tl.parse([[
-         local macro qux!(a: Block, b: Block): Block
-            return `local $a = 1; local $b = 2`
+         local macro bar!(): Block
+            return `x = 1`
          end
       ]])
       assert.same({}, errs)
       local quote = ast[1].body[1].exps[1]
-      assert.same('macro_quote', quote.kind)
-  end)
+      local lua, err = tl.generate(quote, "5.4")
+      assert.is_nil(err)
+      assert.same('{ kind = "assignment", tk = "=", [1] = { kind = "variable", tk = "x" }, [2] = { kind = "expression_list", [1] = { kind = "integer", tk = "1" } } }', lua)
+   end)
 end)

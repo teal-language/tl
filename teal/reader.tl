@@ -651,8 +651,22 @@ local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, 
       return i + 1, typ
    end
 
-   local typ = new_nominal(ps, i, tk)
-   i = i + 1
+   local typ: Block
+   if ps.allow_macro_vars and tk == "$" then
+      local dtk = ps.tokens[i]
+      i = i + 1
+      local ident: Block
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return fail(ps, i, "syntax error, expected identifier")
+      end
+      typ = new_nominal(ps, i - 1, nil)
+      typ[1] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+   else
+      typ = new_nominal(ps, i, tk)
+      i = i + 1
+   end
+
    while ps.tokens[i].tk == "." do
       i = i + 1
       if ps.tokens[i].kind == "identifier" then
@@ -660,6 +674,17 @@ local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, 
          nom.tk = ps.tokens[i].tk
          table.insert(typ, nom)
          i = i + 1
+      elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+         local dtk = ps.tokens[i]
+         i = i + 1
+         local ident: Block
+         i, ident = verify_kind(ps, i, "identifier")
+         if not ident then
+            return fail(ps, i, "syntax error, expected identifier")
+         end
+         local nom = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+         table.insert(typ, nom)
+         i = i + 0
       else
          return fail(ps, i, "syntax error, expected identifier")
       end
@@ -675,7 +700,7 @@ end
 
 local function read_base_type(ps: ReadState, i: integer): integer, Block, integer
    local tk = ps.tokens[i].tk
-   if ps.tokens[i].kind == "identifier" then
+   if ps.tokens[i].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i].tk == "$") then
       return read_simple_type_or_nominal(ps, i)
    elseif tk == "{" then
       local istart = i
@@ -1055,16 +1080,27 @@ do
 
             local key: Block
             i = i + 1
-            if ps.tokens[i].kind ~= "identifier" then
-               local skipped = skip(ps, i, read_type as SkipFunction)
-               if skipped > i + 1 then
-                  fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
-                  return skipped, failstore(ps, tkop, e1)
+            if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+               local dtk = ps.tokens[i]
+               i = i + 1
+               local ident: Block
+               i, ident = verify_kind(ps, i, "identifier")
+               if not ident then
+                  return i, failstore(ps, tkop, e1)
                end
-            end
-            i, key = verify_kind(ps, i, "identifier")
-            if not key then
-               return i, failstore(ps, tkop, e1)
+               key = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+            else
+               if ps.tokens[i].kind ~= "identifier" then
+                  local skipped = skip(ps, i, read_type as SkipFunction)
+                  if skipped > i + 1 then
+                     fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
+                     return skipped, failstore(ps, tkop, e1)
+                  end
+               end
+               i, key = verify_kind(ps, i, "identifier")
+               if not key then
+                  return i, failstore(ps, tkop, e1)
+               end
             end
 
             if op_kind == "op_colon" then
@@ -1943,6 +1979,7 @@ local function read_assignment_expression_list(ps: ReadState, i: integer, asgn: 
       end
       table.insert(asgn[3], val)
    until ps.tokens[i].tk ~= ","
+   end_at(asgn[3], ps.tokens[i - 1])
    return i, asgn
 end
 
@@ -1981,6 +2018,8 @@ do
          end
       end
 
+      end_at(asgn[1], ps.tokens[i - 1])
+
       if ps.tokens[i].tk ~= "=" then
          verify_tk(ps, i, "=")
          return i
@@ -1999,6 +2038,8 @@ local function read_variable_declarations(ps: ReadState, i: integer, node_name: 
    if #asgn[1] == 0 then
       return fail(ps, i, "expected a local variable definition")
    end
+
+   end_at(asgn[1], ps.tokens[i - 1])
 
    i, asgn[2] = read_type_list(ps, i, "decltuple")
 
@@ -2050,9 +2091,20 @@ read_type_declaration = function(ps: ReadState, i: integer, node_name: BlockKind
    local asgn: Block = new_block(ps, i, node_name)
    local var: Block
 
-   i, var = verify_kind(ps, i, "identifier")
-   if not var then
-      return fail(ps, i, "expected a type name")
+   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+      local dtk = ps.tokens[i]
+      i = i + 1
+      local ident: Block
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return fail(ps, i, "expected a type name")
+      end
+      var = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+   else
+      i, var = verify_kind(ps, i, "identifier")
+      if not var then
+         return fail(ps, i, "expected a type name")
+      end
    end
    local typeargs: Block
    local itypeargs = i
@@ -2139,7 +2191,7 @@ local function read_local(ps: ReadState, i: integer): integer, Block
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
       return read_local_function(ps, i)
-   elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
+   elseif ntk == "type" and (ps.tokens[i + 2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i + 2].tk == "$")) then
       return read_type_declaration(ps, i + 2, "local_type")
    elseif ntk == "macro" and ps.tokens[i+2].kind == "identifier" then
       return read_local_macro(ps, i)
@@ -2314,10 +2366,11 @@ end
 
 function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {string}
    errs = errs or {}
+   filename = filename or "input"
    local ps: ReadState = {
       tokens = tokens as {Token},
       errs = errs,
-      filename = filename or "",
+      filename = filename,
       required_modules = {},
       read_lang = read_lang,
       allow_macro_vars = allow_macro_vars or false,
@@ -2338,6 +2391,7 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
 end
 
 function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
+   filename = filename or "input"
    local tokens, errs = lexer.lex(input, filename)
    local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    return node, errs, required_modules
