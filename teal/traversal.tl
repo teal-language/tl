@@ -339,6 +339,7 @@ local no_traverse_nodes: {NodeKind : boolean} = {
    ["string"] = true,
    ["boolean"] = true,
    ["integer"] = true,
+   ["hashbang" as NodeKind] = true,
    ["variable"] = true,
    ["error_node"] = true,
    ["identifier"] = true,
@@ -405,6 +406,8 @@ function traversal.traverse_nodes<S, T>(s: S, root: types.Node,
       ["literal_table"] = walk_children,
       ["variable_list"] = walk_children,
       ["expression_list"] = walk_children,
+      ["typelist" as NodeKind] = walk_children,
+      ["tuple_type" as NodeKind] = walk_children,
 
       ["literal_table_item"] = function(ast: Node, xs: {T})
          xs[1] = recurse(ast.key)
