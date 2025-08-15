@@ -14461,7 +14461,7 @@ do
                end
             else
                if not t.elements then
-                  t.elements = iface
+                  t.elements = iface.elements
                else
                   if not self:same_type(iface.elements, t.elements) then
                      self.errs:add(t, "incompatible array interfaces")

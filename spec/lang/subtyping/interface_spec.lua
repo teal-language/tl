@@ -247,4 +247,13 @@ describe("subtyping of interfaces:", function()
       { y = 13, msg = "I is not a R" },
       { y = 14, msg = "I is not a R" },
    }))
+
+   it("array inheritance works (regression test for #1022)", util.check([[
+      local interface A is {string}
+      end
+      local interface B is A
+      end
+      local _a: A = { "a", "b" }
+      local _b: B = { "c" }
+   ]]))
 end)
