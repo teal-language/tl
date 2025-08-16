@@ -1189,7 +1189,6 @@ do
             tk = tk,
             kind = kind,
             comments = comments,
-
          }
          comments = nil
          in_token = false
@@ -1595,7 +1594,7 @@ do
          end
       end
 
-      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$", comments = comments })
+      table.insert(tokens, { x = x + 1, y = y, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
    end
@@ -3671,7 +3670,7 @@ local function parse_function(ps: ParseState, i: integer, fk: FunctionKind): int
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method and fn.args then
-      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier" })
       fn.min_arity = fn.min_arity + 1
    end
 
@@ -9241,7 +9240,7 @@ do
       return false
    end
 
-   function TypeChecker:subtype_record(a: RecordLikeType, b: RecordLikeType): boolean, {Error}
+   function TypeChecker:subtype_record(a: RecordType, b: RecordLikeType): boolean, {Error}
       -- assert(b.typename == "record")
       if a.elements and b.elements then
          if not self:is_a(a.elements, b.elements) then
@@ -9263,6 +9262,8 @@ do
             if not ok then
                self.errs:add_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
             end
+         elseif (not bk) and b is RecordType then
+            table.insert(errs, Err("record field doesn't exist: " .. k))
          end
       end
       if #errs > 0 then
@@ -9419,7 +9420,7 @@ do
       assert(et is EmptyTableType, u.typename)
       local keys = et.keys
       if not (values is EmptyTableType or values is UnresolvedEmptyTableValueType) then
-         local infer_to = keys is NumericType -- ideally integer only
+         local infer_to: ArrayType | MapType = keys is NumericType -- ideally integer only
                           and an_array(w, values)
                           or  a_map(w, keys, values)
          self:infer_emptytable(et, self:infer_at(w, infer_to))
@@ -15067,7 +15068,6 @@ function tl.check_string(input: string, env?: Env, filename?: string, parse_lang
 
    if (not env.keep_going) and #syntax_errors > 0 then
       local result = {
-         ok = false,
          filename = filename,
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
