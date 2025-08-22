@@ -1,0 +1,669 @@
+diff --git a/spec/lang/macro/import_types_spec.lua b/spec/lang/macro/import_types_spec.lua
+index f91cd25085cde83a4b24fc4290627600dcee6d01..ff6722663072d82d9eca9a4f7dc0c73516de0d86 100644
+--- a/spec/lang/macro/import_types_spec.lua
++++ b/spec/lang/macro/import_types_spec.lua
+@@ -1,39 +1,43 @@
+ local tl = require('tl')
+ 
+ describe('macro import_types', function()
+    it('parses and generates import_types macro', function()
+       local code = [[
+-         local macro import_types!(var: Block, modname: string, ...): Block
++         local macro import_types!(var: Block, modname: Block, ...: Block): Block
+             expect(var, "identifier")
+             expect(modname, "string")
+             local out = block("statements")
+             table.insert(out, `local $var = require($modname)`)
+             for i = 1, select("#", ...) do
+                local b = select(i, ...)
+                expect(b, "identifier")
++               table.insert(out, `local type $b = $var.$b`)
+             end
+             return out
+          end
+       ]]
+       local ast, errs = tl.parse(code)
+       assert.same({}, errs)
+       local macro = ast[1]
+       local lua, err = tl.generate(macro.body, '5.4')
+       assert.is_nil(err)
+       assert.match('local function import_types', lua, 1, true)
+       assert.match('expect%(%s*var%s*,%s*"identifier"%s*%)', lua)
+       assert.match('expect%(%s*modname%s*,%s*"string"%s*%)', lua)
+       assert.match('block%(%s*"statements"%s*%)', lua)
+       assert.match('clone%(%s*var%s*%)', lua)
++      assert.match('clone%(%s*modname%s*%)', lua)
++      assert.match('clone%(%s*b%s*%)', lua)
++      assert.match('kind%s*=%s*"op_dot"', lua)
+       assert.match('for i = 1, select%("#", %.%.%.%) do', lua)
+       assert.match('return out', lua)
+    end)
+ 
+    it('lua generator ignores macros by default', function()
+       local ast, errs = tl.parse([[ local macro foo!(): Block end ]])
+       assert.same({}, errs)
+       local lua, err = tl.generate(ast, '5.4')
+       assert.is_nil(err)
+       assert.same('', lua)
+    end)
+ end)
+diff --git a/teal/reader.lua b/teal/reader.lua
+index 5628d48e15d12c2afb83beeab511d6ebf4f06e15..3b5f13012d7235da2457037022331f668f808756 100644
+--- a/teal/reader.lua
++++ b/teal/reader.lua
+@@ -629,75 +629,100 @@ local function read_function_type(ps, i)
+       typ[1] = new_tuple(ps, i, args_typelist, true)
+ 
+       local rets_typelist = new_block(ps, i, "typelist")
+       rets_typelist[1] = any
+       typ[2] = new_tuple(ps, i, rets_typelist, true)
+    end
+ 
+    if typeargs then
+       return i, new_generic(ps, i, typeargs, typ)
+    end
+ 
+    return i, typ
+ end
+ 
+ local function read_simple_type_or_nominal(ps, i)
+    local tk = ps.tokens[i].tk
+    if tk == "table" and ps.tokens[i + 1].tk ~= "." then
+       local typ = new_type(ps, i, "map_type")
+       local any = new_type(ps, i, "nominal_type")
+       any.tk = "any"
+       typ[1] = any
+       typ[2] = any
+       return i + 1, typ
+    end
+ 
+-   local typ = new_nominal(ps, i, tk)
+-   i = i + 1
++   local typ
++   if ps.allow_macro_vars and tk == "$" then
++      local dtk = ps.tokens[i]
++      i = i + 1
++      local ident
++      i, ident = verify_kind(ps, i, "identifier")
++      if not ident then
++         return fail(ps, i, "syntax error, expected identifier")
++      end
++      typ = new_nominal(ps, i - 1, nil)
++      typ[1] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++   else
++      typ = new_nominal(ps, i, tk)
++      i = i + 1
++   end
++
+    while ps.tokens[i].tk == "." do
+       i = i + 1
+       if ps.tokens[i].kind == "identifier" then
+          local nom = new_block(ps, i, "identifier")
+          nom.tk = ps.tokens[i].tk
+          table.insert(typ, nom)
+          i = i + 1
++      elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++         local dtk = ps.tokens[i]
++         i = i + 1
++         local ident
++         i, ident = verify_kind(ps, i, "identifier")
++         if not ident then
++            return fail(ps, i, "syntax error, expected identifier")
++         end
++         local nom = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++         table.insert(typ, nom)
++         i = i + 0
+       else
+          return fail(ps, i, "syntax error, expected identifier")
+       end
+    end
+ 
+    if ps.tokens[i].tk == "<" then
+       local t
+       i, t = read_anglebracket_list(ps, i, read_type)
+       table.insert(typ, t)
+    end
+    return i, typ
+ end
+ 
+ local function read_base_type(ps, i)
+    local tk = ps.tokens[i].tk
+-   if ps.tokens[i].kind == "identifier" then
++   if ps.tokens[i].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i].tk == "$") then
+       return read_simple_type_or_nominal(ps, i)
+    elseif tk == "{" then
+       local istart = i
+       i = i + 1
+       local t
+       i, t = read_type(ps, i)
+       if not t then
+          return i
+       end
+       if ps.tokens[i].tk == "}" then
+          local decl = new_type(ps, istart, "array_type")
+          decl[1] = t
+          end_at(decl, ps.tokens[i])
+          i = verify_tk(ps, i, "}")
+          return i, decl
+       elseif ps.tokens[i].tk == "," then
+          local decl = new_type(ps, istart, "typelist")
+          decl[1] = t
+          local n = 2
+          repeat
+             i = i + 1
+             i, decl[n] = read_type(ps, i)
+             if not decl[n] then
+                break
+             end
+@@ -1033,60 +1058,71 @@ do
+          if not e1 then
+             fail(ps, prev_i, "expected an expression")
+             return i
+          end
+          e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = "paren", [1] = e1 }
+       else
+          i, e1 = read_literal(ps, i)
+       end
+ 
+       if not e1 then
+          return i
+       end
+ 
+       while true do
+          local tkop = ps.tokens[i]
+          if tkop.kind == "," or tkop.kind == ")" then
+             break
+          end
+          if tkop.tk == "." or tkop.tk == ":" then
+             local op_kind = op_map[2][tkop.tk]
+ 
+             local prev_i = i
+ 
+             local key
+             i = i + 1
+-            if ps.tokens[i].kind ~= "identifier" then
+-               local skipped = skip(ps, i, read_type)
+-               if skipped > i + 1 then
+-                  fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
+-                  return skipped, failstore(ps, tkop, e1)
++            if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++               local dtk = ps.tokens[i]
++               i = i + 1
++               local ident
++               i, ident = verify_kind(ps, i, "identifier")
++               if not ident then
++                  return i, failstore(ps, tkop, e1)
++               end
++               key = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++            else
++               if ps.tokens[i].kind ~= "identifier" then
++                  local skipped = skip(ps, i, read_type)
++                  if skipped > i + 1 then
++                     fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
++                     return skipped, failstore(ps, tkop, e1)
++                  end
++               end
++               i, key = verify_kind(ps, i, "identifier")
++               if not key then
++                  return i, failstore(ps, tkop, e1)
+                end
+-            end
+-            i, key = verify_kind(ps, i, "identifier")
+-            if not key then
+-               return i, failstore(ps, tkop, e1)
+             end
+ 
+             if op_kind == "op_colon" then
+                if not args_starters[ps.tokens[i].kind] then
+                   if ps.tokens[i].tk == "=" then
+                      fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
+                   else
+                      fail(ps, i, "expected a function call for a method")
+                   end
+                   return i, failstore(ps, tkop, e1)
+                end
+ 
+                if not after_valid_prefixexp(ps, e1, prev_i) then
+                   fail(ps, prev_i, "cannot call a method on this expression")
+                   return i, failstore(ps, tkop, e1)
+                end
+             end
+ 
+             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [1] = e1, [2] = key, tk = tkop.tk }
+          elseif tkop.tk == "(" then
+             local prev_tk = ps.tokens[i - 1]
+             if tkop.y > prev_tk.y and ps.read_lang ~= "lua" then
+                table.insert(ps.tokens, i, { y = prev_tk.y, x = prev_tk.x + #prev_tk.tk, tk = ";", kind = ";" })
+                break
+             end
+@@ -2033,53 +2069,64 @@ local function read_type_require(ps, i, asgn)
+    if asgn[2].kind ~= "op_funcall" and asgn[2].kind ~= "op_dot" and asgn[2].kind ~= "variable" then
+       fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
+       return i
+    end
+    if not reader.node_is_require_call(asgn[2]) then
+       fail(ps, istart, "require() for type declarations must have a literal argument")
+       return i
+    end
+    return i, asgn
+ end
+ 
+ local function read_special_type_declaration(ps, i, asgn)
+    if ps.tokens[i].tk == "require" then
+       return true, read_type_require(ps, i, asgn)
+    elseif ps.tokens[i].tk == "pcall" then
+       fail(ps, i, "pcall() cannot be used in type declarations")
+       return true, i
+    end
+    return false, i, asgn
+ end
+ 
+ read_type_declaration = function(ps, i, node_name)
+    local asgn = new_block(ps, i, node_name)
+    local var
+ 
+-   i, var = verify_kind(ps, i, "identifier")
+-   if not var then
+-      return fail(ps, i, "expected a type name")
++   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++      local dtk = ps.tokens[i]
++      i = i + 1
++      local ident
++      i, ident = verify_kind(ps, i, "identifier")
++      if not ident then
++         return fail(ps, i, "expected a type name")
++      end
++      var = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++   else
++      i, var = verify_kind(ps, i, "identifier")
++      if not var then
++         return fail(ps, i, "expected a type name")
++      end
+    end
+    local typeargs
+    local itypeargs = i
+    i, typeargs = read_typeargs_if_any(ps, i)
+ 
+    asgn[1] = var
+ 
+    if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
+       return i, asgn
+    end
+ 
+    i = verify_tk(ps, i, "=")
+    local istart = i
+ 
+    if ps.tokens[i].kind == "identifier" then
+       local is_done
+       is_done, i, asgn = read_special_type_declaration(ps, i, asgn)
+       if is_done then
+          return i, asgn
+       end
+    end
+ 
+    i, asgn[2] = read_newtype(ps, i)
+    if not asgn[2] then
+       return i
+@@ -2122,51 +2169,51 @@ end
+ 
+ local function read_local_macroexp(ps, i)
+    local istart = i
+    i = i + 2
+    local node = new_block(ps, i, "local_macroexp")
+    i, node[1] = read_identifier(ps, i)
+    i, node[2] = read_macroexp(ps, istart, i)
+    end_at(node, ps.tokens[i - 1])
+    return i, node
+ end
+ 
+ local function read_local_macro(ps, i)
+    local istart = i
+    i = verify_tk(ps, i, "local")
+    i = verify_tk(ps, i, "macro")
+    local node = new_block(ps, istart, "local_macro")
+    i, node[1] = read_identifier(ps, i)
+    i = verify_tk(ps, i, "!")
+    return read_function_args_rets_body(ps, i, node)
+ end
+ 
+ local function read_local(ps, i)
+    local ntk = ps.tokens[i + 1].tk
+    if ntk == "function" then
+       return read_local_function(ps, i)
+-   elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
++   elseif ntk == "type" and (ps.tokens[i + 2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i + 2].tk == "$")) then
+       return read_type_declaration(ps, i + 2, "local_type")
+    elseif ntk == "macro" and ps.tokens[i + 2].kind == "identifier" then
+       return read_local_macro(ps, i)
+    elseif ntk == "macroexp" and ps.tokens[i + 2].kind == "identifier" then
+       return read_local_macroexp(ps, i)
+    elseif read_type_body_fns[ntk] and ps.tokens[i + 2].kind == "identifier" then
+       return read_type_constructor(ps, i, "local_type", ntk)
+    end
+    return read_variable_declarations(ps, i + 1, "local_declaration")
+ end
+ 
+ local function read_global(ps, i)
+    local ntk = ps.tokens[i + 1].tk
+    if ntk == "function" then
+       i = verify_tk(ps, i, "global")
+       i = verify_tk(ps, i, "function")
+       local fn = new_block(ps, i - 2, "global_function")
+       i, fn[1] = read_identifier(ps, i)
+       return read_function_args_rets_body(ps, i, fn)
+    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
+       return read_type_declaration(ps, i + 2, "global_type")
+    elseif read_type_body_fns[ntk] and ps.tokens[i + 2].kind == "identifier" then
+       return read_type_constructor(ps, i, "global_type", ntk)
+    elseif ps.tokens[i + 1].kind == "identifier" then
+       return read_variable_declarations(ps, i + 1, "global_declaration")
+diff --git a/teal/reader.tl b/teal/reader.tl
+index de5b6bf02ce9dbd50a8ea96b293a3f7adc24ef98..dbe8171e32196e117cf5eb733f2a4d1cf2e23e10 100644
+--- a/teal/reader.tl
++++ b/teal/reader.tl
+@@ -629,75 +629,100 @@ local function read_function_type(ps: ReadState, i: integer): integer, Block
+      typ[1] = new_tuple(ps, i, args_typelist, true)
+ 
+      local rets_typelist = new_block(ps, i, "typelist")
+      rets_typelist[1] = any
+      typ[2] = new_tuple(ps, i, rets_typelist, true)
+   end
+ 
+    if typeargs then
+       return i, new_generic(ps, i, typeargs, typ)
+    end
+ 
+    return i, typ
+ end
+ 
+ local function read_simple_type_or_nominal(ps: ReadState, i: integer): integer, Block
+    local tk = ps.tokens[i].tk
+    if tk == "table" and ps.tokens[i + 1].tk ~= "."  then
+       local typ = new_type(ps, i, "map_type")
+       local any = new_type(ps, i, "nominal_type")
+       any.tk = "any"
+       typ[1] = any
+       typ[2] = any
+       return i + 1, typ
+    end
+ 
+-   local typ = new_nominal(ps, i, tk)
+-   i = i + 1
++   local typ: Block
++   if ps.allow_macro_vars and tk == "$" then
++      local dtk = ps.tokens[i]
++      i = i + 1
++      local ident: Block
++      i, ident = verify_kind(ps, i, "identifier")
++      if not ident then
++         return fail(ps, i, "syntax error, expected identifier")
++      end
++      typ = new_nominal(ps, i - 1, nil)
++      typ[1] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++   else
++      typ = new_nominal(ps, i, tk)
++      i = i + 1
++   end
++
+    while ps.tokens[i].tk == "." do
+       i = i + 1
+       if ps.tokens[i].kind == "identifier" then
+          local nom = new_block(ps, i, "identifier")
+          nom.tk = ps.tokens[i].tk
+          table.insert(typ, nom)
+          i = i + 1
++      elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++         local dtk = ps.tokens[i]
++         i = i + 1
++         local ident: Block
++         i, ident = verify_kind(ps, i, "identifier")
++         if not ident then
++            return fail(ps, i, "syntax error, expected identifier")
++         end
++         local nom = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++         table.insert(typ, nom)
++         i = i + 0
+       else
+          return fail(ps, i, "syntax error, expected identifier")
+       end
+    end
+ 
+    if ps.tokens[i].tk == "<" then
+       local t: Block
+       i, t = read_anglebracket_list(ps, i, read_type)
+       table.insert(typ, t)
+    end
+    return i, typ
+ end
+ 
+ local function read_base_type(ps: ReadState, i: integer): integer, Block, integer
+    local tk = ps.tokens[i].tk
+-   if ps.tokens[i].kind == "identifier" then
++   if ps.tokens[i].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i].tk == "$") then
+       return read_simple_type_or_nominal(ps, i)
+    elseif tk == "{" then
+       local istart = i
+       i = i + 1
+       local t: Block
+       i, t = read_type(ps, i)
+       if not t then
+          return i
+       end
+       if ps.tokens[i].tk == "}" then
+          local decl = new_type(ps, istart, "array_type")
+          decl[1] = t
+          end_at(decl as Block, ps.tokens[i])
+          i = verify_tk(ps, i, "}")
+          return i, decl
+       elseif ps.tokens[i].tk == "," then
+          local decl = new_type(ps, istart, "typelist")
+          decl[1] = t
+          local n = 2
+          repeat
+             i = i + 1
+             i, decl[n] = read_type(ps, i)
+             if not decl[n] then
+                break
+             end
+@@ -1033,60 +1058,71 @@ do
+          if not e1 then
+             fail(ps, prev_i, "expected an expression")
+             return i
+          end
+          e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = "paren", [1] = e1 }
+       else
+          i, e1 = read_literal(ps, i)
+       end
+ 
+       if not e1 then
+          return i
+       end
+ 
+       while true do
+          local tkop = ps.tokens[i]
+          if tkop.kind == "," or tkop.kind == ")" then -- check most common terminators first
+             break
+          end
+          if tkop.tk == "." or tkop.tk == ":" then
+             local op_kind = op_map[2][tkop.tk]
+ 
+             local prev_i = i
+ 
+             local key: Block
+             i = i + 1
+-            if ps.tokens[i].kind ~= "identifier" then
+-               local skipped = skip(ps, i, read_type as SkipFunction)
+-               if skipped > i + 1 then
+-                  fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
+-                  return skipped, failstore(ps, tkop, e1)
++            if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++               local dtk = ps.tokens[i]
++               i = i + 1
++               local ident: Block
++               i, ident = verify_kind(ps, i, "identifier")
++               if not ident then
++                  return i, failstore(ps, tkop, e1)
++               end
++               key = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++            else
++               if ps.tokens[i].kind ~= "identifier" then
++                  local skipped = skip(ps, i, read_type as SkipFunction)
++                  if skipped > i + 1 then
++                     fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
++                     return skipped, failstore(ps, tkop, e1)
++                  end
++               end
++               i, key = verify_kind(ps, i, "identifier")
++               if not key then
++                  return i, failstore(ps, tkop, e1)
+                end
+-            end
+-            i, key = verify_kind(ps, i, "identifier")
+-            if not key then
+-               return i, failstore(ps, tkop, e1)
+             end
+ 
+             if op_kind == "op_colon" then
+                if not args_starters[ps.tokens[i].kind] then
+                   if ps.tokens[i].tk == "=" then
+                      fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
+                   else
+                      fail(ps, i, "expected a function call for a method")
+                   end
+                   return i, failstore(ps, tkop, e1)
+                end
+ 
+                if not after_valid_prefixexp(ps, e1, prev_i) then
+                   fail(ps, prev_i, "cannot call a method on this expression")
+                   return i, failstore(ps, tkop, e1)
+                end
+             end
+ 
+             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [1] = e1, [2] = key, tk = tkop.tk }
+          elseif tkop.tk == "(" then
+             local prev_tk = ps.tokens[i - 1]
+             if tkop.y > prev_tk.y and ps.read_lang ~= "lua" then
+                table.insert(ps.tokens, i, { y = prev_tk.y, x = prev_tk.x + #prev_tk.tk, tk = ";", kind = ";" })
+                break
+             end
+@@ -2033,53 +2069,64 @@ local function read_type_require(ps: ReadState, i: integer, asgn: Block): intege
+    if asgn[2].kind ~= "op_funcall" and asgn[2].kind ~= "op_dot" and asgn[2].kind ~= "variable" then
+       fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
+       return i
+    end
+    if not reader.node_is_require_call(asgn[2]) then
+       fail(ps, istart, "require() for type declarations must have a literal argument")
+       return i
+    end
+    return i, asgn
+ end
+ 
+ local function read_special_type_declaration(ps: ReadState, i: integer, asgn: Block): boolean, integer, Block
+    if ps.tokens[i].tk == "require" then
+       return true, read_type_require(ps, i, asgn)
+    elseif ps.tokens[i].tk == "pcall" then
+       fail(ps, i, "pcall() cannot be used in type declarations")
+       return true, i
+    end
+    return false, i, asgn
+ end
+ 
+ read_type_declaration = function(ps: ReadState, i: integer, node_name: BlockKind): integer, Block
+    local asgn: Block = new_block(ps, i, node_name)
+    local var: Block
+ 
+-   i, var = verify_kind(ps, i, "identifier")
+-   if not var then
+-      return fail(ps, i, "expected a type name")
++   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
++      local dtk = ps.tokens[i]
++      i = i + 1
++      local ident: Block
++      i, ident = verify_kind(ps, i, "identifier")
++      if not ident then
++         return fail(ps, i, "expected a type name")
++      end
++      var = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
++   else
++      i, var = verify_kind(ps, i, "identifier")
++      if not var then
++         return fail(ps, i, "expected a type name")
++      end
+    end
+    local typeargs: Block
+    local itypeargs = i
+    i, typeargs = read_typeargs_if_any(ps, i)
+ 
+    asgn[1] = var
+ 
+    if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
+       return i, asgn
+    end
+ 
+    i = verify_tk(ps, i, "=")
+    local istart = i
+ 
+    if ps.tokens[i].kind == "identifier" then
+       local is_done: boolean
+       is_done, i, asgn = read_special_type_declaration(ps, i, asgn)
+       if is_done then
+          return i, asgn
+       end
+    end
+ 
+    i, asgn[2] = read_newtype(ps, i)
+    if not asgn[2] then
+       return i
+@@ -2122,51 +2169,51 @@ end
+ 
+ local function read_local_macroexp(ps: ReadState, i: integer): integer, Block
+    local istart = i
+    i = i + 2 -- skip `local`
+    local node = new_block(ps, i, "local_macroexp")
+    i, node[1] = read_identifier(ps, i)
+    i, node[2] = read_macroexp(ps, istart, i)
+    end_at(node, ps.tokens[i - 1])
+    return i, node
+ end
+ 
+ local function read_local_macro(ps: ReadState, i: integer): integer, Block
+    local istart = i
+    i = verify_tk(ps, i, "local")
+    i = verify_tk(ps, i, "macro")
+    local node = new_block(ps, istart, "local_macro")
+    i, node[1] = read_identifier(ps, i)
+    i = verify_tk(ps, i, "!")
+    return read_function_args_rets_body(ps, i, node)
+ end
+ 
+ local function read_local(ps: ReadState, i: integer): integer, Block
+    local ntk = ps.tokens[i + 1].tk
+    if ntk == "function" then
+       return read_local_function(ps, i)
+-   elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
++   elseif ntk == "type" and (ps.tokens[i + 2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i + 2].tk == "$")) then
+       return read_type_declaration(ps, i + 2, "local_type")
+    elseif ntk == "macro" and ps.tokens[i+2].kind == "identifier" then
+       return read_local_macro(ps, i)
+    elseif ntk == "macroexp" and ps.tokens[i+2].kind == "identifier" then
+       return read_local_macroexp(ps, i)
+    elseif read_type_body_fns[ntk] and ps.tokens[i+2].kind == "identifier" then
+       return read_type_constructor(ps, i, "local_type", ntk as BlockKind)
+    end
+    return read_variable_declarations(ps, i + 1, "local_declaration")
+ end
+ 
+ local function read_global(ps: ReadState, i: integer): integer, Block
+    local ntk = ps.tokens[i + 1].tk
+    if ntk == "function" then
+       i = verify_tk(ps, i, "global")
+       i = verify_tk(ps, i, "function")
+       local fn = new_block(ps, i - 2, "global_function")
+       i, fn[1] = read_identifier(ps, i)
+       return read_function_args_rets_body(ps, i, fn)
+    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
+       return read_type_declaration(ps, i + 2, "global_type")
+    elseif read_type_body_fns[ntk] and ps.tokens[i+2].kind == "identifier" then
+       return read_type_constructor(ps, i, "global_type", ntk as BlockKind)
+    elseif ps.tokens[i+1].kind == "identifier" then
+       return read_variable_declarations(ps, i + 1, "global_declaration")
