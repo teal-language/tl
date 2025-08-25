@@ -536,8 +536,13 @@ function traversal.traverse_nodes(s, root,
          end
       end,
 
-      ["local_macro"] = function()
+      ["local_macro"] = function(ast, xs)
+         xs[1] = recurse(ast.body)
+      end,
 
+      ["macro_invocation"] = function(ast, xs)
+         xs[1] = recurse(ast.e1)
+         xs[2] = recurse(ast.args)
       end,
    }
 

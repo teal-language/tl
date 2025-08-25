@@ -143,6 +143,7 @@ local lexer = require("teal.lexer")
 
 
 
+
 local reader = {}
 
 
@@ -152,6 +153,222 @@ local reader = {}
 
 
 
+
+local BLOCK_INDEXES = {
+   PRAGMA = {
+      KEY = 1,
+      VALUE = 2,
+   },
+   IF = {
+      BLOCKS = 1,
+   },
+   IF_BLOCK = {
+      COND = 1,
+      BODY = 2,
+   },
+   WHILE = {
+      COND = 1,
+      BODY = 2,
+   },
+   FORNUM = {
+      VAR = 1,
+      FROM = 2,
+      TO = 3,
+      STEP = 4,
+      BODY = 5,
+   },
+   FORIN = {
+      VARS = 1,
+      EXPS = 2,
+      BODY = 3,
+   },
+   REPEAT = {
+      BODY = 1,
+      COND = 2,
+   },
+   DO = {
+      BODY = 1,
+   },
+   GOTO = {
+      LABEL = 1,
+   },
+   LABEL = {
+      NAME = 1,
+   },
+   RETURN = {
+      EXPS = 1,
+   },
+   FUNCTION = {
+      TYPEARGS = 2,
+      ARGS = 3,
+      RETS = 4,
+      BODY = 5,
+   },
+   LOCAL_FUNCTION = {
+      NAME = 1,
+      TYPEARGS = 2,
+      ARGS = 3,
+      RETS = 4,
+      BODY = 5,
+   },
+   GLOBAL_FUNCTION = {
+      NAME = 1,
+      TYPEARGS = 2,
+      ARGS = 3,
+      RETS = 4,
+      BODY = 5,
+   },
+   RECORD_FUNCTION = {
+      OWNER = 1,
+      NAME = 2,
+      TYPEARGS = 3,
+      ARGS = 4,
+      RETS = 5,
+      BODY = 6,
+   },
+   LOCAL_MACRO = {
+      NAME = 1,
+      TYPEARGS = 2,
+      ARGS = 3,
+      RETS = 4,
+      BODY = 5,
+   },
+   LOCAL_MACROEXP = {
+      NAME = 1,
+      EXP = 2,
+   },
+   LOCAL_DECLARATION = {
+      VARS = 1,
+      DECL = 2,
+      EXPS = 3,
+   },
+   GLOBAL_DECLARATION = {
+      VARS = 1,
+      DECL = 2,
+      EXPS = 3,
+   },
+   LOCAL_TYPE = {
+      VAR = 1,
+      VALUE = 2,
+   },
+   GLOBAL_TYPE = {
+      VAR = 1,
+      VALUE = 2,
+   },
+   ASSIGNMENT = {
+      VARS = 1,
+      EXPS = 3,
+   },
+   VARIABLE = {
+      ANNOTATION = 1,
+   },
+   ARGUMENT = {
+      ANNOTATION = 1,
+   },
+   ARGUMENT_LIST = {
+      FIRST = 1,
+   },
+   VARIABLE_LIST = {
+      FIRST = 1,
+   },
+   EXPRESSION_LIST = {
+      FIRST = 1,
+      SECOND = 2,
+   },
+   LITERAL_TABLE_ITEM = {
+      KEY = 1,
+      VALUE = 2,
+      TYPED_VALUE = 3,
+   },
+   OP = {
+      E1 = 1,
+      E2 = 2,
+   },
+   PAREN = {
+      EXP = 1,
+   },
+   MACRO_QUOTE = {
+      BLOCK = 1,
+   },
+   MACRO_VAR = {
+      NAME = 1,
+   },
+   MACRO_INVOCATION = {
+      MACRO = 1,
+      ARGS = 2,
+   },
+   CAST = {
+      TYPE = 1,
+   },
+   NEWTYPE = {
+      TYPEDECL = 1,
+   },
+   TYPEDECL = {
+      TYPE = 1,
+   },
+   FUNCTION_TYPE = {
+      ARGS = 1,
+      RETS = 2,
+      MACROEXP = 4,
+   },
+   MACROEXP = {
+      ARGS = 1,
+      RETS = 2,
+      EXP = 3,
+   },
+   RECORD = {
+      ARRAY_TYPE = 1,
+      INTERFACES = 2,
+      FIELDS = 3,
+      META_FIELDS = 4,
+      WHERE_CLAUSE = 5,
+   },
+   INTERFACE = {
+      ARRAY_TYPE = 1,
+      INTERFACES = 2,
+      FIELDS = 3,
+      META_FIELDS = 4,
+      WHERE_CLAUSE = 5,
+   },
+   GENERIC_TYPE = {
+      TYPEARGS = 1,
+      BASE = 2,
+   },
+   ARRAY_TYPE = {
+      ELEMENT = 1,
+   },
+   MAP_TYPE = {
+      KEYS = 1,
+      VALUES = 2,
+   },
+   TYPELIST = {
+      FIRST = 1,
+   },
+   UNION_TYPE = {
+      FIRST = 1,
+   },
+   TUPLE_TYPE = {
+      FIRST = 1,
+      SECOND = 2,
+   },
+   RECORD_FIELD = {
+      NAME = 1,
+      TYPE = 2,
+   },
+   TYPEARG = {
+      NAME = 1,
+      CONSTRAINT = 2,
+   },
+   NOMINAL_TYPE = {
+      NAME = 1,
+   },
+   ARGUMENT_TYPE = {
+      NAME = 1,
+   },
+}
+
+reader.BLOCK_INDEXES = BLOCK_INDEXES
+
 local attributes = {
    ["const"] = true,
    ["close"] = true,
@@ -160,24 +377,24 @@ local attributes = {
 local is_attribute = attributes
 
 function reader.node_is_require_call(n)
-   if not (n[1] and n[2]) then
+   if not (n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E2]) then
       return nil
    end
    if n.kind == "op_dot" then
 
-      return reader.node_is_require_call(n[1])
-   elseif n[1].kind == "variable" and n[1].tk == "require" and
-      n[2].kind == "expression_list" and #n[2] == 1 and
-      n[2][1].kind == "string" then
+      return reader.node_is_require_call(n[BLOCK_INDEXES.OP.E1])
+   elseif n[BLOCK_INDEXES.OP.E1].kind == "variable" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
+      n[BLOCK_INDEXES.OP.E2].kind == "expression_list" and #n[BLOCK_INDEXES.OP.E2] == 1 and
+      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
 
 
-      return n[2][1].conststr
+      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].conststr
    end
    return nil
 end
 
 function reader.node_is_funcall(node)
-   return node.kind == "op_funcall"
+   return node.kind == "op_funcall" or node.kind == "macro_invocation"
 end
 
 
@@ -283,34 +500,34 @@ end
 
 local function new_generic(ps, i, typeargs, typ)
    local gt = new_type(ps, i, "generic_type")
-   gt[1] = typeargs
-   gt[2] = typ
+   gt[BLOCK_INDEXES.GENERIC_TYPE.TYPEARGS] = typeargs
+   gt[BLOCK_INDEXES.GENERIC_TYPE.BASE] = typ
    return gt
 end
 
 local function new_typedecl(ps, i, def)
    local t = new_type(ps, i, "typedecl")
-   t[1] = def
+   t[BLOCK_INDEXES.TYPEDECL.TYPE] = def
    return t
 end
 
 local function new_tuple(ps, i, typelist, is_va)
    local t = new_type(ps, i, "tuple_type")
    if is_va then
-      t[1] = new_block(ps, i, "...")
-      t[2] = typelist or new_block(ps, i, "typelist")
-      return t, t[2]
+      t[BLOCK_INDEXES.TUPLE_TYPE.FIRST] = new_block(ps, i, "...")
+      t[BLOCK_INDEXES.TUPLE_TYPE.SECOND] = typelist or new_block(ps, i, "typelist")
+      return t, t[BLOCK_INDEXES.TUPLE_TYPE.SECOND]
    else
-      t[1] = typelist or new_block(ps, i, "typelist")
-      return t, t[1]
+      t[BLOCK_INDEXES.TUPLE_TYPE.FIRST] = typelist or new_block(ps, i, "typelist")
+      return t, t[BLOCK_INDEXES.TUPLE_TYPE.FIRST]
    end
 end
 
 local function new_nominal(ps, i, name)
    local t = new_type(ps, i, "nominal_type")
    if name then
-      t[1] = new_block(ps, i, "identifier")
-      t[1].tk = name
+      t[BLOCK_INDEXES.NOMINAL_TYPE.NAME] = new_block(ps, i, "identifier")
+      t[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk = name
    end
    return t
 end
@@ -402,17 +619,17 @@ local function read_table_item(ps, i, n)
 
    if ps.tokens[i].tk == "[" then
       i = i + 1
-      i, node[1] = read_expression_and_tk(ps, i, "]")
+      i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = read_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
-      i, node[2] = read_table_value(ps, i)
+      i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_table_value(ps, i)
       return i, node, n
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i + 1].tk == "=" then
-         i, node[1] = verify_kind(ps, i, "identifier", "string")
-         node[1].conststr = node[1].tk
-         node[1].tk = '"' .. node[1].tk .. '"'
+         i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(ps, i, "identifier", "string")
+         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
+         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(ps, i, "=")
-         i, node[2] = read_table_value(ps, i)
+         i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_table_value(ps, i)
          return i, node, n
       elseif ps.tokens[i + 1].tk == ":" then
          local orig_i = i
@@ -423,15 +640,15 @@ local function read_table_item(ps, i, n)
             required_modules = ps.required_modules,
             read_lang = ps.read_lang,
          }
-         i, node[1] = verify_kind(try_ps, i, "identifier", "string")
-         node[1].conststr = node[1].tk
-         node[1].tk = '"' .. node[1].tk .. '"'
+         i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
+         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
+         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(try_ps, i, ":")
-         i, node[2] = read_type(try_ps, i)
-         if node[2] and ps.tokens[i].tk == "=" then
+         i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_type(try_ps, i)
+         if node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] and ps.tokens[i].tk == "=" then
             i = verify_tk(try_ps, i, "=")
-            i, node[3] = read_table_value(try_ps, i)
-            if node[3] then
+            i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.TYPED_VALUE] = read_table_value(try_ps, i)
+            if node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.TYPED_VALUE] then
                for _, e in ipairs(try_ps.errs) do
                   table.insert(ps.errs, e)
                end
@@ -439,16 +656,16 @@ local function read_table_item(ps, i, n)
             end
          end
 
-         table.remove(node, 2)
+         table.remove(node, BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE)
          i = orig_i
       end
    end
 
-   node[1] = new_block(ps, i, "integer")
-   node[1].constnum = n
-   node[1].tk = tostring(n)
-   i, node[2] = read_expression(ps, i)
-   if not node[2] then
+   node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = new_block(ps, i, "integer")
+   node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].constnum = n
+   node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = tostring(n)
+   i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_expression(ps, i)
+   if not node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] then
       return fail(ps, i, "expected an expression")
    end
    return i, node, n + 1
@@ -587,9 +804,9 @@ local function read_typearg(ps, i)
       i = i + 1
       i, constraint = read_interface_name(ps, i)
    end
-   t[1] = new_block(ps, i, "identifier")
-   t[1].tk = name
-   t[2] = constraint
+   t[BLOCK_INDEXES.TYPEARG.NAME] = new_block(ps, i, "identifier")
+   t[BLOCK_INDEXES.TYPEARG.NAME].tk = name
+   t[BLOCK_INDEXES.TYPEARG.CONSTRAINT] = constraint
    return i, t
 end
 
@@ -598,7 +815,7 @@ local function read_return_types(ps, i)
    local t
 
    i, t = read_type_list(ps, i, "rets")
-   local list = t[2] or t[1]
+   local list = t[BLOCK_INDEXES.TUPLE_TYPE.SECOND] or t[BLOCK_INDEXES.TUPLE_TYPE.FIRST]
    if list and #list == 0 then
       t.x = ps.tokens[iprev].x
       t.y = ps.tokens[iprev].y
@@ -620,18 +837,18 @@ local function read_function_type(ps, i)
 
    i, typeargs = read_typeargs_if_any(ps, i)
    if ps.tokens[i].tk == "(" then
-      i, typ[1] = read_argument_type_list(ps, i)
-      i, typ[2] = read_return_types(ps, i)
+      i, typ[BLOCK_INDEXES.FUNCTION_TYPE.ARGS] = read_argument_type_list(ps, i)
+      i, typ[BLOCK_INDEXES.FUNCTION_TYPE.RETS] = read_return_types(ps, i)
    else
       local any = new_type(ps, i, "nominal_type")
       any.tk = "any"
       local args_typelist = new_block(ps, i, "typelist")
-      args_typelist[1] = any
-      typ[1] = new_tuple(ps, i, args_typelist, true)
+      args_typelist[BLOCK_INDEXES.TYPELIST.FIRST] = any
+      typ[BLOCK_INDEXES.FUNCTION_TYPE.ARGS] = new_tuple(ps, i, args_typelist, true)
 
       local rets_typelist = new_block(ps, i, "typelist")
-      rets_typelist[1] = any
-      typ[2] = new_tuple(ps, i, rets_typelist, true)
+      rets_typelist[BLOCK_INDEXES.TYPELIST.FIRST] = any
+      typ[BLOCK_INDEXES.FUNCTION_TYPE.RETS] = new_tuple(ps, i, rets_typelist, true)
    end
 
    if typeargs then
@@ -647,8 +864,8 @@ local function read_simple_type_or_nominal(ps, i)
       local typ = new_type(ps, i, "map_type")
       local any = new_type(ps, i, "nominal_type")
       any.tk = "any"
-      typ[1] = any
-      typ[2] = any
+      typ[BLOCK_INDEXES.MAP_TYPE.KEYS] = any
+      typ[BLOCK_INDEXES.MAP_TYPE.VALUES] = any
       return i + 1, typ
    end
 
@@ -662,7 +879,7 @@ local function read_simple_type_or_nominal(ps, i)
          return fail(ps, i, "syntax error, expected identifier")
       end
       typ = new_nominal(ps, i - 1, nil)
-      typ[1] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+      typ[BLOCK_INDEXES.NOMINAL_TYPE.NAME] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident, tk = "$" }
    else
       typ = new_nominal(ps, i, tk)
       i = i + 1
@@ -683,7 +900,7 @@ local function read_simple_type_or_nominal(ps, i)
          if not ident then
             return fail(ps, i, "syntax error, expected identifier")
          end
-         local nom = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+         local nom = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident, tk = "$" }
          table.insert(typ, nom)
          i = i + 0
       else
@@ -713,13 +930,13 @@ local function read_base_type(ps, i)
       end
       if ps.tokens[i].tk == "}" then
          local decl = new_type(ps, istart, "array_type")
-         decl[1] = t
+         decl[BLOCK_INDEXES.ARRAY_TYPE.ELEMENT] = t
          end_at(decl, ps.tokens[i])
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == "," then
          local decl = new_type(ps, istart, "typelist")
-         decl[1] = t
+         decl[BLOCK_INDEXES.TYPELIST.FIRST] = t
          local n = 2
          repeat
             i = i + 1
@@ -735,9 +952,9 @@ local function read_base_type(ps, i)
       elseif ps.tokens[i].tk == ":" then
          local decl = new_type(ps, istart, "map_type")
          i = i + 1
-         decl[1] = t
-         i, decl[2] = read_type(ps, i)
-         if not decl[2] then
+         decl[BLOCK_INDEXES.MAP_TYPE.KEYS] = t
+         i, decl[BLOCK_INDEXES.MAP_TYPE.VALUES] = read_type(ps, i)
+         if not decl[BLOCK_INDEXES.MAP_TYPE.VALUES] then
             return i
          end
          end_at(decl, ps.tokens[i])
@@ -770,7 +987,7 @@ read_type = function(ps, i)
    end
    if ps.tokens[i].tk == "|" then
       local u = new_type(ps, istart, "union_type")
-      u[1] = bt
+      u[BLOCK_INDEXES.UNION_TYPE.FIRST] = bt
       while ps.tokens[i].tk == "|" do
          i = i + 1
          i, bt = read_base_type(ps, i)
@@ -828,12 +1045,12 @@ end
 local function read_function_args_rets_body(ps, i, node)
    local istart = i - 1
 
-   i, node[2] = read_typeargs_if_any(ps, i)
+   i, node[BLOCK_INDEXES.FUNCTION.TYPEARGS] = read_typeargs_if_any(ps, i)
 
-   i, node[3] = read_argument_list(ps, i)
-   i, node[4] = read_return_types(ps, i)
+   i, node[BLOCK_INDEXES.FUNCTION.ARGS] = read_argument_list(ps, i)
+   i, node[BLOCK_INDEXES.FUNCTION.RETS] = read_return_types(ps, i)
 
-   i, node[5] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.FUNCTION.BODY] = read_statements(ps, i)
    end_at(node, ps.tokens[i])
    i = verify_end(ps, i, istart, node)
    return i, node
@@ -850,10 +1067,26 @@ local function read_macro_quote(ps, i)
    local node = new_block(ps, i, "macro_quote")
    local code = token.tk:sub(2, -2)
    local block, errs = reader.read(code, ps.filename, ps.read_lang, true)
+   if #errs > 0 then
+      local wrapped, werrs = reader.read("return " .. code, ps.filename, ps.read_lang, true)
+      if #werrs == 0 then
+         local ret = wrapped[1]
+         if ret and ret.kind == "return" and ret[BLOCK_INDEXES.RETURN.EXPS] then
+            local exp = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+            block = { kind = "statements", y = exp.y or 1, x = exp.x or 1, tk = "", yend = exp.yend or exp.y or 1, xend = exp.xend or exp.x or 1 }
+            block[1] = exp
+            errs = {}
+         else
+            errs = werrs
+         end
+      else
+         errs = werrs
+      end
+   end
    for _, e in ipairs(errs) do
       table.insert(ps.errs, e)
    end
-   node[1] = block
+   node[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] = block
    end_at(node, token)
    return i + 1, node
 end
@@ -912,13 +1145,13 @@ local function node_is_require_call_or_pcall(n)
       return r
    end
    if reader.node_is_funcall(n) and
-      n[1] and n[1].tk == "pcall" and
-      n[2] and #n[2] == 2 and
-      n[2][1].kind == "variable" and n[2][1].tk == "require" and
-      n[2][2].kind == "string" and n[2][2].conststr then
+      n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].tk == "pcall" and
+      n[BLOCK_INDEXES.OP.E2] and #n[BLOCK_INDEXES.OP.E2] == 2 and
+      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "variable" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk == "require" and
+      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr then
 
 
-      return n[2][2].conststr
+      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr
    end
    return nil
 end
@@ -1026,7 +1259,7 @@ do
 
 
    local function failstore(ps, tkop, e1)
-      return { f = ps.filename, y = tkop.y, x = tkop.x, kind = "paren", [1] = e1 }
+      return { f = ps.filename, y = tkop.y, x = tkop.x, kind = "paren", [BLOCK_INDEXES.PAREN.EXP] = e1 }
    end
 
    local function P(ps, i)
@@ -1045,7 +1278,7 @@ do
             fail(ps, prev_i, "expected an expression")
             return i
          end
-         e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = op_kind, [1] = e1, tk = t1.tk }
+         e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, tk = t1.tk }
       elseif ps.allow_macro_vars and ps.tokens[i].tk == "$" then
          local dtk = ps.tokens[i]
          i = i + 1
@@ -1063,7 +1296,7 @@ do
             fail(ps, prev_i, "expected an expression")
             return i
          end
-         e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = "paren", [1] = e1 }
+         e1 = { f = ps.filename, y = t1.y, x = t1.x, kind = "paren", [BLOCK_INDEXES.PAREN.EXP] = e1 }
       else
          i, e1 = read_literal(ps, i)
       end
@@ -1123,7 +1356,39 @@ do
                end
             end
 
-            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [1] = e1, [2] = key, tk = tkop.tk }
+            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = key, tk = tkop.tk }
+         elseif tkop.tk == "!" then
+            local prev_i = i
+            i = i + 1
+            local next_tk = ps.tokens[i]
+            local args = new_block(ps, i, "expression_list")
+            local argument
+            if next_tk.tk == "(" then
+               i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
+            elseif next_tk.kind == "string" or next_tk.kind == "{" then
+               if next_tk.kind == "string" then
+                  argument = new_block(ps, i)
+                  argument.conststr, argument.is_longstring = unquote(next_tk.tk)
+                  i = i + 1
+               else
+                  i, argument = read_table_literal(ps, i)
+               end
+               table.insert(args, argument)
+            else
+               if next_tk.tk == "=" then
+                  fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
+               else
+                  fail(ps, i, "expected macro arguments")
+               end
+               return i, failstore(ps, tkop, e1)
+            end
+
+            if not after_valid_prefixexp(ps, e1, prev_i) then
+               fail(ps, prev_i, "cannot call this expression")
+               return i, failstore(ps, tkop, e1)
+            end
+
+            e1 = { f = ps.filename, y = args.y, x = args.x, kind = "macro_invocation", [BLOCK_INDEXES.MACRO_INVOCATION.MACRO] = e1, [BLOCK_INDEXES.MACRO_INVOCATION.ARGS] = args, tk = tkop.tk }
          elseif tkop.tk == "(" then
             local prev_tk = ps.tokens[i - 1]
             if tkop.y > prev_tk.y and ps.read_lang ~= "lua" then
@@ -1143,7 +1408,7 @@ do
                return i, failstore(ps, tkop, e1)
             end
 
-            e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [1] = e1, [2] = args, tk = tkop.tk }
+            e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = args, tk = tkop.tk }
 
             table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
          elseif tkop.tk == "[" then
@@ -1160,7 +1425,7 @@ do
                return i, failstore(ps, tkop, e1)
             end
 
-            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [1] = e1, [2] = idx, tk = tkop.tk }
+            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = idx, tk = tkop.tk }
          elseif tkop.kind == "string" or tkop.kind == "{" then
             local op_kind = op_map[2]["@funcall"]
 
@@ -1186,7 +1451,7 @@ do
             end
 
             table.insert(args, argument)
-            e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [1] = e1, [2] = args, tk = tkop.tk }
+            e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = args, tk = tkop.tk }
 
             table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
          elseif tkop.tk == "as" or tkop.tk == "is" then
@@ -1195,14 +1460,14 @@ do
             i = i + 1
             local cast = new_block(ps, i, "cast")
             if ps.tokens[i].tk == "(" then
-               i, cast[1] = read_type_list(ps, i, "casttype")
+               i, cast[BLOCK_INDEXES.CAST.TYPE] = read_type_list(ps, i, "casttype")
             else
-               i, cast[1] = read_type(ps, i)
+               i, cast[BLOCK_INDEXES.CAST.TYPE] = read_type(ps, i)
             end
-            if not cast[1] then
+            if not cast[BLOCK_INDEXES.CAST.TYPE] then
                return i, failstore(ps, tkop, e1)
             end
-            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [1] = e1, [2] = cast, conststr = e1.conststr, tk = tkop.tk }
+            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, conststr = e1.conststr, tk = tkop.tk }
          else
             break
          end
@@ -1234,7 +1499,7 @@ do
             end
             lookahead = ps.tokens[i].tk
          end
-         lhs = { f = ps.filename, y = op_tk.y, x = op_tk.x, kind = op_kind, [1] = lhs, [2] = rhs, tk = op_tk.tk }
+         lhs = { f = ps.filename, y = op_tk.y, x = op_tk.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = lhs, [BLOCK_INDEXES.OP.E2] = rhs, tk = op_tk.tk }
       end
       return i, lhs
    end
@@ -1298,7 +1563,7 @@ local function read_variable_name(ps, i)
          return i
       end
       node = new_block(ps, i - 1, "macro_var")
-      node[1] = ident
+      node[BLOCK_INDEXES.MACRO_VAR.NAME] = ident
       end_at(node, ps.tokens[i - 1])
    else
       i, node = verify_kind(ps, i, "identifier")
@@ -1457,7 +1722,7 @@ local function read_local_function(ps, i)
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
    local node = new_block(ps, i - 2, "local_function")
-   i, node[1] = read_identifier(ps, i)
+   i, node[BLOCK_INDEXES.LOCAL_FUNCTION.NAME] = read_identifier(ps, i)
    return read_function_args_rets_body(ps, i, node)
 end
 
@@ -1465,29 +1730,29 @@ local function read_if_block(ps, i, node, is_else)
    local block = new_block(ps, i, "if_block")
    i = i + 1
    if not is_else then
-      i, block[1] = read_expression_and_tk(ps, i, "then")
-      if not block[1] then
+      i, block[BLOCK_INDEXES.IF_BLOCK.COND] = read_expression_and_tk(ps, i, "then")
+      if not block[BLOCK_INDEXES.IF_BLOCK.COND] then
          return i
       end
-      i, block[2] = read_statements(ps, i)
-      if not block[2] then
+      i, block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
+      if not block[BLOCK_INDEXES.IF_BLOCK.BODY] then
          return i
       end
    else
-      i, block[1] = read_statements(ps, i)
-      if not block[1] then
+      i, block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
+      if not block[BLOCK_INDEXES.IF_BLOCK.BODY] then
          return i
       end
    end
-   block.yend, block.xend = (block[2] or block[1]).yend, (block[2] or block[1]).xend
-   table.insert(node[1], block)
+   block.yend, block.xend = (block[BLOCK_INDEXES.IF_BLOCK.BODY] or block[BLOCK_INDEXES.IF_BLOCK.COND]).yend, (block[BLOCK_INDEXES.IF_BLOCK.BODY] or block[BLOCK_INDEXES.IF_BLOCK.COND]).xend
+   table.insert(node[BLOCK_INDEXES.IF.BLOCKS], block)
    return i, node
 end
 
 local function read_if(ps, i)
    local istart = i
    local node = new_block(ps, i, "if")
-   node[1] = {}
+   node[BLOCK_INDEXES.IF.BLOCKS] = {}
    i, node = read_if_block(ps, i, node)
    if not node then
       return i
@@ -1512,8 +1777,8 @@ local function read_while(ps, i)
    local istart = i
    local node = new_block(ps, i, "while")
    i = verify_tk(ps, i, "while")
-   i, node[1] = read_expression_and_tk(ps, i, "do")
-   i, node[2] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.WHILE.COND] = read_expression_and_tk(ps, i, "do")
+   i, node[BLOCK_INDEXES.WHILE.BODY] = read_statements(ps, i)
    i = verify_end(ps, i, istart, node)
    return i, node
 end
@@ -1522,17 +1787,17 @@ local function read_fornum(ps, i)
    local istart = i
    local node = new_block(ps, i, "fornum")
    i = i + 1
-   i, node[1] = read_identifier(ps, i)
+   i, node[BLOCK_INDEXES.FORNUM.VAR] = read_identifier(ps, i)
    i = verify_tk(ps, i, "=")
-   i, node[2] = read_expression_and_tk(ps, i, ",")
-   i, node[3] = read_expression(ps, i)
+   i, node[BLOCK_INDEXES.FORNUM.FROM] = read_expression_and_tk(ps, i, ",")
+   i, node[BLOCK_INDEXES.FORNUM.TO] = read_expression(ps, i)
    if ps.tokens[i].tk == "," then
       i = i + 1
-      i, node[4] = read_expression_and_tk(ps, i, "do")
+      i, node[BLOCK_INDEXES.FORNUM.STEP] = read_expression_and_tk(ps, i, "do")
    else
       i = verify_tk(ps, i, "do")
    end
-   i, node[5] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.FORNUM.BODY] = read_statements(ps, i)
    i = verify_end(ps, i, istart, node)
    return i, node
 end
@@ -1541,18 +1806,18 @@ local function read_forin(ps, i)
    local istart = i
    local node = new_block(ps, i, "forin")
    i = i + 1
-   node[1] = new_block(ps, i, "variable_list")
-   i, node[1] = read_list(ps, i, node[1], { ["in"] = true }, "sep", read_identifier)
+   node[BLOCK_INDEXES.FORIN.VARS] = new_block(ps, i, "variable_list")
+   i, node[BLOCK_INDEXES.FORIN.VARS] = read_list(ps, i, node[BLOCK_INDEXES.FORIN.VARS], { ["in"] = true }, "sep", read_identifier)
    i = verify_tk(ps, i, "in")
-   node[2] = new_block(ps, i, "expression_list")
-   i = read_list(ps, i, node[2], { ["do"] = true }, "sep", read_expression)
-   if #node[2] < 1 then
+   node[BLOCK_INDEXES.FORIN.EXPS] = new_block(ps, i, "expression_list")
+   i = read_list(ps, i, node[BLOCK_INDEXES.FORIN.EXPS], { ["do"] = true }, "sep", read_expression)
+   if #node[BLOCK_INDEXES.FORIN.EXPS] < 1 then
       return fail(ps, i, "missing iterator expression in generic for")
-   elseif #node[2] > 3 then
+   elseif #node[BLOCK_INDEXES.FORIN.EXPS] > 3 then
       return fail(ps, i, "too many expressions in generic for")
    end
    i = verify_tk(ps, i, "do")
-   i, node[3] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.FORIN.BODY] = read_statements(ps, i)
    i = verify_end(ps, i, istart, node)
    return i, node
 end
@@ -1568,9 +1833,9 @@ end
 local function read_repeat(ps, i)
    local node = new_block(ps, i, "repeat")
    i = verify_tk(ps, i, "repeat")
-   i, node[1] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.REPEAT.BODY] = read_statements(ps, i)
    i = verify_tk(ps, i, "until")
-   i, node[2] = read_expression(ps, i)
+   i, node[BLOCK_INDEXES.REPEAT.COND] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
    return i, node
 end
@@ -1579,7 +1844,7 @@ local function read_do(ps, i)
    local istart = i
    local node = new_block(ps, i, "do")
    i = verify_tk(ps, i, "do")
-   i, node[1] = read_statements(ps, i)
+   i, node[BLOCK_INDEXES.DO.BODY] = read_statements(ps, i)
    i = verify_end(ps, i, istart, node)
    return i, node
 end
@@ -1593,8 +1858,8 @@ end
 local function read_goto(ps, i)
    local node = new_block(ps, i, "goto")
    i = verify_tk(ps, i, "goto")
-   node[1] = new_block(ps, i, "identifier")
-   node[1].tk = ps.tokens[i].tk
+   node[BLOCK_INDEXES.GOTO.LABEL] = new_block(ps, i, "identifier")
+   node[BLOCK_INDEXES.GOTO.LABEL].tk = ps.tokens[i].tk
    i = verify_kind(ps, i, "identifier")
    return i, node
 end
@@ -1602,8 +1867,8 @@ end
 local function read_label(ps, i)
    local node = new_block(ps, i, "label")
    i = verify_tk(ps, i, "::")
-   node[1] = new_block(ps, i, "identifier")
-   node[1].tk = ps.tokens[i].tk
+   node[BLOCK_INDEXES.LABEL.NAME] = new_block(ps, i, "identifier")
+   node[BLOCK_INDEXES.LABEL.NAME].tk = ps.tokens[i].tk
    i = verify_kind(ps, i, "identifier")
    i = verify_tk(ps, i, "::")
    return i, node
@@ -1628,8 +1893,8 @@ end
 local function read_return(ps, i)
    local node = new_block(ps, i, "return")
    i = verify_tk(ps, i, "return")
-   node[1] = new_block(ps, i, "expression_list")
-   i = read_list(ps, i, node[1], stop_return_list, "sep", read_expression)
+   node[BLOCK_INDEXES.RETURN.EXPS] = new_block(ps, i, "expression_list")
+   i = read_list(ps, i, node[BLOCK_INDEXES.RETURN.EXPS], stop_return_list, "sep", read_expression)
    if ps.tokens[i].kind == ";" then
       i = i + 1
       if ps.tokens[i].kind ~= "$EOF$" and not stop_statement_list[ps.tokens[i].kind] then
@@ -1659,8 +1924,8 @@ local function read_nested_type(ps, i, tn)
 
    table.insert(nt, new_typedecl(ps, istart, ndef))
    local asgn = new_block(ps, istart, "local_type")
-   asgn[1] = v
-   asgn[2] = nt
+   asgn[BLOCK_INDEXES.LOCAL_TYPE.VAR] = v
+   asgn[BLOCK_INDEXES.LOCAL_TYPE.VALUE] = nt
    return i, asgn
 end
 
@@ -1731,15 +1996,15 @@ end
 local function read_where_clause(ps, i, def)
    local node = new_block(ps, i, "macroexp")
 
-   node[1] = new_block(ps, i, "argument_list")
-   node[1][1] = new_block(ps, i, "argument")
-   node[1][1].tk = "self"
-   node[1][1][1] = new_type(ps, i, "nominal_type")
-   node[1][1][1].tk = "self"
-   node[1][1][1][1] = def
-   node[2] = new_tuple(ps, i)
-   node[2][1] = new_type(ps, i, "boolean")
-   i, node[3] = read_expression(ps, i)
+   node[BLOCK_INDEXES.MACROEXP.ARGS] = new_block(ps, i, "argument_list")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST] = new_block(ps, i, "argument")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION] = new_type(ps, i, "nominal_type")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
+   node[BLOCK_INDEXES.MACROEXP.RETS] = new_tuple(ps, i)
+   node[BLOCK_INDEXES.MACROEXP.RETS][BLOCK_INDEXES.TUPLE_TYPE.FIRST] = new_type(ps, i, "boolean")
+   i, node[BLOCK_INDEXES.MACROEXP.EXP] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
    return i, node
 end
@@ -1778,7 +2043,7 @@ local function extract_userdata_from_interface_list(ps, i, interface_list)
    local is_userdata = false
    for j = #interface_list, 1, -1 do
       local iface = interface_list[j]
-      if iface.kind == "nominal_type" and #iface == 1 and iface[1].tk == "userdata" then
+      if iface.kind == "nominal_type" and #iface == 1 and iface[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk == "userdata" then
          table.remove(interface_list, j)
          if is_userdata then
             fail(ps, i, "duplicated 'userdata' declaration")
@@ -1800,7 +2065,7 @@ read_record_body = function(ps, i, def)
       local atype
       i, atype = read_array_interface_type(ps, i)
       if atype then
-         def[1] = atype
+         def[BLOCK_INDEXES.RECORD.ARRAY_TYPE] = atype
       end
    end
 
@@ -1808,38 +2073,38 @@ read_record_body = function(ps, i, def)
       i = i + 1
 
       if ps.tokens[i].tk == "{" then
-         if def[1] then
+         if def[BLOCK_INDEXES.RECORD.ARRAY_TYPE] then
             return failskip(ps, i, "duplicated declaration of array element type", read_type)
          end
          local atype
          i, atype = read_array_interface_type(ps, i)
          if atype then
-            def[1] = atype
+            def[BLOCK_INDEXES.RECORD.ARRAY_TYPE] = atype
          end
          if ps.tokens[i].tk == "," then
             i = i + 1
-            def[2] = new_block(ps, i, "interface_list")
-            i, def[2] = read_trying_list(ps, i, def[2], read_interface_name)
+            def[BLOCK_INDEXES.RECORD.INTERFACES] = new_block(ps, i, "interface_list")
+            i, def[BLOCK_INDEXES.RECORD.INTERFACES] = read_trying_list(ps, i, def[BLOCK_INDEXES.RECORD.INTERFACES], read_interface_name)
          else
-            def[2] = new_block(ps, i, "interface_list")
+            def[BLOCK_INDEXES.RECORD.INTERFACES] = new_block(ps, i, "interface_list")
          end
       else
-         def[2] = new_block(ps, i, "interface_list")
-         i, def[2] = read_trying_list(ps, i, def[2], read_interface_name)
+         def[BLOCK_INDEXES.RECORD.INTERFACES] = new_block(ps, i, "interface_list")
+         i, def[BLOCK_INDEXES.RECORD.INTERFACES] = read_trying_list(ps, i, def[BLOCK_INDEXES.RECORD.INTERFACES], read_interface_name)
       end
 
-      if def[2] and extract_userdata_from_interface_list(ps, i, def[2]) then
+      if def[BLOCK_INDEXES.RECORD.INTERFACES] and extract_userdata_from_interface_list(ps, i, def[BLOCK_INDEXES.RECORD.INTERFACES]) then
          table.insert(def, new_block(ps, i, "userdata"))
       end
    end
 
    if ps.tokens[i].tk == "where" then
       i = i + 1
-      i, def[5] = read_where_clause(ps, i, def)
+      i, def[BLOCK_INDEXES.RECORD.WHERE_CLAUSE] = read_where_clause(ps, i, def)
    end
 
    local fields = new_block(ps, i, "record_body")
-   def[3] = fields
+   def[BLOCK_INDEXES.RECORD.FIELDS] = fields
    local meta_fields
 
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
@@ -1904,7 +2169,7 @@ read_record_body = function(ps, i, def)
             if is_metamethod then
                if not meta_fields then
                   meta_fields = new_block(ps, i, "record_body")
-                  def[4] = meta_fields
+                  def[BLOCK_INDEXES.RECORD.META_FIELDS] = meta_fields
                end
                current_fields = meta_fields
                if not metamethod_names[field_name] then
@@ -1913,18 +2178,18 @@ read_record_body = function(ps, i, def)
             end
 
             if ps.tokens[i].tk == "=" and ps.tokens[i + 1].tk == "macroexp" then
-               local tt = t.kind == "generic_type" and t[2] or t
+               local tt = t.kind == "generic_type" and t[BLOCK_INDEXES.GENERIC_TYPE.BASE] or t
 
                if tt.kind == "function" then
-                  i, tt[4] = read_macroexp(ps, i + 1, i + 2)
+                  i, tt[BLOCK_INDEXES.FUNCTION_TYPE.MACROEXP] = read_macroexp(ps, i + 1, i + 2)
                else
                   fail(ps, i + 1, "macroexp must have a function type")
                end
             end
 
             local field = new_block(ps, i, "record_field")
-            field[1] = v
-            field[2] = t
+            field[BLOCK_INDEXES.RECORD_FIELD.NAME] = v
+            field[BLOCK_INDEXES.RECORD_FIELD.TYPE] = t
             table.insert(current_fields, field)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -1964,26 +2229,26 @@ local function read_newtype(ps, i)
       return fail(ps, i, "expected a type")
    end
 
-   table.insert(node, new_typedecl(ps, istart, def))
+   node[BLOCK_INDEXES.NEWTYPE.TYPEDECL] = new_typedecl(ps, istart, def)
 
    return i, node
 end
 
 local function read_assignment_expression_list(ps, i, asgn)
-   asgn[3] = new_block(ps, i, "expression_list")
+   asgn[BLOCK_INDEXES.ASSIGNMENT.EXPS] = new_block(ps, i, "expression_list")
    repeat
       i = i + 1
       local val
       i, val = read_expression(ps, i)
       if not val then
-         if #asgn[3] == 0 then
-            asgn[3] = nil
+         if #asgn[BLOCK_INDEXES.ASSIGNMENT.EXPS] == 0 then
+            asgn[BLOCK_INDEXES.ASSIGNMENT.EXPS] = nil
          end
          return i
       end
-      table.insert(asgn[3], val)
+      table.insert(asgn[BLOCK_INDEXES.ASSIGNMENT.EXPS], val)
    until ps.tokens[i].tk ~= ","
-   end_at(asgn[3], ps.tokens[i - 1])
+   end_at(asgn[BLOCK_INDEXES.ASSIGNMENT.EXPS], ps.tokens[i - 1])
    return i, asgn
 end
 
@@ -2012,17 +2277,17 @@ do
       end
 
       local asgn = new_block(ps, istart, "assignment")
-      asgn[1] = new_block(ps, istart, "variable_list")
-      asgn[1][1] = exp
+      asgn[BLOCK_INDEXES.ASSIGNMENT.VARS] = new_block(ps, istart, "variable_list")
+      asgn[BLOCK_INDEXES.ASSIGNMENT.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST] = exp
       if ps.tokens[i].tk == "," then
          i = i + 1
-         i = read_trying_list(ps, i, asgn[1], read_variable)
-         if #asgn[1] < 2 then
+         i = read_trying_list(ps, i, asgn[BLOCK_INDEXES.ASSIGNMENT.VARS], read_variable)
+         if #asgn[BLOCK_INDEXES.ASSIGNMENT.VARS] < 2 then
             return fail(ps, i, "syntax error")
          end
       end
 
-      end_at(asgn[1], ps.tokens[i - 1])
+      end_at(asgn[BLOCK_INDEXES.ASSIGNMENT.VARS], ps.tokens[i - 1])
 
       if ps.tokens[i].tk ~= "=" then
          verify_tk(ps, i, "=")
@@ -2037,15 +2302,15 @@ end
 local function read_variable_declarations(ps, i, node_name)
    local asgn = new_block(ps, i, node_name)
 
-   asgn[1] = new_block(ps, i, "variable_list")
-   i = read_trying_list(ps, i, asgn[1], read_variable_name)
-   if #asgn[1] == 0 then
+   asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS] = new_block(ps, i, "variable_list")
+   i = read_trying_list(ps, i, asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS], read_variable_name)
+   if #asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS] == 0 then
       return fail(ps, i, "expected a local variable definition")
    end
 
-   end_at(asgn[1], ps.tokens[i - 1])
+   end_at(asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS], ps.tokens[i - 1])
 
-   i, asgn[2] = read_type_list(ps, i, "decltuple")
+   i, asgn[BLOCK_INDEXES.LOCAL_DECLARATION.DECL] = read_type_list(ps, i, "decltuple")
 
    if ps.tokens[i].tk == "=" then
 
@@ -2053,10 +2318,10 @@ local function read_variable_declarations(ps, i, node_name)
       local tn = next_word
       if read_type_body_fns[tn] then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn[1][1].tk .. "'", skip_type_body)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. "'", skip_type_body)
       elseif next_word == "functiontype" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[1][1].tk .. " = function('...", read_function_type)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. " = function('...", read_function_type)
       end
 
       i, asgn = read_assignment_expression_list(ps, i, asgn)
@@ -2066,15 +2331,16 @@ end
 
 local function read_type_require(ps, i, asgn)
    local istart = i
-   i, asgn[2] = read_expression(ps, i)
-   if not asgn[2] then
+   local BIDX = asgn.kind == "local_type" and BLOCK_INDEXES.LOCAL_TYPE or BLOCK_INDEXES.GLOBAL_TYPE
+   i, asgn[BIDX.VALUE] = read_expression(ps, i)
+   if not asgn[BIDX.VALUE] then
       return i
    end
-   if asgn[2].kind ~= "op_funcall" and asgn[2].kind ~= "op_dot" and asgn[2].kind ~= "variable" then
+   if asgn[BIDX.VALUE].kind ~= "op_funcall" and asgn[BIDX.VALUE].kind ~= "op_dot" and asgn[BIDX.VALUE].kind ~= "variable" then
       fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
       return i
    end
-   if not reader.node_is_require_call(asgn[2]) then
+   if not reader.node_is_require_call(asgn[BIDX.VALUE]) then
       fail(ps, istart, "require() for type declarations must have a literal argument")
       return i
    end
@@ -2094,6 +2360,7 @@ end
 read_type_declaration = function(ps, i, node_name)
    local asgn = new_block(ps, i, node_name)
    local var
+   local BIDX = node_name == "local_type" and BLOCK_INDEXES.LOCAL_TYPE or BLOCK_INDEXES.GLOBAL_TYPE
 
    if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
       local dtk = ps.tokens[i]
@@ -2114,7 +2381,7 @@ read_type_declaration = function(ps, i, node_name)
    local itypeargs = i
    i, typeargs = read_typeargs_if_any(ps, i)
 
-   asgn[1] = var
+   asgn[BIDX.VAR] = var
 
    if node_name == "global_type" and ps.tokens[i].tk ~= "=" then
       return i, asgn
@@ -2131,13 +2398,13 @@ read_type_declaration = function(ps, i, node_name)
       end
    end
 
-   i, asgn[2] = read_newtype(ps, i)
-   if not asgn[2] then
+   i, asgn[BIDX.VALUE] = read_newtype(ps, i)
+   if not asgn[BIDX.VALUE] then
       return i
    end
 
-   if typeargs and asgn[2][1] and asgn[2][1][1] then
-      asgn[2][1][1] = new_generic(ps, itypeargs, typeargs, asgn[2][1][1])
+   if typeargs and asgn[BIDX.VALUE][BLOCK_INDEXES.NEWTYPE.TYPEDECL] and asgn[BIDX.VALUE][BLOCK_INDEXES.NEWTYPE.TYPEDECL][BLOCK_INDEXES.TYPEDECL.TYPE] then
+      asgn[BIDX.VALUE][BLOCK_INDEXES.NEWTYPE.TYPEDECL][BLOCK_INDEXES.TYPEDECL.TYPE] = new_generic(ps, itypeargs, typeargs, asgn[BIDX.VALUE][BLOCK_INDEXES.NEWTYPE.TYPEDECL][BLOCK_INDEXES.TYPEDECL.TYPE])
    end
 
    return i, asgn
@@ -2146,14 +2413,15 @@ end
 local function read_type_constructor(ps, i, node_name, tn)
    local asgn = new_block(ps, i, node_name)
    local nt = new_block(ps, i, "newtype")
-   asgn[2] = nt
+   local BIDX = node_name == "local_type" and BLOCK_INDEXES.LOCAL_TYPE or BLOCK_INDEXES.GLOBAL_TYPE
+   asgn[BIDX.VALUE] = nt
    local istart = i
    local def
 
    i = i + 2
 
-   i, asgn[1] = verify_kind(ps, i, "identifier")
-   if not asgn[1] then
+   i, asgn[BIDX.VAR] = verify_kind(ps, i, "identifier")
+   if not asgn[BIDX.VAR] then
       return fail(ps, i, "expected a type name")
    end
 
@@ -2175,8 +2443,8 @@ local function read_local_macroexp(ps, i)
    local istart = i
    i = i + 2
    local node = new_block(ps, i, "local_macroexp")
-   i, node[1] = read_identifier(ps, i)
-   i, node[2] = read_macroexp(ps, istart, i)
+   i, node[BLOCK_INDEXES.LOCAL_MACROEXP.NAME] = read_identifier(ps, i)
+   i, node[BLOCK_INDEXES.LOCAL_MACROEXP.EXP] = read_macroexp(ps, istart, i)
    end_at(node, ps.tokens[i - 1])
    return i, node
 end
@@ -2186,7 +2454,7 @@ local function read_local_macro(ps, i)
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "macro")
    local node = new_block(ps, istart, "local_macro")
-   i, node[1] = read_identifier(ps, i)
+   i, node[BLOCK_INDEXES.LOCAL_MACRO.NAME] = read_identifier(ps, i)
    i = verify_tk(ps, i, "!")
    local old_in_macro = ps.in_local_macro
    local old_allow = ps.allow_macro_vars
@@ -2220,7 +2488,7 @@ local function read_global(ps, i)
       i = verify_tk(ps, i, "global")
       i = verify_tk(ps, i, "function")
       local fn = new_block(ps, i - 2, "global_function")
-      i, fn[1] = read_identifier(ps, i)
+      i, fn[BLOCK_INDEXES.GLOBAL_FUNCTION.NAME] = read_identifier(ps, i)
       return read_function_args_rets_body(ps, i, fn)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return read_type_declaration(ps, i + 2, "global_type")
@@ -2258,21 +2526,21 @@ local function read_record_function(ps, i)
       local owner = names[1]
       for n = 2, #names - 1 do
          local dot_block = new_block(ps, dot_pos[n - 1], "op_dot")
-         dot_block[1] = owner
-         dot_block[2] = names[n]
+         dot_block[BLOCK_INDEXES.OP.E1] = owner
+         dot_block[BLOCK_INDEXES.OP.E2] = names[n]
          owner = dot_block
       end
-      fn[1] = owner
-      fn[2] = names[#names]
+      fn[BLOCK_INDEXES.RECORD_FUNCTION.OWNER] = owner
+      fn[BLOCK_INDEXES.RECORD_FUNCTION.NAME] = names[#names]
    else
-      fn[1] = names[1]
+      fn[BLOCK_INDEXES.RECORD_FUNCTION.OWNER] = names[1]
    end
 
    local istart = i - 1
-   i, fn[3] = read_typeargs_if_any(ps, i)
-   i, fn[4] = read_argument_list(ps, i)
-   i, fn[5] = read_return_types(ps, i)
-   i, fn[6] = read_statements(ps, i)
+   i, fn[BLOCK_INDEXES.RECORD_FUNCTION.TYPEARGS] = read_typeargs_if_any(ps, i)
+   i, fn[BLOCK_INDEXES.RECORD_FUNCTION.ARGS] = read_argument_list(ps, i)
+   i, fn[BLOCK_INDEXES.RECORD_FUNCTION.RETS] = read_return_types(ps, i)
+   i, fn[BLOCK_INDEXES.RECORD_FUNCTION.BODY] = read_statements(ps, i)
 
    end_at(fn, ps.tokens[i])
    i = verify_end(ps, i, istart, fn)
@@ -2286,15 +2554,15 @@ local function read_pragma(ps, i)
    if ps.tokens[i].kind ~= "pragma_identifier" then
       return fail(ps, i, "expected pragma name")
    end
-   pragma[1] = new_block(ps, i, "identifier")
-   pragma[1].tk = ps.tokens[i].tk
+   pragma[BLOCK_INDEXES.PRAGMA.KEY] = new_block(ps, i, "identifier")
+   pragma[BLOCK_INDEXES.PRAGMA.KEY].tk = ps.tokens[i].tk
    i = i + 1
 
    if ps.tokens[i].kind ~= "pragma_identifier" then
       return fail(ps, i, "expected pragma value")
    end
-   pragma[2] = new_block(ps, i, "identifier")
-   pragma[2].tk = ps.tokens[i].tk
+   pragma[BLOCK_INDEXES.PRAGMA.VALUE] = new_block(ps, i, "identifier")
+   pragma[BLOCK_INDEXES.PRAGMA.VALUE].tk = ps.tokens[i].tk
    i = i + 1
 
    return i, pragma

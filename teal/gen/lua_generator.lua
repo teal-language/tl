@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 
 
 
@@ -13,9 +13,12 @@ local types = require("teal.types")
 
 
 
+local parser = require("teal.parser")
 
 
+local reader = require("teal.reader")
 
+local BLOCK_INDEXES = reader.BLOCK_INDEXES
 
 local traversal = require("teal.traversal")
 
@@ -95,11 +98,45 @@ lua_generator.fast_opts = {
    preserve_hashbang = false,
 }
 
-function lua_generator.generate(ast, gen_target, opts)
+function lua_generator.generate(ast, gen_target, opts, macro_env)
    local err
    local indent = 0
 
    opts = opts or lua_generator.default_opts
+
+   local function clone_value(v)
+      if type(v) ~= "table" then
+         return v
+      end
+      local out = {}
+      for k, vv in pairs(v) do
+         out[k] = clone_value(vv)
+      end
+      return out
+   end
+
+   macro_env = macro_env or {}
+   setmetatable(macro_env, { __index = _G })
+   macro_env.block = macro_env.block or function(kind)
+      return { kind = kind, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+   end
+   macro_env.expect = macro_env.expect or function(b, k)
+      if type(b) ~= "table" or (b).kind ~= k then
+         error("expected " .. k)
+      end
+      return b
+   end
+   macro_env.clone = clone_value
+   macro_env.pairs = pairs
+   macro_env.ipairs = ipairs
+   macro_env.select = select
+   macro_env.tostring = tostring
+   macro_env.tonumber = tonumber
+   macro_env.type = type
+   macro_env.table = table
+   macro_env.string = string
+   macro_env.math = math
+   macro_env.require = require
 
 
 
@@ -153,11 +190,14 @@ function lua_generator.generate(ast, gen_target, opts)
          return
       end
 
-      if child.y ~= -1 and child.y < out.y then
+      child.y = child.y or -1
+      out.y = out.y or -1
+
+      if child.y ~= -1 and out.y ~= -1 and child.y < out.y then
          out.y = child.y
       end
 
-      if child.y > out.y + out.h and opts.preserve_newlines then
+      if child.y ~= -1 and out.y ~= -1 and child.y > out.y + out.h and opts.preserve_newlines then
          local delta = child.y - (out.y + out.h)
          out.h = out.h + delta
          table.insert(out, ("\n"):rep(delta))
@@ -249,7 +289,7 @@ function lua_generator.generate(ast, gen_target, opts)
                out = { y = 1, h = 0 }
                table.insert(out, node.hashbang)
             else
-               out = { y = node.y, h = 0 }
+               out = { y = node.y or -1, h = 0 }
             end
             local space
             for i, child in ipairs(children) do
@@ -506,6 +546,80 @@ function lua_generator.generate(ast, gen_target, opts)
                end
             end
             add_child(out, children[2])
+            return out
+         end,
+      },
+      ["local_macro"] = {
+         after = function(_, node, _children)
+            local code, cerr = lua_generator.generate(node.body, gen_target, lua_generator.fast_opts, macro_env)
+            if cerr then
+               err = cerr
+               return { y = node.y or -1, h = 0 }
+            end
+            local chunk, load_err = load(code .. "\nreturn " .. node.name.tk, node.name.tk, "t", macro_env)
+            if not chunk then
+               err = load_err
+               return { y = node.y or -1, h = 0 }
+            end
+            local ok, fn = pcall(chunk)
+            if not ok then
+               err = tostring(fn)
+               return { y = node.y or -1, h = 0 }
+            end
+            macro_env[node.name.tk] = fn
+            return { y = node.y or -1, h = 0 }
+         end,
+      },
+      ["macro_invocation"] = {
+         after = function(_, node, _children)
+            local fn = macro_env[node.e1.tk]
+            if not fn then
+               err = "unknown macro '" .. node.e1.tk .. "'"
+               return { y = node.y or -1, h = 0 }
+            end
+            local argv = {}
+            for _, arg in ipairs(node.args) do
+               local arg_code, aerr = lua_generator.generate(arg, gen_target, lua_generator.fast_opts, macro_env)
+               if aerr then
+                  err = aerr
+                  return { y = node.y or -1, h = 0 }
+               end
+               local arg_block, rerrs = reader.read("return " .. arg_code, node.e1.f or "macro_arg", "tl", true)
+               if #rerrs > 0 then
+                  err = rerrs[1].msg
+                  return { y = node.y or -1, h = 0 }
+               end
+               local ret = arg_block[1]
+               local exp_block = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+               table.insert(argv, exp_block)
+            end
+            local ok
+            local block
+            ok, block = (pcall)(fn, _tl_table_unpack(argv))
+            if not ok then
+               err = tostring(block)
+               return { y = node.y or -1, h = 0 }
+            end
+            if type(block) ~= "table" or not (block).kind then
+               err = "macro '" .. node.e1.tk .. "' did not return a Block"
+               return { y = node.y or -1, h = 0 }
+            end
+            if (block).kind ~= "statements" then
+               local b = block
+               block = { kind = "statements", [1] = b, y = b.y or 1, x = b.x or 1, tk = "", yend = b.yend or b.y or 1, xend = b.xend or b.x or 1 }
+            end
+            local exp_ast, perrs = parser.parse(block, node.e1.f or "macro")
+            if #perrs > 0 then
+               err = perrs[1].msg
+               return { y = node.y or -1, h = 0 }
+            end
+            local exp_code, gerr = lua_generator.generate(exp_ast, gen_target, opts, macro_env)
+            if gerr then
+               err = gerr
+               return { y = node.y or -1, h = 0 }
+            end
+            local out = { y = node.y or -1, h = 0 }
+            add_string(out, exp_code)
             return out
          end,
       },

@@ -31,7 +31,7 @@ describe("local macro parsing", function()
       local quote = ast[1].body[1].exps[1]
       local lua, err = lua_gen.generate(quote, "5.4")
       assert.is_nil(err)
-      assert.same('{ kind = "assignment", [1] = { kind = "variable_list", [1] = { kind = "identifier", tk = "x" } }, [2] = { kind = "expression_list", [1] = { kind = "number", tk = "1" } } }', lua)
+      assert.same('{ kind = "assignment", tk = "x", [1] = { kind = "variable_list", tk = "x", [1] = { kind = "variable", tk = "x" } }, [2] = { kind = "expression_list", tk = "=", [1] = { kind = "integer", tk = "1" } } }', lua)
    end)
 
    it("splices variables with clone()", function()
@@ -44,6 +44,19 @@ describe("local macro parsing", function()
       local quote = ast[1].body[1].exps[1]
       local lua, err = lua_gen.generate(quote, "5.4")
       assert.is_nil(err)
-      assert.same('{ kind = "assignment", [1] = { kind = "variable_list", [1] = { kind = "identifier", tk = "y" } }, [2] = { kind = "expression_list", [1] = clone(x) } }', lua)
+      assert.same('{ kind = "assignment", tk = "y", [1] = { kind = "variable_list", tk = "y", [1] = { kind = "variable", tk = "y" } }, [2] = { kind = "expression_list", tk = "=", [1] = clone(x) } }', lua)
+   end)
+
+   it("rejects nested macro invocation", function()
+      local _, errs = tl.parse([[
+         local macro inner!(x: Block): Block
+            return x
+         end
+
+         local macro outer!(x: Block): Block
+            return inner!(x)
+         end
+      ]])
+      assert.not_same({}, errs)
    end)
 end)
