@@ -120,6 +120,10 @@ describe("xpcall", function()
       { y = 6, x = 35, msg = "argument 3: got integer, expected string" },
    }))
 
+   it("works with debug.traceback", util.check([[
+      local worked = xpcall(print, debug.traceback, 123, 456)
+   ]]))
+
    it("does not warn when passed a method as the first argument", util.check_warnings([[
       local record Text
          text: string
