@@ -166,6 +166,11 @@ do
          "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
       end
 
+      enum FileType
+         "file"
+         "closed file"
+      end
+
       close: function(? FILE)
       input: function(? FILE | string): FILE
       flush: function()
@@ -190,8 +195,8 @@ do
       stdin: FILE
       stdout: FILE
       tmpfile: function(): FILE
-      type: function(any): string
-      write: function((string | number)...): FILE, string
+      type: function(any): FileType
+      write: function((string | number)...): FILE, string, integer
    end
 
    global record FILE
@@ -206,7 +211,7 @@ do
       end
 
       close: function(FILE): boolean, string, integer
-      flush: function(FILE)
+      flush: function(FILE): boolean, string, integer
 
       lines: function(FILE): (function(): (string))
       lines: function(FILE, FileNumberMode...): (function(): (number...))
@@ -220,10 +225,10 @@ do
       read: function(FILE, (number | FileMode)...): ((string | number)...)
       read: function(FILE, (number | string)...): (string...)
 
-      seek: function(FILE, ? SeekWhence, ? integer): integer, string
-      setvbuf: function(FILE, SetVBufMode, ? integer)
+      seek: function(FILE, ? SeekWhence, ? integer): integer, string, integer
+      setvbuf: function(FILE, SetVBufMode, ? integer): boolean, string, integer
 
-      write: function(FILE, (string | number)...): FILE, string
+      write: function(FILE, (string | number)...): FILE, string, integer
 
       metamethod __close: function(FILE)
    end
