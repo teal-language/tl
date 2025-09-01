@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 
 
 
@@ -16,9 +16,6 @@ local types = require("teal.types")
 local parser = require("teal.parser")
 
 
-local reader = require("teal.reader")
-
-local BLOCK_INDEXES = reader.BLOCK_INDEXES
 
 local traversal = require("teal.traversal")
 
@@ -572,55 +569,8 @@ function lua_generator.generate(ast, gen_target, opts, macro_env)
       },
       ["macro_invocation"] = {
          after = function(_, node, _children)
-            local fn = macro_env[node.e1.tk]
-            if not fn then
-               err = "unknown macro '" .. node.e1.tk .. "'"
-               return { y = node.y or -1, h = 0 }
-            end
-            local argv = {}
-            for _, arg in ipairs(node.args) do
-               local arg_code, aerr = lua_generator.generate(arg, gen_target, lua_generator.fast_opts, macro_env)
-               if aerr then
-                  err = aerr
-                  return { y = node.y or -1, h = 0 }
-               end
-               local arg_block, rerrs = reader.read("return " .. arg_code, node.e1.f or "macro_arg", "tl", true)
-               if #rerrs > 0 then
-                  err = rerrs[1].msg
-                  return { y = node.y or -1, h = 0 }
-               end
-               local ret = arg_block[1]
-               local exp_block = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-               table.insert(argv, exp_block)
-            end
-            local ok
-            local block
-            ok, block = (pcall)(fn, _tl_table_unpack(argv))
-            if not ok then
-               err = tostring(block)
-               return { y = node.y or -1, h = 0 }
-            end
-            if type(block) ~= "table" or not (block).kind then
-               err = "macro '" .. node.e1.tk .. "' did not return a Block"
-               return { y = node.y or -1, h = 0 }
-            end
-            if (block).kind ~= "statements" then
-               local b = block
-               block = { kind = "statements", [1] = b, y = b.y or 1, x = b.x or 1, tk = "", yend = b.yend or b.y or 1, xend = b.xend or b.x or 1 }
-            end
-            local exp_ast, perrs = parser.parse(block, node.e1.f or "macro")
-            if #perrs > 0 then
-               err = perrs[1].msg
-               return { y = node.y or -1, h = 0 }
-            end
-            local exp_code, gerr = lua_generator.generate(exp_ast, gen_target, opts, macro_env)
-            if gerr then
-               err = gerr
-               return { y = node.y or -1, h = 0 }
-            end
-            local out = { y = node.y or -1, h = 0 }
-            add_string(out, exp_code)
-            return out
+            err = "macro invocation must be expanded before code generation. This is likley a bug with teal."
+            return { y = node.y or -1, h = 0 }
          end,
       },
       ["local_macroexp"] = {

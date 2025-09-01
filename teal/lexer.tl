@@ -71,6 +71,7 @@ do
       "string double got \\" 
       "string backtick"
       "string backtick got \\" 
+      "string backtick triple"
       "string long"
       "string long got ]"
       "comment short"
@@ -110,6 +111,7 @@ do
       ["string double got \\"] = "$ERR$",
       ["string backtick"] = "$ERR$",
       ["string backtick got \\"] = "$ERR$",
+      ["string backtick triple"] = "$ERR$",
       ["string long"] = "$ERR$",
       ["string long got ]"] = "$ERR$",
       ["comment short"] = nil, -- drop comment
@@ -414,19 +416,32 @@ do
          end
 
          if state == "any" then
-            local st = lex_any_char_states[c]
-            if st then
-               state = st
+            -- Special-case backticks to detect triple-code fences
+            if c == "`" then
+               -- Peek ahead for triple backticks
+               local c2 = input:sub(i + 1, i + 1)
+               local c3 = input:sub(i + 2, i + 2)
+               if c2 == "`" and c3 == "`" then
+                  state = "string backtick triple"
+               else
+                  state = "string backtick"
+               end
                begin_token()
             else
-               local k = lex_any_char_kinds[c]
-               if k then
+               local st = lex_any_char_states[c]
+               if st then
+                  state = st
                   begin_token()
-                  end_token(k, c)
-               elseif not lex_space[c] then
-                  begin_token()
-                  end_token_here("$ERR$")
-                  add_syntax_error()
+               else
+                  local k = lex_any_char_kinds[c]
+                  if k then
+                     begin_token()
+                     end_token(k, c)
+                  elseif not lex_space[c] then
+                     begin_token()
+                     end_token_here("$ERR$")
+                     add_syntax_error()
+                  end
                end
             end
          elseif state == "identifier" then
@@ -625,6 +640,24 @@ do
             elseif c == "`" then
                end_token_here("`")
                state = "any"
+            end
+         elseif state == "string backtick triple" then
+            -- On entry, we are at the first backtick of the opening fence.
+            -- Consume opening ``` entirely, then read until closing ```.
+            if input:sub(i, i + 2) == "```" then
+               -- If this is the very start of the token, skip opening fence
+               if i == ti then
+                  -- Advance over the two extra backticks; main loop will
+                  -- advance by one more, totaling three.
+                  i = i + 2
+                  x = x + 2
+               else
+                  -- Otherwise this is the closing fence; include it and close.
+                  i = i + 2
+                  x = x + 2
+                  end_token_here("`")
+                  state = "any"
+               end
             end
          elseif state == "string backtick got \\" then
             local skip, valid = lex_string_escape(input, i, c)

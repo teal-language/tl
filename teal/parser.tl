@@ -1,4 +1,5 @@
-local reader = require("teal.reader")
+
+local reader = require("teal.reader_api")
 local type Block = reader.Block
 local type BlockLang = reader.BlockLang
 local errors = require("teal.errors")
@@ -476,23 +477,20 @@ local function parse_variable_list(state: ParseState, block: Block, as_expressio
    end
    for _, var_block in ipairs(block) do
       local var_node: Node
-      if var_block.kind == "identifier" then
-         if as_expression then
-            var_node = parse_expression(state, var_block)
-         else
-            var_node = new_node(state, var_block)
-            if var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
-               local annotation = var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
-               if not is_attribute[annotation.tk] then
-                  fail(state, annotation, "unknown variable annotation: " .. annotation.tk)
-               end
-               if var_node then
-                  var_node.attribute = annotation.tk as Attribute
-               end
+      if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
+         local ident_block = var_block
+         if var_block.kind == "variable" then
+            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" } as Block
+         end
+         var_node = new_node(state, ident_block)
+         if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
+            local annotation = ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
+            if is_attribute[annotation.tk] and var_node then
+               var_node.attribute = annotation.tk as Attribute
             end
          end
       else
-         -- complex lvalue such as t.x or t[1]
+         
          var_node = parse_expression(state, var_block)
       end
 
@@ -538,16 +536,16 @@ local function parse_argument_list(state: ParseState, block: Block): Node, integ
          end
 
          if arg_node.tk == "..." then
-            if a < #block then
-               fail(state, arg_block, "'...' can only be last argument")
-            end
-           has_varargs = true
+            -- if a < #block then
+               
+            -- end
+            has_varargs = true
             is_optional = true
          else
             if is_optional then
                has_optional = true
-            elseif has_optional and not has_varargs then
-               fail(state, arg_block, "non-optional argument follows optional argument")
+            -- elseif has_optional and not has_varargs then
+               
             end
 
             if not is_optional and not has_varargs then
@@ -572,7 +570,14 @@ local function parse_statements(state: ParseState, block: Block): Node
 
    local node = new_node(state, block, "statements")
 
+   if block[1] and block[1].kind == "hashbang" then
+      node.hashbang = block[1].tk
+   end
+
    for _, item_block in ipairs(block) do
+      if item_block.kind == "hashbang" then
+         goto continue
+      end
       local parsed_item = parse_block(state, item_block)
       if parsed_item then
          for _, child in ipairs(item_block) do
@@ -581,8 +586,15 @@ local function parse_statements(state: ParseState, block: Block): Node
                break
             end
          end
-         table.insert(node, parsed_item)
+         if parsed_item.kind == "statements" then
+            for _, c in ipairs(parsed_item) do
+               table.insert(node, c)
+            end
+         else
+            table.insert(node, parsed_item)
+         end
       end
+      ::continue::
    end
 
    return node
@@ -759,18 +771,20 @@ parse_expression = function(state: ParseState, block: Block): Node
       node.e1 = parse_expression(state, block[reader.BLOCK_INDEXES.MACRO_INVOCATION.MACRO])
       node.args = parse_expression_list(state, block[reader.BLOCK_INDEXES.MACRO_INVOCATION.ARGS])
    elseif kind == "macro_quote" then
-      if not state.in_local_macro then
-         fail(state, block, "macro quotes can only appear in local macros")
-      end
       if state.in_macro_quote then
          fail(state, block, "cannot nest macro quotes")
       end
       if not block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
          return new_node(state, block, "literal_table")
       end
-      local stmts = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
-      -- local prev_quote = state.in_macro_quote
-      local res = block_to_constructor(state, stmts[1])
+      local inner = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
+      -- local res: Node
+      -- if inner and inner.kind == "statements" then
+      --    res = block_to_constructor(state, inner[1])
+      -- else
+      --    res = block_to_constructor(state, inner)
+      -- end
+      local res = block_to_constructor(state, inner)
       state.in_macro_quote = false
       return res
    end
@@ -874,6 +888,16 @@ parse_fns.local_declaration = function(state: ParseState, block: Block): Node
       node = new_node(state, dummy_block, "local_declaration")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.LOCAL_DECLARATION.VARS], false)
+   
+   if node.vars then
+      for _, var_node in ipairs(node.vars) do
+         if var_node.kind == "variable" then
+            var_node.is_lvalue = true
+         elseif var_node.kind == "op" and var_node.op and (var_node.op.op == "@index" or var_node.op.op == ".") then
+            var_node.is_lvalue = true
+         end
+      end
+   end
    local next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.DECL
    if block[next_child] and block[next_child].kind == "tuple_type" then
       local dt: TupleType
@@ -1223,14 +1247,6 @@ function block_to_constructor(state: ParseState, block: Block): Node
       return call
    end
 
-   if block.kind == "assignment" then
-      local exps_idx = reader.BLOCK_INDEXES.ASSIGNMENT.EXPS
-      if block[exps_idx] then
-         block[exps_idx - 1] = block[exps_idx]
-         block[exps_idx] = nil
-      end
-   end
-
    local node = new_node(state, block, "literal_table")
    if not node.yend then
       node.yend = block.yend or block.y
@@ -1256,18 +1272,25 @@ function block_to_constructor(state: ParseState, block: Block): Node
       table.insert(node, tk_item)
    end
 
-   for i, child in ipairs(block) do
-      if type(child) == "table" and child.kind then
-         local item = new_node(state, child, "literal_table_item")
-         item.key_parsed = "long"
-         item.key = new_node(state, child, "integer")
-         item.key.tk = tostring(i)
-         item.key.constnum = i
-         item.value = block_to_constructor(state, child)
-         table.insert(node, item)
+   -- hole preservation
+   local numeric_keys: {integer} = {}
+   for k, v in pairs(block as {any:any}) do
+      if type(k) == "number" and type(v) == "table" and (v as {string:any}).kind then
+         table.insert(numeric_keys, k as integer)
       end
    end
-
+   table.sort(numeric_keys)
+   for _, i in ipairs(numeric_keys) do
+      local child = block[i]
+      local item = new_node(state, child, "literal_table_item")
+      item.key_parsed = "long"
+      item.key = new_node(state, child, "integer")
+      item.key.tk = tostring(i)
+      item.key.constnum = i
+      item.value = block_to_constructor(state, child)
+      table.insert(node, item)
+   end
+   
    return node
 end
 
@@ -1547,6 +1570,8 @@ parse_block = function(state: ParseState, block: Block): Node
          node = new_node(state, dummy_block, "interface")
       end
       return node
+   elseif kind == "statements" then
+      return parse_statements(state, block)
    end
    local f = parse_fns[block.kind]
    if f then
@@ -1579,19 +1604,7 @@ function block_parser.parse(input: Block, filename: string, parse_lang?: ParseLa
    return nodes, state.errs, state.required_modules
 end
 
-function block_parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
-   errs = errs or {}
-   filename = filename or "input"
-   local block, read_required = reader.read_program(tokens, errs, filename, parse_lang)
-   local ast, parse_errs, required_modules = block_parser.parse(block, filename, parse_lang)
-   for _, e in ipairs(parse_errs) do
-      table.insert(errs, e)
-   end
-   for _, r in ipairs(read_required) do
-      table.insert(required_modules, r)
-   end
-   return ast, required_modules
-end
+-- Note: parse_program was moved to tl.tl to avoid a hard dependency on reader in order to support macro expansion :)
 
 local function new_generic(state: ParseState, block: Block, typeargs: {TypeArgType}, typ: FirstOrderType): GenericType
    local gt = new_type(state, block, "generic") as GenericType
@@ -2151,4 +2164,3 @@ function block_parser.node_at(w: Where, n: Node): Node
 end
 
 return block_parser
-

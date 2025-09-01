@@ -16,9 +16,6 @@ local type RecordLikeType = types.RecordLikeType
 local parser = require("teal.parser")
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
-local reader = require("teal.reader")
-local type Block = reader.Block
-local BLOCK_INDEXES = reader.BLOCK_INDEXES
 
 local traversal = require("teal.traversal")
 local type Visitor = traversal.Visitor
@@ -572,55 +569,8 @@ function lua_generator.generate(ast: types.Node, gen_target: Target, opts?: Opti
       },
       ["macro_invocation"] = {
          after = function(_: nil, node: Node, _children: {Output}): Output
-            local fn = macro_env[node.e1.tk]
-            if not fn then
-               err = "unknown macro '" .. node.e1.tk .. "'"
-               return { y = node.y or -1, h = 0 }
-            end
-            local argv: {any} = {}
-            for _, arg in ipairs(node.args) do
-               local arg_code, aerr = lua_generator.generate(arg, gen_target, lua_generator.fast_opts, macro_env)
-               if aerr then
-                  err = aerr
-                  return { y = node.y or -1, h = 0 }
-               end
-               local arg_block, rerrs = reader.read("return " .. arg_code, node.e1.f or "macro_arg", "tl", true)
-               if #rerrs > 0 then
-                  err = rerrs[1].msg
-                  return { y = node.y or -1, h = 0 }
-               end
-               local ret = arg_block[1]
-               local exp_block = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-               table.insert(argv, exp_block)
-            end
-            local ok: boolean
-            local block: any
-            ok, block = (pcall as function(any, ...: any): (boolean, any))(fn, table.unpack(argv))
-            if not ok then
-               err = tostring(block)
-               return { y = node.y or -1, h = 0 }
-            end
-            if type(block) ~= "table" or not (block as {string:any}).kind then
-               err = "macro '" .. node.e1.tk .. "' did not return a Block"
-               return { y = node.y or -1, h = 0 }
-            end
-            if (block as {string:any}).kind ~= "statements" then
-               local b = block as {string:any}
-               block = { kind = "statements", [1] = b, y = b.y or 1, x = b.x or 1, tk = "", yend = b.yend or b.y or 1, xend = b.xend or b.x or 1 }
-            end
-            local exp_ast, perrs = parser.parse(block as Block, node.e1.f or "macro")
-            if #perrs > 0 then
-               err = perrs[1].msg
-               return { y = node.y or -1, h = 0 }
-            end
-            local exp_code, gerr = lua_generator.generate(exp_ast, gen_target, opts, macro_env)
-            if gerr then
-               err = gerr
-               return { y = node.y or -1, h = 0 }
-            end
-            local out: Output = { y = node.y or -1, h = 0 }
-            add_string(out, exp_code)
-            return out
+            err = "macro invocation must be expanded before code generation. This is likley a bug with teal."
+            return { y = node.y or -1, h = 0 }
          end,
       },
       ["local_macroexp"] = {

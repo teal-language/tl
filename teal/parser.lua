@@ -1,4 +1,5 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local reader = require("teal.reader")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local reader = require("teal.reader_api")
 
 
 local errors = require("teal.errors")
@@ -476,19 +477,16 @@ local function parse_variable_list(state, block, as_expression)
    end
    for _, var_block in ipairs(block) do
       local var_node
-      if var_block.kind == "identifier" then
-         if as_expression then
-            var_node = parse_expression(state, var_block)
-         else
-            var_node = new_node(state, var_block)
-            if var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
-               local annotation = var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
-               if not is_attribute[annotation.tk] then
-                  fail(state, annotation, "unknown variable annotation: " .. annotation.tk)
-               end
-               if var_node then
-                  var_node.attribute = annotation.tk
-               end
+      if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
+         local ident_block = var_block
+         if var_block.kind == "variable" then
+            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" }
+         end
+         var_node = new_node(state, ident_block)
+         if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
+            local annotation = ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
+            if is_attribute[annotation.tk] and var_node then
+               var_node.attribute = annotation.tk
             end
          end
       else
@@ -539,7 +537,7 @@ local function parse_argument_list(state, block)
 
          if arg_node.tk == "..." then
             if a < #block then
-               fail(state, arg_block, "'...' can only be last argument")
+
             end
             has_varargs = true
             is_optional = true
@@ -547,7 +545,7 @@ local function parse_argument_list(state, block)
             if is_optional then
                has_optional = true
             elseif has_optional and not has_varargs then
-               fail(state, arg_block, "non-optional argument follows optional argument")
+
             end
 
             if not is_optional and not has_varargs then
@@ -572,7 +570,14 @@ local function parse_statements(state, block)
 
    local node = new_node(state, block, "statements")
 
+   if block[1] and block[1].kind == "hashbang" then
+      node.hashbang = block[1].tk
+   end
+
    for _, item_block in ipairs(block) do
+      if item_block.kind == "hashbang" then
+         goto continue
+      end
       local parsed_item = parse_block(state, item_block)
       if parsed_item then
          for _, child in ipairs(item_block) do
@@ -581,8 +586,15 @@ local function parse_statements(state, block)
                break
             end
          end
-         table.insert(node, parsed_item)
+         if parsed_item.kind == "statements" then
+            for _, c in ipairs(parsed_item) do
+               table.insert(node, c)
+            end
+         else
+            table.insert(node, parsed_item)
+         end
       end
+      ::continue::
    end
 
    return node
@@ -759,18 +771,20 @@ parse_expression = function(state, block)
       node.e1 = parse_expression(state, block[reader.BLOCK_INDEXES.MACRO_INVOCATION.MACRO])
       node.args = parse_expression_list(state, block[reader.BLOCK_INDEXES.MACRO_INVOCATION.ARGS])
    elseif kind == "macro_quote" then
-      if not state.in_local_macro then
-         fail(state, block, "macro quotes can only appear in local macros")
-      end
       if state.in_macro_quote then
          fail(state, block, "cannot nest macro quotes")
       end
       if not block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
          return new_node(state, block, "literal_table")
       end
-      local stmts = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
+      local inner = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
 
-      local res = block_to_constructor(state, stmts[1])
+
+
+
+
+
+      local res = block_to_constructor(state, inner)
       state.in_macro_quote = false
       return res
    end
@@ -874,6 +888,17 @@ parse_fns.local_declaration = function(state, block)
       node = new_node(state, dummy_block, "local_declaration")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.LOCAL_DECLARATION.VARS], false)
+
+
+   if node.vars then
+      for _, var_node in ipairs(node.vars) do
+         if var_node.kind == "variable" then
+            var_node.is_lvalue = true
+         elseif var_node.kind == "op" and var_node.op and (var_node.op.op == "@index" or var_node.op.op == ".") then
+            var_node.is_lvalue = true
+         end
+      end
+   end
    local next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.DECL
    if block[next_child] and block[next_child].kind == "tuple_type" then
       local dt
@@ -1223,14 +1248,6 @@ function block_to_constructor(state, block)
       return call
    end
 
-   if block.kind == "assignment" then
-      local exps_idx = reader.BLOCK_INDEXES.ASSIGNMENT.EXPS
-      if block[exps_idx] then
-         block[exps_idx - 1] = block[exps_idx]
-         block[exps_idx] = nil
-      end
-   end
-
    local node = new_node(state, block, "literal_table")
    if not node.yend then
       node.yend = block.yend or block.y
@@ -1256,16 +1273,23 @@ function block_to_constructor(state, block)
       table.insert(node, tk_item)
    end
 
-   for i, child in ipairs(block) do
-      if type(child) == "table" and child.kind then
-         local item = new_node(state, child, "literal_table_item")
-         item.key_parsed = "long"
-         item.key = new_node(state, child, "integer")
-         item.key.tk = tostring(i)
-         item.key.constnum = i
-         item.value = block_to_constructor(state, child)
-         table.insert(node, item)
+
+   local numeric_keys = {}
+   for k, v in pairs(block) do
+      if type(k) == "number" and type(v) == "table" and (v).kind then
+         table.insert(numeric_keys, k)
       end
+   end
+   table.sort(numeric_keys)
+   for _, i in ipairs(numeric_keys) do
+      local child = block[i]
+      local item = new_node(state, child, "literal_table_item")
+      item.key_parsed = "long"
+      item.key = new_node(state, child, "integer")
+      item.key.tk = tostring(i)
+      item.key.constnum = i
+      item.value = block_to_constructor(state, child)
+      table.insert(node, item)
    end
 
    return node
@@ -1547,6 +1571,8 @@ parse_block = function(state, block)
          node = new_node(state, dummy_block, "interface")
       end
       return node
+   elseif kind == "statements" then
+      return parse_statements(state, block)
    end
    local f = parse_fns[block.kind]
    if f then
@@ -1579,19 +1605,8 @@ function block_parser.parse(input, filename, parse_lang)
    return nodes, state.errs, state.required_modules
 end
 
-function block_parser.parse_program(tokens, errs, filename, parse_lang)
-   errs = errs or {}
-   filename = filename or "input"
-   local block, read_required = reader.read_program(tokens, errs, filename, parse_lang)
-   local ast, parse_errs, required_modules = block_parser.parse(block, filename, parse_lang)
-   for _, e in ipairs(parse_errs) do
-      table.insert(errs, e)
-   end
-   for _, r in ipairs(read_required) do
-      table.insert(required_modules, r)
-   end
-   return ast, required_modules
-end
+
+
 
 local function new_generic(state, block, typeargs, typ)
    local gt = new_type(state, block, "generic")

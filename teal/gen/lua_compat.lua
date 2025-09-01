@@ -10,6 +10,7 @@ local parser = require("teal.parser")
 local node_at = parser.node_at
 
 local reader = require("teal.reader")
+local reader_api = require("teal.reader_api")
 
 local metamethods = require("teal.metamethods")
 local unop_to_metamethod = metamethods.unop_to_metamethod
@@ -48,10 +49,11 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-         local block, read_errs = reader.read(text, "@internal", "lua")
+         local blk, read_errs = reader.read(text, "@internal", "lua")
          if #read_errs > 0 then
             error("Failed to read compat code: " .. read_errs[1].msg)
          end
+         local block = blk
          code = parser.parse(block, "@internal", "lua")
          check.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code

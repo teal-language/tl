@@ -23,14 +23,14 @@ function string_checker.check(env: Env, input: string, filename?: string, parse_
    end
    filename = filename or ""
 
-   local blocks, syntax_errors = reader.read(input, filename, parse_lang)
-   if (not env.keep_going) and #syntax_errors > 0 then
+   local blocks, read_errs = reader.read(input, filename, parse_lang)
+   if (not env.keep_going) and #read_errs > 0 then
       local result = {
          ok = false,
          filename = filename,
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
-         syntax_errors = syntax_errors,
+         syntax_errors = read_errs,
          env = env,
       }
       env.loaded[filename] = result
@@ -39,14 +39,14 @@ function string_checker.check(env: Env, input: string, filename?: string, parse_
    end
 
 
-   local program, syntax_errors = parser.parse(blocks, filename, parse_lang)
-   if (not env.keep_going) and #syntax_errors > 0 then
+   local program, parse_errs = parser.parse(blocks, filename, parse_lang)
+   if (not env.keep_going) and #parse_errs > 0 then
       local result = {
          ok = false,
          filename = filename,
          type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
          type_errors = {},
-         syntax_errors = syntax_errors,
+         syntax_errors = parse_errs,
          env = env,
       }
       env.loaded[filename] = result
@@ -56,10 +56,11 @@ function string_checker.check(env: Env, input: string, filename?: string, parse_
 
    local result = check.check(program as Node, filename, env.defaults, env)
 
-   result.syntax_errors = syntax_errors
+   result.syntax_errors = {}
+   for _, e in ipairs(read_errs or {}) do table.insert(result.syntax_errors, e) end
+   for _, e in ipairs(parse_errs or {}) do table.insert(result.syntax_errors, e) end
 
    return result
 end
 
 return string_checker
-

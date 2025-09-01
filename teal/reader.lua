@@ -1,137 +1,17 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
-local types = require("teal.types")
-
-local errors = require("teal.errors")
 
 
 local lexer = require("teal.lexer")
 
 
 
+local block = require("teal.block")
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+local macro_eval = require("teal.macro_eval")
 
 
 
@@ -154,218 +34,8 @@ local reader = {}
 
 
 
-local BLOCK_INDEXES = {
-   PRAGMA = {
-      KEY = 1,
-      VALUE = 2,
-   },
-   IF = {
-      BLOCKS = 1,
-   },
-   IF_BLOCK = {
-      COND = 1,
-      BODY = 2,
-   },
-   WHILE = {
-      COND = 1,
-      BODY = 2,
-   },
-   FORNUM = {
-      VAR = 1,
-      FROM = 2,
-      TO = 3,
-      STEP = 4,
-      BODY = 5,
-   },
-   FORIN = {
-      VARS = 1,
-      EXPS = 2,
-      BODY = 3,
-   },
-   REPEAT = {
-      BODY = 1,
-      COND = 2,
-   },
-   DO = {
-      BODY = 1,
-   },
-   GOTO = {
-      LABEL = 1,
-   },
-   LABEL = {
-      NAME = 1,
-   },
-   RETURN = {
-      EXPS = 1,
-   },
-   FUNCTION = {
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   LOCAL_FUNCTION = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   GLOBAL_FUNCTION = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   RECORD_FUNCTION = {
-      OWNER = 1,
-      NAME = 2,
-      TYPEARGS = 3,
-      ARGS = 4,
-      RETS = 5,
-      BODY = 6,
-   },
-   LOCAL_MACRO = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   LOCAL_MACROEXP = {
-      NAME = 1,
-      EXP = 2,
-   },
-   LOCAL_DECLARATION = {
-      VARS = 1,
-      DECL = 2,
-      EXPS = 3,
-   },
-   GLOBAL_DECLARATION = {
-      VARS = 1,
-      DECL = 2,
-      EXPS = 3,
-   },
-   LOCAL_TYPE = {
-      VAR = 1,
-      VALUE = 2,
-   },
-   GLOBAL_TYPE = {
-      VAR = 1,
-      VALUE = 2,
-   },
-   ASSIGNMENT = {
-      VARS = 1,
-      EXPS = 3,
-   },
-   VARIABLE = {
-      ANNOTATION = 1,
-   },
-   ARGUMENT = {
-      ANNOTATION = 1,
-   },
-   ARGUMENT_LIST = {
-      FIRST = 1,
-   },
-   VARIABLE_LIST = {
-      FIRST = 1,
-   },
-   EXPRESSION_LIST = {
-      FIRST = 1,
-      SECOND = 2,
-   },
-   LITERAL_TABLE_ITEM = {
-      KEY = 1,
-      VALUE = 2,
-      TYPED_VALUE = 3,
-   },
-   OP = {
-      E1 = 1,
-      E2 = 2,
-   },
-   PAREN = {
-      EXP = 1,
-   },
-   MACRO_QUOTE = {
-      BLOCK = 1,
-   },
-   MACRO_VAR = {
-      NAME = 1,
-   },
-   MACRO_INVOCATION = {
-      MACRO = 1,
-      ARGS = 2,
-   },
-   CAST = {
-      TYPE = 1,
-   },
-   NEWTYPE = {
-      TYPEDECL = 1,
-   },
-   TYPEDECL = {
-      TYPE = 1,
-   },
-   FUNCTION_TYPE = {
-      ARGS = 1,
-      RETS = 2,
-      MACROEXP = 4,
-   },
-   MACROEXP = {
-      ARGS = 1,
-      RETS = 2,
-      EXP = 3,
-   },
-   RECORD = {
-      ARRAY_TYPE = 1,
-      INTERFACES = 2,
-      FIELDS = 3,
-      META_FIELDS = 4,
-      WHERE_CLAUSE = 5,
-   },
-   INTERFACE = {
-      ARRAY_TYPE = 1,
-      INTERFACES = 2,
-      FIELDS = 3,
-      META_FIELDS = 4,
-      WHERE_CLAUSE = 5,
-   },
-   GENERIC_TYPE = {
-      TYPEARGS = 1,
-      BASE = 2,
-   },
-   ARRAY_TYPE = {
-      ELEMENT = 1,
-   },
-   MAP_TYPE = {
-      KEYS = 1,
-      VALUES = 2,
-   },
-   TYPELIST = {
-      FIRST = 1,
-   },
-   UNION_TYPE = {
-      FIRST = 1,
-   },
-   TUPLE_TYPE = {
-      FIRST = 1,
-      SECOND = 2,
-   },
-   RECORD_FIELD = {
-      NAME = 1,
-      TYPE = 2,
-   },
-   TYPEARG = {
-      NAME = 1,
-      CONSTRAINT = 2,
-   },
-   NOMINAL_TYPE = {
-      NAME = 1,
-   },
-   ARGUMENT_TYPE = {
-      NAME = 1,
-   },
-}
+
+local BLOCK_INDEXES = block.BLOCK_INDEXES
 
 reader.BLOCK_INDEXES = BLOCK_INDEXES
 
@@ -415,6 +85,7 @@ end
 
 
 
+
 local read_type_list
 local read_typeargs_if_any
 local read_expression
@@ -422,9 +93,16 @@ local read_expression_and_tk
 local read_statements
 local read_argument_list
 local read_argument_type_list
+local read_macro_quote
 local read_type
 local read_type_declaration
 local read_interface_name
+local read_statement_argblock
+local read_statement_fns
+local needs_local_or_global
+local read_nested_type
+local read_call_or_assignment
+local read_record_function
 
 
 local read_enum_body
@@ -738,6 +416,73 @@ end
 local function read_table_literal(ps, i)
    local node = new_block(ps, i, "literal_table")
    return read_bracket_list(ps, i, node, "{", "}", "term", read_table_item)
+end
+
+local function read_macro_args_with_sig(ps, i, sig)
+   local node = new_block(ps, i, "expression_list")
+   local function read_item(ps2, ii, n)
+      local expected
+      if sig then
+         expected = sig.kinds[n] or (sig.vararg ~= "" and sig.vararg or nil)
+      end
+      if expected == "stmt" then
+         if ps2.tokens[ii].kind == "`" then
+            local ni, q = read_macro_quote(ps2, ii)
+            return ni, q, n + 1
+         else
+
+
+            if read_type_body_fns and ps2.tokens[ii].kind == "identifier" then end
+            local tk0 = ps2.tokens[ii].tk
+            if read_type_body_fns[tk0] and ps2.tokens[ii + 1].kind == "identifier" then
+               local istart = ii
+               local ni
+               local lt
+               ni, lt = read_nested_type(ps2, ii, tk0)
+               local sblk = new_block(ps2, istart, "statements")
+               table.insert(sblk, lt)
+               end_at(sblk, ps2.tokens[ni])
+               return ni, sblk, n + 1
+            end
+
+
+
+            local j = ii
+            local paren_depth = 0
+            while ps2.tokens[j].kind ~= "$EOF$" do
+               local t = ps2.tokens[j].tk
+               if t == "(" then
+                  paren_depth = paren_depth + 1
+               elseif t == ")" then
+                  if paren_depth == 0 then break end
+                  paren_depth = paren_depth - 1
+               elseif t == "," and paren_depth == 0 then
+                  break
+               end
+               j = j + 1
+            end
+
+            local slice = {}
+            local nt = 0
+            for k = ii, j - 1 do
+               nt = nt + 1
+               slice[nt] = ps2.tokens[k]
+            end
+            nt = nt + 1
+            local eof_prev = ps2.tokens[math.max(ii, j - 1)]
+            slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
+            local errs2 = {}
+            local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
+            for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
+            return j, block, n + 1
+         end
+      else
+         local ni, e = read_expression(ps2, ii)
+         return ni, e, n + 1
+      end
+   end
+   i, node = read_bracket_list(ps, i, node, "(", ")", "sep", read_item)
+   return i, node
 end
 
 local function read_trying_list(ps, i, list, read_item, ret_lookahead)
@@ -1062,19 +807,44 @@ local function read_function_value(ps, i)
    return read_function_args_rets_body(ps, i, node)
 end
 
+
+local function skip_any_function(ps, i)
+
+   i = verify_tk(ps, i, "function")
+
+   while ps.tokens[i] and (ps.tokens[i].kind == "identifier" or ps.tokens[i].tk == "." or ps.tokens[i].tk == ":") do
+      i = i + 1
+   end
+   local dummy = new_block(ps, i, "function")
+   return read_function_args_rets_body(ps, i, dummy)
+end
+
 local function read_macro_quote(ps, i)
    local token = ps.tokens[i]
    local node = new_block(ps, i, "macro_quote")
-   local code = token.tk:sub(2, -2)
-   local block, errs = reader.read(code, ps.filename, ps.read_lang, true)
-   if #errs > 0 then
+   local tk = token.tk
+
+   local triple = tk:sub(1, 3) == "```"
+   local delim = triple and 3 or 1
+   local code = tk:sub(delim + 1, -(delim + 1))
+   if code:match("^%s*$") then
+      return fail(ps, i, "macro quotes cannot be empty")
+   end
+
+   local block
+   local errs
+
+   if triple then
+
+      block, errs = reader.read(code, ps.filename, ps.read_lang, true)
+   else
+
       local wrapped, werrs = reader.read("return " .. code, ps.filename, ps.read_lang, true)
       if #werrs == 0 then
          local ret = wrapped[1]
          if ret and ret.kind == "return" and ret[BLOCK_INDEXES.RETURN.EXPS] then
             local exp = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-            block = { kind = "statements", y = exp.y or 1, x = exp.x or 1, tk = "", yend = exp.yend or exp.y or 1, xend = exp.xend or exp.x or 1 }
-            block[1] = exp
+            block = exp
             errs = {}
          else
             errs = werrs
@@ -1083,7 +853,8 @@ local function read_macro_quote(ps, i)
          errs = werrs
       end
    end
-   for _, e in ipairs(errs) do
+
+   for _, e in ipairs(errs or {}) do
       table.insert(ps.errs, e)
    end
    node[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] = block
@@ -1125,9 +896,6 @@ local function read_literal(ps, i)
    elseif tk == "function" then
       return read_function_value(ps, i)
    elseif kind == "`" then
-      if not ps.in_local_macro then
-         return fail(ps, i, "macro quotes can only appear in local macros")
-      end
       return read_macro_quote(ps, i)
    elseif tk == "{" then
       return read_table_literal(ps, i)
@@ -1364,7 +1132,16 @@ do
             local args = new_block(ps, i, "expression_list")
             local argument
             if next_tk.tk == "(" then
-               i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
+               local mname
+               if e1 and (e1.kind == "variable" or e1.kind == "identifier") then
+                  mname = e1.tk
+               end
+               local sig = mname and ps.macro_sigs[mname]
+               if sig then
+                  i, args = read_macro_args_with_sig(ps, i, sig)
+               else
+                  i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
+               end
             elseif next_tk.kind == "string" or next_tk.kind == "{" then
                if next_tk.kind == "string" then
                   argument = new_block(ps, i)
@@ -1374,6 +1151,10 @@ do
                   i, argument = read_table_literal(ps, i)
                end
                table.insert(args, argument)
+            elseif next_tk.kind == "`" then
+               local qi, q = read_macro_quote(ps, i)
+               i = qi
+               table.insert(args, q)
             else
                if next_tk.tk == "=" then
                   fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
@@ -1409,8 +1190,6 @@ do
             end
 
             e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = args, tk = tkop.tk }
-
-            table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
          elseif tkop.tk == "[" then
             local op_kind = op_map[2]["@index"]
 
@@ -1452,8 +1231,6 @@ do
 
             table.insert(args, argument)
             e1 = { f = ps.filename, y = args.y, x = args.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = args, tk = tkop.tk }
-
-            table.insert(ps.required_modules, node_is_require_call_or_pcall(e1))
          elseif tkop.tk == "as" or tkop.tk == "is" then
             local op_kind = op_map[2][tkop.tk]
 
@@ -1864,6 +1641,61 @@ local function read_goto(ps, i)
    return i, node
 end
 
+
+
+
+
+read_statement_argblock = function(ps, i)
+   local node = new_block(ps, i, "statements")
+   local item
+   while true do
+      while ps.tokens[i].kind == ";" do
+         i = i + 1
+      end
+      if ps.tokens[i].kind == "$EOF$" then
+         break
+      end
+      local tk = ps.tokens[i].tk
+      if tk == ")" or tk == "," then
+         break
+      end
+
+      local fn = read_statement_fns[tk]
+      if not fn then
+         if read_type_body_fns[tk] and ps.tokens[i + 1].kind == "identifier" then
+
+            local lt
+            i, lt = read_nested_type(ps, i, tk)
+            item = lt
+         else
+            local skip_fn = needs_local_or_global[tk]
+            if skip_fn and ps.tokens[i + 1].kind == "identifier" then
+               fn = skip_fn
+            else
+               fn = read_call_or_assignment
+            end
+         end
+      end
+
+      if not item and fn then
+         i, item = fn(ps, i)
+      end
+
+      if item then
+         table.insert(node, item)
+         item = nil
+      elseif i > 1 then
+         local lasty = ps.tokens[i - 1].y
+         while ps.tokens[i].kind ~= "$EOF$" and ps.tokens[i].y == lasty do
+            i = i + 1
+         end
+      end
+   end
+
+   end_at(node, ps.tokens[i])
+   return i, node
+end
+
 local function read_label(ps, i)
    local node = new_block(ps, i, "label")
    i = verify_tk(ps, i, "::")
@@ -1904,7 +1736,7 @@ local function read_return(ps, i)
    return i, node
 end
 
-local function read_nested_type(ps, i, tn)
+read_nested_type = function(ps, i, tn)
    local istart = i
    i = i + 1
 
@@ -2463,6 +2295,34 @@ local function read_local_macro(ps, i)
    i, node = read_function_args_rets_body(ps, i, node)
    ps.in_local_macro = old_in_macro
    ps.allow_macro_vars = old_allow
+   local args = node[BLOCK_INDEXES.LOCAL_MACRO.ARGS]
+   if args then
+      local sig = { kinds = {}, vararg = "" }
+      local idx = 1
+      for _, ab in ipairs(args) do
+         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local ok = false
+         local mode
+         if annot and annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
+            local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
+            if tname == "Statement" then ok = true; mode = "stmt"
+            elseif tname == "Expression" then ok = true; mode = "expr" end
+         end
+         if not ok then
+            table.insert(ps.errs, { filename = ps.filename, y = (annot and annot.y) or ab.y, x = (annot and annot.x) or ab.x, msg = "macro argument type must be 'Statement' or 'Expression'" })
+         else
+            if ab.tk == "..." then
+               sig.vararg = mode or "expr"
+            else
+               sig.kinds[idx] = mode or "expr"
+               idx = idx + 1
+            end
+         end
+      end
+      if node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].kind == "identifier" then
+         ps.macro_sigs[node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk] = sig
+      end
+   end
    return i, node
 end
 
@@ -2487,8 +2347,14 @@ local function read_global(ps, i)
    if ntk == "function" then
       i = verify_tk(ps, i, "global")
       i = verify_tk(ps, i, "function")
+      local func_start = i - 1
       local fn = new_block(ps, i - 2, "global_function")
       i, fn[BLOCK_INDEXES.GLOBAL_FUNCTION.NAME] = read_identifier(ps, i)
+      if ps.tokens[i].tk == "." or ps.tokens[i].tk == ":" then
+         local ni = skip_any_function(ps, func_start)
+         fail(ps, func_start, "record functions cannot be annotated as 'global'")
+         return ni
+      end
       return read_function_args_rets_body(ps, i, fn)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return read_type_declaration(ps, i + 2, "global_type")
@@ -2568,7 +2434,7 @@ local function read_pragma(ps, i)
    return i, pragma
 end
 
-local read_statement_fns = {
+read_statement_fns = {
    ["--#pragma"] = read_pragma,
    ["::"] = read_label,
    ["do"] = read_do,
@@ -2589,7 +2455,7 @@ local function type_needs_local_or_global(ps, i)
    return failskip(ps, i, ("%s needs to be declared with 'local %s' or 'global %s'"):format(tk, tk, tk), skip_type_body)
 end
 
-local needs_local_or_global = {
+needs_local_or_global = {
    ["type"] = function(ps, i)
       return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    end,
@@ -2654,6 +2520,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       read_lang = read_lang,
       allow_macro_vars = allow_macro_vars or false,
       in_local_macro = false,
+      macro_sigs = {},
    }
    local i = 1
    local hashbang
@@ -2665,6 +2532,10 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    if hashbang then
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
+
+
+   local lang = read_lang or "tl"
+   node = macro_eval.compile_all_and_expand(node, filename, lang, errs)
 
    errors.clear_redundant_errors(errs)
    return node, ps.required_modules
