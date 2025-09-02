@@ -667,7 +667,16 @@ local function show_type_base(t, short, seen)
 end
 
 local function inferred_msg(t, prefix)
-   return " (" .. (prefix or "") .. "inferred at " .. t.inferred_at.f .. ":" .. t.inferred_at.y .. ":" .. t.inferred_at.x .. ")"
+   local w = t.inferred_at
+   if w then
+      local f = w.f or ""
+      local y = w.y and tostring(w.y) or ""
+      local x = w.x and tostring(w.x) or ""
+      if f ~= "" or y ~= "" or x ~= "" then
+         return " (" .. (prefix or "") .. "inferred at " .. f .. ":" .. y .. ":" .. x .. ")"
+      end
+   end
+   return " (" .. (prefix or "") .. "inferred)"
 end
 
 show_type = function(t, short, seen)

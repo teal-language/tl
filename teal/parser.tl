@@ -1247,32 +1247,34 @@ function block_to_constructor(state: ParseState, block: Block): Node
       return call
    end
 
+   local function add_string_field(tbl: Node, owner: Block, keyname: string, value: string)
+      local it = new_node(state, owner, "literal_table_item")
+      it.key_parsed = "short"
+      it.key = new_node(state, owner, "identifier")
+      it.key.tk = string.format("%q", keyname)
+      it.value = new_node(state, owner, "string")
+      it.value.tk = string.format("%q", value)
+      it.value.conststr = value
+      table.insert(tbl, it)
+   end
+
    local node = new_node(state, block, "literal_table")
    if not node.yend then
       node.yend = block.yend or block.y
    end
 
-   local kind_item = new_node(state, block, "literal_table_item")
-   kind_item.key_parsed = "short"
-   kind_item.key = new_node(state, block, "identifier")
-   kind_item.key.tk = "\"kind\""
-   kind_item.value = new_node(state, block, "string")
-   kind_item.value.tk = string.format("%q", block.kind)
-   kind_item.value.conststr = block.kind
-   table.insert(node, kind_item)
+   add_string_field(node, block, "kind", block.kind)
 
-   if block.tk then
-      local tk_item = new_node(state, block, "literal_table_item")
-      tk_item.key_parsed = "short"
-      tk_item.key = new_node(state, block, "identifier")
-      tk_item.key.tk = "\"tk\""
-      tk_item.value = new_node(state, block, "string")
-      tk_item.value.tk = string.format("%q", block.tk)
-      tk_item.value.conststr = block.tk
-      table.insert(node, tk_item)
+   if block.tk and block.tk ~= "" then
+      add_string_field(node, block, "tk", block.tk)
    end
 
-   -- hole preservation
+   --technically this should probably be a block idx
+   --TODO: change later :)
+   if block.conststr then
+      add_string_field(node, block, "conststr", block.conststr)
+   end
+
    local numeric_keys: {integer} = {}
    for k, v in pairs(block as {any:any}) do
       if type(k) == "number" and type(v) == "table" and (v as {string:any}).kind then
@@ -1290,7 +1292,7 @@ function block_to_constructor(state: ParseState, block: Block): Node
       item.value = block_to_constructor(state, child)
       table.insert(node, item)
    end
-   
+
    return node
 end
 

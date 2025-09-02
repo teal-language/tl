@@ -1215,7 +1215,11 @@ visit_node.cbs = {
                local w = (node.exps[i] and node.exps[i].x)
                          and node.exps[i]
                          or  node.exps
-               assert(w and w.x)
+               if not (w and w.x) then
+                  -- Fall back to the return node itself if we don't have xy for the expression
+                  -- TODO: look into this more... a bit of a hack
+                  w = node
+               end
                assert_is_a(self, w, got_t[i], e, what)
             end
          end

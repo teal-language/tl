@@ -33,8 +33,13 @@ function macro_eval.new_env(): {string:any}
    setmetatable(env, { __index = _G })
    -- macro signatures: name -> { kinds = {"stmt"|"expr"...}, vararg?: "stmt"|"expr" }
    env.__macro_sig = {}
+   env.__macro_where = nil -- set by expander to the call-site location
    env.block = function(kind: string): {string:any}
-      return { kind = kind, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      local w = (env.__macro_where or { f = "@macro", y = 1, x = 1 }) as {string:any}
+      local y = w.y or 1
+      local x = w.x or 1
+      local f = w.f or "@macro"
+      return { kind = kind, f = f, y = y, x = x, tk = "", yend = y, xend = x }
    end
    env.expect = function(b: any, k: string): any
       if type(b) ~= "table" or (b as {string:any}).kind ~= k then
@@ -191,7 +196,10 @@ local function expand_in_node(b: Block, filename: string, env: {string:any}, err
             table.insert(argv, ab)
          end
       end
+      local prev_where = (env.__macro_where as {string:any})
+      env.__macro_where = { f = filename, y = mname_block.y, x = mname_block.x }
       local ok, res = (pcall as function(any, ...: any): (boolean, any))(fn, table.unpack(argv))
+      env.__macro_where = prev_where
       if not ok then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
          return b

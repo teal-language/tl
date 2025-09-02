@@ -388,7 +388,11 @@ function TypeReporter:get_collector(filename: string): TypeCollector
          symbol_list_n = symbol_list_n + 1
          slot = symbol_list_n
       end
-      symbol_list[slot] = { y = node.y, x = node.x, name = name, typ = t }
+      
+      --TODO: I think this has been fixed but sometimes this would be nil
+      local y = node.y or node.yend or 0
+      local x = node.x or node.xend or 0
+      symbol_list[slot] = { y = y, x = x, name = name, typ = t }
    end
 
    collector.begin_symbol_list_scope = function(node: Node)

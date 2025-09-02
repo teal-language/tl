@@ -831,7 +831,46 @@ local function read_macro_quote(ps, i)
 
    if triple then
 
-      block, errs = reader.read(code, ps.filename, ps.read_lang, true)
+
+
+
+      local splices = {}
+      local kept_lines = {}
+      local line_index = 1
+      for line in (code .. "\n"):gmatch("([^\n]*)\n") do
+         local ident = line:match("^%s*%$([%a_][%w_]*)%s*;?%s*$")
+         if ident then
+            local y = token.y + (line_index - 1)
+            local x = token.x + delim
+            local ident_block = { f = ps.filename, y = y, x = x + 1, kind = "identifier", tk = ident }
+            local mv = { f = ps.filename, y = y, x = x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident_block, tk = "$" }
+            table.insert(splices, { idx = line_index, blk = mv })
+
+         else
+            table.insert(kept_lines, line)
+         end
+         line_index = line_index + 1
+      end
+
+      local kept_code = table.concat(kept_lines, "\n")
+      local parsed_block
+      parsed_block, errs = reader.read(kept_code, ps.filename, ps.read_lang, true)
+
+
+      if #splices > 0 and parsed_block and parsed_block.kind == "statements" then
+         local combined = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" }
+
+
+         for _, s in ipairs(splices) do
+            table.insert(combined, s.blk)
+         end
+         for _, stmt in ipairs(parsed_block) do
+            table.insert(combined, stmt)
+         end
+         block = combined
+      else
+         block = parsed_block
+      end
    else
 
       local wrapped, werrs = reader.read("return " .. code, ps.filename, ps.read_lang, true)
@@ -849,9 +888,31 @@ local function read_macro_quote(ps, i)
       end
    end
 
-   for _, e in ipairs(errs or {}) do
-      table.insert(ps.errs, e)
+
+
+   if errs and #errs > 0 then
+      local x0 = token.x + delim
+      local y0 = token.y
+      local ret_prefix = not triple and 7 or 0
+      for _, e in ipairs(errs) do
+         local ey = e.y or 1
+         local ex = e.x or 1
+         local ny = y0 + (ey - 1)
+         local nx
+         if ey == 1 then
+
+            local ex_unwrapped = ex - ret_prefix
+            if ex_unwrapped < 1 then ex_unwrapped = 1 end
+            nx = x0 + (ex_unwrapped - 1)
+         else
+
+            nx = ex
+         end
+         local msg = (e.msg and ("macro quote error: " .. e.msg)) or "macro quote error"
+         table.insert(ps.errs, { filename = ps.filename, y = ny, x = nx, msg = msg .. " (quote starts at " .. ps.filename .. ":" .. token.y .. ":" .. token.x .. ")" })
+      end
    end
+
    node[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] = block
    end_at(node, token)
    return i + 1, node
@@ -1731,9 +1792,20 @@ read_nested_type = function(ps, i, tn)
    i = i + 1
 
    local v
-   i, v = verify_kind(ps, i, "identifier", "type_identifier")
-   if not v then
-      return fail(ps, i, "expected a variable name")
+   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+      local dtk = ps.tokens[i]
+      i = i + 1
+      local ident
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return fail(ps, i, "expected a variable name")
+      end
+      v = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+   else
+      i, v = verify_kind(ps, i, "identifier", "type_identifier")
+      if not v then
+         return fail(ps, i, "expected a variable name")
+      end
    end
 
    local nt = new_block(ps, istart, "newtype")
@@ -2094,6 +2166,12 @@ do
          return i, exp
       end
 
+
+
+      if exp.kind == "macro_var" then
+         return i, exp
+      end
+
       if exp.kind ~= "variable" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
          return fail(ps, i, "syntax error")
       end
@@ -2242,9 +2320,20 @@ local function read_type_constructor(ps, i, node_name, tn)
 
    i = i + 2
 
-   i, asgn[BIDX.VAR] = verify_kind(ps, i, "identifier")
-   if not asgn[BIDX.VAR] then
-      return fail(ps, i, "expected a type name")
+   if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
+      local dtk = ps.tokens[i]
+      i = i + 1
+      local ident
+      i, ident = verify_kind(ps, i, "identifier")
+      if not ident then
+         return fail(ps, i, "expected a type name")
+      end
+      asgn[BIDX.VAR] = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+   else
+      i, asgn[BIDX.VAR] = verify_kind(ps, i, "identifier")
+      if not asgn[BIDX.VAR] then
+         return fail(ps, i, "expected a type name")
+      end
    end
 
    i, def = read_type_body(ps, i, istart, nt, tn)
@@ -2326,7 +2415,7 @@ local function read_local(ps, i)
       return read_local_macro(ps, i)
    elseif ntk == "macroexp" and ps.tokens[i + 2].kind == "identifier" then
       return read_local_macroexp(ps, i)
-   elseif read_type_body_fns[ntk] and ps.tokens[i + 2].kind == "identifier" then
+   elseif read_type_body_fns[ntk] and (ps.tokens[i + 2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i + 2].tk == "$")) then
       return read_type_constructor(ps, i, "local_type", ntk)
    end
    return read_variable_declarations(ps, i + 1, "local_declaration")
@@ -2348,7 +2437,7 @@ local function read_global(ps, i)
       return read_function_args_rets_body(ps, i, fn)
    elseif ntk == "type" and ps.tokens[i + 2].kind == "identifier" then
       return read_type_declaration(ps, i + 2, "global_type")
-   elseif read_type_body_fns[ntk] and ps.tokens[i + 2].kind == "identifier" then
+   elseif read_type_body_fns[ntk] and (ps.tokens[i + 2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i + 2].tk == "$")) then
       return read_type_constructor(ps, i, "global_type", ntk)
    elseif ps.tokens[i + 1].kind == "identifier" then
       return read_variable_declarations(ps, i + 1, "global_declaration")
@@ -2364,17 +2453,35 @@ local function read_record_function(ps, i)
    local names = {}
    local dot_pos = {}
 
-   i, names[1] = read_identifier(ps, i)
+   local function read_name_piece(ps2, ii)
+      if ps2.allow_macro_vars and ps2.tokens[ii].tk == "$" then
+         local dtk = ps2.tokens[ii]
+         ii = ii + 1
+         local ident
+         ii, ident = read_identifier(ps2, ii)
+         if not ident then
+            return fail(ps2, ii, "syntax error, expected identifier")
+         end
+         return ii, { f = ps2.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
+      end
+      local nii
+      local nb
+      nii, nb = read_identifier(ps2, ii)
+      return nii, nb
+   end
+
+   i, names[1] = read_name_piece(ps, i)
 
    while ps.tokens[i] and ps.tokens[i].tk == "." do
       table.insert(dot_pos, i)
       i = i + 1
-      i, names[#names + 1] = read_identifier(ps, i)
+      i, names[#names + 1] = read_name_piece(ps, i)
    end
 
    if ps.tokens[i] and ps.tokens[i].tk == ":" then
       fn.tk = ":"
       i = i + 1
+
       i, names[#names + 1] = read_identifier(ps, i)
    end
 

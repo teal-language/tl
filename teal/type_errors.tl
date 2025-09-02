@@ -53,9 +53,14 @@ function Errors.new(filename: string): Errors
 end
 
 local function insert_error(self: Errors, y: integer, x: integer, f: string, err: Error)
-   err.y = assert(y)
-   err.x = assert(x)
-   err.filename = assert(f)
+   --TODO: sometimes the err x and y is nil, but this is a bad way to fix for rn
+   local yy = y or err.y or 1
+   local xx = x or err.x or 1
+   local ff = f or err.filename or self.filename or "?"
+
+   err.y = yy
+   err.x = xx
+   err.filename = ff
 
    if TL_DEBUG then
       io.stderr:write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")

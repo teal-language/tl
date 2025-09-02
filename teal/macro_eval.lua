@@ -12,6 +12,11 @@ local macro_eval = {}
 
 
 
+
+
+
+
+
 local function clone_value(v)
    if type(v) ~= "table" then
       return v
@@ -26,8 +31,15 @@ end
 function macro_eval.new_env()
    local env = {}
    setmetatable(env, { __index = _G })
+
+   env.__macro_sig = {}
+   env.__macro_where = nil
    env.block = function(kind)
-      return { kind = kind, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      local w = (env.__macro_where or { f = "@macro", y = 1, x = 1 })
+      local y = w.y or 1
+      local x = w.x or 1
+      local f = w.f or "@macro"
+      return { kind = kind, f = f, y = y, x = x, tk = "", yend = y, xend = x }
    end
    env.expect = function(b, k)
       if type(b) ~= "table" or (b).kind ~= k then
@@ -63,6 +75,39 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    end
    local name = name_block.tk
 
+   local sig = { kinds = {}, vararg = "" }
+   local args = mb[BLOCK_INDEXES.LOCAL_MACRO.ARGS]
+   if args then
+      local idx = 1
+      for _, ab in ipairs(args) do
+         local expected
+         local annot = ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         if not annot then
+            table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. name .. "' argument missing type; expected 'Statement' or 'Expression'" })
+         else
+            if annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
+               local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
+               if tname == "Statement" then
+                  expected = "stmt"
+               elseif tname == "Expression" then
+                  expected = "expr"
+               else
+                  table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. name .. "' argument type must be 'Statement' or 'Expression'" })
+               end
+            else
+               table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. name .. "' argument type must be 'Statement' or 'Expression'" })
+            end
+         end
+         if ab.tk == "..." then
+            sig.vararg = expected or "expr"
+         else
+            sig.kinds[idx] = expected or "expr"
+            idx = idx + 1
+         end
+      end
+   end
+
+
 
    local parser_any = require("teal.parser")
    local lua_generator = require("teal.gen.lua_generator")
@@ -89,7 +134,8 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = tostring(fn) })
       return
    end
-   env[name] = fn
+   env[name] = fn;
+   (env.__macro_sig)[name] = sig
 end
 
 local function expand_in_node(b, filename, env, errs, context)
@@ -108,13 +154,52 @@ local function expand_in_node(b, filename, env, errs, context)
          return b
       end
       local argv = {}
+      local sig = (env.__macro_sig)[mname]
       local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+
+      if sig then
+         local provided = args and #args or 0
+         local required = #sig.kinds
+         local has_vararg = sig.vararg ~= ""
+         if provided < required or ((not has_vararg) and provided > required) then
+            table.insert(errs, {
+               filename = filename,
+               y = mname_block.y,
+               x = mname_block.x,
+               msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
+            })
+            return b
+         end
+      end
       if args then
-         for _, ab in ipairs(args) do
+         for i, ab in ipairs(args) do
+            if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
+               ab = ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
+            end
+            local expected
+            if sig then
+               expected = sig.kinds and sig.kinds[i] or (sig.vararg ~= "" and sig.vararg or nil)
+            end
+            if expected == "stmt" then
+               if not ab or ab.kind ~= "statements" then
+                  table.insert(errs, { filename = filename, y = ab and ab.y or b.y, x = ab and ab.x or b.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be a Statement" })
+               end
+            elseif expected == "expr" then
+               if ab and ab.kind == "statements" then
+                  if #ab == 1 and not is_statement_kind(ab[1].kind) then
+                     ab = ab[1]
+                  else
+                     table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be an Expression" })
+                  end
+               end
+            end
             table.insert(argv, ab)
          end
       end
+      local prev_where = (env.__macro_where)
+      env.__macro_where = { f = filename, y = mname_block.y, x = mname_block.x }
       local ok, res = (pcall)(fn, _tl_table_unpack(argv))
+      env.__macro_where = prev_where
       if not ok then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
          return b
@@ -131,6 +216,7 @@ local function expand_in_node(b, filename, env, errs, context)
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
          return b
       end
+
       return expand_in_node(rb, filename, env, errs, context)
    end
 
@@ -175,7 +261,6 @@ end
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
    local env = macro_eval.new_env()
 
-
    local i = 1
    while i <= #node do
       local it = node[i]
@@ -186,7 +271,6 @@ function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
          i = i + 1
       end
    end
-
 
    local j = 1
    while j <= #node do

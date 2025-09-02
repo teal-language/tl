@@ -53,9 +53,16 @@ function Errors.new(filename)
 end
 
 local function insert_error(self, y, x, f, err)
-   err.y = assert(y)
-   err.x = assert(x)
-   err.filename = assert(f)
+
+
+
+   local yy = y or err.y or 1
+   local xx = x or err.x or 1
+   local ff = f or err.filename or self.filename or "?"
+
+   err.y = yy
+   err.x = xx
+   err.filename = ff
 
    if TL_DEBUG then
       io.stderr:write("ERROR:" .. err.y .. ":" .. err.x .. ": " .. err.msg .. "\n")
