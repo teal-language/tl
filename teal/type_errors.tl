@@ -120,12 +120,14 @@ function Errors:collect(errs: {Error})
 end
 
 function Errors:add_warning(tag: WarningKind, w: Where, fmt: string, ...: any)
-   assert(w.y)
+   local yy = (w and w.y) or 1
+   local xx = (w and w.x) or 1
+   local ff = (w and w.f) or self.filename
    table.insert(self.warnings, {
-      y = w.y,
-      x = w.x,
+      y = yy,
+      x = xx,
       msg = fmt:format(...),
-      filename = assert(w.f),
+      filename = ff,
       tag = tag,
    })
 end
@@ -254,8 +256,8 @@ local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning
          if var.has_been_written_to and not var.has_been_read_from then
             usage_warnings = usage_warnings or {}
             table.insert(usage_warnings, {
-               y = var.declared_at.y,
-               x = var.declared_at.x,
+               y = (var.declared_at and var.declared_at.y) or 0,
+               x = (var.declared_at and var.declared_at.x) or 0,
                name = name,
                var = var,
                kind = "written but not read",
@@ -272,7 +274,13 @@ local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning
                var.declared_at.elide_type = true
             end
             usage_warnings = usage_warnings or {}
-            table.insert(usage_warnings, { y = var.declared_at.y, x = var.declared_at.x, name = name, var = var, kind = "unused" })
+            table.insert(usage_warnings, {
+               y = (var.declared_at and var.declared_at.y) or 0,
+               x = (var.declared_at and var.declared_at.x) or 0,
+               name = name,
+               var = var,
+               kind = "unused",
+            })
          end
       elseif has_var_been_used(var) and t is TypeDeclType and var.aliasing then
          var.aliasing.has_been_written_to = var.has_been_written_to
@@ -284,7 +292,12 @@ local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning
    end
    if usage_warnings then
       table.sort(usage_warnings, function(a: UsageWarning, b: UsageWarning): boolean
-         return a.y < b.y or (a.y == b.y and a.x < b.x)
+         local ay = a.y or 0
+         local by = b.y or 0
+         if ay ~= by then return ay < by end
+         local ax = a.x or 0
+         local bx = b.x or 0
+         return ax < bx
       end)
    end
    return usage_warnings

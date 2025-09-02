@@ -418,7 +418,7 @@ local function read_table_literal(ps: ReadState, i: integer): integer, Block
    return read_bracket_list(ps, i, node, "{", "}", "term", read_table_item)
 end
 
-local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig): integer, Block
+local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig, mname?: string): integer, Block
    local node = new_block(ps, i, "expression_list")
    local function read_item(ps2: ReadState, ii: integer, n: integer): integer, Block, integer
       local expected: string
@@ -1133,7 +1133,7 @@ do
                end
                local sig = mname and ps.macro_sigs[mname]
                if sig then
-                  i, args = read_macro_args_with_sig(ps, i, sig)
+                  i, args = read_macro_args_with_sig(ps, i, sig, mname)
                else
                   i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
                end
@@ -2523,7 +2523,35 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
-   -- Compile local macros and expand macro invocations at read time
+   local function check_macro_arity(b: Block)
+      if type(b) ~= "table" or not b.kind then return end
+      if b.kind == "macro_invocation" then
+         local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
+         local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+         if m and (m.kind == "variable" or m.kind == "identifier") then
+            local name = m.tk
+            local sig = ps.macro_sigs[name]
+            if sig then
+               local provided = args and #args or 0
+               local required = #sig.kinds
+               local has_vararg = sig.vararg ~= ""
+               if provided < required or ((not has_vararg) and provided > required) then
+                  local msg = "macro '" .. name .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided)
+                  table.insert(ps.errs, { filename = ps.filename, y = m.y, x = m.x, msg = msg })
+               end
+            end
+         end
+      end
+      for i2 = 1, #b do
+         local child = b[i2]
+         if type(child) == "table" then
+            check_macro_arity(child)
+         end
+      end
+   end
+
+   check_macro_arity(node)
+
    local lang: BlockLang = read_lang or "tl"
    node = macro_eval.compile_all_and_expand(node, filename, lang, errs)
 

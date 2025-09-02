@@ -418,7 +418,7 @@ local function read_table_literal(ps, i)
    return read_bracket_list(ps, i, node, "{", "}", "term", read_table_item)
 end
 
-local function read_macro_args_with_sig(ps, i, sig)
+local function read_macro_args_with_sig(ps, i, sig, mname)
    local node = new_block(ps, i, "expression_list")
    local function read_item(ps2, ii, n)
       local expected
@@ -430,7 +430,6 @@ local function read_macro_args_with_sig(ps, i, sig)
             local ni, q = read_macro_quote(ps2, ii)
             return ni, q, n + 1
          else
-
 
             if read_type_body_fns and ps2.tokens[ii].kind == "identifier" then end
             local tk0 = ps2.tokens[ii].tk
@@ -444,8 +443,6 @@ local function read_macro_args_with_sig(ps, i, sig)
                end_at(sblk, ps2.tokens[ni])
                return ni, sblk, n + 1
             end
-
-
 
             local j = ii
             local paren_depth = 0
@@ -807,9 +804,7 @@ local function read_function_value(ps, i)
    return read_function_args_rets_body(ps, i, node)
 end
 
-
 local function skip_any_function(ps, i)
-
    i = verify_tk(ps, i, "function")
 
    while ps.tokens[i] and (ps.tokens[i].kind == "identifier" or ps.tokens[i].tk == "." or ps.tokens[i].tk == ":") do
@@ -1138,7 +1133,7 @@ do
                end
                local sig = mname and ps.macro_sigs[mname]
                if sig then
-                  i, args = read_macro_args_with_sig(ps, i, sig)
+                  i, args = read_macro_args_with_sig(ps, i, sig, mname)
                else
                   i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
                end
@@ -1641,10 +1636,6 @@ local function read_goto(ps, i)
    return i, node
 end
 
-
-
-
-
 read_statement_argblock = function(ps, i)
    local node = new_block(ps, i, "statements")
    local item
@@ -1663,7 +1654,6 @@ read_statement_argblock = function(ps, i)
       local fn = read_statement_fns[tk]
       if not fn then
          if read_type_body_fns[tk] and ps.tokens[i + 1].kind == "identifier" then
-
             local lt
             i, lt = read_nested_type(ps, i, tk)
             item = lt
@@ -2533,6 +2523,34 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
+   local function check_macro_arity(b)
+      if type(b) ~= "table" or not b.kind then return end
+      if b.kind == "macro_invocation" then
+         local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
+         local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+         if m and (m.kind == "variable" or m.kind == "identifier") then
+            local name = m.tk
+            local sig = ps.macro_sigs[name]
+            if sig then
+               local provided = args and #args or 0
+               local required = #sig.kinds
+               local has_vararg = sig.vararg ~= ""
+               if provided < required or ((not has_vararg) and provided > required) then
+                  local msg = "macro '" .. name .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided)
+                  table.insert(ps.errs, { filename = ps.filename, y = m.y, x = m.x, msg = msg })
+               end
+            end
+         end
+      end
+      for i2 = 1, #b do
+         local child = b[i2]
+         if type(child) == "table" then
+            check_macro_arity(child)
+         end
+      end
+   end
+
+   check_macro_arity(node)
 
    local lang = read_lang or "tl"
    node = macro_eval.compile_all_and_expand(node, filename, lang, errs)

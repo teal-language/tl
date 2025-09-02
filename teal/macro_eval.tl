@@ -151,6 +151,21 @@ local function expand_in_node(b: Block, filename: string, env: {string:any}, err
       local argv: {any} = {}
       local sig: MacroSig = (env.__macro_sig as {string:MacroSig})[mname]
       local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+
+      if sig then
+         local provided = args and #args or 0
+         local required = #sig.kinds
+         local has_vararg = sig.vararg ~= ""
+         if provided < required or ((not has_vararg) and provided > required) then
+            table.insert(errs, {
+               filename = filename,
+               y = mname_block.y,
+               x = mname_block.x,
+               msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
+            })
+            return b
+         end
+      end
       if args then
          for i, ab in ipairs(args) do
             if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then

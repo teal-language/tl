@@ -536,15 +536,15 @@ local function parse_argument_list(state, block)
          end
 
          if arg_node.tk == "..." then
-            if a < #block then
 
-            end
+
+
             has_varargs = true
             is_optional = true
          else
             if is_optional then
                has_optional = true
-            elseif has_optional and not has_varargs then
+
 
             end
 
@@ -888,7 +888,6 @@ parse_fns.local_declaration = function(state, block)
       node = new_node(state, dummy_block, "local_declaration")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.LOCAL_DECLARATION.VARS], false)
-
 
    if node.vars then
       for _, var_node in ipairs(node.vars) do
@@ -1604,7 +1603,6 @@ function block_parser.parse(input, filename, parse_lang)
    errors.clear_redundant_errors(state.errs)
    return nodes, state.errs, state.required_modules
 end
-
 
 
 

@@ -3,8 +3,9 @@ local tl = require('tl')
 describe("macro invocation parsing", function()
    it("parses macro invocation", function()
       local ast, errs = tl.parse([[
-         local macro my_macro!(x: Block)
+         local macro my_macro!(x: Expression)
             assert(x.kind == "string")
+            return `3`
          end
 
          my_macro!("hello")
