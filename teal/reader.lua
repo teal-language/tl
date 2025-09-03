@@ -834,6 +834,11 @@ local function read_macro_quote(ps, i)
 
 
 
+
+
+
+
+
       local splices = {}
       local kept_lines = {}
       local line_index = 1
@@ -859,8 +864,6 @@ local function read_macro_quote(ps, i)
 
       if #splices > 0 and parsed_block and parsed_block.kind == "statements" then
          local combined = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" }
-
-
          for _, s in ipairs(splices) do
             table.insert(combined, s.blk)
          end
@@ -889,23 +892,20 @@ local function read_macro_quote(ps, i)
    end
 
 
-
    if errs and #errs > 0 then
       local x0 = token.x + delim
       local y0 = token.y
-      local ret_prefix = not triple and 7 or 0
+      local ret_prefix = not triple and #("return ") or 0
       for _, e in ipairs(errs) do
          local ey = e.y or 1
          local ex = e.x or 1
          local ny = y0 + (ey - 1)
          local nx
          if ey == 1 then
-
             local ex_unwrapped = ex - ret_prefix
             if ex_unwrapped < 1 then ex_unwrapped = 1 end
             nx = x0 + (ex_unwrapped - 1)
          else
-
             nx = ex
          end
          local msg = (e.msg and ("macro quote error: " .. e.msg)) or "macro quote error"
@@ -2166,8 +2166,6 @@ do
          return i, exp
       end
 
-
-
       if exp.kind == "macro_var" then
          return i, exp
       end
@@ -2481,7 +2479,6 @@ local function read_record_function(ps, i)
    if ps.tokens[i] and ps.tokens[i].tk == ":" then
       fn.tk = ":"
       i = i + 1
-
       i, names[#names + 1] = read_identifier(ps, i)
    end
 

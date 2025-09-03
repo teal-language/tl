@@ -54,8 +54,6 @@ end
 
 local function insert_error(self, y, x, f, err)
 
-
-
    local yy = y or err.y or 1
    local xx = x or err.x or 1
    local ff = f or err.filename or self.filename or "?"

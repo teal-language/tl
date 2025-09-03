@@ -390,8 +390,6 @@ function TypeReporter:get_collector(filename)
       end
 
 
-
-
       local y = node.y or node.yend or 0
       local x = node.x or node.xend or 0
       symbol_list[slot] = { y = y, x = x, name = name, typ = t }
