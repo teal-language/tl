@@ -433,45 +433,128 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
 
             if read_type_body_fns and ps2.tokens[ii].kind == "identifier" then end
             local tk0 = ps2.tokens[ii].tk
-            if read_type_body_fns[tk0] and ps2.tokens[ii + 1].kind == "identifier" then
-               local istart = ii
+
+            local curr_i = ii
+            local sblk
+            while read_type_body_fns[tk0] and ps2.tokens[curr_i + 1] and ps2.tokens[curr_i + 1].kind == "identifier" do
                local ni
                local lt
-               ni, lt = read_nested_type(ps2, ii, tk0)
-               local sblk = new_block(ps2, istart, "statements")
+               ni, lt = read_nested_type(ps2, curr_i, tk0)
+               if not sblk then sblk = new_block(ps2, curr_i, "statements") end
                table.insert(sblk, lt)
-               end_at(sblk, ps2.tokens[ni])
-               return ni, sblk, n + 1
+               curr_i = ni
+               tk0 = ps2.tokens[curr_i].tk
             end
 
-            local j = ii
+            local j = sblk and curr_i or ii
             local paren_depth = 0
+            local seen_top_level_comma = false
+            local best_j
+            local best_block
+            local need_do_end_error = false
+            local can_split_on_comma = false
+            if sig then
+               local fixed = #sig.kinds
+               local has_vararg_stmt = sig.vararg == "stmt"
+               if (n <= fixed - 1) or has_vararg_stmt then
+                  can_split_on_comma = true
+               end
+            end
+
+            local function try_parse_until(jend)
+               local slice = {}
+               local nt = 0
+               for k = ii, jend - 1 do
+                  nt = nt + 1
+                  slice[nt] = ps2.tokens[k]
+               end
+               nt = nt + 1
+               local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
+               local errs2 = {}
+               local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
+               if #errs2 == 0 and block then
+                  best_j = jend
+                  best_block = block
+                  return true
+               end
+               return false
+            end
+
             while ps2.tokens[j].kind ~= "$EOF$" do
                local t = ps2.tokens[j].tk
                if t == "(" then
                   paren_depth = paren_depth + 1
                elseif t == ")" then
-                  if paren_depth == 0 then break end
+                  if paren_depth == 0 then
+                     if try_parse_until(j) then
+                        break
+                     end
+                     break
+                  end
                   paren_depth = paren_depth - 1
                elseif t == "," and paren_depth == 0 then
-                  break
+                  seen_top_level_comma = true
+                  if can_split_on_comma then
+                     if try_parse_until(j) then
+                        best_j = j
+                     end
+                  end
                end
                j = j + 1
             end
 
-            local slice = {}
-            local nt = 0
-            for k = ii, j - 1 do
+            if not best_block then
+
+               local slice = {}
+               local nt = 0
+               for k = (sblk and curr_i or ii), j - 1 do
+                  nt = nt + 1
+                  slice[nt] = ps2.tokens[k]
+               end
                nt = nt + 1
-               slice[nt] = ps2.tokens[k]
+               local eof_prev = ps2.tokens[math.max(ii, j - 1)]
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
+               local errs2 = {}
+               local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
+               for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
+               best_block = block_fallback
+               best_j = j
             end
-            nt = nt + 1
-            local eof_prev = ps2.tokens[math.max(ii, j - 1)]
-            slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
-            local errs2 = {}
-            local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
-            for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
-            return j, block, n + 1
+
+
+            if best_block and best_block.kind == "statements" and #best_block == 1 then
+               local st = best_block[1]
+               if st and st.kind == "local_declaration" then
+                  local BIDX = BLOCK_INDEXES
+                  local vlist = st[BIDX.LOCAL_DECLARATION.VARS]
+                  local exps = st[BIDX.LOCAL_DECLARATION.EXPS]
+                  local has_top_level_comma = false
+                  if vlist and #vlist > 1 then has_top_level_comma = true end
+                  if exps and #exps > 1 then has_top_level_comma = true end
+                  if has_top_level_comma then
+                     need_do_end_error = true
+                  end
+               end
+            end
+
+            if need_do_end_error then
+               local st = best_block and best_block[1]
+               local basey = ps2.tokens[ii].y
+               local ey = basey - 1
+               if ey < 1 then ey = (st and st.y) or basey end
+               table.insert(ps2.errs, { filename = ps2.filename, y = ey, x = 0, msg = "wrap the statement in 'do ... end'" })
+            end
+
+            if sblk and best_block and best_block.kind == "statements" then
+               for idx = 1, #best_block do
+                  table.insert(sblk, best_block[idx])
+               end
+               end_at(sblk, ps2.tokens[best_j])
+               return best_j, sblk, n + 1
+            else
+               return best_j, best_block, n + 1
+            end
          end
       else
          local ni, e = read_expression(ps2, ii)

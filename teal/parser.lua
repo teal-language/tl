@@ -912,6 +912,8 @@ parse_fns.local_declaration = function(state, block)
       local dt
       dt = parse_type_list(state, dummy_block, "decltuple")
       node.decltuple = dt
+
+      next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.EXPS
    end
    if block[next_child] and block[next_child].kind == "expression_list" then
       node.exps = parse_expression_list(state, block[next_child])
