@@ -138,8 +138,13 @@ local function compile_local_macro(mb: Block, filename: string, read_lang: Block
    (env.__macro_sig as {string:MacroSig})[name] = sig
 end
 
+local seen: {any:boolean}
+
 local function expand_in_node(b: Block, filename: string, env: {string:any}, errs: {Error}, context: string): Block
    if not b then return b end
+   if type(b) ~= "table" or not b.kind then return b end
+   if seen and seen[b] then return b end
+   if seen then seen[b] = true end
    if b.kind == "macro_invocation" then
       local mexp = b
       local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
@@ -259,6 +264,7 @@ local function expand_in_node(b: Block, filename: string, env: {string:any}, err
 end
 
 function macro_eval.compile_all_and_expand(node: Block, filename: string, read_lang: BlockLang, errs: {Error}): Block
+   seen = setmetatable({}, { __mode = "k" }) as {any:boolean}
    local env = macro_eval.new_env()
 
    local i = 1

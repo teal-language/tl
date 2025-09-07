@@ -358,8 +358,6 @@ function Errors:fail_unresolved_nominals(scope: Scope, global_scope: Scope)
       for name, typs in pairs(scope.pending_nominals) do
          if not global_scope.pending_global_types[name] then
             for _, typ in ipairs(typs) do
-               assert(typ.x)
-               assert(typ.y)
                self:add(typ, "unknown type %s", typ)
             end
          end

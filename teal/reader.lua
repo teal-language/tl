@@ -430,10 +430,7 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
             local ni, q = read_macro_quote(ps2, ii)
             return ni, q, n + 1
          else
-
-            if read_type_body_fns and ps2.tokens[ii].kind == "identifier" then end
             local tk0 = ps2.tokens[ii].tk
-
             local curr_i = ii
             local sblk
             while read_type_body_fns[tk0] and ps2.tokens[curr_i + 1] and ps2.tokens[curr_i + 1].kind == "identifier" do
@@ -2710,8 +2707,14 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
+
+
+   local seen = setmetatable({}, { __mode = "k" })
+
    local function check_macro_arity(b)
       if type(b) ~= "table" or not b.kind then return end
+      if seen[b] then return end
+      seen[b] = true
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]

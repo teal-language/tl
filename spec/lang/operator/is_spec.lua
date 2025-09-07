@@ -802,4 +802,21 @@ end]]))
       if t and t is R and t.rfield then
       end
    ]]))
+
+   it("does not overflow with where referencing self across record/interface (regression)", util.check([[
+      local interface Object
+         where self.__name
+
+         __index: Object | function(k: string): any
+         __name: string
+      end
+
+      local record Point is Object
+         where self.__name == "Point"
+
+         x: integer
+         y: integer
+         metamethod __add: function(self, Point): Point
+      end
+   ]]))
 end)

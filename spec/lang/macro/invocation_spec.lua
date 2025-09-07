@@ -1,5 +1,6 @@
 local tl = require('tl')
 local lua_gen = require('teal.gen.lua_generator')
+local util = require('spec.util')
 
 describe('macro invocation expansion', function()
    it('expands macro with no arguments', function()
@@ -68,6 +69,42 @@ describe('macro invocation expansion', function()
       out = out:gsub("^%s+", "")
       assert.match('local y = 2 %+ 1 %+ 1', out)
    end)
+end)
+
+describe('macro unknown type error', function()
+   it('reports unknown type from macro-built nominal without crashing', util.check_type_error([[ 
+      local macro badtype!()
+         local blk = require("teal.block")
+         local BI = blk.BLOCK_INDEXES
+
+         local function mkident(s: string)
+            local b = block('identifier')
+            b.tk = s
+            return b
+         end
+
+         -- Build: local type T = DoesNotExist
+         local lt = block('local_type')
+         lt[BI.LOCAL_TYPE.VAR] = mkident('T')
+
+         local nt = block('nominal_type')
+         nt[BI.NOMINAL_TYPE.NAME] = mkident('DoesNotExist')
+
+         local td = block('typedecl')
+         td[BI.TYPEDECL.TYPE] = nt
+
+         local newt = block('newtype')
+         newt[BI.NEWTYPE.TYPEDECL] = td
+
+         lt[BI.LOCAL_TYPE.VALUE] = newt
+
+         return lt
+      end
+
+      badtype!()
+   ]], {
+      { msg = 'unknown type DoesNotExist' },
+   }))
 end)
 
 describe('statement macro invocation (paren form)', function()
@@ -453,4 +490,25 @@ describe('statement macro invocation (paren form)', function()
       assert.match("local zero = 0", out)
       assert.match("print%(%s*zero%s*%)", out)
    end)
+
+   it('splices a nominal_type into type positions (regression)', util.check([[ 
+      local macro cast_demo!()
+         local blk = require("teal.block")
+         local BI = blk.BLOCK_INDEXES
+         local function nt_named(name: string)
+            local nt = block('nominal_type')
+            local id = block('identifier')
+            id.tk = name
+            nt[BI.NOMINAL_TYPE.NAME] = id
+            return nt
+         end
+         local T = nt_named('Foo')
+         return ```
+            local type Foo = integer
+            local _ = 1 as $T
+         ```
+      end
+
+      cast_demo!()
+   ]]))
 end)

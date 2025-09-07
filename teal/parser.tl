@@ -1844,23 +1844,31 @@ parse_simple_type_or_nominal = function(state: ParseState, block: Block): FirstO
    end
 
    if block.kind == "nominal_type" then
+      local name_block = block[reader.BLOCK_INDEXES.NOMINAL_TYPE.NAME] or block[1]
+      if name_block and name_block.kind == "nominal_type" then
+         return parse_simple_type_or_nominal(state, name_block)
+      end
+
       local typ = new_nominal(state, block)
       typ.names = {}
       local current_block_idx = 1
 
-      -- block[1] from reader is the first identifier part, tk is da actual name :D
       if block[current_block_idx] and block[current_block_idx].kind == "identifier" then
          table.insert(typ.names, block[current_block_idx].tk)
          current_block_idx = current_block_idx + 1
       elseif block.tk and block.tk ~= "" then
-          -- Use block.tk if the first child is not an identifier (e.g. simple nominal like `MyType`)
-          -- yes this is kinda stupid
-          -- TODO: consider changing?
          table.insert(typ.names, block.tk)
       else
-         fail(state, block, "Nominal type block has no initial name part in tk or first child.")
-         table.insert(typ.names, "unknown_nominal_type")
-         return typ
+         if name_block and name_block.kind == "identifier" then
+            table.insert(typ.names, name_block.tk)
+            if block[1] == name_block then
+               current_block_idx = current_block_idx + 1
+            end
+         else
+            fail(state, block, "Nominal type block has no initial name part in tk or first child.")
+            table.insert(typ.names, "unknown_nominal_type")
+            return typ
+         end
       end
 
       -- other parts of the name (e.g., for table.concat.MyType)
@@ -1882,8 +1890,8 @@ parse_simple_type_or_nominal = function(state: ParseState, block: Block): FirstO
          end
       end
       if #typ.names == 0 then -- Should ideally not be reached if logic above is sound
-          fail(state, block, "Nominal type ended up with no name parts.")
-          table.insert(typ.names, block.tk or "unknown_nominal_final")
+         fail(state, block, "Nominal type ended up with no name parts.")
+         table.insert(typ.names, block.tk or "unknown_nominal_final")
       end
       return typ
    end

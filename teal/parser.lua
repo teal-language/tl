@@ -1844,6 +1844,13 @@ parse_simple_type_or_nominal = function(state, block)
    end
 
    if block.kind == "nominal_type" then
+
+
+      local name_block = block[reader.BLOCK_INDEXES.NOMINAL_TYPE.NAME] or block[1]
+      if name_block and name_block.kind == "nominal_type" then
+         return parse_simple_type_or_nominal(state, name_block)
+      end
+
       local typ = new_nominal(state, block)
       typ.names = {}
       local current_block_idx = 1
@@ -1854,13 +1861,20 @@ parse_simple_type_or_nominal = function(state, block)
          current_block_idx = current_block_idx + 1
       elseif block.tk and block.tk ~= "" then
 
-
-
          table.insert(typ.names, block.tk)
       else
-         fail(state, block, "Nominal type block has no initial name part in tk or first child.")
-         table.insert(typ.names, "unknown_nominal_type")
-         return typ
+
+         if name_block and name_block.kind == "identifier" then
+            table.insert(typ.names, name_block.tk)
+
+            if block[1] == name_block then
+               current_block_idx = current_block_idx + 1
+            end
+         else
+            fail(state, block, "Nominal type block has no initial name part in tk or first child.")
+            table.insert(typ.names, "unknown_nominal_type")
+            return typ
+         end
       end
 
 

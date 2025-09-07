@@ -2707,8 +2707,12 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
+   local seen = setmetatable({}, { __mode = "k" })
+
    local function check_macro_arity(b: Block)
       if type(b) ~= "table" or not b.kind then return end
+      if seen[b] then return end
+      seen[b] = true
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
