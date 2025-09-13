@@ -138,8 +138,6 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    (env.__macro_sig)[name] = sig
 end
 
-
-
 local seen
 
 local function expand_in_node(b, filename, env, errs, context)
@@ -266,7 +264,6 @@ local function expand_in_node(b, filename, env, errs, context)
 end
 
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
-
    seen = setmetatable({}, { __mode = "k" })
    local env = macro_eval.new_env()
 

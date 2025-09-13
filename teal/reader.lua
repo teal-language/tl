@@ -2707,8 +2707,6 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
 
-
-
    local seen = setmetatable({}, { __mode = "k" })
 
    local function check_macro_arity(b)
