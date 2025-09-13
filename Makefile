@@ -1,6 +1,6 @@
-LUA ?= ./lua
-STABLE_TL ?= $(LUA) ./tl
-NEW_TL ?= $(LUA) ./tl
+LUA ?= lua
+STABLE_TL ?= $(LUA) tl
+NEW_TL ?= $(LUA) tl
 TLGENFLAGS = --check --gen-target=5.1
 BUSTED = busted --suppress-pending
 
