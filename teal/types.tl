@@ -709,9 +709,10 @@ end
 
 local function a_type<T is Type>(w: Where, typename: TypeName, t: T): T
    t.typeid = new_typeid()
-   t.f = w.f
-   t.x = w.x
-   t.y = w.y
+   -- Ensure coordinates are always set on types
+   t.f = w.f or "<unknown>"
+   t.x = w.x or 1
+   t.y = w.y or 1
    t.typename = typename
    do
       local ty: Type = t
@@ -738,9 +739,10 @@ end
 local function raw_type(f: string, y: integer, x: integer, typename: TypeName): Type
    local t: Type = setmetatable({}, type_mt)
    t.typeid = new_typeid()
-   t.f = f
-   t.x = x
-   t.y = y
+   -- Be defensive in case callers pass missing coords
+   t.f = f or "<unknown>"
+   t.x = x or 1
+   t.y = y or 1
    t.typename = typename
    return t
 end

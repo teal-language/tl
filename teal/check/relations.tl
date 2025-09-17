@@ -963,10 +963,15 @@ function relations.compare_types(ck: TypeChecker, prios: TypePriorities, rels: T
       end
       local show_t1 = show_type(t1)
       local show_t2 = show_type(t2)
+      -- pick a location that definitely has coordinates to avoid ICEs
+      local wf = t1.f or t2.f or "<unknown>"
+      local wx = t1.x or t2.x or 1
+      local wy = t1.y or t2.y or 1
+      local w: errors.Where = { f = wf, x = wx, y = wy }
       if show_t1 == show_t2 then
-         return false, { errors.at(t1, "types are incompatible") }
+         return false, { errors.at(w, "types are incompatible") }
       else
-         return false, { errors.at(t1, "got " .. show_t1 .. ", expected " .. show_t2) }
+         return false, { errors.at(w, "got " .. show_t1 .. ", expected " .. show_t2) }
       end
    end
    return ok, err

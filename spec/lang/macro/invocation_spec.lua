@@ -71,6 +71,89 @@ describe('macro invocation expansion', function()
    end)
 end)
 
+describe('macro-generated is/or chain', function()
+   it('does not ICE when splicing union types into is/or', util.gen([[ 
+      local macro match!(value: Expression, cases: Expression): Statement
+         local blk = require("teal.block")
+         local BI = blk.BLOCK_INDEXES
+
+         local function or_chain(exprs: {any})
+            if #exprs == 0 then return nil end
+            local acc = exprs[1]
+            for i = 2, #exprs do
+               local e = exprs[i]
+               acc = `$acc or $e`
+            end
+            return acc
+         end
+
+         cases = expect(cases, "literal_table")
+
+         local ifstmt = block('if')
+         ifstmt[BI.IF.BLOCKS] = {}
+
+         for _, item in ipairs(cases) do
+            if not item then goto continue end
+            local fn = item[BI.LITERAL_TABLE_ITEM.VALUE]
+            fn = expect(fn, "function")
+
+            local args = expect(fn[BI.FUNCTION.ARGS], "argument_list")
+
+            local body_call
+            local ib = block('if_block')
+
+            if #args == 0 then
+               body_call = `($fn)()`
+            else
+               if #args ~= 1 then
+                  error("match! cases must be functions with 0 or 1 argument")
+               end
+               local arg = expect(args[1], "argument")
+               local ann = arg[BI.ARGUMENT.ANNOTATION]
+               if not ann then
+                  error("match! case function must have a typed argument")
+               end
+
+               local types_to_match: {any} = {}
+               if ann.kind == "union_type" then
+                  for i = 1, #ann do
+                     local t = ann[i]
+                     if t then table.insert(types_to_match, t) end
+                  end
+               else
+                  table.insert(types_to_match, ann)
+               end
+
+               local cond_terms: {any} = {}
+               for _, t in ipairs(types_to_match) do
+                  table.insert(cond_terms, `$value is $t`)
+               end
+               ib[BI.IF_BLOCK.COND] = or_chain(cond_terms)
+
+               body_call = `($fn)($value)`
+            end
+
+            local body = block('statements')
+            table.insert(body, body_call)
+            ib[BI.IF_BLOCK.BODY] = body
+            table.insert(ifstmt[BI.IF.BLOCKS], ib)
+            ::continue::
+         end
+
+         return ifstmt
+      end
+
+      local v: integer | string | table | userdata | nil = "hello"
+
+      match!(v, {
+         function(x: integer) print(x + 10) end;
+         function(x: string) print(x:upper()) end;
+         function(x: table | userdata) print("other") end;
+         function() print("none!") end
+      })
+   ]]))
+end)
+
 describe('macro unknown type error', function()
    it('reports unknown type from macro-built nominal without crashing', util.check_type_error([[ 
       local macro badtype!()

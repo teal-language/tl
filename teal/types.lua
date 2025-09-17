@@ -709,9 +709,10 @@ end
 
 local function a_type(w, typename, t)
    t.typeid = new_typeid()
-   t.f = w.f
-   t.x = w.x
-   t.y = w.y
+
+   t.f = w.f or "<unknown>"
+   t.x = w.x or 1
+   t.y = w.y or 1
    t.typename = typename
    do
       local ty = t
@@ -738,9 +739,10 @@ end
 local function raw_type(f, y, x, typename)
    local t = setmetatable({}, type_mt)
    t.typeid = new_typeid()
-   t.f = f
-   t.x = x
-   t.y = y
+
+   t.f = f or "<unknown>"
+   t.x = x or 1
+   t.y = y or 1
    t.typename = typename
    return t
 end
