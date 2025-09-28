@@ -14100,6 +14100,15 @@ do
                local tn = types_op[ra.typename]
                local t = tn and a_type(node, tn, {})
 
+               -- we need to check if we have a macroexp that overrides any interfaces first
+               local meta_on_operator: integer
+               if not t then
+                  local mt_name = unop_to_metamethod[node.op.op]
+                  if mt_name then
+                     t, meta_on_operator = self:check_metamethod(node, mt_name, ra, nil, ua, nil)
+                  end
+               end
+
                if not t and ra is RecordLikeType then
                   if ra.interface_list then
                      for _, iface in ipairs(ra.interface_list) do
@@ -14108,14 +14117,6 @@ do
                            break
                         end
                      end
-                  end
-               end
-
-               local meta_on_operator: integer
-               if not t then
-                  local mt_name = unop_to_metamethod[node.op.op]
-                  if mt_name then
-                     t, meta_on_operator = self:check_metamethod(node, mt_name, ra, nil, ua, nil)
                   end
                end
 
