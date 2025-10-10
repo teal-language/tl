@@ -222,5 +222,27 @@ describe("macroexp code generation", function()
 
       print('arg1', 'arg2', nil)
    ]]))
+
+   it("overrides array __len", util.gen([[
+      local interface Foo is {integer}
+         sz: integer
+         metamethod __len: function(self) = macroexp(self: Foo)
+            return self.sz
+         end
+      end
+
+      local f: Foo = {sz = 10}
+      print(#f)
+   ]], [[
+
+
+
+
+
+
+
+      local f = {sz = 10}
+      print(f.sz)
+   ]]))
 end)
 
