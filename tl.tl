@@ -11078,7 +11078,7 @@ do
          return old
       end
 
-      if new is RecordLikeType then
+      if new is RecordLikeType and (old is MapType or old is RecordLikeType) then
          local keys: Type
          local values: Type
          if old is MapType then

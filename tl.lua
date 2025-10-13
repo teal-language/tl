@@ -11078,7 +11078,7 @@ a.types[i], b.types[i]), }
          return old
       end
 
-      if new.fields then
+      if new.fields and (old.typename == "map" or old.fields) then
          local keys
          local values
          if old.typename == "map" then

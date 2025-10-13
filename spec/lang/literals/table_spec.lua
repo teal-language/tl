@@ -10,4 +10,8 @@ describe("table literals", function()
    ]], {
       { y = 3, msg = "x: got string | number, expected string" }
    }))
+
+   it("accepts a tuple table mixing integers and records (regression test for #1035)", util.check([[
+      local x = {1, {a = 2}, 3}
+   ]]))
 end)
