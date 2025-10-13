@@ -1,3 +1,35 @@
+# 0.24.8
+
+2025-10-13
+
+Another bugfix release, hopefully the last one in the '24 series. This
+releases includes a couple of bugfixes, and a bunch of improvements to
+the standard library definitions.
+
+This release features commits by Morgan Bartlett, Corey Williamson and
+Hisham Muhammad.
+
+### Language
+
+* `__len` metamethod can now override `#` at compile-time with a `macroexp`
+* Lots of improved type definitions for the standard library:
+  * `io`: better error returns
+  * `FILE` type now has a `where` clause so you can do `if x is FILE`
+  * `utf8`: return values are integers
+  * `debug`: improved definitions for `getupvalue`, `getuservalue`,
+    and `getinfo`
+  * `loadfile`: use `{any:any}` instead of `table`
+  * `pairs`, `ipairs`: improved return types for the returned iterators
+  * `xpcall` now can handle `debug.traceback` as an argument
+
+### Fixes
+
+* Fixed array inheritance: an interface that inherits another interface
+  that inherits an array type can be used as that array type corectly
+  (#1023)
+* Fixed inference of tuple table declarations mixing non-aggregate
+  and aggregate types. (#1035)
+
 # 0.24.7
 
 2025-07-22
