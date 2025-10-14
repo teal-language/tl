@@ -24,4 +24,10 @@ describe("assert", function()
       local f = assert(io.open("nonexistent.txt"))
    ]]))
 
+   it("does not crash on no arguments (regression test for #1038)", util.check_type_error([[
+      assert()
+   ]], {
+      { y = 1, msg = "wrong number of arguments" },
+   }))
+
 end)
