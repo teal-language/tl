@@ -57,8 +57,6 @@ rm -rf "$linux_folder"
 mkdir "$linux_folder"
 cp README.md CHANGELOG.md LICENSE _binary/tlconfig.lua "$linux_folder"
 cp -a docs/ "$linux_folder"
-mkdir "$linux_folder"/src
-cp tl.tl "$linux_folder"/src
 mkdir "$linux_folder"/build
 cp tl.lua "$linux_folder"/build
 cp _binary/build/tl "$linux_folder"
@@ -73,8 +71,6 @@ rm -rf "$windows_folder"
 mkdir "$windows_folder"
 cp README.md CHANGELOG.md LICENSE _binary/tlconfig.lua "$windows_folder"
 cp -a docs/ "$windows_folder"
-mkdir "$windows_folder"/src
-cp tl.tl "$windows_folder"/src
 mkdir "$windows_folder"/build
 cp tl.lua "$windows_folder"/build
 cp _binary/build/tl.exe "$windows_folder"
@@ -84,7 +80,7 @@ vtag=${version//./}
 
 echo "*** All prepared. Will start pushing the release... ***"
 
-git commit tl.tl tl.lua -m "Release $version" || {
+git commit teal/environment.tl teal/environment.lua -m "Release $version" || {
    echo "Failed to create the release commit."
    exit 1
 }
