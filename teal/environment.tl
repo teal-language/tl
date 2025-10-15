@@ -1,5 +1,5 @@
 
-local VERSION = "0.24.6+dev"
+local VERSION = "0.25.0-alpha+dev"
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG

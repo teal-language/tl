@@ -15662,7 +15662,7 @@ end
 -- module teal.environment from teal/environment.lua
 package.preload["teal.environment"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
-local VERSION = "0.24.6+dev"
+local VERSION = "0.25.0-alpha+dev"
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
