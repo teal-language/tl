@@ -523,7 +523,7 @@ EOF
 do
    fromroot="${file#"${sourcedir}"/}"
    newdir="${root}/src/$(dirname "${fromroot}")"
-   [ -d "$newdir" ] || mkdir "${newdir}"
+   [ -d "$newdir" ] || mkdir -p "${newdir}"
    cp "$file" "${newdir}"
 done
 
