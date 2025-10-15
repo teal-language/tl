@@ -13542,7 +13542,7 @@ self:expand_type(node, values, elements) })
             assert(rets.typename == "tuple")
 
             self:end_function_scope(node)
-            if node.is_predeclared_local_function then
+            if node.is_predeclared_local_function or (node.implicit_global_function and not self.feat_lax) then
                return NONE
             end
 
