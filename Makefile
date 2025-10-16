@@ -113,6 +113,8 @@ cleantemp:
 	rm -rf _temp
 
 clean: cleantemp
+# force a recompile of the environment
+	rm precompiler.lua
 
 ########################################
 # Makefile administrivia
