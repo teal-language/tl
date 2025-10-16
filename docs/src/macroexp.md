@@ -100,6 +100,6 @@ end
 ```
 
 At this time, macroexp declarations within records do not allow inference,
-so the `function` type needs to be explicitly declared when implementinga
+so the `function` type needs to be explicitly declared when implementing a
 a field or metamethod as a `macroexp`. This requirement may be dropped in
 the future.

@@ -6,7 +6,7 @@ A concrete record is a type declared with `record`, which can be used
 both as a Lua table and as a type. In object-oriented terms, the record
 itself works as class whose fields work as class attributes,
 while other tables declared with the record type are objects whose
-fields are object atributes. For example:
+fields are object attributes. For example:
 
 ```lua
 local record MyConcreteRecord
