@@ -285,7 +285,6 @@ end
 
 function environment.register_failed(env: Env, filename: string, syntax_errors: {Error}): Result
    local result = {
-      ok = false,
       filename = filename,
       type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
       type_errors = {},

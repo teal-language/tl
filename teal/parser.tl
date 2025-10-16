@@ -1460,7 +1460,7 @@ local function parse_function(ps: ParseState, i: integer, fk: FunctionKind): int
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method and fn.args then
-      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier" })
       fn.min_arity = fn.min_arity + 1
    end
 

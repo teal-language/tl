@@ -136,7 +136,6 @@ local function compare_or_infer_typevar(ck, typevar, a, b, cmp)
 end
 
 local function subtype_record(ck, a, b)
-
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -157,6 +156,8 @@ local function subtype_record(ck, a, b)
          if not ok then
             ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
          end
+      elseif b.typename == "record" then
+         table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
    if #errs > 0 then

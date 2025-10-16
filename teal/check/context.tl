@@ -358,7 +358,7 @@ function Context:infer_emptytable_from_unresolved_value(w: Where, u: UnresolvedE
    assert(et is EmptyTableType, u.typename)
    local keys = et.keys
    if not (values is EmptyTableType or values is UnresolvedEmptyTableValueType) then
-      local infer_to = keys is NumericType -- ideally integer only
+      local infer_to: ArrayType | MapType = keys is NumericType -- ideally integer only
                        and an_array(w, values)
                        or  a_map(w, keys, values)
       self:infer_emptytable(et, self:infer_at(w, infer_to))
