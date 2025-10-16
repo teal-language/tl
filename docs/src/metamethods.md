@@ -40,7 +40,7 @@ print((r + s).x)      -- prints 32
 ```
 
 Note that we explicitly declare variables as `Rec` when initializing the
-declaration with `setmetatable`. The Teal standard library definiton of
+declaration with `setmetatable`. The Teal standard library definition of
 `setmetatable` is `function<T>(T, metatable<T>): T`, so declaring the correct
 record type in the declaration assigns the record type to the type variable
 `T` in the return value of the function call, causing it to propagate to the

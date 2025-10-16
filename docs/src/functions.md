@@ -4,7 +4,7 @@ Functions in Teal should work like you expect, and we have already showed
 various examples.
 
 You can declare nominal function types, like we do for records, to avoid
-longwinded type declarations, especially when declaring functions that take
+long-winded type declarations, especially when declaring functions that take
 callbacks. This is done with using `function` types, and they can be generic as
 well:
 
