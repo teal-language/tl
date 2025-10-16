@@ -1,0 +1,24 @@
+name: spellcheck
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**/*.md'
+  workflow_dispatch:
+  push:
+    branches: main
+    paths:
+      - 'docs/**/*.md'
+
+jobs:
+  Spellcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+
+    - name: Check spelling
+      run: |
+        cd docs
+        npx --yes cspell --no-progress --show-suggestions --show-context src/*.md

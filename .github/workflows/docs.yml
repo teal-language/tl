@@ -16,10 +16,6 @@ jobs:
       uses: peaceiris/actions-mdbook@adeb05db28a0c0004681db83893d56c0388ea9ea
       with:
         mdbook-version: 'latest'
-    - name: Spell-check
-      run: |
-        cd docs
-        npx --yes cspell --no-progress --show-suggestions --show-context src/*.md
     - name: Generate book
       run: |
         cd docs
