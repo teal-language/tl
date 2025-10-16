@@ -135,8 +135,7 @@ local function compare_or_infer_typevar(ck: TypeChecker, typevar: string, a: Typ
    end
 end
 
-local function subtype_record(ck: TypeChecker, a: RecordLikeType, b: RecordLikeType): boolean, {Error}
-   -- assert(b.typename == "record")
+local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType): boolean, {Error}
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -157,6 +156,8 @@ local function subtype_record(ck: TypeChecker, a: RecordLikeType, b: RecordLikeT
          if not ok then
             ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
          end
+      elseif b.typename == "record" then
+         table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
    if #errs > 0 then

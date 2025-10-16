@@ -3217,7 +3217,6 @@ local function compare_or_infer_typevar(ck, typevar, a, b, cmp)
 end
 
 local function subtype_record(ck, a, b)
-
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -3238,6 +3237,8 @@ local function subtype_record(ck, a, b)
          if not ok then
             ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
          end
+      elseif b.typename == "record" then
+         table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
    if #errs > 0 then
@@ -8068,7 +8069,6 @@ end
 
 function environment.register_failed(env, filename, syntax_errors)
    local result = {
-      ok = false,
       filename = filename,
       type = a_type({ f = filename, y = 1, x = 1 }, "boolean", {}),
       type_errors = {},
@@ -10960,7 +10960,7 @@ do
          end
       end
 
-      table.insert(tokens, { x = x + 1, y = y, i = i, tk = "$EOF$", kind = "$EOF$", comments = comments })
+      table.insert(tokens, { x = x + 1, y = y, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
    end
@@ -12766,7 +12766,7 @@ local function parse_function(ps, i, fk)
    local selfx, selfy = ps.tokens[i].x, ps.tokens[i].y
    i = parse_function_args_rets_body(ps, i, fn)
    if fn.is_method and fn.args then
-      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier", is_self = true })
+      table.insert(fn.args, 1, { f = ps.filename, x = selfx, y = selfy, tk = "self", kind = "identifier" })
       fn.min_arity = fn.min_arity + 1
    end
 
