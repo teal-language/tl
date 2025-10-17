@@ -1,30 +1,37 @@
 #!/usr/bin/env -S tl run
 
-local function find_all(dirname: string, pattern: string): function(): string
-   local pd = io.popen("find '" .. dirname .. "' -name '" .. pattern .. "'")
-   return pd:lines()
+local module_to_file: {string:string} = {}
+local module_to_content: {string:string} = {}
+
+local function scan_deps(k: string)
+   if not module_to_content[k] then
+      local fn = k:gsub("%.", "/") .. ".lua"
+      module_to_file[k] = fn
+
+      local f = assert(io.open(fn, "rb"))
+      local modcontent = assert(f:read("*a"))
+      assert(f:close())
+      module_to_content[k] = modcontent
+
+      -- all the requires in teal.* are this syntax
+      for requirement in modcontent:gmatch([[require%("([^"]+)"%)]]) do
+         scan_deps(requirement)
+      end
+   end
 end
 
-local module_to_files = {}
-
-for luafile in find_all("teal", "*.lua") do
-   local modname = luafile:gsub("%.lua$", ""):gsub("/", ".")
-   module_to_files[modname] = luafile
-end
+scan_deps("teal.api.v2")
 
 local keys = {}
-for k in pairs(module_to_files) do table.insert(keys, k) end
+for k in pairs(module_to_content) do table.insert(keys, k) end
 table.sort(keys)
 
 -- populate the preload field so that we leave worrying about dependency order
 -- to Lua
 local content = {}
 for _, k in ipairs(keys) do
-   local fn = module_to_files[k]
-   local f = assert(io.open(fn, 'rb'))
-   local modcontent = assert(f:read'*a')
-   assert(f:close())
-
+   local fn = module_to_file[k]
+   local modcontent = module_to_content[k]
    table.insert(content,
 string.format([[
 -- module %s from %s
