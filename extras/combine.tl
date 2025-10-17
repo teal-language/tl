@@ -9,7 +9,7 @@ local function scan_deps(k: string)
       module_to_file[k] = fn
 
       local f = assert(io.open(fn, "rb"))
-      local modcontent = assert(f:read("a"))
+      local modcontent = assert(f:read("*a"))
       assert(f:close())
       module_to_content[k] = modcontent
 
