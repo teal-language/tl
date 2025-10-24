@@ -51,9 +51,9 @@ local function write_out(tlconfig, module, output_file, gen_opts, tree)
          make_dir_for(output_file)
       end
       ofd, err = io.open(output_file, "wb")
-   end
-   if not ofd then
-      common.die("cannot write " .. prettyname .. ": " .. err)
+      if not ofd then
+         common.die("cannot write " .. prettyname .. ": " .. err)
+      end
    end
 
    local lua_code = module:gen(gen_opts)
