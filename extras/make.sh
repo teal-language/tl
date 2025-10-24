@@ -37,6 +37,13 @@ function move_all_lua1_to_err() {
    done
 }
 
+function remove_all_lua2() {
+   for_all '*.lua.2' in _temp | while read -r lua2_file
+   do
+      rm "$lua2_file"
+   done
+}
+
 ## ----------------------------------------
 ## Build tasks
 ## ----------------------------------------
@@ -57,6 +64,7 @@ function move_all_lua1_to_lua() {
 function restore_backup_and_fail() {
    restore_all_bak_files
    move_all_lua1_to_err
+   remove_all_lua2
    exit 1
 }
 
