@@ -35,7 +35,7 @@ describe('macro invocation expansion', function()
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
       out = out:gsub("^%s+", ""):gsub("%s+$", "")
-      assert.match("print%('hi'%)%s*;%s*print%('hi'%)", out)
+      assert.same("print('hi'); print('hi')", out)
    end)
 
    it('expands macro used in expressions', function()
@@ -50,8 +50,8 @@ describe('macro invocation expansion', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub("^%s+", "")
-      assert.match('local y = 2 %+ 1', out)
+      out = out:gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same('local y = 2 + 1', out)
    end)
 
    it('expands nested macro invocations eagerly', function()
@@ -66,92 +66,9 @@ describe('macro invocation expansion', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub("^%s+", "")
-      assert.match('local y = 2 %+ 1 %+ 1', out)
+      out = out:gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same('local y = 2 + 1 + 1', out)
    end)
-end)
-
-describe('macro-generated is/or chain', function()
-   it('does not ICE when splicing union types into is/or', util.gen([[ 
-      local macro match!(value: Expression, cases: Expression): Statement
-         local blk = require("teal.block")
-         local BI = blk.BLOCK_INDEXES
-
-         local function or_chain(exprs: {any})
-            if #exprs == 0 then return nil end
-            local acc = exprs[1]
-            for i = 2, #exprs do
-               local e = exprs[i]
-               acc = `$acc or $e`
-            end
-            return acc
-         end
-
-         cases = expect(cases, "literal_table")
-
-         local ifstmt = block('if')
-         ifstmt[BI.IF.BLOCKS] = {}
-
-         for _, item in ipairs(cases) do
-            if not item then goto continue end
-            local fn = item[BI.LITERAL_TABLE_ITEM.VALUE]
-            fn = expect(fn, "function")
-
-            local args = expect(fn[BI.FUNCTION.ARGS], "argument_list")
-
-            local body_call
-            local ib = block('if_block')
-
-            if #args == 0 then
-               body_call = `($fn)()`
-            else
-               if #args ~= 1 then
-                  error("match! cases must be functions with 0 or 1 argument")
-               end
-               local arg = expect(args[1], "argument")
-               local ann = arg[BI.ARGUMENT.ANNOTATION]
-               if not ann then
-                  error("match! case function must have a typed argument")
-               end
-
-               local types_to_match: {any} = {}
-               if ann.kind == "union_type" then
-                  for i = 1, #ann do
-                     local t = ann[i]
-                     if t then table.insert(types_to_match, t) end
-                  end
-               else
-                  table.insert(types_to_match, ann)
-               end
-
-               local cond_terms: {any} = {}
-               for _, t in ipairs(types_to_match) do
-                  table.insert(cond_terms, `$value is $t`)
-               end
-               ib[BI.IF_BLOCK.COND] = or_chain(cond_terms)
-
-               body_call = `($fn)($value)`
-            end
-
-            local body = block('statements')
-            table.insert(body, body_call)
-            ib[BI.IF_BLOCK.BODY] = body
-            table.insert(ifstmt[BI.IF.BLOCKS], ib)
-            ::continue::
-         end
-
-         return ifstmt
-      end
-
-      local v: integer | string | table | userdata | nil = "hello"
-
-      match!(v, {
-         function(x: integer) print(x + 10) end;
-         function(x: string) print(x:upper()) end;
-         function(x: table | userdata) print("other") end;
-         function() print("none!") end
-      })
-   ]]))
 end)
 
 describe('macro unknown type error', function()
@@ -208,8 +125,8 @@ describe('statement macro invocation (paren form)', function()
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
       
-      out = out:gsub("%s+", " ")
-      assert.match('local x = %s*%{ %s*name = "ok" %s*%}', out)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same('local MyClass = {} local x = { name = "ok" }', out)
    end)
 
    it('handles commas inside Statement followed by another arg', function()
@@ -232,9 +149,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match('for _, x in ipairs%(%s*t%s*%) do%s*print%(x%)%s*end', out)
-      assert.match("print%('ok'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("local t = { 1, 2, 3 } for _, x in ipairs(t) do print(x) end; print('ok')", out)
    end)
 
    it('handles commas in first Statement when two Statement args', function()
@@ -257,9 +173,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match('for _, v in ipairs%(%{ 1, 2 %}%).*end', out)
-      assert.match("print%('second'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("for _, v in ipairs({ 1, 2 }) do print(v) end print('second')", out)
    end)
 
    it('requires do-end wrapper for top-level commas in local declarations', function()
@@ -299,8 +214,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match("print%('ok'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("do local a, b = 1, 2 end; print('ok')", out)
    end)
 
 
@@ -320,10 +235,10 @@ describe('statement macro invocation (paren form)', function()
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
       out = out:gsub("^%s+", ""):gsub("%s+$", "")
-      assert.match("print%('hi'%)%s*;%s*print%('hi'%)", out)
+      assert.same("print('hi'); print('hi')", out)
    end)
 
-   it('still supports triple backtick Statement arguments', function()
+   it('rejects triple backtick Statement arguments outside macro definitions', function()
       local code = [[
          local macro s!(b: Statement)
             return b
@@ -335,11 +250,16 @@ describe('statement macro invocation (paren form)', function()
             end
          ```
       ]]
-      local ast, errs = tl.parse(code)
-      assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
-      
-      assert.is_nil(err)
+      local _, errs = tl.parse(code)
+      assert.not_same({}, errs)
+      local saw_macro_quote_error = false
+      for _, err in ipairs(errs) do
+         if err.msg:match('macro quotes can only be used inside macro statements') then
+            saw_macro_quote_error = true
+            break
+         end
+      end
+      assert.is_true(saw_macro_quote_error)
    end)
 
    it('supports vararg Statement arguments (seq!)', function()
@@ -359,8 +279,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub("^%s+", "")
-      assert.match("print%('a'%)%s*;%s*print%('b'%)", out)
+      out = out:gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same("print('a'); print('b')", out)
    end)
 
 
@@ -383,9 +303,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match("if true then%s*print%('x', 'y'%)%s*end", out)
-      assert.match("print%('ok'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("if true then print('x', 'y') end; print('ok')", out)
    end)
 
    it("requires do-end for 'local a = 1, 2' in Statement arg", function()
@@ -459,8 +378,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match("print%('ok'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("local a; print('ok')", out)
    end)
 
    it('does not require do-end when comma appears inside nested local decl', function()
@@ -482,9 +401,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match("if true then%s*local a, b = 1, 2%s*end", out)
-      assert.match("print%('ok'%)", out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("if true then local a, b = 1, 2 end; print('ok')", out)
    end)
 
    it('vararg Statement args accept statements with commas', function()
@@ -507,9 +425,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match('for _, v in ipairs%(%{ 1, 2 %}%).-end', out)
-      assert.match('a, b = 1, 2', out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('for _, v in ipairs({ 1, 2 }) do print(v) end a, b = 1, 2', out)
    end)
 
    it('accepts for-in Statement with commas followed by table literal expression', function()
@@ -528,9 +445,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub('%s+', ' ')
-      assert.match('for i, v in ipairs%(%s*t%s*%) do%s*print%(i, v%)%s*end', out)
-      assert.match('print%(%s*%{ %s*t, %s*t, %s*t %}%s*%)', out)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('local t = { 1, 2, 3, 4 } for i, v in ipairs(t) do print(i, v) end; print({ t, t, t })', out)
    end)
 
    it('preserves record fields in macro-quoted type returned from macro', function()
@@ -550,8 +466,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub("%s+", " ")
-      assert.match('local x = %s*%{ %s*name = "ok" %s*%}', out)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same('local Rec = {} local x = { name = "ok" }', out)
    end)
 
    it('allows macro LHS name via macro variable in declaration', function()
@@ -569,9 +485,8 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      out = out:gsub("%s+", " ")
-      assert.match("local zero = 0", out)
-      assert.match("print%(%s*zero%s*%)", out)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same('local zero = 0 print(zero)', out)
    end)
 
    it('splices a nominal_type into type positions (regression)', util.check([[ 

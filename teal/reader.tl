@@ -895,6 +895,9 @@ local function skip_any_function(ps: ReadState, i: integer): integer, Block
 end
 
 local function read_macro_quote(ps: ReadState, i: integer): integer, Block
+   if not ps.in_local_macro then
+      return fail(ps, i, "macro quotes can only be used inside macro statements")
+   end
    local token = ps.tokens[i]
    local node = new_block(ps, i, "macro_quote")
    local tk = token.tk
@@ -1032,6 +1035,9 @@ local function read_literal(ps: ReadState, i: integer): integer, Block
    elseif tk == "function" then
       return read_function_value(ps, i)
    elseif kind == "`" then
+      if not ps.in_local_macro then
+         return fail(ps, i, "macro quotes can only be used inside macro statements")
+      end
       return read_macro_quote(ps, i)
    elseif tk == "{" then
       return read_table_literal(ps, i)

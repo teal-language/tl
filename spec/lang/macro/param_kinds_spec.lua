@@ -32,7 +32,8 @@ describe('macro parameter kinds', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      assert.match('local a = 1 %+ 2', out)
+      out = out:gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('local a = 1 + 2', out)
 
    end)
 

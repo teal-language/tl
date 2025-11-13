@@ -22,6 +22,22 @@ describe("local macro parsing", function()
       assert.not_same({}, errs)
    end)
 
+   it("rejects backtick macro quotes outside macro statements", function()
+      local _, errs = tl.parse([[
+         local x = `1`
+      ]])
+      assert.not_same({}, errs)
+   end)
+
+   it("rejects triple backtick macro quotes outside macro statements", function()
+      local _, errs = tl.parse([[
+         local function foo()
+            return ```x = 1```
+         end
+      ]])
+      assert.not_same({}, errs)
+   end)
+
    it("expands triple backtick quotes into concrete statements", function()
       local ast, errs = tl.parse([[
          local macro bar!(): Block
@@ -33,7 +49,8 @@ describe("local macro parsing", function()
       assert.same({}, errs)
       local lua, err = lua_gen.generate(ast, "5.4")
       assert.is_nil(err)
-      assert.match('x%s*=%s*1', lua)
+      lua = lua:gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('x = 1', lua)
    end)
 
    it("splices variables inside triple backticks", function()
@@ -47,7 +64,8 @@ describe("local macro parsing", function()
       assert.same({}, errs)
       local lua, err = lua_gen.generate(ast, "5.4")
       assert.is_nil(err)
-      assert.match('y%s*=%s*1', lua)
+      lua = lua:gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('y = 1', lua)
    end)
 
    it("rejects nested macro invocation", function()
@@ -96,8 +114,8 @@ describe("local macro parsing", function()
          assert.same({}, errs)
          local lua, err = lua_gen.generate(ast, "5.4")
          assert.is_nil(err)
-         assert.match('local x%s*=%s*1', lua)
-         assert.match('y%s*=%s*2', lua)
+         lua = lua:gsub('^%s+', ''):gsub('%s+$', '')
+         assert.same('local x = 1; y = 2', lua)
       end)
 
       it("rejects whitespace-only triple quotes", function()
@@ -133,8 +151,8 @@ describe("local macro parsing", function()
          assert.same({}, errs)
          local lua, err = lua_gen.generate(ast, "5.4")
          assert.is_nil(err)
-         assert.match('y%s*=%s*1', lua)
-         assert.match('y%s*=%s*2', lua)
+         lua = lua:gsub('^%s+', ''):gsub('%s+$', '')
+         assert.same('y = 1; y = 2', lua)
       end)
    end)
 end)
