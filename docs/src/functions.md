@@ -70,6 +70,72 @@ in both function declarations.
 Teal also supports [macro expressions](macroexp.md), which are a restricted
 form of function whose contents are expanded inline when generating Lua code.
 
+### Function declaration syntax
+
+Unlike Lua, bare `function` declarations are not global by default.
+Like other variables, Teal requires functions to be declared as `local` or `global`.
+
+
+```lua
+local function a_local_function()
+end
+
+global function a_global_function()
+end
+```
+
+One exception to the need of a `local` or `global` discriminator is when using
+the "record function syntax", which is used to declare and assign a function
+element to a record, because the visibility is already defined by the record
+itself. You can use this syntax within the same scope where a
+record is declared:
+
+```lua
+local record MyRecord
+end
+
+function MyRecord.a_record_function()
+end
+```
+
+That supports both `.` and `:` notation, for an implied first argument `self`:
+
+```lua
+local record MyRecord
+   x: integer
+end
+
+function MyRecord:print_x()
+   print(self.x)
+end
+```
+
+Note that this syntax is only supported for records. It cannot be used with
+interfaces, because they are abstract. It also cannot be used with maps, emphasizing
+that records and maps are distinct types with distinct uses in Teal. Even though
+both are implemented as Lua tables, they are not interchangeable. If you have
+a map with function values, you can use the assignment syntax. As a matter of style,
+you may want to use the array index syntax, to emphasize to readers of your code
+that this is a map, as the declaration and assignment might be far apart in the
+source:
+
+```lua
+local funcs = {string : function(string):(integer)}
+
+funcs["count_a"] = function(input: string)
+   local n = 0
+   for _ in input:gmatch("a") do
+      n = n + 1
+   end
+   return n
+end
+```
+
+The example above also showcases using a `function` as a value -- in this case,
+being assigned to a map. Like in Lua, you can pass functions as argument to
+functions, assign them to variables, maps, record fields, and so on, as long
+as their types as compatible.
+
 ### Variadic functions
 
 Just like in Lua, some functions in Teal may receive a variable amount of

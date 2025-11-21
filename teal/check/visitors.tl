@@ -1598,7 +1598,13 @@ visit_node.cbs = {
          end
 
          if not rtype is RecordLikeType then
-            self.errs:add(node, "not a record: %s", rtype)
+            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+            local short_type = show_type(rtype, true)
+            local msg = ("record function syntax cannot be used with this type: %s is %s"):format(owner_name, short_type)
+            self.errs:add(node, msg, rtype)
+            if rtype is MapType then
+                self.errs:add_warning("hint", node, "use the assignment syntax to store functions in maps", rtype)
+            end
             return
          end
 

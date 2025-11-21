@@ -1,6 +1,55 @@
 local util = require("spec.util")
 
 describe("record function", function()
+   describe("syntax: ", function()
+      it("works", util.check([[
+         local record tbl
+         end
+
+         function tbl.foo(s: string):table|nil, string
+            return nil, s
+         end
+
+         function tbl.bar(_s: string): table|nil, string
+            return {}
+         end
+      ]]))
+
+      it("cannot be used with interfaces", util.check_type_error([[
+         local interface tbl
+         end
+
+         function tbl.foo(s: string):table|nil, string
+            return nil, s
+         end
+
+         function tbl.bar(_s: string): table|nil, string
+            return {}
+         end
+      ]], {
+         { y = 4, msg = "interfaces are abstract; consider using a concrete record" },
+         { y = 8, msg = "interfaces are abstract; consider using a concrete record" },
+      }))
+
+      it("cannot be used with maps", util.check_warnings([[
+         local tbl: {string : function(string):table|nil, string} = {}
+
+         function tbl.foo(s: string):table|nil, string
+            return nil, s
+         end
+
+         function tbl.bar(_s: string): table|nil, string
+            return {}
+         end
+      ]], {
+         { y = 3, msg = "use the assignment syntax to store functions in maps" },
+         { y = 7, msg = "use the assignment syntax to store functions in maps" },
+      }, {
+         { y = 3, msg = "record function syntax cannot be used with this type: tbl is" },
+         { y = 7, msg = "record function syntax cannot be used with this type: tbl is" },
+      }))
+   end)
+
    describe("redeclaration: ", function()
       it("an inconsistent arity in redeclaration produces an error", util.check_type_error([[
          local record Y
