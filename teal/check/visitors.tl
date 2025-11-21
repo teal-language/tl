@@ -1572,6 +1572,9 @@ visit_node.cbs = {
          local t = children[1]
          local rtype = self:to_structural(resolve_typedecl(t))
 
+         -- This must be set early, before we return due to any errors
+         self:add_internal_function_variables(node, args)
+
          if rtype is GenericType then
             rtype = rtype.t
          end
@@ -1679,7 +1682,6 @@ visit_node.cbs = {
             open_v.implemented[open_k] = true
          end
 
-         self:add_internal_function_variables(node, args)
       end,
       after = function(self: Context, node: Node, _children: {Type}): Type
          self:end_function_scope(node)

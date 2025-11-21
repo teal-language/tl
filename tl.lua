@@ -6327,6 +6327,9 @@ visit_node.cbs = {
          local t = children[1]
          local rtype = self:to_structural(resolve_typedecl(t))
 
+
+         self:add_internal_function_variables(node, args)
+
          if rtype.typename == "generic" then
             rtype = rtype.t
          end
@@ -6434,7 +6437,6 @@ visit_node.cbs = {
             open_v.implemented[open_k] = true
          end
 
-         self:add_internal_function_variables(node, args)
       end,
       after = function(self, node, _children)
          self:end_function_scope(node)
