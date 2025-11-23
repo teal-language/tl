@@ -38,7 +38,6 @@ local simple_types = types.simple_types
 local lexer = require("teal.lexer")
 local type Token = lexer.Token
 local type TokenKind = lexer.TokenKind
-local type Comment = lexer.Comment
 
 local enum NodeKind
    "op"
@@ -112,12 +111,9 @@ local record Node
 
    tk: string
    kind: NodeKind
-   comments: {Comment}
    symbol_list_slot: integer
    semicolon: boolean
    hashbang: string
-
-   unattached_comments: {Comment}
 
    is_longstring: boolean
 
@@ -235,13 +231,14 @@ local enum KeyParsed
    "implicit"
 end
 
-local record parser
+local record block_parser
    type Attribute = Attribute
    type Node = Node
    type NodeKind = NodeKind
    type ParseLang = ParseLang
 
    parse: function(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
    operator: function(Node, integer, string): Operator
    
    -- Type parsing functions
@@ -379,7 +376,7 @@ local node_mt: metatable<Node> = {
    end
 }
 
-function parser.lang_heuristic(filename?: string, input?: string): ParseLang
+function block_parser.lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
       local pattern <const> = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
@@ -565,94 +562,13 @@ local function parse_argument_list(state: ParseState, block: Block): Node, integ
    return node, min_arity
 end
 
-local comment_node_kinds: {string:boolean} = {
-   ["local_declaration"] = true,
-   ["global_declaration"] = true,
-   ["local_function"] = true,
-   ["global_function"] = true,
-   ["record_function"] = true,
-   ["local_type"] = true,
-   ["global_type"] = true,
-   ["local_macroexp"] = true,
-   ["local_macro"] = true,
-}
-
-local function comment_block_to_comment(cb: Block): Comment
-   return {
-      x = cb.x,
-      y = cb.y,
-      text = cb.conststr or cb.tk or "",
-   }
-end
-
-local function comment_block_end_y(cb: Block): integer
-   if cb.yend then
-      return cb.yend
-   end
-   local text = cb.conststr or cb.tk or ""
-   local _, newlines = string.gsub(text, "\n", "")
-   return cb.y + newlines
-end
-
-local function extract_attached_comments(pending: {Block}, target: Block): {Comment}
-   if #pending == 0 then
-      return nil
-   end
-
-   local last = pending[#pending]
-   local diff_y = target.y - comment_block_end_y(last)
-   if diff_y < 0 or diff_y > 1 then
-       return nil
-   end
-
-   local first = #pending
-   for i = #pending - 1, 1, -1 do
-      local prev = pending[i]
-      local gap = pending[i + 1].y - comment_block_end_y(prev)
-      if gap > 1 then
-         break
-      end
-      first = i
-   end
-
-   local attached_blocks: {Block} = {}
-   for i = first, #pending do
-      table.insert(attached_blocks, pending[i])
-   end
-   for i = #pending, first, -1 do
-      table.remove(pending, i)
-   end
-
-   local comments: {Comment} = {}
-   for _, cb in ipairs(attached_blocks) do
-      table.insert(comments, comment_block_to_comment(cb))
-   end
-   return comments
-end
-
-local function flush_unattached_comments(node: Node, pending: {Block})
-   if #pending == 0 then
-      return
-   end
-   if not node.unattached_comments then
-      node.unattached_comments = {}
-   end
-   for _, cb in ipairs(pending) do
-      table.insert(node.unattached_comments, comment_block_to_comment(cb))
-   end
-   for i = #pending, 1, -1 do
-      table.remove(pending, i)
-   end
-end
-
-local function parse_statements(state: ParseState, block: Block, toplevel?: boolean): Node
+local function parse_statements(state: ParseState, block: Block): Node
    if not block then
       local dummy_block = { kind = "statements", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
       return new_node(state, dummy_block, "statements")
    end
 
    local node = new_node(state, block, "statements")
-   local pending_comments: {Block} = {}
 
    if block[1] and block[1].kind == "hashbang" then
       node.hashbang = block[1].tk
@@ -662,28 +578,8 @@ local function parse_statements(state: ParseState, block: Block, toplevel?: bool
       if item_block.kind == "hashbang" then
          goto continue
       end
-      if item_block.kind == "comment" then
-         table.insert(pending_comments, item_block)
-         goto continue
-      end
-
       local parsed_item = parse_block(state, item_block)
       if parsed_item then
-         if comment_node_kinds[item_block.kind] then
-            local attached = extract_attached_comments(pending_comments, item_block)
-            if attached then
-               parsed_item.comments = attached
-            end
-         end
-
-         if toplevel and #pending_comments > 0 then
-            flush_unattached_comments(node, pending_comments)
-         else
-            for i = #pending_comments, 1, -1 do
-               table.remove(pending_comments, i)
-            end
-         end
-
          for _, child in ipairs(item_block) do
             if child.kind == ";" then
                parsed_item.semicolon = true
@@ -699,10 +595,6 @@ local function parse_statements(state: ParseState, block: Block, toplevel?: bool
          end
       end
       ::continue::
-   end
-
-   if toplevel and #pending_comments > 0 then
-      flush_unattached_comments(node, pending_comments)
    end
 
    return node
@@ -942,25 +834,14 @@ local function parse_newtype(state: ParseState, block: Block): Node
          if typename as string == "enum" then
             local enum_type = new_type(state, inner_type, "enum") as EnumType
             enum_type.enumset = {}
-            enum_type.value_comments = {}
-            local pending_comments: {Block} = {}
-            for _, value_block in ipairs(inner_type) do
-               if value_block.kind == "comment" then
-                  table.insert(pending_comments, value_block)
-               elseif value_block and value_block.tk then
-                  local value_str = value_block.conststr or value_block.tk
+            for i = 1, #inner_type do
+               local value_block = inner_type[i]
+               if value_block and value_block.tk then
+                  local value_str = value_block.tk
                   if value_str:match('^".*"$') or value_str:match("^'.*'$") then
                      value_str = value_str:sub(2, -2)
                   end
                   enum_type.enumset[value_str] = true
-                  local comments = extract_attached_comments(pending_comments, value_block)
-                  if comments then
-                     enum_type.value_comments[value_str] = comments
-                  else
-                     for i = #pending_comments, 1, -1 do
-                        table.remove(pending_comments, i)
-                     end
-                  end
                end
             end
             node.newtype = new_typedecl(state, def_block, enum_type)
@@ -1704,7 +1585,7 @@ parse_block = function(state: ParseState, block: Block): Node
    end
 end
 
-function parser.parse(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+function block_parser.parse(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    filename = filename or "input"
    if not input then
       return nil, {{ filename = filename, y = 1, x = 1, msg = "input is nil" }}, {}
@@ -1721,17 +1602,13 @@ function parser.parse(input: Block, filename: string, parse_lang?: ParseLang): t
       in_macro_quote = false,
    }
 
-   local nodes = parse_statements(state, input, true)
+   local nodes = parse_statements(state, input)
 
    errors.clear_redundant_errors(state.errs)
    return nodes, state.errs, state.required_modules
 end
 
 -- Note: parse_program was moved to tl.tl to avoid a hard dependency on reader in order to support macro expansion :)
-function parser.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
-   errors.clear_redundant_errors(errs or {})
-   return nil, {}
-end
 
 local function new_generic(state: ParseState, block: Block, typeargs: {TypeArgType}, typ: FirstOrderType): GenericType
    local gt = new_type(state, block, "generic") as GenericType
@@ -1830,10 +1707,9 @@ parse_where_clause = function(state: ParseState, block: Block, def: RecordLikeTy
    return node
 end
 
-local function store_field_in_record(state: ParseState, block: Block, name: string, newt: Type, def: RecordLikeType, meta: boolean, comments?: {Comment})
+local function store_field_in_record(state: ParseState, block: Block, name: string, newt: Type, def: RecordLikeType, meta: boolean)
    local fields: {string: Type}
    local order: {string}
-   local field_comments: {string: {{Comment}}}
    if meta then
       if not def.meta_fields then
          def.meta_fields = {}
@@ -1841,20 +1717,9 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
       end
       fields = def.meta_fields
       order = def.meta_field_order
-      field_comments = def.meta_field_comments
    else
       fields = def.fields
       order = def.field_order
-      field_comments = def.field_comments
-   end
-
-   if comments and not field_comments then
-      field_comments = {}
-      if meta then
-         def.meta_field_comments = field_comments
-      else
-         def.field_comments = field_comments
-      end
    end
 
    if not fields[name] then
@@ -1862,9 +1727,6 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
          set_declname(newt.def, name)
       end
       fields[name] = newt
-      if comments then
-         field_comments[name] = {comments}
-      end
       table.insert(order, name)
       return
    end
@@ -1880,32 +1742,13 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
    local oldf = basetype(oldt)
    local newf = basetype(newt)
 
-   local function store_comment_for_poly(poly: PolyType)
-      if not field_comments then
-         return
-      end
-      if comments then
-         if not field_comments[name] then
-            field_comments[name] = {}
-            for idx = 1, #poly.types - 1 do
-               field_comments[name][idx] = {}
-            end
-         end
-         table.insert(field_comments[name], comments)
-      elseif field_comments and field_comments[name] then
-         table.insert(field_comments[name], {})
-      end
-   end
-
    if newf is FunctionType then
       if oldf is FunctionType then
          local p = new_type(state, block, "poly") as PolyType
          p.types = { oldt as FunctionType, newt as FunctionType }
          fields[name] = p
-         store_comment_for_poly(p)
       elseif oldt is PolyType then
          table.insert((oldt as PolyType).types, newt as FunctionType)
-         store_comment_for_poly(oldt as PolyType)
       else
          fail(state, block, "attempt to redeclare field '" .. name .. "' (only functions can be overloaded)")
       end
@@ -1949,37 +1792,22 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
 
    local function parse_field_list(list_block: Block, meta: boolean)
       if not list_block then return end
-      local pending_field_comments: {Block} = {}
       for _, fld in ipairs(list_block) do
-         if fld.kind == "comment" then
-            table.insert(pending_field_comments, fld)
-         elseif fld.kind == "record_field" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
+         if fld.kind == "record_field" then
             local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
             local field_name = name_node.conststr or name_node.tk
             local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
             if t is FunctionType and t.maybe_method then
                t.is_method = true
             end
-            store_field_in_record(state, fld, field_name, t, decl, meta, comments)
-            for i = #pending_field_comments, 1, -1 do
-               table.remove(pending_field_comments, i)
-            end
+            store_field_in_record(state, fld, field_name, t, decl, meta)
          elseif fld.kind == "local_type" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
             if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
                if nt_node and nt_node.newtype then
-                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
+                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta)
                end
-            end
-            for i = #pending_field_comments, 1, -1 do
-               table.remove(pending_field_comments, i)
-            end
-         else
-            for i = #pending_field_comments, 1, -1 do
-               table.remove(pending_field_comments, i)
             end
          end
       end
@@ -2309,26 +2137,26 @@ parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListM
    return t, maybe_method, min_arity
 end
 
-function parser.parse_type(state: ParseState, block: Block): Type
+function block_parser.parse_type(state: ParseState, block: Block): Type
    return parse_type(state, block)
 end
 
-function parser.parse_type_list(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType, boolean, integer
+function block_parser.parse_type_list(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType, boolean, integer
    return parse_type_list(state, block, mode)
 end
 
-function parser.operator(node: Node, arity: integer, op: string): Operator
+function block_parser.operator(node: Node, arity: integer, op: string): Operator
    return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
 end
 
-function parser.node_is_funcall(node: Node): boolean
+function block_parser.node_is_funcall(node: Node): boolean
    return node.kind == "op" and node.op.op == "@funcall"
 end
 
-function parser.node_is_require_call(n: Node): string
+function block_parser.node_is_require_call(n: Node): string
    if n.kind == "op" and n.op.op == "." then
       -- `require("str").something`
-      return parser.node_is_require_call(n.e1)
+      return block_parser.node_is_require_call(n.e1)
    elseif n.kind == "op" and n.op.op == "@funcall"
       and n.e1.kind == "variable" and n.e1.tk == "require"
       and n.e2.kind == "expression_list" and #n.e2 == 1
@@ -2340,11 +2168,11 @@ function parser.node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
-function parser.node_at(w: Where, n: Node): Node
+function block_parser.node_at(w: Where, n: Node): Node
    n.f = assert(w.f)
    n.x = w.x
    n.y = w.y
    return n
 end
 
-return parser
+return block_parser

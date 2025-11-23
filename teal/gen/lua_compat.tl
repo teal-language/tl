@@ -6,6 +6,7 @@ local type GenCompat = environment.GenCompat
 local type Result = environment.Result
 
 local parser = require("teal.parser")
+local reader = require("teal.reader")
 local type Node = parser.Node
 local type NodeKind = parser.NodeKind
 local node_at = parser.node_at
@@ -42,7 +43,8 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         code = parser.parse(text, "@<internal>.lua") as Node
+         local block_ast = reader.read(text, "@<internal>.lua")
+         code = parser.parse(block_ast, "@<internal>.lua") as Node
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
