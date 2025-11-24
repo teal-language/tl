@@ -115,7 +115,27 @@ function macro_eval.new_env(): MacroEnv
    end
 
    --todo: restrict
-   setmetatable(env, { __index = _G })
+   local FORBIDDEN_LIBS: {string:boolean} = {
+      os = true,
+      io = true,
+      debug = true,
+      package = true,
+      load = true,
+      loadfile = true,
+      dofile = true,
+      -- require = true,
+   }
+   setmetatable(env, {
+      __index = function(t: any, key: string): any
+         if FORBIDDEN_LIBS[key] then
+            return nil
+         end
+
+         -- some lua modules that are `require`d could pollute `_G` which would allow a macro to access them
+         -- TODO: reconstruct _G from scratch?
+         return (_G as {string:any})[key]
+      end
+   })
    -- macro signatures: name -> { kinds = {"stmt"|"expr"...}, vararg?: "stmt"|"expr" }
    return env
 end
