@@ -417,6 +417,7 @@ local block = { Block = { ExpectedContext = {} } }
 
 
 
+
 local BLOCK_INDEXES = {
    PRAGMA = {
       KEY = 1,
@@ -641,7 +642,111 @@ local BLOCK_INDEXES = {
    },
 }
 
+local BLOCK_KINDS = {
+   ["nil"] = true,
+   ["string"] = true,
+   ["number"] = true,
+   ["integer"] = true,
+   ["boolean"] = true,
+   ["literal_table"] = true,
+   ["literal_table_item"] = true,
+   ["function"] = true,
+   ["expression_list"] = true,
+   ["if"] = true,
+   ["if_block"] = true,
+   ["while"] = true,
+   ["fornum"] = true,
+   ["forin"] = true,
+   ["goto"] = true,
+   ["label"] = true,
+   ["repeat"] = true,
+   ["do"] = true,
+   ["break"] = true,
+   ["return"] = true,
+   ["newtype"] = true,
+   ["argument"] = true,
+   ["type_identifier"] = true,
+   ["variable"] = true,
+   ["variable_list"] = true,
+   ["statements"] = true,
+   ["assignment"] = true,
+   ["argument_list"] = true,
+   ["local_function"] = true,
+   ["global_function"] = true,
+   ["local_type"] = true,
+   ["global_type"] = true,
+   ["record_function"] = true,
+   ["local_declaration"] = true,
+   ["global_declaration"] = true,
+   ["identifier"] = true,
+   ["cast"] = true,
+   ["..."] = true,
+   [":"] = true,
+   [";"] = true,
+   ["comment"] = true,
+   ["hashbang"] = true,
+   ["paren"] = true,
+   ["macroexp"] = true,
+   ["local_macroexp"] = true,
+   ["local_macro"] = true,
+   ["macro_quote"] = true,
+   ["macro_var"] = true,
+   ["macro_invocation"] = true,
+   ["interface"] = true,
+   ["pragma"] = true,
+   ["error_block"] = true,
+   ["userdata"] = true,
+
+   ["op_not"] = true,
+   ["op_len"] = true,
+   ["op_unm"] = true,
+   ["op_bnot"] = true,
+   ["op_or"] = true,
+   ["op_and"] = true,
+   ["op_is"] = true,
+   ["op_lt"] = true,
+   ["op_gt"] = true,
+   ["op_le"] = true,
+   ["op_ge"] = true,
+   ["op_ne"] = true,
+   ["op_eq"] = true,
+   ["op_bor"] = true,
+   ["op_bxor"] = true,
+   ["op_band"] = true,
+   ["op_shl"] = true,
+   ["op_shr"] = true,
+   ["op_concat"] = true,
+   ["op_add"] = true,
+   ["op_sub"] = true,
+   ["op_mul"] = true,
+   ["op_div"] = true,
+   ["op_idiv"] = true,
+   ["op_mod"] = true,
+   ["op_pow"] = true,
+   ["op_as"] = true,
+   ["op_funcall"] = true,
+   ["op_index"] = true,
+   ["op_dot"] = true,
+   ["op_colon"] = true,
+
+   ["typeargs"] = true,
+   ["typelist"] = true,
+   ["generic_type"] = true,
+   ["typedecl"] = true,
+   ["tuple_type"] = true,
+   ["nominal_type"] = true,
+   ["map_type"] = true,
+   ["array_type"] = true,
+   ["union_type"] = true,
+   ["argument_type"] = true,
+   ["interface_list"] = true,
+   ["record_body"] = true,
+   ["record_field"] = true,
+   ["question"] = true,
+}
+
 block.BLOCK_INDEXES = BLOCK_INDEXES
+block.BLOCK_KINDS = BLOCK_KINDS
 
 return block
 
@@ -10876,7 +10981,7 @@ local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
    end
 end
 
-function macro_eval.new_env()
+function macro_eval.new_env(errs)
    local env = {
       macros = {},
       signatures = {},
@@ -10892,13 +10997,16 @@ function macro_eval.new_env()
    }
    env.block = function(kind)
       local w = env.where
+      if not block.BLOCK_KINDS[kind] then
+         table.insert(errs, { filename = w.f, y = w.y, x = w.x, msg = "unknown block kind: " .. tostring(kind) })
+      end
       return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
    env.expect = function(b, k)
       if b and b.kind == k then
          return b
       end
-      error("expected " .. k .. ", got " .. (b and b.kind or "nil"))
+      table.insert(errs, { filename = env.where.f, y = env.where.y, x = env.where.x, msg = "expected " .. k .. ", got " .. (b and b.kind or "nil") })
       return nil
    end
 
@@ -10918,6 +11026,9 @@ function macro_eval.new_env()
          if FORBIDDEN_LIBS[key] then
             return nil
          end
+
+
+
          return (_G)[key]
       end,
    })
@@ -11132,7 +11243,7 @@ end
 
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
    seen = setmetatable({}, { __mode = "k" })
-   local env = macro_eval.new_env()
+   local env = macro_eval.new_env(errs)
 
    local i = 1
    while i <= #node do
