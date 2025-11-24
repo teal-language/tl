@@ -10,7 +10,7 @@ local parser = require("teal.parser")
 local type ParserNode = parser.Node
 
 local record macro_eval
-   new_env: function(): MacroEnv
+   new_env: function(errs: {Error}): MacroEnv
    compile_all_and_expand: function(node: Block, filename: string, read_lang: BlockLang, errs: {Error}): Block
 end
 
@@ -88,7 +88,7 @@ local function reanchor_block_positions(b: Block, where_y: integer | nil, where_
    end
 end
 
-function macro_eval.new_env(): MacroEnv
+function macro_eval.new_env(errs: {Error}): MacroEnv
    local env: MacroEnv = {
       macros = {},
       signatures = {},
@@ -104,13 +104,16 @@ function macro_eval.new_env(): MacroEnv
    }
    env.block = function(kind: block.BlockKind): Block
       local w = env.where
+      if not block.BLOCK_KINDS[kind] then
+         table.insert(errs, { filename = w.f, y = w.y, x = w.x, msg = "unknown block kind: " .. tostring(kind) })
+      end
       return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
    env.expect = function(b: Block, k: block.BlockKind): Block
       if b and b.kind == k then
          return b
       end
-      error("expected " .. k .. ", got " .. (b and b.kind or "nil"))
+      table.insert(errs, { filename = env.where.f, y = env.where.y, x = env.where.x, msg = "expected " .. k .. ", got " .. (b and b.kind or "nil") })
       return nil
    end
 
@@ -347,7 +350,7 @@ end
 
 function macro_eval.compile_all_and_expand(node: Block, filename: string, read_lang: BlockLang, errs: {Error}): Block
    seen = setmetatable({}, { __mode = "k" })
-   local env = macro_eval.new_env()
+   local env = macro_eval.new_env(errs)
 
    local i = 1
    while i <= #node do

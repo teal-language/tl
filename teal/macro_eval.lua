@@ -88,7 +88,7 @@ local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
    end
 end
 
-function macro_eval.new_env()
+function macro_eval.new_env(errs)
    local env = {
       macros = {},
       signatures = {},
@@ -104,13 +104,16 @@ function macro_eval.new_env()
    }
    env.block = function(kind)
       local w = env.where
+      if not block.BLOCK_KINDS[kind] then
+         table.insert(errs, { filename = w.f, y = w.y, x = w.x, msg = "unknown block kind: " .. tostring(kind) })
+      end
       return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
    env.expect = function(b, k)
       if b and b.kind == k then
          return b
       end
-      error("expected " .. k .. ", got " .. (b and b.kind or "nil"))
+      table.insert(errs, { filename = env.where.f, y = env.where.y, x = env.where.x, msg = "expected " .. k .. ", got " .. (b and b.kind or "nil") })
       return nil
    end
 
@@ -130,6 +133,9 @@ function macro_eval.new_env()
          if FORBIDDEN_LIBS[key] then
             return nil
          end
+
+
+
          return (_G)[key]
       end,
    })
@@ -344,7 +350,7 @@ end
 
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
    seen = setmetatable({}, { __mode = "k" })
-   local env = macro_eval.new_env()
+   local env = macro_eval.new_env(errs)
 
    local i = 1
    while i <= #node do

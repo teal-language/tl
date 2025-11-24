@@ -509,4 +509,25 @@ end)
 
       cast_demo!()
    ]]))
+
+   it('gives a proper error message on known block kind', function()
+      local code = [[
+         local macro make_weird!()
+            local blk = require("teal.block")
+            local BI = blk.BLOCK_INDEXES
+
+            local weird = block('whatever')
+            weird[BI.WHATEVER.SOME_FIELD] = 123
+
+            return weird
+         end
+
+         make_weird!()
+      ]]
+      local _, errs = tl.parse(code)
+      assert.truthy(#errs > 0)
+      --error is ./teal/macro_eval.lua:108: unknown block kind: whatever
+      --ignore file/line info
+      assert.match("unknown block kind: whatever", errs[1].msg)
+   end)
 end)
