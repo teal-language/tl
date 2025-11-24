@@ -594,6 +594,11 @@ local function comment_block_end_y(cb: Block): integer
    return cb.y + newlines
 end
 
+local function is_long_comment_block(cb: Block): boolean
+   local text = cb.conststr or cb.tk or ""
+   return text:match("^%-%-%[(=*)%[") ~= nil
+end
+
 local function extract_attached_comments(pending: {Block}, target: Block): {Comment}
    if #pending == 0 then
       return nil
@@ -601,15 +606,29 @@ local function extract_attached_comments(pending: {Block}, target: Block): {Comm
 
    local last = pending[#pending]
    local diff_y = target.y - comment_block_end_y(last)
+   if is_long_comment_block(last) then
+      if diff_y >= 0 and diff_y <= 1 then
+         table.remove(pending, #pending)
+         return { comment_block_to_comment(last) }
+      else
+         return nil
+      end
+   end
+
    if diff_y < 0 or diff_y > 1 then
-       return nil
+      return nil
    end
 
    local first = #pending
    for i = #pending - 1, 1, -1 do
       local prev = pending[i]
+      if is_long_comment_block(prev) then
+         first = i + 1
+         break
+      end
       local gap = pending[i + 1].y - comment_block_end_y(prev)
       if gap > 1 then
+         first = i + 1
          break
       end
       first = i
@@ -1300,33 +1319,27 @@ parse_fns.local_function = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.local_macro = function(state: ParseState, block: Block): Node
-   local node = new_node(state, block, "local_macro")
-   if not node then
-      local dummy_block = { kind = "local_macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
-      node = new_node(state, dummy_block, "local_macro")
-   end
-
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME] then
       fail(state, block, "local macro missing name")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS] then
       fail(state, block, "local macro missing argument list")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.BODY] then
       fail(state, block, "local macro missing body")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      return new_node(state, dummy_block, "local_function")
    end
 
-   node.name = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME], "identifier")
-   node.typeargs = parse_typeargs_if_any(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.TYPEARGS])
+   local name_node = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME], "identifier")
+   local typeargs = parse_typeargs_if_any(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.TYPEARGS])
    local args, min_arity = parse_argument_list(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS])
-   node.args = args
-   node.min_arity = min_arity
    local r: TupleType
    r = parse_type_list(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.RETS], "rets")
-   node.rets = r
    local prev_local = state.in_local_macro
    local prev_quote = state.in_macro_quote
    state.in_local_macro = true
@@ -1335,16 +1348,14 @@ parse_fns.local_macro = function(state: ParseState, block: Block): Node
    state.in_local_macro = prev_local
    state.in_macro_quote = prev_quote
    local fn = new_node(state, block, "local_function")
-   fn.name = node.name
-   fn.typeargs = node.typeargs
+   fn.name = name_node
+   fn.typeargs = typeargs
    fn.args = args
    fn.min_arity = min_arity
    fn.rets = r
    fn.body = body_stmts
    fn[1] = body_stmts[1]
-   node.body = fn
-
-   return node
+   return fn
 end
 
 function block_to_constructor(state: ParseState, block: Block): Node
@@ -1842,7 +1853,14 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
       fields = def.meta_fields
       order = def.meta_field_order
       field_comments = def.meta_field_comments
+      if not field_comments then
+         field_comments = {}
+         def.meta_field_comments = field_comments
+      end
    else
+      if not def.field_comments then
+         def.field_comments = {}
+      end
       fields = def.fields
       order = def.field_order
       field_comments = def.field_comments
@@ -1862,6 +1880,7 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
          set_declname(newt.def, name)
       end
       fields[name] = newt
+      field_comments[name] = field_comments[name] or {}
       if comments then
          field_comments[name] = {comments}
       end
@@ -1887,9 +1906,9 @@ local function store_field_in_record(state: ParseState, block: Block, name: stri
       if comments then
          if not field_comments[name] then
             field_comments[name] = {}
-            for idx = 1, #poly.types - 1 do
-               field_comments[name][idx] = {}
-            end
+         end
+         while #field_comments[name] < (#poly.types - 1) do
+            table.insert(field_comments[name], {})
          end
          table.insert(field_comments[name], comments)
       elseif field_comments and field_comments[name] then
@@ -1918,6 +1937,8 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
    local decl = new_type(state, block, typename as TypeName) as RecordLikeType
    decl.fields = {}
    decl.field_order = {}
+   decl.field_comments = {}
+   decl.meta_field_comments = {}
 
    if typename == "interface" then
       decl.interface_list = {}
@@ -1954,8 +1975,8 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
          if fld.kind == "comment" then
             table.insert(pending_field_comments, fld)
          elseif fld.kind == "record_field" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
             local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
+            local comments = extract_attached_comments(pending_field_comments, name_node or fld)
             local field_name = name_node.conststr or name_node.tk
             local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
             if t is FunctionType and t.maybe_method then
@@ -1966,7 +1987,8 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
                table.remove(pending_field_comments, i)
             end
          elseif fld.kind == "local_type" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
+            local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
+            local comments = extract_attached_comments(pending_field_comments, target)
             if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])

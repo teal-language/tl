@@ -40,6 +40,56 @@ local BLOCK_INDEXES <const> = block.BLOCK_INDEXES
 
 reader.BLOCK_INDEXES = BLOCK_INDEXES
 
+local function lang_heuristic(filename?: string, input?: string): BlockLang
+   if filename then
+      local pattern <const> = "(.*)%.([a-z]+)$"
+      local _, extension = filename:match(pattern)
+      extension = extension and extension:lower()
+
+      if extension == "tl" then
+         return "tl"
+      elseif extension == "lua" then
+         return "lua"
+      end
+   end
+   if input then
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
+   end
+   return "tl"
+end
+
+local function normalize_macro_tokens(tokens: {Token}, errs: {Error}): {Error}
+   local filtered: {Error} = {}
+   for _, e in ipairs(errs or {}) do
+      local msg = e.msg or ""
+      if not (msg:find("invalid token '!'") or msg:find("invalid token '`'") or msg:find("invalid token '$'")) then
+         table.insert(filtered, e)
+      end
+   end
+
+   for _, t in ipairs(tokens) do
+      if t.kind == "$ERR$" then
+         if t.tk == "!" then
+            t.kind = "op"
+         elseif t.tk == "`" then
+            t.kind = "op"
+         elseif t.tk == "$" then
+            t.kind = "identifier"
+         end
+      end
+   end
+   if errs then
+      for i = #errs, 1, -1 do
+         errs[i] = nil
+      end
+      for i = 1, #filtered do
+         errs[i] = filtered[i]
+      end
+      return errs
+   end
+   return filtered
+end
+
 local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
@@ -939,6 +989,25 @@ local function read_macro_quote(ps: ReadState, i: integer): integer, Block
       return fail(ps, i, "macro quotes cannot be empty")
    end
 
+<<<<<<< ours
+   local function shift_coords(b: any, dy: integer, dx: integer)
+      if type(b) ~= "table" then return end
+      local tbl = b as {string:any}
+      if tbl.kind then
+         local cy: integer = (tbl.y as integer) or (token.y or 1)
+         local cx: integer = (tbl.x as integer) or (token.x or 1)
+         tbl.y = cy + dy
+         tbl.x = cx + dx
+         if tbl.yend then tbl.yend = (tbl.yend as integer) + dy end
+         if tbl.xend then tbl.xend = (tbl.xend as integer) + dx end
+      end
+      for _, v in pairs(tbl) do
+         shift_coords(v, dy, dx)
+      end
+   end
+
+=======
+>>>>>>> theirs
    local block: Block
    local errs: {Error}
 
@@ -2745,6 +2814,11 @@ end
 function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {string}
    errs = errs or {}
    filename = filename or "input"
+   errs = normalize_macro_tokens(tokens, errs)
+   read_lang = read_lang or lang_heuristic(filename)
+   if allow_macro_vars == nil then
+      allow_macro_vars = true
+   end
    local ps: ReadState = {
       tokens = tokens as {Token},
       errs = errs,
@@ -2808,6 +2882,7 @@ end
 
 function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
    filename = filename or "input"
+   read_lang = read_lang or lang_heuristic(filename, input)
    local tokens, errs = lexer.lex(input, filename)
    local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    return node, errs, required_modules

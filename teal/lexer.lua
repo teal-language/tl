@@ -85,6 +85,9 @@ do
 
 
 
+
+
+
    local last_token_kind = {
       ["start"] = nil,
       ["any"] = nil,
@@ -106,6 +109,9 @@ do
       ["string single got \\"] = "$ERR$",
       ["string double"] = "$ERR$",
       ["string double got \\"] = "$ERR$",
+      ["string backtick"] = "$ERR$",
+      ["string backtick got \\"] = "$ERR$",
+      ["string backtick triple"] = "$ERR$",
       ["string long"] = "$ERR$",
       ["string long got ]"] = "$ERR$",
       ["comment short"] = nil,
@@ -203,11 +209,11 @@ do
    end
 
    local lex_any_char_kinds = {}
-   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", ";", "?" }
+   local single_char_kinds = { "[", "]", "(", ")", "{", "}", ",", ";", "?", "$" }
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
-   for _, c in ipairs({ "#", "+", "*", "|", "&", "%", "^" }) do
+   for _, c in ipairs({ "#", "+", "*", "|", "&", "%", "^", "!" }) do
       lex_any_char_kinds[c] = "op"
    end
 
@@ -415,19 +421,30 @@ do
          end
 
          if state == "any" then
-            local st = lex_any_char_states[c]
-            if st then
-               state = st
+            if c == "`" then
+               local c2 = input:sub(i + 1, i + 1)
+               local c3 = input:sub(i + 2, i + 2)
+               if c2 == "`" and c3 == "`" then
+                  state = "string backtick triple"
+               else
+                  state = "string backtick"
+               end
                begin_token()
             else
-               local k = lex_any_char_kinds[c]
-               if k then
+               local st = lex_any_char_states[c]
+               if st then
+                  state = st
                   begin_token()
-                  end_token(k, c)
-               elseif not lex_space[c] then
-                  begin_token()
-                  end_token_here("$ERR$")
-                  add_syntax_error()
+               else
+                  local k = lex_any_char_kinds[c]
+                  if k then
+                     begin_token()
+                     end_token(k, c)
+                  elseif not lex_space[c] then
+                     begin_token()
+                     end_token_here("$ERR$")
+                     add_syntax_error()
+                  end
                end
             end
          elseif state == "identifier" then
@@ -443,6 +460,34 @@ do
                end_token_here("string")
                state = "any"
             end
+         elseif state == "string backtick" then
+            if c == "\\" then
+               state = "string backtick got \\"
+            elseif c == "`" then
+               end_token_here("`")
+               state = "any"
+            end
+         elseif state == "string backtick triple" then
+            if input:sub(i, i + 2) == "```" then
+               if i == ti then
+                  i = i + 2
+                  x = x + 2
+               else
+                  i = i + 2
+                  x = x + 2
+                  end_token_here("`")
+                  state = "any"
+               end
+            end
+         elseif state == "string backtick got \\" then
+            local skip, valid = lex_string_escape(input, i, c)
+            i = i + skip
+            if not valid then
+               end_token_here("$ERR$")
+               add_syntax_error("malformed string")
+            end
+            x = x + skip
+            state = "string backtick"
          elseif state == "comment short" then
             if c == "\n" then
                add_comment(input:sub(ti, i - 1))

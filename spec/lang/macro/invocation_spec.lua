@@ -168,14 +168,14 @@ describe('statement macro invocation (paren form)', function()
             end,
             print('second')
          )
-      ]]
-      local ast, errs = tl.parse(code)
-      assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
-      assert.is_nil(err)
-      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
-      assert.same("for _, v in ipairs({ 1, 2 }) do print(v) end print('second')", out)
-   end)
+   ]]
+   local ast, errs = tl.parse(code)
+   assert.same({}, errs)
+   local out, err = lua_gen.generate(ast, '5.4')
+   assert.is_nil(err)
+   out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same("for _, v in ipairs({ 1, 2 }) do print(v) end; print('second')", out)
+end)
 
    it('requires do-end wrapper for top-level commas in local declarations', function()
       local code = [[
@@ -421,13 +421,13 @@ describe('statement macro invocation (paren form)', function()
             a, b = 1, 2
          )
       ]]
-      local ast, errs = tl.parse(code)
-      assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
-      assert.is_nil(err)
-      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
-      assert.same('for _, v in ipairs({ 1, 2 }) do print(v) end a, b = 1, 2', out)
-   end)
+   local ast, errs = tl.parse(code)
+   assert.same({}, errs)
+   local out, err = lua_gen.generate(ast, '5.4')
+   assert.is_nil(err)
+   out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('for _, v in ipairs({ 1, 2 }) do print(v) end; a, b = 1, 2', out)
+end)
 
    it('accepts for-in Statement with commas followed by table literal expression', function()
       local code = [[
