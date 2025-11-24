@@ -1800,30 +1800,36 @@ parse_typeargs_if_any = function(state: ParseState, block: Block): {TypeArgType}
 
    local out: {TypeArgType} = {}
 
-   for _, ta_block_item in ipairs(block) do
-      if ta_block_item.kind == "typeargs" then
-         local ta = new_type(state, ta_block_item, "typearg") as TypeArgType
-         if ta_block_item[reader.BLOCK_INDEXES.TYPEARG.NAME] and ta_block_item[reader.BLOCK_INDEXES.TYPEARG.NAME].kind == "identifier" then
-            ta.typearg = ta_block_item[reader.BLOCK_INDEXES.TYPEARG.NAME].tk
-         else
-            fail(state, ta_block_item, "expected type argument name")
-            -- Potentially skip this malformed typearg or handle error more gracefully
-            goto continue
-         end
+for _, ta_block_item in ipairs(block) do
+   if ta_block_item.kind == "typeargs" then
+      local ta = new_type(state, ta_block_item, "typearg") as TypeArgType
+      local ok = true
 
-         if ta_block_item[reader.BLOCK_INDEXES.TYPEARG.CONSTRAINT] then -- Constraint is optional
-            local constraint_type = parse_type(state, ta_block_item[reader.BLOCK_INDEXES.TYPEARG.CONSTRAINT])
+      local name_block = ta_block_item[reader.BLOCK_INDEXES.TYPEARG.NAME]
+      if name_block and name_block.kind == "identifier" then
+         ta.typearg = name_block.tk
+      else
+         fail(state, ta_block_item, "expected type argument name")
+         ok = false
+      end
+
+      if ok then
+         local constraint_block = ta_block_item[reader.BLOCK_INDEXES.TYPEARG.CONSTRAINT]
+         if constraint_block then -- Constraint is optional
+            local constraint_type = parse_type(state, constraint_block)
             if constraint_type then
                ta.constraint = constraint_type
             else
-               fail(state, ta_block_item[reader.BLOCK_INDEXES.TYPEARG.CONSTRAINT], "invalid type constraint")
+               fail(state, constraint_block, "invalid type constraint")
                -- Potentially skip constraint or handle error
             end
          end
+
          table.insert(out, ta)
       end
-      ::continue::
    end
+end
+
    return out
 end
 

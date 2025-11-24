@@ -2203,7 +2203,7 @@ read_record_body = function(ps, i, def)
          end
          table.insert(fields, lt)
       elseif read_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
-         if def.kind == ("interface") and tn == "record" then
+         if def.kind == "interface" and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
             local lt
@@ -2852,7 +2852,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       end
       for i2 = 1, #b do
          local child = b[i2]
-         if child and child.kind then
+         if child then
             check_macro_arity(child)
          end
       end
