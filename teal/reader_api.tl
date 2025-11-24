@@ -7,8 +7,6 @@ local record ReaderAPI
    BLOCK_INDEXES: {string : {string : integer}}
 end
 
-local reader_api: ReaderAPI = {
-   BLOCK_INDEXES = block.BLOCK_INDEXES,
-}
+ReaderAPI.BLOCK_INDEXES = block.BLOCK_INDEXES
 
-return reader_api
+return ReaderAPI

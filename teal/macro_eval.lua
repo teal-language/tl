@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local block = require("teal.block")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
 
 
 local BLOCK_INDEXES = block.BLOCK_INDEXES
@@ -6,6 +6,7 @@ local BLOCK_INDEXES = block.BLOCK_INDEXES
 local errors = require("teal.errors")
 
 
+local parser = require("teal.parser")
 
 
 local macro_eval = {}
@@ -18,47 +19,104 @@ local macro_eval = {}
 
 
 
-local function clone_value(v)
-   if type(v) ~= "table" then
-      return v
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function numeric_child_keys(b)
+   local keys = {}
+   for k, child in pairs(b) do
+      if math.type(k) == "integer" and child then
+         table.insert(keys, k)
+      end
    end
-   local out = {}
-   for k, vv in pairs(v) do
-      out[k] = clone_value(vv)
+   table.sort(keys)
+   return keys
+end
+
+local function clone_value(v)
+   local out = {
+      kind = v.kind,
+      f = v.f,
+      y = v.y,
+      x = v.x,
+      tk = v.tk,
+      yend = v.yend,
+      xend = v.xend,
+      constnum = v.constnum,
+      conststr = v.conststr,
+      is_longstring = v.is_longstring,
+   }
+   for _, idx in ipairs(numeric_child_keys(v)) do
+      local child = v[idx]
+      if child then
+         out[idx] = clone_value(child)
+      end
    end
    return out
 end
 
-function macro_eval.new_env()
-   local env = {}
-   setmetatable(env, { __index = _G })
+local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
+   if seen_blocks[b] then
+      return
+   end
+   seen_blocks[b] = true
 
-   env.__macro_sig = {}
-   env.__macro_where = nil
+   if where_y then
+      b.y = where_y
+      b.yend = where_y
+   end
+   if where_x then
+      b.x = where_x
+      b.xend = where_x
+   end
+
+   for _, idx in ipairs(numeric_child_keys(b)) do
+      local child = b[idx]
+      if child then
+         reanchor_block_positions(child, where_y, where_x, seen_blocks)
+      end
+   end
+end
+
+function macro_eval.new_env()
+   local env = {
+      macros = {},
+      signatures = {},
+      where = { f = "@macro", y = 1, x = 1 },
+      block = function(_)
+         return { kind = "statements", f = "@macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      end,
+      expect = function(_, _)
+         error("macro env not initialized")
+         return nil
+      end,
+      clone = clone_value,
+   }
    env.block = function(kind)
-      local w = (env.__macro_where or { f = "@macro", y = 1, x = 1 })
-      local y = w.y or 1
-      local x = w.x or 1
-      local f = w.f or "@macro"
-      return { kind = kind, f = f, y = y, x = x, tk = "", yend = y, xend = x }
+      local w = env.where
+      return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
    env.expect = function(b, k)
-      if type(b) ~= "table" or (b).kind ~= k then
-         error("expected " .. k)
+      if b and b.kind == k then
+         return b
       end
-      return b
+      error("expected " .. k .. ", got " .. (b and b.kind or "nil"))
+      return nil
    end
-   env.clone = clone_value
-   env.pairs = pairs
-   env.ipairs = ipairs
-   env.select = select
-   env.tostring = tostring
-   env.tonumber = tonumber
-   env.type = type
-   env.table = table
-   env.string = string
-   env.math = math
-   env.require = require
+
+
+   setmetatable(env, { __index = _G })
+
    return env
 end
 
@@ -108,13 +166,10 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       end
    end
 
-
-
-   local parser_any = require("teal.parser")
    local lua_generator = require("teal.gen.lua_generator")
    local single = { kind = "statements", y = mb.y, x = mb.x, tk = mb.tk, yend = mb.yend, xend = mb.xend }
    single[1] = mb
-   local mast, perrs = parser_any.parse(single, filename, read_lang)
+   local mast, perrs = parser.parse(single, filename, read_lang)
    if #perrs > 0 then
       for _, e in ipairs(perrs) do table.insert(errs, e) end
       return
@@ -126,20 +181,24 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = load_err })
       return
    end
-   local ok, fn = pcall(chunk)
+   local ok, fn_raw = pcall(chunk)
    if not ok then
-      table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = tostring(fn) })
+      table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = tostring(fn_raw) })
       return
    end
-   env[name] = fn;
-   (env.__macro_sig)[name] = sig
+   if type(fn_raw) == "function" then
+      env.macros[name] = fn_raw
+   else
+      table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = "macro '" .. name .. "' did not compile to a function" })
+      return
+   end
+   env.signatures[name] = sig
 end
 
 local seen
 
 local function expand_in_node(b, filename, env, errs, context)
    if not b then return b end
-   if type(b) ~= "table" or not b.kind then return b end
    if seen and seen[b] then return b end
    if seen then seen[b] = true end
    if b.kind == "macro_invocation" then
@@ -150,13 +209,13 @@ local function expand_in_node(b, filename, env, errs, context)
          return b
       end
       local mname = mname_block.tk
-      local fn = (env)[mname]
+      local fn = env.macros[mname]
       if not fn then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "unknown macro '" .. mname .. "'" })
          return b
       end
       local argv = {}
-      local sig = (env.__macro_sig)[mname]
+      local sig = env.signatures[mname]
       local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
 
       if sig then
@@ -195,66 +254,72 @@ local function expand_in_node(b, filename, env, errs, context)
                   end
                end
             end
-            table.insert(argv, ab)
+            if ab then
+               table.insert(argv, ab)
+            end
          end
       end
-      local prev_where = (env.__macro_where)
-      env.__macro_where = { f = filename, y = mname_block.y, x = mname_block.x }
-      local ok, res = (pcall)(fn, _tl_table_unpack(argv))
-      env.__macro_where = prev_where
+      local prev_where = env.where
+      local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
+      env.where = current_where
+      local function invoke_macro()
+         return fn(_tl_table_unpack(argv, 1, #argv))
+      end
+      local ok, res = pcall(invoke_macro)
+      env.where = prev_where
       if not ok then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
          return b
       end
-      if type(res) ~= "table" or not (res).kind then
+      if not (res and res.kind) then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' did not return a Block" })
          return b
       end
-      local rb = res
-      if context == "expr" and rb.kind == "statements" then
-         if #rb == 1 and not is_statement_kind(rb[1].kind) then
-            return expand_in_node(rb[1], filename, env, errs, "expr")
+      local wy = current_where.y
+      local wx = current_where.x
+      reanchor_block_positions(res, wy, wx, setmetatable({}, { __mode = "k" }))
+      if context == "expr" and res.kind == "statements" then
+         if #res == 1 and not is_statement_kind(res[1].kind) then
+            return expand_in_node(res[1], filename, env, errs, "expr")
          end
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
          return b
       end
 
-      return expand_in_node(rb, filename, env, errs, context)
+      return expand_in_node(res, filename, env, errs, context)
    end
 
    for i = 1, #b do
       local child = b[i]
-      if type(child) == "table" and child.kind then
-         if child.kind == "statements" then
-            local expanded = child
-            local j = 1
-            while j <= #expanded do
-               local s = expanded[j]
-               if type(s) == "table" and s.kind then
-                  if s.kind == "macro_invocation" then
-                     local repl = expand_in_node(s, filename, env, errs, "stmt")
-                     if repl and repl.kind == "statements" then
-                        table.remove(expanded, j)
-                        local rr = expand_in_node(repl, filename, env, errs, "stmt")
-                        for k = 1, #rr do
-                           table.insert(expanded, j + k - 1, rr[k])
-                        end
-                        j = j + #repl
-                     else
-                        expanded[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
-                        j = j + 1
+      if child and child.kind == "statements" then
+         local expanded = child
+         local j = 1
+         while j <= #expanded do
+            local s = expanded[j]
+            if s then
+               if s.kind == "macro_invocation" then
+                  local repl = expand_in_node(s, filename, env, errs, "stmt")
+                  if repl and repl.kind == "statements" then
+                     table.remove(expanded, j)
+                     local rr = expand_in_node(repl, filename, env, errs, "stmt")
+                     for k = 1, #rr do
+                        table.insert(expanded, j + k - 1, rr[k])
                      end
+                     j = j + #repl
                   else
-                     expanded[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
+                     expanded[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
                      j = j + 1
                   end
                else
+                  expanded[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
                   j = j + 1
                end
+            else
+               j = j + 1
             end
-         else
-            b[i] = expand_in_node(child, filename, env, errs, "expr")
          end
+      else
+         b[i] = expand_in_node(child, filename, env, errs, "expr")
       end
    end
    return b

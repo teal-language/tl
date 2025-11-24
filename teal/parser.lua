@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 local reader = require("teal.reader_api")
 
 
@@ -594,6 +594,11 @@ local function comment_block_end_y(cb)
    return cb.y + newlines
 end
 
+local function is_long_comment_block(cb)
+   local text = cb.conststr or cb.tk or ""
+   return text:match("^%-%-%[(=*)%[") ~= nil
+end
+
 local function extract_attached_comments(pending, target)
    if #pending == 0 then
       return nil
@@ -601,6 +606,15 @@ local function extract_attached_comments(pending, target)
 
    local last = pending[#pending]
    local diff_y = target.y - comment_block_end_y(last)
+   if is_long_comment_block(last) then
+      if diff_y >= 0 and diff_y <= 1 then
+         table.remove(pending, #pending)
+         return { comment_block_to_comment(last) }
+      else
+         return nil
+      end
+   end
+
    if diff_y < 0 or diff_y > 1 then
       return nil
    end
@@ -608,8 +622,13 @@ local function extract_attached_comments(pending, target)
    local first = #pending
    for i = #pending - 1, 1, -1 do
       local prev = pending[i]
+      if is_long_comment_block(prev) then
+         first = i + 1
+         break
+      end
       local gap = pending[i + 1].y - comment_block_end_y(prev)
       if gap > 1 then
+         first = i + 1
          break
       end
       first = i
@@ -757,7 +776,7 @@ parse_expression = function(state, block)
       node.e1 = parse_expression(state, block[reader.BLOCK_INDEXES.OP.E1])
       if not node.e1 then
 
-         local dummy_block = { kind = "error_node", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
+         local dummy_block = { kind = nil, y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
          node.e1 = new_node(state, dummy_block, "error_node")
       end
       if op_info.arity == 2 then
@@ -798,7 +817,7 @@ parse_expression = function(state, block)
          else
             node.e2 = parse_expression(state, block[reader.BLOCK_INDEXES.OP.E2])
             if not node.e2 then
-               local dummy_block = { kind = "error_node", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
+               local dummy_block = { kind = nil, y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
                node.e2 = new_node(state, dummy_block, "error_node")
             end
          end
@@ -808,7 +827,7 @@ parse_expression = function(state, block)
 
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "error_node", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      local dummy_block = { kind = nil, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "error_node")
    end
 
@@ -1300,33 +1319,27 @@ parse_fns.local_function = function(state, block)
 end
 
 parse_fns.local_macro = function(state, block)
-   local node = new_node(state, block, "local_macro")
-   if not node then
-      local dummy_block = { kind = "local_macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "local_macro")
-   end
-
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME] then
       fail(state, block, "local macro missing name")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS] then
       fail(state, block, "local macro missing argument list")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.BODY] then
       fail(state, block, "local macro missing body")
-      return node
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      return new_node(state, dummy_block, "local_function")
    end
 
-   node.name = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME], "identifier")
-   node.typeargs = parse_typeargs_if_any(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.TYPEARGS])
+   local name_node = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME], "identifier")
+   local typeargs = parse_typeargs_if_any(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.TYPEARGS])
    local args, min_arity = parse_argument_list(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS])
-   node.args = args
-   node.min_arity = min_arity
    local r
    r = parse_type_list(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.RETS], "rets")
-   node.rets = r
    local prev_local = state.in_local_macro
    local prev_quote = state.in_macro_quote
    state.in_local_macro = true
@@ -1335,16 +1348,14 @@ parse_fns.local_macro = function(state, block)
    state.in_local_macro = prev_local
    state.in_macro_quote = prev_quote
    local fn = new_node(state, block, "local_function")
-   fn.name = node.name
-   fn.typeargs = node.typeargs
+   fn.name = name_node
+   fn.typeargs = typeargs
    fn.args = args
    fn.min_arity = min_arity
    fn.rets = r
    fn.body = body_stmts
    fn[1] = body_stmts[1]
-   node.body = fn
-
-   return node
+   return fn
 end
 
 function block_to_constructor(state, block)
@@ -1379,6 +1390,17 @@ function block_to_constructor(state, block)
       table.insert(tbl, it)
    end
 
+   local function add_number_field(tbl, owner, keyname, value)
+      local it = new_node(state, owner, "literal_table_item")
+      it.key_parsed = "short"
+      it.key = new_node(state, owner, "identifier")
+      it.key.tk = string.format("%q", keyname)
+      it.value = new_node(state, owner, "number")
+      it.value.tk = tostring(value)
+      it.value.constnum = value
+      table.insert(tbl, it)
+   end
+
    local node = new_node(state, block, "literal_table")
    if not node.yend then
       node.yend = block.yend or block.y
@@ -1390,6 +1412,19 @@ function block_to_constructor(state, block)
       add_string_field(node, block, "tk", block.tk)
    end
 
+   if block.y then
+      add_number_field(node, block, "y", block.y)
+   end
+   if block.x then
+      add_number_field(node, block, "x", block.x)
+   end
+   if block.yend then
+      add_number_field(node, block, "yend", block.yend)
+   end
+   if block.xend then
+      add_number_field(node, block, "xend", block.xend)
+   end
+
 
 
    if block.conststr then
@@ -1398,7 +1433,7 @@ function block_to_constructor(state, block)
 
    local numeric_keys = {}
    for k, v in pairs(block) do
-      if type(k) == "number" and type(v) == "table" and (v).kind then
+      if math.type(k) == "integer" and v and v.kind ~= nil then
          table.insert(numeric_keys, k)
       end
    end
@@ -1594,7 +1629,7 @@ parse_fns.local_type = function(state, block)
          node.value = parse_newtype(state, block[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
          if node.value and node.value.newtype and node.var and node.var.tk then
             local def = node.value.newtype.def
-            if def and def.typename == "generic" and (def).t and (def).t.typename == "generic" then
+            if def and def.typename == "generic" and def.t.typename == "generic" then
                fail(state, block[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE], "cannot declare type arguments twice in type declaration")
             end
             set_declname(node.value.newtype.def, node.var.tk)
@@ -1842,7 +1877,14 @@ local function store_field_in_record(state, block, name, newt, def, meta, commen
       fields = def.meta_fields
       order = def.meta_field_order
       field_comments = def.meta_field_comments
+      if not field_comments then
+         field_comments = {}
+         def.meta_field_comments = field_comments
+      end
    else
+      if not def.field_comments then
+         def.field_comments = {}
+      end
       fields = def.fields
       order = def.field_order
       field_comments = def.field_comments
@@ -1862,6 +1904,7 @@ local function store_field_in_record(state, block, name, newt, def, meta, commen
          set_declname(newt.def, name)
       end
       fields[name] = newt
+      field_comments[name] = field_comments[name] or {}
       if comments then
          field_comments[name] = { comments }
       end
@@ -1887,9 +1930,9 @@ local function store_field_in_record(state, block, name, newt, def, meta, commen
       if comments then
          if not field_comments[name] then
             field_comments[name] = {}
-            for idx = 1, #poly.types - 1 do
-               field_comments[name][idx] = {}
-            end
+         end
+         while #field_comments[name] < (#poly.types - 1) do
+            table.insert(field_comments[name], {})
          end
          table.insert(field_comments[name], comments)
       elseif field_comments and field_comments[name] then
@@ -1918,6 +1961,8 @@ parse_record_like_type = function(state, block, typename)
    local decl = new_type(state, block, typename)
    decl.fields = {}
    decl.field_order = {}
+   decl.field_comments = {}
+   decl.meta_field_comments = {}
 
    if typename == "interface" then
       decl.interface_list = {}
@@ -1954,8 +1999,8 @@ parse_record_like_type = function(state, block, typename)
          if fld.kind == "comment" then
             table.insert(pending_field_comments, fld)
          elseif fld.kind == "record_field" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
             local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
+            local comments = extract_attached_comments(pending_field_comments, name_node or fld)
             local field_name = name_node.conststr or name_node.tk
             local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
             if t.typename == "function" and t.maybe_method then
@@ -1966,7 +2011,8 @@ parse_record_like_type = function(state, block, typename)
                table.remove(pending_field_comments, i)
             end
          elseif fld.kind == "local_type" then
-            local comments = extract_attached_comments(pending_field_comments, fld)
+            local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
+            local comments = extract_attached_comments(pending_field_comments, target)
             if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])

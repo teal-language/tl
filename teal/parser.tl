@@ -397,6 +397,7 @@ function parser.lang_heuristic(filename?: string, input?: string): ParseLang
    return "tl"
 end
 
+--TODO make `node` instead be a subtype of `Where` with xend/yend 
 local function end_at(node: Node, block: Block)
    if block then
       if block.yend then
@@ -456,12 +457,12 @@ end
 local function parse_expression_list(state: ParseState, block: Block): Node
    if not block then
       -- empty expr list
-      local dummy_block = { kind = "expression_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "expression_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "expression_list")
    end
    local node = new_node(state, block, "expression_list")
    if not node then
-      local dummy_block = { kind = "expression_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "expression_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "expression_list")
    end
    return parse_list(state, block, node, parse_expression)
@@ -470,12 +471,12 @@ end
 local function parse_variable_list(state: ParseState, block: Block, as_expression: boolean): Node
    if not block then
       -- Create a dummy block for an empty variable list
-      local dummy_block = { kind = "variable_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "variable_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "variable_list")
    end
    local node = new_node(state, block, "variable_list")
    if not node then
-      local dummy_block = { kind = "variable_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "variable_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "variable_list")
    end
    for _, var_block in ipairs(block) do
@@ -483,7 +484,7 @@ local function parse_variable_list(state: ParseState, block: Block, as_expressio
       if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
          local ident_block = var_block
          if var_block.kind == "variable" then
-            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" } as Block
+            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" }
          end
          var_node = new_node(state, ident_block)
          if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
@@ -506,13 +507,13 @@ end
 
 local function parse_argument_list(state: ParseState, block: Block): Node, integer
    if not block then
-      local dummy_block = { kind = "argument_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "argument_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "argument_list")
    end
    
    local node = new_node(state, block, "argument_list")
    if not node then
-      local dummy_block = { kind = "argument_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "argument_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "argument_list")
    end
    
@@ -666,7 +667,7 @@ end
 
 local function parse_statements(state: ParseState, block: Block, toplevel?: boolean): Node
    if not block then
-      local dummy_block = { kind = "statements", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "statements", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "statements")
    end
 
@@ -776,7 +777,7 @@ parse_expression = function(state: ParseState, block: Block): Node
       node.e1 = parse_expression(state, block[reader.BLOCK_INDEXES.OP.E1])
       if not node.e1 then
          -- Create a dummy error node if first expression failed to parse
-         local dummy_block = { kind = "error_node", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 } as Block
+         local dummy_block: Block = { kind = nil, y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
          node.e1 = new_node(state, dummy_block, "error_node")
       end
       if op_info.arity == 2 then
@@ -811,13 +812,13 @@ parse_expression = function(state: ParseState, block: Block): Node
             -- For dot/: operations, the right-hand side should be treated as an identifier
             node.e2 = new_node(state, block[reader.BLOCK_INDEXES.OP.E2], "identifier")
             if not node.e2 then
-               local dummy_block = { kind = "identifier", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 } as Block
+               local dummy_block = { kind = "identifier", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
                node.e2 = new_node(state, dummy_block, "identifier")
             end
          else
             node.e2 = parse_expression(state, block[reader.BLOCK_INDEXES.OP.E2])
             if not node.e2 then
-               local dummy_block = { kind = "error_node", y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 } as Block
+               local dummy_block: Block = { kind = nil, y = block.y or 1, x = block.x or 1, tk = "", yend = block.yend or 1, xend = block.xend or 1 }
                node.e2 = new_node(state, dummy_block, "error_node")
             end
          end
@@ -827,7 +828,7 @@ parse_expression = function(state: ParseState, block: Block): Node
 
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "error_node", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block: Block = { kind = nil, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "error_node")
    end
 
@@ -943,7 +944,7 @@ end
 local function parse_newtype(state: ParseState, block: Block): Node
    local node = new_node(state, block, "newtype")
    if not node then
-      local dummy_block = { kind = "newtype", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "newtype", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "newtype")
    end
    
@@ -1022,7 +1023,7 @@ local parse_fns: {string: ParseFn} = {}
 parse_fns.local_declaration = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "local_declaration", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "local_declaration", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "local_declaration")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.LOCAL_DECLARATION.VARS], false)
@@ -1045,8 +1046,8 @@ parse_fns.local_declaration = function(state: ParseState, block: Block): Node
    else
       -- Always set decltuple, even if empty, to match regular parser behavior
       -- TODO: I aint too sure abt this one...
-      local dummy_block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
-      dummy_block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block: Block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      dummy_block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       local dt: TupleType
       dt = parse_type_list(state, dummy_block, "decltuple")
       node.decltuple = dt
@@ -1063,7 +1064,7 @@ parse_fns.global_declaration = parse_fns.local_declaration
 parse_fns.assignment = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "assignment", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "assignment", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "assignment")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.ASSIGNMENT.VARS], true)
@@ -1086,7 +1087,7 @@ end
 parse_fns["if"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "if", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "if", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "if")
    end
    
@@ -1141,7 +1142,7 @@ end
 parse_fns["while"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "while", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "while", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "while")
    end
    
@@ -1170,7 +1171,7 @@ end
 parse_fns.fornum = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "fornum", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "fornum", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "fornum")
    end
 
@@ -1200,7 +1201,7 @@ end
 parse_fns.forin = function(state: ParseState, block: Block): Node
    local node = new_node(state, block, "forin")
    if not node then
-      local dummy_block = { kind = "forin", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "forin", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "forin")
    end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.FORIN.VARS], false)
@@ -1217,7 +1218,7 @@ end
 parse_fns["repeat"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "repeat", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "repeat", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "repeat")
    end
    node.body = parse_statements(state, block[reader.BLOCK_INDEXES.REPEAT.BODY])
@@ -1231,7 +1232,7 @@ end
 parse_fns["do"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "do", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "do", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "do")
    end
    node.body = parse_statements(state, block[reader.BLOCK_INDEXES.DO.BODY])
@@ -1241,7 +1242,7 @@ end
 parse_fns["return"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "return", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "return", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "return")
    end
    node.exps = parse_expression_list(state, block[reader.BLOCK_INDEXES.RETURN.EXPS])
@@ -1255,7 +1256,7 @@ end
 parse_fns["goto"] = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "goto", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "goto", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "goto")
    end
    if block[reader.BLOCK_INDEXES.GOTO.LABEL] then
@@ -1267,7 +1268,7 @@ end
 parse_fns.label = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "label", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "label", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "label")
    end
    if block[reader.BLOCK_INDEXES.LABEL.NAME] then
@@ -1279,7 +1280,7 @@ end
 parse_fns.local_function = function(state: ParseState, block: Block): Node
    local node = new_node(state, block, "local_function")
    if not node then
-      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "local_function")
    end
    
@@ -1321,17 +1322,17 @@ end
 parse_fns.local_macro = function(state: ParseState, block: Block): Node
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME] then
       fail(state, block, "local macro missing name")
-      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS] then
       fail(state, block, "local macro missing argument list")
-      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "local_function")
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.BODY] then
       fail(state, block, "local macro missing body")
-      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       return new_node(state, dummy_block, "local_function")
    end
 
@@ -1390,6 +1391,17 @@ function block_to_constructor(state: ParseState, block: Block): Node
       table.insert(tbl, it)
    end
 
+   local function add_number_field(tbl: Node, owner: Block, keyname: string, value: number)
+      local it = new_node(state, owner, "literal_table_item")
+      it.key_parsed = "short"
+      it.key = new_node(state, owner, "identifier")
+      it.key.tk = string.format("%q", keyname)
+      it.value = new_node(state, owner, "number")
+      it.value.tk = tostring(value)
+      it.value.constnum = value
+      table.insert(tbl, it)
+   end
+
    local node = new_node(state, block, "literal_table")
    if not node.yend then
       node.yend = block.yend or block.y
@@ -1401,6 +1413,19 @@ function block_to_constructor(state: ParseState, block: Block): Node
       add_string_field(node, block, "tk", block.tk)
    end
 
+   if block.y then
+      add_number_field(node, block, "y", block.y)
+   end
+   if block.x then
+      add_number_field(node, block, "x", block.x)
+   end
+   if block.yend then
+      add_number_field(node, block, "yend", block.yend)
+   end
+   if block.xend then
+      add_number_field(node, block, "xend", block.xend)
+   end
+
    --technically this should probably be a block idx
    --TODO: change later :)
    if block.conststr then
@@ -1408,9 +1433,9 @@ function block_to_constructor(state: ParseState, block: Block): Node
    end
 
    local numeric_keys: {integer} = {}
-   for k, v in pairs(block as {any:any}) do
-      if type(k) == "number" and type(v) == "table" and (v as {string:any}).kind then
-         table.insert(numeric_keys, k as integer)
+   for k, v in pairs(block as {string|integer:any}) do
+      if k is integer and v and v is Block then
+         table.insert(numeric_keys, k)
       end
    end
    table.sort(numeric_keys)
@@ -1442,7 +1467,7 @@ end
 parse_fns.global_function = function(state: ParseState, block: Block): Node
    local node = new_node(state, block, "global_function")
    if not node then
-      local dummy_block = { kind = "global_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "global_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "global_function")
    end
 
@@ -1487,7 +1512,7 @@ parse_fns.record_function = function(state: ParseState, block: Block): Node
       node.tk = "function"
    end
    if not node then
-      local dummy_block = { kind = "record_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "record_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "record_function")
    end
    if node then
@@ -1511,7 +1536,7 @@ parse_fns.record_function = function(state: ParseState, block: Block): Node
          [reader.BLOCK_INDEXES.GLOBAL_FUNCTION.ARGS] = block[reader.BLOCK_INDEXES.RECORD_FUNCTION.ARGS],
          [reader.BLOCK_INDEXES.GLOBAL_FUNCTION.RETS] = block[reader.BLOCK_INDEXES.RECORD_FUNCTION.RETS],
          [reader.BLOCK_INDEXES.GLOBAL_FUNCTION.BODY] = block[reader.BLOCK_INDEXES.RECORD_FUNCTION.BODY],
-      } as Block
+      }
       local gnode = parse_fns.global_function(state, gblock)
       gnode.implicit_global_function = true
       return gnode
@@ -1579,7 +1604,7 @@ end
 parse_fns.pragma = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "pragma", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "pragma", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "pragma")
    end
    if block[reader.BLOCK_INDEXES.PRAGMA.KEY] then
@@ -1594,7 +1619,7 @@ end
 parse_fns.local_type = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "local_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "local_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "local_type")
    end
    if block[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] then
@@ -1605,7 +1630,7 @@ parse_fns.local_type = function(state: ParseState, block: Block): Node
          node.value = parse_newtype(state, block[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
          if node.value and node.value.newtype and node.var and node.var.tk then
             local def = node.value.newtype.def
-            if def and def.typename == "generic" and (def as GenericType).t and (def as GenericType).t.typename == "generic" then
+            if def and def is GenericType and def.t.typename == "generic" then
                fail(state, block[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE], "cannot declare type arguments twice in type declaration")
             end
             set_declname(node.value.newtype.def, node.var.tk)
@@ -1619,7 +1644,7 @@ end
 parse_fns.global_type = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "global_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "global_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "global_type")
    end
    if block[reader.BLOCK_INDEXES.GLOBAL_TYPE.VAR] then
@@ -1644,7 +1669,7 @@ end
 parse_fns.interface = function(state: ParseState, block: Block): Node
    local node = new_node(state, block)
    if not node then
-      local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "interface")
    end
    return node
@@ -1652,7 +1677,7 @@ end
 parse_fns.local_macroexp = function(state: ParseState, block: Block): Node
    local node = new_node(state, block, "local_macroexp")
    if not node then
-      local dummy_block = { kind = "local_macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "local_macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "local_macroexp")
    end
 
@@ -1669,7 +1694,7 @@ end
 parse_fns.macroexp = function(state: ParseState, block: Block): Node
    local node = new_node(state, block, "macroexp")
    if not node then
-      local dummy_block = { kind = "macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+      local dummy_block = { kind = "macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       node = new_node(state, dummy_block, "macroexp")
    end
 
@@ -1700,7 +1725,7 @@ parse_block = function(state: ParseState, block: Block): Node
    elseif kind == "interface" then
       local node = new_node(state, block, "interface")
       if not node then
-         local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 } as Block
+         local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
          node = new_node(state, dummy_block, "interface")
       end
       return node
@@ -2095,8 +2120,8 @@ end
 
 parse_base_type = function(state: ParseState, block: Block): FirstClassType
    if not block then
-      fail(state, { y = 1, x = 1 } as Block, "expected a type")
-      return new_type(state, { y = 1, x = 1 } as Block, "any") as FirstClassType
+      fail(state, { y = 1, x = 1 }, "expected a type")
+      return new_type(state, { y = 1, x = 1 }, "any") as FirstClassType
    end
 
    local tk = block.tk
@@ -2111,7 +2136,7 @@ parse_base_type = function(state: ParseState, block: Block): FirstClassType
       return new_generic(state, block, typeargs, base)
   elseif block.kind as string == "record" then
       return parse_record_like_type(state, block, "record")
-  elseif block.kind as string == "interface" then
+  elseif block.kind == "interface" then
       return parse_record_like_type(state, block, "interface")
   elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array") as ArrayType
@@ -2150,7 +2175,7 @@ end
 
 parse_type = function(state: ParseState, block: Block): Type
    if not block then
-      return new_type(state, { y = 1, x = 1 } as Block, "any")
+      return new_type(state, { y = 1, x = 1 }, "any")
    end
    
    if block.kind == "paren" then
@@ -2184,7 +2209,7 @@ parse_type = function(state: ParseState, block: Block): Type
 end
 
 parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType, boolean, integer
-   local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist"} as Block) -- Ensure block is not nil for new_tuple
+   local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist"}) -- Ensure block is not nil for new_tuple
    local maybe_method = false
    local min_arity = 0
 

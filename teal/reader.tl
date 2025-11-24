@@ -71,7 +71,7 @@ local function normalize_macro_tokens(tokens: {Token}, errs: {Error}): {Error}
       if t.kind == "$ERR$" then
          if t.tk == "!" then
             t.kind = "op"
-         elseif t.tk == "`" then
+         elseif t.tk:sub(1, 1) == "`" then
             t.kind = "op"
          elseif t.tk == "$" then
             t.kind = "identifier"
@@ -90,12 +90,16 @@ local function normalize_macro_tokens(tokens: {Token}, errs: {Error}): {Error}
    return filtered
 end
 
+local function is_macro_quote_token(t: Token): boolean
+   return t.kind == "`" or t.tk:sub(1, 1) == "`"
+end
+
 local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
 }
-local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
+local is_attribute <const> = attributes as {string:boolean}
 
 function reader.node_is_require_call(n: Block): string
    if not (n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E2]) then
@@ -115,6 +119,9 @@ function reader.node_is_require_call(n: Block): string
 end
 
 function reader.node_is_funcall(node: Block): boolean
+   if node.kind == "paren" and node[BLOCK_INDEXES.PAREN.EXP] then
+      return reader.node_is_funcall(node[BLOCK_INDEXES.PAREN.EXP])
+   end
    return node.kind == "op_funcall" or node.kind == "macro_invocation"
 end
 
@@ -240,7 +247,7 @@ local function make_comment_block(ps: ReadState, c: Comment): Block
       kind = "comment",
       yend = c.y + newlines,
       xend = newlines > 0 and #last_line or (c.x + #text - 1),
-   } as Block
+   }
    return setmetatable(cb, node_mt)
 end
 
@@ -506,7 +513,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
          expected = sig.kinds[n] or (sig.vararg ~= "" and sig.vararg or nil)
       end
       if expected == "stmt" then
-         if ps2.tokens[ii].tk == "`" then
+         if is_macro_quote_token(ps2.tokens[ii]) then
             local ni, q = read_macro_quote(ps2, ii)
             return ni, q, n + 1
          else
@@ -547,7 +554,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                end
                nt = nt + 1
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
-               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } as Token
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
                local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
                if #errs2 == 0 and block then
@@ -591,7 +598,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                end
                nt = nt + 1
                local eof_prev = ps2.tokens[math.max(ii, j - 1)]
-               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } as Token
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
                local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
                for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
@@ -833,7 +840,7 @@ local function read_base_type(ps: ReadState, i: integer): integer, Block, intege
       if ps.tokens[i].tk == "}" then
          local decl = new_type(ps, istart, "array_type")
          decl[BLOCK_INDEXES.ARRAY_TYPE.ELEMENT] = t
-         end_at(decl as Block, ps.tokens[i])
+         end_at(decl , ps.tokens[i])
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == "," then
@@ -848,7 +855,7 @@ local function read_base_type(ps: ReadState, i: integer): integer, Block, intege
             end
             n = n + 1
          until ps.tokens[i].tk ~= ","
-         end_at(decl as Block, ps.tokens[i])
+         end_at(decl , ps.tokens[i])
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == ":" then
@@ -859,7 +866,7 @@ local function read_base_type(ps: ReadState, i: integer): integer, Block, intege
          if not decl[BLOCK_INDEXES.MAP_TYPE.VALUES] then
             return i
          end
-         end_at(decl as Block, ps.tokens[i])
+         end_at(decl , ps.tokens[i])
          i = verify_tk(ps, i, "}")
          return i, decl
       end
@@ -989,25 +996,6 @@ local function read_macro_quote(ps: ReadState, i: integer): integer, Block
       return fail(ps, i, "macro quotes cannot be empty")
    end
 
-<<<<<<< ours
-   local function shift_coords(b: any, dy: integer, dx: integer)
-      if type(b) ~= "table" then return end
-      local tbl = b as {string:any}
-      if tbl.kind then
-         local cy: integer = (tbl.y as integer) or (token.y or 1)
-         local cx: integer = (tbl.x as integer) or (token.x or 1)
-         tbl.y = cy + dy
-         tbl.x = cx + dx
-         if tbl.yend then tbl.yend = (tbl.yend as integer) + dy end
-         if tbl.xend then tbl.xend = (tbl.xend as integer) + dx end
-      end
-      for _, v in pairs(tbl) do
-         shift_coords(v, dy, dx)
-      end
-   end
-
-=======
->>>>>>> theirs
    local block: Block
    local errs: {Error}
 
@@ -1029,8 +1017,8 @@ local function read_macro_quote(ps: ReadState, i: integer): integer, Block
          if ident then
             local y = token.y + (line_index - 1)
             local x = token.x + delim
-            local ident_block = { f = ps.filename, y = y, x = x + 1, kind = "identifier", tk = ident } as Block
-            local mv = { f = ps.filename, y = y, x = x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident_block, tk = "$" } as Block
+            local ident_block = { f = ps.filename, y = y, x = x + 1, kind = "identifier", tk = ident } 
+            local mv = { f = ps.filename, y = y, x = x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident_block, tk = "$" } 
             table.insert(splices, { idx = line_index, blk = mv })
             -- omit this line from kept_lines
          else
@@ -1045,7 +1033,7 @@ local function read_macro_quote(ps: ReadState, i: integer): integer, Block
 
       -- splices gotta be merge with parsed statements
       if #splices > 0 and parsed_block and parsed_block.kind == "statements" then
-         local combined = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" } as Block
+         local combined: Block = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" } 
          for _, s in ipairs(splices) do
             table.insert(combined, s.blk)
          end
@@ -1133,7 +1121,7 @@ local function read_literal(ps: ReadState, i: integer): integer, Block
       return verify_kind(ps, i, "keyword", "nil")
    elseif tk == "function" then
       return read_function_value(ps, i)
-   elseif tk == "`" then
+   elseif is_macro_quote_token(ps.tokens[i]) then
       if not ps.in_local_macro then
          return fail(ps, i, "macro quotes can only be used inside macro statements")
       end
@@ -1337,7 +1325,7 @@ do
                key = { f = ps.filename, y = dtk.y, x = dtk.x, kind = "macro_var", [1] = ident, tk = "$" }
             else
                if ps.tokens[i].kind ~= "identifier" then
-                  local skipped = skip(ps, i, read_type as SkipFunction)
+                  local skipped = skip(ps, i, read_type)
                   if skipped > i + 1 then
                      fail(ps, i, "syntax error, cannot declare a type here (missing 'local' or 'global'?)")
                      return skipped, failstore(ps, tkop, e1)
@@ -1392,7 +1380,7 @@ do
                   i, argument = read_table_literal(ps, i)
                end
                table.insert(args, argument)
-            elseif next_tk.tk == "`" then
+            elseif is_macro_quote_token(next_tk) then
                local qi, q = read_macro_quote(ps, i)
                i = qi
                table.insert(args, q)
@@ -2157,7 +2145,7 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
 
       if ps.tokens[i].tk == "{" then
          if def[BLOCK_INDEXES.RECORD.ARRAY_TYPE] then
-            return failskip(ps, i, "duplicated declaration of array element type", read_type as SkipFunction)
+            return failskip(ps, i, "duplicated declaration of array element type", read_type)
          end
          local atype: Block
          i, atype = read_array_interface_type(ps, i)
@@ -2215,7 +2203,7 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
          end
          table.insert(fields, lt)
       elseif read_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
-         if def.kind == ("interface" as BlockKind) and tn == "record" then
+         if def.kind == "interface" and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
             local lt: Block
@@ -2422,7 +2410,7 @@ local function read_variable_declarations(ps: ReadState, i: integer, node_name: 
          return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. "'", skip_type_body)
       elseif next_word == "functiontype" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. " = function('...", read_function_type as SkipFunction)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. " = function('...", read_function_type)
       end
 
       i, asgn = read_assignment_expression_list(ps, i, asgn)
@@ -2820,7 +2808,7 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       allow_macro_vars = true
    end
    local ps: ReadState = {
-      tokens = tokens as {Token},
+      tokens = tokens,
       errs = errs,
       filename = filename,
       required_modules = {},
@@ -2843,7 +2831,6 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
    local seen = setmetatable({}, { __mode = "k" })
 
    local function check_macro_arity(b: Block)
-      if type(b) ~= "table" or not b.kind then return end
       if seen[b] then return end
       seen[b] = true
       if b.kind == "macro_invocation" then
@@ -2865,7 +2852,7 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       end
       for i2 = 1, #b do
          local child = b[i2]
-         if type(child) == "table" then
+         if child then
             check_macro_arity(child)
          end
       end

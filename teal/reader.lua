@@ -40,6 +40,60 @@ local BLOCK_INDEXES = block.BLOCK_INDEXES
 
 reader.BLOCK_INDEXES = BLOCK_INDEXES
 
+local function lang_heuristic(filename, input)
+   if filename then
+      local pattern = "(.*)%.([a-z]+)$"
+      local _, extension = filename:match(pattern)
+      extension = extension and extension:lower()
+
+      if extension == "tl" then
+         return "tl"
+      elseif extension == "lua" then
+         return "lua"
+      end
+   end
+   if input then
+      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
+   end
+   return "tl"
+end
+
+local function normalize_macro_tokens(tokens, errs)
+   local filtered = {}
+   for _, e in ipairs(errs or {}) do
+      local msg = e.msg or ""
+      if not (msg:find("invalid token '!'") or msg:find("invalid token '`'") or msg:find("invalid token '$'")) then
+         table.insert(filtered, e)
+      end
+   end
+
+   for _, t in ipairs(tokens) do
+      if t.kind == "$ERR$" then
+         if t.tk == "!" then
+            t.kind = "op"
+         elseif t.tk:sub(1, 1) == "`" then
+            t.kind = "op"
+         elseif t.tk == "$" then
+            t.kind = "identifier"
+         end
+      end
+   end
+   if errs then
+      for i = #errs, 1, -1 do
+         errs[i] = nil
+      end
+      for i = 1, #filtered do
+         errs[i] = filtered[i]
+      end
+      return errs
+   end
+   return filtered
+end
+
+local function is_macro_quote_token(t)
+   return t.kind == "`" or t.tk:sub(1, 1) == "`"
+end
+
 local attributes = {
    ["const"] = true,
    ["close"] = true,
@@ -65,6 +119,9 @@ function reader.node_is_require_call(n)
 end
 
 function reader.node_is_funcall(node)
+   if node.kind == "paren" and node[BLOCK_INDEXES.PAREN.EXP] then
+      return reader.node_is_funcall(node[BLOCK_INDEXES.PAREN.EXP])
+   end
    return node.kind == "op_funcall" or node.kind == "macro_invocation"
 end
 
@@ -456,7 +513,7 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
          expected = sig.kinds[n] or (sig.vararg ~= "" and sig.vararg or nil)
       end
       if expected == "stmt" then
-         if ps2.tokens[ii].tk == "`" then
+         if is_macro_quote_token(ps2.tokens[ii]) then
             local ni, q = read_macro_quote(ps2, ii)
             return ni, q, n + 1
          else
@@ -1064,7 +1121,7 @@ local function read_literal(ps, i)
       return verify_kind(ps, i, "keyword", "nil")
    elseif tk == "function" then
       return read_function_value(ps, i)
-   elseif tk == "`" then
+   elseif is_macro_quote_token(ps.tokens[i]) then
       if not ps.in_local_macro then
          return fail(ps, i, "macro quotes can only be used inside macro statements")
       end
@@ -1323,7 +1380,7 @@ do
                   i, argument = read_table_literal(ps, i)
                end
                table.insert(args, argument)
-            elseif next_tk.tk == "`" then
+            elseif is_macro_quote_token(next_tk) then
                local qi, q = read_macro_quote(ps, i)
                i = qi
                table.insert(args, q)
@@ -2745,6 +2802,11 @@ end
 function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    errs = errs or {}
    filename = filename or "input"
+   errs = normalize_macro_tokens(tokens, errs)
+   read_lang = read_lang or lang_heuristic(filename)
+   if allow_macro_vars == nil then
+      allow_macro_vars = true
+   end
    local ps = {
       tokens = tokens,
       errs = errs,
@@ -2769,7 +2831,6 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    local seen = setmetatable({}, { __mode = "k" })
 
    local function check_macro_arity(b)
-      if type(b) ~= "table" or not b.kind then return end
       if seen[b] then return end
       seen[b] = true
       if b.kind == "macro_invocation" then
@@ -2791,7 +2852,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       end
       for i2 = 1, #b do
          local child = b[i2]
-         if type(child) == "table" then
+         if child and child.kind then
             check_macro_arity(child)
          end
       end
@@ -2808,6 +2869,7 @@ end
 
 function reader.read(input, filename, read_lang, allow_macro_vars)
    filename = filename or "input"
+   read_lang = read_lang or lang_heuristic(filename, input)
    local tokens, errs = lexer.lex(input, filename)
    local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
    return node, errs, required_modules
