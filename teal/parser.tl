@@ -679,46 +679,42 @@ local function parse_statements(state: ParseState, block: Block, toplevel?: bool
    end
 
    for _, item_block in ipairs(block) do
-      if item_block.kind == "hashbang" then
-         goto continue
-      end
       if item_block.kind == "comment" then
          table.insert(pending_comments, item_block)
-         goto continue
+      elseif item_block.kind ~= "hashbang" then
+
+         local parsed_item = parse_block(state, item_block)
+         if parsed_item then
+            if comment_node_kinds[item_block.kind] then
+               local attached = extract_attached_comments(pending_comments, item_block)
+               if attached then
+                  parsed_item.comments = attached
+               end
+            end
+
+            if toplevel and #pending_comments > 0 then
+               flush_unattached_comments(node, pending_comments)
+            else
+               for i = #pending_comments, 1, -1 do
+                  table.remove(pending_comments, i)
+               end
+            end
+
+            for _, child in ipairs(item_block) do
+               if child.kind == ";" then
+                  parsed_item.semicolon = true
+                  break
+               end
+            end
+            if parsed_item.kind == "statements" then
+               for _, c in ipairs(parsed_item) do
+                  table.insert(node, c)
+               end
+            else
+               table.insert(node, parsed_item)
+            end
+         end
       end
-
-      local parsed_item = parse_block(state, item_block)
-      if parsed_item then
-         if comment_node_kinds[item_block.kind] then
-            local attached = extract_attached_comments(pending_comments, item_block)
-            if attached then
-               parsed_item.comments = attached
-            end
-         end
-
-         if toplevel and #pending_comments > 0 then
-            flush_unattached_comments(node, pending_comments)
-         else
-            for i = #pending_comments, 1, -1 do
-               table.remove(pending_comments, i)
-            end
-         end
-
-         for _, child in ipairs(item_block) do
-            if child.kind == ";" then
-               parsed_item.semicolon = true
-               break
-            end
-         end
-         if parsed_item.kind == "statements" then
-            for _, c in ipairs(parsed_item) do
-               table.insert(node, c)
-            end
-         else
-            table.insert(node, parsed_item)
-         end
-      end
-      ::continue::
    end
 
    if toplevel and #pending_comments > 0 then
