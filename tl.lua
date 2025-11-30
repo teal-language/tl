@@ -1,6 +1,6 @@
 -- module teal.api.v2 from teal/api/v2.lua
 package.preload["teal.api.v2"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
 local lexer = require("teal.lexer")
@@ -285,8 +285,6 @@ local errors = require("teal.errors")
 
 
 local block = { Block = { ExpectedContext = {} } }
-
-
 
 
 
@@ -754,7 +752,7 @@ end
 
 -- module teal.check.check from teal/check/check.lua
 package.preload["teal.check.check"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local context = require("teal.check.context")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local context = require("teal.check.context")
 local Context = context.Context
 
 local tldebug = require("teal.debug")
@@ -914,7 +912,7 @@ end
 
 -- module teal.check.context from teal/check/context.lua
 package.preload["teal.check.context"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type
 
 
 
@@ -3345,7 +3343,7 @@ end
 
 -- module teal.check.relations from teal/check/relations.lua
 package.preload["teal.check.relations"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 local types = require("teal.types")
@@ -4346,7 +4344,7 @@ end
 
 -- module teal.check.require_file from teal/check/require_file.lua
 package.preload["teal.check.require_file"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local input = require("teal.input")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local input = require("teal.input")
 
 
 
@@ -4484,7 +4482,7 @@ end
 
 -- module teal.check.special_functions from teal/check/special_functions.lua
 package.preload["teal.check.special_functions"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
 
@@ -5223,7 +5221,7 @@ end
 
 -- module teal.check.visitors from teal/check/visitors.lua
 package.preload["teal.check.visitors"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
 
@@ -7841,7 +7839,7 @@ end
 
 -- module teal.debug from teal/debug.lua
 package.preload["teal.debug"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local string = _tl_compat and _tl_compat.string or string
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local string = _tl_compat and _tl_compat.string or string
 
 
 local tldebug = {}
@@ -7968,7 +7966,7 @@ end
 
 -- module teal.environment from teal/environment.lua
 package.preload["teal.environment"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 local VERSION = "0.25.0-alpha+dev"
 
 local tldebug = require("teal.debug")
@@ -8273,7 +8271,7 @@ end
 
 -- module teal.errors from teal/errors.lua
 package.preload["teal.errors"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local errors = { Error = {}, ErrorContext = {} }
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local errors = { Error = {}, ErrorContext = {} }
 
 
 
@@ -8376,7 +8374,7 @@ end
 
 -- module teal.facts from teal/facts.lua
 package.preload["teal.facts"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG_FACTS = tldebug.TL_DEBUG_FACTS
 
 
@@ -8890,7 +8888,7 @@ end
 
 -- module teal.gen.lua_compat from teal/gen/lua_compat.lua
 package.preload["teal.gen.lua_compat"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local environment = require("teal.environment")
@@ -9091,7 +9089,7 @@ end
 
 -- module teal.gen.lua_generator from teal/gen/lua_generator.lua
 package.preload["teal.gen.lua_generator"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 
 
 
@@ -9938,7 +9936,7 @@ end
 
 -- module teal.input from teal/input.lua
 package.preload["teal.input"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
 
 local parser = require("teal.parser")
 local reader = require("teal.reader")
@@ -9983,7 +9981,7 @@ end
 
 -- module teal.lexer from teal/lexer.lua
 package.preload["teal.lexer"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
 local errors = require("teal.errors")
@@ -10819,7 +10817,7 @@ end
 
 -- module teal.loader from teal/loader.lua
 package.preload["teal.loader"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
 local input = require("teal.input")
@@ -10891,7 +10889,7 @@ end
 
 -- module teal.macro_eval from teal/macro_eval.lua
 package.preload["teal.macro_eval"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
 
 
 local BLOCK_INDEXES = block.BLOCK_INDEXES
@@ -10945,8 +10943,6 @@ local function clone_value(v)
       tk = v.tk,
       yend = v.yend,
       xend = v.xend,
-      constnum = v.constnum,
-      conststr = v.conststr,
       is_longstring = v.is_longstring,
    }
    for _, idx in ipairs(numeric_child_keys(v)) do
@@ -11205,7 +11201,7 @@ local function expand_in_node(b, filename, env, errs, context)
       return expand_in_node(res, filename, env, errs, context)
    end
 
-   for i = 1, #b do
+   for _, i in ipairs(numeric_child_keys(b)) do
       local child = b[i]
       if child and child.kind == "statements" then
          local expanded = child
@@ -11287,7 +11283,7 @@ end
 
 -- module teal.macroexps from teal/macroexps.lua
 package.preload["teal.macroexps"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs
 
 
 local parser = require("teal.parser")
@@ -11474,7 +11470,7 @@ end
 
 -- module teal.package_loader from teal/package_loader.lua
 package.preload["teal.package_loader"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local load = _tl_compat and _tl_compat.load or load; local package = _tl_compat and _tl_compat.package or package; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local load = _tl_compat and _tl_compat.load or load; local package = _tl_compat and _tl_compat.package or package; local table = _tl_compat and _tl_compat.table or table; local environment = require("teal.environment")
 
 
 local require_file = require("teal.check.require_file")
@@ -11530,7 +11526,7 @@ end
 
 -- module teal.parser from teal/parser.lua
 package.preload["teal.parser"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 local reader = require("teal.reader_api")
 
 
@@ -11941,6 +11937,36 @@ local function end_at(node, block)
    end
 end
 
+local function unquote_string_literal(str)
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2), false
+   end
+   local long_start = str:match("^%[=*%[")
+   if not long_start then
+      return str, false
+   end
+   local l = #long_start + 1
+   return str:sub(l, -l), true
+end
+
+local function block_string_value(b)
+   if b and b.kind == "string" and b.tk then
+      local text
+      local _is_long
+      text, _is_long = unquote_string_literal(b.tk)
+      return text
+   end
+   return nil
+end
+
+local function block_number_value(b)
+   if b and (b.kind == "integer" or b.kind == "number") then
+      return tonumber(b.tk)
+   end
+   return nil
+end
+
 local function new_node(state, block, kind)
    if not block then
       return nil
@@ -12114,7 +12140,7 @@ local function comment_block_to_comment(cb)
    return {
       x = cb.x,
       y = cb.y,
-      text = cb.conststr or cb.tk or "",
+      text = cb.tk or "",
    }
 end
 
@@ -12122,13 +12148,13 @@ local function comment_block_end_y(cb)
    if cb.yend then
       return cb.yend
    end
-   local text = cb.conststr or cb.tk or ""
+   local text = cb.tk or ""
    local _, newlines = string.gsub(text, "\n", "")
    return cb.y + newlines
 end
 
 local function is_long_comment_block(cb)
-   local text = cb.conststr or cb.tk or ""
+   local text = cb.tk or ""
    return text:match("^%-%-%[(=*)%[") ~= nil
 end
 
@@ -12361,15 +12387,17 @@ parse_expression = function(state, block)
    end
 
    if kind == "string" then
-      node.conststr = block.conststr
-      if block.tk then
+      node.conststr = block_string_value(block)
+      if block.is_longstring ~= nil then
+         node.is_longstring = block.is_longstring
+      elseif block.tk then
          node.is_longstring = not not block.tk:match("^%[%=*%[")
       else
          node.is_longstring = false
       end
    elseif kind == "number" or kind == "integer" then
       node.kind = kind
-      node.constnum = block.constnum
+      node.constnum = block_number_value(block)
    elseif kind == "boolean" then
       node.kind = kind
    elseif kind == "identifier" or kind == "variable" then
@@ -12496,8 +12524,10 @@ local function parse_newtype(state, block)
                if value_block.kind == "comment" then
                   table.insert(pending_comments, value_block)
                elseif value_block and value_block.tk then
-                  local value_str = value_block.conststr or value_block.tk
-                  if value_str:match('^".*"$') or value_str:match("^'.*'$") then
+                  local value_str = value_block.tk
+                  if value_block.kind == "string" then
+                     value_str = block_string_value(value_block) or value_str
+                  elseif value_str:match('^".*"$') or value_str:match("^'.*'$") then
                      value_str = value_str:sub(2, -2)
                   end
                   enum_type.enumset[value_str] = true
@@ -12956,8 +12986,8 @@ function block_to_constructor(state, block)
 
 
 
-   if block.conststr then
-      add_string_field(node, block, "conststr", block.conststr)
+   if block.kind == "string" then
+      add_string_field(node, block, "conststr", block_string_value(block) or block.tk or "")
    end
 
    local numeric_keys = {}
@@ -13536,7 +13566,12 @@ parse_record_like_type = function(state, block, typename)
          elseif fld.kind == "record_field" then
             local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
             local comments = extract_attached_comments(pending_field_comments, name_node or fld)
-            local field_name = name_node.conststr or name_node.tk
+            local field_name
+            if name_node and name_node.kind == "string" then
+               field_name = block_string_value(name_node) or name_node.tk or ""
+            else
+               field_name = name_node and name_node.tk or ""
+            end
             local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
             if t.typename == "function" and t.maybe_method then
                t.is_method = true
@@ -14009,7 +14044,7 @@ end
 
 -- module teal.reader from teal/reader.lua
 package.preload["teal.reader"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 
@@ -14105,6 +14140,19 @@ local function is_macro_quote_token(t)
    return t.kind == "`" or t.tk:sub(1, 1) == "`"
 end
 
+local function unquote(str)
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2), false
+   end
+   f = str:match("^%[=*%[")
+   if not f then
+      return str, false
+   end
+   local l = #f + 1
+   return str:sub(l, -l), true
+end
+
 local attributes = {
    ["const"] = true,
    ["close"] = true,
@@ -14124,7 +14172,11 @@ function reader.node_is_require_call(n)
       n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
 
 
-      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].conststr
+      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+      if arg.tk then
+         local value = unquote(arg.tk)
+         return value
+      end
    end
    return nil
 end
@@ -14254,7 +14306,6 @@ local function make_comment_block(ps, c)
       y = c.y,
       x = c.x,
       tk = text,
-      conststr = text,
       kind = "comment",
       yend = c.y + newlines,
       xend = newlines > 0 and #last_line or (c.x + #text - 1),
@@ -14402,7 +14453,6 @@ local function read_table_item(ps, i, n)
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i + 1].tk == "=" then
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(ps, i, "identifier", "string")
-         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(ps, i, "=")
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_table_value(ps, i)
@@ -14417,7 +14467,6 @@ local function read_table_item(ps, i, n)
             read_lang = ps.read_lang,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
-         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(try_ps, i, ":")
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_type(try_ps, i)
@@ -14438,7 +14487,6 @@ local function read_table_item(ps, i, n)
    end
 
    node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = new_block(ps, i, "integer")
-   node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].constnum = n
    node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = tostring(n)
    i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_expression(ps, i)
    if not node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] then
@@ -15099,16 +15147,6 @@ local function read_macro_quote(ps, i)
    return i + 1, node
 end
 
-local function unquote(str)
-   local f = str:sub(1, 1)
-   if f == '"' or f == "'" then
-      return str:sub(2, -2), false
-   end
-   f = str:match("^%[=*%[")
-   local l = #f + 1
-   return str:sub(l, -l), true
-end
-
 local function read_literal(ps, i)
    local tk = ps.tokens[i].tk
    local kind = ps.tokens[i].kind
@@ -15116,13 +15154,12 @@ local function read_literal(ps, i)
       return verify_kind(ps, i, "identifier", "variable")
    elseif kind == "string" then
       local node = new_block(ps, i, "string")
-      node.conststr, node.is_longstring = unquote(tk)
+      local _, is_long = unquote(tk)
+      node.is_longstring = is_long
       return i + 1, node
    elseif kind == "number" or kind == "integer" then
-      local n = tonumber(tk)
       local node
       i, node = verify_kind(ps, i, kind)
-      node.constnum = n
       return i, node
    elseif tk == "true" then
       return verify_kind(ps, i, "keyword", "boolean")
@@ -15156,10 +15193,12 @@ local function node_is_require_call_or_pcall(n)
       n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].tk == "pcall" and
       n[BLOCK_INDEXES.OP.E2] and #n[BLOCK_INDEXES.OP.E2] == 2 and
       n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "variable" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk == "require" and
-      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr then
+      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string" then
 
 
-      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr
+      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND]
+      local value = unquote(arg.tk)
+      return value
    end
    return nil
 end
@@ -15385,7 +15424,8 @@ do
             elseif next_tk.kind == "string" or next_tk.kind == "{" then
                if next_tk.kind == "string" then
                   argument = new_block(ps, i)
-                  argument.conststr, argument.is_longstring = unquote(next_tk.tk)
+                  local _, is_long = unquote(next_tk.tk)
+                  argument.is_longstring = is_long
                   i = i + 1
                else
                   i, argument = read_table_literal(ps, i)
@@ -15454,7 +15494,8 @@ do
             local argument
             if tkop.kind == "string" then
                argument = new_block(ps, i)
-               argument.conststr, argument.is_longstring = unquote(tkop.tk)
+               local _, is_long = unquote(tkop.tk)
+               argument.is_longstring = is_long
                i = i + 1
             else
                i, argument = read_table_literal(ps, i)
@@ -15484,7 +15525,7 @@ do
             if not cast[BLOCK_INDEXES.CAST.TYPE] then
                return i, failstore(ps, tkop, e1)
             end
-            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, conststr = e1.conststr, tk = tkop.tk }
+            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, tk = tkop.tk }
          else
             break
          end
@@ -16237,7 +16278,7 @@ read_record_body = function(ps, i, def)
          if ps.tokens[i].tk == "[" then
             i = i + 1
             i, v = read_literal(ps, i)
-            if v and not v.conststr then
+            if not v or v.kind ~= "string" then
                return fail(ps, i, "expected a string literal")
             end
             i = verify_tk(ps, i, "]")
@@ -16256,7 +16297,12 @@ read_record_body = function(ps, i, def)
                return fail(ps, i, "expected a type")
             end
 
-            local field_name = v.conststr or v.tk
+            local field_name
+            if v.kind == "string" then
+               field_name = unquote(v.tk)
+            else
+               field_name = v.tk
+            end
             local current_fields = fields
             if is_metamethod then
                if not meta_fields then
@@ -16909,7 +16955,7 @@ end
 
 -- module teal.traversal from teal/traversal.lua
 package.preload["teal.traversal"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local type = type
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local type = type
 
 
 local tldebug = require("teal.debug")
@@ -17449,7 +17495,7 @@ end
 
 -- module teal.type_errors from teal/type_errors.lua
 package.preload["teal.type_errors"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local types = require("teal.types")
@@ -17817,7 +17863,7 @@ end
 
 -- module teal.type_reporter from teal/type_reporter.lua
 package.preload["teal.type_reporter"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local types = require("teal.types")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local types = require("teal.types")
 
 
 
@@ -18370,7 +18416,7 @@ end
 
 -- module teal.types from teal/types.lua
 package.preload["teal.types"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 
@@ -19671,7 +19717,7 @@ end
 
 -- module teal.util from teal/util.lua
 package.preload["teal.util"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table
 
 
 local util = {}
@@ -19723,7 +19769,7 @@ end
 
 -- module teal.variables from teal/variables.lua
 package.preload["teal.variables"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local pairs = _tl_compat and _tl_compat.pairs or pairs
 
 
 

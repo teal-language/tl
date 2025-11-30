@@ -118,8 +118,6 @@ local record block
       kind: BlockKind
       yend: integer
       xend: integer
-      constnum: number
-      conststr: string
       is_longstring: boolean
    end
 

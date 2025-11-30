@@ -94,6 +94,19 @@ local function is_macro_quote_token(t: Token): boolean
    return t.kind == "`" or t.tk:sub(1, 1) == "`"
 end
 
+local function unquote(str: string): string, boolean
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2), false
+   end
+   f = str:match("^%[=*%[")
+   if not f then
+      return str, false
+   end
+   local l = #f + 1
+   return str:sub(l, -l), true
+end
+
 local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
@@ -113,7 +126,11 @@ function reader.node_is_require_call(n: Block): string
       and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string"
    then
       -- `require("str")`
-      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].conststr
+      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+      if arg.tk then
+         local value: string = unquote(arg.tk)
+         return value
+      end
    end
    return nil -- table.insert cares about arity
 end
@@ -243,7 +260,6 @@ local function make_comment_block(ps: ReadState, c: Comment): Block
       y = c.y,
       x = c.x,
       tk = text,
-      conststr = text,
       kind = "comment",
       yend = c.y + newlines,
       xend = newlines > 0 and #last_line or (c.x + #text - 1),
@@ -391,7 +407,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
    elseif ps.tokens[i].kind == "identifier" then
       if ps.tokens[i+1].tk == "=" then
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(ps, i, "identifier", "string")
-         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(ps, i, "=")
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_table_value(ps, i)
@@ -406,7 +421,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
             read_lang = ps.read_lang,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
-         node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].conststr = node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
          i = verify_tk(try_ps, i, ":")
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_type(try_ps, i)
@@ -427,7 +441,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
    end
 
    node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = new_block(ps, i, "integer")
-   node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].constnum = n
    node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = tostring(n)
    i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_expression(ps, i)
    if not node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] then
@@ -1088,30 +1101,19 @@ local function read_macro_quote(ps: ReadState, i: integer): integer, Block
    return i + 1, node
 end
 
-local function unquote(str: string): string, boolean
-   local f = str:sub(1, 1)
-   if f == '"' or f == "'" then
-      return str:sub(2, -2), false
-   end
-   f = str:match("^%[=*%[")
-   local l = #f + 1
-   return str:sub(l, -l), true
-end
-
 local function read_literal(ps: ReadState, i: integer): integer, Block
    local tk = ps.tokens[i].tk
-   local kind = ps.tokens[i].kind
+  local kind = ps.tokens[i].kind
    if kind == "identifier" then
       return verify_kind(ps, i, "identifier", "variable")
   elseif kind == "string" then
       local node = new_block(ps, i, "string")
-      node.conststr, node.is_longstring = unquote(tk)
+      local _, is_long = unquote(tk)
+      node.is_longstring = is_long
       return i + 1, node
    elseif kind == "number" or kind == "integer" then
-      local n = tonumber(tk)
       local node: Block
       i, node = verify_kind(ps, i, kind)
-      node.constnum = n
       return i, node
    elseif tk == "true" then
       return verify_kind(ps, i, "keyword", "boolean")
@@ -1145,10 +1147,12 @@ local function node_is_require_call_or_pcall(n: Block): string
       and n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].tk == "pcall"
       and n[BLOCK_INDEXES.OP.E2] and #n[BLOCK_INDEXES.OP.E2] == 2
       and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "variable" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk == "require"
-      and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr
+      and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string"
    then
       -- `pcall(require, "str")`
-      return n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].conststr
+      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND]
+      local value: string = unquote(arg.tk)
+      return value
    end
    return nil -- table.insert cares about arity
 end
@@ -1374,7 +1378,8 @@ do
             elseif next_tk.kind == "string" or next_tk.kind == "{" then
                if next_tk.kind == "string" then
                   argument = new_block(ps, i)
-                  argument.conststr, argument.is_longstring = unquote(next_tk.tk)
+                  local _, is_long = unquote(next_tk.tk)
+                  argument.is_longstring = is_long
                   i = i + 1
                else
                   i, argument = read_table_literal(ps, i)
@@ -1443,7 +1448,8 @@ do
             local argument: Block
             if tkop.kind == "string" then
                argument = new_block(ps, i)
-               argument.conststr, argument.is_longstring = unquote(tkop.tk)
+               local _, is_long = unquote(tkop.tk)
+               argument.is_longstring = is_long
                i = i + 1
             else
                i, argument = read_table_literal(ps, i)
@@ -1473,7 +1479,7 @@ do
             if not cast[BLOCK_INDEXES.CAST.TYPE] then
                return i, failstore(ps, tkop, e1)
             end
-            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, conststr = e1.conststr, tk = tkop.tk }
+            e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, tk = tkop.tk }
          else
             break
          end
@@ -2226,7 +2232,7 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
          if ps.tokens[i].tk == "[" then
             i = i + 1
             i, v = read_literal(ps, i)
-            if v and not v.conststr then
+            if not v or v.kind ~= "string" then
                return fail(ps, i, "expected a string literal")
            end
             i = verify_tk(ps, i, "]")
@@ -2245,7 +2251,12 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
                return fail(ps, i, "expected a type")
             end
 
-            local field_name = v.conststr or v.tk
+            local field_name: string
+            if v.kind == "string" then
+               field_name = unquote(v.tk)
+            else
+               field_name = v.tk
+            end
             local current_fields = fields
             if is_metamethod then
                if not meta_fields then

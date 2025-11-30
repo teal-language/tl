@@ -52,8 +52,6 @@ local function clone_value(v: Block): Block
       tk = v.tk,
       yend = v.yend,
       xend = v.xend,
-      constnum = v.constnum,
-      conststr = v.conststr,
       is_longstring = v.is_longstring,
    }
    for _, idx in ipairs(numeric_child_keys(v)) do

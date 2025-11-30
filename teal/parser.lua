@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 local reader = require("teal.reader_api")
 
 
@@ -409,6 +409,36 @@ local function end_at(node, block)
    end
 end
 
+local function unquote_string_literal(str)
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2), false
+   end
+   local long_start = str:match("^%[=*%[")
+   if not long_start then
+      return str, false
+   end
+   local l = #long_start + 1
+   return str:sub(l, -l), true
+end
+
+local function block_string_value(b)
+   if b and b.kind == "string" and b.tk then
+      local text
+      local _is_long
+      text, _is_long = unquote_string_literal(b.tk)
+      return text
+   end
+   return nil
+end
+
+local function block_number_value(b)
+   if b and (b.kind == "integer" or b.kind == "number") then
+      return tonumber(b.tk)
+   end
+   return nil
+end
+
 local function new_node(state, block, kind)
    if not block then
       return nil
@@ -582,7 +612,7 @@ local function comment_block_to_comment(cb)
    return {
       x = cb.x,
       y = cb.y,
-      text = cb.conststr or cb.tk or "",
+      text = cb.tk or "",
    }
 end
 
@@ -590,13 +620,13 @@ local function comment_block_end_y(cb)
    if cb.yend then
       return cb.yend
    end
-   local text = cb.conststr or cb.tk or ""
+   local text = cb.tk or ""
    local _, newlines = string.gsub(text, "\n", "")
    return cb.y + newlines
 end
 
 local function is_long_comment_block(cb)
-   local text = cb.conststr or cb.tk or ""
+   local text = cb.tk or ""
    return text:match("^%-%-%[(=*)%[") ~= nil
 end
 
@@ -829,15 +859,17 @@ parse_expression = function(state, block)
    end
 
    if kind == "string" then
-      node.conststr = block.conststr
-      if block.tk then
+      node.conststr = block_string_value(block)
+      if block.is_longstring ~= nil then
+         node.is_longstring = block.is_longstring
+      elseif block.tk then
          node.is_longstring = not not block.tk:match("^%[%=*%[")
       else
          node.is_longstring = false
       end
    elseif kind == "number" or kind == "integer" then
       node.kind = kind
-      node.constnum = block.constnum
+      node.constnum = block_number_value(block)
    elseif kind == "boolean" then
       node.kind = kind
    elseif kind == "identifier" or kind == "variable" then
@@ -964,8 +996,10 @@ local function parse_newtype(state, block)
                if value_block.kind == "comment" then
                   table.insert(pending_comments, value_block)
                elseif value_block and value_block.tk then
-                  local value_str = value_block.conststr or value_block.tk
-                  if value_str:match('^".*"$') or value_str:match("^'.*'$") then
+                  local value_str = value_block.tk
+                  if value_block.kind == "string" then
+                     value_str = block_string_value(value_block) or value_str
+                  elseif value_str:match('^".*"$') or value_str:match("^'.*'$") then
                      value_str = value_str:sub(2, -2)
                   end
                   enum_type.enumset[value_str] = true
@@ -1424,8 +1458,8 @@ function block_to_constructor(state, block)
 
 
 
-   if block.conststr then
-      add_string_field(node, block, "conststr", block.conststr)
+   if block.kind == "string" then
+      add_string_field(node, block, "conststr", block_string_value(block) or block.tk or "")
    end
 
    local numeric_keys = {}
@@ -2004,7 +2038,12 @@ parse_record_like_type = function(state, block, typename)
          elseif fld.kind == "record_field" then
             local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
             local comments = extract_attached_comments(pending_field_comments, name_node or fld)
-            local field_name = name_node.conststr or name_node.tk
+            local field_name
+            if name_node and name_node.kind == "string" then
+               field_name = block_string_value(name_node) or name_node.tk or ""
+            else
+               field_name = name_node and name_node.tk or ""
+            end
             local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
             if t.typename == "function" and t.maybe_method then
                t.is_method = true
