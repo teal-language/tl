@@ -69,6 +69,28 @@ describe('macro invocation expansion', function()
       out = out:gsub("^%s+", ""):gsub("%s+$", "")
       assert.same('local y = 2 + 1 + 1', out)
    end)
+
+   it('expands macro invocations inside else blocks', function()
+      local code = [[
+         local macro one!()
+            return `1`
+         end
+
+         local x = 0
+         if false then
+            x = 0
+         else
+            x = one!()
+         end
+      ]]
+
+      local ast, errs = tl.parse(code)
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same("local x = 0 if false then x = 0 else x = 1 end", out)
+   end)
 end)
 
 describe('macro unknown type error', function()

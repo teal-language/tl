@@ -312,7 +312,7 @@ local function expand_in_node(b: Block, filename: string, env: MacroEnv, errs: {
       return expand_in_node(res, filename, env, errs, context)
    end
 
-   for i = 1, #b do
+   for _, i in ipairs(numeric_child_keys(b)) do
       local child = b[i]
       if child and child.kind == "statements" then
          local expanded = child
