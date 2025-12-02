@@ -32,8 +32,8 @@ local record reader
    type BlockLang = BlockLang
 
    BLOCK_INDEXES: {string : {string : integer}}
-   read: function(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
-   read_program: function(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {string}
+   read: function(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block, {Error}, {string}
+   read_program: function(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block, {string}
 end
 
 local BLOCK_INDEXES <const> = block.BLOCK_INDEXES
@@ -569,7 +569,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
-               local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
+               local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                if #errs2 == 0 and block then
                   best_j = jend
                   best_block = block
@@ -613,7 +613,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                local eof_prev = ps2.tokens[math.max(ii, j - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
-               local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true)
+               local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
                best_block = block_fallback
                best_j = j
@@ -2810,7 +2810,7 @@ read_statements = function(ps: ReadState, i: integer, toplevel?: boolean): integ
    return i, node
 end
 
-function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {string}
+function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block, {string}
    errs = errs or {}
    filename = filename or "input"
    errs = normalize_macro_tokens(tokens, errs)
@@ -2872,17 +2872,19 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
    check_macro_arity(node)
 
    local lang: BlockLang = read_lang or "tl"
-   node = macro_eval.compile_all_and_expand(node, filename, lang, errs)
+   if not skip_macro_expand then
+      node = macro_eval.compile_all_and_expand(node, filename, lang, errs)
+   end
 
    errors.clear_redundant_errors(errs)
    return node, ps.required_modules
 end
 
-function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean): Block, {Error}, {string}
+function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block, {Error}, {string}
    filename = filename or "input"
    read_lang = read_lang or lang_heuristic(filename, input)
    local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars)
+    local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
    return node, errs, required_modules
 end
 

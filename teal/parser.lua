@@ -1456,8 +1456,6 @@ function block_to_constructor(state, block)
       add_number_field(node, block, "xend", block.xend)
    end
 
-
-
    if block.kind == "string" then
       add_string_field(node, block, "conststr", block_string_value(block) or block.tk or "")
    end

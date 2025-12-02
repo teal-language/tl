@@ -502,13 +502,34 @@ end)
 
          def0!(zero)
          print(zero)
+   ]]
+   local ast, errs = tl.parse(code)
+   assert.same({}, errs)
+   local out, err = lua_gen.generate(ast, '5.4')
+   assert.is_nil(err)
+   out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+   assert.same('local zero = 0 print(zero)', out)
+end)
+
+   it('parses macros inside Statement args without needing local macro definitions', function()
+      local code = [[
+         local macro wrap!(b: Statement)
+            return b
+         end
+
+         local macro inc!(x: Expression)
+            return `$x + 1`
+         end
+
+         local function demo()
+            wrap!(do
+               local v = inc!(1)
+               return v
+            end)
+         end
       ]]
-      local ast, errs = tl.parse(code)
+      local _, errs = tl.parse(code)
       assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
-      assert.is_nil(err)
-      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-      assert.same('local zero = 0 print(zero)', out)
    end)
 
    it('splices a nominal_type into type positions (regression)', util.check([[ 

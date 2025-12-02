@@ -2,6 +2,7 @@ local record Args
    check: boolean
    command: string
    custom_ext: string
+   dump_format: string
    feat_arity: string
    file: {string}
    gen_target: string

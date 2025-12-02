@@ -28,6 +28,7 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	tlcli/main.tl \
 	tlcli/commands/run.tl \
 	tlcli/commands/warnings.tl \
+	tlcli/commands/dump_blocks.tl \
 	tlcli/commands/types.tl \
 	tlcli/commands/check.tl \
 	tlcli/commands/gen.tl \
@@ -123,4 +124,3 @@ clean: cleantemp
 
 .PHONY: all build1 replace1 build2 selfbuild \
 	suite bin binary cov revert cov cleantemp clean
-
