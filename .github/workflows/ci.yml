@@ -29,6 +29,7 @@ jobs:
     - uses: luarocks/gh-actions-luarocks@master
 
     - name: Restore cached LuaRocks packages
+      id: cache
       uses: actions/cache/restore@v4
       with:
         path: ${{ runner.os == 'Windows' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\luarocks' || format('{0}/.luarocks', github.workspace) }}
@@ -45,6 +46,7 @@ jobs:
         luarocks test
 
     - name: Save LuaRocks packages
+      if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.os == 'Windows' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\luarocks' || format('{0}/.luarocks', github.workspace) }}
