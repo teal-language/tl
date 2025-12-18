@@ -28,6 +28,12 @@ jobs:
 
     - uses: luarocks/gh-actions-luarocks@master
 
+    - name: Restore cached LuaRocks packages
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.os == 'Windows' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\luarocks' || format('{0}/.luarocks', github.workspace) }}
+        key: ${{ runner.os }}-luarocks-${{ matrix.lua-version }}-${{ hashFiles('**/luarocks.lock') }}
+
     - name: Build
       run: |
         luarocks make --only-deps
@@ -37,3 +43,9 @@ jobs:
         luarocks lint tl-dev-1.rockspec
         make selfbuild
         luarocks test
+
+    - name: Save LuaRocks packages
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.os == 'Windows' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\luarocks' || format('{0}/.luarocks', github.workspace) }}
+        key: ${{ runner.os }}-luarocks-${{ matrix.lua-version }}-${{ hashFiles('**/luarocks.lock') }}
