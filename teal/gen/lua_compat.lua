@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
 
 local environment = require("teal.environment")
@@ -6,6 +6,7 @@ local environment = require("teal.environment")
 
 
 local parser = require("teal.parser")
+local reader = require("teal.reader")
 
 
 local node_at = parser.node_at
@@ -42,7 +43,8 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-         code = parser.parse(text, "@<internal>.lua")
+         local block_ast = reader.read(text, "@<internal>.lua")
+         code = parser.parse(block_ast, "@<internal>.lua")
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do

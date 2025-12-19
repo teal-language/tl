@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = true, require('compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
 
 
 
@@ -92,6 +92,13 @@ local function get_args_parser()
    types_command:option("-p --position", "Report values in scope in position line[:column]"):
    argname("<position>")
 
+   local dump_blocks_command = parser:command("dump-blocks", "Dump parser blocks as Lua tables or JSON.")
+   dump_blocks_command:argument("file", "The Teal source file. Use '-' for stdin."):args(1)
+   dump_blocks_command:option("--format", "Output format."):
+   choices({ "lua", "json" }):
+   default("lua"):
+   target("dump_format")
+
    return parser
 end
 
@@ -102,6 +109,7 @@ return function(...)
       run = require("tlcli.commands.run"),
       types = require("tlcli.commands.types"),
       warnings = require("tlcli.commands.warnings"),
+      ["dump-blocks"] = require("tlcli.commands.dump_blocks"),
    }
 
    local parser = get_args_parser()
