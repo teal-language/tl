@@ -102,30 +102,23 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       h: integer
    end
 
-   local save_indent: {integer} = {}
-
    local function increment_indent(_: nil, node: Node)
       local child = node.body or node[1]
       if not child then
          return
       end
-      if child.y ~= node.y then
-         if indent == 0 and #save_indent > 0 then
-            indent = save_indent[#save_indent] + 1
-         else
-            indent = indent + 1
-         end
+      if not indent then
+         indent = 1
       else
-         table.insert(save_indent, indent)
-         indent = 0
+         indent = indent + 1
       end
    end
 
-   local function decrement_indent(node: Node, child: Node)
-      if child.y ~= node.y then
-         indent = indent - 1
+   local function decrement_indent()
+      if not indent then
+         indent = 0
       else
-         indent = table.remove(save_indent)
+         indent = indent - 1
       end
    end
 
@@ -143,7 +136,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       end
    end
 
-   local function add_child(out: Output, child: Output, space?: string, current_indent?: integer): integer
+   local function add_child(out: Output, child: Output, space?: string, current_indent?: integer)
       if #child == 0 then
          return
       end
@@ -234,6 +227,33 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
    local function starts_with_longstring(n: Node): boolean
       while n.e1 do n = n.e1 end
       return n.is_longstring
+   end
+
+   local function drop_initial_indentation(out: Output)
+      if not out then
+         return
+      end
+      local first = out[1]
+      if first is string then
+         if first:match("^ +$") then
+            table.remove(out, 1)
+            drop_initial_indentation(out)
+         end
+      else
+         drop_initial_indentation(first as Output)
+      end
+   end
+
+   local function add_block(out: Output, block_out: Output, top_node: Node)
+      if not block_out then
+         return
+      end
+      if block_out.y == top_node.y then
+         drop_initial_indentation(block_out)
+      end
+
+      add_child(out, block_out, " ")
+      decrement_indent()
    end
 
    visit_node.cbs = {
@@ -347,8 +367,8 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                add_child(out, children[1], " ")
                table.insert(out, " then")
             end
-            add_child(out, children[2], " ")
-            decrement_indent(node, node.body)
+
+            add_block(out, children[2], node)
             return out
          end,
       },
@@ -359,8 +379,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             table.insert(out, "while")
             add_child(out, children[1], " ")
             table.insert(out, " do")
-            add_child(out, children[2], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[2], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -370,8 +389,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "repeat")
-            add_child(out, children[1], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[1], node)
             add_child(out, { y = node.yend, h = 0, [1] = "until " }, " ", indent)
             add_child(out, children[2])
             return out
@@ -382,8 +400,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             table.insert(out, "do")
-            add_child(out, children[1], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[1], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -397,8 +414,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             table.insert(out, " in")
             add_child(out, children[2], " ")
             table.insert(out, " do")
-            add_child(out, children[3], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[3], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -418,8 +434,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                add_child(out, children[4], " ")
             end
             table.insert(out, " do")
-            add_child(out, children[5], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[5], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -456,7 +471,11 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
          end,
       },
       ["literal_table"] = {
-         before = increment_indent,
+         before = increment_indent and function(_: nil, node: Node)
+            if node[1] and node[1].y ~= node.y then
+               increment_indent(_, node)
+            end
+         end,
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
             if #children == 0 then
@@ -471,7 +490,9 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                   table.insert(out, ",")
                end
             end
-            decrement_indent(node, node[1])
+            if increment_indent and node[1] and node[1].y ~= node.y then
+               decrement_indent()
+            end
             add_child(out, { y = node.yend, h = 0, [1] = "}" }, " ", indent)
             return out
          end,
@@ -513,8 +534,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             table.insert(out, "(")
             add_child(out, children[2])
             table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[4], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -528,8 +548,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             table.insert(out, "(")
             add_child(out, children[2])
             table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[4], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -555,8 +574,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             end
             add_child(out, children[3])
             table.insert(out, ")")
-            add_child(out, children[5], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[5], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,
@@ -568,8 +586,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             table.insert(out, "function(")
             add_child(out, children[1])
             table.insert(out, ")")
-            add_child(out, children[3], " ")
-            decrement_indent(node, node.body)
+            add_block(out, children[3], node)
             add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
             return out
          end,

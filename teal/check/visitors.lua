@@ -630,9 +630,9 @@ local function infer_table_literal(self, node, children)
    if is_array and is_map then
       self.errs:add(node, "cannot determine type of table literal")
       t = a_type(node, "map", { keys =
-self:expand_type(node, keys, a_type(node, "integer", {})), values =
+      self:expand_type(node, keys, a_type(node, "integer", {})), values =
 
-self:expand_type(node, values, elements) })
+      self:expand_type(node, values, elements) })
    elseif is_record and is_array then
       t = a_type(node, "record", {
          fields = fields,
