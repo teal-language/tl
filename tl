@@ -10,8 +10,8 @@ do
    -- get the whole API into package.loaded
    require("teal")
 
+   require("tlcli.main")({...})
+
    -- but otherwise don't pollute package.path inadvertedly
    package.path = save_package_path
 end
-
-require("tlcli.main")({...})
