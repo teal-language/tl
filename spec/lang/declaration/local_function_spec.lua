@@ -209,6 +209,37 @@ describe("local function", function()
       ]]))
    end)
 
+   describe("Lua 5.5 named variadic arguments", function()
+      it("works in a type annotation", util.check([[
+         local _: function(a: integer, ...b: integer)
+      ]]))
+
+      it("is no different for callers", util.check[[
+         local f: function(...a: integer)
+
+         f(1)
+         f(1, 2)
+         f(1, 2, 3)
+         f(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+      ]])
+
+      it("is an array in the function body", util.check[[
+         local function f(...a: integer)
+            local _: {integer} = a
+         end
+
+         f(1, 2)
+      ]])
+
+      it("... is still usable", util.check[[
+         local function f(...a: integer)
+            local _ = ...
+         end
+
+         f(1, 2)
+      ]])
+   end)
+
    describe("shadowing", function()
       it("arguments shadow variables", util.check([[
          local record Name
