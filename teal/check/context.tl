@@ -1122,9 +1122,16 @@ function Context:resolve_for_call(func: Type, args: TupleType, is_method: boolea
       return self:resolve_for_call(func.def, args, is_method)
    -- resolve if metatable
    elseif func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
+      local interface_type = func  -- save the interface/record type for self resolution
       table.insert(args.tuple, 1, func)
       func = func.meta_fields["__call"]
       func = self:to_structural(func)
+      -- resolve 'self' in return type to the interface type, not the caller
+      func = types.map(interface_type, func, {
+         ["self"] = function(iface: RecordLikeType, _typ: SelfType): Type, boolean
+            return iface, true
+         end,
+      })
       is_method = true
    end
 

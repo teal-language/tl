@@ -233,4 +233,24 @@ describe("metamethod __call", function()
          Foo(1)
       ]]))
    end)
+
+   describe("interface with __call returning self", function()
+      it("resolves self to the interface type, not the caller", util.check([[
+         local record Foo
+         end
+
+         local interface ICallable
+            metamethod __call: function(self, ...: any): self
+         end
+
+         function Foo:bar(a: ICallable): integer
+            return 1
+         end
+
+         local x: ICallable
+         local foo: Foo = {}
+
+         foo:bar(x(1))
+      ]]))
+   end)
 end)
