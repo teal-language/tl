@@ -1122,9 +1122,16 @@ function Context:resolve_for_call(func, args, is_method)
       return self:resolve_for_call(func.def, args, is_method)
 
    elseif func.fields and func.meta_fields and func.meta_fields["__call"] then
+      local interface_type = func
       table.insert(args.tuple, 1, func)
       func = func.meta_fields["__call"]
       func = self:to_structural(func)
+
+      func = types.map(interface_type, func, {
+         ["self"] = function(iface, _typ)
+            return iface, true
+         end,
+      })
       is_method = true
    end
 
