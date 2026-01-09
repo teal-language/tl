@@ -310,6 +310,9 @@ global record table
       is {A}
 
       n: integer
+      metamethod __len: function(self): integer = macroexp(self): integer
+         return self.n
+      end
    end
 
    concat: function({(string | number)}, ? string, ? integer, ? integer): string
@@ -320,7 +323,7 @@ global record table
    move: function<A>({A}, integer, integer, integer, ? {A}): {A}
 
    pack: function<T>(T...): PackTable<T> --[[needs_compat]]
-   pack: function(any...): {any:any} --[[needs_compat]]
+   pack: function(any...): PackTable<any> --[[needs_compat]]
 
    remove: function<A>({A}, ? integer): A
    sort: function<A>({A}, ? SortFunction<A>)
