@@ -29,7 +29,7 @@ jobs:
         cd ${{ github.workspace }}/teal-playground
         yarn build
       env:
-        VUE_APP_TL_PACKAGE_PATH_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}/?.lua
+        VITE_TL_PACKAGE_PATH_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}/?.lua
     - name: netlify deploy
       id: netlify-deploy
       run: |
