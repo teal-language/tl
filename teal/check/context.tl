@@ -1490,19 +1490,31 @@ do
       end
    end
 
-   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}
+   local function collect_interfaces(
+   self: Context,
+   list: {ArrayType | NominalType},
+   t: RecordLikeType,
+   seen: {Type: boolean}
+   ): {ArrayType | NominalType}
       if t.interface_list then
          for _, iface in ipairs(t.interface_list) do
             if iface is NominalType then
                local ri = self:resolve_nominal(iface)
                if ri is InterfaceType then
-                  table.insert(list, iface)
-                  if ri.interfaces_expanded and not seen[ri] then
+                  if not seen[ri] then
                      seen[ri] = true
-                     collect_interfaces(self, list, ri, seen)
+                     table.insert(list, iface)
+                     if ri.interfaces_expanded then
+                        collect_interfaces(self, list, ri, seen)
+                     end
                   end
                else
-                  self.errs:add(iface, "attempted to use %s as interface, but its type is %s", iface, ri)
+                  self.errs:add(
+                     iface,
+                     "attempted to use %s as interface, but its type is %s",
+                     iface,
+                     ri
+                  )
                end
             else
                if not seen[iface] then
