@@ -298,6 +298,15 @@ describe("warnings", function()
          { y = 2, msg = "using the '#' operator on a PackTable may produce unexpected results. Use '.n' instead" },
          { y = 4, msg = "using the '#' operator on a PackTable may produce unexpected results. Use '.n' instead" },
       }))
+      it("should complain about table.unpack(PackTable)", util.check_warnings([[
+         local packed = table.pack(...)
+         local _ = table.unpack(packed)
+         local packed2 = table.pack(1,2,3,4,5,6,7,8,"this",10)
+         local _ = table.unpack(packed2)
+      ]], {
+         { y = 2, msg = "table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead" },
+         { y = 4, msg = "table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead" },
+      }))
    end)
 
    describe("on return", function()

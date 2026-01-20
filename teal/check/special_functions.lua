@@ -457,6 +457,21 @@ local special_functions = {
       end
       return r
    end,
+   ["table.unpack"] = function(self, node, a, b, argdelta)
+
+      if #b.tuple == 1 then
+         local first = b.tuple[1]
+         if first.typename == "nominal" and first.found then
+            local table_t = (self.env.modules["table"]).def
+            local packtable = (table_t.fields["PackTable"]).def
+
+            if first.found.def.typeid == packtable.typeid then
+               self:add_warning("hint", node, "hint: table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead")
+            end
+         end
+      end
+      return (self:type_check_function_call(node, a, b, argdelta))
+   end,
    ["string.pack"] = function(self, node, a, b, argdelta)
       if #b.tuple < 1 then
          return self:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
