@@ -310,9 +310,6 @@ global record table
       is {A}
 
       n: integer
-      metamethod __len: function(self): integer = macroexp(self): integer
-         return self.n
-      end
    end
 
    concat: function({(string | number)}, ? string, ? integer, ? integer): string

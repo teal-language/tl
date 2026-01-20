@@ -298,7 +298,6 @@ describe("tl gen", function()
       local t = {1, 2, 3, 4}
       print(table.unpack(t))
       local t2 = table.pack(1, 2, "any")
-      local tcount = #t2
       local n = 42
       local maxi = math.maxinteger
       local mini = math.mininteger
@@ -318,7 +317,6 @@ describe("tl gen", function()
       local t = { 1, 2, 3, 4 }
       print(table.unpack(t))
       local t2 = table.pack(1, 2, "any")
-      local tcount = t2.n
       local n = 42
       local maxi = math.maxinteger
       local mini = math.mininteger
@@ -338,7 +336,6 @@ describe("tl gen", function()
       local t = { 1, 2, 3, 4 }
       print(_tl_table_unpack(t))
       local t2 = _tl_table_pack(1, 2, "any")
-      local tcount = t2.n
       local n = 42
       local maxi = _tl_math_maxinteger
       local mini = _tl_math_mininteger
@@ -358,7 +355,6 @@ describe("tl gen", function()
       local t = { 1, 2, 3, 4 }
       print(_tl_table_unpack(t))
       local t2 = _tl_table_pack(1, 2, "any")
-      local tcount = t2.n
       local n = 42
       local maxi = _tl_math_maxinteger
       local mini = _tl_math_mininteger
