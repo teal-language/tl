@@ -288,6 +288,18 @@ describe("warnings", function()
       }))
    end)
 
+   describe("on types", function()
+      it("should complain about #PackTable", util.check_warnings([[
+         local packed = table.pack(...)
+         local _ = #packed
+         local packed2 = table.pack(1,2,3,4,5,6,7,8,"this",10)
+         return #packed2
+      ]], {
+         { y = 2, msg = "using the '#' operator on a PackTable may produce unexpected results. Use '.n' instead" },
+         { y = 4, msg = "using the '#' operator on a PackTable may produce unexpected results. Use '.n' instead" },
+      }))
+   end)
+
    describe("on return", function()
       it("should report when discarding returns via expressions with 'and'", util.check_warnings([[
          local function may_fail(chance: number): boolean, string

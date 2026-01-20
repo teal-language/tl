@@ -2114,6 +2114,15 @@ visit_node.cbs = {
                end
             end
 
+            if ua is NominalType and ua.found then
+               local table_t = (self.env.modules["table"] as types.TypeDeclType).def as RecordType
+               local packtable = (table_t.fields["PackTable"] as types.TypeDeclType).def
+
+               if ua.found.def.typeid == packtable.typeid then
+                  self:add_warning("hint", node, "hint: using the '#' operator on a PackTable may produce unexpected results. Use '.n' instead")
+               end
+            end
+
             if not t then
                return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
             end
