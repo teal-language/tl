@@ -7027,10 +7027,24 @@ visit_node.cbs = {
                a_type(node, "any", {})
             end
          end
+
+         local is_named_vararg = false
          if node.tk == "..." then
+            if node.name then
+               is_named_vararg = true
+               self:add_var(node, node.name.tk, a_type(node, "array", { elements = t })).is_func_arg = true
+            end
             t = a_vararg(node, { t })
          end
-         self:add_var(node, node.tk, t).is_func_arg = true
+
+         local var = self:add_var(node, node.tk, t)
+         var.is_func_arg = true
+         if is_named_vararg then
+
+
+            var.has_been_read_from = true
+         end
+
          return t
       end,
    },
@@ -8645,7 +8659,7 @@ end
 
 -- module teal.gen.lua_generator from teal/gen/lua_generator.lua
 package.preload["teal.gen.lua_generator"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
 
 
 
@@ -8881,6 +8895,68 @@ function lua_generator.generate(ast, gen_target, opts)
    local function starts_with_longstring(n)
       while n.e1 do n = n.e1 end
       return n.is_longstring
+   end
+
+
+
+
+
+
+
+
+   local function_indexes = {
+
+      ["anonymous"] = { 1, 3 },
+      ["record"] = { 3, 5 },
+      ["local"] = { 2, 4 },
+      ["global"] = { 2, 4 },
+   }
+
+   local function after_function(kind)
+      local arguments_index, body_index = _tl_table_unpack(function_indexes[kind])
+      return function(_, node, children)
+         local out = { y = node.y, h = 0 }
+
+         if kind == "local" then
+            table.insert(out, "local ")
+         end
+
+         table.insert(out, "function")
+
+         if kind == "record" then
+            add_child(out, children[1], " ")
+            table.insert(out, node.is_method and ":" or ".")
+            add_child(out, children[2])
+         elseif kind ~= "anonymous" then
+            add_child(out, children[1], " ")
+         end
+         table.insert(out, "(")
+
+
+         local args = children[arguments_index]
+         if kind == "record" and node.is_method then
+            table.remove(args, 1)
+            if args[1] == "," then
+               table.remove(args, 1)
+               if args[1] == " " then
+                  table.remove(args, 1)
+               end
+            end
+         end
+         add_child(out, args)
+
+         table.insert(out, ")")
+
+         local last_arg = node.args[#node.args]
+         if last_arg and last_arg.tk == "..." and last_arg.name then
+            table.insert(out, "local " .. last_arg.name.tk .. "={...};")
+         end
+
+         add_child(out, children[body_index], " ")
+         decrement_indent(node, node.body)
+         add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+         return out
+      end
    end
 
    visit_node.cbs = {
@@ -9153,73 +9229,19 @@ function lua_generator.generate(ast, gen_target, opts)
       },
       ["local_function"] = {
          before = increment_indent,
-         after = function(_, node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "local function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("local"),
       },
       ["global_function"] = {
          before = increment_indent,
-         after = function(_, node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_child(out, children[4], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("global"),
       },
       ["record_function"] = {
          before = increment_indent,
-         after = function(_, node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, node.is_method and ":" or ".")
-            add_child(out, children[2])
-            table.insert(out, "(")
-            if node.is_method then
-
-               table.remove(children[3], 1)
-               if children[3][1] == "," then
-                  table.remove(children[3], 1)
-                  if children[3][1] == " " then
-                     table.remove(children[3], 1)
-                  end
-               end
-            end
-            add_child(out, children[3])
-            table.insert(out, ")")
-            add_child(out, children[5], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("record"),
       },
       ["function"] = {
          before = increment_indent,
-         after = function(_, node, children)
-            local out = { y = node.y, h = 0 }
-            table.insert(out, "function(")
-            add_child(out, children[1])
-            table.insert(out, ")")
-            add_child(out, children[3], " ")
-            decrement_indent(node, node.body)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("anonymous"),
       },
       ["paren"] = {
          after = function(_, node, children)
@@ -11919,6 +11941,9 @@ local function parse_argument(ps, i)
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
       node.opt = true
+      if ps.tokens[i].kind == "identifier" then
+         i, node.name = verify_kind(ps, i, "identifier", "argument")
+      end
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -11992,6 +12017,10 @@ local function parse_argument_type(ps, i)
       opt = i
       i = i + 1
    elseif ps.tokens[i].tk == "..." then
+      if ps.tokens[i + 1].kind == "identifier" then
+         argument_name = ps.tokens[i + 1].tk
+         i = i + 1
+      end
       if ps.tokens[i + 1].tk == "?" then
          fail(ps, i + 1, "cannot mix '?' and '...' in a declaration; '...' already implies optional")
          i = i + 1

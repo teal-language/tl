@@ -1283,6 +1283,9 @@ local function parse_argument(ps, i)
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
       node.opt = true
+      if ps.tokens[i].kind == "identifier" then
+         i, node.name = verify_kind(ps, i, "identifier", "argument")
+      end
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -1356,6 +1359,10 @@ local function parse_argument_type(ps, i)
       opt = i
       i = i + 1
    elseif ps.tokens[i].tk == "..." then
+      if ps.tokens[i + 1].kind == "identifier" then
+         argument_name = ps.tokens[i + 1].tk
+         i = i + 1
+      end
       if ps.tokens[i + 1].tk == "?" then
          fail(ps, i + 1, "cannot mix '?' and '...' in a declaration; '...' already implies optional")
          i = i + 1

@@ -2257,10 +2257,24 @@ visit_node.cbs = {
                a_type(node, "any", {})
             end
          end
+
+         local is_named_vararg = false
          if node.tk == "..." then
+            if node.name then
+               is_named_vararg = true
+               self:add_var(node, node.name.tk, a_type(node, "array", { elements = t })).is_func_arg = true
+            end
             t = a_vararg(node, { t })
          end
-         self:add_var(node, node.tk, t).is_func_arg = true
+
+         local var = self:add_var(node, node.tk, t)
+         var.is_func_arg = true
+         if is_named_vararg then
+
+
+            var.has_been_read_from = true
+         end
+
          return t
       end,
    },
