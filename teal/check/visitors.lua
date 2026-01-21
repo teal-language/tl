@@ -630,9 +630,9 @@ local function infer_table_literal(self, node, children)
    if is_array and is_map then
       self.errs:add(node, "cannot determine type of table literal")
       t = a_type(node, "map", { keys =
-self:expand_type(node, keys, a_type(node, "integer", {})), values =
+      self:expand_type(node, keys, a_type(node, "integer", {})), values =
 
-self:expand_type(node, values, elements) })
+      self:expand_type(node, values, elements) })
    elseif is_record and is_array then
       t = a_type(node, "record", {
          fields = fields,
@@ -1138,7 +1138,15 @@ visit_node.cbs = {
             end
          end
       end,
-      after = end_scope_and_none_type,
+      after = function(self, node, _children)
+         local control_var = node.vars[1]
+         local var = self:find_var(control_var.tk)
+         if var and var.has_been_written_to then
+            node.forin_modifies_control_var = true
+         end
+         self:end_scope(node)
+         return NONE
+      end,
    },
    ["fornum"] = {
       before_statements = function(self, node, children)

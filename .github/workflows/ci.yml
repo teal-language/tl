@@ -10,7 +10,7 @@ jobs:
   Test:
     strategy:
       matrix:
-        lua-version: ["5.4", "5.3", "5.2", "5.1", "luajit"]
+        lua-version: ["5.5", "5.4", "5.3", "5.2", "5.1", "luajit"]
         os: ["ubuntu-latest"]
         include:
         - os: "macos-latest"
