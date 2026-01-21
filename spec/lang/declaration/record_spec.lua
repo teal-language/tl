@@ -1081,3 +1081,29 @@ describe("loop check", function()
       end
    ]]))
 end)
+
+describe("userdata check", function()
+   it("requires userdata to be explicit", util.check_type_error([[
+      local interface User
+         is userdata
+      end
+
+      local record Foo
+         is User
+      end
+   ]], {
+      { y = 6, x = 13, msg = "userdata needs to be explicit: User is a userdata type", },
+   }))
+   it("works with explicit userdata declarations", util.check([[
+      local interface User
+         is userdata
+      end
+
+      local record Foo1
+         is User, userdata
+      end
+      local record Foo2
+         is userdata, User
+      end
+   ]]))
+end)
