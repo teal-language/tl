@@ -457,6 +457,21 @@ local special_functions <total>: {SpecialFunctionName : function(NodeChecker, No
       end
       return r
    end,
+   ["table.unpack"] = function(self: NodeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+      -- table.unpack(PackTable<_>) uses # instead of .n
+      if #b.tuple == 1 then
+         local first = b.tuple[1]
+         if first is types.NominalType and first.found then
+            local table_t = (self.env.modules["table"] as types.TypeDeclType).def as RecordType
+            local packtable = (table_t.fields["PackTable"] as types.TypeDeclType).def
+
+            if first.found.def.typeid == packtable.typeid then
+               self:add_warning("hint", node, "hint: table.unpack should use indices for packed tables: use the form table.unpack(t, 1, t.n) instead")
+            end
+         end
+      end
+      return (self:type_check_function_call(node, a, b, argdelta))
+   end,
    ["string.pack"] = function(self: NodeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
       if #b.tuple < 1 then
          return self:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")

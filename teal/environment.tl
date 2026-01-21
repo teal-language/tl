@@ -230,6 +230,8 @@ do
          table_t.fields["unpack"].needs_compat = true
 
          -- special cased functions
+         set_special_function(table_t.fields["unpack"], "table.unpack")
+
          local string_t = (stdlib_globals["string"].t as TypeDeclType).def as RecordType
          set_special_function(string_t.fields["find"], "string.find")
          set_special_function(string_t.fields["format"], "string.format")
