@@ -27,9 +27,8 @@ jobs:
     - name: build
       run: |
         cd ${{ github.workspace }}/teal-playground
+        echo "VITE_TL_PACKAGE_PATH_URL=https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}/?.lua" >.env.local
         yarn build
-      env:
-        VITE_TL_PACKAGE_PATH_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name }}/${{ github.head_ref }}/?.lua
     - name: netlify deploy
       id: netlify-deploy
       run: |
