@@ -466,7 +466,7 @@ local special_functions = {
             local packtable = (table_t.fields["PackTable"]).def
 
             if first.found.def.typeid == packtable.typeid then
-               self:add_warning("hint", node, "hint: table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead")
+               self:add_warning("hint", node, "hint: table.unpack should use indices for packed tables: use the form table.unpack(t, 1, t.n) instead")
             end
          end
       end

@@ -304,8 +304,8 @@ describe("warnings", function()
          local packed2 = table.pack(1,2,3,4,5,6,7,8,"this",10)
          local _ = table.unpack(packed2)
       ]], {
-         { y = 2, msg = "table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead" },
-         { y = 4, msg = "table.unpack should use indices for PackTable: use table.unpack(this, 1, this.n) instead" },
+         { y = 2, msg = "table.unpack should use indices for packed tables: use the form table.unpack(t, 1, t.n) instead" },
+         { y = 4, msg = "table.unpack should use indices for packed tables: use the form table.unpack(t, 1, t.n) instead" },
       }))
    end)
 
