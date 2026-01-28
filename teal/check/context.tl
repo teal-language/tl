@@ -1496,6 +1496,9 @@ do
             if iface is NominalType then
                local ri = self:resolve_nominal(iface)
                if ri is InterfaceType then
+                  if ri.is_userdata and not t.is_userdata then
+                     self.errs:add(iface, "userdata needs to be explicit: %s is a userdata type", iface)
+                  end
                   table.insert(list, iface)
                   if ri.interfaces_expanded and not seen[ri] then
                      seen[ri] = true
