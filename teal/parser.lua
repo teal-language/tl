@@ -2094,7 +2094,7 @@ parse_simple_type_or_nominal = function(state, block)
    local st = simple_types[tk]
    if st then
       return new_type(state, block, tk)
-   elseif tk == "table" then
+   elseif tk == "table" and block.kind ~= "nominal_type" then
       local typ = new_type(state, block, "map")
       typ.keys = new_type(state, block, "any")
       typ.values = new_type(state, block, "any")

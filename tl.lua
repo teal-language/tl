@@ -11113,7 +11113,7 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       return
    end
 
-   local code = lua_generator.generate(mast, "5.4", lua_generator.fast_opts)
+   local code = lua_generator.generate(mast, "5.1", lua_generator.fast_opts)
    local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env)
    if not chunk then
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = load_err })
@@ -13648,7 +13648,7 @@ parse_simple_type_or_nominal = function(state, block)
    local st = simple_types[tk]
    if st then
       return new_type(state, block, tk)
-   elseif tk == "table" then
+   elseif tk == "table" and block.kind ~= "nominal_type" then
       local typ = new_type(state, block, "map")
       typ.keys = new_type(state, block, "any")
       typ.values = new_type(state, block, "any")

@@ -20,7 +20,7 @@ local record MacroSig
 end
 
 local type MacroFunction = function(...: Block): Block
-   
+
 local type MacroValue = nil | boolean | number | string | MacroFunction | Block
 
 local record MacroEnv
@@ -195,8 +195,8 @@ local function compile_local_macro(mb: Block, filename: string, read_lang: Block
       for _, e in ipairs(perrs) do table.insert(errs, e) end
       return
    end
-   
-   local code = lua_generator.generate(mast as ParserNode, "5.4", lua_generator.fast_opts)
+
+   local code = lua_generator.generate(mast as ParserNode, "5.1", lua_generator.fast_opts)
    local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env as table)
    if not chunk then
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = load_err })
@@ -306,7 +306,7 @@ local function expand_in_node(b: Block, filename: string, env: MacroEnv, errs: {
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
          return b
       end
-      
+
       return expand_in_node(res, filename, env, errs, context)
    end
 

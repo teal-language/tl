@@ -2094,7 +2094,7 @@ parse_simple_type_or_nominal = function(state: ParseState, block: Block): FirstO
    local st = simple_types[tk as TypeName]
    if st then
       return new_type(state, block, tk as TypeName) as StructuralType
-   elseif tk == "table" then -- and ps.tokens[i + 1].tk ~= "." -- reader doesn't have this check for blocks
+   elseif tk == "table" and block.kind ~= "nominal_type" then -- reader already turns plain `table` into map_type
       local typ = new_type(state, block, "map") as MapType
       typ.keys = new_type(state, block, "any")
       typ.values = new_type(state, block, "any")
