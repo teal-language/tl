@@ -124,7 +124,7 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
       load = true,
       loadfile = true,
       dofile = true,
-      -- require = true,
+      require = true,
    }
    setmetatable(env, {
       __index = function(_: any, key: string): any
