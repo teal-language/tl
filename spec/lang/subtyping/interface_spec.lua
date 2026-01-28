@@ -256,4 +256,32 @@ describe("subtyping of interfaces:", function()
       local _a: A = { "a", "b" }
       local _b: B = { "c" }
    ]]))
+
+   it("no duplicate interfaces in interface_list with diamond inheritance", util.check([[
+      local interface A
+         a: number
+      end
+
+      local interface B is A
+         b: string
+      end
+
+      local interface C is A
+         c: boolean
+      end
+
+      -- This should result in interface_list: {B, A, C} (no duplicate A)
+      local record D is B, C
+         d: integer
+      end
+
+      -- Test that all fields are accessible
+      local d: D = {
+         a = 1,    -- from A (via B and C)
+         b = "hi", -- from B
+         c = true, -- from C
+         d = 42    -- from D
+      }
+      print(d.a, d.b, d.c, d.d)
+   ]]))
 end)
