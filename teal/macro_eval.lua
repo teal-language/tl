@@ -127,7 +127,7 @@ function macro_eval.new_env(errs)
 
    }
    setmetatable(env, {
-      __index = function(t, key)
+      __index = function(_, key)
          if FORBIDDEN_LIBS[key] then
             return nil
          end

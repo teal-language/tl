@@ -96,7 +96,6 @@ local lexer = require("teal.lexer")
 
 
 
-
 local parse_type
 local parse_type_list
 local parse_typeargs_if_any
@@ -255,36 +254,6 @@ local attributes = {
    ["total"] = true,
 }
 local is_attribute = attributes
-
-local metamethod_names = {
-   ["__add"] = true,
-   ["__sub"] = true,
-   ["__mul"] = true,
-   ["__div"] = true,
-   ["__mod"] = true,
-   ["__pow"] = true,
-   ["__unm"] = true,
-   ["__idiv"] = true,
-   ["__band"] = true,
-   ["__bor"] = true,
-   ["__bxor"] = true,
-   ["__bnot"] = true,
-   ["__shl"] = true,
-   ["__shr"] = true,
-   ["__concat"] = true,
-   ["__len"] = true,
-   ["__eq"] = true,
-   ["__lt"] = true,
-   ["__le"] = true,
-   ["__index"] = true,
-   ["__newindex"] = true,
-   ["__call"] = true,
-   ["__tostring"] = true,
-   ["__pairs"] = true,
-   ["__gc"] = true,
-   ["__close"] = true,
-   ["__is"] = true,
-}
 
 local precedences = {
    [1] = {
@@ -548,10 +517,9 @@ local function parse_argument_list(state, block)
    end
 
    local min_arity = 0
-   local has_optional = false
    local has_varargs = false
 
-   for a, arg_block in ipairs(block) do
+   for _, arg_block in ipairs(block) do
       local arg_node = new_node(state, arg_block, "argument")
       if not arg_node then
          fail(state, arg_block, "invalid argument")
@@ -570,18 +538,9 @@ local function parse_argument_list(state, block)
          end
 
          if arg_node.tk == "..." then
-
-
-
             has_varargs = true
             is_optional = true
          else
-            if is_optional then
-               has_optional = true
-
-
-            end
-
             if not is_optional and not has_varargs then
                min_arity = min_arity + 1
             end
@@ -1792,7 +1751,7 @@ function parser.parse(input, filename, parse_lang)
 end
 
 
-function parser.parse_program(tokens, errs, filename, parse_lang)
+function parser.parse_program(_tokens, errs, _filename, _parse_lang)
    errors.clear_redundant_errors(errs or {})
    return nil, {}
 end
@@ -2079,8 +2038,8 @@ parse_record_like_type = function(state, block, typename)
       local typ = new_type(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], "function")
       typ.is_method = true
       typ.min_arity = 1
-      local arg = a_type(where_macroexp, "self", { display_type = decl })
-      typ.args = new_tuple(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], { arg })
+      local self_arg = a_type(where_macroexp, "self", { display_type = decl })
+      typ.args = new_tuple(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], { self_arg })
       typ.rets = new_tuple(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], { new_type(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], "boolean") })
       typ.macroexp = where_macroexp
       store_field_in_record(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], "__is", typ, decl, true)

@@ -126,9 +126,9 @@ function reader.node_is_require_call(n)
       n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
 
 
-      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-      if arg.tk then
-         local value = unquote(arg.tk)
+      local arg_block = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+      if arg_block.tk then
+         local value = unquote(arg_block.tk)
          return value
       end
    end
@@ -172,7 +172,6 @@ local read_macro_quote
 local read_type
 local read_type_declaration
 local read_interface_name
-local read_statement_argblock
 local read_statement_fns
 local needs_local_or_global
 local read_nested_type
@@ -518,7 +517,7 @@ local function read_table_literal(ps, i)
    return read_bracket_list(ps, i, node, "{", "}", "term", read_table_item)
 end
 
-local function read_macro_args_with_sig(ps, i, sig, mname)
+local function read_macro_args_with_sig(ps, i, sig)
    local node = new_block(ps, i, "expression_list")
    local function read_item(ps2, ii, n)
       local expected
@@ -545,7 +544,6 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
 
             local j = sblk and curr_i or ii
             local paren_depth = 0
-            local seen_top_level_comma = false
             local best_j
             local best_block
             local need_do_end_error = false
@@ -569,10 +567,10 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
                local errs2 = {}
-               local block, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
-               if #errs2 == 0 and block then
+               local block_ast, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
+               if #errs2 == 0 and block_ast then
                   best_j = jend
-                  best_block = block
+                  best_block = block_ast
                   return true
                end
                return false
@@ -591,7 +589,6 @@ local function read_macro_args_with_sig(ps, i, sig, mname)
                   end
                   paren_depth = paren_depth - 1
                elseif t == "," and paren_depth == 0 then
-                  seen_top_level_comma = true
                   if can_split_on_comma then
                      if try_parse_until(j) then
                         best_j = j
@@ -994,7 +991,7 @@ local function skip_any_function(ps, i)
    return read_function_args_rets_body(ps, i, dummy)
 end
 
-local function read_macro_quote(ps, i)
+read_macro_quote = function(ps, i)
    if not ps.in_local_macro then
       return fail(ps, i, "macro quotes can only be used inside macro statements")
    end
@@ -1009,7 +1006,7 @@ local function read_macro_quote(ps, i)
       return fail(ps, i, "macro quotes cannot be empty")
    end
 
-   local block
+   local quoted_block
    local errs
 
    if triple then
@@ -1053,9 +1050,9 @@ local function read_macro_quote(ps, i)
          for _, stmt in ipairs(parsed_block) do
             table.insert(combined, stmt)
          end
-         block = combined
+         quoted_block = combined
       else
-         block = parsed_block
+         quoted_block = parsed_block
       end
    else
 
@@ -1064,7 +1061,7 @@ local function read_macro_quote(ps, i)
          local ret = wrapped[1]
          if ret and ret.kind == "return" and ret[BLOCK_INDEXES.RETURN.EXPS] then
             local exp = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-            block = exp
+            quoted_block = exp
             errs = {}
          else
             errs = werrs
@@ -1096,7 +1093,7 @@ local function read_macro_quote(ps, i)
       end
    end
 
-   node[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] = block
+   node[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] = quoted_block
    end_at(node, token)
    return i + 1, node
 end
@@ -1136,25 +1133,6 @@ local function read_literal(ps, i)
       return fail(ps, i, "invalid token")
    end
    return fail(ps, i, "syntax error")
-end
-
-local function node_is_require_call_or_pcall(n)
-   local r = reader.node_is_require_call(n)
-   if r then
-      return r
-   end
-   if reader.node_is_funcall(n) and
-      n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].tk == "pcall" and
-      n[BLOCK_INDEXES.OP.E2] and #n[BLOCK_INDEXES.OP.E2] == 2 and
-      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "variable" and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk == "require" and
-      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND].kind == "string" then
-
-
-      local arg = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.SECOND]
-      local value = unquote(arg.tk)
-      return value
-   end
-   return nil
 end
 
 do
@@ -1271,7 +1249,6 @@ do
       local t1 = ps.tokens[i]
       if precedences[1][t1.tk] ~= nil then
          local op_kind = op_map[1][t1.tk]
-         local op_i = i
          i = i + 1
          local prev_i = i
          i, e1 = P(ps, i)
@@ -1371,7 +1348,7 @@ do
                end
                local sig = mname and ps.macro_sigs[mname]
                if sig then
-                  i, args = read_macro_args_with_sig(ps, i, sig, mname)
+                  i, args = read_macro_args_with_sig(ps, i, sig)
                else
                   i, args = read_bracket_list(ps, i, args, "(", ")", "sep", read_expression)
                end
@@ -1567,7 +1544,6 @@ end
 local function read_variable_name(ps, i)
    local node
    if ps.allow_macro_vars and ps.tokens[i].tk == "$" then
-      local dtk = ps.tokens[i]
       i = i + 1
       local ident
       i, ident = verify_kind(ps, i, "identifier")
@@ -1739,25 +1715,25 @@ local function read_local_function(ps, i)
 end
 
 local function read_if_block(ps, i, node, is_else)
-   local block = new_block(ps, i, "if_block")
+   local if_block = new_block(ps, i, "if_block")
    i = i + 1
    if not is_else then
-      i, block[BLOCK_INDEXES.IF_BLOCK.COND] = read_expression_and_tk(ps, i, "then")
-      if not block[BLOCK_INDEXES.IF_BLOCK.COND] then
+      i, if_block[BLOCK_INDEXES.IF_BLOCK.COND] = read_expression_and_tk(ps, i, "then")
+      if not if_block[BLOCK_INDEXES.IF_BLOCK.COND] then
          return i
       end
-      i, block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
-      if not block[BLOCK_INDEXES.IF_BLOCK.BODY] then
+      i, if_block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
+      if not if_block[BLOCK_INDEXES.IF_BLOCK.BODY] then
          return i
       end
    else
-      i, block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
-      if not block[BLOCK_INDEXES.IF_BLOCK.BODY] then
+      i, if_block[BLOCK_INDEXES.IF_BLOCK.BODY] = read_statements(ps, i)
+      if not if_block[BLOCK_INDEXES.IF_BLOCK.BODY] then
          return i
       end
    end
-   block.yend, block.xend = (block[BLOCK_INDEXES.IF_BLOCK.BODY] or block[BLOCK_INDEXES.IF_BLOCK.COND]).yend, (block[BLOCK_INDEXES.IF_BLOCK.BODY] or block[BLOCK_INDEXES.IF_BLOCK.COND]).xend
-   table.insert(node[BLOCK_INDEXES.IF.BLOCKS], block)
+   if_block.yend, if_block.xend = (if_block[BLOCK_INDEXES.IF_BLOCK.BODY] or if_block[BLOCK_INDEXES.IF_BLOCK.COND]).yend, (if_block[BLOCK_INDEXES.IF_BLOCK.BODY] or if_block[BLOCK_INDEXES.IF_BLOCK.COND]).xend
+   table.insert(node[BLOCK_INDEXES.IF.BLOCKS], if_block)
    return i, node
 end
 
@@ -1873,56 +1849,6 @@ local function read_goto(ps, i)
    node[BLOCK_INDEXES.GOTO.LABEL] = new_block(ps, i, "identifier")
    node[BLOCK_INDEXES.GOTO.LABEL].tk = ps.tokens[i].tk
    i = verify_kind(ps, i, "identifier")
-   return i, node
-end
-
-read_statement_argblock = function(ps, i)
-   local node = new_block(ps, i, "statements")
-   local item
-   while true do
-      while ps.tokens[i].kind == ";" do
-         i = i + 1
-      end
-      if ps.tokens[i].kind == "$EOF$" then
-         break
-      end
-      local tk = ps.tokens[i].tk
-      if tk == ")" or tk == "," then
-         break
-      end
-
-      local fn = read_statement_fns[tk]
-      if not fn then
-         if read_type_body_fns[tk] and ps.tokens[i + 1].kind == "identifier" then
-            local lt
-            i, lt = read_nested_type(ps, i, tk)
-            item = lt
-         else
-            local skip_fn = needs_local_or_global[tk]
-            if skip_fn and ps.tokens[i + 1].kind == "identifier" then
-               fn = skip_fn
-            else
-               fn = read_call_or_assignment
-            end
-         end
-      end
-
-      if not item and fn then
-         i, item = fn(ps, i)
-      end
-
-      if item then
-         table.insert(node, item)
-         item = nil
-      elseif i > 1 then
-         local lasty = ps.tokens[i - 1].y
-         while ps.tokens[i].kind ~= "$EOF$" and ps.tokens[i].y == lasty do
-            i = i + 1
-         end
-      end
-   end
-
-   end_at(node, ps.tokens[i])
    return i, node
 end
 
@@ -2348,7 +2274,6 @@ local function read_assignment_expression_list(ps, i, asgn)
    return i, asgn
 end
 
-local read_call_or_assignment
 do
    local function read_variable(ps, i)
       local node
@@ -2488,7 +2413,6 @@ read_type_declaration = function(ps, i, node_name)
    end
 
    i = verify_tk(ps, i, "=")
-   local istart = i
 
    if ps.tokens[i].kind == "identifier" then
       local is_done
@@ -2645,7 +2569,7 @@ local function read_global(ps, i)
    return read_call_or_assignment(ps, i)
 end
 
-local function read_record_function(ps, i)
+read_record_function = function(ps, i)
    i = verify_tk(ps, i, "function")
 
    local fn = new_block(ps, i - 1, "record_function")

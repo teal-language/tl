@@ -127,7 +127,7 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
       -- require = true,
    }
    setmetatable(env, {
-      __index = function(t: any, key: string): any
+      __index = function(_: any, key: string): any
          if FORBIDDEN_LIBS[key] then
             return nil
          end
