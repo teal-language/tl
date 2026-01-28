@@ -28,6 +28,13 @@ jobs:
 
     - uses: luarocks/gh-actions-luarocks@master
 
+    - name: Cache LuaRocks packages
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.os == 'Windows' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\luarocks' || format('{0}/.luarocks', github.workspace) }}
+        key: ${{ runner.os }}-luarocks-${{ matrix.lua-version }}-${{ hashFiles('**/luarocks.lock') }}
+
     - name: Build
       run: |
         luarocks make --only-deps

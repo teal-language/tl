@@ -287,6 +287,7 @@ local record types
       "string.match"
       "string.pack"
       "string.unpack"
+      "table.unpack"
    end
 
    record FunctionType

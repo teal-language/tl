@@ -181,10 +181,8 @@ function util.assert_line_by_line(s1, s2)
    batch:assert()
 end
 
-local vars_prefix = {
-   util.os_set("LUA_PATH", util.os_path(package.path)) .. util.os_join,
-   util.os_set("LUA_CPATH", util.os_path(package.cpath)) .. util.os_join
-}
+local vars_prefix = { util.os_set("LUA_PATH", util.os_path(package.path)) .. util.os_join }
+table.insert(vars_prefix, util.os_set("LUA_CPATH", util.os_path(package.cpath)) .. util.os_join)
 for i = 1, 4 do
    table.insert(vars_prefix, util.os_set("LUA_PATH_5_" .. tostring(i), util.os_path(package.path)) .. util.os_join)
    table.insert(vars_prefix, util.os_set("LUA_CPATH_5_" .. tostring(i), util.os_path(package.cpath)) .. util.os_join)
