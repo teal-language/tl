@@ -8,6 +8,7 @@ local type lua_compat = require("teal.gen.lua_compat")
 local type lua_generator = require("teal.gen.lua_generator")
 local type package_loader = require("teal.package_loader")
 local type parser = require("teal.parser")
+local reader = require("teal.reader")
 local type require_file = require("teal.check.require_file")
 local type targets = require("teal.gen.targets")
 local type type_reporter = require("teal.type_reporter")
@@ -304,7 +305,17 @@ end
 
 function TokenList:parse(): ParseTree, ParseError
    local errs = self.lexical_errors as {teal.Error} or {}
-   local ast, required_modules = parser.parse_program(self.tokens, errs, self.filename)
+   local block_ast, required_modules = reader.read_program(self.tokens, errs, self.filename)
+   local ast, parse_errs, parse_required = parser.parse(block_ast, self.filename)
+   for _, e in ipairs(parse_errs) do
+      table.insert(errs, e)
+   end
+   if parse_required then
+      required_modules = required_modules or {}
+      for _, m in ipairs(parse_required) do
+         table.insert(required_modules, m)
+      end
+   end
 
    if #errs > 0 and not self.env.keep_going then
       environment.register_failed(self.env, self.filename, errs)
