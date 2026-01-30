@@ -10915,7 +10915,7 @@ end
 
 -- module teal.macro_eval from teal/macro_eval.lua
 package.preload["teal.macro_eval"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local coroutine = _tl_compat and _tl_compat.coroutine or coroutine; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local coroutine = _tl_compat and _tl_compat.coroutine or coroutine; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local rawlen = _tl_compat and _tl_compat.rawlen or rawlen; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local utf8 = _tl_compat and _tl_compat.utf8 or utf8; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall; local block = require("teal.block")
 
 
 local BLOCK_INDEXES = block.BLOCK_INDEXES
@@ -11017,7 +11017,6 @@ function macro_eval.new_env(errs)
          end,
          clone = clone_value,
 
-
          BLOCK_INDEXES = BLOCK_INDEXES,
 
          math = math,
@@ -11033,7 +11032,30 @@ function macro_eval.new_env(errs)
          unpack = (_G).unpack,
          select = select,
          coroutine = coroutine,
+         assert = assert,
 
+         next = next,
+         xpcall = xpcall,
+         print = print,
+         _VERSION = _VERSION,
+
+         getmetatable = getmetatable,
+         setmetatable = setmetatable,
+
+         rawget = rawget,
+         rawset = rawset,
+         rawequal = rawequal,
+         rawlen = rawlen,
+
+         utf8 = utf8,
+         bit = (_G).bit,
+
+         os = {
+            clock = os.clock,
+            date = os.date,
+            difftime = os.difftime,
+            time = os.time,
+         },
 
 
 
@@ -11558,7 +11580,7 @@ end
 -- module teal.parser from teal/parser.lua
 package.preload["teal.parser"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
-local reader = require("teal.reader_api")
+local reader = require("teal.block")
 
 
 local errors = require("teal.errors")
@@ -16849,23 +16871,6 @@ function reader.read(input, filename, read_lang, allow_macro_vars, skip_macro_ex
 end
 
 return reader
-
-end
-
--- module teal.reader_api from teal/reader_api.lua
-package.preload["teal.reader_api"] = function(...)
-local block = require("teal.block")
-
-local ReaderAPI = {}
-
-
-
-
-
-
-ReaderAPI.BLOCK_INDEXES = block.BLOCK_INDEXES
-
-return ReaderAPI
 
 end
 
