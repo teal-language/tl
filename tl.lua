@@ -10915,7 +10915,7 @@ end
 
 -- module teal.macro_eval from teal/macro_eval.lua
 package.preload["teal.macro_eval"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local coroutine = _tl_compat and _tl_compat.coroutine or coroutine; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack; local type = type; local block = require("teal.block")
 
 
 local BLOCK_INDEXES = block.BLOCK_INDEXES
@@ -10927,7 +10927,6 @@ local parser = require("teal.parser")
 
 
 local macro_eval = {}
-
 
 
 
@@ -11008,52 +11007,58 @@ function macro_eval.new_env(errs)
       macros = {},
       signatures = {},
       where = { f = "@macro", y = 1, x = 1 },
-      block = function(_)
-         return { kind = "statements", f = "@macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      end,
-      expect = function(_, _)
-         error("macro env not initialized")
-         return nil
-      end,
-      clone = clone_value,
+      sandbox = {
+         block = function(_)
+            return { kind = "statements", f = "@macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+         end,
+         expect = function(_, _)
+            error("macro env not initialized")
+            return nil
+         end,
+         clone = clone_value,
+
+
+         BLOCK_INDEXES = BLOCK_INDEXES,
+
+         math = math,
+         string = string,
+         table = table,
+         pairs = pairs,
+         ipairs = ipairs,
+         tostring = tostring,
+         tonumber = tonumber,
+         type = type,
+         error = error,
+         pcall = pcall,
+         unpack = (_G).unpack,
+         select = select,
+         coroutine = coroutine,
+
+
+
+
+
+
+
+
+
+
+      },
    }
-   env.block = function(kind)
+   env.sandbox.block = function(kind)
       local w = env.where
       if not block.BLOCK_KINDS[kind] then
          table.insert(errs, { filename = w.f, y = w.y, x = w.x, msg = "unknown block kind: " .. tostring(kind) })
       end
       return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
-   env.expect = function(b, k)
+   env.sandbox.expect = function(b, k)
       if b and b.kind == k then
          return b
       end
       table.insert(errs, { filename = env.where.f, y = env.where.y, x = env.where.x, msg = "expected " .. k .. ", got " .. (b and b.kind or "nil") })
       return nil
    end
-
-
-   local FORBIDDEN_LIBS = {
-      os = true,
-      io = true,
-      debug = true,
-      package = true,
-      load = true,
-      loadfile = true,
-      dofile = true,
-
-   }
-   setmetatable(env, {
-      __index = function(_, key)
-         if FORBIDDEN_LIBS[key] then
-            return nil
-         end
-
-
-
-         return (_G)[key]
-      end,
-   })
 
    return env
 end
@@ -11114,7 +11119,7 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    end
 
    local code = lua_generator.generate(mast, "5.1", lua_generator.fast_opts)
-   local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env)
+   local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env.sandbox)
    if not chunk then
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = load_err })
       return

@@ -27,9 +27,8 @@ local record MacroEnv
    macros: {string: MacroFunction}
    signatures: {string: MacroSig}
    where: Where
-   block: function(kind: block.BlockKind): Block
-   expect: function(v: MacroValue, k: string): Block
-   clone: function(v: Block): Block
+
+   sandbox: {string:any}
 end
 
 local function numeric_child_keys(b: Block): {integer}
@@ -91,23 +90,52 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
       macros = {},
       signatures = {},
       where = { f = "@macro", y = 1, x = 1 },
-      block = function(_: block.BlockKind): Block
-         return { kind = "statements", f = "@macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      end,
-      expect = function(_: MacroValue, _: string): Block
-         error("macro env not initialized")
-         return nil
-      end,
-      clone = clone_value,
+      sandbox = {
+         block = function(_: block.BlockKind): Block
+            return { kind = "statements", f = "@macro", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+         end,
+         expect = function(_: MacroValue, _: string): Block
+            error("macro env not initialized")
+            return nil
+         end,
+         clone = clone_value,
+
+
+         BLOCK_INDEXES = BLOCK_INDEXES,
+
+         math = math,
+         string = string,
+         table = table,
+         pairs = pairs,
+         ipairs = ipairs,
+         tostring = tostring,
+         tonumber = tonumber,
+         type = type,
+         error = error,
+         pcall = pcall,
+         unpack = (_G as {string:any}).unpack,
+         select = select,
+         coroutine = coroutine,
+
+         -- FORBIDDEN --
+         -- os = nil,
+         -- io = nil,
+         -- debug = nil,
+         -- package = nil,
+         -- load = nil,
+         -- loadfile = nil,
+         -- dofile = nil,
+         -- require = nil,
+      }
    }
-   env.block = function(kind: block.BlockKind): Block
+   env.sandbox.block = function(kind: block.BlockKind): Block
       local w = env.where
       if not block.BLOCK_KINDS[kind] then
          table.insert(errs, { filename = w.f, y = w.y, x = w.x, msg = "unknown block kind: " .. tostring(kind) })
       end
       return { kind = kind, f = w.f, y = w.y, x = w.x, tk = "", yend = w.y, xend = w.x }
    end
-   env.expect = function(b: Block, k: block.BlockKind): Block
+   env.sandbox.expect = function(b: Block, k: block.BlockKind): Block
       if b and b.kind == k then
          return b
       end
@@ -115,29 +143,6 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
       return nil
    end
 
-   --todo: restrict
-   local FORBIDDEN_LIBS: {string:boolean} = {
-      os = true,
-      io = true,
-      debug = true,
-      package = true,
-      load = true,
-      loadfile = true,
-      dofile = true,
-      require = true,
-   }
-   setmetatable(env, {
-      __index = function(_: any, key: string): any
-         if FORBIDDEN_LIBS[key] then
-            return nil
-         end
-
-         -- some lua modules that are `require`d could pollute `_G` which would allow a macro to access them
-         -- TODO: reconstruct _G from scratch?
-         return (_G as {string:any})[key]
-      end
-   })
-   -- macro signatures: name -> { kinds = {"stmt"|"expr"...}, vararg?: "stmt"|"expr" }
    return env
 end
 
@@ -197,7 +202,7 @@ local function compile_local_macro(mb: Block, filename: string, read_lang: Block
    end
 
    local code = lua_generator.generate(mast as ParserNode, "5.1", lua_generator.fast_opts)
-   local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env as table)
+   local chunk, load_err = load(code .. "\nreturn " .. name, name, "t", env.sandbox)
    if not chunk then
       table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = load_err })
       return

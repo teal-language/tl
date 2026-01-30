@@ -94,10 +94,9 @@ describe('macro invocation expansion', function()
 end)
 
 describe('macro unknown type error', function()
-   it('reports unknown type from macro-built nominal without crashing', util.check_type_error([[ 
+   it('reports unknown type from macro-built nominal without crashing', util.check_type_error([[
       local macro badtype!()
-         local blk = require("teal.block")
-         local BI = blk.BLOCK_INDEXES
+         local BI = BLOCK_INDEXES
 
          local function mkident(s: string)
             local b = block('identifier')
@@ -146,7 +145,7 @@ describe('statement macro invocation (paren form)', function()
       assert.same({}, errs)
       local out, err = lua_gen.generate(ast, '5.4')
       assert.is_nil(err)
-      
+
       out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
       assert.same('local MyClass = {} local x = { name = "ok" }', out)
    end)
@@ -532,10 +531,9 @@ end)
       assert.same({}, errs)
    end)
 
-   it('splices a nominal_type into type positions (regression)', util.check([[ 
+   it('splices a nominal_type into type positions (regression)', util.check([[
       local macro cast_demo!()
-         local blk = require("teal.block")
-         local BI = blk.BLOCK_INDEXES
+         local BI = BLOCK_INDEXES
          local function nt_named(name: string)
             local nt = block('nominal_type')
             local id = block('identifier')
@@ -556,8 +554,7 @@ end)
    it('gives a proper error message on known block kind', function()
       local code = [[
          local macro make_weird!()
-            local blk = require("teal.block")
-            local BI = blk.BLOCK_INDEXES
+            local BI = BLOCK_INDEXES
 
             local weird = block('whatever')
             weird[BI.WHATEVER.SOME_FIELD] = 123
