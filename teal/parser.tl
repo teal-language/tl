@@ -1,5 +1,5 @@
 
-local reader = require("teal.reader_api")
+local reader = require("teal.block")
 local type Block = reader.Block
 local type BlockLang = reader.BlockLang
 local errors = require("teal.errors")
