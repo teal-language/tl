@@ -100,7 +100,6 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
          end,
          clone = clone_value,
 
-
          BLOCK_INDEXES = BLOCK_INDEXES,
 
          math = math,
@@ -116,16 +115,39 @@ function macro_eval.new_env(errs: {Error}): MacroEnv
          unpack = (_G as {string:any}).unpack,
          select = select,
          coroutine = coroutine,
+         assert = assert,
 
+         next = next,
+         xpcall = xpcall,
+         print = print,
+         _VERSION = _VERSION,
+
+         getmetatable = getmetatable,
+         setmetatable = setmetatable,
+
+         rawget = rawget,
+         rawset = rawset,
+         rawequal = rawequal,
+         rawlen = rawlen,
+
+         utf8 = utf8,
+         bit = (_G as {string:any}).bit,
+
+         os = {
+            clock = os.clock,
+            date = os.date,
+            difftime = os.difftime,
+            time = os.time,
+         }
          -- FORBIDDEN --
          -- os = nil,
          -- io = nil,
          -- debug = nil,
          -- package = nil,
-         -- load = nil,
          -- loadfile = nil,
          -- dofile = nil,
          -- require = nil,
+         -- load = nil,
       }
    }
    env.sandbox.block = function(kind: block.BlockKind): Block
