@@ -114,6 +114,6 @@ describe("pcall", function()
          print(err)
       end
    ]], {
-      { msg = "argument 2: got integer, expected Text" }
+      { msg = "argument 2: got integer, expected record Text" }
    }))
 end)
