@@ -302,6 +302,10 @@ local record types
       rets: TupleType
       macroexp: Node
       special_function_handler: SpecialFunctionName -- special handling for format strings etc
+      
+      -- contextual typing fields
+      is_contextually_typed: boolean      -- Whether this function was contextually typed
+      inference_constraints: any          -- Constraints applied during inference
    end
 
    interface AggregateType

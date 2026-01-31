@@ -61,6 +61,8 @@ build = {
       ["teal.facts"] = "teal/facts.lua",
       ["teal.lexer"] = "teal/lexer.lua",
       ["teal.util"] = "teal/util.lua",
+      ["teal.contextual_typing"] = "teal/contextual_typing.lua",
+      ["teal.contextual_type_checker"] = "teal/contextual_type_checker.lua",
 
       -- Ship the compiled Lua modules from the `tlcli` namespace for the `tl` program:
       ["tlcli.commands.warnings"] = "tlcli/commands/warnings.lua",
@@ -118,6 +120,8 @@ build = {
          ["teal.facts"] = "teal/facts.tl",
          ["teal.lexer"] = "teal/lexer.tl",
          ["teal.util"] = "teal/util.tl",
+         ["teal.contextual_typing"] = "teal/contextual_typing.tl",
+         ["teal.contextual_type_checker"] = "teal/contextual_type_checker.tl",
          ["teal.precompiled.default_env"] = "teal/precompiled/default_env.d.tl",
          ["teal.default.prelude"] = "teal/default/prelude.d.tl",
          ["teal.default.stdlib"] = "teal/default/stdlib.d.tl",

@@ -10,6 +10,12 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/variables.tl teal/type_reporter.tl \
 	teal/macroexps.tl teal/metamethods.tl \
 	teal/type_errors.tl teal/environment.tl \
+	teal/contextual_typing.tl teal/contextual_type_checker.tl \
+	teal/mixed_parameter_handler.tl teal/mixed_parameter_error_reporter.tl \
+	teal/generic_error_handler.tl \
+	teal/generic_resolution.tl teal/generic_resolver.tl \
+	teal/type_alias_subtyping_support.tl \
+	teal/inference_performance_optimizer.tl \
 	teal/check/context.tl teal/check/visitors.tl teal/check/check.tl \
 	teal/check/relations.tl teal/check/special_functions.tl \
 	teal/check/type_checker.tl teal/check/node_checker.tl \

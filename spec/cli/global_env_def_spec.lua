@@ -78,4 +78,35 @@ describe("--global-env-def argument", function()
 
    end);
 
+   it("handles path normalization correctly with different path separators", function()
+      util.do_in(util.write_tmp_dir(finally, {
+         src = {
+            ["cc.d.tl"] = [[
+               global record Redirect
+                  url: string
+               end
+            ]],
+         },
+         ["main.tl"] = [[
+            local cc = require("cc")
+            local function test(r: cc.Redirect)
+               print(r.url)
+            end
+            test({url = "http://example.com"})
+         ]],
+         ["tlconfig.lua"] = [[
+         return {
+            source_dir = "src",
+            include_dir = { "src" },
+            global_env_def = "cc",
+         }
+         ]],
+      }), function()
+         local pd = io.popen(util.tl_cmd("check", "main.tl"), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         assert.match("0 errors detected", output, 1, true)
+      end)
+   end)
+
 end)

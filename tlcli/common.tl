@@ -40,44 +40,8 @@ do
    end
 
    function common.normalize(filename: string): string, string
-      local drive = ""
-
-      if common.sep == "\\" then
-         filename = filename:gsub("\\", "/")
-         drive, filename = split_drive(filename)
-      end
-
-      if filename:sub(1, 1) ~= "/" then
-         filename = cd() .. "/" .. filename
-         drive, filename = split_drive(filename)
-      end
-
-      local root = ""
-      if filename:sub(1, 1) == "/" then
-         root = "/"
-      end
-
-      local pieces = {}
-      for piece in filename:gmatch("[^/]+") do
-         if piece == ".." then
-            local prev = pieces[#pieces]
-            if not prev or prev == ".." then
-               table.insert(pieces, "..")
-            elseif prev ~= "" then
-               table.remove(pieces)
-            end
-         elseif piece ~= "." then
-            table.insert(pieces, piece)
-         end
-      end
-
-      filename = (drive .. root .. table.concat(pieces, "/")):gsub("/*$", "")
-
-      if common.sep == "\\" then
-         filename = filename:gsub("/", "\\")
-      end
-
-      return filename, drive .. common.sep
+      local util = require("teal.util")
+      return util.normalize_path(filename)
    end
 end
 

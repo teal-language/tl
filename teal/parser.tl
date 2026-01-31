@@ -198,6 +198,12 @@ local record Node
    itemtype: Type
    decltuple: TupleType
 
+   -- contextual typing fields
+   inferred_signature: FunctionType     -- Inferred function type for function literals
+   inference_source: string             -- Source of type inference (call_site, assignment, etc.)
+   inference_confidence: number         -- Confidence level of inference (0.0 to 1.0)
+   contextual_type_info: any           -- Additional contextual typing metadata
+
    -- pragma
    pkey: string
    pvalue: string
@@ -877,6 +883,13 @@ end
 
 local function parse_function_value(ps: ParseState, i: integer): integer, Node
    local node = new_node(ps, i, "function")
+   
+   -- Initialize contextual typing fields
+   node.inferred_signature = nil
+   node.inference_source = nil
+   node.inference_confidence = 0.0
+   node.contextual_type_info = nil
+   
    i = verify_tk(ps, i, "function")
    return parse_function_args_rets_body(ps, i, node)
 end
@@ -1419,6 +1432,13 @@ local function parse_local_function(ps: ParseState, i: integer): integer, Node
    i = verify_tk(ps, i, "local")
    i = verify_tk(ps, i, "function")
    local node = new_node(ps, i - 2, "local_function")
+   
+   -- Initialize contextual typing fields
+   node.inferred_signature = nil
+   node.inference_source = nil
+   node.inference_confidence = 0.0
+   node.contextual_type_info = nil
+   
    i, node.name = parse_identifier(ps, i)
    return parse_function_args_rets_body(ps, i, node)
 end
@@ -1432,6 +1452,13 @@ local function parse_function(ps: ParseState, i: integer, fk: FunctionKind): int
    local orig_i = i
    i = verify_tk(ps, i, "function")
    local fn = new_node(ps, i - 1, "global_function")
+   
+   -- Initialize contextual typing fields
+   fn.inferred_signature = nil
+   fn.inference_source = nil
+   fn.inference_confidence = 0.0
+   fn.contextual_type_info = nil
+   
    local names: {Node} = {}
    i, names[1] = parse_identifier(ps, i)
    while ps.tokens[i].tk == "." do

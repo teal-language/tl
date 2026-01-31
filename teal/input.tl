@@ -11,6 +11,10 @@ local record input
 end
 
 function input.check(env: Env, filename: string, code: string): Result
+   local util = require("teal.util")
+   -- Normalize filename to ensure consistent path representation
+   filename = util.normalize_path(filename)
+   
    if env.loaded and env.loaded[filename] then
       return env.loaded[filename]
    end

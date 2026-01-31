@@ -4,6 +4,66 @@
 local record util
 end
 
+function util.normalize_path(filename: string): string, string
+   local function split_drive(filename: string): string, string
+      local drive, rest = filename:match("^([A-Za-z]:)(.*)$")
+      if drive then
+         return drive, rest
+      end
+      return "", filename
+   end
+
+   local function cd(): string
+      local ok, popen = pcall(io.popen, "cd")
+      if not ok then
+         return "."
+      end
+      local current = popen:read("*l")
+      popen:close()
+      return current or "."
+   end
+
+   local drive = ""
+   local sep = package.config:sub(1, 1)
+
+   if sep == "\\" then
+      filename = filename:gsub("\\", "/")
+      drive, filename = split_drive(filename)
+   end
+
+   if filename:sub(1, 1) ~= "/" then
+      filename = cd() .. "/" .. filename
+      drive, filename = split_drive(filename)
+   end
+
+   local root = ""
+   if filename:sub(1, 1) == "/" then
+      root = "/"
+   end
+
+   local pieces = {}
+   for piece in filename:gmatch("[^/]+") do
+      if piece == ".." then
+         local prev = pieces[#pieces]
+         if not prev or prev == ".." then
+            table.insert(pieces, "..")
+         elseif prev ~= "" then
+            table.remove(pieces)
+         end
+      elseif piece ~= "." then
+         table.insert(pieces, piece)
+      end
+   end
+
+   filename = (drive .. root .. table.concat(pieces, "/")):gsub("/*$", "")
+
+   if sep == "\\" then
+      filename = filename:gsub("/", "\\")
+   end
+
+   return filename, drive .. sep
+end
+
 function util.binary_search<T, U>(list: {T}, item: U, cmp: function(T, U): boolean): integer, T
    local len <const> = #list
    local mid: integer

@@ -31,6 +31,8 @@ require_file.all_extensions = {
 }
 
 local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, string, {string}
+   local util = require("teal.util")
+   
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
 
@@ -56,7 +58,9 @@ local function search_for(module_name: string, suffix: string, path: string, tri
                return nil, nil, tried
             end
             fd:close()
-            return tl_filename, code, tried
+            -- Normalize the path before returning
+            local normalized_filename = util.normalize_path(tl_filename)
+            return normalized_filename, code, tried
          end
       end
    end
@@ -95,11 +99,14 @@ local function a_circular_require(w: Where): TypeDeclType
 end
 
 function require_file.search_and_load(env: Env, module_name: string, extension_set?: {Extension:boolean}): Result, string, {string}
+   local util = require("teal.util")
    local found, code, tried = require_file.search_module(module_name, extension_set)
    if not found then
       return nil, nil, tried
    end
 
+   -- Normalize the found path before storing it
+   found = util.normalize_path(found)
    env.module_filenames[module_name] = found
 
    local w = { f = found, x = 1, y = 1 }
