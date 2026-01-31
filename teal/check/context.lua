@@ -1680,7 +1680,15 @@ function Context:match_record_key(t, rec, key)
       assert(t.fields, "record has no fields!?")
 
       if t.fields[key] then
-         return t.fields[key]
+         local ft = t.fields[key]
+         if ft.typename == "function" then
+            ft = types.map(nil, ft, {
+               ["self"] = function(_, _typ)
+                  return t, true
+               end,
+            })
+         end
+         return ft
       end
 
       local str = a_type(rec, "string", {})
