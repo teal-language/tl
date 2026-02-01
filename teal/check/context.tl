@@ -1490,7 +1490,8 @@ do
       end
    end
 
-   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}
+   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}, boolean
+      local is_userdata = t.is_userdata
       if t.interface_list then
          for _, iface in ipairs(t.interface_list) do
             if iface is NominalType then
@@ -1500,7 +1501,8 @@ do
                      seen[ri] = true
                      table.insert(list, iface)
                      if ri.interfaces_expanded then
-                        collect_interfaces(self, list, ri, seen)
+                        local _, ud = collect_interfaces(self, list, ri, seen)
+                        is_userdata = is_userdata or ud
                      end
                   end
                else
@@ -1514,7 +1516,7 @@ do
             end
          end
       end
-      return list
+      return list, is_userdata
    end
 
    function Context:expand_interfaces(t: RecordLikeType)
@@ -1523,7 +1525,7 @@ do
       end
       t.interfaces_expanded = true
 
-      t.interface_list = collect_interfaces(self, {}, t, {})
+      t.interface_list, t.is_userdata = collect_interfaces(self, {}, t, {})
 
       for _, iface in ipairs(t.interface_list) do
          if iface is NominalType then
