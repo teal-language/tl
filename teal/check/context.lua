@@ -1792,7 +1792,7 @@ function Context:add_global(node, varname, valtype, is_assigning)
       return nil
    end
 
-   local var = { t = valtype, attribute = is_const and "const" or nil }
+   local var = { t = valtype, attribute = is_const and "const" or nil, declared_at = node, is_global = true }
    self.st[1].vars[varname] = var
 
    return var
