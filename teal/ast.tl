@@ -599,8 +599,9 @@ local function extract_attached_comments(pending: {Block}, target: Block): {Comm
    end
 
    local last = pending[#pending]
-   local diff_y = target.y - comment_block_end_y(last)
    if is_long_comment_block(last) then
+      local diff_y = target.y - comment_block_end_y(last)
+      -- we want to attach only long comments that end just before the token
       if diff_y >= 0 and diff_y <= 1 then
          table.remove(pending, #pending)
          return { comment_block_to_comment(last) }
@@ -609,23 +610,23 @@ local function extract_attached_comments(pending: {Block}, target: Block): {Comm
       end
    end
 
+   local diff_y = target.y - last.y
    if diff_y < 0 or diff_y > 1 then
       return nil
    end
 
-   local first = #pending
-   for i = #pending - 1, 1, -1 do
-      local prev = pending[i]
+   local first = 1
+   for i = #pending, 2, -1 do
+      local prev = pending[i - 1]
       if is_long_comment_block(prev) then
-         first = i + 1
+         first = i
          break
       end
-      local gap = pending[i + 1].y - comment_block_end_y(prev)
-      if gap > 1 then
-         first = i + 1
+      -- we want to attach only consecutive comments
+      if pending[i].y - prev.y > 1 then
+         first = i
          break
       end
-      first = i
    end
 
    local attached_blocks: {Block} = {}

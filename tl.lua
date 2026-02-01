@@ -861,8 +861,9 @@ local function extract_attached_comments(pending, target)
    end
 
    local last = pending[#pending]
-   local diff_y = target.y - comment_block_end_y(last)
    if is_long_comment_block(last) then
+      local diff_y = target.y - comment_block_end_y(last)
+
       if diff_y >= 0 and diff_y <= 1 then
          table.remove(pending, #pending)
          return { comment_block_to_comment(last) }
@@ -871,23 +872,23 @@ local function extract_attached_comments(pending, target)
       end
    end
 
+   local diff_y = target.y - last.y
    if diff_y < 0 or diff_y > 1 then
       return nil
    end
 
-   local first = #pending
-   for i = #pending - 1, 1, -1 do
-      local prev = pending[i]
+   local first = 1
+   for i = #pending, 2, -1 do
+      local prev = pending[i - 1]
       if is_long_comment_block(prev) then
-         first = i + 1
+         first = i
          break
       end
-      local gap = pending[i + 1].y - comment_block_end_y(prev)
-      if gap > 1 then
-         first = i + 1
+
+      if pending[i].y - prev.y > 1 then
+         first = i
          break
       end
-      first = i
    end
 
    local attached_blocks = {}
@@ -1299,8 +1300,6 @@ parse_fns.local_declaration = function(state, block)
       node.decltuple = dt
       next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.EXPS
    else
-
-
       local dummy_block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       dummy_block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       local dt
@@ -15071,7 +15070,6 @@ end
 
 local function read_function_args_rets_body(ps, i, node)
    local istart = i - 1
-
    i, node[BLOCK_INDEXES.FUNCTION.TYPEARGS] = read_typeargs_if_any(ps, i)
 
    i, node[BLOCK_INDEXES.FUNCTION.ARGS] = read_argument_list(ps, i)
