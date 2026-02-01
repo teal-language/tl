@@ -1,5 +1,9 @@
 local util = require("spec.util")
 
+local function load_string(code, name)
+  return (loadstring or load)(code, name)
+end
+
 describe("tl dump-blocks", function()
    setup(util.chdir_setup)
    teardown(util.chdir_teardown)
@@ -12,7 +16,7 @@ describe("tl dump-blocks", function()
       local output = pd:read("*a")
       util.assert_popen_close(0, pd:close())
 
-      local chunk, load_err = load("return " .. output, "dump-blocks-output")
+      local chunk, load_err = load_string("return " .. output, "dump-blocks-output")
       assert.is_truthy(chunk, load_err)
       local root = chunk()
       assert.equals("statements", root.kind)
