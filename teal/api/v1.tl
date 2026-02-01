@@ -112,13 +112,11 @@ v1.load = loader.load
 v1.loader = package_loader.install_loader
 
 v1.parse = function(input: string, filename: string): Node, {Error}, {string}
-   local ast, errs, required = parser.parse(input, filename)
-   return ast as parser.Node, errs as {Error}, required
+   return parser.parse(input, filename) as (parser.Node, {Error}, {string})
 end
 
 v1.parse_program = function(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
-   local ast, required = parser.parse_program(tokens, errs, filename)
-   return ast as parser.Node, required
+   return parser.parse_program(tokens, errs, filename) as (parser.Node, {string})
 end
 
 v1.pretty_print_ast = function(ast: Node, gen_target?: v1.TargetMode, mode?: boolean | v1.PrettyPrintOpts): string, string
