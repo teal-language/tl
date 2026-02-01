@@ -6,8 +6,8 @@ local BLOCK_INDEXES = block.BLOCK_INDEXES
 local errors = require("teal.errors")
 local type Error = errors.Error
 local type Where = errors.Where
-local parser = require("teal.parser")
-local type ParserNode = parser.Node
+local ast = require("teal.ast")
+local type ParserNode = ast.Node
 
 local record macro_eval
    new_env: function(errs: {Error}): MacroEnv
@@ -217,7 +217,7 @@ local function compile_local_macro(mb: Block, filename: string, read_lang: Block
    local lua_generator = require("teal.gen.lua_generator")
    local single: Block = { kind = "statements", y = mb.y, x = mb.x, tk = mb.tk, yend = mb.yend, xend = mb.xend }
    single[1] = mb
-   local mast, perrs = parser.parse(single, filename, read_lang)
+   local mast, perrs = ast.parse_blocks(single, filename, read_lang)
    if #perrs > 0 then
       for _, e in ipairs(perrs) do table.insert(errs, e) end
       return

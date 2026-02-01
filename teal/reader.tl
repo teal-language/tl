@@ -32,8 +32,8 @@ local record reader
    type BlockLang = BlockLang
 
    BLOCK_INDEXES: {string : {string : integer}}
-   read: function(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block, {Error}, {string}
-   read_program: function(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block, {string}
+   read: function(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block, {Error}
+   read_program: function(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, allow_macro_expand?: boolean): Block
 end
 
 local BLOCK_INDEXES <const> = block.BLOCK_INDEXES
@@ -147,13 +147,11 @@ local record ReadState
    errs: {Error}
    filename: string
    end_alignment_hint: Error
-
-    required_modules: {string}
-    read_lang: BlockLang
-    allow_macro_vars: boolean
-    in_local_macro: boolean
-    macro_sigs: {string: MacroSig}
-  end
+   read_lang: BlockLang
+   allow_macro_vars: boolean
+   in_local_macro: boolean
+   macro_sigs: {string: MacroSig}
+end
 
 local enum BlockTypeListMode
    "rets"
@@ -326,7 +324,6 @@ local function skip(ps: ReadState, i: integer, skip_fn: SkipFunction): integer, 
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      required_modules = {},
       read_lang = ps.read_lang,
    }
    return skip_fn(err_ps, i)
@@ -416,7 +413,6 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
             filename = ps.filename,
             tokens = ps.tokens,
             errs = {},
-            required_modules = ps.required_modules,
             read_lang = ps.read_lang,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
@@ -567,7 +563,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
-               local block_ast, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
+               local block_ast = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                if #errs2 == 0 and block_ast then
                   best_j = jend
                   best_block = block_ast
@@ -610,7 +606,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                local eof_prev = ps2.tokens[math.max(ii, j - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
                local errs2: {Error} = {}
-               local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
+               local block_fallback = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
                best_block = block_fallback
                best_j = j
@@ -664,10 +660,9 @@ local function read_trying_list<T>(ps: ReadState, i: integer, list: {T}, read_it
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-   required_modules = ps.required_modules,
-   read_lang = ps.read_lang,
-   allow_macro_vars = ps.allow_macro_vars,
-}
+      read_lang = ps.read_lang,
+      allow_macro_vars = ps.allow_macro_vars,
+   }
    local tryi, item: integer, T = read_item(try_ps, i)
    if not item then
       return i, list
@@ -2734,7 +2729,7 @@ read_statements = function(ps: ReadState, i: integer, toplevel?: boolean): integ
    return i, node
 end
 
-function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block, {string}
+function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block
    errs = errs or {}
    filename = filename or "input"
    errs = normalize_macro_tokens(tokens, errs)
@@ -2746,7 +2741,6 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       tokens = tokens,
       errs = errs,
       filename = filename,
-      required_modules = {},
       read_lang = read_lang,
       allow_macro_vars = allow_macro_vars or false,
       in_local_macro = false,
@@ -2801,15 +2795,15 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
    end
 
    errors.clear_redundant_errors(errs)
-   return node, ps.required_modules
+   return node
 end
 
-function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block, {Error}, {string}
+function reader.read(input: string, filename: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block, {Error}
    filename = filename or "input"
    read_lang = read_lang or lang_heuristic(filename, input)
    local tokens, errs = lexer.lex(input, filename)
-    local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
-   return node, errs, required_modules
+   local node = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
+   return node, errs
 end
 
 return reader

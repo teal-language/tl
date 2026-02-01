@@ -16,9 +16,9 @@ local type NominalType = types.NominalType
 local type RecordType = types.RecordType
 local type RecordLikeType = types.RecordLikeType
 
-local type parser = require("teal.parser")
-local type Node = parser.Node
-local type NodeKind = parser.NodeKind
+local type ast_types = require("teal.ast")
+local type Node = ast_types.Node
+local type NodeKind = ast_types.NodeKind
 
 local traversal = require("teal.traversal")
 local type Visitor = traversal.Visitor

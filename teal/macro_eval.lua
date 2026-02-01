@@ -6,7 +6,7 @@ local BLOCK_INDEXES = block.BLOCK_INDEXES
 local errors = require("teal.errors")
 
 
-local parser = require("teal.parser")
+local ast = require("teal.ast")
 
 
 local macro_eval = {}
@@ -217,7 +217,7 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    local lua_generator = require("teal.gen.lua_generator")
    local single = { kind = "statements", y = mb.y, x = mb.x, tk = mb.tk, yend = mb.yend, xend = mb.xend }
    single[1] = mb
-   local mast, perrs = parser.parse(single, filename, read_lang)
+   local mast, perrs = ast.parse_blocks(single, filename, read_lang)
    if #perrs > 0 then
       for _, e in ipairs(perrs) do table.insert(errs, e) end
       return

@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local check = require("teal.check.check")
 local environment = require("teal.environment")
 local errors = require("teal.errors")
 local lexer = require("teal.lexer")
@@ -7,7 +7,6 @@ local lua_generator = require("teal.gen.lua_generator")
 local lua_compat = require("teal.gen.lua_compat")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
-local reader = require("teal.reader")
 local require_file = require("teal.check.require_file")
 local input = require("teal.input")
 local targets = require("teal.gen.targets")
@@ -221,33 +220,13 @@ v2.new_env = function(opts)
    return env
 end
 
-v2.parse = function(teal_code, filename, _parse_lang)
-   local block_ast, read_errs, required_modules = reader.read(teal_code, filename)
-   local ast, parse_errs, parse_required = parser.parse(block_ast, filename)
-   for _, e in ipairs(parse_errs) do
-      table.insert(read_errs, e)
-   end
-   if parse_required then
-      required_modules = required_modules or {}
-      for _, m in ipairs(parse_required) do
-         table.insert(required_modules, m)
-      end
-   end
-   return ast, read_errs, required_modules
+v2.parse = function(teal_code, filename, parse_lang)
+   local ast, errs, required_modules = parser.parse(teal_code, filename, parse_lang)
+   return ast, errs, required_modules
 end
 
 v2.parse_program = function(tokens, errs, filename, parse_lang)
-   local block_ast, required_modules = reader.read_program(tokens, errs, filename, parse_lang)
-   local ast, parse_errs, parse_required = parser.parse(block_ast, filename, parse_lang)
-   for _, e in ipairs(parse_errs) do
-      table.insert(errs, e)
-   end
-   if parse_required then
-      required_modules = required_modules or {}
-      for _, m in ipairs(parse_required) do
-         table.insert(required_modules, m)
-      end
-   end
+   local ast, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
    return ast, required_modules
 end
 

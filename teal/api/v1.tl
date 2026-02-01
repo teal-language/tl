@@ -11,7 +11,6 @@ local loader = require("teal.loader")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
-local reader = require("teal.reader")
 local type Node = parser.Node
 local targets = require("teal.gen.targets")
 local type_reporter = require("teal.type_reporter")
@@ -113,32 +112,12 @@ v1.load = loader.load
 v1.loader = package_loader.install_loader
 
 v1.parse = function(input: string, filename: string): Node, {Error}, {string}
-   local block_ast, read_errs, required = reader.read(input, filename)
-   local ast, parse_errs, parse_required = parser.parse(block_ast, filename)
-   for _, e in ipairs(parse_errs) do
-      table.insert(read_errs, e)
-   end
-   if parse_required then
-      required = required or {}
-      for _, m in ipairs(parse_required) do
-         table.insert(required, m)
-      end
-   end
-   return ast as parser.Node, read_errs as {Error}, required
+   local ast, errs, required = parser.parse(input, filename)
+   return ast as parser.Node, errs as {Error}, required
 end
 
 v1.parse_program = function(tokens: {Token}, errs: {Error}, filename?: string): Node, {string}
-   local block_ast, required = reader.read_program(tokens, errs, filename)
-   local ast, parse_errs, parse_required = parser.parse(block_ast, filename)
-   for _, e in ipairs(parse_errs) do
-      table.insert(errs, e)
-   end
-   if parse_required then
-      required = required or {}
-      for _, m in ipairs(parse_required) do
-         table.insert(required, m)
-      end
-   end
+   local ast, required = parser.parse_program(tokens, errs, filename)
    return ast as parser.Node, required
 end
 

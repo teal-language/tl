@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local check = require("teal.check.check")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local io = _tl_compat and _tl_compat.io or io; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local check = require("teal.check.check")
 local environment = require("teal.environment")
 
 local errors = require("teal.errors")
@@ -8,7 +8,6 @@ local lua_compat = require("teal.gen.lua_compat")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
-local reader = require("teal.reader")
 local require_file = require("teal.check.require_file")
 local targets = require("teal.gen.targets")
 
@@ -305,17 +304,7 @@ end
 
 function TokenList:parse()
    local errs = self.lexical_errors or {}
-   local block_ast, required_modules = reader.read_program(self.tokens, errs, self.filename)
-   local ast, parse_errs, parse_required = parser.parse(block_ast, self.filename)
-   for _, e in ipairs(parse_errs) do
-      table.insert(errs, e)
-   end
-   if parse_required then
-      required_modules = required_modules or {}
-      for _, m in ipairs(parse_required) do
-         table.insert(required_modules, m)
-      end
-   end
+   local ast, required_modules = parser.parse_program(self.tokens, errs, self.filename)
 
    if #errs > 0 and not self.env.keep_going then
       environment.register_failed(self.env, self.filename, errs)

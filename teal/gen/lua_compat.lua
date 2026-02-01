@@ -6,7 +6,6 @@ local environment = require("teal.environment")
 
 
 local parser = require("teal.parser")
-local reader = require("teal.reader")
 
 
 local node_at = parser.node_at
@@ -43,8 +42,7 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-         local block_ast = reader.read(text, "@<internal>.lua")
-         code = parser.parse(block_ast, "@<internal>.lua")
+         code = parser.parse(text, "@<internal>.lua")
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do

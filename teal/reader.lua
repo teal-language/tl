@@ -159,8 +159,6 @@ end
 
 
 
-
-
 local read_type_list
 local read_typeargs_if_any
 local read_expression
@@ -326,7 +324,6 @@ local function skip(ps, i, skip_fn)
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      required_modules = {},
       read_lang = ps.read_lang,
    }
    return skip_fn(err_ps, i)
@@ -416,7 +413,6 @@ local function read_table_item(ps, i, n)
             filename = ps.filename,
             tokens = ps.tokens,
             errs = {},
-            required_modules = ps.required_modules,
             read_lang = ps.read_lang,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
@@ -567,7 +563,7 @@ local function read_macro_args_with_sig(ps, i, sig)
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
                local errs2 = {}
-               local block_ast, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
+               local block_ast = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                if #errs2 == 0 and block_ast then
                   best_j = jend
                   best_block = block_ast
@@ -610,7 +606,7 @@ local function read_macro_args_with_sig(ps, i, sig)
                local eof_prev = ps2.tokens[math.max(ii, j - 1)]
                slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
                local errs2 = {}
-               local block_fallback, _req = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
+               local block_fallback = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
                best_block = block_fallback
                best_j = j
@@ -664,7 +660,6 @@ local function read_trying_list(ps, i, list, read_item, ret_lookahead)
       filename = ps.filename,
       tokens = ps.tokens,
       errs = {},
-      required_modules = ps.required_modules,
       read_lang = ps.read_lang,
       allow_macro_vars = ps.allow_macro_vars,
    }
@@ -2746,7 +2741,6 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       tokens = tokens,
       errs = errs,
       filename = filename,
-      required_modules = {},
       read_lang = read_lang,
       allow_macro_vars = allow_macro_vars or false,
       in_local_macro = false,
@@ -2801,15 +2795,15 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    end
 
    errors.clear_redundant_errors(errs)
-   return node, ps.required_modules
+   return node
 end
 
 function reader.read(input, filename, read_lang, allow_macro_vars, skip_macro_expand)
    filename = filename or "input"
    read_lang = read_lang or lang_heuristic(filename, input)
    local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
-   return node, errs, required_modules
+   local node = reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
+   return node, errs
 end
 
 return reader
