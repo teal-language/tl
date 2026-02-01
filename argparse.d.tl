@@ -100,6 +100,8 @@ local record argparse
 
       handle_options: function(self: Command, boolean): Command
 
+      hidden: function(self: Command, boolean): Command
+
       mutex: function(self: Command, ...: any) --! copied over from Parser
 
       group: function(self: Command, ...:any): Command --! copied over from Parser

@@ -93,6 +93,8 @@ local function get_args_parser(): argparse.Parser
               :argname("<position>")
 
    local dump_blocks_command = parser:command("dump-blocks", "Dump parser blocks as Lua tables or JSON.")
+   dump_blocks_command:hidden(true)
+
    dump_blocks_command:argument("file", "The Teal source file. Use '-' for stdin."):args(1)
    dump_blocks_command:option("--format", "Output format.")
               :choices({ "lua", "json" })
