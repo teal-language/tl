@@ -220,8 +220,8 @@ v2.new_env = function(opts)
    return env
 end
 
-v2.parse = function(teal_code, filename, _parse_lang)
-   local ast, errs, required_modules = parser.parse(teal_code, filename)
+v2.parse = function(teal_code, filename, parse_lang)
+   local ast, errs, required_modules = parser.parse(teal_code, filename, parse_lang)
    return ast, errs, required_modules
 end
 

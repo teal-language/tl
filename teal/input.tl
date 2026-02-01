@@ -29,4 +29,3 @@ function input.check(env: Env, filename: string, code: string): Result
 end
 
 return input
-

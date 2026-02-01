@@ -112,11 +112,13 @@ v1.load = loader.load
 v1.loader = package_loader.install_loader
 
 v1.parse = function(input, filename)
-   return parser.parse(input, filename)
+   local ast, errs, required = parser.parse(input, filename)
+   return ast, errs, required
 end
 
 v1.parse_program = function(tokens, errs, filename)
-   return parser.parse_program(tokens, errs, filename)
+   local ast, required = parser.parse_program(tokens, errs, filename)
+   return ast, required
 end
 
 v1.pretty_print_ast = function(ast, gen_target, mode)
