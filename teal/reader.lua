@@ -325,6 +325,9 @@ local function skip(ps, i, skip_fn)
       tokens = ps.tokens,
       errs = {},
       read_lang = ps.read_lang,
+      allow_macro_vars = ps.allow_macro_vars,
+      in_local_macro = ps.in_local_macro,
+      macro_sigs = ps.macro_sigs,
    }
    return skip_fn(err_ps, i)
 end
@@ -414,6 +417,9 @@ local function read_table_item(ps, i, n)
             tokens = ps.tokens,
             errs = {},
             read_lang = ps.read_lang,
+            allow_macro_vars = ps.allow_macro_vars,
+            in_local_macro = ps.in_local_macro,
+            macro_sigs = ps.macro_sigs,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
@@ -662,6 +668,8 @@ local function read_trying_list(ps, i, list, read_item, ret_lookahead)
       errs = {},
       read_lang = ps.read_lang,
       allow_macro_vars = ps.allow_macro_vars,
+      in_local_macro = ps.in_local_macro,
+      macro_sigs = ps.macro_sigs,
    }
    local tryi, item = read_item(try_ps, i)
    if not item then
