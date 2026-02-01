@@ -799,7 +799,6 @@ visit_node.cbs = {
             if resolved is InvalidType then
                return
             end
-            node.value.newtype = resolved
             if aliasing then
                added.aliasing = aliasing
             end

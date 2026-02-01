@@ -3272,7 +3272,7 @@ function check.check(ast, env, filename)
 
    local global_scope = self.st[1]
    variables.close_types(global_scope)
-   self.errs:check_var_usage(global_scope, true)
+   self.errs:check_var_usage(global_scope)
 
    errors.clear_redundant_errors(self.errs.errors)
 
@@ -5079,7 +5079,7 @@ function Context:add_global(node, varname, valtype, is_assigning)
       return nil
    end
 
-   local var = { t = valtype, attribute = is_const and "const" or nil }
+   local var = { t = valtype, attribute = is_const and "const" or nil, declared_at = node, is_global = true }
    self.st[1].vars[varname] = var
 
    return var
@@ -8429,7 +8429,6 @@ visit_node.cbs = {
             if resolved.typename == "invalid" then
                return
             end
-            node.value.newtype = resolved
             if aliasing then
                added.aliasing = aliasing
             end
@@ -17610,7 +17609,7 @@ function Errors:redeclaration_warning(at, var_name, var_kind, old_var)
    if var_name:sub(1, 1) == "_" then return end
 
    local short_error = var_kind .. " shadows previous declaration of '%s'"
-   if old_var and old_var.declared_at then
+   if old_var and old_var.declared_at and (not old_var.is_global) then
       self:add_warning("redeclaration", at, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
    else
       self:add_warning("redeclaration", at, short_error, var_name)
@@ -17620,6 +17619,7 @@ end
 local function var_should_be_ignored_for_warnings(name, var)
    local prefix = name:sub(1, 1)
    return (not var.declared_at) or
+   var.is_global or
    var.is_specialized == "narrow" or
    prefix == "_" or
    prefix == "@"
@@ -17709,7 +17709,7 @@ end
 
 
 
-local function check_var_usage(scope, is_global)
+local function check_var_usage(scope)
    local vars = scope.vars
    if not next(vars) then
       return
@@ -17731,11 +17731,11 @@ local function check_var_usage(scope, is_global)
 
       end
 
-      if var.declared_at and not has_var_been_used(var) then
+      if var.declared_at and not has_var_been_used(var) and not var.is_global then
          if var.used_as_type then
             var.declared_at.elide_type = true
          else
-            if t.typename == "typedecl" and not is_global then
+            if t.typename == "typedecl" then
                var.declared_at.elide_type = true
             end
             usage_warnings = usage_warnings or {}
@@ -17757,8 +17757,8 @@ local function check_var_usage(scope, is_global)
    return usage_warnings
 end
 
-function Errors:check_var_usage(scope, is_global)
-   local usage_warnings = check_var_usage(scope, is_global)
+function Errors:check_var_usage(scope)
+   local usage_warnings = check_var_usage(scope)
    if usage_warnings then
       for _, u in ipairs(usage_warnings) do
          if u.kind == "unused" then
@@ -19753,6 +19753,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 local variables = { Variable = {}, Scope = {} }
+
 
 
 

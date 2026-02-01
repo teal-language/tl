@@ -48,6 +48,7 @@ local variables = { Variable = {}, Scope = {} }
 
 
 
+
 function variables.has_var_been_used(var)
    return var.has_been_read_from or var.has_been_written_to
 end
