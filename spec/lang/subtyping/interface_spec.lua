@@ -291,4 +291,25 @@ describe("subtyping of interfaces:", function()
          assert.equal(expected[i], v.resolved.declname)
       end
    end)
+
+   it("interfaces propagate userdata marking (#1070)", util.check_type_error([[
+      local interface User
+         is userdata
+         name: string
+      end
+
+      local record Foo is User
+      end
+
+      local a: Foo = {
+          name = "foo"
+      }
+
+
+      local function Foos(a:User) end
+
+      Foos(a)
+   ]], {
+      { y = 9, msg = "record is not a userdata" },
+   }))
 end)
