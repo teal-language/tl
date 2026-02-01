@@ -1066,7 +1066,7 @@ read_macro_quote = function(ps: ReadState, i: integer): integer, Block
       end
    end
 
-   -- making da syntax errors relative to the actual macro quote
+   -- making syntax errors relative to the actual macro quote
    if errs and #errs > 0 then
       local x0 = token.x + delim -- first content column if error is on first internal line
       local y0 = token.y         -- first content line maps to token.y
