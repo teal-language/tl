@@ -7,7 +7,7 @@ BUSTED = busted --suppress-pending
 PRECOMPILED = teal/precompiled/default_env.lua
 SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/reader.tl teal/block.tl \
-	teal/util.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
+	teal/util.tl teal/types.tl teal/facts.tl teal/ast.tl teal/parser.tl teal/traversal.tl \
 	teal/variables.tl teal/type_reporter.tl \
 	teal/macroexps.tl teal/macro_eval.tl teal/metamethods.tl \
 	teal/type_errors.tl teal/environment.tl \
