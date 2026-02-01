@@ -167,6 +167,7 @@ local record Node
    -- forin
    vars: Node
    exps: Node
+   forin_modifies_control_var: boolean
 
    -- newtype
    newtype: TypeDeclType
