@@ -537,7 +537,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                curr_i = ni
                tk0 = ps2.tokens[curr_i].tk
             end
-            
+
             local j = sblk and curr_i or ii
             local paren_depth = 0
             local best_j: integer
@@ -561,7 +561,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                end
                nt = nt + 1
                local eof_prev = ps2.tokens[math.max(ii, jend - 1)]
-               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
                local errs2: {Error} = {}
                local block_ast = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                if #errs2 == 0 and block_ast then
@@ -604,7 +604,7 @@ local function read_macro_args_with_sig(ps: ReadState, i: integer, sig: MacroSig
                end
                nt = nt + 1
                local eof_prev = ps2.tokens[math.max(ii, j - 1)]
-               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" } 
+               slice[nt] = { x = eof_prev.x, y = eof_prev.y, tk = "$EOF$", kind = "$EOF$" }
                local errs2: {Error} = {}
                local block_fallback = reader.read_program(slice, errs2, ps2.filename, ps2.read_lang, true, true)
                for _, e in ipairs(errs2) do table.insert(ps2.errs, e) end
@@ -958,7 +958,6 @@ end
 
 local function read_function_args_rets_body(ps: ReadState, i: integer, node: Block): integer, Block
    local istart = i - 1
-   --TODO: integrate types
    i, node[BLOCK_INDEXES.FUNCTION.TYPEARGS] = read_typeargs_if_any(ps, i)
    --node[2]will be typeargs
    i, node[BLOCK_INDEXES.FUNCTION.ARGS] --[[, node.min_arity]] = read_argument_list(ps, i)
@@ -978,7 +977,7 @@ end
 
 local function skip_any_function(ps: ReadState, i: integer): integer, Block
    i = verify_tk(ps, i, "function")
-   
+
    while ps.tokens[i] and (ps.tokens[i].kind == "identifier" or ps.tokens[i].tk == "." or ps.tokens[i].tk == ":") do
       i = i + 1
    end
@@ -1022,8 +1021,8 @@ read_macro_quote = function(ps: ReadState, i: integer): integer, Block
          if ident then
             local y = token.y + (line_index - 1)
             local x = token.x + delim
-            local ident_block = { f = ps.filename, y = y, x = x + 1, kind = "identifier", tk = ident } 
-            local mv = { f = ps.filename, y = y, x = x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident_block, tk = "$" } 
+            local ident_block = { f = ps.filename, y = y, x = x + 1, kind = "identifier", tk = ident }
+            local mv = { f = ps.filename, y = y, x = x, kind = "macro_var", [BLOCK_INDEXES.MACRO_VAR.NAME] = ident_block, tk = "$" }
             table.insert(splices, { idx = line_index, blk = mv })
             -- omit this line from kept_lines
          else
@@ -1038,7 +1037,7 @@ read_macro_quote = function(ps: ReadState, i: integer): integer, Block
 
       -- splices gotta be merge with parsed statements
       if #splices > 0 and parsed_block and parsed_block.kind == "statements" then
-         local combined: Block = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" } 
+         local combined: Block = { f = ps.filename, y = token.y, x = token.x + delim, kind = "statements" }
          for _, s in ipairs(splices) do
             table.insert(combined, s.blk)
          end
@@ -2011,12 +2010,12 @@ read_interface_name = function(ps: ReadState, i: integer): integer, Block, integ
    local istart = i
    local typ: Block
 
-   
+
    i, typ = read_simple_type_or_nominal(ps, i)
    if typ.kind ~= "nominal_type" then
       return fail(ps, istart, "expected an interface")
    end
-   
+
    return i, typ
 
 end
@@ -2622,7 +2621,7 @@ read_record_function = function(ps: ReadState, i: integer): integer, Block
    i, fn[BLOCK_INDEXES.RECORD_FUNCTION.ARGS] = read_argument_list(ps, i)
    i, fn[BLOCK_INDEXES.RECORD_FUNCTION.RETS] = read_return_types(ps, i)
    i, fn[BLOCK_INDEXES.RECORD_FUNCTION.BODY] = read_statements(ps, i)
-   
+
    end_at(fn, ps.tokens[i])
    i = verify_end(ps, i, istart, fn)
    return i, fn

@@ -958,7 +958,6 @@ end
 
 local function read_function_args_rets_body(ps, i, node)
    local istart = i - 1
-
    i, node[BLOCK_INDEXES.FUNCTION.TYPEARGS] = read_typeargs_if_any(ps, i)
 
    i, node[BLOCK_INDEXES.FUNCTION.ARGS] = read_argument_list(ps, i)

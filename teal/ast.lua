@@ -1037,8 +1037,6 @@ parse_fns.local_declaration = function(state, block)
       node.decltuple = dt
       next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.EXPS
    else
-
-
       local dummy_block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       dummy_block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       local dt
