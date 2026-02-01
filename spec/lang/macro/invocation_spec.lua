@@ -91,6 +91,42 @@ describe('macro invocation expansion', function()
       out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
       assert.same("local x = 0 if false then x = 0 else x = 1 end", out)
    end)
+
+   it('expands macro invocation in assignment variable lists', function()
+      local code = [[
+         local macro slot!(obj: Expression)
+            return `$obj`
+         end
+
+         local function demo()
+            local obj = {}
+            local i = 1
+            i, slot!(obj) = 1, 2
+         end
+      ]]
+      local ast, errs = tl.parse(code)
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.match("i, obj = 1, 2", out)
+   end)
+
+   it('expands macro invocation in typed table literal values', function()
+      local code = [[
+         local macro id!(x: Expression)
+            return `$x`
+         end
+
+         local t = { foo: string = id!("bar") }
+      ]]
+      local ast, errs = tl.parse(code)
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+      assert.match("local t = { foo = \"bar\" }", out)
+   end)
 end)
 
 describe('macro unknown type error', function()
