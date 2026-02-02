@@ -117,6 +117,127 @@ local macro make_local!(name: Expression, value: Expression)
 end
 ```
 
+## Putting it all together, writing a pipe! macro
+
+Using all these tools given to us by the macro system, we can write a simple `pipe!` macro that takes in an expression like
+
+```lua
+x | f | g(y)
+```
+
+and produces
+
+```lua
+g(f(x), y)
+```
+
+First, we declare the macro with the appropriate argument type:
+
+```lua
+local macro pipe!(pipe_expr: Expression)
+
+end
+```
+
+now we want to make sure we are taking in an `op_bor` (`|`). We can do this using `expect`
+
+```lua
+local macro pipe!(pipe_expr: Expression)
+   expect(pipe_expr, "op_bor")
+end
+```
+
+Now we want to be extracting all of the "calls" that are being piped together. We do this by traversing the `op_bor` nodes until we reach the last expression.
+
+```lua
+local macro pipe!(pipe_expr: Expression)
+   expect(pipe_expr, "op_bor")
+   local BI = BLOCK_INDEXES
+
+   local calls = {}
+   local function append_call(expr)
+      if expr.kind == "op_bor" then
+         -- see below for the indexes
+         -- because op_bor is a binary operator,
+         -- we are going to use E1 and E2 to get the left and right expressions
+         append_call(expr[BI.OP.E1])
+         append_call(expr[BI.OP.E2])
+      else
+         -- this will be a block of a variable (f) or a func call (g(y))
+         table.insert(calls, expr)
+      end
+      return nil
+   end
+   append_call(pipe_expr)
+end
+```
+
+Now that we have the calls in order, we need to build the nested function calls. For our macro, we also want to make it so any variables on their own (for example, just `f` in `x | f`) are treated as function calls with no arguments (`f()`).
+
+```lua
+local macro pipe!(pipe_expr: Expression)
+   expect(pipe_expr, "op_bor")
+   local BI = BLOCK_INDEXES
+
+   local calls = {}
+   local function append_call(expr)
+      if expr.kind == "op_bor" then
+         -- see below for the indexes
+         -- because op_bor is a binary operator,
+         -- we are going to use E1 and E2 to get the left and right expressions
+         append_call(expr[BI.OP.E1])
+         append_call(expr[BI.OP.E2])
+      else
+         -- this will be a block of a variable (f) or a func call (g(y))
+         table.insert(calls, expr)
+      end
+      return nil
+   end
+   append_call(pipe_expr)
+
+   -- this is what we are gonna keep updating
+   local invocation = calls[1]
+   for i = 2, #calls do
+      local call = calls[i]
+      if call.kind ~= "op_funcall" then
+         -- this is the case where we have a variable (f)
+         -- we just need to give it an expression list to store its parameters
+         call = `($call)()`
+      end
+
+      -- this is the parametres of the call itself
+      local exprlist = call[BI.OP.E2]
+      --we need a clone so we can mutate safely
+      local newexprlist = clone(exprlist)
+      -- adding in the previous invocation as the first parameter
+      -- so `x | f` becomes `f(x)` and `x | f | g(y)` becomes `g(f(x), y)`
+      table.insert(newexprlist, 1, invocation)
+      invocation = clone(call)
+      -- assigning the new parameter list back to our new call
+      invocation[BI.OP.E2] = newexprlist
+   end
+
+   -- good job! we did it!
+   return invocation
+end
+```
+
+And we can test it out:
+
+```lua
+local function add(x: integer, y: integer): integer
+    return x + y
+end
+
+local function double(x: integer): integer
+    return x * 2
+end
+
+local z = pipe!(3 | add(4) | double)
+
+print(z) -- prints 14
+```
+
 ## By-design limitations
 
 | Detail | Notes |
