@@ -1,6 +1,6 @@
 # Macros
 
-Teal macros are compile-time code generators. They let you write Teal code that
+Teal macros are compile-time code generators. They let you write Lua code that
 constructs and returns AST blocks, which are then spliced into your program
 before type checking and code generation. Macros are a separate feature from
 macro expressions (see [Macro expressions](./macroexp.md)).
@@ -241,227 +241,171 @@ question
 This is the full table used by the macro API (from `teal/block.tl`):
 
 ```lua
-BLOCK_INDEXES = {
-   PRAGMA = {
-      KEY = 1,
-      VALUE = 2,
-   },
-   IF = {
-      BLOCKS = 1,
-   },
-   IF_BLOCK = {
-      COND = 1,
-      BODY = 2,
-   },
-   WHILE = {
-      COND = 1,
-      BODY = 2,
-   },
-   FORNUM = {
-      VAR = 1,
-      FROM = 2,
-      TO = 3,
-      STEP = 4,
-      BODY = 5,
-   },
-   FORIN = {
-      VARS = 1,
-      EXPS = 2,
-      BODY = 3,
-   },
-   REPEAT = {
-      BODY = 1,
-      COND = 2,
-   },
-   DO = {
-      BODY = 1,
-   },
-   GOTO = {
-      LABEL = 1,
-   },
-   LABEL = {
-      NAME = 1,
-   },
-   RETURN = {
-      EXPS = 1,
-   },
-   FUNCTION = {
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   LOCAL_FUNCTION = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   GLOBAL_FUNCTION = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   RECORD_FUNCTION = {
-      OWNER = 1,
-      NAME = 2,
-      TYPEARGS = 3,
-      ARGS = 4,
-      RETS = 5,
-      BODY = 6,
-   },
-   LOCAL_MACRO = {
-      NAME = 1,
-      TYPEARGS = 2,
-      ARGS = 3,
-      RETS = 4,
-      BODY = 5,
-   },
-   LOCAL_MACROEXP = {
-      NAME = 1,
-      EXP = 2,
-   },
-   LOCAL_DECLARATION = {
-      VARS = 1,
-      DECL = 2,
-      EXPS = 3,
-   },
-   GLOBAL_DECLARATION = {
-      VARS = 1,
-      DECL = 2,
-      EXPS = 3,
-   },
-   LOCAL_TYPE = {
-      VAR = 1,
-      VALUE = 2,
-   },
-   GLOBAL_TYPE = {
-      VAR = 1,
-      VALUE = 2,
-   },
-   ASSIGNMENT = {
-      VARS = 1,
-      EXPS = 3,
-   },
-   VARIABLE = {
-      ANNOTATION = 1,
-   },
-   ARGUMENT = {
-      ANNOTATION = 1,
-   },
-   ARGUMENT_LIST = {
-      FIRST = 1,
-   },
-   VARIABLE_LIST = {
-      FIRST = 1,
-   },
-   EXPRESSION_LIST = {
-      FIRST = 1,
-      SECOND = 2,
-   },
-   LITERAL_TABLE_ITEM = {
-      KEY = 1,
-      VALUE = 2,
-      TYPED_VALUE = 3,
-   },
-   OP = {
-      E1 = 1,
-      E2 = 2,
-   },
-   PAREN = {
-      EXP = 1,
-   },
-   MACRO_QUOTE = {
-      BLOCK = 1,
-   },
-   MACRO_VAR = {
-      NAME = 1,
-   },
-   MACRO_INVOCATION = {
-      MACRO = 1,
-      ARGS = 2,
-   },
-   CAST = {
-      TYPE = 1,
-   },
-   NEWTYPE = {
-      TYPEDECL = 1,
-   },
-   TYPEDECL = {
-      TYPE = 1,
-   },
-   FUNCTION_TYPE = {
-      ARGS = 1,
-      RETS = 2,
-      MACROEXP = 4,
-   },
-   MACROEXP = {
-      ARGS = 1,
-      RETS = 2,
-      EXP = 3,
-   },
-   RECORD = {
-      ARRAY_TYPE = 1,
-      INTERFACES = 2,
-      FIELDS = 3,
-      META_FIELDS = 4,
-      WHERE_CLAUSE = 5,
-   },
-   INTERFACE = {
-      ARRAY_TYPE = 1,
-      INTERFACES = 2,
-      FIELDS = 3,
-   },
-   RECORD_BODY = {
-      FIELDS = 1,
-      META_FIELDS = 2,
-   },
-   RECORD_FIELD = {
-      NAME = 1,
-      TYPE = 2,
-      VAL = 3,
-      METHOD = 4,
-      DEFAULT_VAL = 5,
-   },
-   ARGUMENT_TYPE = {
-      NAME = 1,
-   },
-   TYPEARGS = {
-      FIRST = 1,
-   },
-   TYPEARG = {
-      NAME = 1,
-      CONSTRAINT = 2,
-   },
-   GENERIC_TYPE = {
-      TYPEARGS = 1,
-      BASE = 2,
-   },
-   NOMINAL_TYPE = {
-      NAME = 1,
-   },
-   UNION_TYPE = {
-      FIRST = 1,
-   },
-   TUPLE_TYPE = {
-      FIRST = 1,
-      SECOND = 2,
-   },
-   ARRAY_TYPE = {
-      ELEMENT = 1,
-   },
-   MAP_TYPE = {
-      KEYS = 1,
-      VALUES = 2,
-   },
-   TYPELIST = {
-      FIRST = 1,
-   },
-   INTERFACE_LIST = {
-      FIRST = 1,
-   },
-}
+TYPELIST.FIRST
+
+MACROEXP.RETS
+MACROEXP.ARGS
+MACROEXP.EXP
+
+GLOBAL_TYPE.VALUE
+GLOBAL_TYPE.VAR
+
+ASSIGNMENT.VARS
+ASSIGNMENT.EXPS
+
+MACRO_INVOCATION.ARGS
+MACRO_INVOCATION.MACRO
+
+UNION_TYPE.FIRST
+
+PAREN.EXP
+
+DO.BODY
+
+EXPRESSION_LIST.FIRST
+EXPRESSION_LIST.SECOND
+
+FUNCTION.BODY
+FUNCTION.RETS
+FUNCTION.TYPEARGS
+FUNCTION.ARGS
+
+LOCAL_MACROEXP.NAME
+LOCAL_MACROEXP.EXP
+
+TYPEARGS.FIRST
+
+LOCAL_TYPE.VALUE
+LOCAL_TYPE.VAR
+
+MACRO_VAR.NAME
+
+VARIABLE_LIST.FIRST
+
+GLOBAL_DECLARATION.EXPS
+GLOBAL_DECLARATION.VARS
+GLOBAL_DECLARATION.DECL
+
+RECORD.FIELDS
+RECORD.META_FIELDS
+RECORD.ARRAY_TYPE
+RECORD.WHERE_CLAUSE
+RECORD.INTERFACES
+
+RECORD_FUNCTION.ARGS
+RECORD_FUNCTION.BODY
+RECORD_FUNCTION.RETS
+RECORD_FUNCTION.TYPEARGS
+RECORD_FUNCTION.NAME
+RECORD_FUNCTION.OWNER
+
+INTERFACE_LIST.FIRST
+
+RETURN.EXPS
+
+MAP_TYPE.KEYS
+MAP_TYPE.VALUES
+
+OP.E1
+OP.E2
+
+ARRAY_TYPE.ELEMENT
+
+IF.BLOCKS
+
+TUPLE_TYPE.FIRST
+TUPLE_TYPE.SECOND
+
+NOMINAL_TYPE.NAME
+
+NEWTYPE.TYPEDECL
+
+GENERIC_TYPE.TYPEARGS
+GENERIC_TYPE.BASE
+
+TYPEARG.NAME
+TYPEARG.CONSTRAINT
+
+ARGUMENT_TYPE.NAME
+
+TYPEDECL.TYPE
+
+PRAGMA.KEY
+PRAGMA.VALUE
+
+WHILE.BODY
+WHILE.COND
+
+RECORD_FIELD.DEFAULT_VAL
+RECORD_FIELD.VAL
+RECORD_FIELD.TYPE
+RECORD_FIELD.NAME
+RECORD_FIELD.METHOD
+
+ARGUMENT_LIST.FIRST
+
+RECORD_BODY.META_FIELDS
+RECORD_BODY.FIELDS
+
+MACRO_QUOTE.BLOCK
+
+INTERFACE.FIELDS
+INTERFACE.INTERFACES
+INTERFACE.ARRAY_TYPE
+
+CAST.TYPE
+
+LITERAL_TABLE_ITEM.VALUE
+LITERAL_TABLE_ITEM.KEY
+LITERAL_TABLE_ITEM.TYPED_VALUE
+
+FUNCTION_TYPE.MACROEXP
+FUNCTION_TYPE.ARGS
+FUNCTION_TYPE.RETS
+
+LOCAL_DECLARATION.EXPS
+LOCAL_DECLARATION.VARS
+LOCAL_DECLARATION.DECL
+
+LOCAL_FUNCTION.RETS
+LOCAL_FUNCTION.BODY
+LOCAL_FUNCTION.TYPEARGS
+LOCAL_FUNCTION.NAME
+LOCAL_FUNCTION.ARGS
+
+FORIN.EXPS
+FORIN.VARS
+FORIN.BODY
+
+GOTO.LABEL
+
+GLOBAL_FUNCTION.RETS
+GLOBAL_FUNCTION.BODY
+GLOBAL_FUNCTION.TYPEARGS
+GLOBAL_FUNCTION.NAME
+GLOBAL_FUNCTION.ARGS
+
+VARIABLE.ANNOTATION
+
+REPEAT.BODY
+REPEAT.COND
+
+LABEL.NAME
+
+IF_BLOCK.BODY
+IF_BLOCK.COND
+
+LOCAL_MACRO.RETS
+LOCAL_MACRO.BODY
+LOCAL_MACRO.TYPEARGS
+LOCAL_MACRO.NAME
+LOCAL_MACRO.ARGS
+
+FORNUM.TO
+FORNUM.VAR
+FORNUM.FROM
+FORNUM.BODY
+FORNUM.STEP
+
+ARGUMENT.ANNOTATION
 ```
