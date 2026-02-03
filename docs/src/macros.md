@@ -117,6 +117,17 @@ local macro make_local!(name: Expression, value: Expression)
 end
 ```
 
+which is the equivalent to
+
+```lua
+local macro make_local!(name: Expression, value: Expression)
+   local decl = ```
+      local $name = $value
+   ```
+   return decl
+end 
+```
+
 ## Putting it all together, writing a pipe! macro
 
 Using all these tools given to us by the macro system, we can write a simple `pipe!` macro that takes in an expression like
