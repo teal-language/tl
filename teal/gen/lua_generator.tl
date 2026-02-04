@@ -256,6 +256,70 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       decrement_indent()
    end
 
+   local enum FunctionKind
+      "anonymous"
+      "record"
+      "local"
+      "global"
+   end
+
+   local function_indexes <total>: {FunctionKind:{integer, integer}} = {
+      -- arguments, body
+      ["anonymous"] = { 1, 3 },
+      ["record"] = { 3, 5 },
+      ["local"] = { 2, 4 },
+      ["global"] = { 2, 4 },
+   }
+
+   local function after_function(kind: FunctionKind): function(nil, Node, {Output}): Output
+      local arguments_index <const>, body_index <const> = table.unpack(function_indexes[kind])
+      return function(_: nil, node: Node, children: {Output}): Output
+         local out <const>: Output = { y = node.y, h = 0 }
+
+         if kind == "local" then
+            table.insert(out, "local ")
+         end
+
+         table.insert(out, "function")
+
+         if kind == "record" then
+            add_child(out, children[1], " ")
+            table.insert(out, node.is_method and ":" or ".")
+            add_child(out, children[2])
+         elseif kind ~= "anonymous" then
+            add_child(out, children[1], " ")
+         end
+         table.insert(out, "(")
+
+         -- Remove self from methods
+         local args <const> = children[arguments_index]
+         if kind == "record" and node.is_method then
+            table.remove(args, 1)
+            if args[1] == "," then
+               table.remove(args, 1)
+               if args[1] == " " then
+                  table.remove(args, 1)
+               end
+            end
+         end
+         add_child(out, args)
+
+         table.insert(out, ")")
+
+         local last_arg <const> = node.args[#node.args]
+         if last_arg and last_arg.tk == "..." and last_arg.name then
+            -- TODO: only generate this when the var is used
+            -- TODO: does table.pack need compat?
+            table.insert(out, "local " .. last_arg.name.tk .. "=table.pack(...);")
+         end
+
+         add_child(out, children[body_index], " ")
+         decrement_indent()
+         add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
+         return out
+      end
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
@@ -527,69 +591,19 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       },
       ["local_function"] = {
          before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "local function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_block(out, children[4], node)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("local"),
       },
       ["global_function"] = {
          before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, "(")
-            add_child(out, children[2])
-            table.insert(out, ")")
-            add_block(out, children[4], node)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("global"),
       },
       ["record_function"] = {
          before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function")
-            add_child(out, children[1], " ")
-            table.insert(out, node.is_method and ":" or ".")
-            add_child(out, children[2])
-            table.insert(out, "(")
-            if node.is_method then
-               -- remove self
-               table.remove(children[3], 1)
-               if children[3][1] == "," then
-                  table.remove(children[3], 1)
-                  if children[3][1] == " " then
-                     table.remove(children[3], 1)
-                  end
-               end
-            end
-            add_child(out, children[3])
-            table.insert(out, ")")
-            add_block(out, children[5], node)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("record")
       },
       ["function"] = {
          before = increment_indent,
-         after = function(_: nil, node: Node, children: {Output}): Output
-            local out: Output = { y = node.y, h = 0 }
-            table.insert(out, "function(")
-            add_child(out, children[1])
-            table.insert(out, ")")
-            add_block(out, children[3], node)
-            add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
-            return out
-         end,
+         after = after_function("anonymous"),
       },
       ["paren"] = {
          after = function(_: nil, node: Node, children: {Output}): Output

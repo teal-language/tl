@@ -1580,8 +1580,13 @@ end
 
 local function read_argument(ps: ReadState, i: integer): integer, Block, integer
    local node: Block
+   local vararg_name: Block
    if ps.tokens[i].tk == "..." then
       i, node = verify_kind(ps, i, "...", "argument")
+      if ps.tokens[i].kind == "identifier" then
+         vararg_name = new_block(ps, i, "identifier")
+         i = i + 1
+      end
    else
       i, node = verify_kind(ps, i, "identifier", "argument")
    end
@@ -1607,6 +1612,9 @@ local function read_argument(ps: ReadState, i: integer): integer, Block, integer
    end
    if has_question then
       table.insert(node, new_block(ps, q_i, "question"))
+   end
+   if vararg_name then
+      table.insert(node, vararg_name)
    end
    return i, node, 0
 end
@@ -1652,6 +1660,9 @@ local function read_argument_type(ps: ReadState, i: integer): integer, Block, in
    elseif ps.tokens[i].tk == "..." then
       if ps.tokens[i + 1].tk == "?" then
          fail(ps, i + 1, "cannot mix '?' and '...' in a declaration; '...' already implies optional")
+         i = i + 1
+      end
+      if ps.tokens[i + 1].kind == "identifier" then
          i = i + 1
       end
       if ps.tokens[i + 1].tk == ":" then

@@ -2264,10 +2264,25 @@ visit_node.cbs = {
                    or  a_type(node, "any", {})
             end
          end
+
+         local is_named_vararg = false
          if node.tk == "..." then
+            if node.name then
+               local pack_table <const> = an_array(node, t) -- TODO: how to access `table.PackTable<t>` from here?
+               self:add_var(node, node.name.tk, pack_table).is_func_arg = true
+               is_named_vararg = true
+            end
             t = a_vararg(node, { t })
          end
-         self:add_var(node, node.tk, t).is_func_arg = true
+
+         local arg_var <const> = self:add_var(node, node.tk, t)
+         arg_var.is_func_arg = true
+         if is_named_vararg then
+            -- Silence unused warnings for the `...` var since removing it
+            -- would change the semantics of the code
+            arg_var.has_been_read_from = true
+         end
+
          return t
       end,
    },
