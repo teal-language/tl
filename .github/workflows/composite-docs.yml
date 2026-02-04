@@ -1,6 +1,16 @@
 name: composite-docs
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch (e.g main) or tag (e.g. v0.x.y)"
+        required: true
+        type: string
+      target-directory:
+        description: "dir (e.g book/unstable, book/latest, book/0.x.y)"
+        required: true
+        type: string
   workflow_call:
     inputs:
       ref:
