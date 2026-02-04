@@ -37,7 +37,7 @@ jobs:
         cd docs
         mdbook build
     - name: Push to docs repo
-      uses: hishamhm/github-action-push-to-another-repository@b3514b264edf63bd8ea41fb5cd4f5b93979bdf81
+      uses: hishamhm/github-action-push-to-another-repository@2101498712d973a9cee4f67fe773ece41d642795
       env:
         API_TOKEN_GITHUB: ${{ secrets.DOCS_PUSH_GITHUB_TOKEN }}
       with:
