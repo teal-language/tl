@@ -86,14 +86,14 @@ end
 For statement quotes, you can splice a `Statement` argument by putting `$name`
 on its own line (optional semicolon):
 
-~~~lua
+````lua
 local macro insert!(s: Statement)
    return ```
       $s
       print("after")
    ```
 end
-~~~
+````
 
 ## Building AST blocks directly
 
@@ -119,14 +119,14 @@ end
 
 which is the equivalent to
 
-```lua
+````lua
 local macro make_local!(name: Expression, value: Expression)
    local decl = ```
       local $name = $value
    ```
    return decl
-end 
-```
+end
+````
 
 ## Putting it all together, writing a pipe! macro
 
