@@ -157,7 +157,7 @@ describe("xpcall", function()
       local myText: Text = {}
       xpcall(myText.print, msgh, 12)
    ]], {
-      { msg = "argument 3: got integer, expected Text" }
+      { msg = "argument 3: got integer, expected record Text" }
    }))
 
 end)

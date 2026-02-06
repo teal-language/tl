@@ -1122,9 +1122,16 @@ function Context:resolve_for_call(func: Type, args: TupleType, is_method: boolea
       return self:resolve_for_call(func.def, args, is_method)
    -- resolve if metatable
    elseif func is RecordLikeType and func.meta_fields and func.meta_fields["__call"] then
+      local interface_type = func  -- save the interface/record type for self resolution
       table.insert(args.tuple, 1, func)
       func = func.meta_fields["__call"]
       func = self:to_structural(func)
+      -- resolve 'self' in return type to the interface type, not the caller
+      func = types.map(interface_type, func, {
+         ["self"] = function(iface: RecordLikeType, _typ: SelfType): Type, boolean
+            return iface, true
+         end,
+      })
       is_method = true
    end
 
@@ -1490,7 +1497,8 @@ do
       end
    end
 
-   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}
+   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}, boolean
+      local is_userdata = t.is_userdata
       if t.interface_list then
          for _, iface in ipairs(t.interface_list) do
             if iface is NominalType then
@@ -1500,7 +1508,8 @@ do
                      seen[ri] = true
                      table.insert(list, iface)
                      if ri.interfaces_expanded then
-                        collect_interfaces(self, list, ri, seen)
+                        local _, ud = collect_interfaces(self, list, ri, seen)
+                        is_userdata = is_userdata or ud
                      end
                   end
                else
@@ -1514,7 +1523,7 @@ do
             end
          end
       end
-      return list
+      return list, is_userdata
    end
 
    function Context:expand_interfaces(t: RecordLikeType)
@@ -1523,7 +1532,7 @@ do
       end
       t.interfaces_expanded = true
 
-      t.interface_list = collect_interfaces(self, {}, t, {})
+      t.interface_list, t.is_userdata = collect_interfaces(self, {}, t, {})
 
       for _, iface in ipairs(t.interface_list) do
          if iface is NominalType then
@@ -1671,7 +1680,15 @@ function Context:match_record_key(t: Type, rec: Node, key: string): Type, string
       assert(t.fields, "record has no fields!?")
 
       if t.fields[key] then
-         return t.fields[key]
+         local ft = t.fields[key]
+         if ft is FunctionType then
+            ft = types.map(nil, ft, {
+               ["self"] = function(_: nil, _typ: SelfType): Type, boolean
+                  return t, true
+               end,
+            })
+         end
+         return ft
       end
 
       local str = a_type(rec, "string", {})
@@ -1775,7 +1792,7 @@ function Context:add_global(node: Node, varname: string, valtype: Type, is_assig
       return nil
    end
 
-   local var = { t = valtype, attribute = is_const and "const" or nil }
+   local var = { t = valtype, attribute = is_const and "const" or nil, declared_at = node, is_global = true }
    self.st[1].vars[varname] = var
 
    return var
