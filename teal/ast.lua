@@ -535,14 +535,19 @@ local function parse_argument_list(state, block)
          end
 
          local is_optional = false
+         local vararg_name
          for _, child in ipairs(arg_block) do
-            if type(child) == "table" and child.kind == "question" then
-               is_optional = true
-               break
+            if type(child) == "table" then
+               if child.kind == "question" then
+                  is_optional = true
+               elseif not vararg_name and child.kind == "identifier" then
+                  vararg_name = new_node(state, child, "identifier")
+               end
             end
          end
 
          if arg_node.tk == "..." then
+            arg_node.name = vararg_name
             has_varargs = true
             is_optional = true
          else
