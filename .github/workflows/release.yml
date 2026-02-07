@@ -8,7 +8,7 @@ on:
         required: true
 
 jobs:
-  Release:
+  release:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -33,3 +33,16 @@ jobs:
         git config --global user.email "$GITHUB_USER@users.noreply.github.com"
         extras/release.sh $VERSION
 
+  docs-latest:
+    needs: [release]
+    uses: ./.github/workflows/composite-docs.yml
+    with:
+      ref: v${{ inputs.version }}
+      target-directory: 'book/latest'
+
+  docs-versioned:
+    needs: [release]
+    uses: ./.github/workflows/composite-docs.yml
+    with:
+      ref: v${{ inputs.version }}
+      target-directory: book/{{ inputs.version }}
