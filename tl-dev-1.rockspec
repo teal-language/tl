@@ -61,6 +61,11 @@ build = {
       ["teal.facts"] = "teal/facts.lua",
       ["teal.lexer"] = "teal/lexer.lua",
       ["teal.util"] = "teal/util.lua",
+      ["teal.macro_eval"] = "teal/macro_eval.lua",
+      ["teal.reader"] = "teal/reader.lua",
+      ["teal.ast"] = "teal/ast.lua",
+      ["teal.block"] = "teal/block.lua",
+
 
       -- Ship the compiled Lua modules from the `tlcli` namespace for the `tl` program:
       ["tlcli.commands.warnings"] = "tlcli/commands/warnings.lua",
