@@ -36,6 +36,7 @@ jobs:
   docs-latest:
     needs: [release]
     uses: ./.github/workflows/composite-docs.yml
+    secrets: inherit
     with:
       ref: v${{ inputs.version }}
       target-directory: 'book/latest'
@@ -43,6 +44,7 @@ jobs:
   docs-versioned:
     needs: [release]
     uses: ./.github/workflows/composite-docs.yml
+    secrets: inherit
     with:
       ref: v${{ inputs.version }}
       target-directory: book/{{ inputs.version }}

@@ -9,6 +9,7 @@ on:
 jobs:
   Docs:
     uses: ./.github/workflows/composite-docs.yml
+    secrets: inherit
     with:
       ref: 'main'
       target-directory: 'book/unstable'
