@@ -2295,7 +2295,10 @@ visit_node.cbs = {
          local is_named_vararg = false
          if node.tk == "..." then
             if node.name then
-               local pack_table <const> = an_array(node, t) -- TODO: how to access `table.PackTable<t>` from here?
+               local table_t <const> = (self.env.modules["table"] as types.TypeDeclType).def as RecordType
+               local generic_pack_table <const> = (table_t.fields["PackTable"] as types.TypeDeclType).def as types.GenericType
+               local pack_table <const> = self:apply_generic(node, generic_pack_table, { t })
+
                self:add_var(node, node.name.tk, pack_table).is_func_arg = true
                is_named_vararg = true
             end

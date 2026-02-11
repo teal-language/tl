@@ -158,6 +158,14 @@ describe("local function", function()
 
          f(1, 2)
       ]])
+
+      it("argument is a table.PackTable", util.check[[
+         local function f(...a: integer)
+            local _: table.PackTable<integer> = a
+         end
+
+         f(1, 2, 3, 4)
+      ]])
    end)
 
    it("declaration", util.check([[
