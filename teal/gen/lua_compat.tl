@@ -124,6 +124,59 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
       cbs = {}
    }
 
+   if gen_target <= "5.5" then
+      visit = true
+      local functionvisit = {
+         after = function(_self: nil, node: Node, _children: {nil}): nil
+            local last_arg = node.args[#node.args]
+            if last_arg and last_arg.tk == "..." and last_arg.name then
+
+               -- named varargs are new in Lua 5.5
+
+               local use_compat_pack = (gen_target == "5.1" or gen_target == "5.3") and gen_compat ~= "off"
+
+               local fnname: Node
+               if use_compat_pack then
+                  needs_compat["table.pack"] = true
+                  fnname = node_at(last_arg, {
+                     kind = "variable",
+                     tk = "_tl_table_pack",
+                  })
+               else
+                  fnname = node_at(last_arg, {
+                     kind = "op",
+                     op = parser.operator(last_arg, 2, "."),
+                     e1 = node_at(last_arg, { kind = "variable", tk = "table" }),
+                     e2 = node_at(last_arg, { kind = "identifier", tk = "pack" }),
+                  })
+               end
+
+               local stmt = node_at(last_arg, {
+                  kind = "local_declaration",
+                  vars = node_at(last_arg, {
+                     kind = "variable_list",
+                     node_at(last_arg, { kind = "variable", is_lvalue = true, tk = last_arg.name.tk }),
+                  }),
+                  exps = node_at(last_arg, {
+                     kind = "expression_list",
+                     node_at(last_arg, {
+                        kind = "op",
+                        op = parser.operator(last_arg, 2, "@funcall"),
+                        e1 = fnname,
+                        e2 = node_at(last_arg, { kind = "expression_list", node_at(last_arg, { kind = "...", tk = "..." }) }),
+                     }),
+                  }),
+               })
+               table.insert(node.body, 1, stmt)
+            end
+         end
+      }
+      visit_node.cbs["function"] = functionvisit
+      visit_node.cbs["global_function"] = functionvisit
+      visit_node.cbs["record_function"] = functionvisit
+      visit_node.cbs["local_function"] = functionvisit
+   end
+
    if (gen_target == "5.1" or gen_target == "5.3") and gen_compat ~= "off" then
       visit = true
       visit_node.cbs["op"] = {
