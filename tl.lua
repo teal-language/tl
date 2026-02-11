@@ -11890,8 +11890,7 @@ function lua_generator.generate(ast, gen_target, opts)
             table.insert(out, "local " .. last_arg.name.tk .. "=table.pack(...);")
          end
 
-         add_child(out, children[body_index], " ")
-         decrement_indent()
+         add_block(out, children[body_index], node)
          add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
          return out
       end

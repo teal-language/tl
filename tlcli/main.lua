@@ -48,7 +48,7 @@ local function get_args_parser()
 
    parser:flag("--skip-compat53", "Skip compat53 insertions."):
    hidden(true):
-   action(function(args) args.gen_compat = "off" end)
+   action(function(args)       args.gen_compat = "off" end)
 
    parser:flag("--version", "Print version and exit")
 
