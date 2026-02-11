@@ -195,7 +195,7 @@ end
 
 function configuration.merge_config_and_args(tlconfig, args)
    do
-      local default_true_mt = { __index = function()          return true end }
+      local default_true_mt = { __index = function() return true end }
       local function enable(tab, warning)
          if warning == "all" then
             setmetatable(tab, default_true_mt)
