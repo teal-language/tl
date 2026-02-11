@@ -329,6 +329,9 @@ describe("tl gen", function()
       if mini is integer then
          print("mini")
       end
+      local function testing(...arguments: any): any
+         return arguments[2]
+      end
    ]]
 
    local output_code_without_compat = [[
@@ -347,6 +350,9 @@ describe("tl gen", function()
       end
       if math.type(mini) == "integer" then
          print("mini")
+      end
+      local function testing(...) local arguments = table.pack(...)
+         return arguments[2]
       end
    ]]
 
@@ -367,6 +373,9 @@ describe("tl gen", function()
       if math.type(mini) == "integer" then
          print("mini")
       end
+      local function testing(...) local arguments = _tl_table_pack(...)
+         return arguments[2]
+      end
    ]]
 
    local output_code_with_required_compat = [[
@@ -385,6 +394,9 @@ describe("tl gen", function()
       end
       if math.type(mini) == "integer" then
          print("mini")
+      end
+      local function testing(...) local arguments = _tl_table_pack(...)
+         return arguments[2]
       end
    ]]
 

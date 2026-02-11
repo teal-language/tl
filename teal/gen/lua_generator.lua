@@ -306,13 +306,6 @@ function lua_generator.generate(ast, gen_target, opts)
 
          table.insert(out, ")")
 
-         local last_arg = node.args[#node.args]
-         if last_arg and last_arg.tk == "..." and last_arg.name then
-
-
-            table.insert(out, "local " .. last_arg.name.tk .. "=table.pack(...);")
-         end
-
          add_block(out, children[body_index], node)
          add_child(out, { y = node.yend, h = 0, [1] = "end" }, " ", indent)
          return out

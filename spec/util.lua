@@ -175,7 +175,7 @@ function util.assert_line_by_line(s1, s2)
       table.insert(l2, l)
    end
    local batch = batch_assertions()
-   for i in ipairs(l1) do
+   for i = 1, math.max(#l1, #l2) do
       batch:add(assert.same, l1[i], l2[i], "mismatch at line " .. i .. ":")
    end
    batch:assert()
