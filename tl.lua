@@ -9921,7 +9921,10 @@ visit_node.cbs = {
          local is_named_vararg = false
          if node.tk == "..." then
             if node.name then
-               local pack_table = a_type(node, "array", { elements = t })
+               local table_t = (self.env.modules["table"]).def
+               local generic_pack_table = (table_t.fields["PackTable"]).def
+               local pack_table = self:apply_generic(node, generic_pack_table, { t })
+
                self:add_var(node, node.name.tk, pack_table).is_func_arg = true
                is_named_vararg = true
             end
