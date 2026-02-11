@@ -5743,7 +5743,7 @@ do
 
       setmetatable(self, {
          __index = Context,
-         __tostring = function()             return "Context" end,
+         __tostring = function() return "Context" end,
       })
 
       return self

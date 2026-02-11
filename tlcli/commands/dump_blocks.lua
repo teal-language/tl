@@ -112,17 +112,17 @@ local function write_json_block(fd, bl, indent)
    fd:write(indent, "{\n")
 
    local entries = {}
-   table.insert(entries, { key = "\"kind\"", val = function()       write_json_string(fd, bl.kind) end })
-   table.insert(entries, { key = "\"tk\"", val = function()       write_json_string(fd, bl.tk) end })
+   table.insert(entries, { key = "\"kind\"", val = function() write_json_string(fd, bl.kind) end })
+   table.insert(entries, { key = "\"tk\"", val = function() write_json_string(fd, bl.tk) end })
    if bl.f then
-      table.insert(entries, { key = "\"f\"", val = function()          write_json_string(fd, bl.f) end })
+      table.insert(entries, { key = "\"f\"", val = function() write_json_string(fd, bl.f) end })
    end
-   if bl.y then table.insert(entries, { key = "\"y\"", val = function()          fd:write(tostring(bl.y)) end }) end
-   if bl.x then table.insert(entries, { key = "\"x\"", val = function()          fd:write(tostring(bl.x)) end }) end
-   if bl.yend then table.insert(entries, { key = "\"yend\"", val = function()          fd:write(tostring(bl.yend)) end }) end
-   if bl.xend then table.insert(entries, { key = "\"xend\"", val = function()          fd:write(tostring(bl.xend)) end }) end
+   if bl.y then table.insert(entries, { key = "\"y\"", val = function() fd:write(tostring(bl.y)) end }) end
+   if bl.x then table.insert(entries, { key = "\"x\"", val = function() fd:write(tostring(bl.x)) end }) end
+   if bl.yend then table.insert(entries, { key = "\"yend\"", val = function() fd:write(tostring(bl.yend)) end }) end
+   if bl.xend then table.insert(entries, { key = "\"xend\"", val = function() fd:write(tostring(bl.xend)) end }) end
    if bl.is_longstring then
-      table.insert(entries, { key = "\"is_longstring\"", val = function()          fd:write("true") end })
+      table.insert(entries, { key = "\"is_longstring\"", val = function() fd:write("true") end })
    end
 
    local arr = bl
@@ -173,14 +173,14 @@ local function write_lua_block(fd, bl, indent)
       end)
    end
 
-   add_line("kind", function()       fd:write(string.format("%q", bl.kind)) end)
-   if bl.tk then add_line("tk", function()          fd:write(string.format("%q", bl.tk)) end) end
-   if bl.f then add_line("f", function()          fd:write(string.format("%q", bl.f)) end) end
-   if bl.y then add_line("y", function()          fd:write(tostring(bl.y)) end) end
-   if bl.x then add_line("x", function()          fd:write(tostring(bl.x)) end) end
-   if bl.yend then add_line("yend", function()          fd:write(tostring(bl.yend)) end) end
-   if bl.xend then add_line("xend", function()          fd:write(tostring(bl.xend)) end) end
-   if bl.is_longstring then add_line("is_longstring", function()          fd:write("true") end) end
+   add_line("kind", function() fd:write(string.format("%q", bl.kind)) end)
+   if bl.tk then add_line("tk", function() fd:write(string.format("%q", bl.tk)) end) end
+   if bl.f then add_line("f", function() fd:write(string.format("%q", bl.f)) end) end
+   if bl.y then add_line("y", function() fd:write(tostring(bl.y)) end) end
+   if bl.x then add_line("x", function() fd:write(tostring(bl.x)) end) end
+   if bl.yend then add_line("yend", function() fd:write(tostring(bl.yend)) end) end
+   if bl.xend then add_line("xend", function() fd:write(tostring(bl.xend)) end) end
+   if bl.is_longstring then add_line("is_longstring", function() fd:write("true") end) end
 
    local arr = bl
    for _, idx in ipairs(child_indexes(bl)) do
