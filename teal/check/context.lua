@@ -242,6 +242,21 @@ do
    end
 end
 
+function Context:push_expected_type(t)
+   table.insert(self.expected_type_stack, t)
+end
+
+function Context:pop_expected_type()
+   table.remove(self.expected_type_stack)
+end
+
+function Context:get_expected_type()
+   if #self.expected_type_stack > 0 then
+      return self.expected_type_stack[#self.expected_type_stack]
+   end
+   return nil
+end
+
 function Context:simulate_g()
 
    local globals = {}
@@ -2358,6 +2373,39 @@ function Context:is_pending_global(name)
    return not not global_scope.pending_global_types[name]
 end
 
+local function infer_lambda_parameters(ctx, lambda_node, expected_type)
+   if not expected_type then
+      return false
+   end
+
+   expected_type = ctx:to_structural(expected_type)
+
+   if not (expected_type.typename == "function") then
+      return false
+   end
+
+   local expected_args = expected_type.args
+   if not expected_args then
+      return false
+   end
+
+   local expected_params = expected_args.tuple
+   local lambda_params = lambda_node.args and lambda_node.args.tuple or {}
+
+   if #expected_params ~= #lambda_params then
+      return false
+   end
+
+   for i, param in ipairs(lambda_params) do
+      if not param.decltype then
+         local inferred_type = ctx:infer_at(param, expected_params[i])
+         ctx:add_var(param, param.tk, inferred_type, nil, "localizing")
+      end
+   end
+
+   return true
+end
+
 do
    local function set_feat(feat, default)
       if feat then
@@ -2384,6 +2432,7 @@ do
          subtype_relations = relations.subtype_relations,
          eqtype_relations = relations.eqtype_relations,
          type_priorities = relations.type_priorities,
+         expected_type_stack = {},
       }
 
       if env.report_types then
@@ -2421,6 +2470,6 @@ do
    end
 end
 
-
+context.infer_lambda_parameters = infer_lambda_parameters
 
 return context

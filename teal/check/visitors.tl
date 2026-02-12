@@ -3,6 +3,7 @@ local type VarUse = type_checker.VarUse
 
 local type context = require("teal.check.context")
 local type Context = context.Context
+local infer_lambda_parameters = context.infer_lambda_parameters
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
@@ -1699,13 +1700,14 @@ visit_node.cbs = {
          self:widen_all_unions(node)
          self:begin_scope(node)
 
-         local expected = node.expected
-         if expected and expected is FunctionType then
-            for i, t in ipairs(expected.args.tuple) do
-               if node.args[i] then
-                  node.args[i].expected = t
-               end
-            end
+         local expected = node.expected and self:to_structural(node.expected)
+
+         if expected is GenericType then
+            expected = self:apply_generic(node, expected)
+         end
+
+         if expected and expected.typename == "function" then
+            infer_lambda_parameters(self, node, expected)
          end
       end,
       before_statements = function(self: Context, node: Node, children: {Type})
@@ -2249,7 +2251,9 @@ visit_node.cbs = {
       after = function(self: Context, node: Node, children: {Type}): Type
          local t = children[1]
          if not t then
-            if node.expected and node.tk == "self" then
+            if node.expected then
+               t = node.expected
+            elseif node.tk == "self" then
                t = node.expected
             else
                t = self.feat_lax

@@ -14,11 +14,13 @@ describe("lambda parameter type inference", function()
       end
    ]]))
 
-   it("does not override explicit parameter annotation", util.check([[
-      local f: function(integer): string = function(x: number)
-         return tostring(x)
+   it("does not override explicit parameter annotation", util.check_type_error([[
+      local f: function(integer): string = function(x: string)
+         return x
       end
-   ]]))
+   ]], {
+      { msg = "argument" }
+   }))
 
    it("infers parameter types in function argument position", util.check([[
       local function call_with_function(f: function(integer): string): string
@@ -41,6 +43,12 @@ describe("lambda parameter type inference", function()
    it("rejects arity mismatch", util.check_type_error([[
       local f: function(integer, string): boolean = function(x)
          return true
+      end
+   ]]))
+
+   it("does not infer without expected type", util.check([[
+      local f = function(x)
+         return x
       end
    ]]))
 

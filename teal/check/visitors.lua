@@ -90,7 +90,8 @@ local ensure_not_abstract = type_errors.ensure_not_abstract
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
-
+local context = require("teal.check.context")
+local infer_lambda_parameters = context.infer_lambda_parameters
 
 local visitors = {}
 
@@ -1699,13 +1700,14 @@ visit_node.cbs = {
          self:widen_all_unions(node)
          self:begin_scope(node)
 
-         local expected = node.expected
+         local expected = node.expected and self:to_structural(node.expected)
+
+         if expected and expected.typename == "generic" then
+            expected = self:apply_generic(node, expected)
+         end
+
          if expected and expected.typename == "function" then
-            for i, t in ipairs(expected.args.tuple) do
-               if node.args[i] then
-                  node.args[i].expected = t
-               end
-            end
+            infer_lambda_parameters(self, node, expected)
          end
       end,
       before_statements = function(self, node, children)
@@ -2249,7 +2251,9 @@ visit_node.cbs = {
       after = function(self, node, children)
          local t = children[1]
          if not t then
-            if node.expected and node.tk == "self" then
+            if node.expected then
+               t = node.expected
+            elseif node.tk == "self" then
                t = node.expected
             else
                t = self.feat_lax and
