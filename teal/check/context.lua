@@ -2391,8 +2391,7 @@ function Context:infer_lambda_parameters(node, expected)
          param.expected = expected_params[i]
       end
    end
-endend
-
+end
 
 do
    local function set_feat(feat, default)
