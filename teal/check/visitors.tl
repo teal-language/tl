@@ -1706,6 +1706,9 @@ visit_node.cbs = {
                   node.args[i].expected = t
                end
             end
+            if not node.rets or #node.rets == 0 then
+               node.rets = expected.rets
+            end
          end
       end,
       before_statements = function(self: Context, node: Node, children: {Type})
