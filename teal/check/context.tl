@@ -2375,7 +2375,10 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
 
    for i, param in ipairs(actual_params) do
       if not param.argtype then
-         param.expected = expected_params[i]
+         local expected_type = expected_params[i]
+         if expected_type then
+            param.expected = expected_type
+         end
       end
    end
 end
