@@ -2373,38 +2373,26 @@ function Context:is_pending_global(name)
    return not not global_scope.pending_global_types[name]
 end
 
-local function infer_lambda_parameters(ctx, lambda_node, expected_type)
-   if not expected_type then
-      return false
-   end
-
-   expected_type = ctx:to_structural(expected_type)
-
-   if not (expected_type.typename == "function") then
-      return false
-   end
-
-   local expected_args = expected_type.args
+function Context:infer_lambda_parameters(node, expected)
+   local expected_args = expected.args
    if not expected_args then
-      return false
+      return
    end
 
    local expected_params = expected_args.tuple
-   local lambda_params = lambda_node.args and lambda_node.args.tuple or {}
+   local actual_params = node.args
 
-   if #expected_params ~= #lambda_params then
-      return false
+   if #actual_params ~= #expected_params then
+      return
    end
 
-   for i, param in ipairs(lambda_params) do
+   for i, param in ipairs(actual_params) do
       if not param.decltype then
-         local inferred_type = ctx:infer_at(param, expected_params[i])
-         ctx:add_var(param, param.tk, inferred_type, nil, "localizing")
+         param.expected = expected_params[i]
       end
    end
+endend
 
-   return true
-end
 
 do
    local function set_feat(feat, default)
@@ -2469,7 +2457,5 @@ do
       return self
    end
 end
-
-context.infer_lambda_parameters = infer_lambda_parameters
 
 return context

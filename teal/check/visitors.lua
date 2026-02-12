@@ -90,8 +90,11 @@ local ensure_not_abstract = type_errors.ensure_not_abstract
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
+-- Infers parameter types for anonymous functions
+-- when an expected function type is available.
+-- Only applies to fixed-arity functions.
+
 local context = require("teal.check.context")
-local infer_lambda_parameters = context.infer_lambda_parameters
 
 local visitors = {}
 
@@ -1707,7 +1710,7 @@ visit_node.cbs = {
          end
 
          if expected and expected.typename == "function" then
-            infer_lambda_parameters(self, node, expected)
+            self:infer_lambda_parameters(node, expected)
          end
       end,
       before_statements = function(self, node, children)

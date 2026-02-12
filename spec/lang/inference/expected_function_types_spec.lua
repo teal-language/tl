@@ -14,7 +14,19 @@ describe("lambda parameter type inference", function()
       end
    ]]))
 
-   it("does not override explicit parameter annotation", util.check([[
+   it("enforces inferred integer type in body", util.check_type_error([[
+      local f: function(integer): boolean = function(x)
+         return #x > 0
+      end
+   ]]))
+
+   it("explicit annotation must match expected type", util.check_type_error([[
+      local f: function(integer): string = function(x: string)
+         return x
+      end
+   ]]))
+
+   it("does not override explicit parameter annotation when compatible", util.check([[
       local f: function(integer): string = function(x: number)
          return tostring(x)
       end

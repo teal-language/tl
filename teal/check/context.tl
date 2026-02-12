@@ -167,6 +167,8 @@ local record context
       resolve_self: function(self, Type, resolve_interface?: boolean): Type, {Error}
 
       get_rets: function(TupleType): TupleType
+
+      infer_lambda_parameters: function(self, node: Node, expected: FunctionType)
    end
 end
 
@@ -2358,37 +2360,24 @@ function Context:is_pending_global(name: string): boolean
    return not not global_scope.pending_global_types[name]
 end
 
-local function infer_lambda_parameters(ctx: Context, lambda_node: Node, expected_type: Type): boolean
-   if not expected_type then
-      return false
-   end
-
-   expected_type = ctx:to_structural(expected_type)
-
-   if not (expected_type is FunctionType) then
-      return false
-   end
-
-   local expected_args = expected_type.args
+function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
+   local expected_args = expected.args
    if not expected_args then
-      return false
+      return
    end
 
    local expected_params = expected_args.tuple
-   local lambda_params = lambda_node.args and lambda_node.args.tuple or {}
+   local actual_params = node.args
 
-   if #expected_params ~= #lambda_params then
-      return false
+   if #actual_params ~= #expected_params then
+      return
    end
 
-   for i, param in ipairs(lambda_params) do
+   for i, param in ipairs(actual_params) do
       if not param.decltype then
-         local inferred_type = ctx:infer_at(param, expected_params[i])
-         ctx:add_var(param, param.tk, inferred_type, nil, "localizing")
+         param.expected = expected_params[i]
       end
    end
-
-   return true
 end
 
 do
@@ -2455,7 +2444,5 @@ do
 end
 
 --------------------------------------------------------------------------------
-
-context.infer_lambda_parameters = infer_lambda_parameters
 
 return context

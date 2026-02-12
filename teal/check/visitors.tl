@@ -3,7 +3,6 @@ local type VarUse = type_checker.VarUse
 
 local type context = require("teal.check.context")
 local type Context = context.Context
-local infer_lambda_parameters = context.infer_lambda_parameters
 
 local tldebug = require("teal.debug")
 local TL_DEBUG = tldebug.TL_DEBUG
@@ -1702,12 +1701,8 @@ visit_node.cbs = {
 
          local expected = node.expected and self:to_structural(node.expected)
 
-         if expected is GenericType then
-            expected = self:apply_generic(node, expected)
-         end
-
-         if expected and expected.typename == "function" then
-            infer_lambda_parameters(self, node, expected)
+         if expected is FunctionType then
+            self:infer_lambda_parameters(node, expected)
          end
       end,
       before_statements = function(self: Context, node: Node, children: {Type})

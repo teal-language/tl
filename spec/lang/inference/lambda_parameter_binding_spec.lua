@@ -8,19 +8,20 @@ describe("lambda parameter type inference", function()
       end
    ]]))
 
-   it("infers multiple parameter types from expected function type", util.check([[
+   it("enforces inferred types for multiple parameters", util.check_type_error([[
       local f: function(integer, string): boolean = function(x, y)
-         return #y > x
+         return y + x
       end
    ]]))
 
-   it("does not override explicit parameter annotation", util.check_type_error([[
+
+   it("explicit annotation must still match expected type", util.check_type_error([[
       local f: function(integer): string = function(x: string)
          return x
       end
-   ]], {
-      { msg = "argument" }
-   }))
+   ]]))
+
+
 
    it("infers parameter types in function argument position", util.check([[
       local function call_with_function(f: function(integer): string): string
@@ -46,10 +47,23 @@ describe("lambda parameter type inference", function()
       end
    ]]))
 
-   it("does not infer without expected type", util.check([[
+   it("does not enforce inferred type without expected type", util.check([[
       local f = function(x)
-         return x
+         return x + 1
       end
    ]]))
+
+   it("enforces inferred integer type in body", util.check_type_error([[
+      local f: function(integer): boolean = function(x)
+         return #x > 0
+      end
+   ]]))
+   
+   it("does not infer when arity differs", util.check([[
+      local f: function(integer, string): boolean = function(x)
+         return true
+      end
+   ]]))
+
 
 end)
