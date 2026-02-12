@@ -2367,6 +2367,10 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    end
 
    local expected_params = expected_args.tuple
+   if not expected_params then
+      return
+   end
+
    local actual_params = node.args
 
    if #actual_params ~= #expected_params then

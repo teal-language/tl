@@ -2249,7 +2249,7 @@ visit_node.cbs = {
             if node.expected then
                t = node.expected
             elseif node.tk == "self" then
-               t = node.expected
+               t = self:find_var_type("@self") or a_type(node, "any", {})
             else
                t = self.feat_lax
                    and an_unknown(node)
