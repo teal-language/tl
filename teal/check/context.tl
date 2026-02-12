@@ -2374,7 +2374,7 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    end
 
    for i, param in ipairs(actual_params) do
-      if not param.decltype then
+      if not param.argtype then
          param.expected = expected_params[i]
       end
    end
