@@ -2361,28 +2361,37 @@ function Context:is_pending_global(name: string): boolean
 end
 
 function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
+   -- safety first
+   if not expected or expected.typename ~= "function" then
+      return
+   end
+
    local expected_args = expected.args
-   if not expected_args then
+   local actual_params = node.args
+
+   if not (expected_args and expected_args.tuple and actual_params) then
       return
    end
 
    local expected_params = expected_args.tuple
-   if not expected_params then
-      return
-   end
 
-   local actual_params = node.args
-
+   -- PR2: arity must match exactly
    if #actual_params ~= #expected_params then
       return
    end
 
    for i, param in ipairs(actual_params) do
-      if not param.argtype then
-         local expected_type = expected_params[i]
-         if expected_type then
-            param.expected = expected_type
+      local exp_t = expected_params[i]
+
+      if param.decltype then
+         -- PR2: explicit annotation must be compatible
+         local ok = self:is_a(param.decltype, exp_t)
+         if not ok then
+            self.errs:add(param, "argument type mismatch")
          end
+      else
+         -- PR2: infer only when unannotated
+         param.expected = exp_t
       end
    end
 end

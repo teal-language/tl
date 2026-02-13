@@ -1698,14 +1698,19 @@ visit_node.cbs = {
       before = function(self: Context, node: Node)
          self:widen_all_unions(node)
          self:begin_scope(node)
-
-         local expected = node.expected and self:to_structural(node.expected)
-
-         if expected is FunctionType then
-            self:infer_lambda_parameters(node, expected)
-         end
       end,
       before_statements = function(self: Context, node: Node, children: {Type})
+         local expected = node.expected and self:to_structural(node.expected)
+
+         if expected then
+            if expected is PolyType then
+               expected = expected.t
+            end
+            if expected is FunctionType then
+               self:infer_lambda_parameters(node, expected)
+            end
+         end
+
          local args = children[1]
          assert(args is TupleType)
 
