@@ -1704,7 +1704,8 @@ visit_node.cbs = {
 
          if expected then
             if expected is PolyType then
-               expected = expected.t
+               local p = expected
+               expected = p.t
             end
             if expected is FunctionType then
                self:infer_lambda_parameters(node, expected)
