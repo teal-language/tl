@@ -2362,24 +2362,7 @@ end
 
 function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    -- safety first
-   if not expected then
-      return
-   end
-
-   -- normalize expected type safely
-   expected = self:to_structural(expected)
-
-   -- unwrap PolyType (common in Teal)
-   if expected is PolyType then
-      expected = expected.types[1]
-   end
-
-   -- must be function after normalization
-   if not (expected is FunctionType) then
-      return
-   end
-
-   if expected.typename ~= "function" then
+   if not expected or expected.typename ~= "function" then
       return
    end
 
