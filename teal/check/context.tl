@@ -2362,7 +2362,16 @@ end
 
 function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    -- safety first
-   if not expected or expected.typename ~= "function" then
+   if not expected then
+      return
+   end
+
+   -- unwrap generics defensively
+   if expected.typename == "generic" then
+      expected = expected.t
+   end
+
+   if expected.typename ~= "function" then
       return
    end
 
