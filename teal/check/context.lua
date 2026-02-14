@@ -2374,21 +2374,34 @@ function Context:is_pending_global(name)
 end
 
 function Context:infer_lambda_parameters(node, expected)
+    if not expected or expected.typename ~= "function" then
+      return
+   end
+
    local expected_args = expected.args
-   if not expected_args then
+   local actual_params = node.args
+
+   if not (expected_args and expected_args.tuple and actual_params) then
       return
    end
 
    local expected_params = expected_args.tuple
-   local actual_params = node.args
+ 
 
    if #actual_params ~= #expected_params then
       return
    end
 
    for i, param in ipairs(actual_params) do
-      if not param.decltype then
-         param.expected = expected_params[i]
+      local expected_param = expected_params[i]
+
+      if param.argtype then
+         local ok = self:is_a(param.argtype, expected_param)
+         if not ok then
+            self.errs:add(param, "argument type mismatch")
+         end
+      else
+         param.expected = expected_param
       end
    end
 end
