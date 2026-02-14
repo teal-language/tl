@@ -1706,7 +1706,7 @@ visit_node.cbs = {
                   node.args[i].expected = t
                end
             end
-            if not node.rets or #node.rets == 0 then
+            if not node.rets or #node.rets.tuple == 0 then
                node.rets = expected.rets
             end
          end
