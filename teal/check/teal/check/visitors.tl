@@ -2383,9 +2383,9 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    for i, param in ipairs(actual_params) do
       local exp_t = expected_params[i]
 
-      if param.type then
+      if param.argtype then
          -- PR2: explicit annotation must be compatible
-         local ok = self:is_a(param.type, exp_t)
+         local ok = self:is_a(param.argtype, exp_t)
          if not ok then
             self.errs:add(param, "argument type mismatch")
          end
