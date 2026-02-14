@@ -17,7 +17,15 @@ describe("expected function type propagation", function()
          return tostring(x)
       end)
    ]]))
-
+   it("does not propagate expected returns in assignment context", util.check_type_error([[
+      local f: function(integer): string
+      f = function(x)
+         return tostring(x)
+      end
+   ]], {
+      { msg = "in assignment: incompatible number of returns: got 0 (), expected 1 (string)" },
+      { msg = "excess return values, expected 0 (), got 1 (string)" },
+   }))
    it("propagates expected type in return position", util.check([[
       local function get_handler(): function(integer): string
          return function(x)
