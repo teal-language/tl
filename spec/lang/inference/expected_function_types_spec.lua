@@ -49,6 +49,29 @@ describe("lambda parameter type inference", function()
          end
       end
    ]]))
+    it("keeps inference behavior when no expected type exists", util.check([[
+      local f = function(x)
+         return x
+      end
+   ]]))
+
+   it("infers integer from expected type for unannotated lambda parameter", util.check([[
+      local f: function(integer): integer = function(x)
+         return x
+      end
+   ]]))
+
+   it("accepts wider explicit parameter annotations", util.check([[
+      local f: function(integer): integer = function(x: number)
+         return x
+      end
+   ]]))
+
+   it("rejects incompatible explicit parameter annotations", util.check_type_error([[
+      local f: function(integer): integer = function(x: string)
+         return 1
+      end
+   ]]))
 
    it("rejects arity mismatch", util.check_type_error([[
       local f: function(integer, string): boolean = function(x)
