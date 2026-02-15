@@ -1710,7 +1710,7 @@ visit_node.cbs = {
            if expected is FunctionType then
               self:infer_lambda_parameters(node, expected)
            end
-        end,
+        end
 
 
          local args = children[1]
