@@ -81,8 +81,47 @@ function traversal.fields_of(t: RecordLikeType, meta?: MetaMode): (function(): s
 end
 
 
-local type RecurseType = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
-local recurse_type: RecurseType
+local type TypeWalker = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+local type_walkers: {TypeName: boolean | TypeWalker}
+
+local function recurse_type<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
+   local kind = ast.typename
+
+   if TL_DEBUG then
+      tldebug.indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+   end
+
+   local cbs = visit.cbs
+   local cbkind = cbs and cbs[kind]
+   if cbkind then
+      local cbkind_before = cbkind.before
+      if cbkind_before then
+         cbkind_before(s, ast)
+      end
+   end
+
+   local xs: {T}
+   local walker = type_walkers[ast.typename]
+   if not walker is boolean then
+      xs = walker(s, ast, visit)
+   end
+
+   local ret: T
+   local cbkind_after = cbkind and cbkind.after
+   if cbkind_after then
+      ret = cbkind_after(s, ast, xs)
+   end
+   local visit_after = visit.after
+   if visit_after then
+      ret = visit_after(s, ast, xs, ret)
+   end
+
+   if TL_DEBUG then
+      tldebug.indent_pop("---", "---", ast.y, ast.x)
+   end
+
+   return ret
+end
 
 local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visitor<S, TypeName, Type, T>): {T}
    local xs: {T} = {}
@@ -115,7 +154,7 @@ local function record_like_type_walker<S, T>(s: S, ast: RecordLikeType, visit: V
    return xs
 end
 
-local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}} = {
+type_walkers = {
    ["typevar"] = false,
    ["unresolved_typearg"] = false,
    ["unresolvable_typearg"] = false,
@@ -209,45 +248,6 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       }
    end,
 }
-
-recurse_type = function(s, ast, visit)
-   local kind = ast.typename
-
-   if TL_DEBUG then
-      tldebug.indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
-   end
-
-   local cbs = visit.cbs
-   local cbkind = cbs and cbs[kind]
-   if cbkind then
-      local cbkind_before = cbkind.before
-      if cbkind_before then
-         cbkind_before(s, ast)
-      end
-   end
-
-   local xs
-   local walker = type_walkers[ast.typename]
-   if not walker is boolean then
-      xs = walker(s, ast, visit)
-   end
-
-   local ret
-   local cbkind_after = cbkind and cbkind.after
-   if cbkind_after then
-      ret = cbkind_after(s, ast, xs)
-   end
-   local visit_after = visit.after
-   if visit_after then
-      ret = visit_after(s, ast, xs, ret)
-   end
-
-   if TL_DEBUG then
-      tldebug.indent_pop("---", "---", ast.y, ast.x)
-   end
-
-   return ret
-end as RecurseType
 
 local function recurse_typeargs<S, T>(s: S, ast: Node, visit_type: Visitor<S, TypeName, Type, T>)
    if ast.typeargs then
