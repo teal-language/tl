@@ -168,7 +168,7 @@ local record context
 
       get_rets: function(TupleType): TupleType
 
-      infer_lambda_parameters: function(self, node: Node, expected: FunctionType)
+      infer_lambda_parameters: function(self, node: Node, expected: Type)
    end
 end
 
@@ -2360,13 +2360,26 @@ function Context:is_pending_global(name: string): boolean
    return not not global_scope.pending_global_types[name]
 end
 
-function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
-   -- safety first
-   if not expected or expected.typename ~= "function" then
+function Context:infer_lambda_parameters(node: Node, expected: Type)
+   if not expected then
       return
    end
 
-   local expected_args = expected.args
+   -- normalize first
+   local exp = self:to_structural(expected)
+
+   -- unwrap PolyType if present
+   if exp is PolyType then
+      exp = exp.types[1]
+   end
+
+   -- must be a function type
+   if not (exp is FunctionType) then
+      return
+   end
+
+   local fexp = exp
+   local expected_args = fexp.args
    local actual_params = node.args
 
    if not (expected_args and expected_args.tuple and actual_params) then
@@ -2375,7 +2388,7 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
 
    local expected_params = expected_args.tuple
 
-   -- PR2: arity must match exactly
+   -- PR2: strict arity match
    if #actual_params ~= #expected_params then
       return
    end
@@ -2384,13 +2397,13 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
       local exp_t = expected_params[i]
 
       if param.argtype then
-         -- PR2: explicit annotation must be compatible
+         -- explicit annotation must be compatible
          local ok = self:is_a(param.argtype, exp_t)
          if not ok then
             self.errs:add(param, "argument type mismatch")
          end
       else
-         -- PR2: infer only when unannotated
+         -- infer when missing
          param.expected = exp_t
       end
    end
