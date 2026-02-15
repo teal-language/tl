@@ -918,12 +918,12 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
       if t is GenericType then
          assert(copy is GenericType)
 
-         local ct = {}
+         local ct: {TypeArgType} = {}
          for i, tf in ipairs(t.typeargs) do
-            ct[i], same = resolve(tf, same)
+             ct[i], same = resolve(tf, same) as (TypeArgType, boolean)
          end
          copy.typeargs = ct
-         copy.t, same = resolve(t.t, same)
+         copy.t, same = resolve(t.t, same) as (FirstOrderType, boolean)
       elseif t is ArrayType then
          assert(copy is ArrayType)
 
@@ -949,7 +949,7 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
          end
       elseif t is TypeDeclType then
          assert(copy is TypeDeclType)
-         copy.def, same = resolve(t.def, same)
+         copy.def, same = resolve(t.def, same) as (GenericType | FirstOrderType, boolean)
          copy.is_alias = t.is_alias
          copy.is_nested_alias = t.is_nested_alias
       elseif t is NominalType then
@@ -957,7 +957,7 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
          copy.names = t.names
          copy.typevals = {}
          for i, tf in ipairs(t.typevals) do
-            copy.typevals[i], same = resolve(tf, same)
+            copy.typevals[i], same = resolve(tf, same) as (GenericType | FirstOrderType, boolean)
          end
          copy.found = t.found
       elseif t is FunctionType then
@@ -981,7 +981,7 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
          if t.interface_list then
             copy.interface_list = {}
             for i, v in ipairs(t.interface_list) do
-               copy.interface_list[i], same = resolve(v, same)
+               copy.interface_list[i], same = resolve(v, same) as (ArrayType | NominalType, boolean)
             end
          end
 
@@ -1010,7 +1010,7 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
          assert(copy is UnionType)
          copy.types = {}
          for i, tf in ipairs(t.types) do
-            copy.types[i], same = resolve(tf, same)
+             copy.types[i], same = resolve(tf, same) as (FunctionType | GenericType, boolean)
          end
 
          local _, err = types.is_valid_union(copy)
@@ -1041,7 +1041,7 @@ function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {
       elseif t is SelfType then
          assert(copy is SelfType)
          if t.display_type ~= nil then
-            copy.display_type, same = resolve(t.display_type, same)
+            copy.display_type, same = resolve(t.display_type, same) as (RecordLikeType, boolean)
          end
       end
 
