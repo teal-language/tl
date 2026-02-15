@@ -878,9 +878,10 @@ end
 types.map = function<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {Error}
    local errs: {Error}
    local seen: {Type:Type} = {}
-   local resolve: function<T is Type>(t: T, all_same: boolean): T, boolean
+   local type ResolveFunction = function(Type, boolean): Type, boolean
+   local resolve: ResolveFunction
 
-   resolve = function<T is Type>(t: T, all_same: boolean): T, boolean
+   resolve = function(t: Type, all_same: boolean): Type, boolean
       local same = true
 
       -- avoid copies of types that do not contain type variables
