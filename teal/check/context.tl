@@ -2404,7 +2404,7 @@ function Context:infer_lambda_parameters(node: Node, expected: Type)
          end
       else
          -- infer when missing
-         param.expected = exp_t
+         param.expected = self:infer_at(param, exp_t)
       end
    end
 end
