@@ -81,7 +81,8 @@ function traversal.fields_of(t: RecordLikeType, meta?: MetaMode): (function(): s
 end
 
 
-local recurse_type: function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
+local type RecurseType = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
+local recurse_type: RecurseType
 
 local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visitor<S, TypeName, Type, T>): {T}
    local xs: {T} = {}
