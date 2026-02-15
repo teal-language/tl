@@ -1700,17 +1700,18 @@ visit_node.cbs = {
          self:begin_scope(node)
       end,
       before_statements = function(self: Context, node: Node, children: {Type})
-         local expected = node.expected and self:to_structural(node.expected)
+        local expected = node.expected
 
-         if expected then
-            if expected is PolyType then
-               local p = expected
-               expected = p.types[1]
-            end
-            if expected is FunctionType then
-               self:infer_lambda_parameters(node, expected)
-            end
-         end
+        if expected then
+           if expected is PolyType then
+              expected = expected.types[1]
+           end
+
+           if expected is FunctionType then
+              self:infer_lambda_parameters(node, expected)
+           end
+        end,
+
 
          local args = children[1]
          assert(args is TupleType)
