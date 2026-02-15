@@ -210,7 +210,7 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    end,
 }
 
-recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
+recurse_type = function(s, ast, visit)
    local kind = ast.typename
 
    if TL_DEBUG then
@@ -226,13 +226,13 @@ recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type,
       end
    end
 
-   local xs: {T}
+   local xs
    local walker = type_walkers[ast.typename]
    if not walker is boolean then
       xs = walker(s, ast, visit)
    end
 
-   local ret: T
+   local ret
    local cbkind_after = cbkind and cbkind.after
    if cbkind_after then
       ret = cbkind_after(s, ast, xs)
@@ -247,7 +247,7 @@ recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type,
    end
 
    return ret
-end
+end as RecurseType
 
 local function recurse_typeargs<S, T>(s: S, ast: Node, visit_type: Visitor<S, TypeName, Type, T>)
    if ast.typeargs then
