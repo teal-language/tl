@@ -875,7 +875,7 @@ function types.error(msg: string, t1: Type, t2?: Type, t3?: Type): Error
    }
 end
 
-types.map = function<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {Error}
+function types.map<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type, {Error}
    local errs: {Error}
    local seen: {Type:Type} = {}
    local type ResolveFunction = function(Type, boolean): Type, boolean
