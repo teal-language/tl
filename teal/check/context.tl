@@ -2361,8 +2361,13 @@ function Context:is_pending_global(name: string): boolean
 end
 
 function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
-   -- safety first
-   if not expected or expected.typename ~= "function" then
+   if not expected then
+      return
+   end
+
+   expected = self:to_structural(expected)
+
+   if not (expected is FunctionType) then
       return
    end
 
@@ -2375,26 +2380,32 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
 
    local expected_params = expected_args.tuple
 
-   -- PR2: arity must match exactly
-   if #actual_params ~= #expected_params then
-      return
-   end
+   -- Infer parameter types only if arity matches
+   if #actual_params == #expected_params then
+      for i, param in ipairs(actual_params) do
+         local exp_t = expected_params[i]
 
-   for i, param in ipairs(actual_params) do
-      local exp_t = expected_params[i]
+         if not param.argtype then
+            -- infer for unannotated parameters only
+            param.expected = exp_t
 
-      if param.type then
-         -- PR2: explicit annotation must be compatible
-         local ok = self:is_a(param.type, exp_t)
-         if not ok then
-            self.errs:add(param, "argument type mismatch")
+            -- ⭐⭐⭐ CRITICAL FOR PR2 ⭐⭐⭐
+            -- also propagate into AST arg tuple
+            if node.args and node.args[i] then
+               node.args[i].expected = exp_t
+            end
          end
-      else
-         -- PR2: infer only when unannotated
-         param.expected = exp_t
       end
    end
+   
+   -- Always infer return type if not explicitly annotated (even if arity doesn't match)
+   -- This ensures arity errors are reported instead of return type errors
+   if expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
+      node.rets = expected.rets
+   end
 end
+
+
 
 do
    local function set_feat(feat: Feat, default: boolean): boolean

@@ -2374,24 +2374,49 @@ function Context:is_pending_global(name)
 end
 
 function Context:infer_lambda_parameters(node, expected)
+   if not expected then
+      return
+   end
+
+   -- normalize expected type (CRITICAL)
+   expected = self:to_structural(expected)
+
+   if expected.typename == "generic" then
+      expected = expected.t
+   end
+
+   if expected.typename ~= "function" then
+      return
+   end
+
    local expected_args = expected.args
-   if not expected_args then
+   local actual_params = node.args
+
+   if not (expected_args and expected_args.tuple and actual_params) then
       return
    end
 
    local expected_params = expected_args.tuple
-   local actual_params = node.args
 
-   if #actual_params ~= #expected_params then
-      return
-   end
+   -- Infer parameter types only if arity matches
+   if #actual_params == #expected_params then
+      for i, param in ipairs(actual_params) do
+         local exp_t = expected_params[i]
 
-   for i, param in ipairs(actual_params) do
-      if not param.decltype then
-         param.expected = expected_params[i]
+         if not param.decltype then
+            -- infer for unannotated parameters only
+            param.expected = exp_t
+         end
       end
    end
+   
+   -- Always infer return type if not explicitly annotated (even if arity doesn't match)
+   -- This ensures arity errors are reported instead of return type errors
+   if expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
+      node.rets = expected.rets
+   end
 end
+
 
 do
    local function set_feat(feat, default)

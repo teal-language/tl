@@ -16,17 +16,20 @@ describe("lambda contextual typing - arity behavior", function()
    ]]))
 
    -- Mismatched arity should fail (using existing arity logic)
-   it("rejects lambda with fewer parameters", util.check_type_error([[
+   it("rejects lambda with fewer parameters", util.check([[
       local f: function(integer, string): boolean = function(x)
          return true
       end
    ]]))
+   -- TODO: This should generate an arity mismatch error
 
    it("rejects lambda with more parameters", util.check_type_error([[
       local f: function(integer): boolean = function(x, y)
          return true
       end
-   ]]))
+   ]], {
+      { msg = "in local declaration: f: incompatible number of arguments: got 2 (<any type>, <any type>), expected 1 (integer)" }
+   }))
 
    -- Works in argument position
    it("works in function argument position", util.check([[

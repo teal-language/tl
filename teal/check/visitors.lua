@@ -1703,14 +1703,19 @@ visit_node.cbs = {
          self:widen_all_unions(node)
          self:begin_scope(node)
 
-         local expected = node.expected and self:to_structural(node.expected)
+         local expected = node.expected
+         if expected then
+            expected = self:to_structural(expected)
 
-         if expected and expected.typename == "generic" then
-            expected = self:apply_generic(node, expected)
-         end
-
-         if expected and expected.typename == "function" then
-            self:infer_lambda_parameters(node, expected)
+            if expected.typename == "generic" then
+               expected = self:apply_generic(node, expected)
+            end
+            if expected.typename == "poly" then
+               expected = expected.types[1]
+            end
+            if expected.typename == "function" then
+               self:infer_lambda_parameters(node, expected)
+            end
          end
       end,
       before_statements = function(self, node, children)

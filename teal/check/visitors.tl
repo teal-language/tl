@@ -1703,9 +1703,14 @@ visit_node.cbs = {
          local expected = node.expected and self:to_structural(node.expected)
 
          if expected then
+            expected = self:to_structural(expected)
+
+            -- unwrap generics
+            if expected is GenericType then
+               expected = self:apply_generic(node, expected)
+            end
             if expected is PolyType then
-               local p = expected
-               expected = p.t
+               expected = expected.t
             end
             if expected is FunctionType then
                self:infer_lambda_parameters(node, expected)
