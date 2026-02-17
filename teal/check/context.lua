@@ -2378,14 +2378,9 @@ function Context:infer_lambda_parameters(node, expected)
       return
    end
 
-   -- normalize expected type (CRITICAL)
    expected = self:to_structural(expected)
 
-   if expected.typename == "generic" then
-      expected = expected.t
-   end
-
-   if expected.typename ~= "function" then
+   if not (expected.typename == "function") then
       return
    end
 

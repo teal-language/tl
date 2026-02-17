@@ -2383,7 +2383,7 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    -- Infer parameter types only if arity matches
    if #actual_params == #expected_params then
       for i, param in ipairs(actual_params) do
-         local exp_t = expected_params[i]
+         local exp_t: Type = expected_params[i]
 
          if not param.argtype then
             -- infer for unannotated parameters only
