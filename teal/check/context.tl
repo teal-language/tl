@@ -2365,13 +2365,13 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
       return
    end
 
-   expected = self:to_structural(expected)
+   local structural_expected = self:to_structural(expected)
 
-   if not (expected is FunctionType) then
+   if not (structural_expected is FunctionType) then
       return
    end
 
-   local expected_args = expected.args
+   local expected_args = structural_expected.args
    local actual_params = node.args
 
    if not (expected_args and expected_args.tuple and actual_params) then
@@ -2400,8 +2400,8 @@ function Context:infer_lambda_parameters(node: Node, expected: FunctionType)
    
    -- Always infer return type if not explicitly annotated (even if arity doesn't match)
    -- This ensures arity errors are reported instead of return type errors
-   if expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
-      node.rets = expected.rets
+   if structural_expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
+      node.rets = structural_expected.rets
    end
 end
 
