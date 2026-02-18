@@ -799,7 +799,6 @@ visit_node.cbs = {
             if resolved is InvalidType then
                return
             end
-            node.value.newtype = resolved
             if aliasing then
                added.aliasing = aliasing
             end
@@ -1138,7 +1137,15 @@ visit_node.cbs = {
             end
          end
       end,
-      after = end_scope_and_none_type,
+      after = function(self: Context, node: Node, _children: {Type}): Type
+         local control_var = node.vars[1]
+         local var = self:find_var(control_var.tk)
+         if var and var.has_been_written_to then
+            node.forin_modifies_control_var = true
+         end
+         self:end_scope(node)
+         return NONE
+      end
    },
    ["fornum"] = {
       before_statements = function(self: Context, node: Node, children: {Type})

@@ -66,7 +66,9 @@ local function get_args_parser()
    gen_command:argument("file", "The Teal source file."):args("+")
    gen_command:option("--root", "Interpret module paths relative to given root directory."):
    argname("<dir>")
-   gen_command:flag("-c --check", "Type check and fail on type errors.")
+   gen_command:flag("-c --check", "Type check and fail on type errors. This is the default."):
+   hidden(true)
+   gen_command:flag("--no-check", "Do not fail on type errors, only on syntax errors.")
    gen_command:flag("--keep-hashbang", "Preserve hashbang line (#!) at the top of file if present.")
    gen_command:option("-o --output", "Write to <filename> instead."):
    argname("<filename>")
@@ -92,6 +94,15 @@ local function get_args_parser()
    types_command:option("-p --position", "Report values in scope in position line[:column]"):
    argname("<position>")
 
+   local dump_blocks_command = parser:command("dump-blocks", "Dump parser blocks as Lua tables or JSON.")
+   dump_blocks_command:hidden(true)
+
+   dump_blocks_command:argument("file", "The Teal source file. Use '-' for stdin."):args(1)
+   dump_blocks_command:option("--format", "Output format."):
+   choices({ "lua", "json" }):
+   default("lua"):
+   target("dump_format")
+
    return parser
 end
 
@@ -102,6 +113,7 @@ return function(...)
       run = require("tlcli.commands.run"),
       types = require("tlcli.commands.types"),
       warnings = require("tlcli.commands.warnings"),
+      ["dump-blocks"] = require("tlcli.commands.dump_blocks"),
    }
 
    local parser = get_args_parser()

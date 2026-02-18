@@ -143,7 +143,7 @@ function Errors:redeclaration_warning(at: Where, var_name: string, var_kind: str
    if var_name:sub(1, 1) == "_" then return end
 
    local short_error = var_kind .. " shadows previous declaration of '%s'"
-   if old_var and old_var.declared_at then
+   if old_var and old_var.declared_at and (not old_var.is_global) then
       self:add_warning("redeclaration", at, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
    else
       self:add_warning("redeclaration", at, short_error, var_name)
@@ -153,6 +153,7 @@ end
 local function var_should_be_ignored_for_warnings(name: string, var: Variable): boolean
    local prefix <const> = name:sub(1,1)
    return (not var.declared_at)
+      or var.is_global
       or var.is_specialized == "narrow"
       or prefix == "_"
       or prefix == "@"
@@ -242,7 +243,7 @@ local record UsageWarning
    end
 end
 
-local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning}
+local function check_var_usage(scope: Scope): {UsageWarning}
    local vars = scope.vars
    if not next(vars) then
       return
@@ -264,11 +265,11 @@ local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning
 
       end
 
-      if var.declared_at and not has_var_been_used(var) then
+      if var.declared_at and not has_var_been_used(var) and not var.is_global then
          if var.used_as_type then
             var.declared_at.elide_type = true
          else
-            if t is TypeDeclType and not is_global then
+            if t is TypeDeclType then
                var.declared_at.elide_type = true
             end
             usage_warnings = usage_warnings or {}
@@ -290,8 +291,8 @@ local function check_var_usage(scope: Scope, is_global?: boolean): {UsageWarning
    return usage_warnings
 end
 
-function Errors:check_var_usage(scope: Scope, is_global?: boolean)
-   local usage_warnings <const> = check_var_usage(scope, is_global)
+function Errors:check_var_usage(scope: Scope)
+   local usage_warnings <const> = check_var_usage(scope)
    if usage_warnings then
       for _, u in ipairs(usage_warnings) do
          if u.kind == "unused" then

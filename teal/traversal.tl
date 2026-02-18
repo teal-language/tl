@@ -20,9 +20,9 @@ local type AggregateType = types.AggregateType
 local type TypeName = types.TypeName
 local show_type = types.show_type
 
-local type parser = require("teal.parser")
-local type Node = parser.Node
-local type NodeKind = parser.NodeKind
+local type ast_types = require("teal.ast")
+local type Node = ast_types.Node
+local type NodeKind = ast_types.NodeKind
 
 local record traversal
    record VisitorCallbacks<S, N, T>

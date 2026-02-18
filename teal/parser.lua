@@ -1,15 +1,5 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
-
-
-local attributes = require("teal.attributes")
-
-local is_attribute = attributes.is_attribute
-
-local errors = require("teal.errors")
-
-
-
-local types = require("teal.types")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local table = _tl_compat and _tl_compat.table or table; local ast = require("teal.ast")
+local reader = require("teal.reader")
 
 
 
@@ -17,6 +7,14 @@ local types = require("teal.types")
 
 
 
+
+
+
+
+
+
+
+local parser = {}
 
 
 
@@ -2472,132 +2470,40 @@ local needs_local_or_global = {
    ["enum"] = type_needs_local_or_global,
 }
 
-local function store_unattached_comments(node, token, item)
-   for _, tc in ipairs(token.comments) do
-      local is_attached = false
-      if item.comments then
-         for _, nc in ipairs(item.comments) do
-            if tc == nc then
-               is_attached = true
-               break
-            end
-         end
-      end
-      if not is_attached then
-         if not node.unattached_comments then
-            node.unattached_comments = {}
-         end
-         table.insert(node.unattached_comments, tc)
-      else
-         break
-      end
-   end
-end
 
-parse_statements = function(ps, i, toplevel)
-   local node = new_node(ps, i, "statements")
-   local item
-   while true do
-      while ps.tokens[i].kind == ";" do
-         i = i + 1
-         if item then
-            item.semicolon = true
-         end
-      end
 
-      if ps.tokens[i].kind == "$EOF$" then
-         break
-      end
-      local token = ps.tokens[i]
-      local tk = token.tk
-      if (not toplevel) and stop_statement_list[tk] then
-         break
-      end
 
-      local fn = parse_statement_fns[tk]
-      if not fn then
-         local skip_fn = needs_local_or_global[tk]
-         if skip_fn and ps.tokens[i + 1].kind == "identifier" then
-            fn = skip_fn
-         else
-            fn = parse_call_or_assignment
-         end
-      end
 
-      i, item = fn(ps, i)
+parser.parse_blocks = ast.parse_blocks
+parser.parse_program_block = ast.parse_program_block
+parser.parse_type = ast.parse_type
+parser.parse_type_list = ast.parse_type_list
+parser.operator = ast.operator
+parser.node_is_funcall = ast.node_is_funcall
+parser.node_is_require_call = ast.node_is_require_call
+parser.node_at = ast.node_at
+parser.lang_heuristic = ast.lang_heuristic
 
-      if item then
-         if toplevel and token.comments then
-            store_unattached_comments(node, token, item)
-         end
-         table.insert(node, item)
-      elseif i > 1 then
+function parser.parse(input, filename, parse_lang)
+   local block_ast, read_errs = reader.read(input, filename, parse_lang)
+   read_errs = read_errs or {}
 
-         local lasty = ps.tokens[i - 1].y
-         while ps.tokens[i].kind ~= "$EOF$" and ps.tokens[i].y == lasty do
-            i = i + 1
-         end
-      end
+   local ast_nodes, parse_errs, required = ast.parse_blocks(block_ast, filename, parse_lang)
+   for _, e in ipairs(parse_errs) do
+      table.insert(read_errs, e)
    end
 
-   end_at(node, ps.tokens[i])
-   return i, node
+   return ast_nodes, read_errs, required
 end
 
 function parser.parse_program(tokens, errs, filename, parse_lang)
    errs = errs or {}
-   local ps = {
-      tokens = tokens,
-      errs = errs,
-      filename = filename or "",
-      required_modules = {},
-      parse_lang = parse_lang,
-   }
-   local i = 1
-   local hashbang
-   if ps.tokens[i].kind == "hashbang" then
-      hashbang = ps.tokens[i].tk
-      i = i + 1
+   local block_ast = reader.read_program(tokens, errs, filename, parse_lang)
+   local ast_nodes, parse_errs, required = ast.parse_program_block(block_ast, filename or "input", parse_lang)
+   for _, e in ipairs(parse_errs) do
+      table.insert(errs, e)
    end
-   local _, node = parse_statements(ps, i, true)
-   if hashbang then
-      node.hashbang = hashbang
-   end
-
-   errors.clear_redundant_errors(errs)
-   return node, ps.required_modules
-end
-
-local function lang_heuristic(filename, input)
-   if filename then
-      local pattern = "(.*)%.([a-z]+)$"
-      local _, extension = filename:match(pattern)
-      extension = extension and extension:lower()
-
-      if extension == "tl" then
-         return "tl"
-      elseif extension == "lua" then
-         return "lua"
-      end
-   end
-   if input then
-      return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
-   end
-   return "tl"
-end
-
-function parser.parse(input, filename)
-   local parse_lang = lang_heuristic(filename, input)
-   local tokens, errs = lexer.lex(input, filename)
-   local node, required_modules = parser.parse_program(tokens, errs, filename, parse_lang)
-   return node, errs, required_modules
-end
-
-function parser.node_at(w, n)
-   n.f = assert(w.f)
-   n.x = w.x
-   n.y = w.y
-   return n
+   return ast_nodes, required
 end
 
 return parser

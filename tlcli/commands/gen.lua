@@ -106,14 +106,15 @@ return function(tlconfig, args)
    end
 
    for _, mod in ipairs(mods) do
-      if #mod.check_err.syntax_errors == 0 then
+      local err = mod.check_err
+      if #err.syntax_errors == 0 and (args["no_check"] or #err.type_errors == 0) then
          local output_filename = args["output"] or mod.output_file
          assert(mod.module)
          write_out(tlconfig, mod.module, output_filename, gen_opts, not not args["root"])
       end
    end
 
-   local ok = report.report_all_errors(tlconfig, compiler, not args["check"])
+   local ok = report.report_all_errors(tlconfig, compiler, args["no_check"])
 
    os.exit(ok and 0 or 1)
 end

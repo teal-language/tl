@@ -1,0 +1,49 @@
+name: composite-docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch (e.g main) or tag (e.g. v0.x.y)"
+        required: true
+        type: string
+      target-directory:
+        description: "dir (e.g book/unstable, book/latest, book/0.x.y)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      target-directory:
+        required: true
+        type: string
+
+jobs:
+  Docs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.ref }}
+    - name: Setup mdBook
+      uses: peaceiris/actions-mdbook@adeb05db28a0c0004681db83893d56c0388ea9ea
+      with:
+        mdbook-version: 'latest'
+    - name: Generate book
+      run: |
+        cd docs
+        mdbook build
+    - name: Push to docs repo
+      uses: hishamhm/github-action-push-to-another-repository@2101498712d973a9cee4f67fe773ece41d642795
+      env:
+        API_TOKEN_GITHUB: ${{ secrets.DOCS_PUSH_GITHUB_TOKEN }}
+      with:
+        destination-github-username: 'teal-language'
+        destination-repository-name: 'teal-language.github.io'
+        user-email: hisham@gobolinux.org
+        target-branch: main
+        source-directory: 'docs/book'
+        target-directory: ${{ inputs.target-directory }}

@@ -256,4 +256,60 @@ describe("subtyping of interfaces:", function()
       local _a: A = { "a", "b" }
       local _b: B = { "c" }
    ]]))
+
+   it("no duplicate interfaces in interface_list with diamond inheritance", function()
+      local tl = require("teal.api.v2")
+      local result = tl.check_string([[
+         local interface A
+            a: number
+         end
+
+         local interface B is A
+            b: string
+         end
+
+         local interface C is A
+            c: boolean
+         end
+
+         -- This should result in interface_list: {B, A, C} (no duplicate A)
+         local record D is B, C
+            d: integer
+         end
+
+         -- Test that all fields are accessible
+         local d: D = {
+            a = 1,    -- from A (via B and C)
+            b = "hi", -- from B
+            c = true, -- from C
+            d = 42    -- from D
+         }
+         print(d.a, d.b, d.c, d.d)
+      ]])
+      local expected = { "B", "A", "C" }
+      for i,v in ipairs(result.ast[5].decltuple.tuple[1].resolved.interface_list) do
+         assert.equal(expected[i], v.resolved.declname)
+      end
+   end)
+
+   it("interfaces propagate userdata marking (#1070)", util.check_type_error([[
+      local interface User
+         is userdata
+         name: string
+      end
+
+      local record Foo is User
+      end
+
+      local a: Foo = {
+          name = "foo"
+      }
+
+
+      local function Foos(a:User) end
+
+      Foos(a)
+   ]], {
+      { y = 9, msg = "record is not a userdata" },
+   }))
 end)

@@ -118,15 +118,14 @@ local bit_operators: {string:string} = {
 }
 
 local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat: GenCompat, gen_target: string)
-   if gen_target == "5.4" then
-      return
-   end
+   local visit = false
 
    local visit_node: Visitor<nil, NodeKind, Node, nil> = {
       cbs = {}
    }
 
-   if gen_compat ~= "off" then
+   if (gen_target == "5.1" or gen_target == "5.3") and gen_compat ~= "off" then
+      visit = true
       visit_node.cbs["op"] = {
          after = function(_: nil, node: Node, _children: {nil}): nil
             if node.op.op == "is" then
@@ -172,6 +171,32 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
             end
          end
       }
+   end
+
+   if gen_target == "5.4" then
+      visit = true
+      visit_node.cbs["forin"] = {
+         after = function(_: nil, node: Node, _children: {nil}): nil
+            if #node.body == 0 then
+               return
+            end
+            if node.forin_modifies_control_var then
+               local control_var = node.vars[1].tk
+               local localization = parser.parse("local " .. control_var .. " = " .. control_var, "@<internal>.lua") as Node
+               localization[1].y = node.y
+               localization[1].vars.y = node.y
+               localization[1].vars[1].y = node.y
+               localization[1].exps.y = node.y
+               localization[1].exps[1].y = node.y
+               table.insert(node.body, 1, localization[1])
+               node.body.y = node.y
+            end
+         end,
+      }
+   end
+
+   if not visit then
+      return
    end
 
    traverse_nodes(nil, ast, visit_node, {})

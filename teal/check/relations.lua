@@ -144,7 +144,7 @@ local function subtype_record(ck, a, b)
 
    if a.is_userdata ~= b.is_userdata then
       return false, { errors.new(a.is_userdata and "userdata is not a record" or
-"record is not a userdata"), }
+      "record is not a userdata"), }
    end
 
    local errs = {}
@@ -667,8 +667,8 @@ relations.subtype_relations = {
          for i = 1, math.min(#a.types, #b.types) do
             if not ck:is_a(a.types[i], b.types[i]) then
                return false, { types.error("in tuple entry " ..
-tostring(i) .. ": got %s, expected %s",
-a.types[i], b.types[i]), }
+               tostring(i) .. ": got %s, expected %s",
+               a.types[i], b.types[i]), }
             end
          end
          if #a.types > #b.types then

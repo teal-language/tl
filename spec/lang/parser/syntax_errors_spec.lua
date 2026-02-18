@@ -117,5 +117,19 @@ describe("syntax errors", function()
       { y = 5, msg = "syntax error, expected ')'" },
    }))
 
+   it("regression test from fuzzing: unfinished `is`", util.check_syntax_error([=[
+      local interface foo is
+   ]=], {
+      { y = 1, x = 29, msg = "syntax error" },
+   }))
+
+   it("regression test from fuzzing: bad syntax with `?`", util.check_syntax_error([=[
+      a + function { .. ?
+   ]=], {
+      { y = 1, x = 20, msg = "syntax error" },
+      { y = 1, x = 22, msg = "syntax error" },
+      { y = 1, x = 26, msg = "syntax error" },
+   }))
+
 end)
 

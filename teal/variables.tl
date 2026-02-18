@@ -31,6 +31,7 @@ local record variables
       implemented: {string:boolean}
       has_been_read_from: boolean
       has_been_written_to: boolean
+      is_global: boolean
    end
 
    record Scope
