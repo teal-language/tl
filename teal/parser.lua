@@ -1766,8 +1766,10 @@ local function get_attached_comments(token)
       end
    end
 
-   local attached_comments =
-   table.move(token.comments, first_n, #token.comments, 1, {})
+   local attached_comments = {}
+   for i = first_n, #token.comments do
+      attached_comments[i - first_n + 1] = token.comments[i]
+   end
 
    return attached_comments
 end
