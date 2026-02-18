@@ -172,6 +172,8 @@ local context = { Context = {} }
 
 
 
+
+
 local Context = context.Context
 
 
@@ -240,21 +242,6 @@ do
          end
       end
    end
-end
-
-function Context:push_expected_type(t)
-   table.insert(self.expected_type_stack, t)
-end
-
-function Context:pop_expected_type()
-   table.remove(self.expected_type_stack)
-end
-
-function Context:get_expected_type()
-   if #self.expected_type_stack > 0 then
-      return self.expected_type_stack[#self.expected_type_stack]
-   end
-   return nil
 end
 
 function Context:simulate_g()
@@ -2393,24 +2380,31 @@ function Context:infer_lambda_parameters(node, expected)
 
    local expected_params = expected_args.tuple
 
-   -- Infer parameter types only if arity matches
+
    if #actual_params == #expected_params then
       for i, param in ipairs(actual_params) do
          local exp_t = expected_params[i]
 
-         if not param.decltype then
-            -- infer for unannotated parameters only
+         if not param.argtype then
+
             param.expected = exp_t
+
+
+
+            if node.args and node.args[i] then
+               node.args[i].expected = exp_t
+            end
          end
       end
    end
-   
-   -- Always infer return type if not explicitly annotated (even if arity doesn't match)
-   -- This ensures arity errors are reported instead of return type errors
+
+
+
    if structural_expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
       node.rets = structural_expected.rets
    end
 end
+
 
 
 do
@@ -2439,7 +2433,6 @@ do
          subtype_relations = relations.subtype_relations,
          eqtype_relations = relations.eqtype_relations,
          type_priorities = relations.type_priorities,
-         expected_type_stack = {},
       }
 
       if env.report_types then
@@ -2476,5 +2469,7 @@ do
       return self
    end
 end
+
+
 
 return context
