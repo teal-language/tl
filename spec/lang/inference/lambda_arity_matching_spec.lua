@@ -21,7 +21,7 @@ describe("lambda contextual typing - arity behavior", function()
          return true
       end
    ]]))
-   -- TODO: This should generate an arity mismatch error
+ 
 
    it("rejects lambda with more parameters", util.check_type_error([[
       local f: function(integer): boolean = function(x, y)
@@ -42,7 +42,7 @@ describe("lambda contextual typing - arity behavior", function()
       end)
    ]]))
 
-   -- Works in return position
+ 
    it("works in return position", util.check([[
       local function get_handler(): function(integer): string
          return function(x)

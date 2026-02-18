@@ -2,6 +2,7 @@ local record Args
    check: boolean
    command: string
    custom_ext: string
+   dump_format: string
    feat_arity: string
    file: {string}
    gen_target: string
@@ -9,6 +10,7 @@ local record Args
    global_env_def: {string} -- FIXME should be `string`, but argparse can't handle `:count("0-1")`?...
    include_dir: {string}
    keep_hashbang: boolean
+   no_check: boolean
    output: string
    output_dir: string
    position: string

@@ -273,9 +273,9 @@ describe("record method call", function()
 
       ]],
       {
-         { y = 9, msg = "argument 1: got integer, expected Foo" },
-         { y = 11, msg = "argument 1: got integer, expected Foo" },
-         { y = 15, msg = "argument 1: got integer, expected Foo" },
+         { y = 9, msg = "argument 1: got integer, expected record Foo" },
+         { y = 11, msg = "argument 1: got integer, expected record Foo" },
+         { y = 15, msg = "argument 1: got integer, expected record Foo" },
       }))
 
       it("for function declared in record body with self as different type from receiver", util.check_type_error([[

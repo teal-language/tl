@@ -100,4 +100,22 @@ describe("global type code generation", function()
 
       print(c2:use_it())
    ]]))
+
+   it("does not elide global record type used in alias (#998)", util.gen([[
+      global record TestRecord
+         new: function(): TestRecord
+      end
+
+      global type TestRecordAlias = TestRecord
+
+      local foo = TestRecordAlias.new()
+   ]], [[
+      TestRecord = {}
+
+
+
+      TestRecordAlias = TestRecord
+
+      local foo = TestRecordAlias.new()
+   ]]))
 end)

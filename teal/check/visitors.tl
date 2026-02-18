@@ -1698,25 +1698,25 @@ visit_node.cbs = {
       before = function(self: Context, node: Node)
          self:widen_all_unions(node)
          self:begin_scope(node)
-      end,
-      before_statements = function(self: Context, node: Node, children: {Type})
-         local expected = node.expected and self:to_structural(node.expected)
-
+         
+         -- Infer lambda parameter types from expected function type
+         local expected = node.expected
          if expected then
             expected = self:to_structural(expected)
-
+            
             -- unwrap generics
             if expected is GenericType then
                expected = self:apply_generic(node, expected)
             end
             if expected is PolyType then
-               expected = expected.t
+               expected = expected.types[1]
             end
             if expected is FunctionType then
                self:infer_lambda_parameters(node, expected)
             end
          end
-
+      end,
+      before_statements = function(self: Context, node: Node, children: {Type})
          local args = children[1]
          assert(args is TupleType)
 

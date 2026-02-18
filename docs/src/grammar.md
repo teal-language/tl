@@ -34,6 +34,7 @@ precedence, see below.
 *      ‘local’ ‘interface’ Name recordbody |
 *      ‘local’ ‘enum’ Name enumbody |
 *      ‘local’ ‘type’ Name ‘=’ newtype |
+*      ‘local’ ‘macroexp’ Name macroexpbody |
 *      ‘global’ attnamelist ‘:’ typelist [‘=’ explist] |
 *      ‘global’ attnamelist ‘=’ explist |
 *      ‘global’ ‘function’ Name funcbody |
@@ -118,6 +119,7 @@ precedence, see below.
 
 *  recordentry ::= ‘userdata’ |
 *      ‘type’ Name ‘=’ newtype | [‘metamethod’] recordkey ‘:’ type |
+*      recordkey ‘:’ functiontype ‘=’ ‘macroexp’ macroexpbody |
 *      ‘record’ Name recordbody | ‘enum’ Name enumbody
 
 *  recordkey ::= Name | ‘[’ LiteralString ‘]’
@@ -133,6 +135,9 @@ precedence, see below.
 *  parnamelist ::= parname {‘,’ parname}
 
 *  parname ::= Name [‘?’] [‘:’ type]
+
+*  macroexpbody ::= [typeargs] ‘(’ [parlist] ‘)’ [‘:’ retlist] retstat ‘end’
+
 ```
 
 ## Operator precedence

@@ -128,7 +128,7 @@ function check.check(ast: Node, env: Env, filename: string): Result
 
    local global_scope = self.st[1]
    variables.close_types(global_scope)
-   self.errs:check_var_usage(global_scope, true)
+   self.errs:check_var_usage(global_scope)
 
    errors.clear_redundant_errors(self.errs.errors)
 

@@ -27,6 +27,7 @@
   - [Variable attributes](./variable_attributes.md)
   - [Metamethods](./metamethods.md)
   - [Macro expressions](./macroexp.md)
+  - [Macros](./macros.md)
 - [Behavior rules](./behavior.md)
   - [Type aliasing rules](./aliasing.md)
   - [Type variable matching](./type_variables.md)

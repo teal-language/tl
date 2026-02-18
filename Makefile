@@ -1,4 +1,4 @@
-LUA ?=
+LUA ?= lua
 STABLE_TL ?= $(LUA) ./tl
 NEW_TL ?= $(LUA) ./tl
 TLGENFLAGS = --check --gen-target=5.1
@@ -6,9 +6,10 @@ BUSTED = busted --suppress-pending
 
 PRECOMPILED = teal/precompiled/default_env.lua
 SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
-	teal/util.tl teal/types.tl teal/facts.tl teal/parser.tl teal/traversal.tl \
+	teal/reader.tl teal/block.tl \
+	teal/util.tl teal/types.tl teal/facts.tl teal/ast.tl teal/parser.tl teal/traversal.tl \
 	teal/variables.tl teal/type_reporter.tl \
-	teal/macroexps.tl teal/metamethods.tl \
+	teal/macroexps.tl teal/macro_eval.tl teal/metamethods.tl \
 	teal/type_errors.tl teal/environment.tl \
 	teal/check/context.tl teal/check/visitors.tl teal/check/check.tl \
 	teal/check/relations.tl teal/check/special_functions.tl \
@@ -27,6 +28,7 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	tlcli/main.tl \
 	tlcli/commands/run.tl \
 	tlcli/commands/warnings.tl \
+	tlcli/commands/dump_blocks.tl \
 	tlcli/commands/types.tl \
 	tlcli/commands/check.tl \
 	tlcli/commands/gen.tl \
@@ -42,7 +44,7 @@ precompiler.lua: precompiler.tl
 	$(STABLE_TL) gen $< -o $@ || { rm $@; exit 1; }
 
 teal/precompiled/default_env.lua: precompiler.lua teal/default/prelude.d.tl teal/default/stdlib.d.tl tl.tl
-	lua precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
+	$(LUA) precompiler.lua > teal/precompiled/default_env.lua || { rm $@; exit 1; }
 
 _temp/%.lua.1: %.tl $(PRECOMPILED)
 	@mkdir -p `dirname $@`
@@ -122,4 +124,3 @@ clean: cleantemp
 
 .PHONY: all build1 replace1 build2 selfbuild \
 	suite bin binary cov revert cov cleantemp clean
-

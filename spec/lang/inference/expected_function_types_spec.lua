@@ -59,7 +59,6 @@ describe("lambda parameter type inference", function()
          return true
       end
    ]]))
-   -- TODO: This should generate an arity mismatch error)
 
    it("does not infer without expected type", util.check_type_error([[
       local f = function(x)

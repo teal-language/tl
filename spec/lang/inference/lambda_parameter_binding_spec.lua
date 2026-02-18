@@ -50,9 +50,7 @@ describe("lambda parameter type inference", function()
          return true
       end
    ]]))
-   -- TODO: This should generate an arity mismatch error, but currently doesn't
-   -- because the type checker doesn't properly validate when a function has
-   -- fewer parameters than expected.
+ 
 
    it("does not enforce inferred type without expected type", util.check_type_error([[
       local f = function(x)
