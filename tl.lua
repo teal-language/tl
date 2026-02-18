@@ -2804,6 +2804,51 @@ function Context:is_pending_global(name)
    return not not global_scope.pending_global_types[name]
 end
 
+function Context:infer_lambda_parameters(node, expected)
+   if not expected then
+      return
+   end
+
+   local structural_expected = self:to_structural(expected)
+
+   if not (structural_expected.typename == "function") then
+      return
+   end
+
+   local expected_args = structural_expected.args
+   local actual_params = node.args
+
+   if not (expected_args and expected_args.tuple and actual_params) then
+      return
+   end
+
+   local expected_params = expected_args.tuple
+
+   -- Infer parameter types only if arity matches
+   if #actual_params == #expected_params then
+      for i, param in ipairs(actual_params) do
+         local exp_t = expected_params[i]
+
+         if not param.argtype then
+            -- infer for unannotated parameters only
+            param.expected = exp_t
+
+            -- ⭐⭐⭐ CRITICAL FOR PR2 ⭐⭐⭐
+            -- also propagate into AST arg tuple
+            if node.args and node.args[i] then
+               node.args[i].expected = exp_t
+            end
+         end
+      end
+   end
+   
+   -- Always infer return type if not explicitly annotated (even if arity doesn't match)
+   -- This ensures arity errors are reported instead of return type errors
+   if structural_expected.rets and (not node.rets or (#node.rets.tuple == 0)) then
+      node.rets = structural_expected.rets
+   end
+end
+
 do
    local function set_feat(feat, default)
       if feat then
@@ -6468,13 +6513,21 @@ visit_node.cbs = {
       before = function(self, node)
          self:widen_all_unions(node)
          self:begin_scope(node)
-
+         
+         -- Infer lambda parameter types from expected function type
          local expected = node.expected
-         if expected and expected.typename == "function" then
-            for i, t in ipairs(expected.args.tuple) do
-               if node.args[i] then
-                  node.args[i].expected = t
-               end
+         if expected then
+            expected = self:to_structural(expected)
+            
+            -- unwrap generics
+            if expected.typename == "generic" then
+               expected = self:apply_generic(node, expected)
+            end
+            if expected.typename == "poly" then
+               expected = expected.types[1]
+            end
+            if expected.typename == "function" then
+               self:infer_lambda_parameters(node, expected)
             end
          end
       end,
