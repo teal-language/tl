@@ -257,6 +257,7 @@ local attributes = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
+   ["comptime"] = true,
 }
 local is_attribute = attributes
 

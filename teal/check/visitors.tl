@@ -889,6 +889,11 @@ visit_node.cbs = {
 
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
+            if var.attribute == "comptime" then
+               self.errs:add(var, "globals may not be <comptime>")
+               var.attribute = nil
+            end
+
             local _, t, is_inferred = self:determine_declaration_type(var, node, infertypes, i)
 
             if var.attribute == "close" then

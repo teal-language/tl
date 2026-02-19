@@ -13,16 +13,13 @@ local type Block = block.Block
 local type BlockKind = block.BlockKind
 local type BlockLang = block.BlockLang
 local macro_eval = require("teal.macro_eval")
+local type MacroSig = macro_eval.MacroSig
 
 local enum Attribute
    "const"
    "close"
    "total"
-end
-
-local record MacroSig
-   kinds: {string}
-   vararg: string -- empty string means 'no vararg'
+   "comptime"
 end
 
 local record reader
@@ -111,6 +108,7 @@ local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
+   ["comptime"] = true,
 }
 local is_attribute <const> = attributes as {string:boolean}
 
@@ -140,6 +138,23 @@ function reader.node_is_funcall(node: Block): boolean
       return reader.node_is_funcall(node[BLOCK_INDEXES.PAREN.EXP])
    end
    return node.kind == "op_funcall" or node.kind == "macro_invocation"
+end
+
+local function macro_target_name(node: Block): string | nil
+   if not node then
+      return nil
+   end
+   if node.kind == "variable" or node.kind == "identifier" then
+      return node.tk
+   end
+   if node.kind == "op_dot" then
+      local lhs = macro_target_name(node[BLOCK_INDEXES.OP.E1])
+      local rhs = macro_target_name(node[BLOCK_INDEXES.OP.E2])
+      if lhs and rhs then
+         return lhs .. "." .. rhs
+      end
+   end
+   return nil
 end
 
 local record ReadState
@@ -1344,10 +1359,7 @@ do
             local args = new_block(ps, i, "expression_list")
             local argument: Block
             if next_tk.tk == "(" then
-               local mname: string
-               if e1 and (e1.kind == "variable" or e1.kind == "identifier") then
-                  mname = e1.tk
-               end
+               local mname = macro_target_name(e1)
                local sig = mname and ps.macro_sigs[mname]
                if sig then
                   i, args = read_macro_args_with_sig(ps, i, sig)
@@ -2531,6 +2543,35 @@ local function read_local_macro(ps: ReadState, i: integer): integer, Block
    return i, node
 end
 
+local function local_comptime_require_info(node: Block): string | nil, string | nil, Block | nil
+   if not node or node.kind ~= "local_declaration" then
+      return nil
+   end
+
+   local vars = node[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+   local exps = node[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+   if not vars or not exps or #vars ~= 1 or #exps ~= 1 then
+      return nil
+   end
+
+   local v = vars[1]
+   local annot = v and v[BLOCK_INDEXES.VARIABLE.ANNOTATION]
+   if not (annot and annot.kind == "identifier" and annot.tk == "comptime") then
+      return nil
+   end
+
+   if exps[1].kind ~= "op_funcall" then
+      return nil
+   end
+
+   local module_name = reader.node_is_require_call(exps[1])
+   if not module_name then
+      return nil
+   end
+
+   return v.tk, module_name, v
+end
+
 local function read_local(ps: ReadState, i: integer): integer, Block
    local ntk = ps.tokens[i + 1].tk
    if ntk == "function" then
@@ -2544,7 +2585,17 @@ local function read_local(ps: ReadState, i: integer): integer, Block
    elseif read_type_body_fns[ntk] and (ps.tokens[i+2].kind == "identifier" or (ps.allow_macro_vars and ps.tokens[i+2].tk == "$")) then
       return read_type_constructor(ps, i, "local_type", ntk as BlockKind)
    end
-   return read_variable_declarations(ps, i + 1, "local_declaration")
+   local ni, decl = read_variable_declarations(ps, i + 1, "local_declaration")
+   local alias, module_name, where = local_comptime_require_info(decl)
+   if alias and module_name and where then
+      local sigs: {string: MacroSig} = macro_eval.load_module_signatures(module_name, where, ps.errs)
+      if sigs then
+         for export_name, sig in pairs(sigs) do
+            ps.macro_sigs[alias .. "." .. export_name] = sig
+         end
+      end
+   end
+   return ni, decl
 end
 
 local function read_global(ps: ReadState, i: integer): integer, Block
@@ -2753,6 +2804,9 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       in_local_macro = false,
       macro_sigs = {},
    }
+   if not skip_macro_expand then
+      macro_eval.reset_module_cache()
+   end
    local i = 1
    local hashbang: string
    if ps.tokens[i].kind == "hashbang" then
@@ -2772,8 +2826,8 @@ function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, 
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-         if m and (m.kind == "variable" or m.kind == "identifier") then
-            local name = m.tk
+         local name = macro_target_name(m)
+         if name then
             local sig = ps.macro_sigs[name]
             if sig then
                local provided = args and #args or 0

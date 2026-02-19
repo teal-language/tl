@@ -9,6 +9,11 @@ local errors = require("teal.errors")
 local ast = require("teal.ast")
 
 
+
+
+
+
+
 local macro_eval = {}
 
 
@@ -30,6 +35,31 @@ local macro_eval = {}
 
 
 
+
+
+
+
+
+local module_cache = {}
+local module_failed = {}
+local module_loading = {}
+
+
+
+
+
+
+
+
+
+
+local dynamic_require = (_G).require
+
+function macro_eval.reset_module_cache()
+   module_cache = {}
+   module_failed = {}
+   module_loading = {}
+end
 
 local function numeric_child_keys(b)
    local keys = {}
@@ -83,6 +113,201 @@ local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
          reanchor_block_positions(child, where_y, where_x, seen_blocks)
       end
    end
+end
+
+local function append_errors(dst, src)
+   for _, e in ipairs(src) do
+      table.insert(dst, e)
+   end
+end
+
+local function add_error_at(errs, where, msg)
+   table.insert(errs, {
+      filename = where.f,
+      y = where.y,
+      x = where.x,
+      msg = msg,
+   })
+end
+
+local function macro_target_name(node)
+   if not node then
+      return nil
+   end
+   if node.kind == "variable" or node.kind == "identifier" then
+      return node.tk
+   end
+   if node.kind == "op_dot" then
+      local lhs = macro_target_name(node[BLOCK_INDEXES.OP.E1])
+      local rhs = macro_target_name(node[BLOCK_INDEXES.OP.E2])
+      if lhs and rhs then
+         return lhs .. "." .. rhs
+      end
+   end
+   return nil
+end
+
+local function unquote_string(str)
+   local first = str:sub(1, 1)
+   if first == '"' or first == "'" then
+      return str:sub(2, -2)
+   end
+   local long_start = str:match("^%[=*%[")
+   if not long_start then
+      return str
+   end
+   local l = #long_start + 1
+   return str:sub(l, -l)
+end
+
+local function comptime_initializer_value(item)
+   return item[BLOCK_INDEXES.LITERAL_TABLE_ITEM.TYPED_VALUE] or item[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE]
+end
+
+local function is_primitive_literal(exp)
+   return exp.kind == "nil" or
+   exp.kind == "boolean" or
+   exp.kind == "number" or
+   exp.kind == "integer" or
+   exp.kind == "string"
+end
+
+local function is_literal_table(exp)
+   return exp and exp.kind == "literal_table"
+end
+
+local function validate_comptime_literal(exp, errs, where)
+   if is_primitive_literal(exp) then
+      return true
+   end
+
+   if not is_literal_table(exp) then
+      add_error_at(errs, where, "attribute <comptime> only supports primitive literals, literal tables, or require(\"module\")")
+      return false
+   end
+
+   local ok = true
+   for _, item in ipairs(exp) do
+      if not (item and item.kind == "literal_table_item") then
+         add_error_at(errs, where, "attribute <comptime> only supports literal tables with literal keys and values")
+         ok = false
+      else
+         local key = item[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY]
+         if key and not is_primitive_literal(key) then
+            add_error_at(errs, key, "attribute <comptime> table keys must be literals")
+            ok = false
+         end
+
+         local value = comptime_initializer_value(item)
+         if value and value.kind == "literal_table" then
+            if not validate_comptime_literal(value, errs, value) then
+               ok = false
+            end
+         elseif not value or not is_primitive_literal(value) then
+            add_error_at(errs, item, "attribute <comptime> table values must be literals")
+            ok = false
+         end
+      end
+   end
+
+   return ok
+end
+
+local function child_replacement_allowed(parent, idx, allowed)
+   if not allowed then
+      return false
+   end
+
+   if parent.kind == "local_declaration" then
+      return idx == BLOCK_INDEXES.LOCAL_DECLARATION.EXPS
+   elseif parent.kind == "global_declaration" then
+      return idx == BLOCK_INDEXES.GLOBAL_DECLARATION.EXPS
+   elseif parent.kind == "assignment" then
+      return idx == BLOCK_INDEXES.ASSIGNMENT.EXPS
+   elseif parent.kind == "local_function" then
+      return idx == BLOCK_INDEXES.LOCAL_FUNCTION.BODY
+   elseif parent.kind == "global_function" then
+      return idx == BLOCK_INDEXES.GLOBAL_FUNCTION.BODY
+   elseif parent.kind == "record_function" then
+      return idx == BLOCK_INDEXES.RECORD_FUNCTION.BODY
+   elseif parent.kind == "function" then
+      return idx == BLOCK_INDEXES.FUNCTION.BODY
+   elseif parent.kind == "local_macro" then
+      return idx == BLOCK_INDEXES.LOCAL_MACRO.BODY
+   elseif parent.kind == "variable_list" or parent.kind == "argument_list" then
+      return false
+   elseif parent.kind == "argument" then
+      return false
+   elseif parent.kind == "local_type" or
+      parent.kind == "global_type" or
+      parent.kind == "newtype" or
+      parent.kind == "typedecl" or
+      parent.kind == "typeargs" or
+      parent.kind == "typelist" or
+      parent.kind == "generic_type" or
+      parent.kind == "tuple_type" or
+      parent.kind == "nominal_type" or
+      parent.kind == "map_type" or
+      parent.kind == "array_type" or
+      parent.kind == "union_type" or
+      parent.kind == "argument_type" or
+      parent.kind == "interface_list" or
+      parent.kind == "record_body" or
+      parent.kind == "record_field" or
+      parent.kind == "question" then
+
+      return false
+   end
+
+   return true
+end
+
+local function inline_comptime_literals(root, literals)
+   if not next(literals) then
+      return
+   end
+
+   local seen_rewrite = setmetatable({}, { __mode = "k" })
+
+   local function rewrite(node, allowed)
+      if not node then
+         return node
+      end
+      if seen_rewrite[node] then
+         return node
+      end
+      seen_rewrite[node] = true
+
+      if allowed and node.kind == "variable" and literals[node.tk] then
+         local repl = clone_value(literals[node.tk])
+         reanchor_block_positions(repl, node.y, node.x, setmetatable({}, { __mode = "k" }))
+         return repl
+      end
+      if allowed and node.kind == "macro_var" then
+         local ident = node[BLOCK_INDEXES.MACRO_VAR.NAME]
+         local name = ident and ident.tk
+         if name and literals[name] then
+            local repl = clone_value(literals[name])
+            reanchor_block_positions(repl, node.y, node.x, setmetatable({}, { __mode = "k" }))
+            return repl
+         end
+      end
+
+      for _, idx in ipairs(numeric_child_keys(node)) do
+         local child = node[idx]
+         if child then
+            local child_allowed = child_replacement_allowed(node, idx, allowed)
+            local rewritten = rewrite(child, child_allowed)
+            if rewritten ~= child then
+               node[idx] = rewritten
+            end
+         end
+      end
+
+      return node
+   end
+
+   rewrite(root, true)
 end
 
 function macro_eval.new_env(errs)
@@ -243,6 +468,266 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    env.signatures[name] = sig
 end
 
+local reader_runtime
+local require_file_runtime
+
+local function get_reader_runtime()
+   if not reader_runtime then
+      reader_runtime = dynamic_require("teal.reader")
+   end
+   return reader_runtime
+end
+
+local function get_require_file_runtime()
+   if not require_file_runtime then
+      require_file_runtime = dynamic_require("teal.check.require_file")
+   end
+   return require_file_runtime
+end
+
+local function find_macro_exports_return(module_ast)
+   for _, stmt in ipairs(module_ast) do
+      if stmt.kind == "return" then
+         local exps = stmt[BLOCK_INDEXES.RETURN.EXPS]
+         if exps and #exps == 1 and exps[1] and exps[1].kind == "literal_table" then
+            return exps[1], stmt
+         end
+         return nil, stmt
+      end
+   end
+   return nil, nil
+end
+
+local function parse_export_name(item)
+   local key = item[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY]
+   if not key then
+      return nil
+   end
+   if key.kind == "string" then
+      return unquote_string(key.tk)
+   end
+   if key.kind == "identifier" or key.kind == "variable" then
+      return unquote_string(key.tk)
+   end
+   return nil
+end
+
+local function load_macro_module(module_name, where, errs)
+   local cached = module_cache[module_name]
+   if cached then
+      return cached
+   end
+   if module_failed[module_name] then
+      return nil
+   end
+   if module_loading[module_name] then
+      add_error_at(errs, where, "circular macro module require: '" .. module_name .. "'")
+      return nil
+   end
+
+   module_loading[module_name] = true
+
+   local function fail()
+      module_failed[module_name] = true
+      module_loading[module_name] = nil
+      return nil
+   end
+
+   local require_file = get_require_file_runtime()
+   local found_filename, code, tried = require_file.search_module(module_name, { [".m.tl"] = true })
+   if not found_filename or not code then
+      local msg = "macro module not found: '" .. module_name .. "'"
+      if tried and #tried > 0 then
+         msg = msg .. "\n\t" .. table.concat(tried, "\n\t")
+      end
+      add_error_at(errs, where, msg)
+      return fail()
+   end
+
+   local reader = get_reader_runtime()
+   local module_ast, read_errs = reader.read(code, found_filename, "tl", true, true)
+   if #read_errs > 0 then
+      append_errors(errs, read_errs)
+      return fail()
+   end
+
+   local env = macro_eval.new_env(errs)
+
+   local function process_comptime_declarations(node)
+      local literals = {}
+      local i = 1
+      while i <= #node do
+         local stmt = node[i]
+         if stmt and stmt.kind == "local_declaration" then
+            local vars = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+            local exps = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+            local has_comptime = false
+            local var = vars and vars[1]
+            local annot = var and var[BLOCK_INDEXES.VARIABLE.ANNOTATION]
+            if annot and annot.kind == "identifier" and annot.tk == "comptime" then
+               has_comptime = true
+            end
+
+            if has_comptime then
+               if not (vars and #vars == 1 and exps and #exps == 1) then
+                  add_error_at(errs, stmt, "attribute <comptime> requires exactly one declared variable with one initializer")
+               else
+                  local init = exps[1]
+                  local modname
+                  if init.kind == "op_funcall" then
+                     modname = reader.node_is_require_call(init)
+                  end
+                  if modname then
+                     local loaded = load_macro_module(modname, var, errs)
+                     if loaded then
+                        local loaded_module = loaded
+                        for export_name, fn in pairs(loaded_module.macros) do
+                           local fullname = var.tk .. "." .. export_name
+                           env.macros[fullname] = fn
+                           local sig = loaded_module.signatures[export_name]
+                           if sig then
+                              env.signatures[fullname] = sig
+                           end
+                        end
+                     end
+                  else
+                     if validate_comptime_literal(init, errs, init) then
+                        literals[var.tk] = clone_value(init)
+                     end
+                  end
+               end
+               table.remove(node, i)
+            else
+               i = i + 1
+            end
+         else
+            i = i + 1
+         end
+      end
+
+      inline_comptime_literals(node, literals)
+   end
+
+   process_comptime_declarations(module_ast)
+
+   for _, stmt in ipairs(module_ast) do
+      if stmt and stmt.kind == "local_macro" then
+         compile_local_macro(stmt, found_filename, "tl", env, errs)
+      end
+   end
+
+   local exports_table, return_stmt = find_macro_exports_return(module_ast)
+   if not exports_table then
+      local at = return_stmt or where
+      add_error_at(errs, at, "macro module '" .. module_name .. "' must return a literal table of exported macros")
+      return fail()
+   end
+
+   local exports = exports_table
+   local macros = {}
+   local signatures = {}
+   for _, item in ipairs(exports) do
+      local export_name = parse_export_name(item)
+      if not export_name then
+         add_error_at(errs, item, "invalid macro export key; expected a string or identifier")
+      else
+         local value = item[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE]
+         if not value or (value.kind ~= "variable" and value.kind ~= "identifier") then
+            add_error_at(errs, item, "macro export '" .. export_name .. "' must reference a local macro identifier")
+         else
+            local local_name = value.tk
+            if not env.macros[local_name] then
+               add_error_at(errs, value, "exported macro '" .. export_name .. "' refers to unknown local macro '" .. local_name .. "'")
+            else
+               local macro_fn = env.macros[local_name]
+               local sig = env.signatures[local_name]
+               if macro_fn and sig then
+                  macros[export_name] = macro_fn
+                  signatures[export_name] = sig
+               else
+                  add_error_at(errs, value, "exported macro '" .. export_name .. "' refers to unknown local macro '" .. local_name .. "'")
+               end
+            end
+         end
+      end
+   end
+
+   local loaded = {
+      found_filename = found_filename,
+      macros = macros,
+      signatures = signatures,
+   }
+
+   module_cache[module_name] = loaded
+   module_failed[module_name] = nil
+   module_loading[module_name] = nil
+   return loaded
+end
+
+function macro_eval.load_module_signatures(module_name, where, errs)
+   local loaded = load_macro_module(module_name, where, errs)
+   if not loaded then
+      return {}
+   end
+   local loaded_module = loaded
+   return loaded_module.signatures
+end
+
+local function load_comptime_declarations(node, env, errs)
+   local reader = get_reader_runtime()
+   local literals = {}
+
+   local i = 1
+   while i <= #node do
+      local stmt = node[i]
+      if stmt and stmt.kind == "local_declaration" then
+         local vars = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+         local exps = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+         local var = vars and vars[1]
+         local annot = var and var[BLOCK_INDEXES.VARIABLE.ANNOTATION]
+         local is_comptime = annot and annot.kind == "identifier" and annot.tk == "comptime"
+
+         if is_comptime then
+            if not (vars and #vars == 1 and exps and #exps == 1) then
+               add_error_at(errs, stmt, "attribute <comptime> requires exactly one declared variable with one initializer")
+            else
+               local init = exps[1]
+               local module_name
+               if init.kind == "op_funcall" then
+                  module_name = reader.node_is_require_call(init)
+               end
+               if module_name then
+                  local loaded = load_macro_module(module_name, var, errs)
+                  if loaded then
+                     local loaded_module = loaded
+                     for export_name, fn in pairs(loaded_module.macros) do
+                        local fullname = var.tk .. "." .. export_name
+                        env.macros[fullname] = fn
+                        local sig = loaded_module.signatures[export_name]
+                        if sig then
+                           env.signatures[fullname] = sig
+                        end
+                     end
+                  end
+               else
+                  if validate_comptime_literal(init, errs, init) then
+                     literals[var.tk] = clone_value(init)
+                  end
+               end
+            end
+
+            table.remove(node, i)
+         else
+            i = i + 1
+         end
+      else
+         i = i + 1
+      end
+   end
+
+   inline_comptime_literals(node, literals)
+end
+
 local seen
 
 local function expand_in_node(b, filename, env, errs, context)
@@ -252,11 +737,11 @@ local function expand_in_node(b, filename, env, errs, context)
    if b.kind == "macro_invocation" then
       local mexp = b
       local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
-      if not mname_block or (mname_block.kind ~= "variable" and mname_block.kind ~= "identifier") then
+      local mname = macro_target_name(mname_block)
+      if not mname then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
          return b
       end
-      local mname = mname_block.tk
       local fn = env.macros[mname]
       if not fn then
          table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "unknown macro '" .. mname .. "'" })
@@ -273,8 +758,8 @@ local function expand_in_node(b, filename, env, errs, context)
          if provided < required or ((not has_vararg) and provided > required) then
             table.insert(errs, {
                filename = filename,
-               y = mname_block.y,
-               x = mname_block.x,
+               y = mname_block and mname_block.y or b.y,
+               x = mname_block and mname_block.x or b.x,
                msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
             })
             return b
@@ -308,7 +793,7 @@ local function expand_in_node(b, filename, env, errs, context)
          end
       end
       local prev_where = env.where
-      local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
+      local current_where = { f = filename, y = mname_block and mname_block.y or b.y, x = mname_block and mname_block.x or b.x }
       env.where = current_where
       local function invoke_macro()
          return fn(_tl_table_unpack(argv, 1, #argv))
@@ -376,6 +861,8 @@ end
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
    seen = setmetatable({}, { __mode = "k" })
    local env = macro_eval.new_env(errs)
+
+   load_comptime_declarations(node, env, errs)
 
    local i = 1
    while i <= #node do

@@ -36,6 +36,14 @@ describe("global", function()
       }))
    end)
 
+   describe("annotation", function()
+      it("rejects <comptime> on globals", util.check_type_error([[
+         global x<comptime>: integer = 1
+      ]], {
+         { msg = "globals may not be <comptime>" },
+      }))
+   end)
+
    describe("declared at top level", function()
       it("works for single assignment", util.check([[
          global x: number = 1

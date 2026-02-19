@@ -59,6 +59,15 @@ describe("assignment to const", function()
    ]], {
       { y = 4, msg = "only valid for Lua 5.4 (current target is 5.3)" },
    }, "5.3"))
+
+   it("comptime variables are non-assignable if not erased first", util.check_type_error([[
+      local function f()
+         local x<comptime> = 1
+         x = 2
+      end
+   ]], {
+      { msg = "cannot assign to <comptime> variable" },
+   }))
 end)
 
 describe("attributes syntax", function()

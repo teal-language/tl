@@ -1,5 +1,6 @@
 local util = require("spec.util")
 local tl = require("teal.api.v2")
+local lua_gen = require("teal.gen.lua_generator")
 
 describe("local", function()
    describe("declaration", function()
@@ -117,6 +118,74 @@ describe("local", function()
       it("accepts <const> annotation", util.check([[
          local x <const> = 1
       ]]))
+
+      describe("<comptime>", function()
+         it("accepts annotation on local declarations", util.check([[
+            local x<comptime> = 1
+            local y = x + 2
+         ]]))
+
+         it("rejects unsupported initializer expressions", function()
+            local result = tl.check_string([[
+               local x<comptime> = 1 + 2
+               local y = x
+            ]])
+
+            local found = false
+            for _, e in ipairs(result.syntax_errors) do
+               if e.msg:match("attribute <comptime> only supports primitive literals, literal tables, or require%(\"module\"%)") then
+                  found = true
+                  break
+               end
+            end
+            assert.is_true(found)
+         end)
+
+         it("inlines literals/tables and erases declarations from output", function()
+            local result = tl.check_string([[
+               local n<comptime> = 41
+               local cfg<comptime> = {
+                  nested = { v = 2 },
+                  label = "ok",
+               }
+
+               local x = n + 1
+               local y = cfg.nested.v
+            ]])
+
+            assert.same({}, result.syntax_errors)
+            assert.same({}, result.type_errors)
+
+            local out, err = lua_gen.generate(result.ast, "5.4")
+            assert.is_nil(err)
+            out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+            assert.match("local x = 41 %+ 1", out)
+            assert.match("local y = %b{}.nested.v", out)
+            assert.is_nil(out:match("local n"))
+            assert.is_nil(out:match("local cfg"))
+         end)
+
+         it("inlines comptime values inside local macro quotes", function()
+            local result = tl.check_string([[
+               local n<comptime> = 4
+
+               local macro emit!(): Expression
+                  return `$n + 1`
+               end
+
+               local y = emit!()
+            ]])
+
+            assert.same({}, result.syntax_errors)
+            assert.same({}, result.type_errors)
+
+            local out, err = lua_gen.generate(result.ast, "5.4")
+            assert.is_nil(err)
+            out = out:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+            assert.match("local y = 4 %+ 1", out)
+            assert.is_nil(out:match("local n"))
+         end)
+      end)
 
       describe("<total>", function()
          it("fails without an init value", util.check_type_error([[

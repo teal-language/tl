@@ -207,6 +207,7 @@ function lua_generator.generate(ast, gen_target, opts)
       ["const"] = " <const>",
       ["close"] = " <close>",
       ["total"] = " <const>",
+      ["comptime"] = "",
    }
 
    local function emit_exactly(_, node, _children)
@@ -289,7 +290,10 @@ function lua_generator.generate(ast, gen_target, opts)
                end
                add_string(out, var.tk)
                if var.attribute and gen_target == "5.4" then
-                  add_string(out, lua_54_attribute[var.attribute])
+                  local attr = lua_54_attribute[var.attribute]
+                  if attr ~= "" then
+                     add_string(out, attr)
+                  end
                end
             end
             if children[3] then

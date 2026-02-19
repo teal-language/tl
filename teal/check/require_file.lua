@@ -24,6 +24,7 @@ local require_file = {}
 
 
 
+
 require_file.all_extensions = {
    [".d.tl"] = true,
    [".tl"] = true,
@@ -77,6 +78,12 @@ function require_file.search_module(module_name, extension_set)
    end
    if (not extension_set) or extension_set[".tl"] then
       found, code, tried = search_for(module_name, ".tl", path, tried)
+      if found then
+         return found, code
+      end
+   end
+   if extension_set and extension_set[".m.tl"] then
+      found, code, tried = search_for(module_name, ".m.tl", path, tried)
       if found then
          return found, code
       end

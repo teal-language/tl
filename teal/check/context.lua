@@ -2266,7 +2266,7 @@ function Context:check_assignment(varnode, vartype, valtype)
          end
       end
    end
-   if attr == "close" or attr == "const" or attr == "total" then
+   if attr == "close" or attr == "const" or attr == "total" or attr == "comptime" then
       self.errs:add(varnode, "cannot assign to <" .. attr .. "> variable")
       return nil
    end

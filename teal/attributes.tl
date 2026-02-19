@@ -3,6 +3,7 @@ local record attributes
       "const"
       "close"
       "total"
+      "comptime"
    end
 
    is_attribute: {string:boolean}
@@ -12,6 +13,7 @@ local all_attributes <total>: {attributes.Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
+   ["comptime"] = true,
 }
 
 attributes.is_attribute = all_attributes as {string:boolean}

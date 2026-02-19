@@ -257,6 +257,7 @@ local attributes <total>: {Attribute: boolean} = {
    ["const"] = true,
    ["close"] = true,
    ["total"] = true,
+   ["comptime"] = true,
 }
 local is_attribute <const>: {string:boolean} = attributes as {string:boolean}
 
