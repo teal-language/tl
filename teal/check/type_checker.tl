@@ -58,6 +58,7 @@ local record type_checker
       apply_facts_from: function(self, w: Where, from?: Where)
       apply_generic: function(self, w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType, {TypeArgType}
       arg_check: function(self, w: Where, all_errs: {Error}, a: Type, b: Type, v: VarianceMode, mode: ArgCheckMode, n?: integer): boolean
+      arraytype_from_list: function(self, w: Where, typelist: {Type}): ArrayType, boolean
       arraytype_from_tuple: function(self, w: Where, tupletype: TupleLikeType): ArrayType, {Error}
       assert_is_a: function(self, w: Where, t1: Type, t2: Type, ctx?: ErrorContext, name?: string): boolean
       begin_implied_scope: function(self)

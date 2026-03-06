@@ -1002,22 +1002,30 @@ function Context:to_structural(t: Type): Type
    return t
 end
 
-function Context:arraytype_from_tuple(w: Where, tupletype: TupleLikeType): ArrayType, {Error}
+function Context:arraytype_from_list(w: Where, typelist: {Type}): ArrayType, boolean
    -- first just try a basic union
-   local element_type = unite(w, tupletype.types, true)
+   local element_type = unite(w, typelist, true)
    local valid = (not element_type is UnionType) and true or is_valid_union(element_type)
    if valid then
-      return an_array(w, element_type)
+      return an_array(w, element_type), true
    end
 
    -- failing a basic union, expand the types
-   local arr_type = an_array(w, tupletype.types[1])
-   for i = 2, #tupletype.types do
-      local expanded = self:expand_type(w, arr_type, an_array(w, tupletype.types[i]))
+   local arr_type = an_array(w, typelist[1])
+   for i = 2, #typelist do
+      local expanded = self:expand_type(w, arr_type, an_array(w, typelist[i]))
       if not expanded is ArrayType then
-         return nil, { types.error("unable to convert tuple %s to array", tupletype) }
+         return nil, false
       end
       arr_type = expanded
+   end
+   return arr_type, true
+end
+
+function Context:arraytype_from_tuple(w: Where, tupletype: TupleLikeType): ArrayType, {Error}
+   local arr_type, valid = self:arraytype_from_list(w, tupletype.types)
+   if not valid then
+      return nil, { types.error("unable to convert tuple %s to array", tupletype) }
    end
    return arr_type
 end
@@ -1919,12 +1927,21 @@ function Context:type_check_index(anode: Node, bnode: Node, a: Type, b: Type): T
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
             return ra.types[bnode.constnum as integer]
+         elseif ra is RecordLikeType and ra.elements then
+            return (ra as RecordLikeType).elements
          end
 
          errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
       else
-         local array_type = self:arraytype_from_tuple(bnode, ra)
-         if array_type then
+         local type_list = ra.types
+         if ra is RecordLikeType and ra.elements then
+            type_list = {ra.elements}
+            for _, child in ipairs(ra.types) do
+               table.insert(type_list, child)
+            end
+         end
+         local array_type, valid = self:arraytype_from_list(bnode, type_list)
+         if array_type and valid then
             return array_type.elements
          end
 
