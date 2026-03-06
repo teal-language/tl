@@ -1974,10 +1974,16 @@ parse_record_like_type = function(state, block, typename)
       decl.interface_list = {}
    end
 
-   if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE] and block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "array_type" then
-      local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
-      decl.elements = atype.elements
-      decl.interface_list = { atype }
+   if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE] then
+      if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "array_type" then
+         local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
+         decl.elements = atype.elements
+         decl.interface_list = { atype }
+      elseif block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "typelist" then
+         local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
+         decl.types = atype.types
+         decl.interface_list = { atype }
+      end
    end
 
    if block[reader.BLOCK_INDEXES.RECORD.INTERFACES] and block[reader.BLOCK_INDEXES.RECORD.INTERFACES].kind == "interface_list" then

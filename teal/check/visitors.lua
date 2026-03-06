@@ -42,6 +42,7 @@ local types = require("teal.types")
 
 
 
+
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -634,15 +635,41 @@ local function infer_table_literal(self, node, children)
 
       self:expand_type(node, values, elements) })
    elseif is_record and is_array then
-      t = a_type(node, "record", {
-         fields = fields,
-         field_order = field_order,
-         elements = elements,
-         interface_list = {
-            a_type(node, "array", { elements = elements }),
-         },
-      })
 
+      local pure_array = true
+      if not is_not_tuple then
+         local last_t
+         for _, current_t in pairs(typs) do
+            if last_t then
+               if not self:same_type(last_t, current_t) then
+                  pure_array = false
+                  break
+               end
+            end
+            last_t = current_t
+         end
+      end
+      if pure_array then
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            elements = elements,
+            interface_list = {
+               a_type(node, "array", { elements = elements }),
+            },
+         })
+      else
+         local tupleInterface = a_type(node, "tupletable", { inferred_at = node })
+         tupleInterface.types = typs
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            types = typs,
+            interface_list = {
+               tupleInterface,
+            },
+         })
+      end
    elseif is_record and is_map then
       if keys.typename == "string" then
          for _, fname in ipairs(field_order) do
@@ -1369,7 +1396,7 @@ visit_node.cbs = {
                      assert_is_a(self, node[i], cvtype, df, "in record field", ck)
                   end
                end
-            elseif decltype.typename == "tupletable" and is_numeric_type(cktype) then
+            elseif decltype.types and is_numeric_type(cktype) then
                local dt = decltype.types[n]
                if not n then
                   self.errs:add_in_context(node[i], node, "unknown index in tuple %s", decltype)

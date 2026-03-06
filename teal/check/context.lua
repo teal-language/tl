@@ -66,6 +66,7 @@ local types = require("teal.types")
 
 
 
+
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -1544,12 +1545,32 @@ do
                t.meta_field_order = t.meta_field_order or {}
                add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
             end
-         else
+         elseif iface.typename == "array" then
             if not t.elements then
                t.elements = iface.elements
             else
                if not self:same_type(iface.elements, t.elements) then
                   self.errs:add(t, "incompatible array interfaces")
+               end
+            end
+         elseif iface.typename == "tupletable" then
+            if not t.types then
+               t.types = {}
+               for i, ifaceType in ipairs(iface.types) do
+                  table.insert(t.types, ifaceType)
+               end
+            else
+               local tTypesLen = #t.types
+               for i, ifaceType in ipairs(iface.types) do
+                  if i <= tTypesLen then
+
+                     if not self:same_type(ifaceType, t.types[i]) then
+                        self.errs:add(t, "incompatible tuple interfaces")
+                     end
+                  else
+
+                     table.insert(t.types, ifaceType)
+                  end
                end
             end
          end
@@ -1865,7 +1886,7 @@ function Context:type_check_index(anode, bnode, a, b)
       ra = ra.def
    end
 
-   if ra.typename == "tupletable" and rb.typename == "integer" then
+   if ra.types and rb.typename == "integer" then
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
             return ra.types[bnode.constnum]
