@@ -499,11 +499,11 @@ local function show_fields(t, show)
       table.insert(out, "{" .. show(t.elements) .. "}")
    end
    if t.types then
-      local tupleTypes = {}
+      local tuple_types = {}
       for _, child in ipairs(t.types) do
-         table.insert(tupleTypes, show(child))
+         table.insert(tuple_types, show(child))
       end
-      table.insert(out, "{" .. table.concat(tupleTypes, ", ") .. "}")
+      table.insert(out, "{" .. table.concat(tuple_types, ", ") .. "}")
    end
    local fs = {}
    for _, k in ipairs(t.field_order) do

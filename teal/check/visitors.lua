@@ -659,14 +659,14 @@ local function infer_table_literal(self, node, children)
             },
          })
       else
-         local tupleInterface = a_type(node, "tupletable", { inferred_at = node })
-         tupleInterface.types = typs
+         local tuple_iface = a_type(node, "tupletable", { inferred_at = node })
+         tuple_iface.types = typs
          t = a_type(node, "record", {
             fields = fields,
             field_order = field_order,
             types = typs,
             interface_list = {
-               tupleInterface,
+               tuple_iface,
             },
          })
       end

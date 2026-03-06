@@ -37,6 +37,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
+
 function errors.new(msg)
    return { msg = msg }
 end
@@ -92,6 +93,7 @@ local wk = {
    ["hint"] = true,
    ["debug"] = true,
    ["unread"] = true,
+   ["inheritance"] = true,
 }
 errors.warning_kinds = wk
 

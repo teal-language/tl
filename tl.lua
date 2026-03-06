@@ -3387,6 +3387,7 @@ local is_unknown = types.is_unknown
 local is_valid_union = types.is_valid_union
 local shallow_copy_new_type = types.shallow_copy_new_type
 local show_type_base = types.show_type_base
+local show_type = types.show_type
 local simple_types = types.simple_types
 local unite = types.unite
 local untuple = types.untuple
@@ -4312,22 +4313,30 @@ function Context:to_structural(t)
    return t
 end
 
-function Context:arraytype_from_tuple(w, tupletype)
+function Context:arraytype_from_list(w, typelist)
 
-   local element_type = unite(w, tupletype.types, true)
+   local element_type = unite(w, typelist, true)
    local valid = (not (element_type.typename == "union")) and true or is_valid_union(element_type)
    if valid then
-      return a_type(w, "array", { elements = element_type })
+      return a_type(w, "array", { elements = element_type }), true
    end
 
 
-   local arr_type = a_type(w, "array", { elements = tupletype.types[1] })
-   for i = 2, #tupletype.types do
-      local expanded = self:expand_type(w, arr_type, a_type(w, "array", { elements = tupletype.types[i] }))
+   local arr_type = a_type(w, "array", { elements = typelist[1] })
+   for i = 2, #typelist do
+      local expanded = self:expand_type(w, arr_type, a_type(w, "array", { elements = typelist[i] }))
       if not (expanded.typename == "array") then
-         return nil, { types.error("unable to convert tuple %s to array", tupletype) }
+         return nil, false
       end
       arr_type = expanded
+   end
+   return arr_type, true
+end
+
+function Context:arraytype_from_tuple(w, tupletype)
+   local arr_type, valid = self:arraytype_from_list(w, tupletype.types)
+   if not valid then
+      return nil, { types.error("unable to convert tuple %s to array", tupletype) }
    end
    return arr_type
 end
@@ -4846,6 +4855,9 @@ do
 
       t.interface_list, t.is_userdata = collect_interfaces(self, {}, t, {})
 
+      local has_array_interface = false
+      local has_tuple_interface = false
+
       for _, iface in ipairs(t.interface_list) do
          if iface.typename == "nominal" then
             local ri = self:resolve_nominal(iface)
@@ -4857,6 +4869,7 @@ do
                add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
             end
          elseif iface.typename == "array" then
+            has_array_interface = true
             if not t.elements then
                t.elements = iface.elements
             else
@@ -4865,25 +4878,49 @@ do
                end
             end
          elseif iface.typename == "tupletable" then
+            has_tuple_interface = true
             if not t.types then
                t.types = {}
-               for i, ifaceType in ipairs(iface.types) do
-                  table.insert(t.types, ifaceType)
+               for i, element_type in ipairs(iface.types) do
+                  table.insert(t.types, element_type)
                end
             else
-               local tTypesLen = #t.types
-               for i, ifaceType in ipairs(iface.types) do
-                  if i <= tTypesLen then
+               local existing_type_count = #t.types
+               for i, element_type in ipairs(iface.types) do
+                  if i <= existing_type_count then
 
-                     if not self:same_type(ifaceType, t.types[i]) then
+                     if not self:same_type(element_type, t.types[i]) then
                         self.errs:add(t, "incompatible tuple interfaces")
                      end
                   else
 
-                     table.insert(t.types, ifaceType)
+                     table.insert(t.types, element_type)
                   end
                end
             end
+         end
+      end
+
+      if has_array_interface and has_tuple_interface and #t.types > 0 then
+
+
+
+
+         local incompatible_tuple_array = false
+         for _, element_type in ipairs(t.types) do
+            if not self:same_type(element_type, t.elements) then
+               incompatible_tuple_array = true
+               break
+            end
+         end
+
+
+         if incompatible_tuple_array then
+            local tuple_types = {}
+            for _, element_type in ipairs(t.types) do
+               table.insert(tuple_types, show_type(element_type))
+            end
+            self.errs:add_warning("inheritance", t, "inherits from incompatible overlapping array {%s} and tuple {%s}", show_type(t.elements), table.concat(tuple_types, ", "))
          end
       end
    end
@@ -5201,12 +5238,21 @@ function Context:type_check_index(anode, bnode, a, b)
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
             return ra.types[bnode.constnum]
+         elseif ra.fields and ra.elements then
+            return (ra).elements
          end
 
          errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
       else
-         local array_type = self:arraytype_from_tuple(bnode, ra)
-         if array_type then
+         local type_list = ra.types
+         if ra.fields and ra.elements then
+            type_list = { ra.elements }
+            for _, child in ipairs(ra.types) do
+               table.insert(type_list, child)
+            end
+         end
+         local array_type, valid = self:arraytype_from_list(bnode, type_list)
+         if array_type and valid then
             return array_type.elements
          end
 
@@ -8343,14 +8389,14 @@ local function infer_table_literal(self, node, children)
             },
          })
       else
-         local tupleInterface = a_type(node, "tupletable", { inferred_at = node })
-         tupleInterface.types = typs
+         local tuple_iface = a_type(node, "tupletable", { inferred_at = node })
+         tuple_iface.types = typs
          t = a_type(node, "record", {
             fields = fields,
             field_order = field_order,
             types = typs,
             interface_list = {
-               tupleInterface,
+               tuple_iface,
             },
          })
       end
@@ -10816,6 +10862,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
+
 function errors.new(msg)
    return { msg = msg }
 end
@@ -10871,6 +10918,7 @@ local wk = {
    ["hint"] = true,
    ["debug"] = true,
    ["unread"] = true,
+   ["inheritance"] = true,
 }
 errors.warning_kinds = wk
 
@@ -19035,11 +19083,11 @@ local function show_fields(t, show)
       table.insert(out, "{" .. show(t.elements) .. "}")
    end
    if t.types then
-      local tupleTypes = {}
+      local tuple_types = {}
       for _, child in ipairs(t.types) do
-         table.insert(tupleTypes, show(child))
+         table.insert(tuple_types, show(child))
       end
-      table.insert(out, "{" .. table.concat(tupleTypes, ", ") .. "}")
+      table.insert(out, "{" .. table.concat(tuple_types, ", ") .. "}")
    end
    local fs = {}
    for _, k in ipairs(t.field_order) do
