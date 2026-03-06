@@ -76,6 +76,7 @@ local is_unknown = types.is_unknown
 local is_valid_union = types.is_valid_union
 local shallow_copy_new_type = types.shallow_copy_new_type
 local show_type_base = types.show_type_base
+local show_type = types.show_type
 local simple_types = types.simple_types
 local unite = types.unite
 local untuple = types.untuple
@@ -1535,6 +1536,9 @@ do
 
       t.interface_list, t.is_userdata = collect_interfaces(self, {}, t, {})
 
+      local has_array_interface = false
+      local has_tuple_interface = false
+
       for _, iface in ipairs(t.interface_list) do
          if iface is NominalType then
             local ri = self:resolve_nominal(iface)
@@ -1546,6 +1550,7 @@ do
                add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
             end
          elseif iface is ArrayType then
+            has_array_interface = true
             if not t.elements then
                t.elements = iface.elements
             else
@@ -1554,25 +1559,49 @@ do
                end
             end
          elseif iface is TupleTableType then
+            has_tuple_interface = true
             if not t.types then
                t.types = {}
-               for i, ifaceType in ipairs(iface.types) do
-                  table.insert(t.types, ifaceType)
+               for i, element_type in ipairs(iface.types) do
+                  table.insert(t.types, element_type)
                end
             else
-               local tTypesLen = #t.types
-               for i, ifaceType in ipairs(iface.types) do
-                  if i <= tTypesLen then
+               local existing_type_count = #t.types
+               for i, element_type in ipairs(iface.types) do
+                  if i <= existing_type_count then
                      -- check compatibility with existing types
-                     if not self:same_type(ifaceType, t.types[i]) then
+                     if not self:same_type(element_type, t.types[i]) then
                         self.errs:add(t, "incompatible tuple interfaces")
                      end
                   else
                      -- expand type list with new types
-                     table.insert(t.types, ifaceType)
+                     table.insert(t.types, element_type)
                   end
                end
             end
+         end
+      end
+
+      if has_array_interface and has_tuple_interface and #t.types > 0 then
+         -- TODO Optionally error if this is an interface and not a record?
+         -- If a tuple + array interface is extended, incompatible tuple types could grow into what is considered the array indexes of this interface
+
+         -- Check in case the tuple and the array are incompatible
+         local incompatible_tuple_array = false
+         for _, element_type in ipairs(t.types) do
+            if not self:same_type(element_type, t.elements) then
+               incompatible_tuple_array = true
+               break
+            end
+         end
+
+         -- Send a warning that this type has overlapping tuple keys and array keys
+         if incompatible_tuple_array then
+            local tuple_types = {}
+            for _, element_type in ipairs(t.types) do
+               table.insert(tuple_types, show_type(element_type))
+            end
+            self.errs:add_warning("inheritance", t, "inherits from incompatible overlapping array {%s} and tuple {%s}", show_type(t.elements), table.concat(tuple_types, ", "))
          end
       end
    end
