@@ -61,6 +61,7 @@ local type EmptyTableType = types.EmptyTableType
 local type UnresolvedEmptyTableValueType = types.UnresolvedEmptyTableValueType
 local type FunctionType = types.FunctionType
 local type UnionType = types.UnionType
+local type TupleLikeType = types.TupleLikeType
 local type TupleTableType = types.TupleTableType
 local type PolyType = types.PolyType
 local type EnumType = types.EnumType
@@ -1000,7 +1001,7 @@ function Context:to_structural(t: Type): Type
    return t
 end
 
-function Context:arraytype_from_tuple(w: Where, tupletype: TupleTableType): ArrayType, {Error}
+function Context:arraytype_from_tuple(w: Where, tupletype: TupleLikeType): ArrayType, {Error}
    -- first just try a basic union
    local element_type = unite(w, tupletype.types, true)
    local valid = (not element_type is UnionType) and true or is_valid_union(element_type)
@@ -1497,7 +1498,7 @@ do
       end
    end
 
-   local function collect_interfaces(self: Context, list: {ArrayType | NominalType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType}, boolean
+   local function collect_interfaces(self: Context, list: {ArrayType | NominalType | TupleTableType}, t: RecordLikeType, seen:{Type:boolean}): {ArrayType | NominalType | TupleTableType}, boolean
       local is_userdata = t.is_userdata
       if t.interface_list then
          for _, iface in ipairs(t.interface_list) do
@@ -1544,12 +1545,32 @@ do
                t.meta_field_order = t.meta_field_order or {}
                add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
             end
-         else
+         elseif iface is ArrayType then
             if not t.elements then
                t.elements = iface.elements
             else
                if not self:same_type(iface.elements, t.elements) then
                   self.errs:add(t, "incompatible array interfaces")
+               end
+            end
+         elseif iface is TupleTableType then
+            if not t.types then
+               t.types = {}
+               for i, ifaceType in ipairs(iface.types) do
+                  table.insert(t.types, ifaceType)
+               end
+            else
+               local tTypesLen = #t.types
+               for i, ifaceType in ipairs(iface.types) do
+                  if i <= tTypesLen then
+                     -- check compatibility with existing types
+                     if not self:same_type(ifaceType, t.types[i]) then
+                        self.errs:add(t, "incompatible tuple interfaces")
+                     end
+                  else
+                     -- expand type list with new types
+                     table.insert(t.types, ifaceType)
+                  end
                end
             end
          end
@@ -1865,7 +1886,7 @@ function Context:type_check_index(anode: Node, bnode: Node, a: Type, b: Type): T
       ra = ra.def
    end
 
-   if ra is TupleTableType and rb is IntegerType then
+   if ra is TupleLikeType and rb is IntegerType then
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
             return ra.types[bnode.constnum as integer]

@@ -38,6 +38,7 @@ local type EmptyTableType = types.EmptyTableType
 local type FunctionType = types.FunctionType
 local type UnionType = types.UnionType
 local type TupleTableType = types.TupleTableType
+local type TupleLikeType = types.TupleLikeType
 local type PolyType = types.PolyType
 local type EnumType = types.EnumType
 local type FirstClassType = types.FirstClassType
@@ -634,15 +635,41 @@ local function infer_table_literal(self: Context, node: Node, children: {Literal
          self:expand_type(node, values, elements)
       )
    elseif is_record and is_array then
-      t = a_type(node, "record", {
-         fields = fields,
-         field_order = field_order,
-         elements = elements,
-         interface_list = {
-            an_array(node, elements)
-         }
-      } as RecordType)
-      -- TODO adopt logic from self:is_array below when we accept tupletable as an interface
+      -- adopted logic from self:is_array below
+      local pure_array = true
+      if not is_not_tuple then
+         local last_t: Type
+         for _, current_t in pairs(typs as {integer:Type}) do
+            if last_t then
+               if not self:same_type(last_t, current_t) then
+                  pure_array = false
+                  break
+               end
+            end
+            last_t = current_t
+         end
+      end
+      if pure_array then
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            elements = elements,
+            interface_list = {
+               an_array(node, elements)
+            }
+         } as RecordType)
+      else
+         local tupleInterface = a_type(node, "tupletable", { inferred_at = node }) as TupleTableType
+         tupleInterface.types = typs
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            types = typs,
+            interface_list = {
+               tupleInterface
+            }
+         } as RecordType)
+      end
    elseif is_record and is_map then
       if keys is StringType then
          for _, fname in ipairs(field_order) do
@@ -1369,7 +1396,7 @@ visit_node.cbs = {
                      assert_is_a(self, node[i], cvtype, df, "in record field", ck)
                   end
                end
-            elseif decltype is TupleTableType and cktype is NumericType then
+            elseif decltype is TupleLikeType and cktype is NumericType then
                local dt = decltype.types[n as integer]
                if not n then
                   self.errs:add_in_context(node[i], node, "unknown index in tuple %s", decltype)

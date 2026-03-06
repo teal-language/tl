@@ -16,7 +16,7 @@ local type ArrayType = types.ArrayType
 local type EmptyTableType = types.EmptyTableType
 local type FirstOrderType = types.FirstOrderType
 local type GenericType = types.GenericType
-local type TupleTableType = types.TupleTableType
+local type TupleLikeType = types.TupleLikeType
 local type TypeArgType = types.TypeArgType
 local type TypeDeclType = types.TypeDeclType
 local type UnresolvedEmptyTableValueType = types.UnresolvedEmptyTableValueType
@@ -58,7 +58,7 @@ local record type_checker
       apply_facts_from: function(self, w: Where, from?: Where)
       apply_generic: function(self, w: Where, g: GenericType, typeargs?: {Type}): FirstOrderType, {TypeArgType}
       arg_check: function(self, w: Where, all_errs: {Error}, a: Type, b: Type, v: VarianceMode, mode: ArgCheckMode, n?: integer): boolean
-      arraytype_from_tuple: function(self, w: Where, tupletype: TupleTableType): ArrayType, {Error}
+      arraytype_from_tuple: function(self, w: Where, tupletype: TupleLikeType): ArrayType, {Error}
       assert_is_a: function(self, w: Where, t1: Type, t2: Type, ctx?: ErrorContext, name?: string): boolean
       begin_implied_scope: function(self)
       end_implied_scope: function(self)

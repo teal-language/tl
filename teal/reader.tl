@@ -2037,8 +2037,8 @@ local function read_array_interface_type(ps: ReadState, i: integer): integer, Bl
    if not t then
       return i
    end
-   if t.kind ~= "array_type" then
-      fail(ps, i, "expected an array declaration")
+   if t.kind ~= "array_type" and t.kind ~= "typelist" then
+      fail(ps, i, "expected an array or type list declaration")
       return i
    end
    return i, t
