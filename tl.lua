@@ -4903,24 +4903,28 @@ do
 
       if has_array_interface and has_tuple_interface and #t.types > 0 then
 
-
-
-
          local incompatible_tuple_array = false
          for _, element_type in ipairs(t.types) do
-            if not self:same_type(element_type, t.elements) then
+            if not self:is_a(element_type, t.elements) then
                incompatible_tuple_array = true
                break
             end
          end
 
 
+         local array_type_str = string.format("{%s}", show_type(t.elements))
+         local tuple_types = {}
+         for _, element_type in ipairs(t.types) do
+            table.insert(tuple_types, show_type(element_type))
+         end
+         local tuple_type_str = string.format("{%s}", table.concat(tuple_types, ", "))
+
+
          if incompatible_tuple_array then
-            local tuple_types = {}
-            for _, element_type in ipairs(t.types) do
-               table.insert(tuple_types, show_type(element_type))
-            end
-            self.errs:add_warning("inheritance", t, "inherits from incompatible overlapping array {%s} and tuple {%s}", show_type(t.elements), table.concat(tuple_types, ", "))
+
+            self.errs:add(t, string.format("inherits incompatible array %s and tuple %s", array_type_str, tuple_type_str))
+         else
+            self.errs:add_warning("inheritance", t, "inherits overlapping array %s and tuple %s", array_type_str, tuple_type_str)
          end
       end
    end

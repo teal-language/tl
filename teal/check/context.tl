@@ -1591,25 +1591,30 @@ do
       end
 
       if has_array_interface and has_tuple_interface and #t.types > 0 then
-         -- TODO Optionally error if this is an interface and not a record?
-         -- If a tuple + array interface is extended, incompatible tuple types could grow into what is considered the array indexes of this interface
-
          -- Check in case the tuple and the array are incompatible
          local incompatible_tuple_array = false
          for _, element_type in ipairs(t.types) do
-            if not self:same_type(element_type, t.elements) then
+            if not self:is_a(element_type, t.elements) then
                incompatible_tuple_array = true
                break
             end
          end
 
-         -- Send a warning that this type has overlapping tuple keys and array keys
+         -- Names for tuple/array (for warnings/errors)
+         local array_type_str = string.format("{%s}", show_type(t.elements))
+         local tuple_types = {}
+         for _, element_type in ipairs(t.types) do
+            table.insert(tuple_types, show_type(element_type))
+         end
+         local tuple_type_str = string.format("{%s}", table.concat(tuple_types, ", "))
+         
+         -- Send a warning/error if this type has overlapping tuple keys and array keys
          if incompatible_tuple_array then
-            local tuple_types = {}
-            for _, element_type in ipairs(t.types) do
-               table.insert(tuple_types, show_type(element_type))
-            end
-            self.errs:add_warning("inheritance", t, "inherits from incompatible overlapping array {%s} and tuple {%s}", show_type(t.elements), table.concat(tuple_types, ", "))
+            -- TODO add an optional way of overriding this error for people who know what they're doing
+            self.errs:add(t, string.format("inherits incompatible array %s and tuple %s", array_type_str, tuple_type_str))
+         else
+            -- TODO add an optional way of suppressing this warning for people who know what they're doing
+            self.errs:add_warning("inheritance", t, "inherits overlapping array %s and tuple %s", array_type_str, tuple_type_str)
          end
       end
    end
