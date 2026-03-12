@@ -391,6 +391,10 @@ local function read_table_value(ps, i)
    return i, e
 end
 
+
+
+
+
 local function read_table_item(ps, i, n)
    local node = new_block(ps, i, "literal_table_item")
    if ps.tokens[i].kind == "$EOF$" then

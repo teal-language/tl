@@ -391,6 +391,10 @@ local function read_table_value(ps: ReadState, i: integer): integer, Block, inte
    return i, e
 end
 
+local macro block!(node: Expression, key: Expression): Expression
+   return `$node[BLOCK_INDEXES.$key]`
+end
+
 local function read_table_item(ps: ReadState, i: integer, n?: integer): integer, Block, integer
    local node = new_block(ps, i, "literal_table_item")
    if ps.tokens[i].kind == "$EOF$" then
@@ -399,7 +403,7 @@ local function read_table_item(ps: ReadState, i: integer, n?: integer): integer,
 
    if ps.tokens[i].tk == "[" then
       i = i + 1
-      i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = read_expression_and_tk(ps, i, "]")
+      i, block!(node, LITERAL_TABLE_ITEM.KEY) = read_expression_and_tk(ps, i, "]")
       i = verify_tk(ps, i, "=")
       i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.VALUE] = read_table_value(ps, i)
       return i, node, n
