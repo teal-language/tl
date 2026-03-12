@@ -129,6 +129,166 @@ describe('macro invocation expansion', function()
    end)
 end)
 
+describe('record-attached macro imports', function()
+   it('imports root attached macros via local require alias', function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local record macros end
+
+            macro macros.double!(x: Statement)
+               return ```
+                  $x
+                  $x
+               ```
+            end
+
+            return macros
+         ]],
+      })
+
+      local code = [[
+         local m = require("macs")
+         m.double!(print("hi"))
+      ]]
+
+      local ast, errs = tl.parse(code, "main.tl")
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('print("hi"); print("hi")', out)
+   end)
+
+   it('imports root attached macros via local type require alias', function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local record macros end
+
+            macro macros.double!(x: Statement)
+               return ```
+                  $x
+                  $x
+               ```
+            end
+
+            return macros
+         ]],
+      })
+
+      local code = [[
+         local type m = require("macs")
+         m.double!(print("hi"))
+      ]]
+
+      local ast, errs = tl.parse(code, "main.tl")
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.same('local m = require("macs") print("hi"); print("hi")', out)
+   end)
+
+   it('supports returned-root shorthand and non-returned owner paths together', function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local record macros end
+            local record Helper end
+
+            macro macros.double!(x: Statement)
+               return ```
+                  $x
+                  $x
+               ```
+            end
+
+            macro Helper.side!(x: Statement)
+               return ```
+                  print("SIDE")
+                  $x
+               ```
+            end
+
+            return macros
+         ]],
+      })
+
+      local code = [[
+         local m = require("macs")
+         m.double!(print("root"))
+         m.Helper.side!(print("leaf"))
+      ]]
+
+      local ast, errs = tl.parse(code, "main.tl")
+      assert.same({}, errs)
+      local out, err = lua_gen.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+      assert.match('print%("root"%)%; print%("root"%)', out)
+      assert.match('print%("leaf"%)', out)
+      assert.match('print%("SIDE"%)', out)
+   end)
+
+   it('rejects method-style invocation for attached macros', function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local record macros end
+
+            macro macros.double!(x: Statement)
+               return x
+            end
+
+            return macros
+         ]],
+      })
+
+      local code = [[
+         local m = require("macs")
+         m:double!(print("nope"))
+      ]]
+
+      local _, errs = tl.parse(code, "main.tl")
+      assert.truthy(#errs > 0)
+      local found = false
+      for _, e in ipairs(errs) do
+         if e.msg == "method-style macro invocation is not supported; use record.macro!()" then
+            found = true
+            break
+         end
+      end
+      assert.is_true(found)
+   end)
+
+   it("reports attached macro owners that are not records", function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local not_a_record = {}
+
+            macro not_a_record.nope!(x: Statement)
+               return x
+            end
+
+            return not_a_record
+         ]],
+      })
+
+      local code = [[
+         local m = require("macs")
+         m.nope!(print("x"))
+      ]]
+
+      local _, errs = tl.parse(code, "main.tl")
+      assert.truthy(#errs > 0)
+      local found = false
+      for _, e in ipairs(errs) do
+         if e.msg:match("macro owner 'not_a_record' must be a record") then
+            found = true
+            break
+         end
+      end
+      assert.is_true(found)
+   end)
+end)
+
 describe('macro unknown type error', function()
    it('reports unknown type from macro-built nominal without crashing', util.check_type_error([[
       local macro badtype!()

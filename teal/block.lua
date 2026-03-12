@@ -211,6 +211,8 @@ local BLOCK_INDEXES = {
       ARGS = 3,
       RETS = 4,
       BODY = 5,
+      OWNER = 6,
+      IMPORT_ALIAS = 7,
    },
    LOCAL_MACROEXP = {
       NAME = 1,
