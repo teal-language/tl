@@ -111,6 +111,12 @@ local function record_like_type_walker<S, T>(s: S, ast: RecordLikeType, visit: V
          table.insert(xs, recurse_type(s, child, visit))
       end
    end
+   -- Tuple types at the end of the type list to minimise issues caused by their variable size
+   if ast.types then
+      for _, child in ipairs(ast.types) do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
    return xs
 end
 

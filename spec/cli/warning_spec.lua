@@ -12,7 +12,7 @@ describe("tl warnings", function()
          assert.match(kind .. " : enabled", output, 1, true)
          i = i + 1
       end
-      assert.same(7, i)
+      assert.same(8, i)
    end)
 end)
 

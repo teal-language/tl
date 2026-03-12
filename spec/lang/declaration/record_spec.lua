@@ -1,18 +1,30 @@
 local util = require("spec.util")
 
-local function array(i, arr, not_arr)
-   if i == 2 or i == 4 then
-      return arr .. "\n"
+local function array_or_tuple(i, arr, not_arr)
+   if i == 2 or i == 5 then
+      return string.format("{%s}\n", arr)
+   elseif i == 3 or i == 6 then
+      return string.format("{%s, %s}\n", arr, arr)
    else
       return (not_arr or "") .. "\n"
    end
 end
 
-for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces"}) do
-   local statement = select(i, "record", "record", "interface", "interface")
+local function array_tuple_neither(i, arr, tuple, neither)
+   if i == 2 or i == 5 then
+      return (arr or "") .. "\n"
+   elseif i == 3 or i == 6 then
+      return (tuple or "") .. "\n"
+   else
+      return (neither or "") .. "\n"
+   end
+end
+
+for i, name in ipairs({"records", "arrayrecords", "tuplerecords", "interfaces", "arrayinterfaces", "tupleinterfaces"}) do
+   local statement = select(i, "record", "record", "record", "interface", "interface", "interface")
    describe("#" .. name, function()
       it("can be declared with 'local type'", util.check([[
-         local type Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
+         local type Point = ]]..statement..[[ ]]..array_or_tuple(i, "Point")..[[
             x: number
             y: number
          end
@@ -23,7 +35,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can be declared with 'local "..statement.."'", util.check([[
-         local ]]..statement..[[ Point ]]..array(i, "{Point}")..[[
+         local ]]..statement..[[ Point ]]..array_or_tuple(i, "Point")..[[
             x: number
             y: number
          end
@@ -34,7 +46,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("produces a nice error when declared with bare 'local'", util.check_syntax_error([[
-         local Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
+         local Point = ]]..statement..[[ ]]..array_or_tuple(i, "Point")..[[
             x: number
             y: number
          end
@@ -48,7 +60,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       it("produces a nice error when attempting to nest in a table", util.check_syntax_error([[
          local t = {
-            Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
+            Point = ]]..statement..[[ ]]..array_or_tuple(i, "Point")..[[
                x: number
                y: number
             end
@@ -67,7 +79,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can be declared with 'global type'", util.check([[
-         global type Point = ]]..statement..[[ ]]..array(i, "{Point}")..[[
+         global type Point = ]]..statement..[[ ]]..array_or_tuple(i, "Point")..[[
             x: number
             y: number
          end
@@ -78,7 +90,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can be declared with 'global "..statement.."'", util.check([[
-         global ]]..statement..[[ Point ]]..array(i, "{Point}")..[[
+         global ]]..statement..[[ Point ]]..array_or_tuple(i, "Point")..[[
             x: number
             y: number
          end
@@ -100,7 +112,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ]]))
       else
          it("can have self-references", util.check([[
-            local ]]..statement..[[ SLAXML ]]..array(i, "{SLAXML}")..[[
+            local ]]..statement..[[ SLAXML ]]..array_or_tuple(i, "SLAXML")..[[
                parse: function(self: SLAXML, xml: string, anotherself: SLAXML)
             end
 
@@ -110,11 +122,11 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end
 
       it("can have circular type dependencies", util.check([[
-         local type R = ]]..statement..[[ ]]..array(i, "{S}")..[[
+         local type R = ]]..statement..[[ ]]..array_or_tuple(i, "S")..[[
             foo: S
          end
 
-         local type S = ]]..statement..[[ ]]..array(i, "{R}")..[[
+         local type S = ]]..statement..[[ ]]..array_or_tuple(i, "R")..[[
             foo: R
          end
 
@@ -125,19 +137,19 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       it("recursive types don't trip up the resolver", util.check([[
          local type EmptyString = enum "" end
-         local ]]..statement..[[ ltn12 ]]..array(i, "{ltn12}")..[[
+         local ]]..statement..[[ ltn12 ]]..array_or_tuple(i, "ltn12")..[[
             type FancySource = function<T>(): T|EmptyString, string|FancySource<T>
          end
          return ltn12
       ]]))
 
       it("can overload functions", util.check([[
-         global type love_graphics = ]]..statement..[[ ]]..array(i, "{love_graphics}")..[[
+         global type love_graphics = ]]..statement..[[ ]]..array_or_tuple(i, "love_graphics")..[[
             print: function(text: string, x: number, y: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)
             print: function(coloredtext: {any}, x: number, y: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)
          end
 
-         global type love = ]]..statement..[[ ]]..array(i, "{love}")..[[
+         global type love = ]]..statement..[[ ]]..array_or_tuple(i, "love")..[[
             graphics: love_graphics
          end
       ]] .. (statement ~= "interface" and [[
@@ -147,7 +159,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]] or "")))
 
       it("cannot overload other things", util.check_syntax_error([[
-         global type love_graphics = ]]..statement..[[ ]]..array(i, "{love_graphics}")..[[
+         global type love_graphics = ]]..statement..[[ ]]..array_or_tuple(i, "love_graphics")..[[
             print: number
             print: string
          end
@@ -161,7 +173,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
             "b"
             "c"
          end
-         local type R = ]]..statement..[[ ]]..array(i, "{number}")..[[
+         local type R = ]]..statement..[[ ]]..array_or_tuple(i, "number")..[[
             f: function(enums: {E})
             f: function(tuple: {string, number})
          end
@@ -173,7 +185,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       it("can report an error on unknown types in polymorphic definitions", util.check_type_error([[
          -- this reports an error
-         local type R = ]]..statement..[[ ]]..array(i, "{R}")..[[
+         local type R = ]]..statement..[[ ]]..array_or_tuple(i, "R")..[[
             u: function(): UnknownType
             u: function(): string
          end
@@ -187,7 +199,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       it("can report an error on unknown types in polymorphic definitions in any order", util.check_type_error([[
          -- this reports an error
-         local type R = ]]..statement..[[ ]]..array(i, "{R}")..[[
+         local type R = ]]..statement..[[ ]]..array_or_tuple(i, "R")..[[
             u: function(): string
             u: function(): UnknownType
          end
@@ -200,14 +212,14 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("can produce an intersection type for polymorphic functions", util.check([[
-         local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
+         local type requests = ]]..statement..[[ ]]..array_or_tuple(i, "requests")..[[
 
             type RequestOpts = ]]..statement..[[
                {string}
                url: string
             end
 
-            type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
+            type Response = ]]..statement..[[ ]]..array_or_tuple(i, "Response")..[[
                status_code: number
             end
 
@@ -221,14 +233,14 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can check the arity of polymorphic functions", util.check_type_error([[
-         local type requests = ]]..statement..[[ ]]..array(i, "{requests}")..[[
+         local type requests = ]]..statement..[[ ]]..array_or_tuple(i, "requests")..[[
 
             type RequestOpts = ]]..statement..[[ --
                {string}
                url: string
             end
 
-            type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
+            type Response = ]]..statement..[[ ]]..array_or_tuple(i, "Response")..[[
                status_code: number
             end
 
@@ -253,7 +265,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                      url: string
                   end
 
-                  type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
+                  type Response = ]]..statement..[[ ]]..array_or_tuple(i, "Response")..[[
                      status_code: number
                   end
 
@@ -289,7 +301,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                      url: string
                   end
 
-                  ]]..statement..[[ Response ]]..array(i, "{Response}")..[[
+                  ]]..statement..[[ Response ]]..array_or_tuple(i, "Response")..[[
                      status_code: number
                   end
 
@@ -316,7 +328,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end)
 
       it(statement.." and enum and not reserved words", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             ]]..statement..[[: string
             enum: number
          end
@@ -328,8 +340,8 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can have nested generic " .. name, util.check([[
-         local type Foo = ]]..statement..[[ ]]..array(i, "{Foo}")..[[
-            type Bar = ]]..statement..[[<T> ]]..array(i, "{Bar<T>}")..[[
+         local type Foo = ]]..statement..[[ ]]..array_or_tuple(i, "Foo")..[[
+            type Bar = ]]..statement..[[<T> ]]..array_or_tuple(i, "Bar<T>")..[[
                x: T
             end
             example: Bar<string>
@@ -348,7 +360,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("can have nested enums", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             enum Direction
                "north"
                "south"
@@ -366,8 +378,8 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can have nested generic " .. name .. " with shorthand syntax", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
-            ]]..statement..[[ bar<T> ]]..array(i, "{bar<T>}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
+            ]]..statement..[[ bar<T> ]]..array_or_tuple(i, "bar<T>")..[[
                x: T
             end
             example: bar<string>
@@ -379,9 +391,9 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can mix nested "..statement.." syntax", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
-            ]]..statement..[[ mid<T> ]]..array(i, "{mid<T>}")..[[
-               type bar = ]]..statement..[[ ]]..array(i, "{bar}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
+            ]]..statement..[[ mid<T> ]]..array_or_tuple(i, "mid<T>")..[[
+               type bar = ]]..statement..[[ ]]..array_or_tuple(i, "bar")..[[
                   x: T
                end
                z: bar
@@ -395,7 +407,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can have " .. name .. " in arrayrecords", util.check([[
-         local ]]..statement..[[ bar ]]..array(i, "{bar}")..[[
+         local ]]..statement..[[ bar ]]..array_or_tuple(i, "bar")..[[
          end
          local ]]..statement..[[ foo
             { bar }
@@ -404,8 +416,8 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("nested " .. name .. " in " .. name, util.check_type_error([[
-         local ]]..statement..[[ foo ]]..array(i, "{foo}")..[[
-            ]]..statement..[[ bar ]]..array(i, "{bar}")..[[
+         local ]]..statement..[[ foo ]]..array_or_tuple(i, "foo")..[[
+            ]]..statement..[[ bar ]]..array_or_tuple(i, "bar")..[[
             end
          end
          local f : foo = { {  } }
@@ -413,13 +425,15 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ({
             { msg = "in local declaration: f: got {{}} (inferred at foo.tl:5:26), expected foo" }, -- records
             nil, -- arrayrecords
+            nil, -- tuplerecords
             { msg = "in local declaration: f: got {{}} (inferred at foo.tl:5:26), expected foo" }, -- interfaces
             nil, -- interfaces with arrays
+            nil, -- interfaces with tuples
          })[i]
       }))
 
       it("can have nested enums in " .. name, util.check_type_error([[
-         local ]]..statement..[[ foo ]]..array(i, "{bar}")..[[
+         local ]]..statement..[[ foo ]]..array_or_tuple(i, "bar")..[[
             enum bar
                "baz"
             end
@@ -429,13 +443,15 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ({
             { msg = "in local declaration: f: got {string \"baz\"} (inferred at foo.tl:6:26), expected foo" }, -- records
             nil, -- arrayrecords
+            nil, -- tuplerecords
             { msg = "in local declaration: f: got {string \"baz\"} (inferred at foo.tl:6:26), expected foo" }, -- interfaces
             nil, -- interfaces with arrays
+            nil, -- interfaces with tuples
          })[i]
       }))
 
       it("only records can have record methods", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
          end
 
          function Foo:example(data: string)
@@ -445,13 +461,15 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ({
             nil,
             nil,
+            nil,
+            { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
          })[i]
       }))
 
       it("only records can have record functions", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
          end
 
          function Foo.example(data: string)
@@ -461,13 +479,15 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ({
             nil,
             nil,
+            nil,
+            { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
          })[i]
       }))
 
       it("functions can be implemented in instances", util.check([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
             example: function(string)
          end
 
@@ -479,7 +499,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("methods can be implemented in instances", util.check([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
             example: function(Foo, string)
          end
 
@@ -491,7 +511,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("with implement generic functions", util.check_type_error([[
-         local type Foo = ]]..statement..[[ ]]..array(i, "{Foo}")..[[
+         local type Foo = ]]..statement..[[ ]]..array_or_tuple(i, "Foo")..[[
             type bar = function<T>(T)
             example: bar<string>
          end
@@ -503,20 +523,22 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ({
             nil,
             nil,
+            nil,
+            { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
             { msg = "interfaces are abstract" },
          })[i]
       }))
 
       it("can use where with generic types", util.check([[
-         local type Success = ]]..statement..[[<T> ]]..array(i, "is {integer}")..[[
+         local type Success = ]]..statement..[[<T> ]]..array_tuple_neither(i, "is {integer}", "is {integer, integer}", "")..[[
             where self.error == false
 
             error: boolean
             value: T
          end
 
-         local type Failure = ]]..statement..[[<T> ]]..array(i, "is {integer}")..[[
+         local type Failure = ]]..statement..[[<T> ]]..array_tuple_neither(i, "is {integer}", "is {integer, integer}", "")..[[
             where self.error == true
 
             error: boolean
@@ -551,7 +573,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       if statement == "record" then
          it("does not produce an esoteric type error (#167)", util.check_type_error([[
-            local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
                type bar = function<T>(T)
                example: bar<string>
             end
@@ -565,7 +587,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          }))
       else
          it("does not produce an esoteric type error (#167)", util.check_type_error([[
-            local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+            local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
                type bar = function<T>(T)
                example: bar<string>
             end
@@ -581,7 +603,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end
 
       it("can cast generic member using full path of type name", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             type bar = function<T>(T)
             example: bar<string>
          end
@@ -602,7 +624,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
                      url: string
                   end
 
-                  type Response = ]]..statement..[[ ]]..array(i, "{Response}")..[[
+                  type Response = ]]..statement..[[ ]]..array_or_tuple(i, "Response")..[[
                      status_code: number
                   end
 
@@ -629,7 +651,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          util.mock_io(finally, {
             ["inner.tl"] = [[
                local record inner
-                  ]]..statement..[[ SubType<K> ]]..array(i, "{integer}")..[[
+                  ]]..statement..[[ SubType<K> ]]..array_or_tuple(i, "integer")..[[
                      item: K
                   end
                end
@@ -660,8 +682,8 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end)
 
       it("resolves aliasing of nested " .. name .. " (see #400)", util.check([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
-            ]]..statement..[[ Bar ]]..array(i, "{Bar}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
+            ]]..statement..[[ Bar ]]..array_or_tuple(i, "Bar")..[[
             end
          end
          local function func(_f: Foo.Bar) end
@@ -674,7 +696,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       it("resolves nested type aliases (see #416)", util.check([[
          local type A = number
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
             type B = A
          end
 
@@ -696,14 +718,14 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can use nested type aliases as types (see #416)", util.check_type_error([[
-         local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
-            ]]..statement..[[ A ]]..array(i, "{A}")..[[
+         local ]]..statement..[[ F1 ]]..array_or_tuple(i, "F1")..[[
+            ]]..statement..[[ A ]]..array_or_tuple(i, "A")..[[
                x: number
             end
             type C1 = A
-            ]]..statement..[[ F2 ]]..array(i, "{F2}")..[[
+            ]]..statement..[[ F2 ]]..array_or_tuple(i, "F2")..[[
                type C2 = C1
-               ]]..statement..[[ F3 ]]..array(i, "{F3}")..[[
+               ]]..statement..[[ F3 ]]..array_or_tuple(i, "F3")..[[
                   type C3 = C2
                end
             end
@@ -720,14 +742,14 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       if statement == "record" then
          it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
-            local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
-               ]]..statement..[[ A ]]..array(i, "{C1}")..[[
+            local ]]..statement..[[ F1 ]]..array_or_tuple(i, "F1")..[[
+               ]]..statement..[[ A ]]..array_or_tuple(i, "C1")..[[
                   x: number
                end
                type C1 = A
-               ]]..statement..[[ F2 ]]..array(i, "{C2}")..[[
+               ]]..statement..[[ F2 ]]..array_or_tuple(i, "C2")..[[
                   type C2 = C1
-                  ]]..statement..[[ F3 ]]..array(i, "{C3}")..[[
+                  ]]..statement..[[ F3 ]]..array_or_tuple(i, "C3")..[[
                      type C3 = C2
                   end
                end
@@ -747,14 +769,14 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          }))
       else
          it("cannot use nested type aliases as values (see #416)", util.check_type_error([[
-            local ]]..statement..[[ F1 ]]..array(i, "{F1}")..[[
-               ]]..statement..[[ A ]]..array(i, "{C1}")..[[
+            local ]]..statement..[[ F1 ]]..array_or_tuple(i, "F1")..[[
+               ]]..statement..[[ A ]]..array_or_tuple(i, "C1")..[[
                   x: number
                end
                type C1 = A
-               ]]..statement..[[ F2 ]]..array(i, "{C2}")..[[
+               ]]..statement..[[ F2 ]]..array_or_tuple(i, "C2")..[[
                   type C2 = C1
-                  ]]..statement..[[ F3 ]]..array(i, "{C3}")..[[
+                  ]]..statement..[[ F3 ]]..array_or_tuple(i, "C3")..[[
                      type C3 = C2
                   end
                end
@@ -774,8 +796,8 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end
 
       it("can resolve generics partially (see #417)", util.check_types([[
-         local ]]..statement..[[ fun ]]..array(i, "{fun}")..[[
-             ]]..statement..[[ iterator<T> ]]..array(i, "{iterator<T>}")..[[
+         local ]]..statement..[[ fun ]]..array_or_tuple(i, "fun")..[[
+             ]]..statement..[[ iterator<T> ]]..array_or_tuple(i, "iterator<T>")..[[
                  reduce: function<R>(iterator<T>, (function(R, T): R), R): R
              end
              iter: function<T>({T}): iterator<T>
@@ -791,16 +813,16 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("can have circular type dependencies on nested types", util.check([[
-         local type R = ]]..statement..[[ ]]..array(i, "{S}")..[[
-            type R2 = ]]..statement..[[ ]]..array(i, "{S.S2}")..[[
+         local type R = ]]..statement..[[ ]]..array_or_tuple(i, "S")..[[
+            type R2 = ]]..statement..[[ ]]..array_or_tuple(i, "S.S2")..[[
                foo: S.S2
             end
 
             foo: S
          end
 
-         local type S = ]]..statement..[[ ]]..array(i, "{R}")..[[
-            type S2 = ]]..statement..[[ ]]..array(i, "{R.R2}")..[[
+         local type S = ]]..statement..[[ ]]..array_or_tuple(i, "R")..[[
+            type S2 = ]]..statement..[[ ]]..array_or_tuple(i, "R.R2")..[[
                foo: R.R2
             end
 
@@ -813,16 +835,16 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can detect errors in type dependencies on nested types", util.check_type_error([[
-         local ]]..statement..[[ R ]]..array(i, "{R}")..[[
-            ]]..statement..[[ R2 ]]..array(i, "{R2}")..[[
+         local ]]..statement..[[ R ]]..array_or_tuple(i, "R")..[[
+            ]]..statement..[[ R2 ]]..array_or_tuple(i, "R2")..[[
                foo: S.S3
             end
 
             foo: S
          end
 
-         local ]]..statement..[[ S ]]..array(i, "{S}")..[[
-            ]]..statement..[[ S2 ]]..array(i, "{S2}")..[[
+         local ]]..statement..[[ S ]]..array_or_tuple(i, "S")..[[
+            ]]..statement..[[ S2 ]]..array_or_tuple(i, "S2")..[[
                foo: R.R2
             end
 
@@ -837,7 +859,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("can contain reserved words/arbitrary strings with ['table key syntax']", util.check([[
-         local ]]..statement..[[ A ]]..array(i, "{A}")..[=[
+         local ]]..statement..[[ A ]]..array_or_tuple(i, "A")..[=[
             start: number
             ["end"]: number
             [" "]: string
@@ -847,7 +869,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]=]))
 
       it("can be declared as userdata", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             userdata
             x: number
             y: number
@@ -855,7 +877,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("can be declared as userdata with 'is'", util.check([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             is userdata
             x: number
             y: number
@@ -863,7 +885,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       ]]))
 
       it("cannot be declared as userdata twice", util.check_syntax_error([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             userdata
             userdata
             x: number
@@ -874,7 +896,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("cannot be declared as userdata with 'is' twice", util.check_syntax_error([[
-         local type foo = ]]..statement..[[ ]]..array(i, "{foo}")..[[
+         local type foo = ]]..statement..[[ ]]..array_or_tuple(i, "foo")..[[
             is userdata, userdata
             x: number
             y: number
@@ -884,7 +906,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("untyped attributes are not accepted (#381)", util.check_syntax_error([[
-         local ]]..statement..[[ kons ]]..array(i, "{kons}")..[[
+         local ]]..statement..[[ kons ]]..array_or_tuple(i, "kons")..[[
             any_identifier other_sequence
             aaa bbb
          end
@@ -898,7 +920,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("catches redeclaration of literal keys", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
             foo: string
             bar: boolean
          end
@@ -912,7 +934,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("catches redeclaration of literal keys, bracket syntax", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "{Foo}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "Foo")..[[
             foo: string
             bar: boolean
          end
@@ -927,7 +949,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
       if statement ~= "interface" then
          it("can use itself in a constructor (regression test for #422)", util.check([[
-            local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
+            local ]]..statement..[[ Foo ]]..array_or_tuple(i, "number")..[[
             end
 
             function Foo:new(): Foo
@@ -938,7 +960,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
          ]]))
 
          it("can use itself in a constructor with dot notation (regression test for #422)", util.check([[
-            local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
+            local ]]..statement..[[ Foo ]]..array_or_tuple(i, "number")..[[
             end
 
             function Foo.new(): Foo
@@ -950,7 +972,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       end
 
       it("creation of userdata records should be disallowed (#460)", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "{number}")..[[
+         local ]]..statement..[[ Foo ]]..array_or_tuple(i, "number")..[[
             userdata
             a: number
          end
@@ -971,7 +993,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("reports error on unknown interfaces", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "is {number}, Bongo, Bingo", "is Bongo, Bingo")..[[
+         local ]]..statement..[[ Foo ]]..array_tuple_neither(i, "is {number}, Bongo, Bingo", "is {number, number}, Bongo, Bingo", "is Bongo, Bingo")..[[
             userdata
             a: number
          end
@@ -982,7 +1004,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
 
 
       it("reports error on unexpected generics", util.check_type_error([[
-         local ]]..statement..[[ Foo ]]..array(i, "is {number}")..[[
+         local ]]..statement..[[ Foo ]]..array_tuple_neither(i, "is {number}", "is {number, number}", "")..[[
          end
 
          local x: Foo<integer>
@@ -991,7 +1013,7 @@ for i, name in ipairs({"records", "arrayrecords", "interfaces", "arrayinterfaces
       }))
 
       it("reports error on unexpected generics", util.check_type_error([[
-         local ]]..statement..[[ Foo<K> ]]..array(i, "is {number}")..[[
+         local ]]..statement..[[ Foo<K> ]]..array_tuple_neither(i, "is {number}", "is {number, number}", "")..[[
          end
 
          local x: Foo<integer, string>
@@ -1047,6 +1069,65 @@ describe("arrayrecord", function()
       local a: {string} = v
       print(a)
    ]], {}))
+end)
+
+describe("tuplerecord", function()
+   it("can be declared with is", util.check([[
+      local record R1
+         is {string, boolean}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[1] = "hello"
+      v[2] = true
+   ]]))
+
+   it("assigning to tuple produces no warnings", util.check_warnings([[
+      local record R1
+         {string, boolean}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[1] = "hello"
+      v[2] = true
+
+      local a: {string, boolean} = v
+      print(a)
+   ]], {}))
+
+   it("assigning incorrect type produces type errors", util.check_type_error([[
+      local record R1
+         {string, boolean}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[1] = false
+      v[2] = "world"
+   ]], {
+      {y = 8, x = 14, msg = 'in assignment: got boolean, expected string'},
+      {y = 9, x = 14, msg = 'in assignment: got string "world", expected boolean'}
+   }))
+
+   it("assigning outside of tuple bounds produces errors", util.check_type_error([[
+      local record R1
+         {string, boolean}
+
+         x: number
+      end
+
+      local v: R1 = { x = 10 }
+      v[0] = "hello"
+      v[100] = true
+   ]], {
+      {y = 8, x = 9, msg = 'index 0 out of range for tuple record R1'},
+      {y = 9, x = 9, msg = 'index 100 out of range for tuple record R1'}
+   }))
 end)
 
 describe("abstract check", function()

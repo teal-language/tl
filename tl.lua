@@ -2236,10 +2236,16 @@ parse_record_like_type = function(state, block, typename)
       decl.interface_list = {}
    end
 
-   if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE] and block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "array_type" then
-      local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
-      decl.elements = atype.elements
-      decl.interface_list = { atype }
+   if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE] then
+      if block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "array_type" then
+         local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
+         decl.elements = atype.elements
+         decl.interface_list = { atype }
+      elseif block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "typelist" then
+         local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
+         decl.types = atype.types
+         decl.interface_list = { atype }
+      end
    end
 
    if block[reader.BLOCK_INDEXES.RECORD.INTERFACES] and block[reader.BLOCK_INDEXES.RECORD.INTERFACES].kind == "interface_list" then
@@ -3371,6 +3377,7 @@ local types = require("teal.types")
 
 
 
+
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -3380,6 +3387,7 @@ local is_unknown = types.is_unknown
 local is_valid_union = types.is_valid_union
 local shallow_copy_new_type = types.shallow_copy_new_type
 local show_type_base = types.show_type_base
+local show_type = types.show_type
 local simple_types = types.simple_types
 local unite = types.unite
 local untuple = types.untuple
@@ -4305,22 +4313,30 @@ function Context:to_structural(t)
    return t
 end
 
-function Context:arraytype_from_tuple(w, tupletype)
+function Context:arraytype_from_list(w, typelist)
 
-   local element_type = unite(w, tupletype.types, true)
+   local element_type = unite(w, typelist, true)
    local valid = (not (element_type.typename == "union")) and true or is_valid_union(element_type)
    if valid then
-      return a_type(w, "array", { elements = element_type })
+      return a_type(w, "array", { elements = element_type }), true
    end
 
 
-   local arr_type = a_type(w, "array", { elements = tupletype.types[1] })
-   for i = 2, #tupletype.types do
-      local expanded = self:expand_type(w, arr_type, a_type(w, "array", { elements = tupletype.types[i] }))
+   local arr_type = a_type(w, "array", { elements = typelist[1] })
+   for i = 2, #typelist do
+      local expanded = self:expand_type(w, arr_type, a_type(w, "array", { elements = typelist[i] }))
       if not (expanded.typename == "array") then
-         return nil, { types.error("unable to convert tuple %s to array", tupletype) }
+         return nil, false
       end
       arr_type = expanded
+   end
+   return arr_type, true
+end
+
+function Context:arraytype_from_tuple(w, tupletype)
+   local arr_type, valid = self:arraytype_from_list(w, tupletype.types)
+   if not valid then
+      return nil, { types.error("unable to convert tuple %s to array", tupletype) }
    end
    return arr_type
 end
@@ -4839,6 +4855,9 @@ do
 
       t.interface_list, t.is_userdata = collect_interfaces(self, {}, t, {})
 
+      local has_array_interface = false
+      local has_tuple_interface = false
+
       for _, iface in ipairs(t.interface_list) do
          if iface.typename == "nominal" then
             local ri = self:resolve_nominal(iface)
@@ -4849,7 +4868,8 @@ do
                t.meta_field_order = t.meta_field_order or {}
                add_interface_fields(self, t.meta_fields, t.meta_field_order, ri, iface, "meta")
             end
-         else
+         elseif iface.typename == "array" then
+            has_array_interface = true
             if not t.elements then
                t.elements = iface.elements
             else
@@ -4857,6 +4877,54 @@ do
                   self.errs:add(t, "incompatible array interfaces")
                end
             end
+         elseif iface.typename == "tupletable" then
+            has_tuple_interface = true
+            if not t.types then
+               t.types = {}
+               for i, element_type in ipairs(iface.types) do
+                  table.insert(t.types, element_type)
+               end
+            else
+               local existing_type_count = #t.types
+               for i, element_type in ipairs(iface.types) do
+                  if i <= existing_type_count then
+
+                     if not self:same_type(element_type, t.types[i]) then
+                        self.errs:add(t, "incompatible tuple interfaces")
+                     end
+                  else
+
+                     table.insert(t.types, element_type)
+                  end
+               end
+            end
+         end
+      end
+
+      if has_array_interface and has_tuple_interface and #t.types > 0 then
+
+         local incompatible_tuple_array = false
+         for _, element_type in ipairs(t.types) do
+            if not self:is_a(element_type, t.elements) then
+               incompatible_tuple_array = true
+               break
+            end
+         end
+
+
+         local array_type_str = string.format("{%s}", show_type(t.elements))
+         local tuple_types = {}
+         for _, element_type in ipairs(t.types) do
+            table.insert(tuple_types, show_type(element_type))
+         end
+         local tuple_type_str = string.format("{%s}", table.concat(tuple_types, ", "))
+
+
+         if incompatible_tuple_array then
+
+            self.errs:add(t, string.format("inherits incompatible array %s and tuple %s", array_type_str, tuple_type_str))
+         else
+            self.errs:add_warning("inheritance", t, "inherits overlapping array %s and tuple %s", array_type_str, tuple_type_str)
          end
       end
    end
@@ -5170,16 +5238,25 @@ function Context:type_check_index(anode, bnode, a, b)
       ra = ra.def
    end
 
-   if ra.typename == "tupletable" and rb.typename == "integer" then
+   if ra.types and rb.typename == "integer" then
       if bnode.constnum then
          if bnode.constnum >= 1 and bnode.constnum <= #ra.types and bnode.constnum == math.floor(bnode.constnum) then
             return ra.types[bnode.constnum]
+         elseif ra.fields and ra.elements then
+            return (ra).elements
          end
 
          errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
       else
-         local array_type = self:arraytype_from_tuple(bnode, ra)
-         if array_type then
+         local type_list = ra.types
+         if ra.fields and ra.elements then
+            type_list = { ra.elements }
+            for _, child in ipairs(ra.types) do
+               table.insert(type_list, child)
+            end
+         end
+         local array_type, valid = self:arraytype_from_list(bnode, type_list)
+         if array_type and valid then
             return array_type.elements
          end
 
@@ -5894,6 +5971,15 @@ local function subtype_record(ck, a, b)
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
+      end
+   end
+
+   if a.types and b.types then
+      local size = math.min(#a.types, #b.types)
+      for i = 1, size do
+         if not ck:is_a(a.types[i], b.types[i]) then
+            return false, { errors.new("tuple parts have incompatible element types") }
+         end
       end
    end
 
@@ -7690,6 +7776,7 @@ local types = require("teal.types")
 
 
 
+
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -8282,15 +8369,41 @@ local function infer_table_literal(self, node, children)
 
       self:expand_type(node, values, elements) })
    elseif is_record and is_array then
-      t = a_type(node, "record", {
-         fields = fields,
-         field_order = field_order,
-         elements = elements,
-         interface_list = {
-            a_type(node, "array", { elements = elements }),
-         },
-      })
 
+      local pure_array = true
+      if not is_not_tuple then
+         local last_t
+         for _, current_t in pairs(typs) do
+            if last_t then
+               if not self:same_type(last_t, current_t) then
+                  pure_array = false
+                  break
+               end
+            end
+            last_t = current_t
+         end
+      end
+      if pure_array then
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            elements = elements,
+            interface_list = {
+               a_type(node, "array", { elements = elements }),
+            },
+         })
+      else
+         local tuple_iface = a_type(node, "tupletable", { inferred_at = node })
+         tuple_iface.types = typs
+         t = a_type(node, "record", {
+            fields = fields,
+            field_order = field_order,
+            types = typs,
+            interface_list = {
+               tuple_iface,
+            },
+         })
+      end
    elseif is_record and is_map then
       if keys.typename == "string" then
          for _, fname in ipairs(field_order) do
@@ -9017,7 +9130,7 @@ visit_node.cbs = {
                      assert_is_a(self, node[i], cvtype, df, "in record field", ck)
                   end
                end
-            elseif decltype.typename == "tupletable" and is_numeric_type(cktype) then
+            elseif decltype.types and is_numeric_type(cktype) then
                local dt = decltype.types[n]
                if not n then
                   self.errs:add_in_context(node[i], node, "unknown index in tuple %s", decltype)
@@ -10753,6 +10866,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
+
 function errors.new(msg)
    return { msg = msg }
 end
@@ -10808,6 +10922,7 @@ local wk = {
    ["hint"] = true,
    ["debug"] = true,
    ["unread"] = true,
+   ["inheritance"] = true,
 }
 errors.warning_kinds = wk
 
@@ -16218,8 +16333,8 @@ local function read_array_interface_type(ps, i)
    if not t then
       return i
    end
-   if t.kind ~= "array_type" then
-      fail(ps, i, "expected an array declaration")
+   if t.kind ~= "array_type" and t.kind ~= "typelist" then
+      fail(ps, i, "expected an array or type list declaration")
       return i
    end
    return i, t
@@ -17113,6 +17228,12 @@ local function record_like_type_walker(s, ast, visit)
    end
    if ast.meta_fields then
       for _, child in traversal.fields_of(ast, "meta") do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
+
+   if ast.types then
+      for _, child in ipairs(ast.types) do
          table.insert(xs, recurse_type(s, child, visit))
       end
    end
@@ -18858,6 +18979,12 @@ local types = { GenericType = {}, StringType = {}, IntegerType = {}, BooleanType
 
 
 
+
+
+
+
+
+
 function is_numeric_type(t)
    return t.typename == "number" or t.typename == "integer"
 end
@@ -18958,6 +19085,13 @@ local function show_fields(t, show)
    table.insert(out, " (")
    if t.elements then
       table.insert(out, "{" .. show(t.elements) .. "}")
+   end
+   if t.types then
+      local tuple_types = {}
+      for _, child in ipairs(t.types) do
+         table.insert(tuple_types, show(child))
+      end
+      table.insert(out, "{" .. table.concat(tuple_types, ", ") .. "}")
    end
    local fs = {}
    for _, k in ipairs(t.field_order) do
@@ -19442,6 +19576,14 @@ types.map = function(self, ty, fns)
 
          if t.elements then
             copy.elements, same = resolve(t.elements, same)
+         end
+
+
+         if t.types then
+            copy.types = {}
+            for i, v in ipairs(t.types) do
+               copy.types[i], same = resolve(v, same)
+            end
          end
 
          if t.interface_list then
