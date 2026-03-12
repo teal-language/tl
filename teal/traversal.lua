@@ -111,6 +111,12 @@ local function record_like_type_walker(s, ast, visit)
          table.insert(xs, recurse_type(s, child, visit))
       end
    end
+
+   if ast.types then
+      for _, child in ipairs(ast.types) do
+         table.insert(xs, recurse_type(s, child, visit))
+      end
+   end
    return xs
 end
 

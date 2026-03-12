@@ -14,6 +14,20 @@ describe("subtyping of interfaces:", function()
       local r: MyRecord = {}
       print(#r)
    ]]))
+   
+   it("record inherits interface tuple definition", util.check([[
+      local interface MyInterface
+         is {integer, string}
+         x: integer
+      end
+
+      local record MyRecord
+         is MyInterface
+      end
+
+      local r: MyRecord = {1, "abc"}
+      print(r[1], r[2])
+   ]]))
 
    it("record <: interface", util.check([[
       local interface MyInterface
@@ -311,5 +325,112 @@ describe("subtyping of interfaces:", function()
       Foos(a)
    ]], {
       { y = 9, msg = "record is not a userdata" },
+   }))
+
+   it("compatible tuple definitions are inherited", util.check([[
+      local interface MyInterface
+         is {integer, string}
+         x: integer
+      end
+      
+      local interface MyOtherInterface
+         is {integer, string, boolean}
+         y: integer
+      end
+
+      local record MyRecord
+         is MyInterface, MyOtherInterface
+      end
+
+      local r: MyRecord = {1, "abc", false}
+      print(r[1], r[2], r[3])
+   ]]))
+   
+   it("incompatible tuple definitions produce error", util.check_type_error([[
+      local interface MyInterface
+         is {integer, string}
+         x: integer
+      end
+      
+      local interface MyOtherInterface
+         is {boolean, integer, string}
+         y: integer
+      end
+
+      local record MyRecord
+         is MyInterface, MyOtherInterface
+      end
+   ]], {
+      {y = 11, x = 7, msg = 'incompatible tuple interfaces'}
+   }))
+
+   it("compatible tuple and array definitions produce warning", util.check_warnings([[
+      local interface MyTupleInterface
+         is {integer, integer}
+         x: integer
+      end
+      
+      local interface MyArrayInterface
+         is {integer}
+         y: integer
+      end
+
+      local record MyRecord
+         is MyTupleInterface, MyArrayInterface
+      end
+
+      local r: MyRecord = {10, 12, 14}
+      print(r[1], r[2], r[3])
+   ]], {
+      {y = 11, x = 7, tag = 'inheritance', msg = 'inherits overlapping array {integer} and tuple {integer, integer}'}
+   }))
+
+   it("incompatible tuple and array definitions produce error", util.check_type_error([[
+      local interface MyTupleInterface
+         is {integer, string}
+         x: integer
+      end
+      
+      local interface MyArrayInterface
+         is {boolean}
+         y: integer
+      end
+
+      local record MyRecord
+         is MyTupleInterface, MyArrayInterface
+      end
+   ]], {
+      {y = 11, x = 7, msg = 'inherits incompatible array {boolean} and tuple {integer, string}'}
+   }))
+
+   it("tuple definition types replace array definition union types in tuple indexes", util.check_warnings([[
+      local interface MyTupleInterface
+         is {string, integer}
+         x: integer
+      end
+      
+      local interface MyArrayInterface
+         is {string | integer | boolean}
+         y: integer
+      end
+
+      local record MyRecord
+         is MyTupleInterface, MyArrayInterface
+      end
+
+      local r: MyRecord = {"hello", 10}
+      r[2] = "world"
+      r[1] = true
+
+      r.x = 20
+      r.y = 7
+      r[0] = "array index"
+      r[4] = false
+      print(r[0], r[1], r[2], r[4])
+   ]], {
+      {y = 11, x = 7, tag = 'inheritance', msg = 'inherits overlapping array {string | integer | boolean} and tuple {string, integer}'}
+   }, {
+      {y = 16, x = 14, msg = 'in assignment: got string "world", expected integer'},
+      {y = 17, x = 14, msg = 'in assignment: got boolean, expected string'}
    }))
 end)

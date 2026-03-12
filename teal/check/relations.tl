@@ -141,6 +141,15 @@ local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType)
          return false, { errors.new("array parts have incompatible element types") }
       end
    end
+   
+   if a.types and b.types then
+      local size = math.min(#a.types, #b.types)
+      for i=1,size do
+         if not ck:is_a(a.types[i], b.types[i]) then
+            return false, { errors.new("tuple parts have incompatible element types") }
+         end
+      end
+   end
 
    if a.is_userdata ~= b.is_userdata then
       return false, { errors.new(a.is_userdata and "userdata is not a record"
