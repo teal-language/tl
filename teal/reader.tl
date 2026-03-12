@@ -1238,6 +1238,7 @@ do
          or prevnode.kind == "op_colon"
          or prevnode.kind == "identifier"
          or prevnode.kind == "variable"
+         or prevnode.kind == "macro_var"
    end
 
    -- small hack: for the sake of `tl types`, parse an invalid binary exp

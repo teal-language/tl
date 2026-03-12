@@ -1237,7 +1237,8 @@ do
       prevnode.kind == "op_dot" or
       prevnode.kind == "op_colon" or
       prevnode.kind == "identifier" or
-      prevnode.kind == "variable"
+      prevnode.kind == "variable" or
+      prevnode.kind == "macro_var"
    end
 
 
