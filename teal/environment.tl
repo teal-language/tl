@@ -51,6 +51,7 @@ local record environment
       gen_compat: GenCompat
       gen_target: GenTarget
       run_internal_compiler_checks: boolean
+      no_stdlib: boolean
    end
 
    type RequireModuleFn = function(env: Env, module_name: string): Type, string
@@ -140,7 +141,9 @@ end
 function environment.new(opts?: EnvOptions): Env
    local env = empty_environment()
    env.opts = opts or env.opts
-   load_precompiled_default_env(env)
+   if not env.opts.no_stdlib then
+      load_precompiled_default_env(env)
+   end
    return env
 end
 

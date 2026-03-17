@@ -10420,6 +10420,7 @@ local environment = { EnvOptions = {}, Env = {}, Result = {} }
 
 
 
+
 environment.VERSION = VERSION
 environment.DEFAULT_GEN_COMPAT = "optional"
 environment.DEFAULT_GEN_TARGET = "5.3"
@@ -10473,7 +10474,9 @@ end
 function environment.new(opts)
    local env = empty_environment()
    env.opts = opts or env.opts
-   load_precompiled_default_env(env)
+   if not env.opts.no_stdlib then
+      load_precompiled_default_env(env)
+   end
    return env
 end
 

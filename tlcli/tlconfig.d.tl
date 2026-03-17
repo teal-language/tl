@@ -4,6 +4,7 @@ local record TlConfig
    feat_arity: string
    gen_target: string
    gen_compat: string
+   no_stdlib: boolean
    global_env_def: string
    pretend: boolean
    quiet: boolean

@@ -18,6 +18,8 @@ local function get_args_parser()
    argname("<dtlfilename>"):
    count("*")
 
+   parser:flag("--no-stdlib", "Do not load the Lua standard library.")
+
    parser:option("-I --include-dir", "Prepend this directory to the module search path."):
    argname("<directory>"):
    count("*")

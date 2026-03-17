@@ -80,6 +80,7 @@ local function validate_config(config)
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
+      no_stdlib = "boolean",
    }
 
    local function check_key(k, v)
@@ -236,6 +237,8 @@ function configuration.merge_config_and_args(tlconfig, args)
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
    tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"] or
    (tlconfig["skip_compat53"] and "off")
+
+   tlconfig["no_stdlib"] = args["no_stdlib"] or tlconfig["no_stdlib"]
 
    if args["global_env_def"] then
       if #args["global_env_def"] > 1 then

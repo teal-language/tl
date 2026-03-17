@@ -40,6 +40,7 @@ function driver.setup_compiler(tlconfig)
       feat_arity = tlconfig["feat_arity"],
       gen_compat = tlconfig["gen_compat"],
       gen_target = tlconfig["gen_target"],
+      no_stdlib = tlconfig["no_stdlib"] == true,
    }
 
    if opts.gen_target == "5.4" and opts.gen_compat ~= "off" then

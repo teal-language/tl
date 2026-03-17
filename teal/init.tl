@@ -120,6 +120,7 @@ local record teal
       feat_arity: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
+      no_stdlib: boolean
    end
 
    compiler: function(opts?: CompilerOptions): Compiler
@@ -369,6 +370,7 @@ function teal.compiler(opts?: CompilerOptions): Compiler
       feat_arity = opts and opts.feat_arity,
       gen_compat = opts and opts.gen_compat,
       gen_target = opts and opts.gen_target,
+      no_stdlib = opts and not not opts.no_stdlib,
    }
 
    compiler.env = environment.new(env_opts)
