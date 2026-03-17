@@ -53,6 +53,7 @@ recordkey
 retlist
 retstat
 setmetatable
+stdlib
 subtyping
 tableconstructor
 tlconfig
