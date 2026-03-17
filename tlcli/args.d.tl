@@ -7,6 +7,7 @@ local record Args
    file: {string}
    gen_target: string
    gen_compat: string
+   no_stdlib: boolean
    global_env_def: {string} -- FIXME should be `string`, but argparse can't handle `:count("0-1")`?...
    include_dir: {string}
    keep_hashbang: boolean

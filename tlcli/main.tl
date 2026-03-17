@@ -17,6 +17,8 @@ local function get_args_parser(): argparse.Parser
    parser:option("--global-env-def", "Predefined types from a custom global environment.")
          :argname("<dtlfilename>")
          :count("*") -- `:count("0-1")` does not work? we verify by hand later then
+            
+   parser:flag("--no-stdlib", "Do not load the Lua standard library.")
 
    parser:option("-I --include-dir", "Prepend this directory to the module search path.")
          :argname("<directory>")
