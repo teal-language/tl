@@ -235,7 +235,7 @@ local enum KeyParsed
    "implicit"
 end
 
-local record parser
+local record ast
    type Attribute = Attribute
    type Node = Node
    type NodeKind = NodeKind
@@ -353,7 +353,7 @@ local node_mt: metatable<Node> = {
    end
 }
 
-function parser.lang_heuristic(filename?: string, input?: string): ParseLang
+function ast.lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
       local pattern <const> = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
@@ -1703,7 +1703,7 @@ parse_block = function(state: ParseState, block: Block): Node
    end
 end
 
-function parser.parse_blocks(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+function ast.parse_blocks(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    filename = filename or "input"
    if not input then
       return nil, {{ filename = filename, y = 1, x = 1, msg = "input is nil" }}, {}
@@ -1726,16 +1726,16 @@ function parser.parse_blocks(input: Block, filename: string, parse_lang?: ParseL
    return nodes, state.errs, state.required_modules
 end
 
-function parser.parse(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
-   return parser.parse_blocks(input, filename, parse_lang)
+function ast.parse(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+   return ast.parse_blocks(input, filename, parse_lang)
 end
 
-function parser.parse_program_block(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
-   return parser.parse_blocks(input, filename, parse_lang)
+function ast.parse_program_block(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
+   return ast.parse_blocks(input, filename, parse_lang)
 end
 
--- Note: parse_program is a stub; use teal.parser.parse_program for token-based parsing.
-function parser.parse_program(_tokens: {Token}, errs: {Error}, _filename?: string, _parse_lang?: ParseLang): types.Node, {string}
+-- Note: parse_program is a stub; use teal.ast.parse_program for token-based parsing.
+function ast.parse_program(_tokens: {Token}, errs: {Error}, _filename?: string, _parse_lang?: ParseLang): types.Node, {string}
    errors.clear_redundant_errors(errs or {})
    return nil, {}
 end
@@ -2344,26 +2344,26 @@ parse_type_list = function(state: ParseState, block: Block, mode: ParseTypeListM
    return t, maybe_method, min_arity
 end
 
-function parser.parse_type(state: ParseState, block: Block): Type
+function ast.parse_type(state: ParseState, block: Block): Type
    return parse_type(state, block)
 end
 
-function parser.parse_type_list(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType, boolean, integer
+function ast.parse_type_list(state: ParseState, block: Block, mode: ParseTypeListMode): TupleType, boolean, integer
    return parse_type_list(state, block, mode)
 end
 
-function parser.operator(node: Node, arity: integer, op: string): Operator
+function ast.operator(node: Node, arity: integer, op: string): Operator
    return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
 end
 
-function parser.node_is_funcall(node: Node): boolean
+function ast.node_is_funcall(node: Node): boolean
    return node.kind == "op" and node.op.op == "@funcall"
 end
 
-function parser.node_is_require_call(n: Node): string
+function ast.node_is_require_call(n: Node): string
    if n.kind == "op" and n.op.op == "." then
       -- `require("str").something`
-      return parser.node_is_require_call(n.e1)
+      return ast.node_is_require_call(n.e1)
    elseif n.kind == "op" and n.op.op == "@funcall"
       and n.e1.kind == "variable" and n.e1.tk == "require"
       and n.e2.kind == "expression_list" and #n.e2 == 1
@@ -2375,11 +2375,11 @@ function parser.node_is_require_call(n: Node): string
    return nil -- table.insert cares about arity
 end
 
-function parser.node_at(w: Where, n: Node): Node
+function ast.node_at(w: Where, n: Node): Node
    n.f = assert(w.f)
    n.x = w.x
    n.y = w.y
    return n
 end
 
-return parser
+return ast
