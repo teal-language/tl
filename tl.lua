@@ -981,19 +981,6 @@ local function parse_statements(state, block, toplevel)
    return node
 end
 
-local function parse_forin(state, block)
-   local node = new_node(state, block, "forin")
-   node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.FORIN.VARS], false)
-   node.exps = parse_expression_list(state, block[reader.BLOCK_INDEXES.FORIN.EXPS])
-   if #node.exps < 1 then
-      fail(state, block[reader.BLOCK_INDEXES.FORIN.EXPS], "missing iterator expression in generic for")
-   elseif #node.exps > 3 then
-      fail(state, block[reader.BLOCK_INDEXES.FORIN.EXPS], "too many expressions in generic for")
-   end
-   node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORIN.BODY])
-   return node
-end
-
 local function node_is_require_call(n)
    if n.kind == "op" and n.op.op == "." then
 
@@ -1161,12 +1148,6 @@ parse_expression = function(state, block)
          return new_node(state, block, "literal_table")
       end
       local inner = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
-
-
-
-
-
-
       local res = block_to_constructor(state, inner)
       state.in_macro_quote = false
       return res
@@ -1453,7 +1434,7 @@ parse_fns.fornum = function(state, block)
    return node
 end
 
-parse_fns.forin = function(state, block)
+parse_fns["forin"] = function(state, block)
    local node = new_node(state, block, "forin")
    if not node then
       local dummy_block = { kind = "forin", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
@@ -1973,16 +1954,7 @@ parse_block = function(state, block)
    if not block then return nil end
 
    local kind = block.kind
-   if kind == "forin" then
-      return parse_forin(state, block)
-   elseif kind == "interface" then
-      local node = new_node(state, block, "interface")
-      if not node then
-         local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-         node = new_node(state, dummy_block, "interface")
-      end
-      return node
-   elseif kind == "statements" then
+   if kind == "statements" then
       return parse_statements(state, block)
    end
    local f = parse_fns[block.kind]
