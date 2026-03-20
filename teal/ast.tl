@@ -1160,14 +1160,10 @@ parse_fns.fornum = function(state: ParseState, block: Block): Node
    node.from = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.FROM])
    node.to = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.TO])
 
-   if block[reader.BLOCK_INDEXES.FORNUM.BODY] then
-      -- We have a step value
+   if block[reader.BLOCK_INDEXES.FORNUM.STEP] then
       node.step = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.STEP])
-      node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.BODY])
-   else
-      -- No step, block[4] is the body
-      node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.STEP])
    end
+   node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.BODY])
 
    return node
 end
