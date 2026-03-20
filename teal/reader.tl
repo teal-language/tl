@@ -1,8 +1,6 @@
 local errors = require("teal.errors")
 local type Error = errors.Error
 
--- local types = require("teal.types") -- unused
-
 local lexer = require("teal.lexer")
 local type Token = lexer.Token
 local type TokenKind = lexer.TokenKind
@@ -56,38 +54,6 @@ local function lang_heuristic(filename?: string, input?: string): BlockLang
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
-end
-
-local function normalize_macro_tokens(tokens: {Token}, errs: {Error}): {Error}
-   local filtered: {Error} = {}
-   for _, e in ipairs(errs or {}) do
-      local msg = e.msg or ""
-      if not (msg:find("invalid token '!'") or msg:find("invalid token '`'") or msg:find("invalid token '$'")) then
-         table.insert(filtered, e)
-      end
-   end
-
-   for _, t in ipairs(tokens) do
-      if t.kind == "$ERR$" then
-         if t.tk == "!" then
-            t.kind = "op"
-         elseif t.tk:sub(1, 1) == "`" then
-            t.kind = "op"
-         elseif t.tk == "$" then
-            t.kind = "identifier"
-         end
-      end
-   end
-   if errs then
-      for i = #errs, 1, -1 do
-         errs[i] = nil
-      end
-      for i = 1, #filtered do
-         errs[i] = filtered[i]
-      end
-      return errs
-   end
-   return filtered
 end
 
 local function is_macro_quote_token(t: Token): boolean
@@ -735,7 +701,7 @@ end
 local function read_return_types(ps: ReadState, i: integer): integer, Block
    local iprev = i - 1
    local t: Block
-   --MARK: here
+
    i, t = read_type_list(ps, i, "rets")
    local list = t[BLOCK_INDEXES.TUPLE_TYPE.SECOND] or t[BLOCK_INDEXES.TUPLE_TYPE.FIRST]  -- for variadic, list is t[2]; for non-variadic, list is t[1]
    if list and #list == 0 then
@@ -2742,7 +2708,6 @@ end
 function reader.read_program(tokens: {Token}, errs: {Error}, filename?: string, read_lang?: BlockLang, allow_macro_vars?: boolean, skip_macro_expand?: boolean): Block
    errs = errs or {}
    filename = filename or "input"
-   errs = normalize_macro_tokens(tokens, errs)
    read_lang = read_lang or lang_heuristic(filename)
    if allow_macro_vars == nil then
       allow_macro_vars = true
