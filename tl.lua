@@ -4924,6 +4924,7 @@ do
 
             self.errs:add(t, string.format("inherits incompatible array %s and tuple %s", array_type_str, tuple_type_str))
          else
+
             self.errs:add_warning("inheritance", t, "inherits overlapping array %s and tuple %s", array_type_str, tuple_type_str)
          end
       end
@@ -14297,8 +14298,6 @@ package.preload["teal.reader"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
-
-
 local lexer = require("teal.lexer")
 
 
@@ -14352,38 +14351,6 @@ local function lang_heuristic(filename, input)
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
-end
-
-local function normalize_macro_tokens(tokens, errs)
-   local filtered = {}
-   for _, e in ipairs(errs or {}) do
-      local msg = e.msg or ""
-      if not (msg:find("invalid token '!'") or msg:find("invalid token '`'") or msg:find("invalid token '$'")) then
-         table.insert(filtered, e)
-      end
-   end
-
-   for _, t in ipairs(tokens) do
-      if t.kind == "$ERR$" then
-         if t.tk == "!" then
-            t.kind = "op"
-         elseif t.tk:sub(1, 1) == "`" then
-            t.kind = "op"
-         elseif t.tk == "$" then
-            t.kind = "identifier"
-         end
-      end
-   end
-   if errs then
-      for i = #errs, 1, -1 do
-         errs[i] = nil
-      end
-      for i = 1, #filtered do
-         errs[i] = filtered[i]
-      end
-      return errs
-   end
-   return filtered
 end
 
 local function is_macro_quote_token(t)
@@ -17038,7 +17005,6 @@ end
 function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
    errs = errs or {}
    filename = filename or "input"
-   errs = normalize_macro_tokens(tokens, errs)
    read_lang = read_lang or lang_heuristic(filename)
    if allow_macro_vars == nil then
       allow_macro_vars = true
