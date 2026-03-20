@@ -13484,15 +13484,24 @@ local macro_eval = {}
 
 
 
-local function numeric_child_keys(b)
-   local keys = {}
-   for k, child in pairs(b) do
-      if math.type(k) == "integer" and child then
-         table.insert(keys, k)
+
+
+
+
+local function children_iter(b, at)
+   while true do
+      at = at + 1
+      local val = b[at]
+      if val then
+         return at, val
+      elseif at > 5 then
+         return
       end
    end
-   table.sort(keys)
-   return keys
+end
+
+local function children(b)
+   return children_iter, b, 0
 end
 
 local function clone_value(v)
@@ -13506,11 +13515,8 @@ local function clone_value(v)
       xend = v.xend,
       is_longstring = v.is_longstring,
    }
-   for _, idx in ipairs(numeric_child_keys(v)) do
-      local child = v[idx]
-      if child then
-         out[idx] = clone_value(child)
-      end
+   for idx, child in children(v) do
+      out[idx] = clone_value(child)
    end
    return out
 end
@@ -13530,11 +13536,8 @@ local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
       b.xend = where_x
    end
 
-   for _, idx in ipairs(numeric_child_keys(b)) do
-      local child = b[idx]
-      if child then
-         reanchor_block_positions(child, where_y, where_x, seen_blocks)
-      end
+   for idx, child in children(b) do
+      reanchor_block_positions(child, where_y, where_x, seen_blocks)
    end
 end
 
@@ -13790,9 +13793,8 @@ local function expand_in_node(b, filename, env, errs, context)
       return expand_in_node(res, filename, env, errs, context)
    end
 
-   for _, i in ipairs(numeric_child_keys(b)) do
-      local child = b[i]
-      if child and child.kind == "statements" then
+   for i, child in children(b) do
+      if child.kind == "statements" then
          local expanded = child
          local j = 1
          while j <= #expanded do
