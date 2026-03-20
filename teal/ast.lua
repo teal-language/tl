@@ -95,7 +95,6 @@ local lexer = require("teal.lexer")
 
 
 
-
 local parse_type
 local parse_type_list
 local parse_typeargs_if_any
@@ -236,7 +235,6 @@ local parse_typeargs_if_any
 
 
 local ast = {}
-
 
 
 
@@ -1728,12 +1726,6 @@ end
 
 function ast.parse_program_block(input, filename, parse_lang)
    return ast.parse_blocks(input, filename, parse_lang)
-end
-
-
-function ast.parse_program(_tokens, errs, _filename, _parse_lang)
-   errors.clear_redundant_errors(errs or {})
-   return nil, {}
 end
 
 local function new_generic(state, block, typeargs, typ)

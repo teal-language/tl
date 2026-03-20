@@ -36,7 +36,6 @@ local raw_type = types.raw_type
 local simple_types = types.simple_types
 
 local lexer = require("teal.lexer")
-local type Token = lexer.Token
 local type Comment = lexer.Comment
 
 local enum NodeKind
@@ -244,7 +243,6 @@ local record ast
 
    parse: function(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    parse_blocks: function(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
-   parse_program: function(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): types.Node, {string}
    parse_program_block: function(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    operator: function(Node, integer, string): Operator
 
@@ -1728,12 +1726,6 @@ end
 
 function ast.parse_program_block(input: Block, filename: string, parse_lang?: ParseLang): types.Node, {Error}, {string}
    return ast.parse_blocks(input, filename, parse_lang)
-end
-
--- Note: parse_program is a stub; use teal.ast.parse_program for token-based parsing.
-function ast.parse_program(_tokens: {Token}, errs: {Error}, _filename?: string, _parse_lang?: ParseLang): types.Node, {string}
-   errors.clear_redundant_errors(errs or {})
-   return nil, {}
 end
 
 local function new_generic(state: ParseState, block: Block, typeargs: {TypeArgType}, typ: FirstOrderType): GenericType
