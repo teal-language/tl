@@ -191,7 +191,7 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       local idx = 1
       for _, ab in ipairs(args) do
          local expected
-         local annot = ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          if not annot then
             table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. name .. "' argument missing type; expected 'Statement' or 'Expression'" })
          else

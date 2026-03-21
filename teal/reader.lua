@@ -1973,9 +1973,9 @@ local function read_where_clause(ps, i, def)
    node[BLOCK_INDEXES.MACROEXP.ARGS] = new_block(ps, i, "argument_list")
    node[BLOCK_INDEXES.MACROEXP.ARGS][1] = new_block(ps, i, "argument")
    node[BLOCK_INDEXES.MACROEXP.ARGS][1].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION] = new_type(ps, i, "nominal_type")
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE] = new_type(ps, i, "nominal_type")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
    node[BLOCK_INDEXES.MACROEXP.RETS] = new_tuple(ps, i)
    node[BLOCK_INDEXES.MACROEXP.RETS][1] = new_type(ps, i, "boolean")
    i, node[BLOCK_INDEXES.MACROEXP.EXP] = read_expression(ps, i)
@@ -2468,7 +2468,7 @@ local function read_local_macro(ps, i)
       local sig = { kinds = {}, vararg = "" }
       local idx = 1
       for _, ab in ipairs(args) do
-         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          local ok = false
          local mode
          if annot and annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then

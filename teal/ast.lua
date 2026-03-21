@@ -523,7 +523,7 @@ local function parse_argument_list(state, block)
       if not arg_node then
          fail(state, arg_block, "invalid argument")
       else
-         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.TYPE]
          if type(type_block) == "table" and type_block.kind then
             arg_node.argtype = parse_type(state, type_block)
          end

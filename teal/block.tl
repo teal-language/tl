@@ -241,7 +241,7 @@ local BLOCK_INDEXES <const> = {
       ANNOTATION = 1,
    },
    ARGUMENT = {
-      ANNOTATION = 1,
+      TYPE = 1,
    },
    LITERAL_TABLE_ITEM = {
       KEY = 1,

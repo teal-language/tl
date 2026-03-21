@@ -785,7 +785,7 @@ local function parse_argument_list(state, block)
       if not arg_node then
          fail(state, arg_block, "invalid argument")
       else
-         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.TYPE]
          if type(type_block) == "table" and type_block.kind then
             arg_node.argtype = parse_type(state, type_block)
          end
@@ -2881,7 +2881,7 @@ local BLOCK_INDEXES = {
       ANNOTATION = 1,
    },
    ARGUMENT = {
-      ANNOTATION = 1,
+      TYPE = 1,
    },
    LITERAL_TABLE_ITEM = {
       KEY = 1,
@@ -13604,7 +13604,7 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       local idx = 1
       for _, ab in ipairs(args) do
          local expected
-         local annot = ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          if not annot then
             table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. name .. "' argument missing type; expected 'Statement' or 'Expression'" })
          else
@@ -16182,9 +16182,9 @@ local function read_where_clause(ps, i, def)
    node[BLOCK_INDEXES.MACROEXP.ARGS] = new_block(ps, i, "argument_list")
    node[BLOCK_INDEXES.MACROEXP.ARGS][1] = new_block(ps, i, "argument")
    node[BLOCK_INDEXES.MACROEXP.ARGS][1].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION] = new_type(ps, i, "nominal_type")
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.ANNOTATION][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE] = new_type(ps, i, "nominal_type")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
    node[BLOCK_INDEXES.MACROEXP.RETS] = new_tuple(ps, i)
    node[BLOCK_INDEXES.MACROEXP.RETS][1] = new_type(ps, i, "boolean")
    i, node[BLOCK_INDEXES.MACROEXP.EXP] = read_expression(ps, i)
@@ -16677,7 +16677,7 @@ local function read_local_macro(ps, i)
       local sig = { kinds = {}, vararg = "" }
       local idx = 1
       for _, ab in ipairs(args) do
-         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          local ok = false
          local mode
          if annot and annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
