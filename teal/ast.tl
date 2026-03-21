@@ -483,14 +483,10 @@ local function parse_variable_list(state: ParseState, block: Block, as_expressio
    end
    for _, var_block in ipairs(block) do
       local var_node: Node
-      if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
-         local ident_block = var_block
-         if var_block.kind == "variable" then
-            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" }
-         end
-         var_node = new_node(state, ident_block)
-         if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
-            local annotation = ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
+      if not as_expression and var_block.kind == "identifier" then
+         var_node = new_node(state, var_block)
+         if var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
+            local annotation = var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
             if is_attribute[annotation.tk] and var_node then
                var_node.attribute = annotation.tk as Attribute
             end
@@ -737,7 +733,7 @@ local block_to_constructor: function(state: ParseState, block: Block): Node
 parse_expression = function(state: ParseState, block: Block): Node
    if not block then return nil end
 
-   local kind = block.kind as string
+   local kind = block.kind
    local op_info = op_kinds[kind]
 
    if op_info then
@@ -822,7 +818,7 @@ parse_expression = function(state: ParseState, block: Block): Node
       node.constnum = block_number_value(block)
    elseif kind == "boolean" then
       node.kind = kind as NodeKind
-   elseif kind == "identifier" or kind == "variable" then
+   elseif kind == "identifier" then
       node.kind = "variable"
    elseif kind == "macro_var" then
       if not state.in_macro_quote then

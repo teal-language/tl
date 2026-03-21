@@ -26,7 +26,6 @@ local record block
       "newtype"
       "argument"
       "type_identifier"
-      "variable"
       "variable_list"
       "statements"
       "assignment"
@@ -355,7 +354,6 @@ local BLOCK_KINDS <const> = {
    ["newtype"] = true,
    ["argument"] = true,
    ["type_identifier"] = true,
-   ["variable"] = true,
    ["variable_list"] = true,
    ["statements"] = true,
    ["assignment"] = true,

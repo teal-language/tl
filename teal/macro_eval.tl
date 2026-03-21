@@ -254,7 +254,7 @@ local eval_macro_invocation: function(b: Block, filename: string, env: MacroEnv,
 eval_macro_invocation = function(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
    local mexp = b
    local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
-   if not mname_block or (mname_block.kind ~= "variable" and mname_block.kind ~= "identifier") then
+   if not mname_block or mname_block.kind ~= "identifier" then
       table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
       return b
    end
