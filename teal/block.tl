@@ -90,7 +90,7 @@ local record block
       "op_colon"
 
       "typeargs"
-      "typelist"
+      "type_list"
       "generic_type"
       "typedecl"
       "tuple_type"
@@ -244,16 +244,6 @@ local BLOCK_INDEXES <const> = {
    ARGUMENT = {
       ANNOTATION = 1,
    },
-   ARGUMENT_LIST = {
-      FIRST = 1,
-   },
-   VARIABLE_LIST = {
-      FIRST = 1,
-   },
-   EXPRESSION_LIST = {
-      FIRST = 1,
-      SECOND = 2,
-   },
    LITERAL_TABLE_ITEM = {
       KEY = 1,
       VALUE = 2,
@@ -321,9 +311,6 @@ local BLOCK_INDEXES <const> = {
    ARGUMENT_TYPE = {
       NAME = 1,
    },
-   TYPEARGS = {
-      FIRST = 1,
-   },
    TYPEARG = {
       NAME = 1,
       CONSTRAINT = 2,
@@ -335,25 +322,12 @@ local BLOCK_INDEXES <const> = {
    NOMINAL_TYPE = {
       NAME = 1,
    },
-   UNION_TYPE = {
-      FIRST = 1,
-   },
-   TUPLE_TYPE = {
-      FIRST = 1,
-      SECOND = 2,
-   },
    ARRAY_TYPE = {
       ELEMENT = 1,
    },
    MAP_TYPE = {
       KEYS = 1,
       VALUES = 2,
-   },
-   TYPELIST = {
-      FIRST = 1,
-   },
-   INTERFACE_LIST = {
-      FIRST = 1,
    },
 }
 
@@ -445,7 +419,7 @@ local BLOCK_KINDS <const> = {
    ["op_colon"] = true,
 
    ["typeargs"] = true,
-   ["typelist"] = true,
+   ["type_list"] = true,
    ["generic_type"] = true,
    ["typedecl"] = true,
    ["tuple_type"] = true,
