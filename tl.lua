@@ -745,14 +745,10 @@ local function parse_variable_list(state, block, as_expression)
    end
    for _, var_block in ipairs(block) do
       local var_node
-      if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
-         local ident_block = var_block
-         if var_block.kind == "variable" then
-            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" }
-         end
-         var_node = new_node(state, ident_block)
-         if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
-            local annotation = ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
+      if not as_expression and var_block.kind == "identifier" then
+         var_node = new_node(state, var_block)
+         if var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
+            local annotation = var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
             if is_attribute[annotation.tk] and var_node then
                var_node.attribute = annotation.tk
             end
@@ -1084,7 +1080,7 @@ parse_expression = function(state, block)
       node.constnum = block_number_value(block)
    elseif kind == "boolean" then
       node.kind = kind
-   elseif kind == "identifier" or kind == "variable" then
+   elseif kind == "identifier" then
       node.kind = "variable"
    elseif kind == "macro_var" then
       if not state.in_macro_quote then
@@ -2776,7 +2772,6 @@ local block = { Block = { ExpectedContext = {} } }
 
 
 
-
 local BLOCK_INDEXES = {
    PRAGMA = {
       KEY = 1,
@@ -2999,7 +2994,6 @@ local BLOCK_KINDS = {
    ["newtype"] = true,
    ["argument"] = true,
    ["type_identifier"] = true,
-   ["variable"] = true,
    ["variable_list"] = true,
    ["statements"] = true,
    ["assignment"] = true,
@@ -13673,7 +13667,7 @@ local eval_macro_invocation
 eval_macro_invocation = function(b, filename, env, errs, context)
    local mexp = b
    local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
-   if not mname_block or (mname_block.kind ~= "variable" and mname_block.kind ~= "identifier") then
+   if not mname_block or mname_block.kind ~= "identifier" then
       table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
       return b
    end
@@ -14302,7 +14296,7 @@ function reader.node_is_require_call(n)
    if n.kind == "op_dot" then
 
       return reader.node_is_require_call(n[BLOCK_INDEXES.OP.E1])
-   elseif n[BLOCK_INDEXES.OP.E1].kind == "variable" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
+   elseif n[BLOCK_INDEXES.OP.E1].kind == "identifier" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
       n[BLOCK_INDEXES.OP.E2].kind == "expression_list" and #n[BLOCK_INDEXES.OP.E2] == 1 and
       n[BLOCK_INDEXES.OP.E2][1].kind == "string" then
 
@@ -15289,7 +15283,7 @@ local function read_literal(ps, i)
    local tk = ps.tokens[i].tk
    local kind = ps.tokens[i].kind
    if kind == "identifier" then
-      return verify_kind(ps, i, "identifier", "variable")
+      return verify_kind(ps, i, "identifier")
    elseif kind == "string" then
       local node = new_block(ps, i, "string")
       local _, is_long = unquote(tk)
@@ -15418,8 +15412,7 @@ do
       prevnode.kind == "op_index" or
       prevnode.kind == "op_dot" or
       prevnode.kind == "op_colon" or
-      prevnode.kind == "identifier" or
-      prevnode.kind == "variable"
+      prevnode.kind == "identifier"
    end
 
 
@@ -15530,7 +15523,7 @@ do
             local argument
             if next_tk.tk == "(" then
                local mname
-               if e1 and (e1.kind == "variable" or e1.kind == "identifier") then
+               if e1 and e1.kind == "identifier" then
                   mname = e1.tk
                end
                local sig = mname and ps.macro_sigs[mname]
@@ -16344,7 +16337,7 @@ read_record_body = function(ps, i, def)
             end
             i = verify_tk(ps, i, "]")
          else
-            i, v = verify_kind(ps, i, "identifier", "variable")
+            i, v = verify_kind(ps, i, "identifier")
          end
          if not v then
             return fail(ps, i, "expected a variable name")
@@ -16478,7 +16471,7 @@ do
          return i, exp
       end
 
-      if exp.kind ~= "variable" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
+      if exp.kind ~= "identifier" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
          return fail(ps, i, "syntax error")
       end
 
@@ -16542,7 +16535,7 @@ local function read_type_require(ps, i, asgn)
    if not asgn[BIDX.VALUE] then
       return i
    end
-   if asgn[BIDX.VALUE].kind ~= "op_funcall" and asgn[BIDX.VALUE].kind ~= "op_dot" and asgn[BIDX.VALUE].kind ~= "variable" then
+   if asgn[BIDX.VALUE].kind ~= "op_funcall" and asgn[BIDX.VALUE].kind ~= "op_dot" and asgn[BIDX.VALUE].kind ~= "identifier" then
       fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
       return i
    end
@@ -16950,7 +16943,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-         if m and (m.kind == "variable" or m.kind == "identifier") then
+         if m and m.kind == "identifier" then
             local name = m.tk
             local sig = ps.macro_sigs[name]
             if sig then

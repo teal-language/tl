@@ -132,7 +132,6 @@ local block = { Block = { ExpectedContext = {} } }
 
 
 
-
 local BLOCK_INDEXES = {
    PRAGMA = {
       KEY = 1,
@@ -355,7 +354,6 @@ local BLOCK_KINDS = {
    ["newtype"] = true,
    ["argument"] = true,
    ["type_identifier"] = true,
-   ["variable"] = true,
    ["variable_list"] = true,
    ["statements"] = true,
    ["assignment"] = true,
