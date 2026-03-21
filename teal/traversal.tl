@@ -515,7 +515,7 @@ function traversal.traverse_nodes<S, T>(s: S, root: types.Node,
       if fn then
          fn(ast, xs)
       else
-         assert(no_traverse_nodes[kind])
+         assert(no_traverse_nodes[kind], kind)
       end
 
       local ret: T
