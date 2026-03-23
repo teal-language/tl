@@ -52,6 +52,8 @@ describe("tl dump-blocks", function()
       "f": "<TMP>",
       "y": 1,
       "x": 7,
+      "yend": 1,
+      "xend": 7,
       "1": {
          "kind": "variable_list",
          "tk": "x",
@@ -65,7 +67,9 @@ describe("tl dump-blocks", function()
             "tk": "x",
             "f": "<TMP>",
             "y": 1,
-            "x": 7
+            "x": 7,
+            "yend": 1,
+            "xend": 7
          }
       },
       "VARS": {
@@ -81,7 +85,9 @@ describe("tl dump-blocks", function()
             "tk": "x",
             "f": "<TMP>",
             "y": 1,
-            "x": 7
+            "x": 7,
+            "yend": 1,
+            "xend": 7
          }
       },
       "2": {
@@ -97,7 +103,9 @@ describe("tl dump-blocks", function()
             "tk": "=",
             "f": "<TMP>",
             "y": 1,
-            "x": 9
+            "x": 9,
+            "yend": 1,
+            "xend": 9
          }
       },
       "DECL": {
@@ -113,7 +121,9 @@ describe("tl dump-blocks", function()
             "tk": "=",
             "f": "<TMP>",
             "y": 1,
-            "x": 9
+            "x": 9,
+            "yend": 1,
+            "xend": 9
          }
       },
       "3": {
@@ -129,7 +139,9 @@ describe("tl dump-blocks", function()
             "tk": "1",
             "f": "<TMP>",
             "y": 1,
-            "x": 11
+            "x": 11,
+            "yend": 1,
+            "xend": 11
          }
       },
       "EXPS": {
@@ -145,7 +157,9 @@ describe("tl dump-blocks", function()
             "tk": "1",
             "f": "<TMP>",
             "y": 1,
-            "x": 11
+            "x": 11,
+            "yend": 1,
+            "xend": 11
          }
       }
    }
