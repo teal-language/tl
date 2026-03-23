@@ -196,22 +196,21 @@ local node_mt: metatable<Block> = {
 }
 
 local function new_block(ps: ReadState, i: integer, kind?: BlockKind): Block
-   local t = ps.tokens[i]
-   return setmetatable({ f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as BlockKind) }, node_mt)
-end
-
-
-local function new_type(ps: ReadState, i: integer, typename: BlockKind): Block
    local token = ps.tokens[i]
    return setmetatable({
       f = ps.filename,
       y = token.y,
       x = token.x,
       tk = token.tk,
-      kind = typename,
+      kind = kind or (token.kind as BlockKind),
       yend = token.y,
       xend = token.x + #token.tk - 1,
    }, node_mt)
+end
+
+
+local function new_type(ps: ReadState, i: integer, typename: BlockKind): Block
+   return new_block(ps, i, typename)
 end
 
 local function make_comment_block(ps: ReadState, c: Comment): Block
@@ -255,17 +254,10 @@ local function new_typedecl(ps: ReadState, i: integer, def: Block): Block
    return t
 end
 
-local function new_tuple(ps: ReadState, i: integer, typelist?: Block, is_va?: boolean): Block, Block
+local function new_tuple(ps: ReadState, i: integer, typelist?: Block): Block, Block
    local t = new_type(ps, i, "tuple_type")
-   -- FIXME use uniform representation for tuple_type
-   if is_va then
-      t[1] = new_block(ps, i, "...")
-      t[2] = typelist or new_block(ps, i, "type_list")
-      return t, t[2]
-   else
-      t[1] = typelist or new_block(ps, i, "type_list")
-      return t, t[1]
-   end
+   t[1] = typelist or new_block(ps, i, "type_list")
+   return t, t[1]
 end
 
 local function new_nominal(ps: ReadState, i: integer, name?: string): Block
@@ -704,7 +696,7 @@ local function read_return_types(ps: ReadState, i: integer): integer, Block
    local t: Block
 
    i, t = read_type_list(ps, i, "rets")
-   local list = t[2] or t[1]  -- FIXME for variadic, list is t[2]; for non-variadic, list is t[1]
+   local list = t[1]
    if list and #list == 0 then
       t.x = ps.tokens[iprev].x
       t.y = ps.tokens[iprev].y
@@ -733,11 +725,13 @@ local function read_function_type(ps: ReadState, i: integer): integer, Block
      any.tk = "any"
      local args_typelist = new_block(ps, i, "type_list")
      args_typelist[1] = any
-     typ[BLOCK_INDEXES.FUNCTION_TYPE.ARGS] = new_tuple(ps, i, args_typelist, true)
+     args_typelist[2] = new_block(ps, i, "...")
+     typ[BLOCK_INDEXES.FUNCTION_TYPE.ARGS] = new_tuple(ps, i, args_typelist)
 
      local rets_typelist = new_block(ps, i, "type_list")
      rets_typelist[1] = any
-     typ[BLOCK_INDEXES.FUNCTION_TYPE.RETS] = new_tuple(ps, i, rets_typelist, true)
+     rets_typelist[2] = new_block(ps, i, "...")
+     typ[BLOCK_INDEXES.FUNCTION_TYPE.RETS] = new_tuple(ps, i, rets_typelist)
   end
 
    if typeargs then
@@ -921,7 +915,7 @@ read_type_list = function(ps: ReadState, i: integer, mode: BlockTypeListMode): i
       i = i + 1
       local nrets = #list
       if nrets > 0 then
-         table.insert(t, new_block(ps, i - 1, "..."))
+         table.insert(list, new_block(ps, i - 1, "..."))
       else
          fail(ps, i, "unexpected '...'")
       end
@@ -1654,16 +1648,14 @@ local function read_argument_type(ps: ReadState, i: integer): integer, Block, in
    end
 
    local t = new_type(ps, i, "argument_type")
-   local idx = 1
    if argument_name then
       local name_block = new_block(ps, i, "identifier")
       name_block.tk = argument_name
-      t[idx] = name_block
-      idx = idx + 1
+      t[BLOCK_INDEXES.ARGUMENT_TYPE.NAME] = name_block
    end
-   t[idx] = typ
-   if is_va then t[idx + 1] = new_block(ps, i, "...") end
-   if opt > 0 then t[#t + 1] = new_block(ps, opt, "question") end
+   t[BLOCK_INDEXES.ARGUMENT_TYPE.TYPE] = typ
+   if is_va then t[BLOCK_INDEXES.ARGUMENT_TYPE.VARARG] = new_block(ps, i, "...") end
+   if opt > 0 then t[BLOCK_INDEXES.ARGUMENT_TYPE.OPTIONAL] = new_block(ps, opt, "question") end
 
    return i, t, 0
 end

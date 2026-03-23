@@ -309,6 +309,9 @@ local BLOCK_INDEXES <const> = {
    },
    ARGUMENT_TYPE = {
       NAME = 1,
+      TYPE = 2,
+      VARARG = 3,
+      OPTIONAL = 4,
    },
    TYPEARG = {
       NAME = 1,

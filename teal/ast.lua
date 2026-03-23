@@ -2195,141 +2195,59 @@ parse_type_list = function(state, block, mode)
       return t, maybe_method, min_arity
    end
 
-   if block.kind ~= "tuple_type" then
+   assert(block.kind == "tuple_type")
+   local type_list_block = block[1]
+   assert(type_list_block.kind == "type_list")
+   assert(not block[2])
 
+   for idx, item in ipairs(type_list_block) do
+      if item.kind == "argument_type" then
+         local arg_name = item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.NAME]
+         local arg_type = item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.TYPE]
+         local arg_va = item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.VARARG]
+         local arg_opt = item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.OPTIONAL]
 
-      if block.kind == "type_list" then
-         for _, tb in ipairs(block) do
-            local ty = parse_type(state, tb)
-            if ty then
-               table.insert(list, ty)
-            end
+         if arg_name and arg_name.kind == "identifier" and arg_name.tk == "self" and #list == 0 then
+            maybe_method = true
          end
-         return t, maybe_method, min_arity
-      end
 
-
-      local single_type = parse_type(state, block)
-      if single_type then
-         table.insert(list, single_type)
-      end
-      return t, maybe_method, min_arity
-   end
-
-
-
-
-
-   local type_container_block = block[1]
-   local is_va_from_block = false
-
-   if type_container_block and type_container_block.kind == "..." then
-      t.is_va = true
-      is_va_from_block = true
-      type_container_block = block[2]
-   end
-
-   if type_container_block and type_container_block.kind == "type_list" then
-      for idx, type_block_item in ipairs(type_container_block) do
-         if type_block_item.kind == "argument_type" then
-            local arg_idx = 1
-            if type_block_item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.NAME] and type_block_item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.NAME].kind == "identifier" then
-               if arg_idx == 1 and type_block_item[reader.BLOCK_INDEXES.ARGUMENT_TYPE.NAME].tk == "self" and #list == 0 then
-                  maybe_method = true
-               end
-               arg_idx = 2
-            end
-
-            local is_va = false
-            local is_optional = false
-
-            while type_block_item[arg_idx] and type_block_item[arg_idx].kind == "question" do
-               is_optional = true
-               arg_idx = arg_idx + 1
-            end
-
-            if type_block_item[arg_idx] and type_block_item[arg_idx].kind == "..." then
-               is_va = true
-               arg_idx = arg_idx + 1
-            end
-
-            local arg_type_node = parse_type(state, type_block_item[arg_idx])
-            if arg_type_node then
-               table.insert(list, arg_type_node)
-               for j = arg_idx + 1, #type_block_item do
-                  local child = type_block_item[j]
-                  if child.kind == "..." then
-                     is_va = true
-                  elseif child.kind == "question" then
-                     is_optional = true
-                  end
-               end
-            else
-               fail(state, type_block_item, "invalid type in list")
-            end
-
-            if is_va and idx < #type_container_block then
-               local msg = "'...' can only be last in a type list"
-               if mode == "decltuple" then
-                  msg = "'...' can only be last argument"
-               end
-               fail(state, type_block_item, msg)
-            end
-
-            if is_va then
-               t.is_va = true
-            end
-            if not is_optional and not is_va then
-               min_arity = min_arity + 1
-            end
-         elseif type_block_item.kind == "..." then
-            if idx == #type_container_block then
-               t.is_va = true
-            else
-               local msg = "'...' can only be last in a type list"
-               if mode == "decltuple" then
-                  msg = "'...' can only be last argument"
-               end
-               fail(state, type_block_item, msg)
-            end
+         local typ = parse_type(state, arg_type)
+         if typ then
+            table.insert(list, typ)
          else
-            local parsed_type = parse_type(state, type_block_item)
-            if parsed_type then
-               table.insert(list, parsed_type)
-            else
-               fail(state, type_block_item, "invalid type in list")
-            end
+            fail(state, item, "invalid type in list")
          end
-      end
-   elseif type_container_block then
-      local parsed_type = parse_type(state, type_container_block)
-      if parsed_type then
-         table.insert(list, parsed_type)
-      else
-         fail(state, type_container_block, "invalid type in tuple")
-      end
-   end
 
+         if arg_va and idx < #type_list_block then
+            local msg = "'...' can only be last in a type list"
+            if mode == "decltuple" then
+               msg = "'...' can only be last argument"
+            end
+            fail(state, item, msg)
+         end
 
-   if not is_va_from_block then
-
-      if block and block[2] and block[2].kind == "..." then
-         if #list > 0 then
+         if arg_va then
+            t.is_va = true
+         end
+         if not arg_opt and not arg_va then
+            min_arity = min_arity + 1
+         end
+      elseif item.kind == "..." then
+         if idx == #type_list_block then
             t.is_va = true
          else
-            fail(state, block[2], "unexpected '...'")
-         end
-      elseif #list > 0 then
-
-         local last_block_in_list = type_container_block and type_container_block[#type_container_block]
-         if last_block_in_list and last_block_in_list.kind == "..." then
-            if #list > 0 then
-               t.is_va = true
-
-               table.remove(list, #list)
-            else
-               fail(state, last_block_in_list, "unexpected '...'")
+            local msg = "'...' can only be last in a type list"
+            if mode == "decltuple" then
+               msg = "'...' can only be last argument"
             end
+            fail(state, item, msg)
+         end
+      else
+         local parsed_type = parse_type(state, item)
+         if parsed_type then
+            table.insert(list, parsed_type)
+         else
+            fail(state, item, "invalid type in list")
          end
       end
    end
