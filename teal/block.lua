@@ -137,9 +137,6 @@ local BLOCK_INDEXES = {
       KEY = 1,
       VALUE = 2,
    },
-   IF = {
-      BLOCKS = 1,
-   },
    IF_BLOCK = {
       COND = 1,
       BODY = 2,

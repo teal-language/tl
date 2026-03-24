@@ -667,12 +667,16 @@ local function parse_statements(state, block, toplevel)
       node.hashbang = block[1].tk
    end
 
+   local parsed_item
    for _, item_block in ipairs(block) do
       if item_block.kind == "comment" then
          table.insert(pending_comments, item_block)
+      elseif item_block.kind == ";" then
+         if #node > 0 then
+            node[#node].semicolon = true
+         end
       elseif item_block.kind ~= "hashbang" then
-
-         local parsed_item = parse_block(state, item_block)
+         parsed_item = parse_block(state, item_block)
          if parsed_item then
             if comment_node_kinds[item_block.kind] then
                local attached = extract_attached_comments(pending_comments, item_block)
@@ -689,12 +693,6 @@ local function parse_statements(state, block, toplevel)
                end
             end
 
-            for _, child in ipairs(item_block) do
-               if child.kind == ";" then
-                  parsed_item.semicolon = true
-                  break
-               end
-            end
 
             if parsed_item.kind == "statements" then
                for _, c in ipairs(parsed_item) do
@@ -1048,26 +1046,12 @@ parse_fns.assignment = function(state, block)
 end
 
 parse_fns["if"] = function(state, block)
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "if", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "if")
-   end
 
    node.if_blocks = {}
 
-
-
-
-
-
-   local if_blocks_container = block[reader.BLOCK_INDEXES.IF.BLOCKS]
-   if not if_blocks_container then
-      fail(state, block, "if statement missing condition blocks")
-      return node
-   end
-
-   for i, if_block_block in ipairs(if_blocks_container) do
+   for i, if_block_block in ipairs(block) do
       local if_block_node = new_node(state, if_block_block, "if_block")
       if not if_block_node then
          fail(state, if_block_block, "invalid if block")
@@ -1075,17 +1059,18 @@ parse_fns["if"] = function(state, block)
          if_block_node.if_parent = node
          if_block_node.if_block_n = i
 
-         if #if_block_block == 2 then
+         local cond = if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.COND]
+         local body = if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.BODY]
 
-            if_block_node.exp = parse_expression(state, if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.COND])
+         if cond then
+
+            if_block_node.exp = parse_expression(state, cond)
             if not if_block_node.exp then
-               fail(state, if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.COND], "invalid condition expression")
+               fail(state, cond, "invalid condition expression")
             end
-            if_block_node.body = parse_statements(state, if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.BODY])
-         else
-
-            if_block_node.body = parse_statements(state, if_block_block[reader.BLOCK_INDEXES.IF_BLOCK.BODY])
          end
+
+         if_block_node.body = parse_statements(state, body)
 
          if not if_block_node.body then
             fail(state, if_block_block, "invalid block body")
