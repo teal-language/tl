@@ -13761,8 +13761,7 @@ eval_macro_invocation = function(b, filename, env, errs, context)
    end
    local fn = env.macros[mname]
    if not fn then
-      local msg = mname:find("%.") and ("macro target '" .. mname .. "' must be a record-attached macro") or ("unknown macro '" .. mname .. "'")
-      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = msg })
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "unknown macro '" .. mname .. "'" })
       return b
    end
    local argv = {}
@@ -14832,7 +14831,7 @@ local function collect_record_paths_in_scope(container, prefix, out)
             var = child[BLOCK_INDEXES.GLOBAL_TYPE.VAR]
             val = child[BLOCK_INDEXES.GLOBAL_TYPE.VALUE]
          end
-         if var and var.kind == "identifier" and val then
+         if var and (var.kind == "identifier" or var.kind == "type_identifier") and val then
             local rec = extract_record_from_newtype(val)
             if rec then
                local path = prefix == "" and var.tk or (prefix .. "." .. var.tk)
@@ -14958,14 +14957,9 @@ local function collect_module_macro_exports(node, errs, filename)
                   x = owner.x,
                   msg = "macro owner '" .. owner_key .. "' must be a record",
                })
-            else
-               local exported_key
-               if return_path and (owner_key == return_path or starts_with(owner_key, return_path .. ".")) then
-                  local suffix_owner = owner_key == return_path and "" or owner_key:sub(#return_path + 2)
-                  exported_key = suffix_owner == "" and name.tk or (suffix_owner .. "." .. name.tk)
-               else
-                  exported_key = owner_key .. "." .. name.tk
-               end
+            elseif return_path and (owner_key == return_path or starts_with(owner_key, return_path .. ".")) then
+               local suffix_owner = owner_key == return_path and "" or owner_key:sub(#return_path + 2)
+               local exported_key = suffix_owner == "" and name.tk or (suffix_owner .. "." .. name.tk)
                local sig = build_macro_sig(stmt[BLOCK_INDEXES.LOCAL_MACRO.ARGS], errs, filename, exported_key)
                table.insert(exports, {
                   key = exported_key,

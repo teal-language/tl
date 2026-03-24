@@ -346,8 +346,7 @@ eval_macro_invocation = function(b: Block, filename: string, env: MacroEnv, errs
    end
    local fn = env.macros[mname]
    if not fn then
-      local msg = mname:find("%.") and ("macro target '" .. mname .. "' must be a record-attached macro") or ("unknown macro '" .. mname .. "'")
-      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = msg })
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "unknown macro '" .. mname .. "'" })
       return b
    end
    local argv: {Block} = {}

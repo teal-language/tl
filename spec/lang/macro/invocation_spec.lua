@@ -188,11 +188,12 @@ describe('record-attached macro imports', function()
       assert.same('local m = require("macs") print("hi"); print("hi")', out)
    end)
 
-   it('supports returned-root shorthand and non-returned owner paths together', function()
+   it('imports attached macros for nested records under the returned root', function()
       util.mock_io(finally, {
          ["macs.tl"] = [[
-            local record macros end
-            local record Helper end
+            local record macros
+               record Helper end
+            end
 
             macro macros.double!(x: Statement)
                return ```
@@ -201,7 +202,7 @@ describe('record-attached macro imports', function()
                ```
             end
 
-            macro Helper.side!(x: Statement)
+            macro macros.Helper.side!(x: Statement)
                return ```
                   print("SIDE")
                   $x
@@ -226,6 +227,40 @@ describe('record-attached macro imports', function()
       assert.match('print%("root"%)%; print%("root"%)', out)
       assert.match('print%("leaf"%)', out)
       assert.match('print%("SIDE"%)', out)
+   end)
+
+   it('does not import attached macros from non-returned top-level records', function()
+      util.mock_io(finally, {
+         ["macs.tl"] = [[
+            local record macros end
+            local record Helper end
+
+            macro Helper.side!(x: Statement)
+               return ```
+                  print("SIDE")
+                  $x
+               ```
+            end
+
+            return macros
+         ]],
+      })
+
+      local code = [[
+         local m = require("macs")
+         m.Helper.side!(print("leaf"))
+      ]]
+
+      local _, errs = tl.parse(code, "main.tl")
+      assert.truthy(#errs > 0)
+      local found = false
+      for _, e in ipairs(errs) do
+         if e.msg == "unknown macro 'm.Helper.side'" then
+            found = true
+            break
+         end
+      end
+      assert.is_true(found)
    end)
 
    it('rejects method-style invocation for attached macros', function()

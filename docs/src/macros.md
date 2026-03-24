@@ -43,11 +43,20 @@ Attached macros can be imported through regular `require` aliases:
 
 ```lua
 -- macros.tl
-local record macros end
+local record macros
+   record Helper end
+end
 
 macro macros.double!(x: Statement)
    return ```
       $x
+      $x
+   ```
+end
+
+macro macros.Helper.side!(x: Statement)
+   return ```
+      print("side")
       $x
    ```
 end
@@ -61,9 +70,11 @@ local m = require("macros")
 -- also supported: local type m = require("macros")
 
 m.double!(print("hi"))
+m.Helper.side!(print("there"))
 ```
 
-If a macro is attached to a non-root record, keep the owner path:
+If a macro is attached to a non-root record, that record must actually be
+nested under the returned record. Keep the owner path when invoking it:
 `m.Helper.side!()`.
 
 ## Invoking a macro
@@ -295,7 +306,7 @@ print(z) -- prints 14
 
 | Detail | Notes |
 | --- | --- |
-| Scope and import | `local macro` declarations are file-local. Record-attached macros (`macro Record.name!`) can be imported through `require` aliases. |
+| Scope and import | `local macro` declarations are file-local. Record-attached macros (`macro Record.name!`) can be imported through `require` aliases when their owner record is the returned record or nested under it. |
 | Compile-time only | Macros run before type checking, and their declarations produce no runtime code. |
 | Restricted environment | Macro bodies run in a sandbox with a limited standard library (no `require`, file I/O, or OS access beyond basic timing functions). |
 | Argument types are fixed | Every parameter must be annotated as `Statement` or `Expression` (varargs allowed). Other annotations are errors. |
