@@ -695,6 +695,7 @@ local function parse_statements(state: ParseState, block: Block, toplevel?: bool
                   break
                end
             end
+
             if parsed_item.kind == "statements" then
                for _, c in ipairs(parsed_item) do
                   table.insert(node, c)
@@ -991,11 +992,8 @@ local type ParseFn = function(state: ParseState, block: Block): Node
 local parse_fns: {string: ParseFn} = {}
 
 parse_fns.local_declaration = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "local_declaration", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "local_declaration")
-   end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.LOCAL_DECLARATION.VARS], false)
 
    if node.vars then
@@ -1030,11 +1028,8 @@ end
 parse_fns.global_declaration = parse_fns.local_declaration
 
 parse_fns.assignment = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "assignment", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "assignment")
-   end
    node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.ASSIGNMENT.VARS], true)
    if block[reader.BLOCK_INDEXES.ASSIGNMENT.EXPS] and block[reader.BLOCK_INDEXES.ASSIGNMENT.EXPS].kind == "expression_list" then
       node.exps = parse_expression_list(state, block[reader.BLOCK_INDEXES.ASSIGNMENT.EXPS])
@@ -1137,17 +1132,8 @@ parse_fns["while"] = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.fornum = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "fornum", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "fornum")
-   end
-
-   -- [1] = variable (loop variable)
-   -- [2] = from expression
-   -- [3] = to expression
-   -- [4] = step expression (optional)
-   -- [5] = body statements
 
    node.var = new_node(state, block[reader.BLOCK_INDEXES.FORNUM.VAR], "identifier")
 
@@ -1157,6 +1143,7 @@ parse_fns.fornum = function(state: ParseState, block: Block): Node
    if block[reader.BLOCK_INDEXES.FORNUM.STEP] then
       node.step = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.STEP])
    end
+
    node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.BODY])
 
    return node
@@ -1230,11 +1217,8 @@ parse_fns["goto"] = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.label = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "label", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "label")
-   end
    if block[reader.BLOCK_INDEXES.LABEL.NAME] then
       node.label = block[reader.BLOCK_INDEXES.LABEL.NAME].tk
    end
@@ -1242,11 +1226,8 @@ parse_fns.label = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.local_function = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block, "local_function")
-   if not node then
-      local dummy_block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "local_function")
-   end
 
    if not block[reader.BLOCK_INDEXES.LOCAL_FUNCTION.NAME] then
       fail(state, block, "local function missing name")
@@ -1284,20 +1265,18 @@ parse_fns.local_function = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.local_macro = function(state: ParseState, block: Block): Node
+   assert(block)
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME] then
       fail(state, block, "local macro missing name")
-      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      return new_node(state, dummy_block, "local_function")
+      return
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.ARGS] then
       fail(state, block, "local macro missing argument list")
-      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      return new_node(state, dummy_block, "local_function")
+      return
    end
    if not block[reader.BLOCK_INDEXES.LOCAL_MACRO.BODY] then
       fail(state, block, "local macro missing body")
-      local dummy_block: Block = { kind = "local_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      return new_node(state, dummy_block, "local_function")
+      return
    end
 
    local name_node = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACRO.NAME], "identifier")
@@ -1416,8 +1395,10 @@ function block_to_constructor(state: ParseState, block: Block): Node
 end
 
 parse_fns.macro_var = function(state: ParseState, block: Block): Node
+   assert(block)
    if not state.in_macro_quote then
       fail(state, block, "macro variables can only appear in macro quotes")
+      return
    end
    local node = new_node(state, block, "macro_var")
    if block[reader.BLOCK_INDEXES.MACRO_VAR.NAME] then
@@ -1427,11 +1408,8 @@ parse_fns.macro_var = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.global_function = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block, "global_function")
-   if not node then
-      local dummy_block = { kind = "global_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "global_function")
-   end
 
    if not block[reader.BLOCK_INDEXES.GLOBAL_FUNCTION.NAME] then
       fail(state, block, "global function missing name")
@@ -1469,14 +1447,8 @@ parse_fns.global_function = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.record_function = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block, "record_function")
-   if node then
-      node.tk = "function"
-   end
-   if not node then
-      local dummy_block = { kind = "record_function", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "record_function")
-   end
    if node then
       node.tk = "function"
    end
@@ -1564,11 +1536,9 @@ parse_fns.record_function = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.pragma = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "pragma", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "pragma")
-   end
+
    if block[reader.BLOCK_INDEXES.PRAGMA.KEY] then
       node.pkey = block[reader.BLOCK_INDEXES.PRAGMA.KEY].tk
    end
@@ -1579,11 +1549,9 @@ parse_fns.pragma = function(state: ParseState, block: Block): Node
 end
 
 parse_fns.local_type = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "local_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "local_type")
-   end
+
    if block[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] then
       node.var = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR])
    end
@@ -1604,11 +1572,9 @@ parse_fns.local_type = function(state: ParseState, block: Block): Node
    return node
 end
 parse_fns.global_type = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "global_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "global_type")
-   end
+
    if block[reader.BLOCK_INDEXES.GLOBAL_TYPE.VAR] then
       node.var = new_node(state, block[reader.BLOCK_INDEXES.GLOBAL_TYPE.VAR])
    end
@@ -1629,19 +1595,12 @@ parse_fns.global_type = function(state: ParseState, block: Block): Node
    return node
 end
 parse_fns.interface = function(state: ParseState, block: Block): Node
-   local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "interface")
-   end
-   return node
+   assert(block)
+   return new_node(state, block)
 end
 parse_fns.local_macroexp = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block, "local_macroexp")
-   if not node then
-      local dummy_block = { kind = "local_macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "local_macroexp")
-   end
 
    if block[reader.BLOCK_INDEXES.LOCAL_MACROEXP.NAME] then
       node.name = new_node(state, block[reader.BLOCK_INDEXES.LOCAL_MACROEXP.NAME], "identifier")
@@ -1654,11 +1613,8 @@ parse_fns.local_macroexp = function(state: ParseState, block: Block): Node
    return node
 end
 parse_fns.macroexp = function(state: ParseState, block: Block): Node
+   assert(block)
    local node = new_node(state, block, "macroexp")
-   if not node then
-      local dummy_block = { kind = "macroexp", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "macroexp")
-   end
 
    local idx = 1
    if block[idx] and block[idx].kind == "type_list" then
