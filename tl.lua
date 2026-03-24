@@ -357,7 +357,6 @@ local lexer = require("teal.lexer")
 
 
 
-
 local parse_type
 local parse_type_list
 local parse_typeargs_if_any
@@ -497,8 +496,7 @@ local parse_typeargs_if_any
 
 
 
-local parser = {}
-
+local ast = {}
 
 
 
@@ -615,7 +613,7 @@ local node_mt = {
    end,
 }
 
-function parser.lang_heuristic(filename, input)
+function ast.lang_heuristic(filename, input)
    if filename then
       local pattern = "(.*)%.([a-z]+)$"
       local _, extension = filename:match(pattern)
@@ -747,14 +745,10 @@ local function parse_variable_list(state, block, as_expression)
    end
    for _, var_block in ipairs(block) do
       local var_node
-      if not as_expression and (var_block.kind == "identifier" or var_block.kind == "variable") then
-         local ident_block = var_block
-         if var_block.kind == "variable" then
-            ident_block = { y = var_block.y, x = var_block.x, tk = var_block.tk, kind = "identifier" }
-         end
-         var_node = new_node(state, ident_block)
-         if ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
-            local annotation = ident_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
+      if not as_expression and var_block.kind == "identifier" then
+         var_node = new_node(state, var_block)
+         if var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION] then
+            local annotation = var_block[reader.BLOCK_INDEXES.VARIABLE.ANNOTATION]
             if is_attribute[annotation.tk] and var_node then
                var_node.attribute = annotation.tk
             end
@@ -791,7 +785,7 @@ local function parse_argument_list(state, block)
       if not arg_node then
          fail(state, arg_block, "invalid argument")
       else
-         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local type_block = arg_block[reader.BLOCK_INDEXES.ARGUMENT.TYPE]
          if type(type_block) == "table" and type_block.kind then
             arg_node.argtype = parse_type(state, type_block)
          end
@@ -981,19 +975,6 @@ local function parse_statements(state, block, toplevel)
    return node
 end
 
-local function parse_forin(state, block)
-   local node = new_node(state, block, "forin")
-   node.vars = parse_variable_list(state, block[reader.BLOCK_INDEXES.FORIN.VARS], false)
-   node.exps = parse_expression_list(state, block[reader.BLOCK_INDEXES.FORIN.EXPS])
-   if #node.exps < 1 then
-      fail(state, block[reader.BLOCK_INDEXES.FORIN.EXPS], "missing iterator expression in generic for")
-   elseif #node.exps > 3 then
-      fail(state, block[reader.BLOCK_INDEXES.FORIN.EXPS], "too many expressions in generic for")
-   end
-   node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORIN.BODY])
-   return node
-end
-
 local function node_is_require_call(n)
    if n.kind == "op" and n.op.op == "." then
 
@@ -1001,10 +982,10 @@ local function node_is_require_call(n)
    elseif n.kind == "op" and n.op.op == "@funcall" and
       n.e1.kind == "variable" and n.e1.tk == "require" and
       n.e2.kind == "expression_list" and #n.e2 == 1 and
-      n.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
+      n.e2[1].kind == "string" then
 
 
-      return n.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST].conststr
+      return n.e2[1].conststr
    end
    return nil
 end
@@ -1039,8 +1020,8 @@ parse_expression = function(state, block)
             local r = node_is_require_call(node)
             if not r and node.kind == "op" and node.op and node.e1.kind == "variable" and node.e1.tk == "pcall" then
                if node.e2 and #node.e2 == 2 then
-                  local arg1 = node.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-                  local arg2 = node.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.SECOND]
+                  local arg1 = node.e2[1]
+                  local arg2 = node.e2[2]
                   if arg1.kind == "variable" and arg1.tk == "require" and arg2.kind == "string" and arg2.conststr then
                      r = arg2.conststr
                   end
@@ -1099,7 +1080,7 @@ parse_expression = function(state, block)
       node.constnum = block_number_value(block)
    elseif kind == "boolean" then
       node.kind = kind
-   elseif kind == "identifier" or kind == "variable" then
+   elseif kind == "identifier" then
       node.kind = "variable"
    elseif kind == "macro_var" then
       if not state.in_macro_quote then
@@ -1161,12 +1142,6 @@ parse_expression = function(state, block)
          return new_node(state, block, "literal_table")
       end
       local inner = block[reader.BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
-
-
-
-
-
-
       local res = block_to_constructor(state, inner)
       state.in_macro_quote = false
       return res
@@ -1302,7 +1277,7 @@ parse_fns.local_declaration = function(state, block)
       next_child = reader.BLOCK_INDEXES.LOCAL_DECLARATION.EXPS
    else
       local dummy_block = { kind = "tuple_type", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      dummy_block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST] = { kind = "typelist", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
+      dummy_block[1] = { kind = "type_list", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
       local dt
       dt = parse_type_list(state, dummy_block, "decltuple")
       node.decltuple = dt
@@ -1441,19 +1416,15 @@ parse_fns.fornum = function(state, block)
    node.from = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.FROM])
    node.to = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.TO])
 
-   if block[reader.BLOCK_INDEXES.FORNUM.BODY] then
-
+   if block[reader.BLOCK_INDEXES.FORNUM.STEP] then
       node.step = parse_expression(state, block[reader.BLOCK_INDEXES.FORNUM.STEP])
-      node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.BODY])
-   else
-
-      node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.STEP])
    end
+   node.body = parse_statements(state, block[reader.BLOCK_INDEXES.FORNUM.BODY])
 
    return node
 end
 
-parse_fns.forin = function(state, block)
+parse_fns["forin"] = function(state, block)
    local node = new_node(state, block, "forin")
    if not node then
       local dummy_block = { kind = "forin", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
@@ -1630,8 +1601,8 @@ function block_to_constructor(state, block)
       call.e1 = new_node(state, block, "variable")
       call.e1.tk = "clone"
       call.e2 = new_node(state, block, "expression_list")
-      call.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST] = new_node(state, block[reader.BLOCK_INDEXES.MACRO_VAR.NAME], "variable")
-      call.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk = block[reader.BLOCK_INDEXES.MACRO_VAR.NAME] and block[reader.BLOCK_INDEXES.MACRO_VAR.NAME].tk or ""
+      call.e2[1] = new_node(state, block[reader.BLOCK_INDEXES.MACRO_VAR.NAME], "variable")
+      call.e2[1].tk = block[reader.BLOCK_INDEXES.MACRO_VAR.NAME] and block[reader.BLOCK_INDEXES.MACRO_VAR.NAME].tk or ""
       return call
    end
 
@@ -1952,7 +1923,7 @@ parse_fns.macroexp = function(state, block)
    end
 
    local idx = 1
-   if block[idx] and block[idx].kind == "typelist" then
+   if block[idx] and block[idx].kind == "type_list" then
       node.typeargs = parse_typeargs_if_any(state, block[idx])
       idx = idx + 1
    end
@@ -1973,16 +1944,7 @@ parse_block = function(state, block)
    if not block then return nil end
 
    local kind = block.kind
-   if kind == "forin" then
-      return parse_forin(state, block)
-   elseif kind == "interface" then
-      local node = new_node(state, block, "interface")
-      if not node then
-         local dummy_block = { kind = "interface", y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-         node = new_node(state, dummy_block, "interface")
-      end
-      return node
-   elseif kind == "statements" then
+   if kind == "statements" then
       return parse_statements(state, block)
    end
    local f = parse_fns[block.kind]
@@ -1993,7 +1955,7 @@ parse_block = function(state, block)
    end
 end
 
-function parser.parse_blocks(input, filename, parse_lang)
+function ast.parse_blocks(input, filename, parse_lang)
    filename = filename or "input"
    if not input then
       return nil, { { filename = filename, y = 1, x = 1, msg = "input is nil" } }, {}
@@ -2016,18 +1978,12 @@ function parser.parse_blocks(input, filename, parse_lang)
    return nodes, state.errs, state.required_modules
 end
 
-function parser.parse(input, filename, parse_lang)
-   return parser.parse_blocks(input, filename, parse_lang)
+function ast.parse(input, filename, parse_lang)
+   return ast.parse_blocks(input, filename, parse_lang)
 end
 
-function parser.parse_program_block(input, filename, parse_lang)
-   return parser.parse_blocks(input, filename, parse_lang)
-end
-
-
-function parser.parse_program(_tokens, errs, _filename, _parse_lang)
-   errors.clear_redundant_errors(errs or {})
-   return nil, {}
+function ast.parse_program_block(input, filename, parse_lang)
+   return ast.parse_blocks(input, filename, parse_lang)
 end
 
 local function new_generic(state, block, typeargs, typ)
@@ -2059,7 +2015,7 @@ local parse_record_like_type
 local parse_where_clause
 
 parse_typeargs_if_any = function(state, block)
-   if not block or block.kind ~= "typelist" then
+   if not block or block.kind ~= "type_list" then
       return nil
    end
 
@@ -2121,11 +2077,11 @@ parse_where_clause = function(state, block, def)
    local node = new_node(state, block, "macroexp")
    node.is_method = true
    node.args = new_node(state, block[reader.BLOCK_INDEXES.MACROEXP.ARGS] or block, "argument_list")
-   node.args[reader.BLOCK_INDEXES.ARGUMENT_LIST.FIRST] = new_node(state, block[reader.BLOCK_INDEXES.MACROEXP.ARGS] and block[reader.BLOCK_INDEXES.MACROEXP.ARGS][reader.BLOCK_INDEXES.ARGUMENT_LIST.FIRST] or block, "argument")
-   node.args[reader.BLOCK_INDEXES.ARGUMENT_LIST.FIRST].tk = "self"
+   node.args[1] = new_node(state, block[reader.BLOCK_INDEXES.MACROEXP.ARGS] and block[reader.BLOCK_INDEXES.MACROEXP.ARGS][1] or block, "argument")
+   node.args[1].tk = "self"
    local selftype = new_type(state, block, "self")
    selftype.display_type = def
-   node.args[reader.BLOCK_INDEXES.ARGUMENT_LIST.FIRST].argtype = selftype
+   node.args[1].argtype = selftype
    node.min_arity = 1
    local ret_tuple = new_tuple(state, block, { new_type(state, block, "boolean") })
    node.rets = ret_tuple
@@ -2241,7 +2197,7 @@ parse_record_like_type = function(state, block, typename)
          local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
          decl.elements = atype.elements
          decl.interface_list = { atype }
-      elseif block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "typelist" then
+      elseif block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE].kind == "type_list" then
          local atype = parse_base_type(state, block[reader.BLOCK_INDEXES.RECORD.ARRAY_TYPE])
          decl.types = atype.types
          decl.interface_list = { atype }
@@ -2375,7 +2331,7 @@ parse_simple_type_or_nominal = function(state, block)
       end
 
 
-      if block[current_block_idx] and block[current_block_idx].kind == "typelist" then
+      if block[current_block_idx] and block[current_block_idx].kind == "type_list" then
          typ.typevals = {}
          for _, tv_block in ipairs(block[current_block_idx]) do
             local parsed_tv = parse_type(state, tv_block)
@@ -2427,7 +2383,7 @@ parse_base_type = function(state, block)
       decl.values = parse_type(state, block[reader.BLOCK_INDEXES.MAP_TYPE.VALUES])
       end_at(decl, block)
       return decl
-   elseif block.kind == "typelist" and block.tk == "{" then
+   elseif block.kind == "type_list" and block.tk == "{" then
       local decl = new_type(state, block, "tupletable")
       decl.types = {}
       for _, t in ipairs(block) do
@@ -2473,7 +2429,7 @@ parse_type = function(state, block)
       return u
    end
 
-   if block.kind == "typelist" and block.tk == "{" then
+   if block.kind == "type_list" and block.tk == "{" then
       return parse_base_type(state, block)
    end
 
@@ -2487,18 +2443,19 @@ parse_type = function(state, block)
 end
 
 parse_type_list = function(state, block, mode)
-   local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "typelist" })
+   local t, list = new_tuple(state, block or { y = 1, x = 1, tk = "", kind = "type_list" })
    local maybe_method = false
    local min_arity = 0
 
-   if not block or block.kind ~= "tuple_type" then
 
-      if not block then
-         return t, maybe_method, min_arity
-      end
+   if not block then
+      return t, maybe_method, min_arity
+   end
+
+   if block.kind ~= "tuple_type" then
 
 
-      if block.kind == "typelist" then
+      if block.kind == "type_list" then
          for _, tb in ipairs(block) do
             local ty = parse_type(state, tb)
             if ty then
@@ -2517,16 +2474,19 @@ parse_type_list = function(state, block, mode)
    end
 
 
-   local type_container_block = block[reader.BLOCK_INDEXES.TUPLE_TYPE.FIRST]
+
+
+
+   local type_container_block = block[1]
    local is_va_from_block = false
 
    if type_container_block and type_container_block.kind == "..." then
       t.is_va = true
       is_va_from_block = true
-      type_container_block = block[reader.BLOCK_INDEXES.TUPLE_TYPE.SECOND]
+      type_container_block = block[2]
    end
 
-   if type_container_block and type_container_block.kind == "typelist" then
+   if type_container_block and type_container_block.kind == "type_list" then
       for idx, type_block_item in ipairs(type_container_block) do
          if type_block_item.kind == "argument_type" then
             local arg_idx = 1
@@ -2610,11 +2570,11 @@ parse_type_list = function(state, block, mode)
 
    if not is_va_from_block then
 
-      if block and block[reader.BLOCK_INDEXES.TUPLE_TYPE.SECOND] and block[reader.BLOCK_INDEXES.TUPLE_TYPE.SECOND].kind == "..." then
+      if block and block[2] and block[2].kind == "..." then
          if #list > 0 then
             t.is_va = true
          else
-            fail(state, block[reader.BLOCK_INDEXES.TUPLE_TYPE.SECOND], "unexpected '...'")
+            fail(state, block[2], "unexpected '...'")
          end
       elseif #list > 0 then
 
@@ -2634,45 +2594,45 @@ parse_type_list = function(state, block, mode)
    return t, maybe_method, min_arity
 end
 
-function parser.parse_type(state, block)
+function ast.parse_type(state, block)
    return parse_type(state, block)
 end
 
-function parser.parse_type_list(state, block, mode)
+function ast.parse_type_list(state, block, mode)
    return parse_type_list(state, block, mode)
 end
 
-function parser.operator(node, arity, op)
+function ast.operator(node, arity, op)
    return { y = node.y, x = node.x, arity = arity, op = op, prec = precedences[arity][op] }
 end
 
-function parser.node_is_funcall(node)
+function ast.node_is_funcall(node)
    return node.kind == "op" and node.op.op == "@funcall"
 end
 
-function parser.node_is_require_call(n)
+function ast.node_is_require_call(n)
    if n.kind == "op" and n.op.op == "." then
 
-      return parser.node_is_require_call(n.e1)
+      return ast.node_is_require_call(n.e1)
    elseif n.kind == "op" and n.op.op == "@funcall" and
       n.e1.kind == "variable" and n.e1.tk == "require" and
       n.e2.kind == "expression_list" and #n.e2 == 1 and
-      n.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
+      n.e2[1].kind == "string" then
 
 
-      return n.e2[reader.BLOCK_INDEXES.EXPRESSION_LIST.FIRST].conststr
+      return n.e2[1].conststr
    end
    return nil
 end
 
-function parser.node_at(w, n)
+function ast.node_at(w, n)
    n.f = assert(w.f)
    n.x = w.x
    n.y = w.y
    return n
 end
 
-return parser
+return ast
 
 end
 
@@ -2682,7 +2642,6 @@ local errors = require("teal.errors")
 
 
 local block = { Block = { ExpectedContext = {} } }
-
 
 
 
@@ -2891,6 +2850,8 @@ local BLOCK_INDEXES = {
       ARGS = 3,
       RETS = 4,
       BODY = 5,
+      OWNER = 6,
+      IMPORT_ALIAS = 7,
    },
    LOCAL_MACROEXP = {
       NAME = 1,
@@ -2922,17 +2883,7 @@ local BLOCK_INDEXES = {
       ANNOTATION = 1,
    },
    ARGUMENT = {
-      ANNOTATION = 1,
-   },
-   ARGUMENT_LIST = {
-      FIRST = 1,
-   },
-   VARIABLE_LIST = {
-      FIRST = 1,
-   },
-   EXPRESSION_LIST = {
-      FIRST = 1,
-      SECOND = 2,
+      TYPE = 1,
    },
    LITERAL_TABLE_ITEM = {
       KEY = 1,
@@ -3001,9 +2952,6 @@ local BLOCK_INDEXES = {
    ARGUMENT_TYPE = {
       NAME = 1,
    },
-   TYPEARGS = {
-      FIRST = 1,
-   },
    TYPEARG = {
       NAME = 1,
       CONSTRAINT = 2,
@@ -3015,25 +2963,12 @@ local BLOCK_INDEXES = {
    NOMINAL_TYPE = {
       NAME = 1,
    },
-   UNION_TYPE = {
-      FIRST = 1,
-   },
-   TUPLE_TYPE = {
-      FIRST = 1,
-      SECOND = 2,
-   },
    ARRAY_TYPE = {
       ELEMENT = 1,
    },
    MAP_TYPE = {
       KEYS = 1,
       VALUES = 2,
-   },
-   TYPELIST = {
-      FIRST = 1,
-   },
-   INTERFACE_LIST = {
-      FIRST = 1,
    },
 }
 
@@ -3061,7 +2996,6 @@ local BLOCK_KINDS = {
    ["newtype"] = true,
    ["argument"] = true,
    ["type_identifier"] = true,
-   ["variable"] = true,
    ["variable_list"] = true,
    ["statements"] = true,
    ["assignment"] = true,
@@ -3125,7 +3059,7 @@ local BLOCK_KINDS = {
    ["op_colon"] = true,
 
    ["typeargs"] = true,
-   ["typelist"] = true,
+   ["type_list"] = true,
    ["generic_type"] = true,
    ["typedecl"] = true,
    ["tuple_type"] = true,
@@ -4924,6 +4858,7 @@ do
 
             self.errs:add(t, string.format("inherits incompatible array %s and tuple %s", array_type_str, tuple_type_str))
          else
+
             self.errs:add_warning("inheritance", t, "inherits overlapping array %s and tuple %s", array_type_str, tuple_type_str)
          end
       end
@@ -13511,15 +13446,25 @@ local macro_eval = {}
 
 
 
-local function numeric_child_keys(b)
-   local keys = {}
-   for k, child in pairs(b) do
-      if math.type(k) == "integer" and child then
-         table.insert(keys, k)
+
+
+
+
+
+local function children_iter(b, at)
+   while true do
+      at = at + 1
+      local val = b[at]
+      if val then
+         return at, val
+      elseif at > 5 then
+         return
       end
    end
-   table.sort(keys)
-   return keys
+end
+
+local function children(b)
+   return children_iter, b, 0
 end
 
 local function clone_value(v)
@@ -13533,11 +13478,8 @@ local function clone_value(v)
       xend = v.xend,
       is_longstring = v.is_longstring,
    }
-   for _, idx in ipairs(numeric_child_keys(v)) do
-      local child = v[idx]
-      if child then
-         out[idx] = clone_value(child)
-      end
+   for idx, child in children(v) do
+      out[idx] = clone_value(child)
    end
    return out
 end
@@ -13557,18 +13499,87 @@ local function reanchor_block_positions(b, where_y, where_x, seen_blocks)
       b.xend = where_x
    end
 
-   for _, idx in ipairs(numeric_child_keys(b)) do
-      local child = b[idx]
-      if child then
-         reanchor_block_positions(child, where_y, where_x, seen_blocks)
+   for idx, child in children(b) do
+      reanchor_block_positions(child, where_y, where_x, seen_blocks)
+   end
+end
+
+local function unquote(str)
+   local f = str:sub(1, 1)
+   if f == '"' or f == "'" then
+      return str:sub(2, -2)
+   end
+   f = str:match("^%[=*%[")
+   if not f then
+      return str
+   end
+   local l = #f + 1
+   return str:sub(l, -l)
+end
+
+local function path_block_to_string(node)
+   if not node then
+      return nil
+   end
+   if node.kind == "identifier" then
+      return node.tk
+   elseif node.kind == "op_dot" then
+      local lhs = path_block_to_string(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk
       end
    end
+   return nil
+end
+
+local function macro_target_key(node)
+   if not node then
+      return nil, false
+   end
+   if node.kind == "paren" then
+      return macro_target_key(node[BLOCK_INDEXES.PAREN.EXP])
+   end
+   if node.kind == "identifier" then
+      return node.tk, false
+   end
+   if node.kind == "op_dot" then
+      local lhs, has_colon = macro_target_key(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk, has_colon
+      end
+      return nil, has_colon
+   end
+   if node.kind == "op_colon" then
+      return nil, true
+   end
+   return nil, false
+end
+
+local function require_call_module_name(n)
+   if not n then
+      return nil
+   end
+   if n.kind == "op_dot" then
+      return require_call_module_name(n[BLOCK_INDEXES.OP.E1])
+   elseif n.kind == "op_funcall" and
+      n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].kind == "identifier" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
+      n[BLOCK_INDEXES.OP.E2] and n[BLOCK_INDEXES.OP.E2].kind == "expression_list" and #n[BLOCK_INDEXES.OP.E2] == 1 and
+      n[BLOCK_INDEXES.OP.E2][1] and
+      n[BLOCK_INDEXES.OP.E2][1].kind == "string" and
+      n[BLOCK_INDEXES.OP.E2][1].tk then
+
+      return unquote(n[BLOCK_INDEXES.OP.E2][1].tk)
+   end
+   return nil
 end
 
 function macro_eval.new_env(errs)
    local env = {
       macros = {},
       signatures = {},
+      imported_aliases = {},
       where = { f = "@macro", y = 1, x = 1 },
       sandbox = {
          block = function(_)
@@ -13661,6 +13672,12 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       return
    end
    local name = name_block.tk
+   local owner_key = path_block_to_string(mb[BLOCK_INDEXES.LOCAL_MACRO.OWNER])
+   local macro_key = owner_key and (owner_key .. "." .. name) or name
+   local import_alias = mb[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS]
+   if import_alias and import_alias.kind == "identifier" then
+      env.imported_aliases[import_alias.tk] = true
+   end
 
    local sig = { kinds = {}, vararg = "" }
    local args = mb[BLOCK_INDEXES.LOCAL_MACRO.ARGS]
@@ -13668,9 +13685,9 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       local idx = 1
       for _, ab in ipairs(args) do
          local expected
-         local annot = ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          if not annot then
-            table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. name .. "' argument missing type; expected 'Statement' or 'Expression'" })
+            table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. macro_key .. "' argument missing type; expected 'Statement' or 'Expression'" })
          else
             if annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
                local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
@@ -13679,10 +13696,10 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
                elseif tname == "Expression" then
                   expected = "expr"
                else
-                  table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. name .. "' argument type must be 'Statement' or 'Expression'" })
+                  table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. macro_key .. "' argument type must be 'Statement' or 'Expression'" })
                end
             else
-               table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. name .. "' argument type must be 'Statement' or 'Expression'" })
+               table.insert(errs, { filename = filename, y = annot.y, x = annot.x, msg = "macro '" .. macro_key .. "' argument type must be 'Statement' or 'Expression'" })
             end
          end
          if ab.tk == "..." then
@@ -13715,142 +13732,196 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
       return
    end
    if type(fn_raw) == "function" then
-      env.macros[name] = fn_raw
+      env.macros[macro_key] = fn_raw
    else
-      table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = "macro '" .. name .. "' did not compile to a function" })
+      table.insert(errs, { filename = filename, y = mb.y, x = mb.x, msg = "macro '" .. macro_key .. "' did not compile to a function" })
       return
    end
-   env.signatures[name] = sig
+   env.signatures[macro_key] = sig
 end
 
 local seen
 
-local function expand_in_node(b, filename, env, errs, context)
-   if not b then return b end
+local traverse_invoking_macros
+local eval_macro_invocation
+
+eval_macro_invocation = function(b, filename, env, errs, context)
+   local mexp = b
+   local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
+   local mname
+   local has_colon
+   mname, has_colon = macro_target_key(mname_block)
+   if has_colon then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "method-style macro invocation is not supported; use record.macro!()" })
+      return b
+   end
+   if not mname then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
+      return b
+   end
+   local fn = env.macros[mname]
+   if not fn then
+      local msg = mname:find("%.") and ("macro target '" .. mname .. "' must be a record-attached macro") or ("unknown macro '" .. mname .. "'")
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = msg })
+      return b
+   end
+   local argv = {}
+   local sig = env.signatures[mname]
+   local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+
+   if sig then
+      local provided = args and #args or 0
+      local required = #sig.kinds
+      local has_vararg = sig.vararg ~= ""
+      if provided < required or ((not has_vararg) and provided > required) then
+         table.insert(errs, {
+            filename = filename,
+            y = mname_block.y,
+            x = mname_block.x,
+            msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
+         })
+         return b
+      end
+   end
+   if args then
+      for i, ab in ipairs(args) do
+         if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
+            ab = ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
+         end
+         local expected
+         if sig then
+            expected = sig.kinds and sig.kinds[i] or (sig.vararg ~= "" and sig.vararg or nil)
+         end
+         if expected == "stmt" then
+            if not ab or ab.kind ~= "statements" then
+               table.insert(errs, { filename = filename, y = ab and ab.y or b.y, x = ab and ab.x or b.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be a Statement" })
+            end
+         elseif expected == "expr" then
+            if ab and ab.kind == "statements" then
+               if #ab == 1 and not is_statement_kind(ab[1].kind) then
+                  ab = ab[1]
+               else
+                  table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be an Expression" })
+               end
+            end
+         end
+         if ab then
+            table.insert(argv, ab)
+         end
+      end
+   end
+   local prev_where = env.where
+   local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
+   env.where = current_where
+   local function invoke_macro()
+      return fn(_tl_table_unpack(argv, 1, #argv))
+   end
+   local ok, res = pcall(invoke_macro)
+   env.where = prev_where
+   if not ok then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
+      return b
+   end
+   if not (res and res.kind) then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' did not return a Block" })
+      return b
+   end
+   local wy = current_where.y
+   local wx = current_where.x
+   reanchor_block_positions(res, wy, wx, setmetatable({}, { __mode = "k" }))
+   if context == "expr" and res.kind == "statements" then
+      if #res == 1 and not is_statement_kind(res[1].kind) then
+         return traverse_invoking_macros(res[1], filename, env, errs, "expr")
+      end
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
+      return b
+   end
+
+   return traverse_invoking_macros(res, filename, env, errs, context)
+end
+
+traverse_invoking_macros = function(b, filename, env, errs, context)
+
    if seen and seen[b] then return b end
    if seen then seen[b] = true end
    if b.kind == "macro_invocation" then
-      local mexp = b
-      local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
-      if not mname_block or (mname_block.kind ~= "variable" and mname_block.kind ~= "identifier") then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
-         return b
-      end
-      local mname = mname_block.tk
-      local fn = env.macros[mname]
-      if not fn then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "unknown macro '" .. mname .. "'" })
-         return b
-      end
-      local argv = {}
-      local sig = env.signatures[mname]
-      local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-
-      if sig then
-         local provided = args and #args or 0
-         local required = #sig.kinds
-         local has_vararg = sig.vararg ~= ""
-         if provided < required or ((not has_vararg) and provided > required) then
-            table.insert(errs, {
-               filename = filename,
-               y = mname_block.y,
-               x = mname_block.x,
-               msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
-            })
-            return b
-         end
-      end
-      if args then
-         for i, ab in ipairs(args) do
-            if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
-               ab = ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
-            end
-            local expected
-            if sig then
-               expected = sig.kinds and sig.kinds[i] or (sig.vararg ~= "" and sig.vararg or nil)
-            end
-            if expected == "stmt" then
-               if not ab or ab.kind ~= "statements" then
-                  table.insert(errs, { filename = filename, y = ab and ab.y or b.y, x = ab and ab.x or b.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be a Statement" })
-               end
-            elseif expected == "expr" then
-               if ab and ab.kind == "statements" then
-                  if #ab == 1 and not is_statement_kind(ab[1].kind) then
-                     ab = ab[1]
-                  else
-                     table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be an Expression" })
-                  end
-               end
-            end
-            if ab then
-               table.insert(argv, ab)
-            end
-         end
-      end
-      local prev_where = env.where
-      local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
-      env.where = current_where
-      local function invoke_macro()
-         return fn(_tl_table_unpack(argv, 1, #argv))
-      end
-      local ok, res = pcall(invoke_macro)
-      env.where = prev_where
-      if not ok then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
-         return b
-      end
-      if not (res and res.kind) then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' did not return a Block" })
-         return b
-      end
-      local wy = current_where.y
-      local wx = current_where.x
-      reanchor_block_positions(res, wy, wx, setmetatable({}, { __mode = "k" }))
-      if context == "expr" and res.kind == "statements" then
-         if #res == 1 and not is_statement_kind(res[1].kind) then
-            return expand_in_node(res[1], filename, env, errs, "expr")
-         end
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
-         return b
-      end
-
-      return expand_in_node(res, filename, env, errs, context)
+      return eval_macro_invocation(b, filename, env, errs, context)
    end
 
-   for _, i in ipairs(numeric_child_keys(b)) do
-      local child = b[i]
-      if child and child.kind == "statements" then
-         local expanded = child
-         local j = 1
-         while j <= #expanded do
-            local s = expanded[j]
-            if s then
-               if s.kind == "macro_invocation" then
-                  local repl = expand_in_node(s, filename, env, errs, "stmt")
-                  if repl and repl.kind == "statements" then
-                     table.remove(expanded, j)
-                     local rr = expand_in_node(repl, filename, env, errs, "stmt")
-                     for k = 1, #rr do
-                        table.insert(expanded, j + k - 1, rr[k])
-                     end
-                     j = j + #repl
-                  else
-                     expanded[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
-                     j = j + 1
-                  end
-               else
-                  expanded[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
-                  j = j + 1
-               end
-            else
-               j = j + 1
-            end
+   local patches
+   for i, child in children(b) do
+      local ret
+      if child.kind == "macro_invocation" then
+         ret = eval_macro_invocation(child, filename, env, errs, b.kind == "statements" and "stmt" or "expr")
+         if ret.kind == "statements" then
+            patches = patches or {}
+            patches[i] = ret
+         else
+            b[i] = ret
          end
       else
-         b[i] = expand_in_node(child, filename, env, errs, "expr")
+         traverse_invoking_macros(child, filename, env, errs, context)
       end
    end
+
+   if patches then
+      for i = #b, 1, -1 do
+         local patch = patches[i]
+         if patch then
+            table.remove(b, i)
+            for j = 1, #patch do
+               table.insert(b, i + j - 1, patch[j])
+            end
+         end
+      end
+   end
+
    return b
+end
+
+local function local_require_alias(stmt)
+   if not stmt or stmt.kind ~= "local_declaration" then
+      return nil
+   end
+   local vars = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+   local exps = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+   if not vars or not exps or #vars ~= 1 or #exps ~= 1 then
+      return nil
+   end
+   local v = vars[1]
+   if not v or v.kind ~= "identifier" then
+      return nil
+   end
+   local module_name = require_call_module_name(exps[1])
+   if not module_name then
+      return nil
+   end
+   return v.tk
+end
+
+local function block_uses_name(b, name, skip)
+   if not b or b == skip then
+      return false
+   end
+   if b.kind == "identifier" and b.tk == name then
+      return true
+   end
+   for _, child in children(b) do
+      if block_uses_name(child, name, skip) then
+         return true
+      end
+   end
+   return false
+end
+
+local function remove_macro_only_requires(node, imported_aliases)
+   for i = #node, 1, -1 do
+      local stmt = node[i]
+      local alias = local_require_alias(stmt)
+      if alias and imported_aliases[alias] and not block_uses_name(node, alias, stmt) then
+         table.remove(node, i)
+      end
+   end
 end
 
 function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
@@ -13868,28 +13939,8 @@ function macro_eval.compile_all_and_expand(node, filename, read_lang, errs)
       end
    end
 
-   local j = 1
-   while j <= #node do
-      local s = node[j]
-      if s.kind == "macro_invocation" then
-         local repl = expand_in_node(s, filename, env, errs, "stmt")
-         if repl and repl.kind == "statements" then
-            table.remove(node, j)
-            local rr = expand_in_node(repl, filename, env, errs, "stmt")
-            for k = 1, #rr do
-               table.insert(node, j + k - 1, rr[k])
-            end
-            j = j + #repl
-         else
-            node[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
-            j = j + 1
-         end
-      else
-         node[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
-         j = j + 1
-      end
-   end
-
+   node = traverse_invoking_macros(node, filename, env, errs, "stmt")
+   remove_macro_only_requires(node, env.imported_aliases)
    return node
 end
 
@@ -14294,9 +14345,7 @@ end
 
 -- module teal.reader from teal/reader.lua
 package.preload["teal.reader"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
-
-
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 local lexer = require("teal.lexer")
@@ -14336,6 +14385,21 @@ local BLOCK_INDEXES = block.BLOCK_INDEXES
 
 reader.BLOCK_INDEXES = BLOCK_INDEXES
 
+
+
+
+
+
+
+
+
+
+
+local module_macro_cache = {}
+local module_macro_missing = {}
+local module_macro_loading = {}
+local read_program_depth = 0
+
 local function lang_heuristic(filename, input)
    if filename then
       local pattern = "(.*)%.([a-z]+)$"
@@ -14352,38 +14416,6 @@ local function lang_heuristic(filename, input)
       return (input:match("^#![^\n]*lua[^\n]*\n")) and "lua" or "tl"
    end
    return "tl"
-end
-
-local function normalize_macro_tokens(tokens, errs)
-   local filtered = {}
-   for _, e in ipairs(errs or {}) do
-      local msg = e.msg or ""
-      if not (msg:find("invalid token '!'") or msg:find("invalid token '`'") or msg:find("invalid token '$'")) then
-         table.insert(filtered, e)
-      end
-   end
-
-   for _, t in ipairs(tokens) do
-      if t.kind == "$ERR$" then
-         if t.tk == "!" then
-            t.kind = "op"
-         elseif t.tk:sub(1, 1) == "`" then
-            t.kind = "op"
-         elseif t.tk == "$" then
-            t.kind = "identifier"
-         end
-      end
-   end
-   if errs then
-      for i = #errs, 1, -1 do
-         errs[i] = nil
-      end
-      for i = 1, #filtered do
-         errs[i] = filtered[i]
-      end
-      return errs
-   end
-   return filtered
 end
 
 local function is_macro_quote_token(t)
@@ -14417,12 +14449,12 @@ function reader.node_is_require_call(n)
    if n.kind == "op_dot" then
 
       return reader.node_is_require_call(n[BLOCK_INDEXES.OP.E1])
-   elseif n[BLOCK_INDEXES.OP.E1].kind == "variable" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
+   elseif n[BLOCK_INDEXES.OP.E1].kind == "identifier" and n[BLOCK_INDEXES.OP.E1].tk == "require" and
       n[BLOCK_INDEXES.OP.E2].kind == "expression_list" and #n[BLOCK_INDEXES.OP.E2] == 1 and
-      n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string" then
+      n[BLOCK_INDEXES.OP.E2][1].kind == "string" then
 
 
-      local arg_block = n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+      local arg_block = n[BLOCK_INDEXES.OP.E2][1]
       if arg_block.tk then
          local value = unquote(arg_block.tk)
          return value
@@ -14437,6 +14469,53 @@ function reader.node_is_funcall(node)
    end
    return node.kind == "op_funcall" or node.kind == "macro_invocation"
 end
+
+local function starts_with(str, prefix)
+   return str:sub(1, #prefix) == prefix
+end
+
+local function macro_target_key(node)
+   if not node then
+      return nil, false
+   end
+   if node.kind == "paren" then
+      return macro_target_key(node[BLOCK_INDEXES.PAREN.EXP])
+   end
+   if node.kind == "identifier" then
+      return node.tk, false
+   end
+   if node.kind == "op_dot" then
+      local lhs, has_colon = macro_target_key(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk, has_colon
+      end
+      return nil, has_colon
+   end
+   if node.kind == "op_colon" then
+      return nil, true
+   end
+   return nil, false
+end
+
+local function path_block_to_string(node)
+   if not node then
+      return nil
+   end
+   if node.kind == "identifier" then
+      return node.tk
+   elseif node.kind == "op_dot" then
+      local lhs = path_block_to_string(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk
+      end
+   end
+   return nil
+end
+
+
+
 
 
 
@@ -14544,6 +14623,68 @@ local function new_type(ps, i, typename)
    }, node_mt)
 end
 
+local function split_dotted_path(path)
+   local out = {}
+   for part in path:gmatch("[^%.]+") do
+      table.insert(out, part)
+   end
+   return out
+end
+
+local function build_path_block_from_parts(f, y, x, parts)
+   local function mk_ident(name)
+      return setmetatable({
+         f = f,
+         y = y,
+         x = x,
+         tk = name,
+         kind = "identifier",
+      }, node_mt)
+   end
+
+   local owner = mk_ident(parts[1])
+   for j = 2, #parts do
+      local dot = setmetatable({
+         f = f,
+         y = y,
+         x = x,
+         tk = ".",
+         kind = "op_dot",
+      }, node_mt)
+      dot[BLOCK_INDEXES.OP.E1] = owner
+      dot[BLOCK_INDEXES.OP.E2] = mk_ident(parts[j])
+      owner = dot
+   end
+   return owner
+end
+
+local function clone_block_deep(b)
+   if not b then
+      return nil
+   end
+   local copy = {
+      kind = b.kind,
+      f = b.f,
+      y = b.y,
+      x = b.x,
+      tk = b.tk,
+      yend = b.yend,
+      xend = b.xend,
+      is_longstring = b.is_longstring,
+   }
+   local child_indexes = {}
+   for k, child in pairs(b) do
+      if math.type(k) == "integer" and child then
+         table.insert(child_indexes, k)
+      end
+   end
+   table.sort(child_indexes)
+   for _, idx in ipairs(child_indexes) do
+      copy[idx] = clone_block_deep(b[idx])
+   end
+   return setmetatable(copy, node_mt)
+end
+
 local function make_comment_block(ps, c)
    local text = c.text
    local _, newlines = string.gsub(text, "\n", "")
@@ -14587,13 +14728,14 @@ end
 
 local function new_tuple(ps, i, typelist, is_va)
    local t = new_type(ps, i, "tuple_type")
+
    if is_va then
-      t[BLOCK_INDEXES.TUPLE_TYPE.FIRST] = new_block(ps, i, "...")
-      t[BLOCK_INDEXES.TUPLE_TYPE.SECOND] = typelist or new_block(ps, i, "typelist")
-      return t, t[BLOCK_INDEXES.TUPLE_TYPE.SECOND]
+      t[1] = new_block(ps, i, "...")
+      t[2] = typelist or new_block(ps, i, "type_list")
+      return t, t[2]
    else
-      t[BLOCK_INDEXES.TUPLE_TYPE.FIRST] = typelist or new_block(ps, i, "typelist")
-      return t, t[BLOCK_INDEXES.TUPLE_TYPE.FIRST]
+      t[1] = typelist or new_block(ps, i, "type_list")
+      return t, t[1]
    end
 end
 
@@ -14613,6 +14755,123 @@ local function verify_kind(ps, i, kind, node_kind)
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
+local function build_macro_sig(args, errs, filename, macro_name)
+   local sig = { kinds = {}, vararg = "" }
+   if not args then
+      return sig
+   end
+
+   local idx = 1
+   for _, ab in ipairs(args) do
+      local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.TYPE]
+      local ok = false
+      local mode
+      if annot and annot.kind == "nominal_type" and
+         annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and
+         annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
+
+         local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
+         if tname == "Statement" then
+            ok = true
+            mode = "stmt"
+         elseif tname == "Expression" then
+            ok = true
+            mode = "expr"
+         end
+      end
+      if not ok then
+         table.insert(errs, {
+            filename = filename,
+            y = (annot and annot.y) or ab.y,
+            x = (annot and annot.x) or ab.x,
+            msg = "macro '" .. macro_name .. "' argument type must be 'Statement' or 'Expression'",
+         })
+      else
+         if ab.tk == "..." then
+            sig.vararg = mode or "expr"
+         else
+            sig.kinds[idx] = mode or "expr"
+            idx = idx + 1
+         end
+      end
+   end
+
+   return sig
+end
+
+local function extract_record_from_newtype(nt)
+   if not nt or nt.kind ~= "newtype" then
+      return nil
+   end
+   local typedecl = nt[BLOCK_INDEXES.NEWTYPE.TYPEDECL]
+   if not typedecl or typedecl.kind ~= "typedecl" then
+      return nil
+   end
+   local typ = typedecl[BLOCK_INDEXES.TYPEDECL.TYPE]
+   if typ and typ.kind == "generic_type" then
+      typ = typ[BLOCK_INDEXES.GENERIC_TYPE.BASE]
+   end
+   if typ and (typ.kind) == "record" then
+      return typ
+   end
+   return nil
+end
+
+local function collect_record_paths_in_scope(container, prefix, out)
+   if not container then
+      return
+   end
+   for _, child in ipairs(container) do
+      if child and (child.kind == "local_type" or child.kind == "global_type") then
+         local var
+         local val
+         if child.kind == "local_type" then
+            var = child[BLOCK_INDEXES.LOCAL_TYPE.VAR]
+            val = child[BLOCK_INDEXES.LOCAL_TYPE.VALUE]
+         else
+            var = child[BLOCK_INDEXES.GLOBAL_TYPE.VAR]
+            val = child[BLOCK_INDEXES.GLOBAL_TYPE.VALUE]
+         end
+         if var and var.kind == "identifier" and val then
+            local rec = extract_record_from_newtype(val)
+            if rec then
+               local path = prefix == "" and var.tk or (prefix .. "." .. var.tk)
+               out[path] = true
+               collect_record_paths_in_scope(rec[BLOCK_INDEXES.RECORD.FIELDS], path, out)
+            end
+         end
+      end
+   end
+end
+
+local function collect_record_paths(node)
+   local out = {}
+   collect_record_paths_in_scope(node, "", out)
+   return out
+end
+
+local function validate_attached_macro_owners(node, errs, filename)
+   local records = collect_record_paths(node)
+   for _, child in ipairs(node) do
+      if child and
+         child.kind == "local_macro" and
+         child[BLOCK_INDEXES.LOCAL_MACRO.OWNER] and
+         not child[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] then
+
+         local owner_key = path_block_to_string(child[BLOCK_INDEXES.LOCAL_MACRO.OWNER])
+         if owner_key and not records[owner_key] then
+            local owner = child[BLOCK_INDEXES.LOCAL_MACRO.OWNER]
+            table.insert(errs, {
+               filename = filename,
+               y = owner.y,
+               x = owner.x,
+               msg = "macro owner '" .. owner_key .. "' must be a record",
+            })
+         end
+      end
+   end
+end
+
 
 
 local function skip(ps, i, skip_fn)
@@ -14624,6 +14883,9 @@ local function skip(ps, i, skip_fn)
       allow_macro_vars = ps.allow_macro_vars,
       in_local_macro = ps.in_local_macro,
       macro_sigs = ps.macro_sigs,
+      require_aliases = ps.require_aliases,
+      imported_macro_decls = ps.imported_macro_decls,
+      imported_macro_keys = ps.imported_macro_keys,
    }
    return skip_fn(err_ps, i)
 end
@@ -14632,6 +14894,214 @@ local function failskip(ps, i, msg, skip_fn, starti)
    local skip_i = skip(ps, starti or i, skip_fn)
    fail(ps, i, msg)
    return skip_i
+end
+
+local function search_tl_module(module_name)
+   local path = os.getenv("TL_PATH") or package.path
+   local slash_name = module_name:gsub("%.", "/")
+   for entry in path:gmatch("[^;]+") do
+      if not entry:match("%?[/\\]init%.lua$") then
+         local filename = entry:gsub("?", slash_name)
+         local tl_filename = filename:gsub("%.lua$", ".tl")
+         local fd = io.open(tl_filename, "rb")
+         if not fd then
+            tl_filename = filename:gsub("%.lua$", "/init.tl")
+            fd = io.open(tl_filename, "rb")
+         end
+         if fd then
+            local code = fd:read("*a")
+            fd:close()
+            if code then
+               return tl_filename, code
+            end
+         end
+      end
+   end
+   return nil
+end
+
+local function top_level_return_path(node)
+   local out
+   for _, stmt in ipairs(node) do
+      if stmt and stmt.kind == "return" then
+         local exps = stmt[BLOCK_INDEXES.RETURN.EXPS]
+         if exps and exps[1] then
+            local path = path_block_to_string(exps[1])
+            if path then
+               out = path
+            end
+         end
+      end
+   end
+   return out
+end
+
+local function collect_module_macro_exports(node, errs, filename)
+   local exports = {}
+   local records = collect_record_paths(node)
+   local return_path = top_level_return_path(node)
+
+   for _, stmt in ipairs(node) do
+      if stmt and
+         stmt.kind == "local_macro" and
+         stmt[BLOCK_INDEXES.LOCAL_MACRO.OWNER] and
+         not stmt[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] then
+
+         local owner = stmt[BLOCK_INDEXES.LOCAL_MACRO.OWNER]
+         local owner_key = path_block_to_string(owner)
+         local name = stmt[BLOCK_INDEXES.LOCAL_MACRO.NAME]
+         if owner_key and name and name.kind == "identifier" then
+            if not records[owner_key] then
+               table.insert(errs, {
+                  filename = filename,
+                  y = owner.y,
+                  x = owner.x,
+                  msg = "macro owner '" .. owner_key .. "' must be a record",
+               })
+            else
+               local exported_key
+               if return_path and (owner_key == return_path or starts_with(owner_key, return_path .. ".")) then
+                  local suffix_owner = owner_key == return_path and "" or owner_key:sub(#return_path + 2)
+                  exported_key = suffix_owner == "" and name.tk or (suffix_owner .. "." .. name.tk)
+               else
+                  exported_key = owner_key .. "." .. name.tk
+               end
+               local sig = build_macro_sig(stmt[BLOCK_INDEXES.LOCAL_MACRO.ARGS], errs, filename, exported_key)
+               table.insert(exports, {
+                  key = exported_key,
+                  sig = sig,
+                  decl = stmt,
+               })
+            end
+         end
+      end
+   end
+
+   return exports
+end
+
+local function load_module_macro_info(ps, module_name)
+   if module_macro_missing[module_name] then
+      return nil
+   end
+   local cached = module_macro_cache[module_name]
+   if cached ~= nil then
+      return cached
+   end
+
+   if module_macro_loading[module_name] then
+      return nil
+   end
+   module_macro_loading[module_name] = true
+
+   local found, code = search_tl_module(module_name)
+   if not found or not code then
+      module_macro_missing[module_name] = true
+      module_macro_loading[module_name] = nil
+      return nil
+   end
+
+   local lang = lang_heuristic(found, code)
+   local mod_node, mod_errs = reader.read(code, found, lang, true, true)
+   for _, e in ipairs(mod_errs) do
+      table.insert(ps.errs, e)
+   end
+
+   local info = {
+      exports = collect_module_macro_exports(mod_node, ps.errs, found),
+   }
+
+   module_macro_cache[module_name] = info
+   module_macro_loading[module_name] = nil
+   return info
+end
+
+local function local_require_alias(stmt)
+   if not stmt then
+      return nil
+   end
+
+   local var
+   local exp
+
+   if stmt.kind == "local_declaration" then
+      local vars = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+      local exps = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+      if not vars or not exps or #vars ~= 1 or #exps ~= 1 then
+         return nil
+      end
+      var = vars[1]
+      exp = exps[1]
+   elseif stmt.kind == "local_type" then
+      var = stmt[BLOCK_INDEXES.LOCAL_TYPE.VAR]
+      exp = stmt[BLOCK_INDEXES.LOCAL_TYPE.VALUE]
+   else
+      return nil
+   end
+
+   if not var or var.kind ~= "identifier" then
+      return nil
+   end
+
+   local module_name = reader.node_is_require_call(exp)
+   if not module_name then
+      return nil
+   end
+   return var.tk, module_name
+end
+
+local function ensure_required_alias_macros(ps, alias)
+   local module_name = ps.require_aliases[alias]
+   if not module_name then
+      return
+   end
+   local loaded_key = "@loaded:" .. alias
+   if ps.imported_macro_keys[loaded_key] then
+      return
+   end
+   ps.imported_macro_keys[loaded_key] = true
+
+   local info = load_module_macro_info(ps, module_name)
+   if not info then
+      return
+   end
+
+   for _, exp in ipairs(info.exports) do
+      local imported_key = alias .. "." .. exp.key
+      if not ps.imported_macro_keys[imported_key] then
+         ps.imported_macro_keys[imported_key] = true
+         ps.macro_sigs[imported_key] = exp.sig
+
+         local imported_decl = clone_block_deep(exp.decl)
+         local parts = split_dotted_path(imported_key)
+         local macro_name = parts[#parts]
+         parts[#parts] = nil
+
+         imported_decl[BLOCK_INDEXES.LOCAL_MACRO.NAME] = setmetatable({
+            f = imported_decl.f or ps.filename,
+            y = imported_decl.y or 1,
+            x = imported_decl.x or 1,
+            tk = macro_name,
+            kind = "identifier",
+         }, node_mt)
+
+         if #parts > 0 then
+            imported_decl[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = build_path_block_from_parts(imported_decl.f, imported_decl.y, imported_decl.x, parts)
+         else
+            imported_decl[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = nil
+         end
+
+         imported_decl[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] = setmetatable({
+            f = imported_decl.f,
+            y = imported_decl.y,
+            x = imported_decl.x,
+            tk = alias,
+            kind = "identifier",
+         }, node_mt)
+
+         table.insert(ps.imported_macro_decls, imported_decl)
+      end
+   end
 end
 
 local function read_type_body(ps, i, istart, node, tn)
@@ -14716,6 +15186,9 @@ local function read_table_item(ps, i, n)
             allow_macro_vars = ps.allow_macro_vars,
             in_local_macro = ps.in_local_macro,
             macro_sigs = ps.macro_sigs,
+            require_aliases = ps.require_aliases,
+            imported_macro_decls = ps.imported_macro_decls,
+            imported_macro_keys = ps.imported_macro_keys,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
@@ -14966,6 +15439,9 @@ local function read_trying_list(ps, i, list, read_item, ret_lookahead)
       allow_macro_vars = ps.allow_macro_vars,
       in_local_macro = ps.in_local_macro,
       macro_sigs = ps.macro_sigs,
+      require_aliases = ps.require_aliases,
+      imported_macro_decls = ps.imported_macro_decls,
+      imported_macro_keys = ps.imported_macro_keys,
    }
    local tryi, item = read_item(try_ps, i)
    if not item then
@@ -14999,7 +15475,7 @@ local function read_anglebracket_list(ps, i, read_item)
       return i + 1
    end
 
-   local typelist = new_type(ps, i, "typelist")
+   local typelist = new_type(ps, i, "type_list")
    i = verify_tk(ps, i, "<")
    i = read_list(ps, i, typelist, { [">"] = true, [">>"] = true }, "sep", read_item)
    if ps.tokens[i].tk == ">" then
@@ -15033,7 +15509,7 @@ local function read_return_types(ps, i)
    local t
 
    i, t = read_type_list(ps, i, "rets")
-   local list = t[BLOCK_INDEXES.TUPLE_TYPE.SECOND] or t[BLOCK_INDEXES.TUPLE_TYPE.FIRST]
+   local list = t[2] or t[1]
    if list and #list == 0 then
       t.x = ps.tokens[iprev].x
       t.y = ps.tokens[iprev].y
@@ -15060,12 +15536,12 @@ local function read_function_type(ps, i)
    else
       local any = new_type(ps, i, "nominal_type")
       any.tk = "any"
-      local args_typelist = new_block(ps, i, "typelist")
-      args_typelist[BLOCK_INDEXES.TYPELIST.FIRST] = any
+      local args_typelist = new_block(ps, i, "type_list")
+      args_typelist[1] = any
       typ[BLOCK_INDEXES.FUNCTION_TYPE.ARGS] = new_tuple(ps, i, args_typelist, true)
 
-      local rets_typelist = new_block(ps, i, "typelist")
-      rets_typelist[BLOCK_INDEXES.TYPELIST.FIRST] = any
+      local rets_typelist = new_block(ps, i, "type_list")
+      rets_typelist[1] = any
       typ[BLOCK_INDEXES.FUNCTION_TYPE.RETS] = new_tuple(ps, i, rets_typelist, true)
    end
 
@@ -15156,8 +15632,8 @@ local function read_base_type(ps, i)
          i = verify_tk(ps, i, "}")
          return i, decl
       elseif ps.tokens[i].tk == "," then
-         local decl = new_type(ps, istart, "typelist")
-         decl[BLOCK_INDEXES.TYPELIST.FIRST] = t
+         local decl = new_type(ps, istart, "type_list")
+         decl[1] = t
          local n = 2
          repeat
             i = i + 1
@@ -15208,7 +15684,7 @@ read_type = function(ps, i)
    end
    if ps.tokens[i].tk == "|" then
       local u = new_type(ps, istart, "union_type")
-      u[BLOCK_INDEXES.UNION_TYPE.FIRST] = bt
+      u[1] = bt
       while ps.tokens[i].tk == "|" do
          i = i + 1
          i, bt = read_base_type(ps, i)
@@ -15361,7 +15837,7 @@ read_macro_quote = function(ps, i)
       if #werrs == 0 then
          local ret = wrapped[1]
          if ret and ret.kind == "return" and ret[BLOCK_INDEXES.RETURN.EXPS] then
-            local exp = ret[BLOCK_INDEXES.RETURN.EXPS][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
+            local exp = ret[BLOCK_INDEXES.RETURN.EXPS][1]
             quoted_block = exp
             errs = {}
          else
@@ -15403,7 +15879,7 @@ local function read_literal(ps, i)
    local tk = ps.tokens[i].tk
    local kind = ps.tokens[i].kind
    if kind == "identifier" then
-      return verify_kind(ps, i, "identifier", "variable")
+      return verify_kind(ps, i, "identifier")
    elseif kind == "string" then
       local node = new_block(ps, i, "string")
       local _, is_long = unquote(tk)
@@ -15532,8 +16008,7 @@ do
       prevnode.kind == "op_index" or
       prevnode.kind == "op_dot" or
       prevnode.kind == "op_colon" or
-      prevnode.kind == "identifier" or
-      prevnode.kind == "variable"
+      prevnode.kind == "identifier"
    end
 
 
@@ -15620,7 +16095,7 @@ do
             end
 
             if op_kind == "op_colon" then
-               if not args_starters[ps.tokens[i].kind] then
+               if ps.tokens[i].tk ~= "!" and not args_starters[ps.tokens[i].kind] then
                   if ps.tokens[i].tk == "=" then
                      fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
                   else
@@ -15642,12 +16117,22 @@ do
             local next_tk = ps.tokens[i]
             local args = new_block(ps, i, "expression_list")
             local argument
+            local mname
+            local has_colon
+            mname, has_colon = macro_target_key(e1)
+            if has_colon then
+               fail(ps, prev_i, "method-style macro invocation is not supported; use record.macro!()")
+               return i, failstore(ps, tkop, e1)
+            end
             if next_tk.tk == "(" then
-               local mname
-               if e1 and (e1.kind == "variable" or e1.kind == "identifier") then
-                  mname = e1.tk
-               end
                local sig = mname and ps.macro_sigs[mname]
+               if (not sig) and mname then
+                  local alias = mname:match("^([^.]+)%.")
+                  if alias then
+                     ensure_required_alias_macros(ps, alias)
+                     sig = ps.macro_sigs[mname]
+                  end
+               end
                if sig then
                   i, args = read_macro_args_with_sig(ps, i, sig)
                else
@@ -16301,13 +16786,13 @@ local function read_where_clause(ps, i, def)
    local node = new_block(ps, i, "macroexp")
 
    node[BLOCK_INDEXES.MACROEXP.ARGS] = new_block(ps, i, "argument_list")
-   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST] = new_block(ps, i, "argument")
-   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION] = new_type(ps, i, "nominal_type")
-   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION].tk = "self"
-   node[BLOCK_INDEXES.MACROEXP.ARGS][BLOCK_INDEXES.ARGUMENT_LIST.FIRST][BLOCK_INDEXES.ARGUMENT.ANNOTATION][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1] = new_block(ps, i, "argument")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE] = new_type(ps, i, "nominal_type")
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE].tk = "self"
+   node[BLOCK_INDEXES.MACROEXP.ARGS][1][BLOCK_INDEXES.ARGUMENT.TYPE][BLOCK_INDEXES.NOMINAL_TYPE.NAME] = def
    node[BLOCK_INDEXES.MACROEXP.RETS] = new_tuple(ps, i)
-   node[BLOCK_INDEXES.MACROEXP.RETS][BLOCK_INDEXES.TUPLE_TYPE.FIRST] = new_type(ps, i, "boolean")
+   node[BLOCK_INDEXES.MACROEXP.RETS][1] = new_type(ps, i, "boolean")
    i, node[BLOCK_INDEXES.MACROEXP.EXP] = read_expression(ps, i)
    end_at(node, ps.tokens[i - 1])
    return i, node
@@ -16333,7 +16818,7 @@ local function read_array_interface_type(ps, i)
    if not t then
       return i
    end
-   if t.kind ~= "array_type" and t.kind ~= "typelist" then
+   if t.kind ~= "array_type" and t.kind ~= "type_list" then
       fail(ps, i, "expected an array or type list declaration")
       return i
    end
@@ -16359,12 +16844,6 @@ local function extract_userdata_from_interface_list(ps, i, interface_list)
 end
 
 read_record_body = function(ps, i, def)
-
-
-
-
-
-
    if ps.tokens[i].tk == "{" then
       local atype
       i, atype = read_array_interface_type(ps, i)
@@ -16464,7 +16943,7 @@ read_record_body = function(ps, i, def)
             end
             i = verify_tk(ps, i, "]")
          else
-            i, v = verify_kind(ps, i, "identifier", "variable")
+            i, v = verify_kind(ps, i, "identifier")
          end
          if not v then
             return fail(ps, i, "expected a variable name")
@@ -16598,13 +17077,13 @@ do
          return i, exp
       end
 
-      if exp.kind ~= "variable" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
+      if exp.kind ~= "identifier" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
          return fail(ps, i, "syntax error")
       end
 
       local asgn = new_block(ps, istart, "assignment")
       asgn[BLOCK_INDEXES.ASSIGNMENT.VARS] = new_block(ps, istart, "variable_list")
-      asgn[BLOCK_INDEXES.ASSIGNMENT.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST] = exp
+      asgn[BLOCK_INDEXES.ASSIGNMENT.VARS][1] = exp
       if ps.tokens[i].tk == "," then
          i = i + 1
          i = read_trying_list(ps, i, asgn[BLOCK_INDEXES.ASSIGNMENT.VARS], read_variable)
@@ -16644,10 +17123,10 @@ local function read_variable_declarations(ps, i, node_name)
       local tn = next_word
       if read_type_body_fns[tn] then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. "'", skip_type_body)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " " .. next_word .. " " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][1].tk .. "'", skip_type_body)
       elseif next_word == "functiontype" then
          local scope = node_name == "local_declaration" and "local" or "global"
-         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][BLOCK_INDEXES.VARIABLE_LIST.FIRST].tk .. " = function('...", read_function_type)
+         return failskip(ps, i + 1, "syntax error: this syntax is no longer valid; use '" .. scope .. " type " .. asgn[BLOCK_INDEXES.LOCAL_DECLARATION.VARS][1].tk .. " = function('...", read_function_type)
       end
 
       i, asgn = read_assignment_expression_list(ps, i, asgn)
@@ -16662,7 +17141,7 @@ local function read_type_require(ps, i, asgn)
    if not asgn[BIDX.VALUE] then
       return i
    end
-   if asgn[BIDX.VALUE].kind ~= "op_funcall" and asgn[BIDX.VALUE].kind ~= "op_dot" and asgn[BIDX.VALUE].kind ~= "variable" then
+   if asgn[BIDX.VALUE].kind ~= "op_funcall" and asgn[BIDX.VALUE].kind ~= "op_dot" and asgn[BIDX.VALUE].kind ~= "identifier" then
       fail(ps, istart, "require() in type declarations cannot be part of larger expressions")
       return i
    end
@@ -16799,34 +17278,69 @@ local function read_local_macro(ps, i)
    i, node = read_function_args_rets_body(ps, i, node)
    ps.in_local_macro = old_in_macro
    ps.allow_macro_vars = old_allow
-   local args = node[BLOCK_INDEXES.LOCAL_MACRO.ARGS]
-   if args then
-      local sig = { kinds = {}, vararg = "" }
-      local idx = 1
-      for _, ab in ipairs(args) do
-         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
-         local ok = false
-         local mode
-         if annot and annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
-            local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
-            if tname == "Statement" then ok = true; mode = "stmt"
-            elseif tname == "Expression" then ok = true; mode = "expr" end
-         end
-         if not ok then
-            table.insert(ps.errs, { filename = ps.filename, y = (annot and annot.y) or ab.y, x = (annot and annot.x) or ab.x, msg = "macro argument type must be 'Statement' or 'Expression'" })
-         else
-            if ab.tk == "..." then
-               sig.vararg = mode or "expr"
-            else
-               sig.kinds[idx] = mode or "expr"
-               idx = idx + 1
-            end
-         end
-      end
-      if node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].kind == "identifier" then
-         ps.macro_sigs[node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk] = sig
-      end
+   if node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].kind == "identifier" then
+      local name = node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk
+      ps.macro_sigs[name] = build_macro_sig(node[BLOCK_INDEXES.LOCAL_MACRO.ARGS], ps.errs, ps.filename, name)
    end
+   return i, node
+end
+
+local function read_attached_macro(ps, i)
+   local istart = i
+   i = verify_tk(ps, i, "macro")
+
+   local names = {}
+   local dot_pos = {}
+
+   i, names[1] = read_identifier(ps, i)
+   if not names[1] then
+      return fail(ps, i, "expected macro owner path")
+   end
+
+   while ps.tokens[i] and ps.tokens[i].tk == "." do
+      table.insert(dot_pos, i)
+      i = i + 1
+      local part
+      i, part = read_identifier(ps, i)
+      if not part then
+         return fail(ps, i, "expected macro name")
+      end
+      table.insert(names, part)
+   end
+
+   if #names < 2 then
+      return fail(ps, i, "attached macros must use the form 'macro Record.name!()'")
+   end
+
+   local owner = names[1]
+   for n = 2, #names - 1 do
+      local dot = new_block(ps, dot_pos[n - 1], "op_dot")
+      dot[BLOCK_INDEXES.OP.E1] = owner
+      dot[BLOCK_INDEXES.OP.E2] = names[n]
+      owner = dot
+   end
+
+   local node = new_block(ps, istart, "local_macro")
+   node[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = owner
+   node[BLOCK_INDEXES.LOCAL_MACRO.NAME] = names[#names]
+
+   i = verify_tk(ps, i, "!")
+
+   local old_in_macro = ps.in_local_macro
+   local old_allow = ps.allow_macro_vars
+   ps.in_local_macro = true
+   ps.allow_macro_vars = false
+   i, node = read_function_args_rets_body(ps, i, node)
+   ps.in_local_macro = old_in_macro
+   ps.allow_macro_vars = old_allow
+
+   local owner_key = path_block_to_string(node[BLOCK_INDEXES.LOCAL_MACRO.OWNER])
+   local name = node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk
+   if owner_key and name then
+      local key = owner_key .. "." .. name
+      ps.macro_sigs[key] = build_macro_sig(node[BLOCK_INDEXES.LOCAL_MACRO.ARGS], ps.errs, ps.filename, key)
+   end
+
    return i, node
 end
 
@@ -17008,20 +17522,35 @@ read_statements = function(ps, i, toplevel)
          break
       end
 
-      local fn = read_statement_fns[tk]
-      if not fn then
-         local skip_fn = needs_local_or_global[tk]
-         if skip_fn and ps.tokens[i + 1].kind == "identifier" then
-            fn = skip_fn
+      if tk == "macro" then
+         if not toplevel then
+            i = fail(ps, i, "attached macro declarations are only allowed at top level")
+            item = nil
          else
-            fn = read_call_or_assignment
+            i, item = read_attached_macro(ps, i)
          end
-      end
+      else
+         local fn = read_statement_fns[tk]
+         if not fn then
+            local skip_fn = needs_local_or_global[tk]
+            if skip_fn and ps.tokens[i + 1].kind == "identifier" then
+               fn = skip_fn
+            else
+               fn = read_call_or_assignment
+            end
+         end
 
-      i, item = fn(ps, i)
+         i, item = fn(ps, i)
+      end
 
       if item then
          table.insert(node, item)
+         if toplevel and (item.kind == "local_declaration" or item.kind == "local_type") then
+            local alias, module_name = local_require_alias(item)
+            if alias and module_name then
+               ps.require_aliases[alias] = module_name
+            end
+         end
       elseif i > 1 then
 
          local lasty = ps.tokens[i - 1].y
@@ -17036,9 +17565,15 @@ read_statements = function(ps, i, toplevel)
 end
 
 function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
+   if read_program_depth == 0 then
+      module_macro_cache = {}
+      module_macro_missing = {}
+      module_macro_loading = {}
+   end
+   read_program_depth = read_program_depth + 1
+
    errs = errs or {}
    filename = filename or "input"
-   errs = normalize_macro_tokens(tokens, errs)
    read_lang = read_lang or lang_heuristic(filename)
    if allow_macro_vars == nil then
       allow_macro_vars = true
@@ -17051,6 +17586,9 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       allow_macro_vars = allow_macro_vars or false,
       in_local_macro = false,
       macro_sigs = {},
+      require_aliases = {},
+      imported_macro_decls = {},
+      imported_macro_keys = {},
    }
    local i = 1
    local hashbang
@@ -17062,6 +17600,11 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    if hashbang then
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
+   for _, decl in ipairs(ps.imported_macro_decls) do
+      table.insert(node, decl)
+   end
+
+   validate_attached_macro_owners(node, errs, filename)
 
    local seen = setmetatable({}, { __mode = "k" })
 
@@ -17071,9 +17614,23 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-         if m and (m.kind == "variable" or m.kind == "identifier") then
-            local name = m.tk
+         local name, has_colon = macro_target_key(m)
+         if has_colon then
+            table.insert(ps.errs, {
+               filename = ps.filename,
+               y = m.y,
+               x = m.x,
+               msg = "method-style macro invocation is not supported; use record.macro!()",
+            })
+         elseif name then
             local sig = ps.macro_sigs[name]
+            if not sig then
+               local alias = name:match("^([^.]+)%.")
+               if alias then
+                  ensure_required_alias_macros(ps, alias)
+                  sig = ps.macro_sigs[name]
+               end
+            end
             if sig then
                local provided = args and #args or 0
                local required = #sig.kinds
@@ -17101,6 +17658,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    end
 
    errors.clear_redundant_errors(errs)
+   read_program_depth = read_program_depth - 1
    return node
 end
 
@@ -17635,7 +18193,7 @@ function traversal.traverse_nodes(s, root,
       if fn then
          fn(ast, xs)
       else
-         assert(no_traverse_nodes[kind])
+         assert(no_traverse_nodes[kind], kind)
       end
 
       local ret

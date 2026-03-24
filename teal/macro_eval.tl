@@ -32,15 +32,24 @@ local record MacroEnv
    sandbox: {string:any}
 end
 
-local function numeric_child_keys(b: Block): {integer}
-   local keys: {integer} = {}
-   for k, child in pairs(b as {string|integer: Block | nil}) do
-      if k is integer and child then
-         table.insert(keys, k)
+local macroexp HIGHEST_PREDEFINED_INDEX(): integer
+   return 5
+end
+
+local function children_iter(b: Block, at: integer): integer, Block
+   while true do
+      at = at + 1
+      local val = b[at]
+      if val then
+         return at, val
+      elseif at > HIGHEST_PREDEFINED_INDEX() then
+         return
       end
    end
-   table.sort(keys)
-   return keys
+end
+
+local function children(b: Block): function(Block, integer): (integer, Block), Block, integer
+   return children_iter, b, 0
 end
 
 local function clone_value(v: Block): Block
@@ -54,11 +63,8 @@ local function clone_value(v: Block): Block
       xend = v.xend,
       is_longstring = v.is_longstring,
    }
-   for _, idx in ipairs(numeric_child_keys(v)) do
-      local child = v[idx]
-      if child then
-         out[idx] = clone_value(child)
-      end
+   for idx, child in children(v) do
+      out[idx] = clone_value(child)
    end
    return out
 end
@@ -78,11 +84,8 @@ local function reanchor_block_positions(b: Block, where_y: integer | nil, where_
       b.xend = where_x
    end
 
-   for _, idx in ipairs(numeric_child_keys(b)) do
-      local child = b[idx]
-      if child then
-         reanchor_block_positions(child, where_y, where_x, seen_blocks)
-      end
+   for idx, child in children(b) do
+      reanchor_block_positions(child, where_y, where_x, seen_blocks)
    end
 end
 
@@ -103,12 +106,12 @@ local function path_block_to_string(node: Block): string
    if not node then
       return nil
    end
-   if node.kind == "variable" or node.kind == "identifier" then
+   if node.kind == "identifier" then
       return node.tk
    elseif node.kind == "op_dot" then
       local lhs = path_block_to_string(node[BLOCK_INDEXES.OP.E1])
       local rhs = node[BLOCK_INDEXES.OP.E2]
-      if lhs and rhs and (rhs.kind == "identifier" or rhs.kind == "variable") then
+      if lhs and rhs and rhs.kind == "identifier" then
          return lhs .. "." .. rhs.tk
       end
    end
@@ -122,13 +125,13 @@ local function macro_target_key(node: Block): string, boolean
    if node.kind == "paren" then
       return macro_target_key(node[BLOCK_INDEXES.PAREN.EXP])
    end
-   if node.kind == "variable" or node.kind == "identifier" then
+   if node.kind == "identifier" then
       return node.tk, false
    end
    if node.kind == "op_dot" then
       local lhs, has_colon = macro_target_key(node[BLOCK_INDEXES.OP.E1])
       local rhs = node[BLOCK_INDEXES.OP.E2]
-      if lhs and rhs and (rhs.kind == "identifier" or rhs.kind == "variable") then
+      if lhs and rhs and rhs.kind == "identifier" then
          return lhs .. "." .. rhs.tk, has_colon
       end
       return nil, has_colon
@@ -146,13 +149,13 @@ local function require_call_module_name(n: Block): string
    if n.kind == "op_dot" then
       return require_call_module_name(n[BLOCK_INDEXES.OP.E1])
    elseif n.kind == "op_funcall"
-      and n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].kind == "variable" and n[BLOCK_INDEXES.OP.E1].tk == "require"
+      and n[BLOCK_INDEXES.OP.E1] and n[BLOCK_INDEXES.OP.E1].kind == "identifier" and n[BLOCK_INDEXES.OP.E1].tk == "require"
       and n[BLOCK_INDEXES.OP.E2] and n[BLOCK_INDEXES.OP.E2].kind == "expression_list" and #n[BLOCK_INDEXES.OP.E2] == 1
-      and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST]
-      and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].kind == "string"
-      and n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk
+      and n[BLOCK_INDEXES.OP.E2][1]
+      and n[BLOCK_INDEXES.OP.E2][1].kind == "string"
+      and n[BLOCK_INDEXES.OP.E2][1].tk
    then
-      return unquote(n[BLOCK_INDEXES.OP.E2][BLOCK_INDEXES.EXPRESSION_LIST.FIRST].tk)
+      return unquote(n[BLOCK_INDEXES.OP.E2][1].tk)
    end
    return nil
 end
@@ -267,7 +270,7 @@ local function compile_local_macro(mb: Block, filename: string, read_lang: Block
       local idx = 1
       for _, ab in ipairs(args) do
          local expected: string
-         local annot = ab[BLOCK_INDEXES.ARGUMENT.ANNOTATION]
+         local annot = ab[BLOCK_INDEXES.ARGUMENT.TYPE]
          if not annot then
             table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. macro_key .. "' argument missing type; expected 'Statement' or 'Expression'" })
          else
@@ -324,136 +327,140 @@ end
 
 local seen: {Block:boolean}
 
-local function expand_in_node(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
-   if not b then return b end
+local traverse_invoking_macros: function(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
+local eval_macro_invocation: function(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
+
+eval_macro_invocation = function(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
+   local mexp = b
+   local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
+   local mname: string
+   local has_colon: boolean
+   mname, has_colon = macro_target_key(mname_block)
+   if has_colon then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "method-style macro invocation is not supported; use record.macro!()" })
+      return b
+   end
+   if not mname then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
+      return b
+   end
+   local fn = env.macros[mname]
+   if not fn then
+      local msg = mname:find("%.") and ("macro target '" .. mname .. "' must be a record-attached macro") or ("unknown macro '" .. mname .. "'")
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = msg })
+      return b
+   end
+   local argv: {Block} = {}
+   local sig = env.signatures[mname]
+   local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
+
+   if sig then
+      local provided = args and #args or 0
+      local required = #sig.kinds
+      local has_vararg = sig.vararg ~= ""
+      if provided < required or ((not has_vararg) and provided > required) then
+         table.insert(errs, {
+            filename = filename,
+            y = mname_block.y,
+            x = mname_block.x,
+            msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
+         })
+         return b
+      end
+   end
+   if args then
+      for i, ab in ipairs(args) do
+         if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
+            ab = ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
+         end
+         local expected: string
+         if sig then
+            expected = sig.kinds and sig.kinds[i] or (sig.vararg ~= "" and sig.vararg or nil)
+         end
+         if expected == "stmt" then
+            if not ab or ab.kind ~= "statements" then
+               table.insert(errs, { filename = filename, y = ab and ab.y or b.y, x = ab and ab.x or b.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be a Statement" })
+            end
+         elseif expected == "expr" then
+            if ab and ab.kind == "statements" then
+               if #ab == 1 and not is_statement_kind(ab[1].kind) then
+                  ab = ab[1]
+               else
+                  table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be an Expression" })
+               end
+            end
+         end
+         if ab then
+            table.insert(argv, ab)
+         end
+      end
+   end
+   local prev_where = env.where
+   local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
+   env.where = current_where
+   local function invoke_macro(): Block
+      return fn(table.unpack(argv, 1, #argv))
+   end
+   local ok, res = pcall(invoke_macro)
+   env.where = prev_where
+   if not ok then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
+      return b
+   end
+   if not (res and res.kind) then
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' did not return a Block" })
+      return b
+   end
+   local wy = current_where.y
+   local wx = current_where.x
+   reanchor_block_positions(res, wy, wx, setmetatable({}, { __mode = "k" }))
+   if context == "expr" and res.kind == "statements" then
+      if #res == 1 and not is_statement_kind(res[1].kind) then
+         return traverse_invoking_macros(res[1], filename, env, errs, "expr")
+      end
+      table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
+      return b
+   end
+
+   return traverse_invoking_macros(res, filename, env, errs, context)
+end
+
+traverse_invoking_macros = function(b: Block, filename: string, env: MacroEnv, errs: {Error}, context: string): Block
+   -- FIXME Why do we need this? Blocks must form a tree, not a DAG, much less a cyclic graph.
    if seen and seen[b] then return b end
    if seen then seen[b] = true end
    if b.kind == "macro_invocation" then
-      local mexp = b
-      local mname_block = mexp[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
-      local mname, has_colon = macro_target_key(mname_block)
-      if has_colon then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "method-style macro invocation is not supported; use record.macro!()" })
-         return b
-      end
-      if not mname then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "invalid macro invocation target" })
-         return b
-      end
-      local fn = env.macros[mname]
-      if not fn then
-         local msg = mname:find("%.") and ("macro target '" .. mname .. "' must be a record-attached macro") or ("unknown macro '" .. mname .. "'")
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = msg })
-         return b
-      end
-      local argv: {Block} = {}
-      local sig = env.signatures[mname]
-      local args = mexp[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-
-      if sig then
-         local provided = args and #args or 0
-         local required = #sig.kinds
-         local has_vararg = sig.vararg ~= ""
-         if provided < required or ((not has_vararg) and provided > required) then
-            table.insert(errs, {
-               filename = filename,
-               y = mname_block.y,
-               x = mname_block.x,
-               msg = "macro '" .. mname .. "' expects " .. tostring(required) .. (required == 1 and " argument" or " arguments") .. ", got " .. tostring(provided),
-            })
-            return b
-         end
-      end
-      if args then
-         for i, ab in ipairs(args) do
-            if ab.kind == "macro_quote" and ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK] then
-               ab = ab[BLOCK_INDEXES.MACRO_QUOTE.BLOCK]
-            end
-            local expected: string
-            if sig then
-               expected = sig.kinds and sig.kinds[i] or (sig.vararg ~= "" and sig.vararg or nil)
-            end
-            if expected == "stmt" then
-               if not ab or ab.kind ~= "statements" then
-                  table.insert(errs, { filename = filename, y = ab and ab.y or b.y, x = ab and ab.x or b.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be a Statement" })
-               end
-            elseif expected == "expr" then
-               if ab and ab.kind == "statements" then
-                  if #ab == 1 and not is_statement_kind(ab[1].kind) then
-                     ab = ab[1]
-                  else
-                     table.insert(errs, { filename = filename, y = ab.y, x = ab.x, msg = "macro '" .. mname .. "' argument " .. tostring(i) .. " must be an Expression" })
-                  end
-               end
-            end
-            if ab then
-               table.insert(argv, ab)
-            end
-         end
-      end
-      local prev_where = env.where
-      local current_where = { f = filename, y = mname_block.y, x = mname_block.x }
-      env.where = current_where
-      local function invoke_macro(): Block
-         return fn(table.unpack(argv, 1, #argv))
-      end
-      local ok, res = pcall(invoke_macro)
-      env.where = prev_where
-      if not ok then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = tostring(res) })
-         return b
-      end
-      if not (res and res.kind) then
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' did not return a Block" })
-         return b
-      end
-      local wy = current_where.y
-      local wx = current_where.x
-      reanchor_block_positions(res, wy, wx, setmetatable({}, { __mode = "k" }))
-      if context == "expr" and res.kind == "statements" then
-         if #res == 1 and not is_statement_kind(res[1].kind) then
-            return expand_in_node(res[1], filename, env, errs, "expr")
-         end
-         table.insert(errs, { filename = filename, y = b.y, x = b.x, msg = "macro '" .. mname .. "' returned statements in an expression context" })
-         return b
-      end
-
-      return expand_in_node(res, filename, env, errs, context)
+      return eval_macro_invocation(b, filename, env, errs, context)
    end
 
-   for _, i in ipairs(numeric_child_keys(b)) do
-      local child = b[i]
-      if child and child.kind == "statements" then
-         local expanded = child
-         local j = 1
-         while j <= #expanded do
-            local s = expanded[j]
-            if s then
-               if s.kind == "macro_invocation" then
-                  local repl = expand_in_node(s, filename, env, errs, "stmt")
-                  if repl and repl.kind == "statements" then
-                     table.remove(expanded, j)
-                     local rr = expand_in_node(repl, filename, env, errs, "stmt")
-                     for k = 1, #rr do
-                        table.insert(expanded, j + k - 1, rr[k])
-                     end
-                     j = j + #repl
-                  else
-                     expanded[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
-                     j = j + 1
-                  end
-               else
-                  expanded[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
-                  j = j + 1
-               end
-            else
-               j = j + 1
-            end
+   local patches: {integer:Block}
+   for i, child in children(b) do
+      local ret: Block
+      if child.kind == "macro_invocation" then
+         ret = eval_macro_invocation(child, filename, env, errs, b.kind == "statements" and "stmt" or "expr")
+         if ret.kind == "statements" then
+            patches = patches or {}
+            patches[i] = ret
+         else
+            b[i] = ret
          end
       else
-         b[i] = expand_in_node(child, filename, env, errs, "expr")
+         traverse_invoking_macros(child, filename, env, errs, context)
       end
    end
+
+   if patches then
+      for i = #b, 1, -1 do
+         local patch = patches[i]
+         if patch then
+            table.remove(b, i)
+            for j = 1, #patch do
+               table.insert(b, i+j-1, patch[j])
+            end
+         end
+      end
+   end
+
    return b
 end
 
@@ -467,7 +474,7 @@ local function local_require_alias(stmt: Block): string
       return nil
    end
    local v = vars[1]
-   if not v or (v.kind ~= "identifier" and v.kind ~= "variable") then
+   if not v or v.kind ~= "identifier" then
       return nil
    end
    local module_name = require_call_module_name(exps[1])
@@ -481,12 +488,11 @@ local function block_uses_name(b: Block, name: string, skip: Block): boolean
    if not b or b == skip then
       return false
    end
-   if (b.kind == "variable" or b.kind == "identifier") and b.tk == name then
+   if b.kind == "identifier" and b.tk == name then
       return true
    end
-   for _, idx in ipairs(numeric_child_keys(b)) do
-      local child = b[idx]
-      if child and block_uses_name(child, name, skip) then
+   for _, child in children(b) do
+      if block_uses_name(child, name, skip) then
          return true
       end
    end
@@ -518,30 +524,8 @@ function macro_eval.compile_all_and_expand(node: Block, filename: string, read_l
       end
    end
 
-   local j = 1
-   while j <= #node do
-      local s = node[j]
-      if s.kind == "macro_invocation" then
-         local repl = expand_in_node(s, filename, env, errs, "stmt")
-         if repl and repl.kind == "statements" then
-            table.remove(node, j)
-            local rr = expand_in_node(repl, filename, env, errs, "stmt")
-            for k = 1, #rr do
-               table.insert(node, j + k - 1, rr[k])
-            end
-            j = j + #repl
-         else
-            node[j] = expand_in_node(repl or s, filename, env, errs, "stmt")
-            j = j + 1
-         end
-      else
-         node[j] = expand_in_node(s, filename, env, errs, is_statement_kind(s.kind) and "stmt" or "expr")
-         j = j + 1
-      end
-   end
-
+   node = traverse_invoking_macros(node, filename, env, errs, "stmt")
    remove_macro_only_requires(node, env.imported_aliases)
-
    return node
 end
 

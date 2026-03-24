@@ -93,7 +93,7 @@ local function edge_name(kind: string, idx: integer): string
          return label
       end
    end
-   return tostring(idx)
+   return nil
 end
 
 local function write_json_string(fd: FILE, value: string)
@@ -108,8 +108,8 @@ local function print_errors(errs: {Error}, fallback_name: string)
 end
 
 local function write_json_block(fd: FILE, bl: Block, indent: string)
-   local next_indent = indent .. "  "
-   fd:write(indent, "{\n")
+   fd:write("{\n")
+   local next_indent = indent .. "   "
 
    local entries = {}
    table.insert(entries, { key = "\"kind\"", val = function() write_json_string(fd, bl.kind) end })
@@ -128,25 +128,20 @@ local function write_json_block(fd: FILE, bl: Block, indent: string)
    local arr = bl as BlockChildren
    for _, idx in ipairs(child_indexes(bl)) do
       local child = arr[idx]
+      local val = function()
+         if child then
+            write_json_block(fd, child, next_indent)
+         else
+            fd:write("null")
+         end
+      end
+
+      table.insert(entries, { key = string.format("%q", tostring(idx)), val = val })
+
       local name = edge_name(bl.kind, idx)
-      local key_repr = string.format("%q", name)
-      local idx_key = string.format("%q", tostring(idx))
-
-      table.insert(entries, { key = idx_key, val = function()
-         if child then
-            write_json_block(fd, child, next_indent .. "  ")
-         else
-            fd:write("null")
-         end
-      end })
-
-      table.insert(entries, { key = key_repr, val = function()
-         if child then
-            write_json_block(fd, child, next_indent .. "  ")
-         else
-            fd:write("null")
-         end
-      end })
+      if name then
+         table.insert(entries, { key = string.format("%q", name), val = val })
+      end
    end
 
    for i, entry in ipairs(entries) do
@@ -162,8 +157,8 @@ local function write_json_block(fd: FILE, bl: Block, indent: string)
 end
 
 local function write_lua_block(fd: FILE, bl: Block, indent: string)
-   local next_indent = indent .. "  "
-   fd:write(indent, "{\n")
+   local next_indent = indent .. "   "
+   fd:write("{\n")
 
    local lines = {}
    local function add_line(key_repr: string, value_writer: function())
@@ -185,17 +180,20 @@ local function write_lua_block(fd: FILE, bl: Block, indent: string)
    local arr = bl as BlockChildren
    for _, idx in ipairs(child_indexes(bl)) do
       local child = arr[idx]
-      local name = edge_name(bl.kind, idx)
       local function write_child()
          if child then
-            write_lua_block(fd, child, next_indent .. "  ")
+            write_lua_block(fd, child, next_indent)
          else
             fd:write("nil")
          end
       end
 
       add_line("[" .. tostring(idx) .. "]", write_child)
-      add_line("[" .. string.format("%q", name) .. "]", write_child)
+
+      local name = edge_name(bl.kind, idx)
+      if name then
+         add_line("[" .. string.format("%q", name) .. "]", write_child)
+      end
    end
 
    for i, writer in ipairs(lines) do
