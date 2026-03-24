@@ -5,8 +5,8 @@ constructs and returns AST blocks, which are then spliced into your program
 before type checking and code generation. Macros are a separate feature from
 macro expressions (see [Macro expressions](./macroexp.md)).
 
-Macros are **local** and **compile-time only**: their declarations are removed
-after expansion and produce no Lua code at runtime.
+Macros are compile-time only: their declarations are removed after expansion
+and produce no Lua code at runtime.
 
 ## Declaring a macro
 
@@ -23,6 +23,57 @@ local y = inc!(2)
 
 Here, `inc!` receives an expression AST and returns a new expression AST built
 from a quote.
+
+Macros can also be attached to records using a top-level declaration:
+
+```lua
+local record macros end
+
+macro macros.double!(x: Statement)
+   return ```
+      $x
+      $x
+   ```
+end
+```
+
+## Importing attached macros
+
+Attached macros can be imported through regular `require` aliases:
+
+```lua
+-- macros.tl
+local record macros
+   record Helper end
+end
+
+macro macros.double!(x: Statement)
+   return ```
+      $x
+      $x
+   ```
+end
+
+macro macros.Helper.side!(x: Statement)
+   return ```
+      print("side")
+      $x
+   ```
+end
+
+return macros
+```
+
+```lua
+-- main.tl
+local m = require("macros")
+-- also supported: local type m = require("macros")
+
+m.double!(print("hi"))
+m.Helper.side!(print("there"))
+```
+
+Macros that you import from another module are attached to the record, just as `macroexp`s are, so you must qualify it with the record name (which may be nested). 
 
 ## Invoking a macro
 
@@ -253,12 +304,13 @@ print(z) -- prints 14
 
 | Detail | Notes |
 | --- | --- |
-| Local only | Macros must be declared with `local macro` and are scoped to a single file. They cannot be exported or imported. |
+| Scope and import | `local macro` declarations are file-local. Record-attached macros (`macro Record.name!`) can be imported through `require` aliases when their owner record is the returned record or nested under it. |
 | Compile-time only | Macros run before type checking, and their declarations produce no runtime code. |
 | Restricted environment | Macro bodies run in a sandbox with a limited standard library (no `require`, file I/O, or OS access beyond basic timing functions). |
 | Argument types are fixed | Every parameter must be annotated as `Statement` or `Expression` (varargs allowed). Other annotations are errors. |
 | Quotes are only valid inside macros | Backtick quotes and `$name` splices are rejected outside `local macro` bodies. |
 | No nested macro invocations | You cannot use `other!()` inside a macro body to expand another macro; build the block directly or with quotes. |
+| Invocation style | Use `record.macro!()`. Method-style `record:macro!()` is rejected. |
 | Statement args with top-level commas need a wrapper | When passing a statement argument like `local a, b = 1, 2`, wrap it in `do ... end` to avoid parsing ambiguity. |
 
 ## Block kinds

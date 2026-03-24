@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 local lexer = require("teal.lexer")
@@ -37,6 +37,21 @@ local reader = {}
 local BLOCK_INDEXES = block.BLOCK_INDEXES
 
 reader.BLOCK_INDEXES = BLOCK_INDEXES
+
+
+
+
+
+
+
+
+
+
+
+local module_macro_cache = {}
+local module_macro_missing = {}
+local module_macro_loading = {}
+local read_program_depth = 0
 
 local function lang_heuristic(filename, input)
    if filename then
@@ -107,6 +122,53 @@ function reader.node_is_funcall(node)
    end
    return node.kind == "op_funcall" or node.kind == "macro_invocation"
 end
+
+local function starts_with(str, prefix)
+   return str:sub(1, #prefix) == prefix
+end
+
+local function macro_target_key(node)
+   if not node then
+      return nil, false
+   end
+   if node.kind == "paren" then
+      return macro_target_key(node[BLOCK_INDEXES.PAREN.EXP])
+   end
+   if node.kind == "identifier" then
+      return node.tk, false
+   end
+   if node.kind == "op_dot" then
+      local lhs, has_colon = macro_target_key(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk, has_colon
+      end
+      return nil, has_colon
+   end
+   if node.kind == "op_colon" then
+      return nil, true
+   end
+   return nil, false
+end
+
+local function path_block_to_string(node)
+   if not node then
+      return nil
+   end
+   if node.kind == "identifier" then
+      return node.tk
+   elseif node.kind == "op_dot" then
+      local lhs = path_block_to_string(node[BLOCK_INDEXES.OP.E1])
+      local rhs = node[BLOCK_INDEXES.OP.E2]
+      if lhs and rhs and rhs.kind == "identifier" then
+         return lhs .. "." .. rhs.tk
+      end
+   end
+   return nil
+end
+
+
+
 
 
 
@@ -214,6 +276,68 @@ local function new_type(ps, i, typename)
    }, node_mt)
 end
 
+local function split_dotted_path(path)
+   local out = {}
+   for part in path:gmatch("[^%.]+") do
+      table.insert(out, part)
+   end
+   return out
+end
+
+local function build_path_block_from_parts(f, y, x, parts)
+   local function mk_ident(name)
+      return setmetatable({
+         f = f,
+         y = y,
+         x = x,
+         tk = name,
+         kind = "identifier",
+      }, node_mt)
+   end
+
+   local owner = mk_ident(parts[1])
+   for j = 2, #parts do
+      local dot = setmetatable({
+         f = f,
+         y = y,
+         x = x,
+         tk = ".",
+         kind = "op_dot",
+      }, node_mt)
+      dot[BLOCK_INDEXES.OP.E1] = owner
+      dot[BLOCK_INDEXES.OP.E2] = mk_ident(parts[j])
+      owner = dot
+   end
+   return owner
+end
+
+local function clone_block_deep(b)
+   if not b then
+      return nil
+   end
+   local copy = {
+      kind = b.kind,
+      f = b.f,
+      y = b.y,
+      x = b.x,
+      tk = b.tk,
+      yend = b.yend,
+      xend = b.xend,
+      is_longstring = b.is_longstring,
+   }
+   local child_indexes = {}
+   for k, child in pairs(b) do
+      if math.type(k) == "integer" and child then
+         table.insert(child_indexes, k)
+      end
+   end
+   table.sort(child_indexes)
+   for _, idx in ipairs(child_indexes) do
+      copy[idx] = clone_block_deep(b[idx])
+   end
+   return setmetatable(copy, node_mt)
+end
+
 local function make_comment_block(ps, c)
    local text = c.text
    local _, newlines = string.gsub(text, "\n", "")
@@ -284,6 +408,123 @@ local function verify_kind(ps, i, kind, node_kind)
    return fail(ps, i, "syntax error, expected " .. kind)
 end
 
+local function build_macro_sig(args, errs, filename, macro_name)
+   local sig = { kinds = {}, vararg = "" }
+   if not args then
+      return sig
+   end
+
+   local idx = 1
+   for _, ab in ipairs(args) do
+      local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.TYPE]
+      local ok = false
+      local mode
+      if annot and annot.kind == "nominal_type" and
+         annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and
+         annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
+
+         local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
+         if tname == "Statement" then
+            ok = true
+            mode = "stmt"
+         elseif tname == "Expression" then
+            ok = true
+            mode = "expr"
+         end
+      end
+      if not ok then
+         table.insert(errs, {
+            filename = filename,
+            y = (annot and annot.y) or ab.y,
+            x = (annot and annot.x) or ab.x,
+            msg = "macro '" .. macro_name .. "' argument type must be 'Statement' or 'Expression'",
+         })
+      else
+         if ab.tk == "..." then
+            sig.vararg = mode or "expr"
+         else
+            sig.kinds[idx] = mode or "expr"
+            idx = idx + 1
+         end
+      end
+   end
+
+   return sig
+end
+
+local function extract_record_from_newtype(nt)
+   if not nt or nt.kind ~= "newtype" then
+      return nil
+   end
+   local typedecl = nt[BLOCK_INDEXES.NEWTYPE.TYPEDECL]
+   if not typedecl or typedecl.kind ~= "typedecl" then
+      return nil
+   end
+   local typ = typedecl[BLOCK_INDEXES.TYPEDECL.TYPE]
+   if typ and typ.kind == "generic_type" then
+      typ = typ[BLOCK_INDEXES.GENERIC_TYPE.BASE]
+   end
+   if typ and (typ.kind) == "record" then
+      return typ
+   end
+   return nil
+end
+
+local function collect_record_paths_in_scope(container, prefix, out)
+   if not container then
+      return
+   end
+   for _, child in ipairs(container) do
+      if child and (child.kind == "local_type" or child.kind == "global_type") then
+         local var
+         local val
+         if child.kind == "local_type" then
+            var = child[BLOCK_INDEXES.LOCAL_TYPE.VAR]
+            val = child[BLOCK_INDEXES.LOCAL_TYPE.VALUE]
+         else
+            var = child[BLOCK_INDEXES.GLOBAL_TYPE.VAR]
+            val = child[BLOCK_INDEXES.GLOBAL_TYPE.VALUE]
+         end
+         if var and (var.kind == "identifier" or var.kind == "type_identifier") and val then
+            local rec = extract_record_from_newtype(val)
+            if rec then
+               local path = prefix == "" and var.tk or (prefix .. "." .. var.tk)
+               out[path] = true
+               collect_record_paths_in_scope(rec[BLOCK_INDEXES.RECORD.FIELDS], path, out)
+            end
+         end
+      end
+   end
+end
+
+local function collect_record_paths(node)
+   local out = {}
+   collect_record_paths_in_scope(node, "", out)
+   return out
+end
+
+local function validate_attached_macro_owners(node, errs, filename)
+   local records = collect_record_paths(node)
+   for _, child in ipairs(node) do
+      if child and
+         child.kind == "local_macro" and
+         child[BLOCK_INDEXES.LOCAL_MACRO.OWNER] and
+         not child[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] then
+
+         local owner_key = path_block_to_string(child[BLOCK_INDEXES.LOCAL_MACRO.OWNER])
+         if owner_key and not records[owner_key] then
+            local owner = child[BLOCK_INDEXES.LOCAL_MACRO.OWNER]
+            table.insert(errs, {
+               filename = filename,
+               y = owner.y,
+               x = owner.x,
+               msg = "macro owner '" .. owner_key .. "' must be a record",
+            })
+         end
+      end
+   end
+end
+
 
 
 local function skip(ps, i, skip_fn)
@@ -295,6 +536,9 @@ local function skip(ps, i, skip_fn)
       allow_macro_vars = ps.allow_macro_vars,
       in_local_macro = ps.in_local_macro,
       macro_sigs = ps.macro_sigs,
+      require_aliases = ps.require_aliases,
+      imported_macro_decls = ps.imported_macro_decls,
+      imported_macro_keys = ps.imported_macro_keys,
    }
    return skip_fn(err_ps, i)
 end
@@ -303,6 +547,209 @@ local function failskip(ps, i, msg, skip_fn, starti)
    local skip_i = skip(ps, starti or i, skip_fn)
    fail(ps, i, msg)
    return skip_i
+end
+
+local function search_tl_module(module_name)
+   local path = os.getenv("TL_PATH") or package.path
+   local slash_name = module_name:gsub("%.", "/")
+   for entry in path:gmatch("[^;]+") do
+      if not entry:match("%?[/\\]init%.lua$") then
+         local filename = entry:gsub("?", slash_name)
+         local tl_filename = filename:gsub("%.lua$", ".tl")
+         local fd = io.open(tl_filename, "rb")
+         if not fd then
+            tl_filename = filename:gsub("%.lua$", "/init.tl")
+            fd = io.open(tl_filename, "rb")
+         end
+         if fd then
+            local code = fd:read("*a")
+            fd:close()
+            if code then
+               return tl_filename, code
+            end
+         end
+      end
+   end
+   return nil
+end
+
+local function top_level_return_path(node)
+   local out
+   for _, stmt in ipairs(node) do
+      if stmt and stmt.kind == "return" then
+         local exps = stmt[BLOCK_INDEXES.RETURN.EXPS]
+         if exps and exps[1] then
+            local path = path_block_to_string(exps[1])
+            if path then
+               out = path
+            end
+         end
+      end
+   end
+   return out
+end
+
+local function collect_module_macro_exports(node, errs, filename)
+   local exports = {}
+   local records = collect_record_paths(node)
+   local return_path = top_level_return_path(node)
+
+   for _, stmt in ipairs(node) do
+      if stmt and
+         stmt.kind == "local_macro" and
+         stmt[BLOCK_INDEXES.LOCAL_MACRO.OWNER] and
+         not stmt[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] then
+
+         local owner = stmt[BLOCK_INDEXES.LOCAL_MACRO.OWNER]
+         local owner_key = path_block_to_string(owner)
+         local name = stmt[BLOCK_INDEXES.LOCAL_MACRO.NAME]
+         if owner_key and name and name.kind == "identifier" then
+            if not records[owner_key] then
+               table.insert(errs, {
+                  filename = filename,
+                  y = owner.y,
+                  x = owner.x,
+                  msg = "macro owner '" .. owner_key .. "' must be a record",
+               })
+            elseif return_path and (owner_key == return_path or starts_with(owner_key, return_path .. ".")) then
+               local suffix_owner = owner_key == return_path and "" or owner_key:sub(#return_path + 2)
+               local exported_key = suffix_owner == "" and name.tk or (suffix_owner .. "." .. name.tk)
+               local sig = build_macro_sig(stmt[BLOCK_INDEXES.LOCAL_MACRO.ARGS], errs, filename, exported_key)
+               table.insert(exports, {
+                  key = exported_key,
+                  sig = sig,
+                  decl = stmt,
+               })
+            end
+         end
+      end
+   end
+
+   return exports
+end
+
+local function load_module_macro_info(ps, module_name)
+   if module_macro_missing[module_name] then
+      return nil
+   end
+   local cached = module_macro_cache[module_name]
+   if cached ~= nil then
+      return cached
+   end
+
+   if module_macro_loading[module_name] then
+      return nil
+   end
+   module_macro_loading[module_name] = true
+
+   local found, code = search_tl_module(module_name)
+   if not found or not code then
+      module_macro_missing[module_name] = true
+      module_macro_loading[module_name] = nil
+      return nil
+   end
+
+   local lang = lang_heuristic(found, code)
+   local mod_node, mod_errs = reader.read(code, found, lang, true, true)
+   for _, e in ipairs(mod_errs) do
+      table.insert(ps.errs, e)
+   end
+
+   local info = {
+      exports = collect_module_macro_exports(mod_node, ps.errs, found),
+   }
+
+   module_macro_cache[module_name] = info
+   module_macro_loading[module_name] = nil
+   return info
+end
+
+local function local_require_alias(stmt)
+   if not stmt then
+      return nil
+   end
+
+   local var
+   local exp
+
+   if stmt.kind == "local_declaration" then
+      local vars = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.VARS]
+      local exps = stmt[BLOCK_INDEXES.LOCAL_DECLARATION.EXPS]
+      if not vars or not exps or #vars ~= 1 or #exps ~= 1 then
+         return nil
+      end
+      var = vars[1]
+      exp = exps[1]
+   elseif stmt.kind == "local_type" then
+      var = stmt[BLOCK_INDEXES.LOCAL_TYPE.VAR]
+      exp = stmt[BLOCK_INDEXES.LOCAL_TYPE.VALUE]
+   else
+      return nil
+   end
+
+   if not var or var.kind ~= "identifier" then
+      return nil
+   end
+
+   local module_name = reader.node_is_require_call(exp)
+   if not module_name then
+      return nil
+   end
+   return var.tk, module_name
+end
+
+local function ensure_required_alias_macros(ps, alias)
+   local module_name = ps.require_aliases[alias]
+   if not module_name then
+      return
+   end
+   local loaded_key = "@loaded:" .. alias
+   if ps.imported_macro_keys[loaded_key] then
+      return
+   end
+   ps.imported_macro_keys[loaded_key] = true
+
+   local info = load_module_macro_info(ps, module_name)
+   if not info then
+      return
+   end
+
+   for _, exp in ipairs(info.exports) do
+      local imported_key = alias .. "." .. exp.key
+      if not ps.imported_macro_keys[imported_key] then
+         ps.imported_macro_keys[imported_key] = true
+         ps.macro_sigs[imported_key] = exp.sig
+
+         local imported_decl = clone_block_deep(exp.decl)
+         local parts = split_dotted_path(imported_key)
+         local macro_name = parts[#parts]
+         parts[#parts] = nil
+
+         imported_decl[BLOCK_INDEXES.LOCAL_MACRO.NAME] = setmetatable({
+            f = imported_decl.f or ps.filename,
+            y = imported_decl.y or 1,
+            x = imported_decl.x or 1,
+            tk = macro_name,
+            kind = "identifier",
+         }, node_mt)
+
+         if #parts > 0 then
+            imported_decl[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = build_path_block_from_parts(imported_decl.f, imported_decl.y, imported_decl.x, parts)
+         else
+            imported_decl[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = nil
+         end
+
+         imported_decl[BLOCK_INDEXES.LOCAL_MACRO.IMPORT_ALIAS] = setmetatable({
+            f = imported_decl.f,
+            y = imported_decl.y,
+            x = imported_decl.x,
+            tk = alias,
+            kind = "identifier",
+         }, node_mt)
+
+         table.insert(ps.imported_macro_decls, imported_decl)
+      end
+   end
 end
 
 local function read_type_body(ps, i, istart, node, tn)
@@ -387,6 +834,9 @@ local function read_table_item(ps, i, n)
             allow_macro_vars = ps.allow_macro_vars,
             in_local_macro = ps.in_local_macro,
             macro_sigs = ps.macro_sigs,
+            require_aliases = ps.require_aliases,
+            imported_macro_decls = ps.imported_macro_decls,
+            imported_macro_keys = ps.imported_macro_keys,
          }
          i, node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY] = verify_kind(try_ps, i, "identifier", "string")
          node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk = '"' .. node[BLOCK_INDEXES.LITERAL_TABLE_ITEM.KEY].tk .. '"'
@@ -637,6 +1087,9 @@ local function read_trying_list(ps, i, list, read_item, ret_lookahead)
       allow_macro_vars = ps.allow_macro_vars,
       in_local_macro = ps.in_local_macro,
       macro_sigs = ps.macro_sigs,
+      require_aliases = ps.require_aliases,
+      imported_macro_decls = ps.imported_macro_decls,
+      imported_macro_keys = ps.imported_macro_keys,
    }
    local tryi, item = read_item(try_ps, i)
    if not item then
@@ -1290,7 +1743,7 @@ do
             end
 
             if op_kind == "op_colon" then
-               if not args_starters[ps.tokens[i].kind] then
+               if ps.tokens[i].tk ~= "!" and not args_starters[ps.tokens[i].kind] then
                   if ps.tokens[i].tk == "=" then
                      fail(ps, i, "syntax error, cannot perform an assignment here (missing 'local' or 'global'?)")
                   else
@@ -1312,12 +1765,22 @@ do
             local next_tk = ps.tokens[i]
             local args = new_block(ps, i, "expression_list")
             local argument
+            local mname
+            local has_colon
+            mname, has_colon = macro_target_key(e1)
+            if has_colon then
+               fail(ps, prev_i, "method-style macro invocation is not supported; use record.macro!()")
+               return i, failstore(ps, tkop, e1)
+            end
             if next_tk.tk == "(" then
-               local mname
-               if e1 and e1.kind == "identifier" then
-                  mname = e1.tk
-               end
                local sig = mname and ps.macro_sigs[mname]
+               if (not sig) and mname then
+                  local alias = mname:match("^([^.]+)%.")
+                  if alias then
+                     ensure_required_alias_macros(ps, alias)
+                     sig = ps.macro_sigs[mname]
+                  end
+               end
                if sig then
                   i, args = read_macro_args_with_sig(ps, i, sig)
                else
@@ -2463,34 +2926,69 @@ local function read_local_macro(ps, i)
    i, node = read_function_args_rets_body(ps, i, node)
    ps.in_local_macro = old_in_macro
    ps.allow_macro_vars = old_allow
-   local args = node[BLOCK_INDEXES.LOCAL_MACRO.ARGS]
-   if args then
-      local sig = { kinds = {}, vararg = "" }
-      local idx = 1
-      for _, ab in ipairs(args) do
-         local annot = ab and ab[BLOCK_INDEXES.ARGUMENT.TYPE]
-         local ok = false
-         local mode
-         if annot and annot.kind == "nominal_type" and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME] and annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].kind == "identifier" then
-            local tname = annot[BLOCK_INDEXES.NOMINAL_TYPE.NAME].tk
-            if tname == "Statement" then ok = true; mode = "stmt"
-            elseif tname == "Expression" then ok = true; mode = "expr" end
-         end
-         if not ok then
-            table.insert(ps.errs, { filename = ps.filename, y = (annot and annot.y) or ab.y, x = (annot and annot.x) or ab.x, msg = "macro argument type must be 'Statement' or 'Expression'" })
-         else
-            if ab.tk == "..." then
-               sig.vararg = mode or "expr"
-            else
-               sig.kinds[idx] = mode or "expr"
-               idx = idx + 1
-            end
-         end
-      end
-      if node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].kind == "identifier" then
-         ps.macro_sigs[node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk] = sig
-      end
+   if node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].kind == "identifier" then
+      local name = node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk
+      ps.macro_sigs[name] = build_macro_sig(node[BLOCK_INDEXES.LOCAL_MACRO.ARGS], ps.errs, ps.filename, name)
    end
+   return i, node
+end
+
+local function read_attached_macro(ps, i)
+   local istart = i
+   i = verify_tk(ps, i, "macro")
+
+   local names = {}
+   local dot_pos = {}
+
+   i, names[1] = read_identifier(ps, i)
+   if not names[1] then
+      return fail(ps, i, "expected macro owner path")
+   end
+
+   while ps.tokens[i] and ps.tokens[i].tk == "." do
+      table.insert(dot_pos, i)
+      i = i + 1
+      local part
+      i, part = read_identifier(ps, i)
+      if not part then
+         return fail(ps, i, "expected macro name")
+      end
+      table.insert(names, part)
+   end
+
+   if #names < 2 then
+      return fail(ps, i, "attached macros must use the form 'macro Record.name!()'")
+   end
+
+   local owner = names[1]
+   for n = 2, #names - 1 do
+      local dot = new_block(ps, dot_pos[n - 1], "op_dot")
+      dot[BLOCK_INDEXES.OP.E1] = owner
+      dot[BLOCK_INDEXES.OP.E2] = names[n]
+      owner = dot
+   end
+
+   local node = new_block(ps, istart, "local_macro")
+   node[BLOCK_INDEXES.LOCAL_MACRO.OWNER] = owner
+   node[BLOCK_INDEXES.LOCAL_MACRO.NAME] = names[#names]
+
+   i = verify_tk(ps, i, "!")
+
+   local old_in_macro = ps.in_local_macro
+   local old_allow = ps.allow_macro_vars
+   ps.in_local_macro = true
+   ps.allow_macro_vars = false
+   i, node = read_function_args_rets_body(ps, i, node)
+   ps.in_local_macro = old_in_macro
+   ps.allow_macro_vars = old_allow
+
+   local owner_key = path_block_to_string(node[BLOCK_INDEXES.LOCAL_MACRO.OWNER])
+   local name = node[BLOCK_INDEXES.LOCAL_MACRO.NAME] and node[BLOCK_INDEXES.LOCAL_MACRO.NAME].tk
+   if owner_key and name then
+      local key = owner_key .. "." .. name
+      ps.macro_sigs[key] = build_macro_sig(node[BLOCK_INDEXES.LOCAL_MACRO.ARGS], ps.errs, ps.filename, key)
+   end
+
    return i, node
 end
 
@@ -2672,20 +3170,35 @@ read_statements = function(ps, i, toplevel)
          break
       end
 
-      local fn = read_statement_fns[tk]
-      if not fn then
-         local skip_fn = needs_local_or_global[tk]
-         if skip_fn and ps.tokens[i + 1].kind == "identifier" then
-            fn = skip_fn
+      if tk == "macro" then
+         if not toplevel then
+            i = fail(ps, i, "attached macro declarations are only allowed at top level")
+            item = nil
          else
-            fn = read_call_or_assignment
+            i, item = read_attached_macro(ps, i)
          end
-      end
+      else
+         local fn = read_statement_fns[tk]
+         if not fn then
+            local skip_fn = needs_local_or_global[tk]
+            if skip_fn and ps.tokens[i + 1].kind == "identifier" then
+               fn = skip_fn
+            else
+               fn = read_call_or_assignment
+            end
+         end
 
-      i, item = fn(ps, i)
+         i, item = fn(ps, i)
+      end
 
       if item then
          table.insert(node, item)
+         if toplevel and (item.kind == "local_declaration" or item.kind == "local_type") then
+            local alias, module_name = local_require_alias(item)
+            if alias and module_name then
+               ps.require_aliases[alias] = module_name
+            end
+         end
       elseif i > 1 then
 
          local lasty = ps.tokens[i - 1].y
@@ -2700,6 +3213,13 @@ read_statements = function(ps, i, toplevel)
 end
 
 function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars, skip_macro_expand)
+   if read_program_depth == 0 then
+      module_macro_cache = {}
+      module_macro_missing = {}
+      module_macro_loading = {}
+   end
+   read_program_depth = read_program_depth + 1
+
    errs = errs or {}
    filename = filename or "input"
    read_lang = read_lang or lang_heuristic(filename)
@@ -2714,6 +3234,9 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       allow_macro_vars = allow_macro_vars or false,
       in_local_macro = false,
       macro_sigs = {},
+      require_aliases = {},
+      imported_macro_decls = {},
+      imported_macro_keys = {},
    }
    local i = 1
    local hashbang
@@ -2725,6 +3248,11 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    if hashbang then
       table.insert(node, 1, new_block(ps, 1, "hashbang"))
    end
+   for _, decl in ipairs(ps.imported_macro_decls) do
+      table.insert(node, decl)
+   end
+
+   validate_attached_macro_owners(node, errs, filename)
 
    local seen = setmetatable({}, { __mode = "k" })
 
@@ -2734,9 +3262,23 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
       if b.kind == "macro_invocation" then
          local m = b[BLOCK_INDEXES.MACRO_INVOCATION.MACRO]
          local args = b[BLOCK_INDEXES.MACRO_INVOCATION.ARGS]
-         if m and m.kind == "identifier" then
-            local name = m.tk
+         local name, has_colon = macro_target_key(m)
+         if has_colon then
+            table.insert(ps.errs, {
+               filename = ps.filename,
+               y = m.y,
+               x = m.x,
+               msg = "method-style macro invocation is not supported; use record.macro!()",
+            })
+         elseif name then
             local sig = ps.macro_sigs[name]
+            if not sig then
+               local alias = name:match("^([^.]+)%.")
+               if alias then
+                  ensure_required_alias_macros(ps, alias)
+                  sig = ps.macro_sigs[name]
+               end
+            end
             if sig then
                local provided = args and #args or 0
                local required = #sig.kinds
@@ -2764,6 +3306,7 @@ function reader.read_program(tokens, errs, filename, read_lang, allow_macro_vars
    end
 
    errors.clear_redundant_errors(errs)
+   read_program_depth = read_program_depth - 1
    return node
 end
 
