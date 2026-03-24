@@ -1703,14 +1703,13 @@ local function read_if_block(ps: ReadState, i: integer, node: Block, is_else?: b
       end
    end
    if_block.yend, if_block.xend = (if_block[BLOCK_INDEXES.IF_BLOCK.BODY] or if_block[BLOCK_INDEXES.IF_BLOCK.COND]).yend, (if_block[BLOCK_INDEXES.IF_BLOCK.BODY] or if_block[BLOCK_INDEXES.IF_BLOCK.COND]).xend
-   table.insert(node[BLOCK_INDEXES.IF.BLOCKS], if_block)
+   table.insert(node, if_block)
    return i, node
 end
 
 local function read_if(ps: ReadState, i: integer): integer, Block
    local istart = i
    local node = new_block(ps, i, "if")
-   node[BLOCK_INDEXES.IF.BLOCKS] = {}
    i, node = read_if_block(ps, i, node)
    if not node then
       return i
@@ -2653,9 +2652,7 @@ read_statements = function(ps: ReadState, i: integer, toplevel?: boolean): integ
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
-         if item then
-            table.insert(item, new_block(ps, i - 1, ";"))
-         end
+         table.insert(node, new_block(ps, i - 1, ";"))
       end
 
       if ps.tokens[i].kind == "$EOF$" then
