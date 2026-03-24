@@ -1028,13 +1028,9 @@ read_macro_quote = function(ps: ReadState, i: integer): integer, Block
          if ret and ret.kind == "return" and ret[BLOCK_INDEXES.RETURN.EXPS] then
             local exp = ret[BLOCK_INDEXES.RETURN.EXPS][1]
             quoted_block = exp
-            errs = {}
-         else
-            errs = werrs
          end
-      else
-         errs = werrs
       end
+      errs = werrs
    end
 
    -- making syntax errors relative to the actual macro quote
