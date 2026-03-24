@@ -1,5 +1,5 @@
 local tl = require('tl')
-local lua_gen = require('teal.gen.lua_generator')
+local lua_generator = require('teal.gen.lua_generator')
 
 describe('macro parameter kinds', function()
    it('requires annotations Statement or Expression', function()
@@ -30,7 +30,7 @@ describe('macro parameter kinds', function()
       ]]
       local ast, errs = tl.parse(code)
       assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
+      local out, err = lua_generator.generate(ast, '5.4')
       assert.is_nil(err)
       out = out:gsub('^%s+', ''):gsub('%s+$', '')
       assert.same('local a = 1 + 2', out)
@@ -53,7 +53,7 @@ describe('macro parameter kinds', function()
       ]]
       local ast, errs = tl.parse(code)
       assert.same({}, errs)
-      local out, err = lua_gen.generate(ast, '5.4')
+      local out, err = lua_generator.generate(ast, '5.4')
       assert.is_nil(err)
       local count = 0
       for _ in out:gmatch("print%(") do count = count + 1 end
