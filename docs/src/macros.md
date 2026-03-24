@@ -73,9 +73,7 @@ m.double!(print("hi"))
 m.Helper.side!(print("there"))
 ```
 
-If a macro is attached to a non-root record, that record must actually be
-nested under the returned record. Keep the owner path when invoking it:
-`m.Helper.side!()`.
+Macros that you import from another module are attached to the record, just as `macroexp`s are, so you must qualify it with the record name (which may be nested). 
 
 ## Invoking a macro
 
