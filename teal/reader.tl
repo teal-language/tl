@@ -2256,11 +2256,7 @@ do
          return i, exp
       end
 
-      if exp.kind == "macro_var" then
-         return i, exp
-      end
-
-      if exp.kind ~= "identifier" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" then
+      if exp.kind ~= "identifier" and exp.kind ~= "op_index" and exp.kind ~= "op_dot" and exp.kind ~= "macro_var" then
          return fail(ps, i, "syntax error")
       end
 
