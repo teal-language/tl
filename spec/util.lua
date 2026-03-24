@@ -743,7 +743,27 @@ local function gen(lax, code, expected, gen_target, type_errors)
          assert.same({}, expected_errors, "Code was not expected to have syntax errors")
          local expected_code = tl.generate(expected_ast, gen_target)
 
-         assert.same(expected_code, output_code)
+         local expected_lines = {}
+         for line in expected_code:gmatch("([^\n]*)\n") do
+           table.insert(expected_lines, line)
+         end
+
+         local output_lines = {}
+         for line in output_code:gmatch("([^\n]*)\n") do
+           table.insert(output_lines, line)
+         end
+
+         if expected_code ~= output_code then
+            if #output_lines > 5 then
+               for i = 1, math.max(#expected_lines, #output_lines) do
+                 if expected_lines[i] ~= output_lines[i] then
+                   assert.equals(expected_lines[i], output_lines[i], "\n*** At line " .. i .. ":")
+                 end
+               end
+            else
+               assert.equals(expected_code, output_code)
+            end
+         end
       end
    end
 end
