@@ -303,7 +303,6 @@ record_function
 local_declaration
 global_declaration
 identifier
-cast
 ...
 :
 ;
@@ -464,8 +463,6 @@ MACRO_QUOTE.BLOCK
 INTERFACE.FIELDS
 INTERFACE.INTERFACES
 INTERFACE.ARRAY_TYPE
-
-CAST.TYPE
 
 LITERAL_TABLE_ITEM.VALUE
 LITERAL_TABLE_ITEM.KEY

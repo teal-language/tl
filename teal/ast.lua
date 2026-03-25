@@ -774,8 +774,8 @@ parse_expression = function(state, block)
             end
          elseif op_info.op == "as" or op_info.op == "is" then
             node.e2 = new_node(state, block[reader.BLOCK_INDEXES.OP.E2], "cast")
-            if node.e2 and block[reader.BLOCK_INDEXES.OP.E2] and block[reader.BLOCK_INDEXES.OP.E2][reader.BLOCK_INDEXES.CAST.TYPE] then
-               local ct_block = block[reader.BLOCK_INDEXES.OP.E2][reader.BLOCK_INDEXES.CAST.TYPE]
+            if node.e2 and block[reader.BLOCK_INDEXES.OP.E2] and block[reader.BLOCK_INDEXES.OP.E2] then
+               local ct_block = block[reader.BLOCK_INDEXES.OP.E2]
                if ct_block.kind == "tuple_type" then
                   local ct
                   ct = parse_type_list(state, ct_block, "casttype")

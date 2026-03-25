@@ -1408,13 +1408,13 @@ do
             local op_kind = op_map[2][tkop.tk]
 
             i = i + 1
-            local cast = new_block(ps, i, "cast")
+            local cast: Block
             if ps.tokens[i].tk == "(" then
-               i, cast[BLOCK_INDEXES.CAST.TYPE] = read_type_list(ps, i, "casttype")
+               i, cast = read_type_list(ps, i, "casttype")
             else
-               i, cast[BLOCK_INDEXES.CAST.TYPE] = read_type(ps, i)
+               i, cast = read_type(ps, i)
             end
-            if not cast[BLOCK_INDEXES.CAST.TYPE] then
+            if not cast then
                return i, failstore(ps, tkop, e1)
             end
             e1 = { f = ps.filename, y = tkop.y, x = tkop.x, kind = op_kind, [BLOCK_INDEXES.OP.E1] = e1, [BLOCK_INDEXES.OP.E2] = cast, tk = tkop.tk }
