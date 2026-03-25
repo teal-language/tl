@@ -803,10 +803,6 @@ parse_expression = function(state, block)
    end
 
    local node = new_node(state, block)
-   if not node then
-      local dummy_block = { kind = nil, y = 1, x = 1, tk = "", yend = 1, xend = 1 }
-      node = new_node(state, dummy_block, "error_node")
-   end
 
    if kind == "string" then
       node.conststr = block_string_value(block)
