@@ -10666,6 +10666,10 @@ function environment.new(opts)
    env.opts = opts or env.opts
    if not env.opts.no_stdlib then
       load_precompiled_default_env(env)
+   else
+
+
+      env:require_module("teal.default.prelude")
    end
    return env
 end
