@@ -68,6 +68,7 @@ build = {
 
 
       -- Ship the compiled Lua modules from the `tlcli` namespace for the `tl` program:
+      ["tlcli.commands.dump_blocks"] = "tlcli/commands/dump_blocks.lua",
       ["tlcli.commands.warnings"] = "tlcli/commands/warnings.lua",
       ["tlcli.commands.types"] = "tlcli/commands/types.lua",
       ["tlcli.commands.gen"] = "tlcli/commands/gen.lua",
