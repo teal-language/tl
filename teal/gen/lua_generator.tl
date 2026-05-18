@@ -344,7 +344,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                   add_string(out, ", ")
                end
                add_string(out, var.tk)
-               if var.attribute and gen_target == "5.4" then
+               if var.attribute and (gen_target == "5.4" or gen_target == "5.5") then
                   add_string(out, lua_54_attribute[var.attribute])
                end
             end
@@ -772,7 +772,16 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["nil"] = emit_exactly_visitor_cbs,
       ["boolean"] = emit_exactly_visitor_cbs,
       ["..."] = emit_exactly_visitor_cbs,
-      ["argument"] = emit_exactly_visitor_cbs,
+      ["argument"] = {
+         after = function(_: nil, node: Node, _children: {Output}): Output
+            local out: Output = { y = node.y, h = 0 }
+            add_string(out, node.tk)
+            if node.name and gen_target == "5.5" then
+               add_string(out, node.name.tk)
+            end
+            return out
+         end,
+      },
       ["type_identifier"] = emit_exactly_visitor_cbs,
 
       ["cast"] = emit_nothing_visitor_cbs,

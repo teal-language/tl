@@ -46,7 +46,7 @@ describe("assignment to const", function()
          __close = function() end
       })
    ]], {
-      { y = 4, msg = "only valid for Lua 5.4 (current target is 5.1)" },
+      { y = 4, msg = "only valid for Lua 5.4+ (current target is 5.1)" },
    }, "5.1"))
 
    it("close variable can only be used with 5.4+", util.check_type_error([[
@@ -57,7 +57,7 @@ describe("assignment to const", function()
          __close = function() end
       })
    ]], {
-      { y = 4, msg = "only valid for Lua 5.4 (current target is 5.3)" },
+      { y = 4, msg = "only valid for Lua 5.4+ (current target is 5.3)" },
    }, "5.3"))
 end)
 

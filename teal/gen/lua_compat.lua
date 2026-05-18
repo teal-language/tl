@@ -124,7 +124,22 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
       cbs = {},
    }
 
-   if gen_target <= "5.5" then
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   if gen_target < "5.5" then
       visit = true
       local functionvisit = {
          after = function(_self, node, _children)
@@ -227,7 +242,7 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
    end
 
 
-   if gen_target == "5.4" then
+   if gen_target == "5.4" or gen_target == "5.5" then
       visit = true
       visit_node.cbs["forin"] = {
          after = function(_, node, _children)

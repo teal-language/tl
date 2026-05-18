@@ -5,7 +5,7 @@ describe("local type code generation", function()
       it("rejected for non 5.4 target (" .. gen_target .. ")", util.gen([[
          local x <close> = io.open("foobar", "r")
       ]], nil, gen_target, {
-         { msg = "only valid for Lua 5.4" }
+         { msg = "only valid for Lua 5.4+" }
       }))
    end
 

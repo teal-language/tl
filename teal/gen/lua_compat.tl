@@ -124,7 +124,22 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
       cbs = {}
    }
 
-   if gen_target <= "5.5" then
+   -- Statements that aren't supported in compat have already had errors raised or are ignored:
+   --
+   -- 5.1-only: Goto statements (and labels) aren't supported
+   --           (This isn't errored, since LuaJIT supports goto, but still reports as 5.1)
+   -- 5.1-5.3:  <close> on variables isn't supported
+   --
+   -- (search for gen_target under teal/check/visitors.tl)
+
+   -- Other items that are done below are:
+   --
+   -- 5.1-only: Various library functions and math operations are emulated with compat53
+   -- 5.1-5.4: Named varargs are emulated with table.pack
+   -- 5.4+: For loop control variables have an extra local declaration to allow modification
+
+   -- compat for named varargs
+   if gen_target < "5.5" then
       visit = true
       local functionvisit = {
          after = function(_self: nil, node: Node, _children: {nil}): nil
@@ -227,7 +242,7 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
    end
 
    -- compat for forin control variable modification
-   if gen_target == "5.4" then
+   if gen_target == "5.4" or gen_target == "5.5" then
       visit = true
       visit_node.cbs["forin"] = {
          after = function(_: nil, node: Node, _children: {nil}): nil

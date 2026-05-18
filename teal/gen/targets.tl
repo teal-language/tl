@@ -3,6 +3,7 @@ local record targets
       "5.1"
       "5.3"
       "5.4"
+      "5.5"
    end
 end
 
@@ -15,6 +16,8 @@ function targets.detect(override?: string): targets.GenTarget
       return "5.3"
    elseif version == "Lua 5.4" then
       return "5.4"
+   elseif version == "Lua 5.5" then
+      return "5.5"
    end
 end
 

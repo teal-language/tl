@@ -1,6 +1,7 @@
 local util = require("spec.util")
 
 describe("Lua version compatibility", function()
+   -- integral operators
    it("generates compat code for // operator", util.gen([[
       local function hello(n: number): number
          return 9
@@ -98,4 +99,53 @@ describe("Lua version compatibility", function()
 
       print(_tl_mt("__shl", 1, r, s))
    ]], "5.1"))
+
+   -- varargs
+   it("generates compatibility code for named varargs with Lua 5.1", util.gen([[
+
+      local function test(...args: boolean): integer, boolean
+         return args.n, args[1]
+      end
+   ]], [[
+      local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end
+      local function test(...) local args = _tl_table_pack(...)
+         return args.n, args[1]
+      end
+   ]], "5.1"))
+
+   it("generates compatibility code for named varargs with Lua 5.3", util.gen([[
+
+      local function test(...args: boolean): integer, boolean
+         return args.n, args[1]
+      end
+   ]], [[
+      local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end
+      local function test(...) local args = _tl_table_pack(...)
+         return args.n, args[1]
+      end
+   ]], "5.3"))
+
+   it("generates compatibility code for named varargs with Lua 5.4", util.gen([[
+
+      local function test(...args: boolean): integer, boolean
+         return args.n, args[1]
+      end
+   ]], [[
+
+      local function test(...) local args = table.pack(...)
+         return args.n, args[1]
+      end
+   ]], "5.4"))
+
+   it("does not generate compatibility code for named varargs with Lua 5.5", util.gen([[
+
+      local function test(...args: boolean): integer, boolean
+         return args.n, args[1]
+      end
+   ]], [[
+
+      local function test(...args)
+         return args.n, args[1]
+      end
+   ]], "5.5"))
 end)

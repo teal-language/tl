@@ -356,6 +356,28 @@ describe("tl gen", function()
       end
    ]]
 
+   local output_code_without_compat_55 = [[
+
+      local t = { 1, 2, 3, 4 }
+      print(table.unpack(t))
+      local t2 = table.pack(1, 2, "any")
+      local n = 42
+      local maxi = math.maxinteger
+      local mini = math.mininteger
+      if math.type(n) == "integer" then
+         print("hello")
+      end
+      if math.type(maxi) == "integer" then
+         print("maxi")
+      end
+      if math.type(mini) == "integer" then
+         print("mini")
+      end
+      local function testing(...arguments)
+         return arguments[2]
+      end
+   ]]
+
    local output_code_with_optional_compat = [[
       local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local _tl_math_mininteger = math.mininteger or -math.pow(2, 53) - 1; local table = _tl_compat and _tl_compat.table or table; local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end; local _tl_table_unpack = unpack or table.unpack
       local t = { 1, 2, 3, 4 }
@@ -400,9 +422,9 @@ describe("tl gen", function()
       end
    ]]
 
-   local function run_gen_with_flag(finally, flag, output_code)
+   local function run_gen_with_flag(finally, flag, output_code, version)
       local name = util.write_tmp_file(finally, input_code)
-      local pd = popen_tl("gen", name, flag)
+      local pd = popen_tl("gen", name, flag, version and ("--gen-target="..version))
       local output = pd:read("*a")
       util.assert_popen_close(0, pd:close())
       local lua_name = tl_to_lua(name)
@@ -437,6 +459,18 @@ describe("tl gen", function()
    describe("without --skip-compat53", function()
       it("adds compat53 insertions by default", function()
          run_gen_with_flag(finally, nil, output_code_with_optional_compat)
+      end)
+   end)
+
+   describe("with target 5.5", function()
+      it("uses new argument functionality", function()
+         run_gen_with_flag(finally, "--gen-compat=off", output_code_without_compat_55, "5.5")
+      end)
+   end)
+
+   describe("with target 5.4", function()
+      it("does not add compat53 assertions", function()
+         run_gen_with_flag(finally, "--gen-compat=off", output_code_without_compat, "5.4")
       end)
    end)
 

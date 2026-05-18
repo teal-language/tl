@@ -538,7 +538,7 @@ local function check(lax, code, unknowns, gen_target)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local gen_compat
-      if gen_target == "5.4" then
+      if (gen_target == "5.4" or gen_target == "5.5") then
          gen_compat = "off"
       end
       local result = tl.check(ast, name, { gen_target = gen_target, gen_compat = gen_compat })
@@ -573,7 +573,7 @@ local function check_type_error(lax, code, type_errors, gen_target)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local batch = batch_assertions()
       local gen_compat
-      if gen_target == "5.4" then
+      if (gen_target == "5.4" or gen_target == "5.5") then
          gen_compat = "off"
       end
       local result = tl.check(ast, name, { gen_target = gen_target, gen_compat = gen_compat })
@@ -724,7 +724,7 @@ local function gen(lax, code, expected, gen_target, type_errors)
       local name = lax and "foo.lua" or "foo.tl"
       local ast, syntax_errors = tl.parse(util.dedent(code), name)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
-      local gen_compat = gen_target == "5.4" and "off" or nil
+      local gen_compat = (gen_target == "5.4" or gen_target == "5.5") and "off" or nil
       local result = tl.check(ast, name, { gen_target = gen_target, gen_compat = gen_compat })
 
       if type_errors then

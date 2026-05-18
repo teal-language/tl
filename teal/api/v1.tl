@@ -94,8 +94,8 @@ v1.init_env = function(lax?: boolean, gen_compat?: boolean | GenCompat, gen_targ
       predefined_modules = predefined,
    }
 
-   if opts.defaults.gen_target == "5.4" and opts.defaults.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   if (opts.defaults.gen_target == "5.4" or opts.defaults.gen_target == "5.5") and opts.defaults.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'"
    end
 
    local env, err = v2.new_env(opts)

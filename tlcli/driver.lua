@@ -43,8 +43,8 @@ function driver.setup_compiler(tlconfig)
       no_stdlib = tlconfig["no_stdlib"] == true,
    }
 
-   if opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
-      common.die("gen-compat must be explicitly 'off' when gen-target is '5.4'")
+   if (opts.gen_target == "5.4" or opts.gen_target == "5.5") and opts.gen_compat ~= "off" then
+      common.die("gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'")
    end
 
    local compiler = teal.compiler(opts)
