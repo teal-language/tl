@@ -33,7 +33,7 @@ describe("string literal code generation", function()
       ]]
    ]==], "5.1"))
 
-   for _, version in ipairs { "5.1", "5.3", "5.4" } do
+   for _, version in ipairs { "5.1", "5.3", "5.4", "5.5" } do
       local source = [[local _hex = "\xaa\xbb\xcc"]]
       local expected = version == "5.1"
          and [[local _hex = "\170\187\204"]]

@@ -77,7 +77,7 @@ local function validate_config(config)
       skip_compat53 = "boolean",
       feat_arity = { ["off"] = true, ["on"] = true },
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
-      gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
+      gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true, ["5.5"] = true },
       disable_warnings = "{string}",
       warning_error = "{string}",
       no_stdlib = "boolean",

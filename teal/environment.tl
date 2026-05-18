@@ -157,7 +157,7 @@ end
 -- client application, such as `tl.load` and the Teal package loader.
 function environment.for_runtime(): Env
    local gen_target = targets.detect()
-   local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
+   local gen_compat = (gen_target == "5.4" or gen_target == "5.5") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
       gen_target = gen_target,
       gen_compat = gen_compat,
@@ -201,8 +201,8 @@ do
    -- This is used by the precompiler when building
    -- `teal.precompiled.default_env`.
    function environment.construct(opts?: EnvOptions, prelude?: string, stdlib?: string): Env, string
-      if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
-         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+      if opts and (opts.gen_target == "5.4" or opts.gen_target == "5.5") and opts.gen_compat ~= "off" then
+         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'"
       end
 
       local env = empty_environment()

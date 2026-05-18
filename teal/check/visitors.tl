@@ -860,8 +860,8 @@ visit_node.cbs = {
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
             if var.attribute == "close" then
-               if self.env.opts.gen_target ~= "5.4" then
-                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(self.env.opts.gen_target) .. ")")
+               if self.env.opts.gen_target ~= "5.4" and self.env.opts.gen_target ~= "5.5" then
+                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4+ (current target is " .. tostring(self.env.opts.gen_target) .. ")")
                end
                if encountered_close then
                   self.errs:add(var, "only one <close> per declaration is allowed")

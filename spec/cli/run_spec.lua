@@ -173,7 +173,7 @@ describe("tl run", function()
          local pd = io.popen(util.tl_cmd("run", name) .. "2>&1 1>" .. util.os_null, "r")
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
-         if _VERSION == "Lua 5.4" then
+         if _VERSION == "Lua 5.4" or _VERSION == "Lua 5.5" then
             assert.match("attempt to add a 'string' with a 'number'", output, 1, true)
          else
             assert.match("attempt to perform arithmetic on", output, 1, true)

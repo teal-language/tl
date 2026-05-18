@@ -106,8 +106,8 @@ local function env_from_check_options(opts)
 end
 
 v2.check = function(ast, filename, opts, env)
-   if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   if opts and (opts.gen_target == "5.4" or opts.gen_target == "5.5") and opts.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'"
    end
 
    if opts and env then
@@ -8387,8 +8387,8 @@ visit_node.cbs = {
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
             if var.attribute == "close" then
-               if self.env.opts.gen_target ~= "5.4" then
-                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4 (current target is " .. tostring(self.env.opts.gen_target) .. ")")
+               if self.env.opts.gen_target ~= "5.4" and self.env.opts.gen_target ~= "5.5" then
+                  self.errs:add(var, "<close> attribute is only valid for Lua 5.4+ (current target is " .. tostring(self.env.opts.gen_target) .. ")")
                end
                if encountered_close then
                   self.errs:add(var, "only one <close> per declaration is allowed")
@@ -10490,7 +10490,7 @@ end
 
 function environment.for_runtime()
    local gen_target = targets.detect()
-   local gen_compat = (gen_target == "5.4") and "off" or environment.DEFAULT_GEN_COMPAT
+   local gen_compat = (gen_target == "5.4" or gen_target == "5.5") and "off" or environment.DEFAULT_GEN_COMPAT
    return environment.new({
       gen_target = gen_target,
       gen_compat = gen_compat,
@@ -10534,8 +10534,8 @@ do
 
 
    function environment.construct(opts, prelude, stdlib)
-      if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
-         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+      if opts and (opts.gen_target == "5.4" or opts.gen_target == "5.5") and opts.gen_compat ~= "off" then
+         return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'"
       end
 
       local env = empty_environment()
@@ -11390,7 +11390,22 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
       cbs = {},
    }
 
-   if gen_target <= "5.5" then
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   if gen_target < "5.5" then
       visit = true
       local functionvisit = {
          after = function(_self, node, _children)
@@ -11493,7 +11508,7 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
    end
 
 
-   if gen_target == "5.4" then
+   if gen_target == "5.4" or gen_target == "5.5" then
       visit = true
       visit_node.cbs["forin"] = {
          after = function(_, node, _children)
@@ -11893,7 +11908,7 @@ function lua_generator.generate(ast, gen_target, opts)
                   add_string(out, ", ")
                end
                add_string(out, var.tk)
-               if var.attribute and gen_target == "5.4" then
+               if var.attribute and (gen_target == "5.4" or gen_target == "5.5") then
                   add_string(out, lua_54_attribute[var.attribute])
                end
             end
@@ -12321,7 +12336,16 @@ function lua_generator.generate(ast, gen_target, opts)
       ["nil"] = emit_exactly_visitor_cbs,
       ["boolean"] = emit_exactly_visitor_cbs,
       ["..."] = emit_exactly_visitor_cbs,
-      ["argument"] = emit_exactly_visitor_cbs,
+      ["argument"] = {
+         after = function(_, node, _children)
+            local out = { y = node.y, h = 0 }
+            add_string(out, node.tk)
+            if node.name and gen_target == "5.5" then
+               add_string(out, node.name.tk)
+            end
+            return out
+         end,
+      },
       ["type_identifier"] = emit_exactly_visitor_cbs,
 
       ["cast"] = emit_nothing_visitor_cbs,
@@ -12399,6 +12423,7 @@ local targets = {}
 
 
 
+
 function targets.detect(override)
    local version = override or _VERSION
    if version == "Lua 5.1" or
@@ -12408,6 +12433,8 @@ function targets.detect(override)
       return "5.3"
    elseif version == "Lua 5.4" then
       return "5.4"
+   elseif version == "Lua 5.5" then
+      return "5.5"
    end
 end
 

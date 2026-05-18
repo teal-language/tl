@@ -104,8 +104,8 @@ local function env_from_check_options(opts)
 end
 
 v2.check = function(ast, filename, opts, env)
-   if opts and opts.gen_target == "5.4" and opts.gen_compat ~= "off" then
-      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4'"
+   if opts and (opts.gen_target == "5.4" or opts.gen_target == "5.5") and opts.gen_compat ~= "off" then
+      return nil, "gen-compat must be explicitly 'off' when gen-target is '5.4' or '5.5'"
    end
 
    if opts and env then

@@ -46,7 +46,7 @@ local function get_args_parser()
    defmode("a")
 
    parser:option("--gen-target", "Minimum targeted Lua version for generated code."):
-   choices({ "5.1", "5.3", "5.4" })
+   choices({ "5.1", "5.3", "5.4", "5.5" })
 
    parser:flag("--skip-compat53", "Skip compat53 insertions."):
    hidden(true):
