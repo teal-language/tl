@@ -722,7 +722,7 @@ end
 local function gen(lax, code, expected, gen_target, type_errors)
    return function()
       local name = lax and "foo.lua" or "foo.tl"
-      local ast, syntax_errors = tl.parse(code, name)
+      local ast, syntax_errors = tl.parse(util.dedent(code), name)
       assert.same({}, syntax_errors, "Code was not expected to have syntax errors")
       local gen_compat = gen_target == "5.4" and "off" or nil
       local result = tl.check(ast, name, { gen_target = gen_target, gen_compat = gen_compat })
@@ -739,9 +739,8 @@ local function gen(lax, code, expected, gen_target, type_errors)
       local output_code = tl.generate(ast, gen_target)
 
       if expected then
-         local expected_ast, expected_errors = tl.parse(expected, name)
-         assert.same({}, expected_errors, "Code was not expected to have syntax errors")
-         local expected_code = tl.generate(expected_ast, gen_target)
+         -- trim trailing lines
+         local expected_code = util.dedent(expected):match("^(.-)%s*$")
 
          local expected_lines = {}
          for line in expected_code:gmatch("([^\n]*)\n") do
@@ -756,9 +755,9 @@ local function gen(lax, code, expected, gen_target, type_errors)
          if expected_code ~= output_code then
             if #output_lines > 5 then
                for i = 1, math.max(#expected_lines, #output_lines) do
-                 if expected_lines[i] ~= output_lines[i] then
-                   assert.equals(expected_lines[i], output_lines[i], "\n*** At line " .. i .. ":")
-                 end
+                  if expected_lines[i] ~= output_lines[i] then
+                     assert.equals(expected_lines[i], output_lines[i], "\n*** At line " .. i .. ":")
+                  end
                end
             else
                assert.equals(expected_code, output_code)

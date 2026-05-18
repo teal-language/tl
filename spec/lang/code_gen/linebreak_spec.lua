@@ -41,7 +41,7 @@ describe("improved line break heuristics", function()
 
 
       function Foo:greet(
-            greeting)
+         greeting)
          print(greeting)
       end
    ]]))
