@@ -11492,6 +11492,7 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
       }
    end
 
+
    if gen_target == "5.4" then
       visit = true
       visit_node.cbs["forin"] = {
@@ -11501,14 +11502,19 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
             end
             if node.forin_modifies_control_var then
                local control_var = node.vars[1].tk
-               local localization = parser.parse("local " .. control_var .. " = " .. control_var, "@<internal>.lua")
-               localization[1].y = node.y
-               localization[1].vars.y = node.y
-               localization[1].vars[1].y = node.y
-               localization[1].exps.y = node.y
-               localization[1].exps[1].y = node.y
-               table.insert(node.body, 1, localization[1])
-               node.body.y = node.y
+               local loc_at = node
+               local stmt = node_at(loc_at, {
+                  kind = "local_declaration",
+                  vars = node_at(loc_at, {
+                     kind = "variable_list",
+                     node_at(loc_at, { kind = "variable", is_lvalue = true, tk = control_var }),
+                  }),
+                  exps = node_at(loc_at, {
+                     kind = "expression_list",
+                     node_at(loc_at, { kind = "variable", tk = control_var }),
+                  }),
+               })
+               table.insert(node.body, 1, stmt)
             end
          end,
       }
