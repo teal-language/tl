@@ -349,7 +349,7 @@ describe("local type code generation", function()
 
       Qux.v = 123
 
-      local Foo = {Bar = {}, }
+      local Foo = { Bar = {} }
 
 
 

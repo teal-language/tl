@@ -46,7 +46,7 @@ describe("Lua version compatibility", function()
 
       print((~r) * 2)
    ]], [[
-      local _tl_mt = function(m, s, a, b)    return (getmetatable(s == 1 and a or b)[m](a, b)) end
+      local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end
 
 
 
@@ -81,7 +81,7 @@ describe("Lua version compatibility", function()
 
       print(r << s)
    ]], [[
-      local _tl_mt = function(m, s, a, b)    return (getmetatable(s == 1 and a or b)[m](a, b)) end
+      local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end
 
 
 

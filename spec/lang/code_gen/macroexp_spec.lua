@@ -110,7 +110,7 @@ describe("macroexp code generation", function()
 
 
 
-      local r: R = { x = 10 }
+      local r = { x = 10 }
       print(r.x)
       print("R is " .. tostring(r.x) .. "!")
    ]]))
@@ -241,7 +241,7 @@ describe("macroexp code generation", function()
 
 
 
-      local f = {sz = 10}
+      local f = { sz = 10 }
       print(f.sz)
    ]]))
 end)
