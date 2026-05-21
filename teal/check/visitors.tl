@@ -783,6 +783,16 @@ local function assert_is_a(ctx: Context, w: Where, t1: Type, t2: Type, ectx?: No
    return ok
 end
 
+local function count_scope_vars(self: Context): integer
+   local n = 0
+   for i = 1, #self.st do
+      for _, _ in pairs(self.st[i].vars) do
+         n = n + 1
+      end
+   end
+   return n
+end
+
 visit_node.cbs = {
    ["statements"] = {
       before = function(self: Context, node: Node)
@@ -1052,14 +1062,17 @@ visit_node.cbs = {
             end
          end
 
-         --for i = #self.st, 1, -1 do
-            local scope = self.st[#self.st]
-            if scope.pending_labels and scope.pending_labels[label_id] then
-               node.used_label = true
-               scope.pending_labels[label_id] = nil
-               --break
+         local scope = self.st[#self.st]
+         if scope.pending_labels and scope.pending_labels[label_id] then
+            local n_scope_vars = count_scope_vars(self)
+            for _, goto_node in ipairs(scope.pending_labels[label_id]) do
+               if n_scope_vars > goto_node.n_scope_vars then
+                  self.errs:add(goto_node, "goto jumps into scope of a local variable")
+               end
             end
-         --end
+            node.used_label = true
+            scope.pending_labels[label_id] = nil
+         end
       end,
       after = function(): Type
          return NONE
@@ -1084,6 +1097,7 @@ visit_node.cbs = {
             scope.pending_labels = scope.pending_labels or {}
             scope.pending_labels[label_id] = scope.pending_labels[label_id] or {}
             table.insert(scope.pending_labels[label_id], node)
+            node.n_scope_vars = count_scope_vars(self)
          end
 
          return NONE

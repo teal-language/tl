@@ -107,4 +107,38 @@ describe("goto", function()
       end
    ]]))
 
+   it("rejects a goto into the scope of local in same block (regression test for #1121)", util.check_type_error([[
+      goto finish
+      local _foo  =  0
+      :: finish ::
+      local _bar  =  0
+   ]], {
+      { y = 1, msg = "goto jumps into scope of a local variable" }
+   }))
+
+   it("can jump upwards (regression test for #1121)", util.check([[
+      local _foo = 0
+      :: finish ::
+      goto finish
+   ]]))
+
+   it("can jump over out-of-scope locals (regression test for #1121)", util.check([[
+      do
+         goto finish
+         local _foo  =  0
+      end
+      :: finish ::
+      local _bar  =  0
+   ]]))
+
+   it("rejects a goto into the scope of local in outer block (regression test for #1121)", util.check_type_error([[
+      do
+         goto finish
+      end
+      local _foo  =  0
+      :: finish ::
+      local _bar  =  0
+   ]], {
+      { y = 2, msg = "goto jumps into scope of a local variable" }
+   }))
 end)

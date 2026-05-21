@@ -189,6 +189,7 @@ local record Node
 
    -- goto
    label: string
+   n_scope_vars: integer
 
    -- label
    used_label: boolean
