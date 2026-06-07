@@ -805,6 +805,10 @@ do
          end
       end
 
+      if state == "comment short" or state == "got --" or state == "got --[" then
+         add_comment(input:sub(ti, #input))
+      end
+
       table.insert(tokens, { x = x + 1, y = y, tk = "$EOF$", kind = "$EOF$", comments = comments })
 
       return tokens, errs
