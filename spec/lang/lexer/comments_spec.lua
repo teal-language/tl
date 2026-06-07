@@ -122,4 +122,31 @@ describe("lexer", function()
       }, tokens[11].comments)
    end)
 
+   it("preserves line comment at end of file without trailing newline", function()
+      local tokens = tl.lex("-- a comment")
+      assert.same(1, #tokens)
+      assert.same("$EOF$", tokens[1].tk)
+      assert.same({
+         {text = "-- a comment", x = 1, y = 1}
+      }, tokens[1].comments)
+   end)
+
+   it("preserves empty line comment at end of file without trailing newline", function()
+      local tokens = tl.lex("--")
+      assert.same(1, #tokens)
+      assert.same("$EOF$", tokens[1].tk)
+      assert.same({
+         {text = "--", x = 1, y = 1}
+      }, tokens[1].comments)
+   end)
+
+   it("preserves line comment starting with [ at end of file without trailing newline", function()
+      local tokens = tl.lex("--[")
+      assert.same(1, #tokens)
+      assert.same("$EOF$", tokens[1].tk)
+      assert.same({
+         {text = "--[", x = 1, y = 1}
+      }, tokens[1].comments)
+   end)
+
 end)
