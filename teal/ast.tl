@@ -193,6 +193,7 @@ local record Node
 
    -- label
    used_label: boolean
+   is_end_of_block: boolean
 
    casttype: Type
 
