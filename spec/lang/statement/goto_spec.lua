@@ -141,4 +141,55 @@ describe("goto", function()
    ]], {
       { y = 2, msg = "goto jumps into scope of a local variable" }
    }))
+
+   it("accepts a goto over a local to a label at the end of a block", util.check([[
+      for i = 1, 5 do
+         goto next
+         local _this = i
+         ::next::
+      end
+   ]]))
+
+   it("accepts the continue idiom with locals in the loop body", util.check([[
+      for i = 1, 3 do
+         if i == 2 then
+            goto continue
+         end
+         local doubled = i * 2
+         print(doubled)
+         ::continue::
+      end
+   ]]))
+
+   it("accepts a goto over a local to stacked labels at the end of a block", util.check([[
+      do
+         goto first
+         local _foo = 0
+         ::first::
+         ::second::
+      end
+      local _bar = 0
+   ]]))
+
+   it("rejects a goto over a local to a label followed by return", util.check_type_error([[
+      local function f(): integer
+         goto finish
+         local _foo = 0
+         ::finish::
+         return 1
+      end
+      f()
+   ]], {
+      { y = 2, msg = "goto jumps into scope of a local variable" }
+   }))
+
+   it("rejects a goto over a local to a label at the end of a repeat body", util.check_type_error([[
+      repeat
+         goto continue
+         local _foo = 0
+         ::continue::
+      until true
+   ]], {
+      { y = 2, msg = "goto jumps into scope of a local variable" }
+   }))
 end)

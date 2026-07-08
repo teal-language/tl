@@ -497,6 +497,7 @@ local parse_typeargs_if_any
 
 
 
+
 local ast = {}
 
 
@@ -8325,6 +8326,19 @@ visit_node.cbs = {
    ["statements"] = {
       before = function(self, node)
          self:begin_scope(node)
+
+
+
+
+
+         if not node.is_repeat then
+            for i = #node, 1, -1 do
+               if node[i].kind ~= "label" then
+                  break
+               end
+               node[i].is_end_of_block = true
+            end
+         end
       end,
       after = function(self, node, _children)
 
@@ -8592,10 +8606,12 @@ visit_node.cbs = {
 
          local scope = self.st[#self.st]
          if scope.pending_labels and scope.pending_labels[label_id] then
-            local n_scope_vars = count_scope_vars(self)
-            for _, goto_node in ipairs(scope.pending_labels[label_id]) do
-               if n_scope_vars > goto_node.n_scope_vars then
-                  self.errs:add(goto_node, "goto jumps into scope of a local variable")
+            if not node.is_end_of_block then
+               local n_scope_vars = count_scope_vars(self)
+               for _, goto_node in ipairs(scope.pending_labels[label_id]) do
+                  if n_scope_vars > goto_node.n_scope_vars then
+                     self.errs:add(goto_node, "goto jumps into scope of a local variable")
+                  end
                end
             end
             node.used_label = true
