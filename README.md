@@ -13,7 +13,7 @@ run `.tl` files.
 
 ## Introduction
 
-You can read the [tutorial chapter](https://teal-language.org/book/tutorial.html)
+You can read the [tutorial chapter](https://teal-language.org/book/latest/tutorial.html)
 of the Teal documentation to get started with an overview of the language.
 
 ## Installing
@@ -59,7 +59,7 @@ Once `tl` is in your path, there are a few subcommands:
   stripped.
 * `tl warnings` will list all warnings the compiler can generate.
 
-`tl` also supports some [compiler options](https://teal-language.org/book/compiler_options.html).
+`tl` also supports some [compiler options](https://teal-language.org/book/latest/compiler_options.html).
 These can either be specified on the command line or inside a tlconfig.lua file at the root of your project.
 
 ### Building projects with Cyan
@@ -89,7 +89,7 @@ of this repository.
 
 ## Type definitions
 
-`tl` supports [declaration files](https://teal-language.org/book/declaration_files.html), which can be used to annotate the types
+`tl` supports [declaration files](https://teal-language.org/book/latest/declaration_files.html), which can be used to annotate the types
 of third-party Lua libraries.
 
 We have a collaborative repository for declaration files at

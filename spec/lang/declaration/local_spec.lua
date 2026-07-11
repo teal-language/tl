@@ -411,6 +411,7 @@ describe("local", function()
          local x: MyRecord = {x = "A"}
          assert(x)
       ]]))
+
       it("plain `local` aliasing of records works (regression test for #891)", util.check([[
          local record MyRecord1 end
 
