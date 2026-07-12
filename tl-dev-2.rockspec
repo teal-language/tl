@@ -1,6 +1,6 @@
 rockspec_format = "3.0"
 package = "tl"
-version = "dev-1"
+version = "dev-2"
 source = {
    url = "git+https://github.com/teal-language/tl"
 }
