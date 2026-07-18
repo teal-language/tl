@@ -41,6 +41,6 @@ jobs:
 
     - name: Test
       run: |
-        luarocks lint tl-dev-1.rockspec
+        luarocks lint tl-dev-2.rockspec
         make selfbuild
         luarocks test
