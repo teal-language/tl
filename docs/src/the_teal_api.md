@@ -14,8 +14,8 @@ ways to do it.
 
 If you have an application (let's say, written in C, C++ or Rust), which embeds Lua
 sources, the simplest way to do it is to embed the amalgamated Teal
-sources, `tl.lua`, into your application's Lua sources the same way you embed
-any other Lua modules. `tl.lua` is included in the Teal source distribution,
+sources, `teal.lua`, into your application's Lua sources the same way you embed
+any other Lua modules. `teal.lua` is included in the Teal source distribution,
 and it is a single file which encapsulates all `teal.*` modules that comprise
 the Lua compiler.
 

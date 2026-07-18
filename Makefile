@@ -100,7 +100,8 @@ binary:
 	extras/binary.sh --clean
 
 combine:
-	$(STABLE_TL) run extras/combine.tl
+	$(STABLE_TL) run extras/combine.tl teal.api.v2 tl.lua
+	$(STABLE_TL) run extras/combine.tl teal.init teal.lua
 
 revert:
 	git checkout $(PRECOMPILED) $(addsuffix .lua,$(basename $(SOURCES)))
