@@ -1,5 +1,8 @@
 #!/usr/bin/env -S tl run
 
+local api_module = assert(arg[1], "missing argument: api module")
+local output_file = assert(arg[2], "missing argument: output file")
+
 local module_to_file: {string:string} = {}
 local module_to_content: {string:string} = {}
 
@@ -20,7 +23,7 @@ local function scan_deps(k: string)
    end
 end
 
-scan_deps("teal.api.v2")
+scan_deps(api_module)
 
 local keys = {}
 for k in pairs(module_to_content) do table.insert(keys, k) end
@@ -44,9 +47,9 @@ end
 end
 
 table.insert(content,[[
-return require("teal.api.v2")
+return require("]] .. api_module .. [[")
 ]])
 
-local f = assert(io.open('tl.lua', 'wb'))
+local f = assert(io.open(output_file, 'wb'))
 assert(f:write(table.concat(content)))
 assert(f:close())
