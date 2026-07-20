@@ -1,6 +1,7 @@
 local record TlConfig
    disable_warnings: {string}
    include_dir: {string}
+   source_dir: string
    feat_arity: string
    gen_target: string
    gen_compat: string

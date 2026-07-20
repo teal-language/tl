@@ -72,6 +72,7 @@ local function validate_config(config)
 
    local valid_keys = {
       include_dir = "{string}",
+      source_dir = "string",
       global_env_def = "string",
       quiet = "boolean",
       skip_compat53 = "boolean",
@@ -216,6 +217,11 @@ function configuration.merge_config_and_args(tlconfig, args)
             enable(tlconfig._warning_errors_set, warning)
          end
       end
+   end
+
+   local source_dir = tlconfig["source_dir"]
+   if source_dir and not find_in_sequence(tlconfig.include_dir, source_dir) then
+      table.insert(tlconfig.include_dir, source_dir)
    end
 
    for _, include_dir_cli in ipairs(args["include_dir"]) do

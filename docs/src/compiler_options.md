@@ -22,6 +22,7 @@ return {
 | -------------------- | -------------------------- | ---------- | -------------------- | ----------- |
 | `-l --require`       |                            | `{string}` | `run`                | Require a module prior to executing the script. This is similar in behavior to the `-l` flag in the Lua interpreter. |
 | `-I --include-dir`   | `include_dir`              | `{string}` | `check` `gen` `run`  | Prepend this directory to the module search path.
+|                      | `source_dir`               | `string`   | `check` `gen` `run`  | Set the project source directory and add it to the module search path.
 | `--gen-compat`       | `gen_compat`               | `string`   | `gen` `run`          | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
 | `--gen-target`       | `gen_target`               | `string`   | `gen` `run`          | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
 | `--keep-hashbang`    |                            |            | `gen`                | Preserve hashbang line (`#!`) at the top of file if present.
@@ -30,6 +31,11 @@ return {
 | `--werror`           | `warning_error`            | `{string}` | `check` `run`        | Promote the given warnings to errors.
 | `--global-env-def`   | `global_env_def`           | `string`   | `check` `gen` `run`  | Specify a definition module declaring any custom globals predefined in your Lua environment. See the [declaration files](declaration_files.md#global-environment-definition) page for details. |
 | `--no-stdlib`        | `no_stdlib`                | `boolean`  | `check` `gen` `run`  | Don't include the standard library definitions in the type checker. This is useful when using a custom environment that differs from the PUC-Rio Lua standard library. |
+
+When `source_dir` is set in `tlconfig.lua`, Teal also uses it when resolving
+required modules. This lets a project keep its modules under a source directory
+such as `src` without repeating that directory in `include_dir`; any explicit
+`include_dir` entries are preserved.
 
 ### Generated code
 
