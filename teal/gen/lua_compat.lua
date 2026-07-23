@@ -69,7 +69,7 @@ local function add_compat_entries(program, used_set, gen_compat)
       elseif name == "math.maxinteger" then
          load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
       elseif name == "math.mininteger" then
-         load_code(name, "local _tl_math_mininteger = math.mininteger or -math.pow(2,53) - 1")
+         load_code(name, "local _tl_math_mininteger = math.mininteger or -math.pow(2,53)")
       elseif name == "type" then
          load_code(name, "local type = type")
       else
