@@ -25,6 +25,7 @@ return {
 |                      | `source_dir`               | `string`   | `check` `gen` `run`  | Set the project source directory and add it to the module search path.
 | `--gen-compat`       | `gen_compat`               | `string`   | `gen` `run`          | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
 | `--gen-target`       | `gen_target`               | `string`   | `gen` `run`          | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
+| `--emit-luacats`     | `emit_luacats`             | `boolean`  | `gen`                | Generate LuaCATS annotations from explicit Teal type declarations.
 | `--keep-hashbang`    |                            |            | `gen`                | Preserve hashbang line (`#!`) at the top of file if present.
 | `-p --pretend`       |                            |            | `gen`                | Don't compile/write to any files, but type check and log what files would be written to.
 | `--wdisable`         | `disable_warnings`         | `{string}` | `check` `run`        | Disable the given warnings.

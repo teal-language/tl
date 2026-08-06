@@ -72,6 +72,7 @@ local function get_args_parser(): argparse.Parser
               :hidden(true)
    gen_command:flag("--no-check", "Do not fail on type errors, only on syntax errors.")
    gen_command:flag("--keep-hashbang", "Preserve hashbang line (#!) at the top of file if present.")
+   gen_command:flag("--emit-luacats", "Generate LuaCATS annotations from explicit Teal type declarations.")
    gen_command:option("-o --output", "Write to <filename> instead.")
               :argname("<filename>")
    gen_command:option("--output-dir", "Base directory to use for output files. " ..

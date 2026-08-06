@@ -86,7 +86,8 @@ return function(tlconfig: TlConfig, args: Args)
    local gen_opts: GenOptions = {
       preserve_indent = true,
       preserve_newlines = true,
-      preserve_hashbang = args["keep_hashbang"]
+      preserve_hashbang = args["keep_hashbang"],
+      emit_luacats = tlconfig["emit_luacats"]
    }
 
    for i, input_file in ipairs(args["file"]) do

@@ -79,6 +79,7 @@ local function validate_config(config: {any:any}): TlConfig, {string}, {string}
       feat_arity = { ["off"] = true, ["on"] = true },
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true, ["5.5"] = true },
+      emit_luacats = "boolean",
       disable_warnings = "{string}",
       warning_error = "{string}",
       no_stdlib = "boolean"
@@ -243,6 +244,7 @@ function configuration.merge_config_and_args(tlconfig: TlConfig, args: Args)
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
    tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]
                                                or (tlconfig["skip_compat53"] and "off")
+   tlconfig["emit_luacats"] = args["emit_luacats"] or tlconfig["emit_luacats"]
 
    tlconfig["no_stdlib"] = args["no_stdlib"] or tlconfig["no_stdlib"]
 

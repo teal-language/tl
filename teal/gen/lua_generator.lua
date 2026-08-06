@@ -21,10 +21,12 @@ local types = require("teal.types")
 
 
 local traversal = require("teal.traversal")
+local luacats = require("teal.gen.luacats")
 
 
 
 local lua_generator = { Options = {} }
+
 
 
 
@@ -83,12 +85,14 @@ lua_generator.default_opts = {
    preserve_indent = true,
    preserve_newlines = true,
    preserve_hashbang = false,
+   emit_luacats = false,
 }
 
 lua_generator.fast_opts = {
    preserve_indent = false,
    preserve_newlines = true,
    preserve_hashbang = false,
+   emit_luacats = false,
 }
 
 function lua_generator.generate(ast, gen_target, opts)
@@ -96,11 +100,28 @@ function lua_generator.generate(ast, gen_target, opts)
 
    opts = opts or lua_generator.default_opts
 
+   local function annotation(node)
+      local s = opts.emit_luacats and luacats.for_node(node) or ""
+      local annotation_indent = indent
+      if node.kind == "local_function" or node.kind == "global_function" or node.kind == "record_function" then
+         annotation_indent = annotation_indent - 1
+      end
+      if s ~= "" and opts.preserve_indent and annotation_indent > 0 then
+         s = s:gsub("\n", "\n" .. ("   "):rep(annotation_indent))
+      end
+      return s
+   end
 
 
 
 
 
+
+
+   local function add_annotation(out, node)
+      local s = annotation(node)
+      if s ~= "" then table.insert(out, s) end
+   end
 
    local function increment_indent(_, node)
       local child = node.body or node[1]
@@ -275,6 +296,7 @@ function lua_generator.generate(ast, gen_target, opts)
       local arguments_index, body_index = _tl_table_unpack(function_indexes[kind])
       return function(_, node, children)
          local out = { y = node.y, h = 0 }
+         add_annotation(out, node)
 
          if kind == "local" then
             table.insert(out, "local ")
@@ -324,6 +346,10 @@ function lua_generator.generate(ast, gen_target, opts)
             end
             local space
             for i, child in ipairs(children) do
+               if i > 1 and annotation(node[i]) ~= "" then
+                  add_string(out, "\n")
+                  space = nil
+               end
                add_child(out, child, space, indent)
                if node[i].semicolon then
                   table.insert(out, ";")
@@ -338,6 +364,7 @@ function lua_generator.generate(ast, gen_target, opts)
       ["local_declaration"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
+            add_annotation(out, node)
             table.insert(out, "local ")
             for i, var in ipairs(node.vars) do
                if i > 1 then
@@ -358,6 +385,7 @@ function lua_generator.generate(ast, gen_target, opts)
       ["local_type"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if not node.var.elide_type then
                table.insert(out, "local")
                add_child(out, children[1], " ")
@@ -370,6 +398,7 @@ function lua_generator.generate(ast, gen_target, opts)
       ["global_type"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if children[2] then
                add_child(out, children[1])
                table.insert(out, " =")
@@ -381,6 +410,7 @@ function lua_generator.generate(ast, gen_target, opts)
       ["global_declaration"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if children[3] then
                add_child(out, children[1])
                table.insert(out, " =")

@@ -16,7 +16,7 @@ SOURCES = teal/debug.tl teal/attributes.tl teal/errors.tl teal/lexer.tl \
 	teal/check/type_checker.tl teal/check/node_checker.tl \
 	teal/input.tl \
 	teal/check/require_file.tl \
-	teal/gen/targets.tl teal/gen/lua_generator.tl teal/gen/lua_compat.tl \
+	teal/gen/targets.tl teal/gen/luacats.tl teal/gen/lua_generator.tl teal/gen/lua_compat.tl \
 	teal/package_loader.tl teal/loader.tl \
 	teal/api/v2.tl teal/api/v1.tl \
 	teal/init.tl \

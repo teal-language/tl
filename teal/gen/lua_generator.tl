@@ -21,6 +21,7 @@ local type Node = ast_types.Node
 local type NodeKind = ast_types.NodeKind
 
 local traversal = require("teal.traversal")
+local luacats = require("teal.gen.luacats")
 local type Visitor = traversal.Visitor
 local type VisitorCallbacks = traversal.VisitorCallbacks
 
@@ -29,6 +30,7 @@ local record lua_generator
       preserve_indent: boolean
       preserve_newlines: boolean
       preserve_hashbang: boolean
+      emit_luacats: boolean
    end
 
    default_opts: Options
@@ -83,12 +85,14 @@ lua_generator.default_opts = {
    preserve_indent = true,
    preserve_newlines = true,
    preserve_hashbang = false,
+   emit_luacats = false,
 }
 
 lua_generator.fast_opts = {
    preserve_indent = false,
    preserve_newlines = true,
    preserve_hashbang = false,
+   emit_luacats = false,
 }
 
 function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options): string
@@ -96,10 +100,27 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
 
    opts = opts or lua_generator.default_opts
 
+   local function annotation(node: Node): string
+      local s = opts.emit_luacats and luacats.for_node(node) or ""
+      local annotation_indent = indent
+      if node.kind == "local_function" or node.kind == "global_function" or node.kind == "record_function" then
+         annotation_indent = annotation_indent - 1
+      end
+      if s ~= "" and opts.preserve_indent and annotation_indent > 0 then
+         s = s:gsub("\n", "\n" .. ("   "):rep(annotation_indent))
+      end
+      return s
+   end
+
    local record Output
       {string}
       y: integer
       h: integer
+   end
+
+   local function add_annotation(out: Output, node: Node)
+      local s = annotation(node)
+      if s ~= "" then table.insert(out, s) end
    end
 
    local function increment_indent(_: nil, node: Node)
@@ -275,6 +296,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       local arguments_index <const>, body_index <const> = table.unpack(function_indexes[kind])
       return function(_: nil, node: Node, children: {Output}): Output
          local out <const>: Output = { y = node.y, h = 0 }
+         add_annotation(out, node)
 
          if kind == "local" then
             table.insert(out, "local ")
@@ -324,6 +346,10 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             end
             local space: string
             for i, child in ipairs(children) do
+               if i > 1 and annotation(node[i]) ~= "" then
+                  add_string(out, "\n")
+                  space = nil
+               end
                add_child(out, child, space, indent)
                if node[i].semicolon then
                   table.insert(out, ";")
@@ -338,6 +364,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["local_declaration"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
+            add_annotation(out, node)
             table.insert(out, "local ")
             for i, var in ipairs(node.vars) do
                if i > 1 then
@@ -358,6 +385,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["local_type"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if not node.var.elide_type then
                table.insert(out, "local")
                add_child(out, children[1], " ")
@@ -370,6 +398,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["global_type"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if children[2] then
                add_child(out, children[1])
                table.insert(out, " =")
@@ -381,6 +410,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["global_declaration"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
+            add_annotation(out, node)
             if children[3] then
                add_child(out, children[1])
                table.insert(out, " =")

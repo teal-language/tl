@@ -87,6 +87,7 @@ return function(tlconfig, args)
       preserve_indent = true,
       preserve_newlines = true,
       preserve_hashbang = args["keep_hashbang"],
+      emit_luacats = tlconfig["emit_luacats"],
    }
 
    for i, input_file in ipairs(args["file"]) do

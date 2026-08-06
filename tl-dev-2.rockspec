@@ -2,7 +2,7 @@ rockspec_format = "3.0"
 package = "tl"
 version = "dev-2"
 source = {
-   url = "git+https://github.com/teal-language/tl"
+   url = "git+https://github.com/teal-language/tl",
 }
 description = {
    summary = "Teal, a typed dialect of Lua",
@@ -58,6 +58,7 @@ build = {
       ["teal.facts"] = "teal/facts.lua",
       ["teal.gen.lua_compat"] = "teal/gen/lua_compat.lua",
       ["teal.gen.lua_generator"] = "teal/gen/lua_generator.lua",
+      ["teal.gen.luacats"] = "teal/gen/luacats.lua",
       ["teal.gen.targets"] = "teal/gen/targets.lua",
       ["teal.init"] = "teal/init.lua",
       ["teal.input"] = "teal/input.lua",
@@ -77,7 +78,6 @@ build = {
       ["teal.util"] = "teal/util.lua",
       ["teal.variables"] = "teal/variables.lua",
 
-
       -- Ship the compiled Lua modules from the `tlcli` namespace for the `tl` program:
       ["tlcli.commands.dump_blocks"] = "tlcli/commands/dump_blocks.lua",
       ["tlcli.commands.warnings"] = "tlcli/commands/warnings.lua",
@@ -95,7 +95,7 @@ build = {
    install = {
       bin = {
          -- Ship the `tl` CLI program:
-         "tl"
+         "tl",
       },
 
       lua = {
@@ -133,6 +133,7 @@ build = {
          ["teal.facts"] = "teal/facts.tl",
          ["teal.gen.lua_compat"] = "teal/gen/lua_compat.tl",
          ["teal.gen.lua_generator"] = "teal/gen/lua_generator.tl",
+         ["teal.gen.luacats"] = "teal/gen/luacats.tl",
          ["teal.gen.targets"] = "teal/gen/targets.tl",
          ["teal.init"] = "teal/init.tl",
          ["teal.input"] = "teal/input.tl",
@@ -151,6 +152,6 @@ build = {
          ["teal.types"] = "teal/types.tl",
          ["teal.util"] = "teal/util.tl",
          ["teal.variables"] = "teal/variables.tl",
-      }
+      },
    },
 }
