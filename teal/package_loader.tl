@@ -3,6 +3,7 @@ local type Env = environment.Env
 
 local require_file = require("teal.check.require_file")
 
+local lua_compat = require("teal.gen.lua_compat")
 local lua_generator = require("teal.gen.lua_generator")
 
 local record package_loader
@@ -25,6 +26,8 @@ local function tl_package_loader(module_name: string): any, any
    if #errs > 0 then
       error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
    end
+
+   lua_compat.apply(result)
 
    -- TODO: should this be a hard error? this seems analogous to
    -- finding a lua file with a syntax error in it

@@ -279,6 +279,10 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
 end
 
 function lua_compat.apply(result)
+   if not (result and result.ast) then
+      return
+   end
+
    if result.compat_applied then
       return
    end

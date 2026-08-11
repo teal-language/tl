@@ -30,6 +30,34 @@ describe("tl.loader", function()
             @.]] .. util.os_sep .. [[file1.tl
          ]], output)
       end)
+      it("applies Lua version compatibility code", function()
+         local dir_name = util.write_tmp_dir(finally, {
+            ["module.tl"] = [[
+            local module = {}
+
+            function module.to_integer(n: number): integer
+               return math.tointeger(n)
+            end
+
+            return module
+            ]],
+            ["main.lua"] = [[
+            local tl = require("teal.api.v2")
+            tl.loader()
+            local module = require("module")
+            print(module.to_integer(3.0))
+            ]]
+         })
+         local pd, output
+         util.do_in(dir_name, function()
+            pd = io.popen(util.lua_cmd("main.lua"), "r")
+            output = pd:read("*a")
+         end)
+         util.assert_popen_close(0, pd:close())
+         util.assert_line_by_line([[
+            3
+         ]], output)
+      end)
       it("works properly with the package.loaded table", function()
          local dir_name = util.write_tmp_dir(finally, {
             ["module.lua"] = [[

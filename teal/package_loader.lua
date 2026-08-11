@@ -3,6 +3,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 local require_file = require("teal.check.require_file")
 
+local lua_compat = require("teal.gen.lua_compat")
 local lua_generator = require("teal.gen.lua_generator")
 
 local package_loader = {}
@@ -25,6 +26,8 @@ local function tl_package_loader(module_name)
    if #errs > 0 then
       error(found_filename .. ":" .. errs[1].y .. ":" .. errs[1].x .. ": " .. errs[1].msg)
    end
+
+   lua_compat.apply(result)
 
 
 

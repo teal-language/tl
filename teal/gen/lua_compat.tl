@@ -279,6 +279,10 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
 end
 
 function lua_compat.apply(result: Result)
+   if not (result and result.ast) then
+      return
+   end
+
    if result.compat_applied then
       return
    end

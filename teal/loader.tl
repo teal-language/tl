@@ -1,4 +1,5 @@
 local environment = require("teal.environment")
+local lua_compat = require("teal.gen.lua_compat")
 local lua_generator = require("teal.gen.lua_generator")
 local package_loader = require("teal.package_loader")
 local input = require("teal.input")
@@ -58,6 +59,8 @@ function loader.load(teal_code: string, chunkname?: string, mode?: LoadMode, ...
 
       mode = mode:gsub("c", "") as LoadMode
    end
+
+   lua_compat.apply(result)
 
    local lua_code = lua_generator.generate(result.ast, package_loader.env.opts.gen_target, lua_generator.fast_opts)
 
