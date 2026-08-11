@@ -135,9 +135,7 @@ v2.check = function(ast, filename, opts, env)
    end
 
    local result = check.check(ast, env, filename or "<input>.tl")
-   if result and result.ast then
-      lua_compat.apply(result)
-   end
+   lua_compat.apply(result)
    return result
 end
 
@@ -156,9 +154,7 @@ v2.check_file = function(filename, env, fd)
       return nil, err
    end
    local result = input.check(env, filename, code)
-   if result.ast then
-      lua_compat.apply(result)
-   end
+   lua_compat.apply(result)
    return result
 end
 
@@ -168,9 +164,7 @@ v2.check_string = function(teal_code, env, filename, parse_lang)
       filename = parse_lang == "lua" and "<input>.lua" or "<input>.tl"
    end
    local result = input.check(env, filename, teal_code)
-   if result and result.ast then
-      lua_compat.apply(result)
-   end
+   lua_compat.apply(result)
    return result
 end
 
@@ -11576,6 +11570,10 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
 end
 
 function lua_compat.apply(result)
+   if not (result and result.ast) then
+      return
+   end
+
    if result.compat_applied then
       return
    end

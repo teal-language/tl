@@ -11316,6 +11316,10 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
 end
 
 function lua_compat.apply(result)
+   if not (result and result.ast) then
+      return
+   end
+
    if result.compat_applied then
       return
    end
@@ -12464,9 +12468,7 @@ function Compiler:recall(filename)
    if not result then
       return nil, nil
    end
-   if result.ast then
-      lua_compat.apply(result)
-   end
+   lua_compat.apply(result)
    return module_from_result(result)
 end
 
@@ -12552,9 +12554,7 @@ function ParseTree:check(module_name)
    if result then
       result.syntax_errors = self.syntax_errors
 
-      if result.ast then
-         lua_compat.apply(result)
-      end
+      lua_compat.apply(result)
 
       if module_name then
          self.env.modules[module_name] = result.type
