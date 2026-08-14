@@ -90,6 +90,9 @@ generating 5.3-compatible code. If you install `tl` using LuaRocks, the CLI
 will use the Lua version you use with LuaRocks, so it will default to that
 Lua's version.
 
+The `tl run` command loads the code it generates into the Lua VM it is running
+on, so unless you set `--gen-target` it targets that exact version.
+
 If you require the `tl` Lua module and use the `tl.loader()`, it will do the
 implicit version selection, picking the right choice based on the Lua version
 you're running it on.
