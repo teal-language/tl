@@ -37,6 +37,15 @@ local function type_check_and_load(tlconfig: TlConfig, filename: string): functi
 end
 
 return function(tlconfig: TlConfig, args: Args): any
+   -- the script is loaded into the Lua running tl, so target that version
+   local runtime_target = teal.runtime_target()
+   if runtime_target and not tlconfig["gen_target"] then
+      tlconfig["gen_target"] = runtime_target
+      if runtime_target == "5.4" or runtime_target == "5.5" then
+         tlconfig["gen_compat"] = "off"
+      end
+   end
+
    if args["require"] then
       tlconfig._init_env_modules = {}
       for _, module in ipairs(args["require"]) do
