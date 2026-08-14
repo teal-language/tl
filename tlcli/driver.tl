@@ -13,8 +13,8 @@ end
 local function filename_to_module_name(filename: string): string
    local path = os.getenv("TL_PATH") or package.path
    for entry in path:gmatch("[^;]+") do
-      entry = entry:gsub("%.", "%%.")
-      local lua_pat = "^" .. entry:gsub("%?", ".+") .. "$"
+      local escaped = entry:gsub("%.", "%%.")
+      local lua_pat = "^" .. escaped:gsub("%?", ".+") .. "$"
       local d_tl_pat = lua_pat:gsub("%%.lua%$", "%%.d%%.tl$")
       local tl_pat = lua_pat:gsub("%%.lua%$", "%%.tl$")
 
