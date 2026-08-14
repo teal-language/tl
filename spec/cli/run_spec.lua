@@ -28,6 +28,23 @@ describe("tl run", function()
          ]], output)
       end)
 
+      it("runs code that modifies a for loop control variable", function()
+         local name = util.write_tmp_file(finally, [[
+            local t: {string:string} = { a = "1" }
+
+            for k, v in pairs(t) do
+               k = k:upper()
+               print(k .. "=" .. v)
+            end
+         ]])
+         local pd = io.popen(util.tl_cmd("run", name), "r")
+         local output = pd:read("*a")
+         util.assert_popen_close(0, pd:close())
+         util.assert_line_by_line([[
+            A=1
+         ]], output)
+      end)
+
       it("reports number of errors in stderr and code 1 on type errors", function()
          local name = util.write_tmp_file(finally, [[
             local function add(a: number, b: number): number
