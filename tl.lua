@@ -8455,7 +8455,13 @@ local function finalize_struct_declaration(self, node)
    if not node.value then
       return
    end
-   local resolved = self:get_typedecl(node.value)
+
+
+
+   local resolved, aliasing = self:get_typedecl(node.value)
+   if aliasing then
+      return
+   end
    if not (resolved.typename == "typedecl") then
       return
    end
@@ -8644,7 +8650,13 @@ local function finalize_struct_declaration(self, node)
 
 
 
-   if not rstruct.fields["new"] then
+   if rstruct.fields["new"] then
+
+
+
+
+      self.errs:add(node, "'" .. node.var.tk .. ".new' is reserved: structs generate .new automatically")
+   else
       local w = node
       local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
       local opts_type = a_type(w, "record", {

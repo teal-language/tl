@@ -829,7 +829,13 @@ local function finalize_struct_declaration(self: Context, node: Node)
    if not node.value then
       return
    end
-   local resolved = self:get_typedecl(node.value)
+   -- `local type P = SomeStruct` aliases an existing type: the aliased
+   -- struct was already finalized at its own declaration, so re-running
+   -- synthesis/validation here would misfire (e.g. on its generated .new)
+   local resolved, aliasing = self:get_typedecl(node.value)
+   if aliasing then
+      return
+   end
    if not (resolved is TypeDeclType) then
       return
    end
@@ -1015,11 +1021,17 @@ local function finalize_struct_declaration(self: Context, node: Node)
        end
      end
 
-   -- synthesize .new (always, for struct). The opts parameter is a record
-   -- containing only the instance data fields: static fields and methods
-   -- (record functions) are excluded, so passing them to .new is a type error.
-   if not rstruct.fields["new"] then
-      local w = node as Where
+    -- synthesize .new (always, for struct). The opts parameter is a record
+    -- containing only the instance data fields: static fields and methods
+    -- (record functions) are excluded, so passing them to .new is a type error.
+    if rstruct.fields["new"] then
+       -- only reachable via a body field named `new` (record functions with
+       -- that name are rejected in the record_function visitor); the
+       -- constructor is reserved, so give a clear error instead of letting
+       -- the caller hit "not a function" at the call site
+       self.errs:add(node, "'" .. node.var.tk .. ".new' is reserved: structs generate .new automatically")
+    else
+       local w = node as Where
       local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
       local opts_type = a_type(w, "record", {
          fields = {},

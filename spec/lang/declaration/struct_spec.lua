@@ -781,4 +781,116 @@ describe("struct", function()
          assert.equals(1, n)
       end)
    end)
+
+   describe("acceptance battery", function()
+      it("rejects a data field named 'new' with a clear error", function()
+         local result, err = tl.check_string([[
+            local struct A
+               new: number = 5
+            end
+            local a = A.new {}
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("new' is reserved", result.type_errors[1].msg)
+      end)
+
+      it("allows a data field named 'init'", util.check([[
+         local struct A
+            x: number
+            init: number = 7
+         end
+         local a = A.new { x = 1 }
+         print(a.init)
+      ]]))
+
+      it("rejects a static field shadowing an instance field", function()
+         local result, err = tl.check_string([[
+            local struct A
+               x: number
+               static
+                  x: number = 5
+               end
+            end
+         ]])
+         assert.truthy((result.type_errors and #result.type_errors > 0)
+                       or (result.syntax_errors and #result.syntax_errors > 0))
+      end)
+
+      it("supports metamethod declarations in struct bodies", util.check([[
+         local struct SVec
+            x: number
+            y: number
+            metamethod __len: function(self): integer
+         end
+
+         function SVec.__len(self): integer
+            return 2
+         end
+
+         local v = SVec.new { x = 1, y = 2 }
+         print(#v)
+      ]]))
+
+      it("supports array interfaces combined with inheritance", util.check([[
+         local struct Node is {Node}
+            weight: number
+         end
+
+         local struct Big:Node
+            extra: boolean
+         end
+
+         local n = Node.new { weight = 1 }
+         local b = Big.new { weight = 2, extra = true }
+         print(n.weight, b.weight, b.extra)
+      ]]))
+
+      it("supports structs exported and instantiated across modules", function()
+         util.mock_io(finally, {
+            ["animal.tl"] = [[
+               local struct Animal
+                  name: string
+               end
+
+               function Animal:speak(): string
+                  return self.name .. " speaks"
+               end
+
+               return Animal
+            ]],
+            ["main.tl"] = [[
+               local Animal = require("animal")
+               local a = Animal.new { name = "Rex" }
+               print(a:speak())
+            ]],
+         })
+         local result, err = tl.check_file("main.tl")
+         assert.truthy(result)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("rejects cross-module parents with a clear error", function()
+         util.mock_io(finally, {
+            ["animal.tl"] = [[
+               local struct Animal
+                  name: string
+               end
+               return Animal
+            ]],
+            ["dog.tl"] = [[
+               local Animal = require("animal")
+
+               local struct Dog:Animal
+                  breed: string
+               end
+
+               return Dog
+            ]],
+         })
+         local result, err = tl.check_file("dog.tl")
+         assert.truthy(result)
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("declared in the same module", result.type_errors[1].msg)
+      end)
+   end)
 end)
