@@ -20,6 +20,7 @@ local types = require("teal.types")
 
 
 
+
 local traversal = require("teal.traversal")
 
 
@@ -384,12 +385,18 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
+
       if rdef and rdef.struct_init_chain then
          for _, anc in ipairs(rdef.struct_init_chain) do
-            add_string(out, "; if " .. anc .. ".init then " .. anc .. ".init(self) end")
+            add_string(out, "; " .. anc .. ".init(self)")
          end
       end
-      add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+      if rdef then
+         local own_init = rdef.fields["init"]
+         if own_init ~= nil and own_init.typename == "function" and (own_init).is_record_function then
+            add_string(out, "; " .. owner_tk .. ".init(self)")
+         end
+      end
 
       add_string(out, "; return self")
       add_string(out, " end")

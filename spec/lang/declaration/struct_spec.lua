@@ -734,5 +734,51 @@ describe("struct", function()
          local c = C.new { log = {} }
          print(table.concat(c.log, ","))
       ]]))
+
+      it("skips ancestors without their own init in the chain", util.check([[
+         local struct A
+            log: {string}
+         end
+
+         function A:init()
+            table.insert(self.log, "A")
+         end
+
+         local struct B:A
+         end
+
+         local struct C:B
+         end
+
+         function C:init()
+            table.insert(self.log, "C")
+         end
+
+         local c = C.new { log = {} }
+         print(table.concat(c.log, ","))   -- "A,C": B declares no init
+
+         local b = B.new { log = {} }
+         print(table.concat(b.log, ","))   -- "A": inherited init runs
+      ]]))
+
+      it("reports a mistyped parent default exactly once in children", function()
+         local result, err = tl.check_string([[
+            local struct Base
+               x: number = "bad"
+            end
+
+            local struct Child:Base
+               y: number
+            end
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         local n = 0
+         for _, e in ipairs(result.type_errors) do
+            if e.msg:match("invalid default value for field 'x'") then
+               n = n + 1
+            end
+         end
+         assert.equals(1, n)
+      end)
    end)
 end)

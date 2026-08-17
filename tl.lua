@@ -8480,6 +8480,28 @@ local function finalize_struct_declaration(self, node)
    end
 
 
+
+
+
+
+   if rstruct.default_values then
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
+      end
+   end
+   if rstruct.static_default_values then
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.static_default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
+      end
+   end
+
+
    if rstruct.struct_parent then
       local sp = rstruct.struct_parent
       local found = sp.found or self:find_type(sp.names)
@@ -8528,6 +8550,9 @@ local function finalize_struct_declaration(self, node)
 
 
 
+
+
+
          local chain = {}
          if pdef.struct_init_chain then
             for _, anc in ipairs(pdef.struct_init_chain) do
@@ -8535,7 +8560,10 @@ local function finalize_struct_declaration(self, node)
             end
          end
          if rstruct.struct_parent_name then
-            table.insert(chain, rstruct.struct_parent_name)
+            local pinit = pdef.fields["init"]
+            if pinit ~= nil and pinit.typename == "function" and (pinit).is_record_function then
+               table.insert(chain, rstruct.struct_parent_name)
+            end
          end
          rstruct.struct_init_chain = chain
 
@@ -8559,7 +8587,11 @@ local function finalize_struct_declaration(self, node)
          end
 
          for _, fname in ipairs(pdef.field_order) do
-            if fname ~= "new" then
+
+
+
+
+            if fname ~= "new" and fname ~= "init" then
                if rstruct.static_field_names and rstruct.static_field_names[fname] then
                   self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk ..
                   "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
@@ -8605,27 +8637,6 @@ local function finalize_struct_declaration(self, node)
                   rstruct.static_default_values[fname] = default_node
                end
             end
-         end
-      end
-   end
-
-
-
-
-
-   if rstruct.default_values then
-      for _, fname in ipairs(rstruct.field_order) do
-         local dnode = rstruct.default_values[fname]
-         if dnode then
-            check_default_expr(self, dnode, rstruct.fields[fname], fname)
-         end
-      end
-   end
-   if rstruct.static_default_values then
-      for _, fname in ipairs(rstruct.field_order) do
-         local dnode = rstruct.static_default_values[fname]
-         if dnode then
-            check_default_expr(self, dnode, rstruct.fields[fname], fname)
          end
       end
    end
@@ -11999,6 +12010,7 @@ local types = require("teal.types")
 
 
 
+
 local traversal = require("teal.traversal")
 
 
@@ -12363,12 +12375,18 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
+
       if rdef and rdef.struct_init_chain then
          for _, anc in ipairs(rdef.struct_init_chain) do
-            add_string(out, "; if " .. anc .. ".init then " .. anc .. ".init(self) end")
+            add_string(out, "; " .. anc .. ".init(self)")
          end
       end
-      add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+      if rdef then
+         local own_init = rdef.fields["init"]
+         if own_init ~= nil and own_init.typename == "function" and (own_init).is_record_function then
+            add_string(out, "; " .. owner_tk .. ".init(self)")
+         end
+      end
 
       add_string(out, "; return self")
       add_string(out, " end")

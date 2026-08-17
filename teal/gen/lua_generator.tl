@@ -15,6 +15,7 @@ local type GenericType = types.GenericType
 local type NominalType = types.NominalType
 local type RecordType = types.RecordType
 local type RecordLikeType = types.RecordLikeType
+local type FunctionType = types.FunctionType
 
 local type ast_types = require("teal.ast")
 local type Node = ast_types.Node
@@ -380,16 +381,22 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
           end
        end
 
-       -- run init() from parents to children: one guarded call per
-       -- ancestor (root parent first), each exactly once. Plain lookups
-       -- are safe here: struct tables have no metatable, and `init` is
-       -- never flattened, so `X.init` is non-nil only if X declares it
+       -- run init() from parents to children with no runtime dispatch:
+       -- the typechecker pre-filters struct_init_chain to ancestors that
+       -- actually declare init, and the owner's own init (checked here on
+       -- the post-typecheck field map) is known at generation time — so
+       -- every emitted call is unconditional and each init runs exactly once
        if rdef and rdef.struct_init_chain then
           for _, anc in ipairs(rdef.struct_init_chain) do
-             add_string(out, "; if " .. anc .. ".init then " .. anc .. ".init(self) end")
+             add_string(out, "; " .. anc .. ".init(self)")
           end
        end
-       add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+       if rdef then
+          local own_init = rdef.fields["init"]
+          if own_init ~= nil and own_init is FunctionType and (own_init as FunctionType).is_record_function then
+             add_string(out, "; " .. owner_tk .. ".init(self)")
+          end
+       end
 
        add_string(out, "; return self")
        add_string(out, " end")

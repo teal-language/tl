@@ -845,16 +845,38 @@ local function finalize_struct_declaration(self: Context, node: Node)
       return
    end
 
-   if not (d is RecordType) then
-      return
-   end
-   local rstruct = d as RecordType
-   if not rstruct.is_struct then
-      return
-   end
+    if not (d is RecordType) then
+       return
+    end
+    local rstruct = d as RecordType
+    if not rstruct.is_struct then
+       return
+    end
 
-   -- validate `from Parent` and apply inheritance
-   if rstruct.struct_parent then
+    -- typecheck the struct's OWN default-value expressions against their
+    -- field types. Runs before the inheritance merge: inherited defaults
+    -- were already validated when their struct was declared (and redeclared
+    -- fields are same_type-checked below), so re-traversing them here would
+    -- only duplicate work. Iterated in field_order for deterministic output
+    if rstruct.default_values then
+       for _, fname in ipairs(rstruct.field_order) do
+          local dnode = rstruct.default_values[fname]
+          if dnode then
+             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+          end
+       end
+    end
+    if rstruct.static_default_values then
+       for _, fname in ipairs(rstruct.field_order) do
+          local dnode = rstruct.static_default_values[fname]
+          if dnode then
+             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+          end
+       end
+    end
+
+    -- validate `:Parent` and apply inheritance
+    if rstruct.struct_parent then
       local sp = rstruct.struct_parent
       local found = sp.found or self:find_type(sp.names)
       local rp = self:resolve_nominal(sp)
@@ -899,9 +921,12 @@ local function finalize_struct_declaration(self: Context, node: Node)
              end
           end
 
-          -- ordered init chain, root parent first: codegen emits one
-          -- guarded init() call per ancestor, so every declared init in
-          -- the hierarchy runs exactly once, parent to child
+          -- ordered init chain, root parent first, pre-filtered to
+          -- ancestors that actually declare init (per the documented
+          -- rule, parent methods precede child declarations): codegen
+          -- then emits one unconditional init() call per entry, so every
+          -- init in the hierarchy runs exactly once, parent to child,
+          -- with zero runtime dispatch
           local chain: {string} = {}
           if pdef.struct_init_chain then
              for _, anc in ipairs(pdef.struct_init_chain) do
@@ -909,7 +934,10 @@ local function finalize_struct_declaration(self: Context, node: Node)
              end
           end
           if rstruct.struct_parent_name then
-             table.insert(chain, rstruct.struct_parent_name)
+             local pinit = pdef.fields["init"]
+             if pinit ~= nil and pinit is FunctionType and (pinit as FunctionType).is_record_function then
+                table.insert(chain, rstruct.struct_parent_name)
+             end
           end
           rstruct.struct_init_chain = chain
 
@@ -933,7 +961,11 @@ local function finalize_struct_declaration(self: Context, node: Node)
           end
 
           for _, fname in ipairs(pdef.field_order) do
-            if fname ~= "new" then
+            -- `new` is synthesized per struct; `init` is a lifecycle hook
+            -- invoked explicitly via the init chain — neither is inherited
+            -- as a field (which also keeps the chain filter accurate:
+            -- fields["init"] is set only by the struct's own declaration)
+            if fname ~= "new" and fname ~= "init" then
                if rstruct.static_field_names and rstruct.static_field_names[fname] then
                   self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk
                                  .. "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
@@ -981,28 +1013,7 @@ local function finalize_struct_declaration(self: Context, node: Node)
              end
           end
        end
-    end
-
-    -- typecheck default-value expressions (own and inherited) against
-    -- their field types; runs after inheritance so redeclarations and
-    -- inherited defaults are validated against the final field types.
-    -- Iterated in field_order so error output is deterministic
-    if rstruct.default_values then
-       for _, fname in ipairs(rstruct.field_order) do
-          local dnode = rstruct.default_values[fname]
-          if dnode then
-             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
-          end
-       end
-    end
-    if rstruct.static_default_values then
-       for _, fname in ipairs(rstruct.field_order) do
-          local dnode = rstruct.static_default_values[fname]
-          if dnode then
-             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
-          end
-       end
-    end
+     end
 
    -- synthesize .new (always, for struct). The opts parameter is a record
    -- containing only the instance data fields: static fields and methods
