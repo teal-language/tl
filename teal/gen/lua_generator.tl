@@ -313,54 +313,48 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       end
    end
 
-    -- Emit the struct runtime boilerplate (metatable chain, __index,
-    -- static initializers, auto-generated .new) right after the `X = {}`
-    -- declaration. Shared by the local_type and global_type visitors.
+    -- Emit the struct runtime boilerplate (__index, static initializers,
+    -- flattened parent methods, auto-generated .new) right after the
+    -- `X = {}` declaration. Shared by local_type and global_type visitors.
+    -- Struct tables carry no metatable: inherited methods are flattened
+    -- via explicit `X.m = P.m` copies, so instance method dispatch is a
+    -- single table lookup with no chain.
     local function emit_struct_runtime(out: Output, node: Node)
        local owner_tk = node.var.tk
        local nt = node.value.newtype
-       local parent_name: string
+       local rdef: RecordType
        if nt is TypeDeclType then
           local ntd = nt.def
           if ntd is RecordType then
-             -- prefer the typechecker-resolved runtime name; it is correct
-             -- even when the parent was referenced through a type alias
-             if ntd.struct_parent_name then
-                parent_name = ntd.struct_parent_name
-             else
-                local p = ntd.struct_parent
-                if p ~= nil and p is NominalType and p.names and p.names[1] then
-                   parent_name = table.concat((p as NominalType).names, ".")
-                end
-             end
+             rdef = ntd
           end
        end
 
-       if parent_name then
-          add_string(out, "; ")
-          add_string(out, owner_tk .. " = setmetatable(" .. owner_tk .. ", { __index = " .. parent_name .. " })")
-       end
        add_string(out, "; ")
        add_string(out, owner_tk .. ".__index = " .. owner_tk)
 
        -- emit initializers for static fields (set once on the type);
        -- iterated in field_order so the output is deterministic and
        -- `static b = S.a + 1` is emitted after `S.a = ...`
-       if nt is TypeDeclType then
-          local ntd = nt.def
-          if ntd is RecordType then
-             local rdef = ntd as RecordType
-             if rdef.static_default_values then
-                for _, fname in ipairs(rdef.field_order) do
-                   local default_node = rdef.static_default_values[fname]
-                   if default_node then
-                      local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
-                      add_string(out, "; ")
-                      add_string(out, owner_tk .. "." .. fname .. " = ")
-                      add_child(out, default_out)
-                   end
-                end
+       if rdef and rdef.static_default_values then
+          for _, fname in ipairs(rdef.field_order) do
+             local default_node = rdef.static_default_values[fname]
+             if default_node then
+                local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                add_string(out, "; ")
+                add_string(out, owner_tk .. "." .. fname .. " = ")
+                add_child(out, default_out)
              end
+          end
+       end
+
+       -- flatten parent methods into this struct (one explicit copy per
+       -- method known at declaration time). Methods the child defines
+       -- later overwrite their copies, so overrides need no handling here
+       if rdef and rdef.struct_parent_name and rdef.struct_copied_methods then
+          local parent_name = rdef.struct_parent_name
+          for _, mname in ipairs(rdef.struct_copied_methods) do
+             add_string(out, "; " .. owner_tk .. "." .. mname .. " = " .. parent_name .. "." .. mname)
           end
        end
 
@@ -369,29 +363,34 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
        add_string(out, " local self = setmetatable({}, " .. owner_tk .. ")")
        add_string(out, " for k, v in pairs(opts) do self[k] = v end")
 
-       -- apply default values for fields missing from opts;
-       -- iterated in field_order for deterministic output
-       if nt is TypeDeclType then
-          local ntd = nt.def
-          if ntd is RecordType then
-             local rdef = ntd as RecordType
-             if rdef.default_values then
-                for _, fname in ipairs(rdef.field_order) do
-                   local default_node = rdef.default_values[fname]
-                   if default_node then
-                      local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
-                      add_string(out, "; if opts." .. fname .. " == nil then")
-                      add_string(out, " self." .. fname .. " = ")
-                      add_child(out, default_out)
-                      add_string(out, " end")
-                   end
-                end
+       -- apply default values for fields missing from opts (own + inherited,
+       -- already merged into a single map by the typechecker: one `if` per
+       -- field, no redundant copies); iterated in field_order for
+       -- deterministic output
+       if rdef and rdef.default_values then
+          for _, fname in ipairs(rdef.field_order) do
+             local default_node = rdef.default_values[fname]
+             if default_node then
+                local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                add_string(out, "; if opts." .. fname .. " == nil then")
+                add_string(out, " self." .. fname .. " = ")
+                add_child(out, default_out)
+                add_string(out, " end")
              end
           end
        end
 
-       -- call init explicitly with self (no metatable magic)
+       -- run init() from parents to children: one guarded call per
+       -- ancestor (root parent first), each exactly once. Plain lookups
+       -- are safe here: struct tables have no metatable, and `init` is
+       -- never flattened, so `X.init` is non-nil only if X declares it
+       if rdef and rdef.struct_init_chain then
+          for _, anc in ipairs(rdef.struct_init_chain) do
+             add_string(out, "; if " .. anc .. ".init then " .. anc .. ".init(self) end")
+          end
+       end
        add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+
        add_string(out, "; return self")
        add_string(out, " end")
     end

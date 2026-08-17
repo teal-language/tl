@@ -2027,16 +2027,16 @@ local function extract_userdata_from_interface_list(ps: ReadState, i: integer, i
 end
 
 read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boolean
-   -- 'from Parent' is struct-only inheritance
-   if ps.tokens[i].tk == "from" then
+   -- ':Parent' is struct-only inheritance
+   if ps.tokens[i].tk == ":" then
       if def.kind ~= "struct" then
-         return fail(ps, i, "syntax error: inheritance ('from') is only allowed in struct declarations")
+         return fail(ps, i, "syntax error: inheritance ':Parent' is only allowed in struct declarations")
       end
       i = i + 1
       local parent_block: Block
       i, parent_block = read_simple_type_or_nominal(ps, i)
       if not parent_block or parent_block.kind ~= "nominal_type" then
-         return fail(ps, i, "expected parent struct name after 'from'")
+         return fail(ps, i, "expected a parent struct name after ':'")
       end
       def[BLOCK_INDEXES.RECORD.PARENT] = parent_block
    end

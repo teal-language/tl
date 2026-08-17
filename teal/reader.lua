@@ -2028,15 +2028,15 @@ end
 
 read_record_body = function(ps, i, def)
 
-   if ps.tokens[i].tk == "from" then
+   if ps.tokens[i].tk == ":" then
       if def.kind ~= "struct" then
-         return fail(ps, i, "syntax error: inheritance ('from') is only allowed in struct declarations")
+         return fail(ps, i, "syntax error: inheritance ':Parent' is only allowed in struct declarations")
       end
       i = i + 1
       local parent_block
       i, parent_block = read_simple_type_or_nominal(ps, i)
       if not parent_block or parent_block.kind ~= "nominal_type" then
-         return fail(ps, i, "expected parent struct name after 'from'")
+         return fail(ps, i, "expected a parent struct name after ':'")
       end
       def[BLOCK_INDEXES.RECORD.PARENT] = parent_block
    end

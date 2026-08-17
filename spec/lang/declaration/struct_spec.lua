@@ -97,13 +97,13 @@ describe("struct", function()
    end)
 
    describe("inheritance", function()
-      it("inherits fields from parent via 'from'", util.check([[
+      it("inherits fields from parent via ':Parent'", util.check([[
          local struct Animal
             name: string
             sound: string
          end
 
-         local struct Dog from Animal
+         local struct Dog:Animal
             breed: string
          end
 
@@ -111,7 +111,7 @@ describe("struct", function()
          print(d.name, d.sound, d.breed)
       ]]))
 
-      it("inherits methods from parent at runtime via __index chain", util.check([[
+      it("inherits methods from parent via declaration-time flattening", util.check([[
          local struct Animal
             name: string
          end
@@ -120,7 +120,7 @@ describe("struct", function()
             return "hello from " .. self.name
          end
 
-         local struct Dog from Animal
+         local struct Dog:Animal
             breed: string
          end
 
@@ -139,7 +139,7 @@ describe("struct", function()
                self.sound = self.sound or "<silence>"
             end
 
-            local struct Dog from Animal
+            local struct Dog:Animal
                breed: string
             end
 
@@ -236,7 +236,7 @@ describe("struct", function()
             end
          end
 
-         local struct Derived from Base
+         local struct Derived:Base
             y: number
          end
 
@@ -313,7 +313,7 @@ describe("struct", function()
                x: number
             end
 
-            local struct Child from Base
+            local struct Child:Base
                y: number
             end
 
@@ -333,7 +333,7 @@ describe("struct", function()
                a: number
             end
 
-            local struct Child from Rec
+            local struct Child:Rec
                b: number
             end
          ]])
@@ -347,7 +347,7 @@ describe("struct", function()
                a: number
             end
 
-            local struct Child from Iface
+            local struct Child:Iface
                b: number
             end
          ]])
@@ -408,12 +408,12 @@ describe("struct", function()
          assert.match("only allowed in struct", result.syntax_errors[1].msg)
       end)
 
-      it("rejects 'from' in records", function()
+      it("rejects ':Parent' inheritance in records", function()
          local result, err = tl.check_string([[
             local record A
                a: number
             end
-            local record B from A
+            local record B: A
                b: number
             end
          ]])
@@ -446,7 +446,7 @@ describe("struct", function()
 
             local type P = Point
 
-            local struct P3 from P
+            local struct P3:P
                z: number
             end
 
@@ -462,7 +462,7 @@ describe("struct", function()
                x: number
             end
 
-            local struct Child from Base
+            local struct Child:Base
                x: string
             end
          ]])
@@ -476,7 +476,7 @@ describe("struct", function()
                x: number
             end
 
-            local struct Child from Base
+            local struct Child:Base
                x: number
                y: number
             end
@@ -495,7 +495,7 @@ describe("struct", function()
                self.doubled = self.x * 2
             end
 
-            local struct B from A
+            local struct B:A
                y: number
             end
 
@@ -599,7 +599,7 @@ describe("struct", function()
                x: number = 10
             end
 
-            local struct Child from Base
+            local struct Child:Base
                y: number
             end
 
@@ -611,14 +611,128 @@ describe("struct", function()
    end)
 
    describe("error cases", function()
-      it("requires 'from' to be followed by a parent name", function()
-         -- missing parent name after 'from' yields syntax errors
+      it("requires a parent name after ':'", function()
          local result = tl.check_string([[
-            local struct Dog from
+            local struct Dog:
+            end
+         ]])
+         assert.truthy(result.syntax_errors and #result.syntax_errors > 0)
+      end)
+
+      it("rejects a non-identifier parent", function()
+         local result = tl.check_string([[
+            local struct Dog: 123
                breed: string
             end
          ]])
          assert.truthy(result.syntax_errors and #result.syntax_errors > 0)
       end)
+   end)
+
+   describe(":Parent syntax ergonomics", function()
+      it("allows a field named 'from' in first position of the body", util.check([[
+         local struct Ledger
+            from: string = "start"
+            to: string = "end"
+         end
+
+         local l = Ledger.new {}
+         print(l.from, l.to)
+      ]]))
+
+      it("supports parents written without surrounding whitespace", util.check([[
+         local struct Animal
+            name: string
+         end
+
+         local struct Dog:Animal
+            breed: string
+         end
+
+         local d = Dog.new { name = "Rex", breed = "Lab" }
+         print(d.name, d.breed)
+      ]]))
+   end)
+
+   describe("method flattening and override", function()
+      it("flattens inherited methods onto the child struct", util.check([[
+         local struct Shape
+            name: string
+         end
+
+         function Shape:describe(): string
+            return "shape:" .. self.name
+         end
+
+         local struct Circle:Shape
+            r: number
+         end
+
+         local c = Circle.new { name = "O", r = 5 }
+         print(c:describe())
+         print(Circle.describe(c))
+      ]]))
+
+      it("child method definitions override inherited copies", util.check([[
+         local struct Shape
+            name: string
+         end
+
+         function Shape:describe(): string
+            return "shape:" .. self.name
+         end
+
+         local struct Circle:Shape
+            r: number
+         end
+
+         function Circle:describe(): string
+            return "circle:" .. self.name
+         end
+
+         local c = Circle.new { name = "O", r = 5 }
+         print(c:describe())
+      ]]))
+
+      it("child defaults override inherited defaults", util.check([[
+         local struct Base
+            x: number = 1
+         end
+
+         local struct Child:Base
+            x: number = 5
+         end
+
+         local c = Child.new {}
+         local b = Base.new {}
+         print(c.x, b.x)
+      ]]))
+
+      it("runs the init chain from parents to children", util.check([[
+         local struct A
+            log: {string}
+         end
+
+         function A:init()
+            table.insert(self.log, "A")
+         end
+
+         local struct B:A
+         end
+
+         function B:init()
+            table.insert(self.log, "B")
+         end
+
+         local struct C:B
+         end
+
+         function C:init()
+            table.insert(self.log, "C")
+         end
+
+         local c = C.new { log = {} }
+         print(table.concat(c.log, ","))
+      ]]))
    end)
 end)

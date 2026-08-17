@@ -204,6 +204,20 @@ local record types
       -- accepted wherever its parent is expected
       struct_parent_typeids: {integer:boolean}
 
+      -- ordered ancestor runtime names, root parent first, direct parent
+      -- last; codegen emits an init() call for each entry (guarded with
+      -- rawget so only inits actually declared on that ancestor run,
+      -- exactly once, in parent-to-child order)
+      struct_init_chain: {string}
+
+      -- names of parent methods (record functions, excluding the
+      -- synthesized `new` and the chain-invoked `init`) to flatten into
+      -- this struct at declaration time: codegen emits `X.m = P.m` per
+      -- entry, so instance method dispatch is a single table lookup with
+      -- no metatable chain. Child methods defined later overwrite their
+      -- copies, so overrides always take effect
+      struct_copied_methods: {string}
+
       -- for struct fields with default values (`x: number = 0`):
       -- maps field name to the AST expression node of the default
       default_values: {string:Node}

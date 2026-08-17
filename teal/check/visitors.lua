@@ -899,6 +899,39 @@ local function finalize_struct_declaration(self, node)
             end
          end
 
+
+
+
+         local chain = {}
+         if pdef.struct_init_chain then
+            for _, anc in ipairs(pdef.struct_init_chain) do
+               table.insert(chain, anc)
+            end
+         end
+         if rstruct.struct_parent_name then
+            table.insert(chain, rstruct.struct_parent_name)
+         end
+         rstruct.struct_init_chain = chain
+
+
+
+
+
+
+
+         if rstruct.struct_parent_name then
+            local copies = {}
+            for _, fname in ipairs(pdef.field_order) do
+               if fname ~= "new" and fname ~= "init" then
+                  local pf = pdef.fields[fname]
+                  if pf.typename == "function" and (pf).is_record_function then
+                     table.insert(copies, fname)
+                  end
+               end
+            end
+            rstruct.struct_copied_methods = copies
+         end
+
          for _, fname in ipairs(pdef.field_order) do
             if fname ~= "new" then
                if rstruct.static_field_names and rstruct.static_field_names[fname] then
@@ -953,14 +986,21 @@ local function finalize_struct_declaration(self, node)
 
 
 
+
    if rstruct.default_values then
-      for fname, dnode in pairs(rstruct.default_values) do
-         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
       end
    end
    if rstruct.static_default_values then
-      for fname, dnode in pairs(rstruct.static_default_values) do
-         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.static_default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
       end
    end
 

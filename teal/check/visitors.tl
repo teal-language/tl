@@ -899,6 +899,39 @@ local function finalize_struct_declaration(self: Context, node: Node)
              end
           end
 
+          -- ordered init chain, root parent first: codegen emits one
+          -- guarded init() call per ancestor, so every declared init in
+          -- the hierarchy runs exactly once, parent to child
+          local chain: {string} = {}
+          if pdef.struct_init_chain then
+             for _, anc in ipairs(pdef.struct_init_chain) do
+                table.insert(chain, anc)
+             end
+          end
+          if rstruct.struct_parent_name then
+             table.insert(chain, rstruct.struct_parent_name)
+          end
+          rstruct.struct_init_chain = chain
+
+          -- collect parent methods (record functions) to flatten into
+          -- this struct at declaration time, so instance method dispatch
+          -- needs no metatable chain; methods the child defines later
+          -- overwrite their copies (override = last definition wins).
+          -- `init` is excluded (invoked explicitly by the chain), as is
+          -- the synthesized `new`
+          if rstruct.struct_parent_name then
+             local copies: {string} = {}
+             for _, fname in ipairs(pdef.field_order) do
+                if fname ~= "new" and fname ~= "init" then
+                   local pf = pdef.fields[fname]
+                   if pf is FunctionType and (pf as FunctionType).is_record_function then
+                      table.insert(copies, fname)
+                   end
+                end
+             end
+             rstruct.struct_copied_methods = copies
+          end
+
           for _, fname in ipairs(pdef.field_order) do
             if fname ~= "new" then
                if rstruct.static_field_names and rstruct.static_field_names[fname] then
@@ -952,15 +985,22 @@ local function finalize_struct_declaration(self: Context, node: Node)
 
     -- typecheck default-value expressions (own and inherited) against
     -- their field types; runs after inheritance so redeclarations and
-    -- inherited defaults are validated against the final field types
+    -- inherited defaults are validated against the final field types.
+    -- Iterated in field_order so error output is deterministic
     if rstruct.default_values then
-       for fname, dnode in pairs(rstruct.default_values) do
-          check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+       for _, fname in ipairs(rstruct.field_order) do
+          local dnode = rstruct.default_values[fname]
+          if dnode then
+             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+          end
        end
     end
     if rstruct.static_default_values then
-       for fname, dnode in pairs(rstruct.static_default_values) do
-          check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+       for _, fname in ipairs(rstruct.field_order) do
+          local dnode = rstruct.static_default_values[fname]
+          if dnode then
+             check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+          end
        end
     end
 

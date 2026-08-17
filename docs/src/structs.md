@@ -7,7 +7,7 @@ boilerplate. It is intentionally minimal:
 - an auto-generated `.new` constructor
 - an optional `:init()` hook called by the constructor
 - an auto-set `__index` metatable so method syntax (`x:method()`) works
-- single inheritance via `from`
+- single inheritance via `:Parent`
 
 Anything you can do with a `record` you can do with a `struct` — the only
 difference is the ergonomics. Use `record` for plain data; use `struct` when
@@ -91,8 +91,8 @@ local zero = Point.origin()
 
 ## Inheritance (single)
 
-Use `from` to declare a single parent struct. The child inherits all of
-the parent's fields and methods:
+Use `:Parent` after the struct name to declare a single parent struct.
+The child inherits all of the parent's fields and methods:
 
 ```lua
 local struct Animal
@@ -108,7 +108,7 @@ function Animal:speak(): string
    return self.name .. " says " .. self.sound
 end
 
-local struct Dog from Animal
+local struct Dog:Animal
    breed: string
 end
 
@@ -121,16 +121,24 @@ print(d:speak())           --> Rex says Woof
 print(d.breed)             --> Labrador
 ```
 
-At runtime, `Dog` chains to `Animal` via `setmetatable(Dog, { __index = Animal })`,
-so any method resolved on a `Dog` instance falls back to `Animal` if not
-defined on `Dog`.
+At runtime, methods are **flattened**, not dispatched: at the point `Dog`
+is declared, each method known on `Animal` is copied into it
+(`Dog.speak = Animal.speak`). A method call on an instance is a single
+table lookup — there is no metatable chain. A method defined on `Dog`
+(after its declaration) simply overwrites the copied entry, so overrides
+always take effect: the last definition wins.
+
+`init` is never flattened: `.new` calls every `init` in the hierarchy
+explicitly, root parent first, each exactly once. To invoke a parent
+method explicitly, refer to the parent by name
+(e.g. `Animal.speak(self)`).
 
 There is intentionally **no multiple inheritance** and no `super` keyword.
 If you need to call a parent method explicitly, refer to the parent by
 name (e.g. `Animal.speak(self)`).
 
 A parent may be referenced through a same-file type alias (`local type P = Point;
-struct T from P` works and resolves to `Point` at runtime). Parents declared
+struct T:P` works and resolves to `Point` at runtime). Parents declared
 in other modules are currently rejected with a clear error.
 
 ### Subtyping
@@ -242,7 +250,7 @@ local c2 = Counter.new { count = 20 }
 
 print(Counter.total_created)      -- 0 (unless init mutated it)
 print(Counter.PI)                 -- 3.14
-print(c1.PI)                      -- 3.14 (via __index fallback)
+print(c1.PI)                      -- 3.14 (instance lookup falls back to the type)
 ```
 
 A struct may have **at most one** `static` block, placed anywhere in
@@ -257,7 +265,7 @@ the body (before or after instance fields).
   ```
 - They are **not** the same as a default-value instance field:
   `count: number = 0` is an instance default (per-instance); a static
-  field is shared by every instance via the `__index` chain.
+  field lives on the type itself, shared by every instance.
 
 ### Inheritance
 
@@ -271,18 +279,23 @@ local struct Base
    end
 end
 
-local struct Derived from Base
+local struct Derived:Base
    y: number
 end
 
 print(Derived.klass)              -- "Base" (inherited)
 ```
 
+Initialized statics are re-emitted per child (an independent copy of the
+initializer); a static declared without an initializer on a parent is not
+readable through a child — assign it on the child explicitly if needed.
+
 ## Current limitations
 
-- Methods added to a parent *after* a child struct is declared are not
-  visible to the type checker in the child (they do work at runtime via
-  the `__index` chain). Declare parent methods before child structs.
+- Methods added to a parent *after* a child struct is declared do not
+  reach the child — neither in the type checker nor at runtime (methods
+  are flattened at declaration time). Declare parent methods before
+  child structs.
 - A struct can only extend a struct declared in the same module (a
   same-file type alias for the parent is fine). Cross-module parents
   are rejected with a clear error for now.

@@ -8271,6 +8271,39 @@ local function finalize_struct_declaration(self, node)
             end
          end
 
+
+
+
+         local chain = {}
+         if pdef.struct_init_chain then
+            for _, anc in ipairs(pdef.struct_init_chain) do
+               table.insert(chain, anc)
+            end
+         end
+         if rstruct.struct_parent_name then
+            table.insert(chain, rstruct.struct_parent_name)
+         end
+         rstruct.struct_init_chain = chain
+
+
+
+
+
+
+
+         if rstruct.struct_parent_name then
+            local copies = {}
+            for _, fname in ipairs(pdef.field_order) do
+               if fname ~= "new" and fname ~= "init" then
+                  local pf = pdef.fields[fname]
+                  if pf.typename == "function" and (pf).is_record_function then
+                     table.insert(copies, fname)
+                  end
+               end
+            end
+            rstruct.struct_copied_methods = copies
+         end
+
          for _, fname in ipairs(pdef.field_order) do
             if fname ~= "new" then
                if rstruct.static_field_names and rstruct.static_field_names[fname] then
@@ -8325,14 +8358,21 @@ local function finalize_struct_declaration(self, node)
 
 
 
+
    if rstruct.default_values then
-      for fname, dnode in pairs(rstruct.default_values) do
-         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
       end
    end
    if rstruct.static_default_values then
-      for fname, dnode in pairs(rstruct.static_default_values) do
-         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      for _, fname in ipairs(rstruct.field_order) do
+         local dnode = rstruct.static_default_values[fname]
+         if dnode then
+            check_default_expr(self, dnode, rstruct.fields[fname], fname)
+         end
       end
    end
 
@@ -12001,51 +12041,45 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
+
+
+
    local function emit_struct_runtime(out, node)
       local owner_tk = node.var.tk
       local nt = node.value.newtype
-      local parent_name
+      local rdef
       if nt.typename == "typedecl" then
          local ntd = nt.def
          if ntd.typename == "record" then
-
-
-            if ntd.struct_parent_name then
-               parent_name = ntd.struct_parent_name
-            else
-               local p = ntd.struct_parent
-               if p ~= nil and p.typename == "nominal" and p.names and p.names[1] then
-                  parent_name = table.concat((p).names, ".")
-               end
-            end
+            rdef = ntd
          end
       end
 
-      if parent_name then
-         add_string(out, "; ")
-         add_string(out, owner_tk .. " = setmetatable(" .. owner_tk .. ", { __index = " .. parent_name .. " })")
-      end
       add_string(out, "; ")
       add_string(out, owner_tk .. ".__index = " .. owner_tk)
 
 
 
 
-      if nt.typename == "typedecl" then
-         local ntd = nt.def
-         if ntd.typename == "record" then
-            local rdef = ntd
-            if rdef.static_default_values then
-               for _, fname in ipairs(rdef.field_order) do
-                  local default_node = rdef.static_default_values[fname]
-                  if default_node then
-                     local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
-                     add_string(out, "; ")
-                     add_string(out, owner_tk .. "." .. fname .. " = ")
-                     add_child(out, default_out)
-                  end
-               end
+      if rdef and rdef.static_default_values then
+         for _, fname in ipairs(rdef.field_order) do
+            local default_node = rdef.static_default_values[fname]
+            if default_node then
+               local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+               add_string(out, "; ")
+               add_string(out, owner_tk .. "." .. fname .. " = ")
+               add_child(out, default_out)
             end
+         end
+      end
+
+
+
+
+      if rdef and rdef.struct_parent_name and rdef.struct_copied_methods then
+         local parent_name = rdef.struct_parent_name
+         for _, mname in ipairs(rdef.struct_copied_methods) do
+            add_string(out, "; " .. owner_tk .. "." .. mname .. " = " .. parent_name .. "." .. mname)
          end
       end
 
@@ -12056,27 +12090,32 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
-      if nt.typename == "typedecl" then
-         local ntd = nt.def
-         if ntd.typename == "record" then
-            local rdef = ntd
-            if rdef.default_values then
-               for _, fname in ipairs(rdef.field_order) do
-                  local default_node = rdef.default_values[fname]
-                  if default_node then
-                     local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
-                     add_string(out, "; if opts." .. fname .. " == nil then")
-                     add_string(out, " self." .. fname .. " = ")
-                     add_child(out, default_out)
-                     add_string(out, " end")
-                  end
-               end
+
+
+      if rdef and rdef.default_values then
+         for _, fname in ipairs(rdef.field_order) do
+            local default_node = rdef.default_values[fname]
+            if default_node then
+               local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+               add_string(out, "; if opts." .. fname .. " == nil then")
+               add_string(out, " self." .. fname .. " = ")
+               add_child(out, default_out)
+               add_string(out, " end")
             end
          end
       end
 
 
+
+
+
+      if rdef and rdef.struct_init_chain then
+         for _, anc in ipairs(rdef.struct_init_chain) do
+            add_string(out, "; if " .. anc .. ".init then " .. anc .. ".init(self) end")
+         end
+      end
       add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+
       add_string(out, "; return self")
       add_string(out, " end")
    end
@@ -16859,15 +16898,15 @@ end
 
 read_record_body = function(ps, i, def)
 
-   if ps.tokens[i].tk == "from" then
+   if ps.tokens[i].tk == ":" then
       if def.kind ~= "struct" then
-         return fail(ps, i, "syntax error: inheritance ('from') is only allowed in struct declarations")
+         return fail(ps, i, "syntax error: inheritance ':Parent' is only allowed in struct declarations")
       end
       i = i + 1
       local parent_block
       i, parent_block = read_simple_type_or_nominal(ps, i)
       if not parent_block or parent_block.kind ~= "nominal_type" then
-         return fail(ps, i, "expected parent struct name after 'from'")
+         return fail(ps, i, "expected a parent struct name after ':'")
       end
       def[BLOCK_INDEXES.RECORD.PARENT] = parent_block
    end
@@ -19170,6 +19209,20 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 
 local types = { GenericType = {}, StringType = {}, IntegerType = {}, BooleanType = {}, BooleanContextType = {}, TypeDeclType = {}, LiteralTableItemType = {}, NominalType = {}, SelfType = {}, ArrayType = {}, RecordType = {}, InterfaceType = {}, InvalidType = {}, UnknownType = {}, TupleType = {}, UnresolvedTypeArgType = {}, UnresolvableTypeArgType = {}, TypeVarType = {}, MapType = {}, NilType = {}, EmptyTableType = {}, UnresolvedEmptyTableValueType = {}, FunctionType = {}, UnionType = {}, TupleTableType = {}, PolyType = {}, EnumType = {} }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
