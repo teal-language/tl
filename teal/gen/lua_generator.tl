@@ -202,6 +202,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
    end
 
    local visit_node: Visitor<nil, NodeKind, Node, Output> = {}
+   local visit_type: Visitor<nil, TypeName, Type, Output> = {}
 
    local lua_54_attribute <total>: {Attribute:string} = {
       ["const"] = " <const>",
@@ -312,7 +313,90 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       end
    end
 
-   visit_node.cbs = {
+    -- Emit the struct runtime boilerplate (metatable chain, __index,
+    -- static initializers, auto-generated .new) right after the `X = {}`
+    -- declaration. Shared by the local_type and global_type visitors.
+    local function emit_struct_runtime(out: Output, node: Node)
+       local owner_tk = node.var.tk
+       local nt = node.value.newtype
+       local parent_name: string
+       if nt is TypeDeclType then
+          local ntd = nt.def
+          if ntd is RecordType then
+             -- prefer the typechecker-resolved runtime name; it is correct
+             -- even when the parent was referenced through a type alias
+             if ntd.struct_parent_name then
+                parent_name = ntd.struct_parent_name
+             else
+                local p = ntd.struct_parent
+                if p ~= nil and p is NominalType and p.names and p.names[1] then
+                   parent_name = table.concat((p as NominalType).names, ".")
+                end
+             end
+          end
+       end
+
+       if parent_name then
+          add_string(out, "; ")
+          add_string(out, owner_tk .. " = setmetatable(" .. owner_tk .. ", { __index = " .. parent_name .. " })")
+       end
+       add_string(out, "; ")
+       add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+       -- emit initializers for static fields (set once on the type);
+       -- iterated in field_order so the output is deterministic and
+       -- `static b = S.a + 1` is emitted after `S.a = ...`
+       if nt is TypeDeclType then
+          local ntd = nt.def
+          if ntd is RecordType then
+             local rdef = ntd as RecordType
+             if rdef.static_default_values then
+                for _, fname in ipairs(rdef.field_order) do
+                   local default_node = rdef.static_default_values[fname]
+                   if default_node then
+                      local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                      add_string(out, "; ")
+                      add_string(out, owner_tk .. "." .. fname .. " = ")
+                      add_child(out, default_out)
+                   end
+                end
+             end
+          end
+       end
+
+       add_string(out, "; ")
+       add_string(out, owner_tk .. ".new = function(opts)")
+       add_string(out, " local self = setmetatable({}, " .. owner_tk .. ")")
+       add_string(out, " for k, v in pairs(opts) do self[k] = v end")
+
+       -- apply default values for fields missing from opts;
+       -- iterated in field_order for deterministic output
+       if nt is TypeDeclType then
+          local ntd = nt.def
+          if ntd is RecordType then
+             local rdef = ntd as RecordType
+             if rdef.default_values then
+                for _, fname in ipairs(rdef.field_order) do
+                   local default_node = rdef.default_values[fname]
+                   if default_node then
+                      local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                      add_string(out, "; if opts." .. fname .. " == nil then")
+                      add_string(out, " self." .. fname .. " = ")
+                      add_child(out, default_out)
+                      add_string(out, " end")
+                   end
+                end
+             end
+          end
+       end
+
+       -- call init explicitly with self (no metatable magic)
+       add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+       add_string(out, "; return self")
+       add_string(out, " end")
+    end
+
+    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output
@@ -358,12 +442,26 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["local_type"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if not node.var.elide_type then
+            -- struct declarations always need their runtime `local X = {}`
+            -- (the auto-generated __index, .new, and static initializers
+            -- attach to it), so we don't elide even if Teal considers the
+            -- var "type-only" (e.g. when the struct is only used as a parent
+            -- via `from X`).
+            if not node.var.elide_type or node.synthesize_auto_new then
                table.insert(out, "local")
                add_child(out, children[1], " ")
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+            -- If typechecker flagged this `local struct X` for auto-generated
+            -- .new, emit the constructor plus the __index metatable that
+            -- makes `x:method()` dispatch work. For `struct Y from X` we also
+            -- chain parent lookup via setmetatable(X, {__index = Parent}).
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -375,6 +473,13 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+            -- `global struct X` gets the same runtime boilerplate as the
+            -- local form (metatable chain, __index, statics, .new)
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -788,7 +893,6 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["pragma"] = emit_nothing_visitor_cbs,
    }
 
-   local visit_type: Visitor<nil, TypeName, Type, Output> = {}
    visit_type.cbs = {}
    local default_type_visitor = {
       after = function(_: nil, typ: Type, _children: {Output}): Output

@@ -492,6 +492,10 @@ local parse_typeargs_if_any
 
 
 
+
+
+
+
 local ast = {}
 
 
@@ -2126,6 +2130,17 @@ parse_record_like_type = function(state, block, typename)
    decl.field_comments = {}
    decl.meta_field_comments = {}
 
+
+   if block.kind == "struct" then
+      (decl).is_struct = true
+
+      if block[reader.BLOCK_INDEXES.RECORD.PARENT] then
+         local parent_block = block[reader.BLOCK_INDEXES.RECORD.PARENT]
+         local parent_type = parse_type(state, parent_block);
+         (decl).struct_parent = parent_type
+      end
+   end
+
    if typename == "interface" then
       decl.interface_list = {}
    end
@@ -2180,6 +2195,15 @@ parse_record_like_type = function(state, block, typename)
                t.is_method = true
             end
             store_field_in_record(state, fld, field_name, t, decl, meta, comments)
+
+            local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+            if default_expr and not meta and decl.typename == "record" and (decl).is_struct then
+               local rdef = decl
+               if not rdef.default_values then
+                  rdef.default_values = {}
+               end
+               rdef.default_values[field_name] = parse_expression(state, default_expr)
+            end
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
             end
@@ -2206,6 +2230,43 @@ parse_record_like_type = function(state, block, typename)
 
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.FIELDS], false)
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.META_FIELDS], true)
+
+
+
+
+
+
+   if block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+      local rdef_for_static = decl
+      if rdef_for_static.typename == "record" and (rdef_for_static).is_struct then
+         local rdef = rdef_for_static
+         rdef.static_field_names = {}
+         for _, fld in ipairs(block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS]) do
+            if fld.kind == "record_field" then
+               local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
+               local field_name
+               if name_node and name_node.kind == "string" then
+                  field_name = block_string_value(name_node) or name_node.tk or ""
+               else
+                  field_name = name_node and name_node.tk or ""
+               end
+               local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
+               if t.typename == "function" and t.maybe_method then
+                  t.is_method = true
+               end
+               store_field_in_record(state, fld, field_name, t, decl, false, nil)
+               rdef.static_field_names[field_name] = true
+               local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+               if default_expr then
+                  if not rdef.static_default_values then
+                     rdef.static_default_values = {}
+                  end
+                  rdef.static_default_values[field_name] = parse_expression(state, default_expr)
+               end
+            end
+         end
+      end
+   end
 
    if block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE] then
       local where_macroexp = parse_where_clause(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], decl)
@@ -2310,6 +2371,9 @@ parse_base_type = function(state, block)
       return parse_record_like_type(state, block, "record")
    elseif block.kind == "interface" then
       return parse_record_like_type(state, block, "interface")
+   elseif block.kind == "struct" then
+
+      return parse_record_like_type(state, block, "record")
    elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array")
       decl.elements = parse_type(state, block[reader.BLOCK_INDEXES.ARRAY_TYPE.ELEMENT])
@@ -2628,6 +2692,7 @@ local block = { Block = { ExpectedContext = {} } }
 
 
 
+
 local BLOCK_INDEXES = {
    PRAGMA = {
       KEY = 1,
@@ -2783,6 +2848,8 @@ local BLOCK_INDEXES = {
       FIELDS = 3,
       META_FIELDS = 4,
       WHERE_CLAUSE = 5,
+      PARENT = 6,
+      STATIC_FIELDS = 7,
    },
    INTERFACE = {
       ARRAY_TYPE = 1,
@@ -5757,6 +5824,26 @@ local function compare_or_infer_typevar(ck, typevar, a, b, cmp)
 end
 
 local function subtype_record(ck, a, b)
+
+
+
+
+
+   if b.typename == "record" then
+      local brec = b
+      if brec.is_struct and not a.is_struct then
+         local name = brec.declname or "struct"
+         return false, { errors.new(name .. " is a struct; construct instances with " .. name .. ".new{ ... } instead of a table literal") }
+      end
+   end
+
+
+
+   local struct_inherits = false
+   if b.typename == "record" and a.is_struct and (b).is_struct then
+      struct_inherits = a.struct_parent_typeids ~= nil and a.struct_parent_typeids[b.typeid] == true
+   end
+
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -5782,11 +5869,17 @@ local function subtype_record(ck, a, b)
       local ak = a.fields[k]
       local bk = b.fields[k]
       if bk then
-         local ok, fielderrs = ck:is_a(ak, bk)
-         if not ok then
-            ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
+         if k == "new" and struct_inherits then
+
+
+
+         else
+            local ok, fielderrs = ck:is_a(ak, bk)
+            if not ok then
+               ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
+            end
          end
-      elseif b.typename == "record" then
+      elseif b.typename == "record" and not struct_inherits then
          table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
@@ -5979,6 +6072,10 @@ local emptytable_relations = {
       return not b.is_userdata
    end,
    ["record"] = function(_ck, _a, b)
+      if b.is_struct then
+         local name = b.declname or "struct"
+         return false, { errors.new(name .. " is a struct; construct instances with " .. name .. ".new{ ... } instead of an empty table") }
+      end
       return not b.is_userdata
    end,
 }
@@ -6238,6 +6335,12 @@ relations.subtype_relations = {
          local union_b = rb.typename == "union"
          if union_a or union_b then
             return ck:is_a(union_a and ra or a, union_b and rb or b)
+         end
+
+
+         if ra.typename == "record" and rb.typename == "record" and
+            (ra).is_struct and (rb).is_struct then
+            return ck:is_a(ra, rb)
          end
 
 
@@ -8316,6 +8419,218 @@ local function count_scope_vars(self)
    return n
 end
 
+
+
+
+
+
+
+local function check_default_expr(self, dnode, ftype, fname)
+   if not dnode or not ftype then
+      return
+   end
+
+   (dnode).expected = ftype
+   local t = traversal.traverse_nodes(self, dnode, visit_node, visit_type)
+
+   if not t then
+
+      return
+   end
+
+   local ok, errs = self:is_a(untuple(t), ftype)
+   if not ok then
+      self.errs:add_prefixing(dnode, errs, "invalid default value for field '" .. fname .. "': ")
+   end
+end
+
+
+
+
+
+
+
+local function finalize_struct_declaration(self, node)
+
+   if not node.value then
+      return
+   end
+   local resolved = self:get_typedecl(node.value)
+   if not (resolved.typename == "typedecl") then
+      return
+   end
+
+   local d = resolved.def
+
+
+   if d.typename == "generic" then
+      local inner = (d).t
+      if inner.typename == "record" and (inner).is_struct then
+         self.errs:add(node, "generic structs are not supported yet: '" .. node.var.tk .. "'")
+      end
+      return
+   end
+
+   if not (d.typename == "record") then
+      return
+   end
+   local rstruct = d
+   if not rstruct.is_struct then
+      return
+   end
+
+
+   if rstruct.struct_parent then
+      local sp = rstruct.struct_parent
+      local found = sp.found or self:find_type(sp.names)
+      local rp = self:resolve_nominal(sp)
+      local rp_def = rp
+      if rp_def.typename == "typedecl" then
+         rp_def = (rp_def).def
+      end
+
+      if not (rp_def.typename == "record") or not (rp_def).is_struct then
+         local pname = sp.names and sp.names[#sp.names] or "?"
+         local tname = rp_def and rp_def.typename or "unknown"
+         local what
+         if tname == "interface" then
+            what = "an interface"
+         elseif tname == "record" then
+            what = "a record"
+         elseif tname == "map" then
+            what = "a map"
+         else
+            what = "not a struct (" .. tname .. ")"
+         end
+         self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend another struct; '" .. pname .. "' is " .. what)
+      else
+         local pdef = rp_def
+
+
+
+
+
+         if found and found.f == self.filename and sp.names and #sp.names == 1 then
+            rstruct.struct_parent_name = pdef.declname or sp.names[1]
+         else
+            rstruct.struct_parent_name = nil
+            self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module")
+         end
+
+
+         rstruct.struct_parent_typeids = { [pdef.typeid] = true }
+         if pdef.struct_parent_typeids then
+            for tid, v in pairs(pdef.struct_parent_typeids) do
+               rstruct.struct_parent_typeids[tid] = v
+            end
+         end
+
+         for _, fname in ipairs(pdef.field_order) do
+            if fname ~= "new" then
+               if rstruct.static_field_names and rstruct.static_field_names[fname] then
+                  self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk ..
+                  "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
+               elseif rstruct.fields[fname] then
+
+                  local ok = self:same_type(rstruct.fields[fname], pdef.fields[fname])
+                  if not ok then
+                     self.errs:add(node, "field '" .. fname .. "' of struct '" .. node.var.tk ..
+                     "' conflicts with field inherited from '" .. tostring(pdef.declname) .. "'")
+                  end
+               else
+                  rstruct.fields[fname] = pdef.fields[fname]
+                  table.insert(rstruct.field_order, fname)
+               end
+            end
+         end
+
+         if pdef.default_values then
+            if not rstruct.default_values then
+               rstruct.default_values = {}
+            end
+            for fname, default_node in pairs(pdef.default_values) do
+               if not rstruct.default_values[fname] then
+                  rstruct.default_values[fname] = default_node
+               end
+            end
+         end
+
+         if pdef.static_field_names then
+            if not rstruct.static_field_names then
+               rstruct.static_field_names = {}
+            end
+            for fname, v in pairs(pdef.static_field_names) do
+               rstruct.static_field_names[fname] = v
+            end
+         end
+         if pdef.static_default_values then
+            if not rstruct.static_default_values then
+               rstruct.static_default_values = {}
+            end
+            for fname, default_node in pairs(pdef.static_default_values) do
+               if not rstruct.static_default_values[fname] then
+                  rstruct.static_default_values[fname] = default_node
+               end
+            end
+         end
+      end
+   end
+
+
+
+
+   if rstruct.default_values then
+      for fname, dnode in pairs(rstruct.default_values) do
+         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      end
+   end
+   if rstruct.static_default_values then
+      for fname, dnode in pairs(rstruct.static_default_values) do
+         check_default_expr(self, dnode, rstruct.fields[fname], fname)
+      end
+   end
+
+
+
+
+   if not rstruct.fields["new"] then
+      local w = node
+      local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
+      local opts_type = a_type(w, "record", {
+         fields = {},
+         field_order = {},
+         field_comments = {},
+         meta_field_comments = {},
+      })
+      for _, fname in ipairs(rstruct.field_order) do
+         if fname ~= "new" then
+            local is_static = rstruct.static_field_names and rstruct.static_field_names[fname]
+            local ft = rstruct.fields[fname]
+            local is_method_field = ft.typename == "function" and (ft).is_record_function
+            if not is_static and not is_method_field then
+               opts_type.fields[fname] = ft
+               table.insert(opts_type.field_order, fname)
+            end
+         end
+      end
+      local args_tuple = a_type(w, "tuple", { tuple = { opts_type } })
+      local rets_tuple = a_type(w, "tuple", { tuple = { selftype } })
+      local new_fn = a_function(w, {
+         min_arity = 1,
+         is_method = false,
+         args = args_tuple,
+         rets = rets_tuple,
+         is_record_function = true,
+      })
+      rstruct.fields["new"] = new_fn
+      table.insert(rstruct.field_order, "new")
+      if self.collector then
+         self.env.reporter:add_field(rstruct, "new", new_fn)
+      end
+      node.synthesize_auto_new = true
+   end
+end
+
 visit_node.cbs = {
    ["statements"] = {
       before = function(self, node)
@@ -8359,6 +8674,13 @@ visit_node.cbs = {
       end,
       after = function(self, node, _children)
          self:dismiss_unresolved(node.var.tk)
+
+
+
+
+
+         finalize_struct_declaration(self, node)
+
          return NONE
       end,
    },
@@ -8387,6 +8709,11 @@ visit_node.cbs = {
       end,
       after = function(self, node, _children)
          self:dismiss_unresolved(node.var.tk)
+
+
+
+         finalize_struct_declaration(self, node)
+
          return NONE
       end,
    },
@@ -8916,6 +9243,17 @@ visit_node.cbs = {
             return infer_table_literal(self, node, children)
          end
 
+
+
+
+
+
+         if decltype.typename == "record" and (decltype).is_struct then
+            local sname = (decltype).declname or "struct"
+            self.errs:add(node, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of a table literal")
+            return node.expected
+         end
+
          if decltype.fields then
             self:begin_implied_scope()
             self:add_self_type(node, decltype)
@@ -9191,6 +9529,14 @@ visit_node.cbs = {
             if rtype.typename == "map" then
                self.errs:add_warning("hint", node, "use the assignment syntax to store functions in maps", rtype)
             end
+            return
+         end
+
+
+         if rtype.typename == "record" and (rtype).is_struct and node.name.tk == "new" then
+            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+            self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '" ..
+            owner_name .. ":init()' for custom construction logic instead")
             return
          end
 
@@ -11795,6 +12141,7 @@ function lua_generator.generate(ast, gen_target, opts)
    end
 
    local visit_node = {}
+   local visit_type = {}
 
    local lua_54_attribute = {
       ["const"] = " <const>",
@@ -11905,6 +12252,89 @@ function lua_generator.generate(ast, gen_target, opts)
       end
    end
 
+
+
+
+   local function emit_struct_runtime(out, node)
+      local owner_tk = node.var.tk
+      local nt = node.value.newtype
+      local parent_name
+      if nt.typename == "typedecl" then
+         local ntd = nt.def
+         if ntd.typename == "record" then
+
+
+            if ntd.struct_parent_name then
+               parent_name = ntd.struct_parent_name
+            else
+               local p = ntd.struct_parent
+               if p ~= nil and p.typename == "nominal" and p.names and p.names[1] then
+                  parent_name = table.concat((p).names, ".")
+               end
+            end
+         end
+      end
+
+      if parent_name then
+         add_string(out, "; ")
+         add_string(out, owner_tk .. " = setmetatable(" .. owner_tk .. ", { __index = " .. parent_name .. " })")
+      end
+      add_string(out, "; ")
+      add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+
+
+
+      if nt.typename == "typedecl" then
+         local ntd = nt.def
+         if ntd.typename == "record" then
+            local rdef = ntd
+            if rdef.static_default_values then
+               for _, fname in ipairs(rdef.field_order) do
+                  local default_node = rdef.static_default_values[fname]
+                  if default_node then
+                     local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                     add_string(out, "; ")
+                     add_string(out, owner_tk .. "." .. fname .. " = ")
+                     add_child(out, default_out)
+                  end
+               end
+            end
+         end
+      end
+
+      add_string(out, "; ")
+      add_string(out, owner_tk .. ".new = function(opts)")
+      add_string(out, " local self = setmetatable({}, " .. owner_tk .. ")")
+      add_string(out, " for k, v in pairs(opts) do self[k] = v end")
+
+
+
+      if nt.typename == "typedecl" then
+         local ntd = nt.def
+         if ntd.typename == "record" then
+            local rdef = ntd
+            if rdef.default_values then
+               for _, fname in ipairs(rdef.field_order) do
+                  local default_node = rdef.default_values[fname]
+                  if default_node then
+                     local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                     add_string(out, "; if opts." .. fname .. " == nil then")
+                     add_string(out, " self." .. fname .. " = ")
+                     add_child(out, default_out)
+                     add_string(out, " end")
+                  end
+               end
+            end
+         end
+      end
+
+
+      add_string(out, "; if " .. owner_tk .. ".init then " .. owner_tk .. ".init(self) end")
+      add_string(out, "; return self")
+      add_string(out, " end")
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_, node, children)
@@ -11951,12 +12381,26 @@ function lua_generator.generate(ast, gen_target, opts)
       ["local_type"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
-            if not node.var.elide_type then
+
+
+
+
+
+            if not node.var.elide_type or node.synthesize_auto_new then
                table.insert(out, "local")
                add_child(out, children[1], " ")
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+
+
+
+
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -11968,6 +12412,13 @@ function lua_generator.generate(ast, gen_target, opts)
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+
+
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -12381,7 +12832,6 @@ function lua_generator.generate(ast, gen_target, opts)
       ["pragma"] = emit_nothing_visitor_cbs,
    }
 
-   local visit_type = {}
    visit_type.cbs = {}
    local default_type_visitor = {
       after = function(_, typ, _children)
@@ -16252,6 +16702,20 @@ local function extract_userdata_from_interface_list(ps, i, interface_list)
 end
 
 read_record_body = function(ps, i, def)
+
+   if ps.tokens[i].tk == "from" then
+      if def.kind ~= "struct" then
+         return fail(ps, i, "syntax error: inheritance ('from') is only allowed in struct declarations")
+      end
+      i = i + 1
+      local parent_block
+      i, parent_block = read_simple_type_or_nominal(ps, i)
+      if not parent_block or parent_block.kind ~= "nominal_type" then
+         return fail(ps, i, "expected parent struct name after 'from'")
+      end
+      def[BLOCK_INDEXES.RECORD.PARENT] = parent_block
+   end
+
    if ps.tokens[i].tk == "{" then
       local atype
       i, atype = read_array_interface_type(ps, i)
@@ -16323,7 +16787,9 @@ read_record_body = function(ps, i, def)
          end
          table.insert(fields, lt)
       elseif read_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
-         if def.kind == "interface" and tn == "record" then
+         if tn == "struct" then
+            i = failskip(ps, i, "syntax error: struct cannot be nested inside another type; declare it as a top-level statement", skip_type_body)
+         elseif def.kind == "interface" and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
             local lt
@@ -16335,6 +16801,60 @@ read_record_body = function(ps, i, def)
                table.insert(fields, lt)
             end
          end
+      elseif ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" and def.kind ~= "struct" then
+         return fail(ps, i, "syntax error: 'static' blocks are only allowed in struct declarations")
+      elseif def.kind == "struct" and ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" then
+
+         if def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+            return fail(ps, i, "only one static block is allowed per struct")
+         end
+         i = i + 1
+         local static_fields = new_block(ps, i, "record_body")
+         while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
+            local scbs = collect_comment_blocks(ps, i)
+            local sv
+            if ps.tokens[i].tk == "[" then
+               i = i + 1
+               i, sv = read_literal(ps, i)
+               if not sv or sv.kind ~= "string" then
+                  return fail(ps, i, "expected a string literal")
+               end
+               i = verify_tk(ps, i, "]")
+            else
+               i, sv = verify_kind(ps, i, "identifier")
+            end
+            if not sv then
+               return fail(ps, i, "expected a variable name in static block")
+            end
+            i = verify_tk(ps, i, ":")
+            local st
+            i, st = read_type(ps, i)
+            if not st then
+               return fail(ps, i, "expected a type for static field")
+            end
+            local sfield = new_block(ps, i, "record_field")
+            sfield[BLOCK_INDEXES.RECORD_FIELD.NAME] = sv
+            sfield[BLOCK_INDEXES.RECORD_FIELD.TYPE] = st
+
+            if ps.tokens[i].tk == "=" then
+               i = i + 1
+               local sdefault
+               i, sdefault = read_expression(ps, i)
+               if not sdefault then
+                  return fail(ps, i, "expected an initializer expression for static field")
+               end
+               sfield[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = sdefault
+            end
+            for _, cb in ipairs(scbs) do
+               table.insert(static_fields, cb)
+            end
+            table.insert(static_fields, sfield)
+         end
+         if ps.tokens[i].kind == "$EOF$" then
+            return fail(ps, i, "expected 'end' to close static block")
+         end
+         i = i + 1
+         def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] = static_fields
       else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
@@ -16400,6 +16920,18 @@ read_record_body = function(ps, i, def)
             local field = new_block(ps, i, "record_field")
             field[BLOCK_INDEXES.RECORD_FIELD.NAME] = v
             field[BLOCK_INDEXES.RECORD_FIELD.TYPE] = t
+
+
+            if def.kind == "struct" and ps.tokens[i].tk == "=" then
+               i = i + 1
+               local default_expr
+               i, default_expr = read_expression(ps, i)
+               if not default_expr then
+                  return fail(ps, i, "expected a default value expression")
+               end
+               field[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = default_expr
+            end
+
             table.insert(current_fields, field)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -16421,6 +16953,7 @@ end
 read_type_body_fns = {
    ["interface"] = read_record_body,
    ["record"] = read_record_body,
+   ["struct"] = read_record_body,
    ["enum"] = read_enum_body,
 }
 
@@ -16864,6 +17397,7 @@ needs_local_or_global = {
       return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    end,
    ["record"] = type_needs_local_or_global,
+   ["struct"] = type_needs_local_or_global,
    ["enum"] = type_needs_local_or_global,
 }
 
@@ -18480,6 +19014,37 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 
 local types = { GenericType = {}, StringType = {}, IntegerType = {}, BooleanType = {}, BooleanContextType = {}, TypeDeclType = {}, LiteralTableItemType = {}, NominalType = {}, SelfType = {}, ArrayType = {}, RecordType = {}, InterfaceType = {}, InvalidType = {}, UnknownType = {}, TupleType = {}, UnresolvedTypeArgType = {}, UnresolvableTypeArgType = {}, TypeVarType = {}, MapType = {}, NilType = {}, EmptyTableType = {}, UnresolvedEmptyTableValueType = {}, FunctionType = {}, UnionType = {}, TupleTableType = {}, PolyType = {}, EnumType = {} }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

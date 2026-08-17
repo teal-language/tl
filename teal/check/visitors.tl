@@ -793,6 +793,218 @@ local function count_scope_vars(self: Context): integer
    return n
 end
 
+-- Typecheck a default-value expression against its field type. The
+-- expression node is traversed with the regular check visitors (so it
+-- resolves locals, infers literal types, reports its own errors), then
+-- compared with the declared field type. Strictly evaluated at the point
+-- of declaration: references to names declared later in the module are
+-- errors (matching the runtime semantics of the emitted initializers).
+local function check_default_expr(self: Context, dnode: Node, ftype: Type, fname: string)
+   if not dnode or not ftype then
+      return
+   end
+
+   (dnode as types.Node as parser.Node).expected = ftype
+   local t = traversal.traverse_nodes(self, dnode, visit_node, visit_type)
+
+   if not t then
+      -- traversal already reported errors (e.g. unresolved names)
+      return
+   end
+
+   local ok, errs = self:is_a(untuple(t), ftype)
+   if not ok then
+      self.errs:add_prefixing(dnode as Where, errs, "invalid default value for field '" .. fname .. "': ")
+   end
+end
+
+-- Shared finalization for `local struct X` / `global struct X` declarations:
+-- validates the `from` parent, applies parent-field inheritance, and
+-- synthesizes the auto-generated .new constructor.
+-- Runs in the local_type/global_type `after` visitor, while the declaration
+-- scope is still alive (the parent struct, declared earlier in the module,
+-- is still resolvable there).
+local function finalize_struct_declaration(self: Context, node: Node)
+   -- `global type X` may be a value-less forward declaration
+   if not node.value then
+      return
+   end
+   local resolved = self:get_typedecl(node.value)
+   if not (resolved is TypeDeclType) then
+      return
+   end
+
+   local d = resolved.def
+   -- generic structs (`struct X<T>`) are not supported yet; detect and
+   -- reject with a clear message instead of silently skipping synthesis
+   if d is GenericType then
+      local inner = (d as GenericType).t
+      if inner is RecordType and (inner as RecordType).is_struct then
+         self.errs:add(node, "generic structs are not supported yet: '" .. node.var.tk .. "'")
+      end
+      return
+   end
+
+   if not (d is RecordType) then
+      return
+   end
+   local rstruct = d as RecordType
+   if not rstruct.is_struct then
+      return
+   end
+
+   -- validate `from Parent` and apply inheritance
+   if rstruct.struct_parent then
+      local sp = rstruct.struct_parent
+      local found = sp.found or self:find_type(sp.names)
+      local rp = self:resolve_nominal(sp)
+      local rp_def = rp
+      if rp_def is TypeDeclType then
+         rp_def = (rp_def as TypeDeclType).def
+      end
+
+       if not (rp_def is RecordType) or not (rp_def as RecordType).is_struct then
+          local pname = sp.names and sp.names[#sp.names] or "?"
+          local tname = rp_def and rp_def.typename or "unknown"
+          local what: string
+          if tname == "interface" then
+             what = "an interface"
+          elseif tname == "record" then
+             what = "a record"
+          elseif tname == "map" then
+             what = "a map"
+          else
+             what = "not a struct (" .. tname .. ")"
+          end
+          self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend another struct; '" .. pname .. "' is " .. what)
+       else
+          local pdef = rp_def as RecordType
+
+          -- The runtime parent reference must be a real table variable.
+          -- Only structs declared in the current module (possibly through a
+          -- same-file type alias) qualify; cross-module parents are rejected
+          -- for now because we cannot emit a reliable runtime name for them.
+          if found and found.f == self.filename and sp.names and #sp.names == 1 then
+             rstruct.struct_parent_name = pdef.declname or sp.names[1]
+          else
+             rstruct.struct_parent_name = nil
+             self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module")
+          end
+
+          -- record the ancestor chain (for nominal subtyping: child <: parent)
+          rstruct.struct_parent_typeids = { [pdef.typeid] = true }
+          if pdef.struct_parent_typeids then
+             for tid, v in pairs(pdef.struct_parent_typeids) do
+                rstruct.struct_parent_typeids[tid] = v
+             end
+          end
+
+          for _, fname in ipairs(pdef.field_order) do
+            if fname ~= "new" then
+               if rstruct.static_field_names and rstruct.static_field_names[fname] then
+                  self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk
+                                 .. "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
+               elseif rstruct.fields[fname] then
+                  -- child redeclares an inherited field: types must agree
+                  local ok = self:same_type(rstruct.fields[fname], pdef.fields[fname])
+                  if not ok then
+                     self.errs:add(node, "field '" .. fname .. "' of struct '" .. node.var.tk
+                                    .. "' conflicts with field inherited from '" .. tostring(pdef.declname) .. "'")
+                  end
+               else
+                  rstruct.fields[fname] = pdef.fields[fname]
+                  table.insert(rstruct.field_order, fname)
+               end
+            end
+         end
+         -- inherit default values as well
+         if pdef.default_values then
+            if not rstruct.default_values then
+               rstruct.default_values = {}
+            end
+            for fname, default_node in pairs(pdef.default_values) do
+               if not rstruct.default_values[fname] then
+                  rstruct.default_values[fname] = default_node
+               end
+            end
+         end
+         -- inherit static field names and their initializers
+         if pdef.static_field_names then
+            if not rstruct.static_field_names then
+               rstruct.static_field_names = {}
+            end
+            for fname, v in pairs(pdef.static_field_names) do
+               rstruct.static_field_names[fname] = v
+            end
+         end
+          if pdef.static_default_values then
+             if not rstruct.static_default_values then
+                rstruct.static_default_values = {}
+             end
+             for fname, default_node in pairs(pdef.static_default_values) do
+                if not rstruct.static_default_values[fname] then
+                   rstruct.static_default_values[fname] = default_node
+                end
+             end
+          end
+       end
+    end
+
+    -- typecheck default-value expressions (own and inherited) against
+    -- their field types; runs after inheritance so redeclarations and
+    -- inherited defaults are validated against the final field types
+    if rstruct.default_values then
+       for fname, dnode in pairs(rstruct.default_values) do
+          check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+       end
+    end
+    if rstruct.static_default_values then
+       for fname, dnode in pairs(rstruct.static_default_values) do
+          check_default_expr(self, dnode as Node, rstruct.fields[fname], fname)
+       end
+    end
+
+   -- synthesize .new (always, for struct). The opts parameter is a record
+   -- containing only the instance data fields: static fields and methods
+   -- (record functions) are excluded, so passing them to .new is a type error.
+   if not rstruct.fields["new"] then
+      local w = node as Where
+      local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
+      local opts_type = a_type(w, "record", {
+         fields = {},
+         field_order = {},
+         field_comments = {},
+         meta_field_comments = {},
+      } as RecordType) as RecordType
+      for _, fname in ipairs(rstruct.field_order) do
+         if fname ~= "new" then
+            local is_static = rstruct.static_field_names and rstruct.static_field_names[fname]
+            local ft = rstruct.fields[fname]
+            local is_method_field = ft is FunctionType and (ft as FunctionType).is_record_function
+            if not is_static and not is_method_field then
+               opts_type.fields[fname] = ft
+               table.insert(opts_type.field_order, fname)
+            end
+         end
+      end
+      local args_tuple = a_type(w, "tuple", { tuple = { opts_type } } as TupleType) as TupleType
+      local rets_tuple = a_type(w, "tuple", { tuple = { selftype } } as TupleType) as TupleType
+      local new_fn = a_function(w, {
+         min_arity = 1,
+         is_method = false,
+         args = args_tuple,
+         rets = rets_tuple,
+         is_record_function = true,
+      })
+      rstruct.fields["new"] = new_fn
+      table.insert(rstruct.field_order, "new")
+      if self.collector then
+         self.env.reporter:add_field(rstruct, "new", new_fn)
+      end
+      node.synthesize_auto_new = true
+   end
+end
+
 visit_node.cbs = {
    ["statements"] = {
       before = function(self: Context, node: Node)
@@ -825,20 +1037,27 @@ visit_node.cbs = {
          return NONE
       end
    },
-   ["local_type"] = {
-      before = function(self: Context, node: Node)
-         local name = node.var.tk
-         local resolved, aliasing = self:get_typedecl(node.value)
-         local var = self:add_var(node.var, name, resolved, node.var.attribute)
-         if aliasing then
-            var.aliasing = aliasing
-         end
-      end,
-      after = function(self: Context, node: Node, _children: {Type}): Type
-         self:dismiss_unresolved(node.var.tk)
-         return NONE
-      end,
-   },
+    ["local_type"] = {
+       before = function(self: Context, node: Node)
+          local name = node.var.tk
+          local resolved, aliasing = self:get_typedecl(node.value)
+          local var = self:add_var(node.var, name, resolved, node.var.attribute)
+          if aliasing then
+             var.aliasing = aliasing
+          end
+       end,
+       after = function(self: Context, node: Node, _children: {Type}): Type
+          self:dismiss_unresolved(node.var.tk)
+
+          -- For `local struct X`: apply parent inheritance and synthesize
+          -- .new. Done here (rather than at module finalization) because the
+          -- var declaration lives in the surrounding "statements" scope,
+          -- which is popped by the time check.check() runs its post-pass.
+          finalize_struct_declaration(self, node)
+
+          return NONE
+       end,
+    },
    ["global_type"] = {
       before = function(self: Context, node: Node)
          local global_scope = self.st[1]
@@ -862,12 +1081,17 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self: Context, node: Node, _children: {Type}): Type
-         self:dismiss_unresolved(node.var.tk)
-         return NONE
-      end,
-   },
-   ["local_declaration"] = {
+       after = function(self: Context, node: Node, _children: {Type}): Type
+          self:dismiss_unresolved(node.var.tk)
+
+          -- For `global struct X`: same parent inheritance + .new synthesis
+          -- as the local form.
+          finalize_struct_declaration(self, node)
+
+          return NONE
+       end,
+    },
+    ["local_declaration"] = {
       before = function(self: Context, node: Node)
          if self.collector then
             for _, var in ipairs(node.vars) do
@@ -1345,8 +1569,8 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
-         self.fdb:set_truthy(node)
+       after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
+          self.fdb:set_truthy(node)
 
          if not node.expected then
             return infer_table_literal(self, node, children)
@@ -1389,16 +1613,27 @@ visit_node.cbs = {
             end
          end
 
-         if not is_lua_table_type(decltype) then
-            return infer_table_literal(self, node, children)
-         end
+          if not is_lua_table_type(decltype) then
+             return infer_table_literal(self, node, children)
+          end
 
-         if decltype is RecordLikeType then
-            self:begin_implied_scope()
-            self:add_self_type(node, decltype)
-            decltype = self:resolve_self(decltype, true)
-            self:end_implied_scope()
-         end
+          -- struct types are nominal for construction purposes: table
+          -- literals (including {}) must not adopt a struct type, because
+          -- the resulting table lacks the metatable wiring that methods
+          -- and init rely on. Checked before resolve_self, which rebuilds
+          -- the type and would drop the is_struct marker.
+          if decltype is RecordType and (decltype as RecordType).is_struct then
+             local sname = (decltype as RecordType).declname or "struct"
+             self.errs:add(node, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of a table literal")
+             return node.expected
+          end
+
+          if decltype is RecordLikeType then
+             self:begin_implied_scope()
+             self:add_self_type(node, decltype)
+             decltype = self:resolve_self(decltype, true)
+             self:end_implied_scope()
+          end
 
          local force_array: Type = nil
 
@@ -1660,16 +1895,24 @@ visit_node.cbs = {
             r.field_order = {}
          end
 
-         if not rtype is RecordLikeType then
-            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
-            local short_type = show_type(rtype, true)
-            local msg = ("record function syntax cannot be used with this type: %s is %s"):format(owner_name, short_type)
-            self.errs:add(node, msg, rtype)
-            if rtype is MapType then
+          if not rtype is RecordLikeType then
+             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+             local short_type = show_type(rtype, true)
+             local msg = ("record function syntax cannot be used with this type: %s is %s"):format(owner_name, short_type)
+             self.errs:add(node, msg, rtype)
+             if rtype is MapType then
                 self.errs:add_warning("hint", node, "use the assignment syntax to store functions in maps", rtype)
-            end
-            return
-         end
+             end
+             return
+          end
+
+          -- structs reserve .new as the auto-generated constructor
+          if rtype is RecordType and (rtype as RecordType).is_struct and node.name.tk == "new" then
+             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+             self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '"
+                                       .. owner_name .. ":init()' for custom construction logic instead")
+             return
+          end
 
          local selftype = self:get_self_type(node.fn_owner)
          if node.is_method then

@@ -49,12 +49,13 @@ local record block
       "local_macroexp"
       "local_macro"
       "macro_quote"
-      "macro_var"
-      "macro_invocation"
-      "interface"
-      "pragma"
-      "error_block"
-      "userdata"
+       "macro_var"
+       "macro_invocation"
+       "interface"
+       "struct"
+       "pragma"
+       "error_block"
+       "userdata"
 
       "op_not"
       "op_len"
@@ -281,13 +282,15 @@ local BLOCK_INDEXES <const> = {
       RETS = 2,
       EXP = 3,
    },
-   RECORD = {
-      ARRAY_TYPE = 1,
-      INTERFACES = 2,
-      FIELDS = 3,
-      META_FIELDS = 4,
-      WHERE_CLAUSE = 5,
-   },
+    RECORD = {
+       ARRAY_TYPE = 1,
+       INTERFACES = 2,
+       FIELDS = 3,
+       META_FIELDS = 4,
+       WHERE_CLAUSE = 5,
+       PARENT = 6,
+       STATIC_FIELDS = 7,
+    },
    INTERFACE = {
       ARRAY_TYPE = 1,
       INTERFACES = 2,

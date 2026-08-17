@@ -2027,6 +2027,20 @@ local function extract_userdata_from_interface_list(ps, i, interface_list)
 end
 
 read_record_body = function(ps, i, def)
+
+   if ps.tokens[i].tk == "from" then
+      if def.kind ~= "struct" then
+         return fail(ps, i, "syntax error: inheritance ('from') is only allowed in struct declarations")
+      end
+      i = i + 1
+      local parent_block
+      i, parent_block = read_simple_type_or_nominal(ps, i)
+      if not parent_block or parent_block.kind ~= "nominal_type" then
+         return fail(ps, i, "expected parent struct name after 'from'")
+      end
+      def[BLOCK_INDEXES.RECORD.PARENT] = parent_block
+   end
+
    if ps.tokens[i].tk == "{" then
       local atype
       i, atype = read_array_interface_type(ps, i)
@@ -2098,7 +2112,9 @@ read_record_body = function(ps, i, def)
          end
          table.insert(fields, lt)
       elseif read_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
-         if def.kind == "interface" and tn == "record" then
+         if tn == "struct" then
+            i = failskip(ps, i, "syntax error: struct cannot be nested inside another type; declare it as a top-level statement", skip_type_body)
+         elseif def.kind == "interface" and tn == "record" then
             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
          else
             local lt
@@ -2110,6 +2126,60 @@ read_record_body = function(ps, i, def)
                table.insert(fields, lt)
             end
          end
+      elseif ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" and def.kind ~= "struct" then
+         return fail(ps, i, "syntax error: 'static' blocks are only allowed in struct declarations")
+      elseif def.kind == "struct" and ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" then
+
+         if def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+            return fail(ps, i, "only one static block is allowed per struct")
+         end
+         i = i + 1
+         local static_fields = new_block(ps, i, "record_body")
+         while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
+            local scbs = collect_comment_blocks(ps, i)
+            local sv
+            if ps.tokens[i].tk == "[" then
+               i = i + 1
+               i, sv = read_literal(ps, i)
+               if not sv or sv.kind ~= "string" then
+                  return fail(ps, i, "expected a string literal")
+               end
+               i = verify_tk(ps, i, "]")
+            else
+               i, sv = verify_kind(ps, i, "identifier")
+            end
+            if not sv then
+               return fail(ps, i, "expected a variable name in static block")
+            end
+            i = verify_tk(ps, i, ":")
+            local st
+            i, st = read_type(ps, i)
+            if not st then
+               return fail(ps, i, "expected a type for static field")
+            end
+            local sfield = new_block(ps, i, "record_field")
+            sfield[BLOCK_INDEXES.RECORD_FIELD.NAME] = sv
+            sfield[BLOCK_INDEXES.RECORD_FIELD.TYPE] = st
+
+            if ps.tokens[i].tk == "=" then
+               i = i + 1
+               local sdefault
+               i, sdefault = read_expression(ps, i)
+               if not sdefault then
+                  return fail(ps, i, "expected an initializer expression for static field")
+               end
+               sfield[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = sdefault
+            end
+            for _, cb in ipairs(scbs) do
+               table.insert(static_fields, cb)
+            end
+            table.insert(static_fields, sfield)
+         end
+         if ps.tokens[i].kind == "$EOF$" then
+            return fail(ps, i, "expected 'end' to close static block")
+         end
+         i = i + 1
+         def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] = static_fields
       else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i + 1].tk ~= ":" then
@@ -2175,6 +2245,18 @@ read_record_body = function(ps, i, def)
             local field = new_block(ps, i, "record_field")
             field[BLOCK_INDEXES.RECORD_FIELD.NAME] = v
             field[BLOCK_INDEXES.RECORD_FIELD.TYPE] = t
+
+
+            if def.kind == "struct" and ps.tokens[i].tk == "=" then
+               i = i + 1
+               local default_expr
+               i, default_expr = read_expression(ps, i)
+               if not default_expr then
+                  return fail(ps, i, "expected a default value expression")
+               end
+               field[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = default_expr
+            end
+
             table.insert(current_fields, field)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -2196,6 +2278,7 @@ end
 read_type_body_fns = {
    ["interface"] = read_record_body,
    ["record"] = read_record_body,
+   ["struct"] = read_record_body,
    ["enum"] = read_enum_body,
 }
 
@@ -2639,6 +2722,7 @@ needs_local_or_global = {
       return failskip(ps, i, "types need to be declared with 'local type' or 'global type'", skip_type_declaration)
    end,
    ["record"] = type_needs_local_or_global,
+   ["struct"] = type_needs_local_or_global,
    ["enum"] = type_needs_local_or_global,
 }
 

@@ -236,6 +236,10 @@ local parse_typeargs_if_any
 
 
 
+
+
+
+
 local ast = {}
 
 
@@ -1870,6 +1874,17 @@ parse_record_like_type = function(state, block, typename)
    decl.field_comments = {}
    decl.meta_field_comments = {}
 
+
+   if block.kind == "struct" then
+      (decl).is_struct = true
+
+      if block[reader.BLOCK_INDEXES.RECORD.PARENT] then
+         local parent_block = block[reader.BLOCK_INDEXES.RECORD.PARENT]
+         local parent_type = parse_type(state, parent_block);
+         (decl).struct_parent = parent_type
+      end
+   end
+
    if typename == "interface" then
       decl.interface_list = {}
    end
@@ -1924,6 +1939,15 @@ parse_record_like_type = function(state, block, typename)
                t.is_method = true
             end
             store_field_in_record(state, fld, field_name, t, decl, meta, comments)
+
+            local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+            if default_expr and not meta and decl.typename == "record" and (decl).is_struct then
+               local rdef = decl
+               if not rdef.default_values then
+                  rdef.default_values = {}
+               end
+               rdef.default_values[field_name] = parse_expression(state, default_expr)
+            end
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
             end
@@ -1950,6 +1974,43 @@ parse_record_like_type = function(state, block, typename)
 
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.FIELDS], false)
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.META_FIELDS], true)
+
+
+
+
+
+
+   if block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+      local rdef_for_static = decl
+      if rdef_for_static.typename == "record" and (rdef_for_static).is_struct then
+         local rdef = rdef_for_static
+         rdef.static_field_names = {}
+         for _, fld in ipairs(block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS]) do
+            if fld.kind == "record_field" then
+               local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
+               local field_name
+               if name_node and name_node.kind == "string" then
+                  field_name = block_string_value(name_node) or name_node.tk or ""
+               else
+                  field_name = name_node and name_node.tk or ""
+               end
+               local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
+               if t.typename == "function" and t.maybe_method then
+                  t.is_method = true
+               end
+               store_field_in_record(state, fld, field_name, t, decl, false, nil)
+               rdef.static_field_names[field_name] = true
+               local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+               if default_expr then
+                  if not rdef.static_default_values then
+                     rdef.static_default_values = {}
+                  end
+                  rdef.static_default_values[field_name] = parse_expression(state, default_expr)
+               end
+            end
+         end
+      end
+   end
 
    if block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE] then
       local where_macroexp = parse_where_clause(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], decl)
@@ -2054,6 +2115,9 @@ parse_base_type = function(state, block)
       return parse_record_like_type(state, block, "record")
    elseif block.kind == "interface" then
       return parse_record_like_type(state, block, "interface")
+   elseif block.kind == "struct" then
+
+      return parse_record_like_type(state, block, "record")
    elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array")
       decl.elements = parse_type(state, block[reader.BLOCK_INDEXES.ARRAY_TYPE.ELEMENT])
