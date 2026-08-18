@@ -59,6 +59,198 @@ effects. The generated `.new` calls `init` explicitly as `X.init(self)`,
 without going through the metatable — so `init` resolution is direct and
 free of dispatch magic.
 
+## How it works: the generated code
+
+This section spells out exactly what `tl gen` emits for a struct, because
+the design leans on it heavily: **all inheritance is resolved at compile
+time, so instances never pay for it at runtime**. No lookup chains, no
+metatable walks, no dispatch.
+
+### What `.new` does
+
+For a struct with fields, defaults and an `init`, the constructor is
+generated as a plain function with four fixed steps:
+
+```lua
+local struct Point
+   x: number
+   y: number = 0
+   distance: number
+end
+
+function Point:init()
+   self.distance = math.sqrt(self.x ^ 2 + self.y ^ 2)
+end
+```
+
+compiles to:
+
+```lua
+local Point = {}
+Point.__index = Point                       -- (1) instance wiring
+Point.new = function(opts)
+   local self = setmetatable({}, Point)     -- (2) fresh instance
+   for k, v in pairs(opts) do               -- (3) copy caller's fields
+      self[k] = v
+   end
+   if opts.y == nil then self.y = 0 end     -- (4) apply defaults
+   Point.init(self)                         -- (5) run init, direct call
+   return self
+end
+```
+
+Step by step:
+
+1. **`X.__index = X`** is set once at declaration. It is the *only*
+   metatable in the entire scheme, and it exists for one reason: when
+   `opts` (step 3) or `init` (step 5) does not set a field, reading it
+   from the instance falls back to the struct table — which is where
+   methods and statics live.
+2. **Allocation** — a plain table with that metatable.
+3. **Field copy** — everything the caller passed in `opts` is copied
+   as-is. Passing an unknown key is a *type error* (the `opts` parameter
+   is typed as a record of exactly the struct's instance fields; static
+   fields and methods are excluded from it).
+4. **Defaults** — one explicit `if` per field that declared a default.
+   The check is `== nil`, not falsiness, so `false` and `0` work
+   correctly as overridden values. Defaults are emitted in field
+   declaration order; child structs override parent defaults, and the
+   merge happens at check time, so each constructor contains *one* `if`
+   per defaulted field — never a duplicated parent assignment.
+5. **`init`** — a direct call `X.init(self)`, see below.
+
+If the struct declares no `init`, step 5 is omitted entirely — there is
+no `if X.init then ...` guard, the checker knows the answer at compile
+time. The same applies to defaults: a struct without defaults emits no
+`if`s at all.
+
+### What `init` does, and how inheritance chains run
+
+`init` is a lifecycle hook, not a method. It is never flattened, never
+inherited as a field, and never found through `__index` — `.new` calls
+it by explicit name. That is what makes multiple inits composable:
+
+```lua
+local struct A
+   log: {string}
+end
+
+function A:init()
+   table.insert(self.log, "A")
+end
+
+local struct B:A
+end
+
+function B:init()
+   table.insert(self.log, "B")
+end
+
+local struct C:B
+end
+
+function C:init()
+   table.insert(self.log, "C")
+end
+
+local c = C.new { log = {} }
+print(table.concat(c.log, ","))   --> A,B,C
+```
+
+The generated `C.new` contains the *chain*, root parent first:
+
+```lua
+C.new = function(opts)
+   local self = setmetatable({}, C)
+   for k, v in pairs(opts) do self[k] = v end
+   A.init(self)                    -- unconditional: A declares init
+   B.init(self)                    -- NOT emitted: B declares none
+   C.init(self)
+   return self
+end
+```
+
+(Shown with `B.init` commented for illustration; in reality the call is
+simply absent from the output.) The chain is computed at check time and
+contains only ancestors that declare their own `init`, so:
+
+- every `init` in the hierarchy runs **exactly once**,
+- order is always **parent to child**,
+- an ancestor without `init` is skipped with zero runtime cost,
+- there are no guards and no lookups — just direct calls.
+
+To call a parent `init` (or any parent method) from *inside* your own
+code, refer to the parent by name: `A.init(self)`.
+
+### Methods are flattened, not dispatched
+
+Method calls on struct instances are a **single table lookup**. There is
+no metatable chain between structs and no method resolution at call
+time. Instead, at the point a child struct is declared, every method
+known on its parent is copied into the child:
+
+```lua
+local struct Shape
+   name: string
+end
+
+function Shape:describe(): string
+   return "shape:" .. self.name
+end
+
+local struct Circle:Shape
+   r: number
+end
+```
+
+compiles to:
+
+```lua
+local Shape = {}
+Shape.__index = Shape
+-- ... Shape.new ...
+
+function Shape:describe() ... end
+
+local Circle = {}
+Circle.__index = Circle
+Circle.describe = Shape.describe          -- flattened at declaration
+Circle.new = function(opts) ... end       -- init chain: none here
+```
+
+So `c:describe()` resolves as: instance table → (miss) → `__index` →
+`Circle.describe` → hit. One hop, always.
+
+**Overrides are just later assignments.** A method defined on the child
+*after* its declaration overwrites the flattened copy:
+
+```lua
+function Circle:describe(): string
+   return "circle:" .. self.name
+end
+-- now Circle.describe is the override; Shape.describe is untouched
+```
+
+The last definition wins, and parent implementations remain available by
+name (`Shape.describe(self)`) for explicit delegation.
+
+One consequence to be aware of: methods added to a parent *after* the
+child declaration do not reach the child (neither for the type checker
+nor at runtime) — flattening happens once, at declaration. Declare
+parent methods before child structs; the checker enforces this order.
+
+### Instance wiring, summarized
+
+| What | When | Cost at call time |
+|---|---|---|
+| `__index = X` | once, at declaration | one metatable hop on instance field miss |
+| method flattening (`X.m = P.m`) | once, at declaration | none — direct table entry |
+| init chain | fixed call list inside `.new` | none — unconditional direct calls |
+| defaults | one `if` per defaulted field in `.new` | `== nil` check only |
+
+Everything inheritance-related is paid once per struct at load time,
+never per instance, and never per method call.
+
 ## Methods
 
 Methods are declared with the usual Lua colon syntax. They work because
@@ -121,17 +313,10 @@ print(d:speak())           --> Rex says Woof
 print(d.breed)             --> Labrador
 ```
 
-At runtime, methods are **flattened**, not dispatched: at the point `Dog`
-is declared, each method known on `Animal` is copied into it
-(`Dog.speak = Animal.speak`). A method call on an instance is a single
-table lookup — there is no metatable chain. A method defined on `Dog`
-(after its declaration) simply overwrites the copied entry, so overrides
-always take effect: the last definition wins.
-
-`init` is never flattened: `.new` calls every `init` in the hierarchy
-explicitly, root parent first, each exactly once. To invoke a parent
-method explicitly, refer to the parent by name
-(e.g. `Animal.speak(self)`).
+At runtime, inheritance is fully resolved at compile time — methods are
+flattened into the child at declaration, and `init`s run as a fixed
+chain of direct calls inside `.new`. See *How it works: the generated
+code* above for the exact output and the reasoning.
 
 There is intentionally **no multiple inheritance** and no `super` keyword.
 If you need to call a parent method explicitly, refer to the parent by
