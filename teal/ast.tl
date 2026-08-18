@@ -1951,19 +1951,28 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
             end
-         elseif fld.kind == "local_type" then
-            local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
-            local comments = extract_attached_comments(pending_field_comments, target)
-            if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
-               local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
-               local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
-               if nt_node and nt_node.newtype then
-                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
-               end
-            end
-            for i = #pending_field_comments, 1, -1 do
-               table.remove(pending_field_comments, i)
-            end
+          elseif fld.kind == "local_type" then
+             local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
+             local comments = extract_attached_comments(pending_field_comments, target)
+             if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
+                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
+                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
+                if nt_node and nt_node.newtype then
+                   -- structs need runtime presence (methods, .new, __index)
+                   -- that nested type declarations do not emit: they would
+                   -- produce a struct type without a constructor. Reject
+                   -- here, mirroring the reader-level ban on `struct Inner`
+                   -- blocks nested in type bodies
+                   local nt_def = nt_node.newtype.def
+                   if nt_def is RecordType and (nt_def as RecordType).is_struct then
+                      fail(state, fld, "struct '" .. vname .. "' cannot be nested inside another type; declare it as a top-level statement")
+                   end
+                   store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
+                end
+             end
+             for i = #pending_field_comments, 1, -1 do
+                table.remove(pending_field_comments, i)
+             end
          else
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)

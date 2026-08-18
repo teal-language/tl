@@ -434,6 +434,37 @@ describe("struct", function()
          assert.match("cannot be nested", result.syntax_errors[1].msg)
       end)
 
+      it("rejects nested structs declared through type aliases in type bodies", function()
+         local result, err = tl.check_string([[
+            local record Outer
+               type Inner = struct
+                  x: number
+               end
+            end
+
+            local i = Outer.Inner.new { x = 1 }
+         ]])
+         assert.truthy(result.syntax_errors and #result.syntax_errors > 0)
+         assert.match("cannot be nested", result.syntax_errors[1].msg)
+      end)
+
+      it("allows structs declared inside function bodies", util.check([[
+         local function make(): P
+            local struct P
+               x: number = 1
+            end
+
+            function P:init()
+               self.x = self.x + 1
+            end
+
+            return P.new { x = 1 }
+         end
+
+         local p = make()
+         print(p.x)
+      ]]))
+
       it("allows a type alias as struct parent", function()
          local result, err = tl.check_string([[
             local struct Point

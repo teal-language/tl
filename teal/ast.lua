@@ -1958,6 +1958,15 @@ parse_record_like_type = function(state, block, typename)
                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
                if nt_node and nt_node.newtype then
+
+
+
+
+
+                  local nt_def = nt_node.newtype.def
+                  if nt_def.typename == "record" and (nt_def).is_struct then
+                     fail(state, fld, "struct '" .. vname .. "' cannot be nested inside another type; declare it as a top-level statement")
+                  end
                   store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
                end
             end
