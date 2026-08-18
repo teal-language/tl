@@ -796,6 +796,38 @@ end
 
 
 
+local literal_kinds = {
+   ["number"] = true,
+   ["integer"] = true,
+   ["string"] = true,
+   ["boolean"] = true,
+   ["nil"] = true,
+}
+
+
+
+
+local function first_non_literal_default(rdef)
+   if rdef.default_values then
+      for fname, dnode in pairs(rdef.default_values) do
+         if not literal_kinds[(dnode).kind] then
+            return fname
+         end
+      end
+   end
+   if rdef.static_default_values then
+      for fname, dnode in pairs(rdef.static_default_values) do
+         if not literal_kinds[(dnode).kind] then
+            return fname
+         end
+      end
+   end
+   return nil
+end
+
+
+
+
 
 
 
@@ -912,11 +944,45 @@ local function finalize_struct_declaration(self, node)
 
 
 
-         if found and found.f == self.filename and sp.names and #sp.names == 1 then
-            rstruct.struct_parent_name = pdef.declname or sp.names[1]
+
+
+
+
+
+
+         if found and found.f == self.filename then
+            if sp.names and #sp.names == 1 then
+               rstruct.struct_parent_name = pdef.declname or sp.names[1]
+            else
+               rstruct.struct_parent_name = nil
+               self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct by name: nested type fields have no runtime presence")
+            end
+         elseif found and sp.names and #sp.names == 1 and
+            self.require_locals and self.require_locals[sp.names[1]] then
+            local pname = sp.names[1]
+            local rejection
+            if found.f and found.f:match("%.d%.tl$") then
+               rejection = "cannot extend structs described by declaration files"
+            elseif pdef.struct_init_chain and #pdef.struct_init_chain > 0 then
+               rejection = "ancestors of '" .. pname .. "' declare init, and are not visible outside its module"
+            else
+               local bad_field = first_non_literal_default(pdef)
+               if bad_field then
+                  rejection = "'" .. pname .. "' has a computed default value for field '" .. bad_field ..
+                  "' (only literal defaults are inheritable across modules)"
+               end
+            end
+            if rejection then
+               rstruct.struct_parent_name = nil
+               self.errs:add(node, "struct '" .. node.var.tk .. "' cannot extend '" .. pname .. "': " .. rejection)
+            else
+               rstruct.struct_parent_name = pname
+            end
          else
             rstruct.struct_parent_name = nil
-            self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module")
+            self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module, " ..
+            "or a struct returned directly by a required module assigned to a top-level local " ..
+            "(e.g. local A = require(\"animal\") where the module returns the struct)")
          end
 
 
@@ -1165,6 +1231,23 @@ visit_node.cbs = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
          local valtuple = children[3]
+
+
+
+
+
+
+         if #self.st == 2 and node.exps then
+            for i, var in ipairs(node.vars) do
+               local exp = node.exps[i]
+               if exp and parser.node_is_require_call(exp) then
+                  if not self.require_locals then
+                     self.require_locals = {}
+                  end
+                  self.require_locals[var.tk] = true
+               end
+            end
+         end
 
          local encountered_close = false
          local infertypes = get_assignment_values(node, valtuple, #node.vars)

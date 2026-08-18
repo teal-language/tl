@@ -155,8 +155,14 @@ local record context
       type_priorities: {TypeName:integer}
 
       needs_compat: {string:boolean}
-      dependencies: {string:string}
-      collector: TypeCollector
+       dependencies: {string:string}
+       collector: TypeCollector
+
+       -- names of top-level locals assigned directly from a require call
+       -- (`local X = require("mod")`); these are guaranteed to hold the
+       -- module's return value at runtime, which is what makes cross-module
+       -- struct parents (`struct Dog:X`) emittable
+       require_locals: {string:boolean}
 
        cache_std_metatable_type: Type
 

@@ -138,8 +138,9 @@ If you need to call a parent method explicitly, refer to the parent by
 name (e.g. `Animal.speak(self)`).
 
 A parent may be referenced through a same-file type alias (`local type P = Point;
-struct T:P` works and resolves to `Point` at runtime). Parents declared
-in other modules are currently rejected with a clear error.
+struct T:P` works and resolves to `Point` at runtime). Parents from other
+modules are supported through top-level require locals — see
+*Cross-module inheritance* below.
 
 ### Subtyping
 
@@ -290,17 +291,62 @@ Initialized statics are re-emitted per child (an independent copy of the
 initializer); a static declared without an initializer on a parent is not
 readable through a child — assign it on the child explicitly if needed.
 
+## Cross-module inheritance
+
+A struct can extend a struct from another module when the module
+returns the struct directly and you assign it to a top-level local:
+
+```lua
+-- animal.tl
+local struct Animal
+   name: string
+   legs: number = 4
+end
+
+function Animal:speak(): string
+   return self.name .. " speaks"
+end
+
+return Animal
+```
+
+```lua
+-- dog.tl
+local Animal = require("animal")
+
+local struct Dog:Animal
+   breed: string
+end
+```
+
+The local holds the struct's runtime table (module files run to
+completion before `require` returns), so the flattened method copies
+(`Dog.speak = Animal.speak`) and the init chain (`Animal.init(self)`)
+emitted into `dog.tl` are sound.
+
+Cross-module parents come with restrictions, each rejected with a clear
+error:
+
+- the parent must be referenced by a single top-level `require` local —
+  field paths (`mod.Shape`) and bare globals have no guaranteed runtime
+  presence at the child's declaration site;
+- the parent must not inherit `init` from its own ancestors (those
+  ancestor tables are not visible outside the parent's module);
+- the parent's default values must be literals — computed defaults may
+  reference the parent module's locals, which don't exist in the
+  inheriting module;
+- structs described by declaration files (`.d.tl`) cannot be extended:
+  their runtime shape is by contract and may not follow struct
+  semantics.
+
 ## Current limitations
 
 - Methods added to a parent *after* a child struct is declared do not
-  reach the child — neither in the type checker nor at runtime (methods
-  are flattened at declaration time). Declare parent methods before
-  child structs.
-- A struct can only extend a struct declared in the same module (a
-  same-file type alias for the parent is fine). Cross-module parents
-  are rejected with a clear error for now.
+   reach the child — neither in the type checker nor at runtime (methods
+   are flattened at declaration time). Declare parent methods before
+   child structs.
 - Generic structs (`struct X<T>`) are not supported yet and produce a
-  clear error.
+   clear error.
 - Default value expressions are checked in the scope of the struct
   declaration: forward references to names declared later in the module
   are rejected (see *Default values* above).

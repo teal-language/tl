@@ -869,12 +869,22 @@ describe("struct", function()
          assert.same({}, result.type_errors)
       end)
 
-      it("rejects cross-module parents with a clear error", function()
+      it("supports cross-module parents via top-level require locals", function()
          util.mock_io(finally, {
             ["animal.tl"] = [[
                local struct Animal
                   name: string
+                  legs: number = 4
                end
+
+               function Animal:init()
+                  self.name = self.name or "<unnamed>"
+               end
+
+               function Animal:speak(): string
+                  return self.name .. " says hello"
+               end
+
                return Animal
             ]],
             ["dog.tl"] = [[
@@ -884,13 +894,129 @@ describe("struct", function()
                   breed: string
                end
 
+               function Dog:speak(): string
+                  return self.name .. " the " .. self.breed .. " barks"
+               end
+
+               local d = Dog.new { name = "Rex", breed = "Lab" }
+               print(d:speak())
+               print(Animal.speak(d))
+               print(d.legs)
                return Dog
             ]],
          })
          local result, err = tl.check_file("dog.tl")
          assert.truthy(result)
+         assert.same({}, result.type_errors)
+      end)
+
+      it("rejects global cross-module parents (no runtime presence guarantee)", function()
+         util.mock_io(finally, {
+            ["gmod.tl"] = [[
+               global struct GAnimal
+                  name: string
+               end
+
+               return {}
+            ]],
+            ["dog.tl"] = [[
+               local M = require("gmod")
+               print(type(M))
+
+               local struct Dog:GAnimal
+                  breed: string
+               end
+            ]],
+         })
+         local result, err = tl.check_file("dog.tl")
+         assert.truthy(result)
          assert.truthy(result.type_errors and #result.type_errors > 0)
-         assert.match("declared in the same module", result.type_errors[1].msg)
+         assert.match("returned directly by a required module", result.type_errors[1].msg)
+      end)
+
+      it("rejects cross-module parents whose ancestors declare init", function()
+         util.mock_io(finally, {
+            ["chainmod.tl"] = [[
+               local struct Base
+                  tag: string
+               end
+
+               function Base:init()
+                  self.tag = "base"
+               end
+
+               local struct Animal:Base
+                  name: string
+               end
+
+               return Animal
+            ]],
+            ["dog.tl"] = [[
+               local A = require("chainmod")
+
+               local struct Dog:A
+                  breed: string
+               end
+            ]],
+         })
+         local result, err = tl.check_file("dog.tl")
+         assert.truthy(result)
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("not visible outside its module", result.type_errors[1].msg)
+      end)
+
+      it("rejects cross-module parents with computed default values", function()
+         util.mock_io(finally, {
+            ["kmod.tl"] = [[
+               local K: number = 7
+
+               local struct Animal
+                  name: string
+                  speed: number = K
+               end
+
+               return Animal
+            ]],
+            ["dog.tl"] = [[
+               local A = require("kmod")
+
+               local struct Dog:A
+                  breed: string
+               end
+            ]],
+         })
+         local result, err = tl.check_file("dog.tl")
+         assert.truthy(result)
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("only literal defaults are inheritable", result.type_errors[1].msg)
+      end)
+
+      it("rejects cross-module parents described by declaration files", function()
+         util.mock_io(finally, {
+            ["dlib.lua"] = [[
+               return {
+                  greet = function(self) return "hi " .. self.name end,
+               }
+            ]],
+            ["dlib.d.tl"] = [[
+               local type Lib = struct
+                  name: string
+                  greet: function(self): string
+               end
+               return Lib
+            ]],
+            ["dog.tl"] = [[
+               local L = require("dlib")
+
+               local struct Dog:L
+                  breed: string
+               end
+            ]],
+         })
+         local result, err = tl.check_file("dog.tl")
+         assert.truthy(result)
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("described by declaration files", result.type_errors[1].msg)
       end)
    end)
 end)

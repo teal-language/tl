@@ -793,6 +793,38 @@ local function count_scope_vars(self: Context): integer
    return n
 end
 
+-- Literal node kinds: the only default-value expressions that are safely
+-- relocatable across modules (they cannot reference the parent module's
+-- locals, which would not exist in the inheriting module's scope)
+local literal_kinds: {string:boolean} = {
+   ["number"] = true,
+   ["integer"] = true,
+   ["string"] = true,
+   ["boolean"] = true,
+   ["nil"] = true,
+}
+
+-- Returns the name of the first default-value expression of rdef (own or
+-- inherited: the maps are merged at declaration) that is not a literal,
+-- or nil if all defaults are literals
+local function first_non_literal_default(rdef: RecordType): string
+   if rdef.default_values then
+      for fname, dnode in pairs(rdef.default_values) do
+         if not literal_kinds[(dnode as Node).kind] then
+            return fname
+         end
+      end
+   end
+   if rdef.static_default_values then
+      for fname, dnode in pairs(rdef.static_default_values) do
+         if not literal_kinds[(dnode as Node).kind] then
+            return fname
+         end
+      end
+   end
+   return nil
+end
+
 -- Typecheck a default-value expression against its field type. The
 -- expression node is traversed with the regular check visitors (so it
 -- resolves locals, infers literal types, reports its own errors), then
@@ -905,19 +937,53 @@ local function finalize_struct_declaration(self: Context, node: Node)
              what = "not a struct (" .. tname .. ")"
           end
           self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend another struct; '" .. pname .. "' is " .. what)
-       else
-          local pdef = rp_def as RecordType
+        else
+           local pdef = rp_def as RecordType
 
-          -- The runtime parent reference must be a real table variable.
-          -- Only structs declared in the current module (possibly through a
-          -- same-file type alias) qualify; cross-module parents are rejected
-          -- for now because we cannot emit a reliable runtime name for them.
-          if found and found.f == self.filename and sp.names and #sp.names == 1 then
-             rstruct.struct_parent_name = pdef.declname or sp.names[1]
-          else
-             rstruct.struct_parent_name = nil
-             self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module")
-          end
+           -- Resolve the runtime name of the parent table. Same-module
+           -- parents (incl. same-file aliases) resolve to their declname.
+           -- Cross-module parents are supported only through a top-level
+           -- `local X = require("mod")` whose module returns the struct
+           -- directly: that local is guaranteed to hold the struct's
+           -- runtime table (module files run to completion before require
+           -- returns), so emitted method copies (`X.m = ...`) and init
+           -- calls (`X.init(self)`) are sound. Anything else — field
+           -- paths, bare globals, function params — has no guaranteed
+           -- runtime presence at this point and is rejected.
+           if found and found.f == self.filename then
+              if sp.names and #sp.names == 1 then
+                 rstruct.struct_parent_name = pdef.declname or sp.names[1]
+              else
+                 rstruct.struct_parent_name = nil
+                 self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct by name: nested type fields have no runtime presence")
+              end
+           elseif found and sp.names and #sp.names == 1
+              and self.require_locals and self.require_locals[sp.names[1]] then
+              local pname = sp.names[1]
+              local rejection: string
+              if found.f and found.f:match("%.d%.tl$") then
+                 rejection = "cannot extend structs described by declaration files"
+              elseif pdef.struct_init_chain and #pdef.struct_init_chain > 0 then
+                 rejection = "ancestors of '" .. pname .. "' declare init, and are not visible outside its module"
+              else
+                 local bad_field = first_non_literal_default(pdef)
+                 if bad_field then
+                    rejection = "'" .. pname .. "' has a computed default value for field '" .. bad_field
+                                 .. "' (only literal defaults are inheritable across modules)"
+                 end
+              end
+              if rejection then
+                 rstruct.struct_parent_name = nil
+                 self.errs:add(node, "struct '" .. node.var.tk .. "' cannot extend '" .. pname .. "': " .. rejection)
+              else
+                 rstruct.struct_parent_name = pname
+              end
+           else
+              rstruct.struct_parent_name = nil
+              self.errs:add(node, "struct '" .. node.var.tk .. "' can only extend a struct declared in the same module, "
+                                       .. "or a struct returned directly by a required module assigned to a top-level local "
+                                       .. "(e.g. local A = require(\"animal\") where the module returns the struct)")
+           end
 
           -- record the ancestor chain (for nominal subtyping: child <: parent)
           rstruct.struct_parent_typeids = { [pdef.typeid] = true }
@@ -1162,11 +1228,28 @@ visit_node.cbs = {
             end
          end
       end,
-      before_exp = set_expected_types_to_decltuple,
-      after = function(self: Context, node: Node, children: {Type}): Type
-         local valtuple = children[3] as TupleType -- may be nil
+       before_exp = set_expected_types_to_decltuple,
+       after = function(self: Context, node: Node, children: {Type}): Type
+          local valtuple = children[3] as TupleType -- may be nil
 
-         local encountered_close = false
+          -- record top-level `local X = require(...)` bindings: these
+          -- locals are guaranteed to hold the required module's return
+          -- value at runtime (module files execute to completion before
+          -- require returns), which is what cross-module struct parents
+          -- rely on for their emitted method copies and init calls
+          if #self.st == 2 and node.exps then
+             for i, var in ipairs(node.vars) do
+                local exp = node.exps[i]
+                if exp and parser.node_is_require_call(exp) then
+                   if not self.require_locals then
+                      self.require_locals = {}
+                   end
+                   self.require_locals[var.tk] = true
+                end
+             end
+          end
+
+          local encountered_close = false
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
             if var.attribute == "close" then
