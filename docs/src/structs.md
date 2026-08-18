@@ -4,10 +4,13 @@
 needed for object-oriented programming in Lua, without the metatable
 boilerplate. It is intentionally minimal:
 
-- an auto-generated `.new` constructor
-- an optional `:init()` hook called by the constructor
+- an auto-generated `.new` constructor with a typed opts record
+- an optional `:init()` hook; child constructors run every `init` in the
+  hierarchy, root parent first, each exactly once
 - an auto-set `__index` metatable so method syntax (`x:method()`) works
-- single inheritance via `:Parent`
+- single inheritance via `:Parent` (methods are flattened and defaults
+  are merged at compile time; there is no runtime dispatch)
+- field default values and a `static ... end` block for type-level fields
 
 Anything you can do with a `record` you can do with a `struct` — the only
 difference is the ergonomics. Use `record` for plain data; use `struct` when
