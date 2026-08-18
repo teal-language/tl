@@ -7,8 +7,8 @@ from Lua 5.4. They are:
 
 The `<const>` annotation works in Teal like it does in Lua 5.4 (it works at
 compile time, even if you're running a different version of Lua). Do note
-however that this is annotation for variables, and not values: the contents of a
-value set to a const variable are not constant.
+however that, just like in Lua, this is annotation for variables, and not values:
+the contents of a value set to a const variable are not constant.
 
 ```lua
 local xs <const> = {1,2,3}
@@ -18,10 +18,10 @@ xs = {} -- Error! can't replace the array in variable xs
 
 ### To-be-closed variables
 
-The `<close>` annotation from Lua 5.4 is only supported in Teal if your code
-generation target is Lua 5.4 (see the [compiler options](compiler_options.md)
+The `<close>` annotation introduced in Lua 5.4 is only supported in Teal if your code
+generation target is Lua 5.4 or greater (see the [compiler options](compiler_options.md)
 documentation for details on code generation targets). These work just
-[like they do in Lua 5.4](https://www.lua.org/manual/5.4/manual.html#3.3.8).
+[like they do in Lua 5.4+](https://www.lua.org/manual/5.4/manual.html#3.3.8).
 
 ```lua
 local contents = {}

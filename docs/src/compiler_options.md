@@ -24,7 +24,7 @@ return {
 | `-I --include-dir`   | `include_dir`              | `{string}` | `check` `gen` `run`  | Prepend this directory to the module search path.
 |                      | `source_dir`               | `string`   | `check` `gen` `run`  | Set the project source directory and add it to the module search path.
 | `--gen-compat`       | `gen_compat`               | `string`   | `gen` `run`          | Generate compatibility code for targeting different Lua VM versions. See [below](#generated-code) for details.
-| `--gen-target`       | `gen_target`               | `string`   | `gen` `run`          | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3` and `5.4`. See [below](#generated-code) for details.
+| `--gen-target`       | `gen_target`               | `string`   | `gen` `run`          | Minimum targeted Lua version for generated code. Options are `5.1`, `5.3`, `5.4` and `5.5`. See [below](#generated-code) for details.
 | `--keep-hashbang`    |                            |            | `gen`                | Preserve hashbang line (`#!`) at the top of file if present.
 | `-p --pretend`       |                            |            | `gen`                | Don't compile/write to any files, but type check and log what files would be written to.
 | `--wdisable`         | `disable_warnings`         | `{string}` | `check` `run`        | Disable the given warnings.
@@ -39,7 +39,7 @@ such as `src` without repeating that directory in `include_dir`; any explicit
 
 ### Generated code
 
-Teal is a Lua dialect that most closely resembles Lua 5.3-5.4, but it is able
+Teal is a Lua dialect that most closely resembles Lua 5.3–5.5, but it is able
 to target Lua 5.1 (including LuaJIT) and Lua 5.2 as well. The compiler attempts
 to produce code that, given an input `.tl` file, generates the same behavior
 on various Lua versions.
@@ -60,7 +60,7 @@ library for bitwise operators.
 
 Using `5.3`, Teal will generate code using the native `//` and bitwise operators.
 
-The option `5.4` is equivalent to `5.3`, but it also allows using the `<close>`
+The options `5.4` and `5.5` are equivalent to `5.3`, but also allow using the `<close>`
 variable annotation. Since that is incompatible with other Lua versions, using
 this option requires using `--gen-compat=off`.
 
@@ -76,7 +76,7 @@ target implicitly.
 
 If set explicitly via the `--gen-target` flag of the `tl` CLI (or the equivalent
 options in the programmatic API), the generated code will target the Lua
-version requested: 5.1, 5.3 or 5.4.
+version requested: 5.1, 5.3, 5.4 or 5.5.
 
 If the code generation target is not set explicitly via `--gen-target`, Teal
 will target the Lua version most compatible with the version of the Lua VM
