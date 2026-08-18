@@ -38,7 +38,7 @@ argument type itself.
 
 You can declare functions that generate iterators which can be used in
 `for` statements: the function needs to produce another function that iterates.
-This is an example [taken the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
+This is an example [taken from the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
 
 ```lua
 local function allwords(): (function(): string)
