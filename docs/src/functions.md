@@ -150,6 +150,17 @@ end
 test(1, 2, 3)
 ```
 
+Named vararg tables, as introduced in [Lua 5.5](https://www.lua.org/manual/5.5/manual.html#3.4.11),
+are supported by Teal:
+
+```lua
+local function test(...args: boolean): integer, boolean
+   return args.n, args[1]
+end
+```
+
+Note, however, that named vararg tables will not be read-only when targeting Lua <5.5.
+
 In case your function returns a variable amount of values, you may also declare
 variadic return types by using the `type...` syntax:
 
