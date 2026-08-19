@@ -159,8 +159,6 @@ local function test(...args: boolean): integer, boolean
 end
 ```
 
-Note, however, that named vararg tables will not be read-only when targeting Lua <5.5.
-
 In case your function returns a variable amount of values, you may also declare
 variadic return types by using the `type...` syntax:
 
