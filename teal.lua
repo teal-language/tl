@@ -13760,6 +13760,40 @@ local function is_statement_kind(k)
    k == "record_function" or k == "newtype" or k == "pragma"
 end
 
+
+local function add_for_shadows(b)
+   if b.kind == "forin" or b.kind == "fornum" then
+      local map = BLOCK_INDEXES[b.kind:upper()]
+      local body = b[map.BODY]
+
+      local var = b[1]
+      if b.kind == "forin" then
+         var = var and var[1]
+      end
+
+      if body and var and var.kind == "identifier" then
+         local name = var.tk
+
+         local function at(kind)
+            return { kind = kind, tk = name, f = b.f, y = b.y, x = b.x, yend = b.y, xend = b.x }
+         end
+
+         local LD = BLOCK_INDEXES.LOCAL_DECLARATION
+         local stmt = at("local_declaration")
+         stmt[LD.VARS] = at("variable_list")
+         stmt[LD.VARS][1] = at("identifier")
+         stmt[LD.EXPS] = at("expression_list")
+         stmt[LD.EXPS][1] = at("identifier")
+
+         table.insert(body, 1, stmt)
+      end
+   end
+
+   for _, child in children(b) do
+      add_for_shadows(child)
+   end
+end
+
 local function compile_local_macro(mb, filename, read_lang, env, errs)
    local name_block = mb[BLOCK_INDEXES.LOCAL_MACRO.NAME]
    if not name_block or name_block.kind ~= "identifier" then
@@ -13802,6 +13836,9 @@ local function compile_local_macro(mb, filename, read_lang, env, errs)
    local lua_generator = require("teal.gen.lua_generator")
    local single = { kind = "statements", y = mb.y, x = mb.x, tk = mb.tk, yend = mb.yend, xend = mb.xend }
    single[1] = mb
+
+   add_for_shadows(single)
+
    local mast, perrs = ast.parse_blocks(single, filename, read_lang)
    if #perrs > 0 then
       for _, e in ipairs(perrs) do table.insert(errs, e) end
