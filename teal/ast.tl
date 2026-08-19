@@ -1969,7 +1969,12 @@ end
 parse_simple_type_or_nominal = function(state: ParseState, block: Block): FirstOrderType
    local tk = block.tk
    local st = simple_types[tk as TypeName]
-   if st then
+   -- Only short-circuit to the built-in simple type when there is no trailing
+   -- dotted name part. Otherwise fall through to the nominal path below so that
+   -- an invalid annotation like `number.x.y.z` is reported as an unknown type
+   -- instead of being silently accepted as `number` (issue #1136).
+   local rest = block[reader.BLOCK_INDEXES.NOMINAL_TYPE.NAME + 1]
+   if st and not (rest and rest.kind == "identifier") then
       return new_type(state, block, tk as TypeName) as StructuralType
    elseif tk == "table" and block.kind ~= "nominal_type" then -- reader already turns plain `table` into map_type
       local typ = new_type(state, block, "map") as MapType

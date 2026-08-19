@@ -231,4 +231,16 @@ describe("local type", function()
    ]], {
       { y = 14, msg = 'in record field: Data: string "invalid" is not a member of MyEnum' }
    }))
+
+   it("does not accept a built-in simple type followed by a dotted name (regression test for #1136)", util.check_type_error([[
+      local a: number.x.y.z = 1
+      local b: string.a.b = "x"
+      local c: integer.foo = 1
+      local d: boolean.foo = true
+   ]], {
+      { y = 1, msg = "unknown type number.x.y.z" },
+      { y = 2, msg = "unknown type string.a.b" },
+      { y = 3, msg = "unknown type integer.foo" },
+      { y = 4, msg = "unknown type boolean.foo" },
+   }))
 end)
