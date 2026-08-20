@@ -997,6 +997,12 @@ local function finalize_struct_declaration(self, node)
 
 
 
+         pdef.has_struct_children = true
+
+
+
+
+
 
 
          local chain = {}
@@ -2057,6 +2063,18 @@ visit_node.cbs = {
             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
             self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '" ..
             owner_name .. ":init()' for custom construction logic instead")
+            return
+         end
+
+
+
+
+         if rtype.typename == "record" and (rtype).is_struct and (rtype).has_struct_children then
+            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+            self.errs:add(node, "cannot declare '" .. owner_name .. "." .. node.name.tk ..
+            "' after child structs of '" .. owner_name ..
+            "' were declared: methods are flattened into children at their declaration time; " ..
+            "declare parent methods before child structs")
             return
          end
 

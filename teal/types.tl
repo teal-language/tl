@@ -205,10 +205,17 @@ local record types
       struct_parent_typeids: {integer:boolean}
 
       -- ordered ancestor runtime names, root parent first, direct parent
-      -- last; codegen emits an init() call for each entry (guarded with
-      -- rawget so only inits actually declared on that ancestor run,
-      -- exactly once, in parent-to-child order)
+      -- last; codegen emits one unconditional init() call per entry
+      -- (the chain is pre-filtered at check time to ancestors that
+      -- declare their own init, so each runs exactly once, parent to
+      -- child, with zero runtime dispatch)
       struct_init_chain: {string}
+
+      -- set once any struct extends this one: methods are flattened
+      -- into children at their declaration time, so declaring new
+      -- methods on the parent afterwards would silently not reach the
+      -- children; the record_function visitor rejects such declarations
+      has_struct_children: boolean
 
       -- names of parent methods (record functions, excluding the
       -- synthesized `new` and the chain-invoked `init`) to flatten into

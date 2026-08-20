@@ -529,12 +529,13 @@ error:
 
 ## Current limitations
 
-- Methods added to a parent *after* a child struct is declared do not
-   reach the child — neither in the type checker nor at runtime (methods
-   are flattened at declaration time). Declare parent methods before
-   child structs.
+- Methods (including `init`) cannot be declared on a struct *after* its
+  child structs: methods are flattened and inits chained into children at
+  the children's declaration time, so anything added later would silently
+  not reach them — the checker rejects such declarations with a clear
+  error. Declare parent methods before child structs.
 - Generic structs (`struct X<T>`) are not supported yet and produce a
-   clear error.
+  clear error.
 - Default value expressions are checked in the scope of the struct
   declaration: forward references to names declared later in the module
   are rejected (see *Default values* above).

@@ -985,13 +985,19 @@ local function finalize_struct_declaration(self: Context, node: Node)
                                        .. "(e.g. local A = require(\"animal\") where the module returns the struct)")
            end
 
-          -- record the ancestor chain (for nominal subtyping: child <: parent)
-          rstruct.struct_parent_typeids = { [pdef.typeid] = true }
-          if pdef.struct_parent_typeids then
-             for tid, v in pairs(pdef.struct_parent_typeids) do
-                rstruct.struct_parent_typeids[tid] = v
-             end
-          end
+           -- record the ancestor chain (for nominal subtyping: child <: parent)
+           rstruct.struct_parent_typeids = { [pdef.typeid] = true }
+           if pdef.struct_parent_typeids then
+              for tid, v in pairs(pdef.struct_parent_typeids) do
+                 rstruct.struct_parent_typeids[tid] = v
+              end
+           end
+
+           -- freeze the parent against late method declarations: methods
+           -- (and init) are flattened/chained into children at the
+           -- children's declaration time, so anything added to the parent
+           -- from now on would silently not reach them
+           pdef.has_struct_children = true
 
           -- ordered init chain, root parent first, pre-filtered to
           -- ancestors that actually declare init (per the documented
@@ -2052,13 +2058,25 @@ visit_node.cbs = {
             return
          end
 
-         -- structs reserve .new as the auto-generated constructor
-         if rtype is RecordType and (rtype as RecordType).is_struct and node.name.tk == "new" then
-            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
-            self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '"
-                                      .. owner_name .. ":init()' for custom construction logic instead")
-            return
-         end
+          -- structs reserve .new as the auto-generated constructor
+          if rtype is RecordType and (rtype as RecordType).is_struct and node.name.tk == "new" then
+             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+             self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '"
+                                       .. owner_name .. ":init()' for custom construction logic instead")
+             return
+          end
+
+          -- methods are flattened (and inits chained) into children at the
+          -- children's declaration time: declaring anything on the parent
+          -- after that would silently not reach the children
+          if rtype is RecordType and (rtype as RecordType).is_struct and (rtype as RecordType).has_struct_children then
+             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+             self.errs:add(node, "cannot declare '" .. owner_name .. "." .. node.name.tk
+                                       .. "' after child structs of '" .. owner_name
+                                       .. "' were declared: methods are flattened into children at their declaration time; "
+                                       .. "declare parent methods before child structs")
+             return
+          end
 
          local selftype = self:get_self_type(node.fn_owner)
          if node.is_method then

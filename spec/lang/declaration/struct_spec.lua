@@ -814,6 +814,71 @@ describe("struct", function()
    end)
 
    describe("acceptance battery", function()
+      it("rejects parent methods declared after child structs", function()
+         local result, err = tl.check_string([[
+            local struct Parent
+               v: number
+            end
+
+            local struct Child:Parent
+            end
+
+            function Parent:double(): number
+               return self.v * 2
+            end
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("declare parent methods before child structs", result.type_errors[1].msg)
+      end)
+
+      it("rejects parent init declared after child structs", function()
+         local result, err = tl.check_string([[
+            local struct Parent
+               tag: string
+            end
+
+            local struct Child:Parent
+            end
+
+            function Parent:init()
+               self.tag = "set"
+            end
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("declare parent methods before child structs", result.type_errors[1].msg)
+      end)
+
+      it("rejects parent method implementations after child structs even when the field was declared in the body", function()
+         local result, err = tl.check_string([[
+            local struct Parent
+               v: number
+               speak: function(self): string
+            end
+
+            local struct Child:Parent
+            end
+
+            function Parent:speak(): string
+               return "v=" .. tostring(self.v)
+            end
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("declare parent methods before child structs", result.type_errors[1].msg)
+      end)
+
+      it("allows methods on structs that have no children yet", util.check([[
+         local struct Parent
+            v: number
+         end
+
+         function Parent:double(): number
+            return self.v * 2
+         end
+
+         local p = Parent.new { v = 21 }
+         print(p:double())
+      ]]))
+
       it("rejects a data field named 'new' with a clear error", function()
          local result, err = tl.check_string([[
             local struct A
