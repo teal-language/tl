@@ -155,28 +155,28 @@ local record context
       type_priorities: {TypeName:integer}
 
       needs_compat: {string:boolean}
-       dependencies: {string:string}
-       collector: TypeCollector
+      dependencies: {string:string}
+      collector: TypeCollector
 
-       -- names of top-level locals assigned directly from a require call
-       -- (`local X = require("mod")`); these are guaranteed to hold the
-       -- module's return value at runtime, which is what makes cross-module
-       -- struct parents (`struct Dog:X`) emittable
-       require_locals: {string:boolean}
+      -- names of top-level locals assigned directly from a require call
+      -- (`local X = require("mod")`); these are guaranteed to hold the
+      -- module's return value at runtime, which is what makes cross-module
+      -- struct parents (`struct Dog:X`) emittable
+      require_locals: {string:boolean}
 
-       cache_std_metatable_type: Type
+      cache_std_metatable_type: Type
 
-       feat_arity: boolean
-       feat_lax: boolean
+      feat_arity: boolean
+      feat_lax: boolean
 
-       type_check_funcall: function(self, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+      type_check_funcall: function(self, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
 
-       expand_type: function(self, w: Where, old: Type, new: Type): Type
-       resolve_self: function(self, Type, resolve_interface?: boolean): Type, {Error}
+      expand_type: function(self, w: Where, old: Type, new: Type): Type
+      resolve_self: function(self, Type, resolve_interface?: boolean): Type, {Error}
 
-       get_rets: function(TupleType): TupleType
-    end
- end
+      get_rets: function(TupleType): TupleType
+   end
+end
 
 --------------------------------------------------------------------------------
 
@@ -490,14 +490,14 @@ do
          return specialize_var(scope, node, name, t, attribute, specialization)
       end
 
-       if node then
-          if name ~= "self" and name ~= "..." and name:sub(1, 1) ~= "@" then
-             self:check_if_redeclaration(name, node, t)
-          end
-          if not ensure_not_abstract(t) then
-             node.elide_type = true
-          end
-       end
+      if node then
+         if name ~= "self" and name ~= "..." and name:sub(1, 1) ~= "@" then
+            self:check_if_redeclaration(name, node, t)
+         end
+         if not ensure_not_abstract(t) then
+            node.elide_type = true
+         end
+      end
 
       local var = scope.vars[name]
       if var and not has_var_been_used(var) then

@@ -176,25 +176,23 @@ local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType)
                                                or  "record is not a userdata") }
    end
 
-    local errs: {Error} = {}
-    for _, k in ipairs(a.field_order) do
-       local ak = a.fields[k]
-       local bk = b.fields[k]
-       if bk then
-          if k == "new" and struct_inherits then
-             -- .new is compiler-synthesized per struct (its opts record
-             -- reflects each struct's own fields), so signatures are not
-             -- contravariant-compatible across the hierarchy; skip it
-          else
-             local ok, fielderrs = ck:is_a(ak, bk)
-             if not ok then
-                ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
-             end
-          end
-       elseif b.typename == "record" and not struct_inherits then
-          table.insert(errs, errors.new("record field doesn't exist: " .. k))
-       end
-    end
+   local errs: {Error} = {}
+   for _, k in ipairs(a.field_order) do
+      local ak = a.fields[k]
+      local bk = b.fields[k]
+      -- .new is compiler-synthesized per struct (its opts record reflects
+      -- each struct's own fields), so signatures are not
+      -- contravariant-compatible across the hierarchy; skip it
+      local skip = (k == "new" and struct_inherits)
+      if bk and not skip then
+         local ok, fielderrs = ck:is_a(ak, bk)
+         if not ok then
+            ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
+         end
+      elseif b.typename == "record" and not struct_inherits and not skip then
+         table.insert(errs, errors.new("record field doesn't exist: " .. k))
+      end
+   end
    if #errs > 0 then
       for _, err in ipairs(errs) do
          err.msg = show_type(a) .. " is not a " .. show_type(b) .. ": " .. err.msg
@@ -632,37 +630,37 @@ relations.subtype_relations = {
          return false, { errors.new("cannot match against any alternatives of the polymorphic type") }
       end,
    },
-    ["nominal"] = {
-       ["nominal"] = function(ck: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
-          local ok, errs = are_same_nominals(ck, a, b)
-          if ok then
-             return true
-          end
+   ["nominal"] = {
+      ["nominal"] = function(ck: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
+         local ok, errs = are_same_nominals(ck, a, b)
+         if ok then
+            return true
+         end
 
-          local ra = ck:resolve_nominal(a)
-          local rb = ck:resolve_nominal(b)
+         local ra = ck:resolve_nominal(a)
+         local rb = ck:resolve_nominal(b)
 
-          -- match unions structurally
-          local union_a = ra is UnionType
-          local union_b = rb is UnionType
-          if union_a or union_b then
-             return ck:is_a(union_a and ra or a, union_b and rb or b)
-          end
+         -- match unions structurally
+         local union_a = ra is UnionType
+         local union_b = rb is UnionType
+         if union_a or union_b then
+            return ck:is_a(union_a and ra or a, union_b and rb or b)
+         end
 
-          -- struct inheritance: a child struct is a subtype of its parent
-          if ra is RecordType and rb is RecordType
-            and (ra as RecordType).is_struct and (rb as RecordType).is_struct then
-             return ck:is_a(ra, rb)
-          end
+         -- struct inheritance: a child struct is a subtype of its parent
+         if ra is RecordType and rb is RecordType
+           and (ra as RecordType).is_struct and (rb as RecordType).is_struct then
+            return ck:is_a(ra, rb)
+         end
 
-          -- match interface subtyping
-          if rb is InterfaceType then
-             return a_is_interface_b(ck, a, b)
-          end
+         -- match interface subtyping
+         if rb is InterfaceType then
+            return a_is_interface_b(ck, a, b)
+         end
 
-          -- all other types nominally
-          return ok, errs
-       end,
+         -- all other types nominally
+         return ok, errs
+      end,
       ["union"] = function(ck: TypeChecker, a: NominalType, b: UnionType): boolean, {Error}
          -- match unions structurally
          local ra = ck:resolve_nominal(a)

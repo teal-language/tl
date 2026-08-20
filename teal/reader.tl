@@ -2111,76 +2111,76 @@ read_record_body = function(ps: ReadState, i: integer, def: Block): integer, boo
             table.insert(fields, cb)
          end
          table.insert(fields, lt)
-       elseif read_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
-          if tn == "struct" then
-             i = failskip(ps, i, "syntax error: struct cannot be nested inside another type; declare it as a top-level statement", skip_type_body)
-          elseif def.kind == "interface" and tn == "record" then
-             i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
-          else
-             local lt: Block
-             i, lt = read_nested_type(ps, i, tn as BlockKind)
-             if lt then
-                for _, cb in ipairs(comment_blocks) do
-                   table.insert(fields, cb)
-                end
-                table.insert(fields, lt)
-             end
-          end
-       elseif ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" and def.kind ~= "struct" then
-          return fail(ps, i, "syntax error: 'static' blocks are only allowed in struct declarations")
-       elseif def.kind == "struct" and ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" then
-          -- `static ... end` block: declares type-level (static) fields
-          if def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
-             return fail(ps, i, "only one static block is allowed per struct")
-          end
-          i = i + 1 -- skip "static"
-          local static_fields = new_block(ps, i, "record_body")
-          while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
-             local scbs = collect_comment_blocks(ps, i)
-             local sv: Block
-             if ps.tokens[i].tk == "[" then
-                i = i + 1
-                i, sv = read_literal(ps, i)
-                if not sv or sv.kind ~= "string" then
-                   return fail(ps, i, "expected a string literal")
-                end
-                i = verify_tk(ps, i, "]")
-             else
-                i, sv = verify_kind(ps, i, "identifier")
-             end
-             if not sv then
-                return fail(ps, i, "expected a variable name in static block")
-             end
-             i = verify_tk(ps, i, ":")
-             local st: Block
-             i, st = read_type(ps, i)
-             if not st then
-                return fail(ps, i, "expected a type for static field")
-             end
-             local sfield = new_block(ps, i, "record_field")
-             sfield[BLOCK_INDEXES.RECORD_FIELD.NAME] = sv
-             sfield[BLOCK_INDEXES.RECORD_FIELD.TYPE] = st
-             -- optional initializer `name: type = expr`
-             if ps.tokens[i].tk == "=" then
-                i = i + 1
-                local sdefault: Block
-                i, sdefault = read_expression(ps, i)
-                if not sdefault then
-                   return fail(ps, i, "expected an initializer expression for static field")
-                end
-                sfield[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = sdefault
-             end
-             for _, cb in ipairs(scbs) do
-                table.insert(static_fields, cb)
-             end
-             table.insert(static_fields, sfield)
-          end
-          if ps.tokens[i].kind == "$EOF$" then
-             return fail(ps, i, "expected 'end' to close static block")
-          end
-          i = i + 1 -- consume the inner `end` (closes static block, NOT the struct)
-          def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] = static_fields
-       else
+      elseif read_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
+         if tn == "struct" then
+            i = failskip(ps, i, "syntax error: struct cannot be nested inside another type; declare it as a top-level statement", skip_type_body)
+         elseif def.kind == "interface" and tn == "record" then
+            i = failskip(ps, i, "interfaces cannot contain record definitions", skip_type_body)
+         else
+            local lt: Block
+            i, lt = read_nested_type(ps, i, tn as BlockKind)
+            if lt then
+               for _, cb in ipairs(comment_blocks) do
+                  table.insert(fields, cb)
+               end
+               table.insert(fields, lt)
+            end
+         end
+      elseif ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" and def.kind ~= "struct" then
+         return fail(ps, i, "syntax error: 'static' blocks are only allowed in struct declarations")
+      elseif def.kind == "struct" and ps.tokens[i].tk == "static" and ps.tokens[i + 1].tk ~= ":" then
+         -- `static ... end` block: declares type-level (static) fields
+         if def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+            return fail(ps, i, "only one static block is allowed per struct")
+         end
+         i = i + 1 -- skip "static"
+         local static_fields = new_block(ps, i, "record_body")
+         while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
+            local scbs = collect_comment_blocks(ps, i)
+            local sv: Block
+            if ps.tokens[i].tk == "[" then
+               i = i + 1
+               i, sv = read_literal(ps, i)
+               if not sv or sv.kind ~= "string" then
+                  return fail(ps, i, "expected a string literal")
+               end
+               i = verify_tk(ps, i, "]")
+            else
+               i, sv = verify_kind(ps, i, "identifier")
+            end
+            if not sv then
+               return fail(ps, i, "expected a variable name in static block")
+            end
+            i = verify_tk(ps, i, ":")
+            local st: Block
+            i, st = read_type(ps, i)
+            if not st then
+               return fail(ps, i, "expected a type for static field")
+            end
+            local sfield = new_block(ps, i, "record_field")
+            sfield[BLOCK_INDEXES.RECORD_FIELD.NAME] = sv
+            sfield[BLOCK_INDEXES.RECORD_FIELD.TYPE] = st
+            -- optional initializer `name: type = expr`
+            if ps.tokens[i].tk == "=" then
+               i = i + 1
+               local sdefault: Block
+               i, sdefault = read_expression(ps, i)
+               if not sdefault then
+                  return fail(ps, i, "expected an initializer expression for static field")
+               end
+               sfield[BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL] = sdefault
+            end
+            for _, cb in ipairs(scbs) do
+               table.insert(static_fields, cb)
+            end
+            table.insert(static_fields, sfield)
+         end
+         if ps.tokens[i].kind == "$EOF$" then
+            return fail(ps, i, "expected 'end' to close static block")
+         end
+         i = i + 1 -- consume the inner `end` (closes static block, NOT the struct)
+         def[BLOCK_INDEXES.RECORD.STATIC_FIELDS] = static_fields
+      else
          local is_metamethod = false
          if ps.tokens[i].tk == "metamethod" and ps.tokens[i+1].tk ~= ":" then
             is_metamethod = true

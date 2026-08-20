@@ -402,7 +402,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
        add_string(out, " end")
     end
 
-    visit_node.cbs = {
+   visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output

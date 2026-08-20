@@ -1951,28 +1951,28 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
             end
-          elseif fld.kind == "local_type" then
-             local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
-             local comments = extract_attached_comments(pending_field_comments, target)
-             if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
-                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
-                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
-                if nt_node and nt_node.newtype then
-                   -- structs need runtime presence (methods, .new, __index)
-                   -- that nested type declarations do not emit: they would
-                   -- produce a struct type without a constructor. Reject
-                   -- here, mirroring the reader-level ban on `struct Inner`
-                   -- blocks nested in type bodies
-                   local nt_def = nt_node.newtype.def
-                   if nt_def is RecordType and (nt_def as RecordType).is_struct then
-                      fail(state, fld, "struct '" .. vname .. "' cannot be nested inside another type; declare it as a top-level statement")
-                   end
-                   store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
-                end
-             end
-             for i = #pending_field_comments, 1, -1 do
-                table.remove(pending_field_comments, i)
-             end
+         elseif fld.kind == "local_type" then
+            local target = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] or fld
+            local comments = extract_attached_comments(pending_field_comments, target)
+            if fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR] and fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE] then
+               local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
+               local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
+               if nt_node and nt_node.newtype then
+                  -- structs need runtime presence (methods, .new, __index)
+                  -- that nested type declarations do not emit: they would
+                  -- produce a struct type without a constructor. Reject
+                  -- here, mirroring the reader-level ban on `struct Inner`
+                  -- blocks nested in type bodies
+                  local nt_def = nt_node.newtype.def
+                  if nt_def is RecordType and (nt_def as RecordType).is_struct then
+                     fail(state, fld, "struct '" .. vname .. "' cannot be nested inside another type; declare it as a top-level statement")
+                  end
+                  store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
+               end
+            end
+            for i = #pending_field_comments, 1, -1 do
+               table.remove(pending_field_comments, i)
+            end
          else
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
@@ -1981,15 +1981,15 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
       end
    end
 
-    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.FIELDS], false)
-    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.META_FIELDS], true)
+   parse_field_list(block[reader.BLOCK_INDEXES.RECORD.FIELDS], false)
+   parse_field_list(block[reader.BLOCK_INDEXES.RECORD.META_FIELDS], true)
 
-    -- struct-only: process `static ... end` block fields.
-    -- Static fields are added to `decl.fields` (so they're accessible via
-    -- both X.name and x.name through __index), but tracked separately in
-    -- `static_field_names` so that .new opts type can exclude them.
-    -- Initializers go into `static_default_values` (NOT `default_values`).
-    if block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+   -- struct-only: process `static ... end` block fields.
+   -- Static fields are added to `decl.fields` (so they're accessible via
+   -- both X.name and x.name through __index), but tracked separately in
+   -- `static_field_names` so that .new opts type can exclude them.
+   -- Initializers go into `static_default_values` (NOT `default_values`).
+   if block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
       local rdef_for_static = decl
       if rdef_for_static is RecordType and (rdef_for_static as RecordType).is_struct then
          local rdef = rdef_for_static as RecordType
@@ -2019,9 +2019,9 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
             end
          end
       end
-    end
+   end
 
-    if block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE] then
+   if block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE] then
       local where_macroexp = parse_where_clause(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], decl)
       local typ = new_type(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], "function") as FunctionType
       typ.is_method = true
@@ -2120,11 +2120,11 @@ parse_base_type = function(state: ParseState, block: Block): FirstClassType
       local typeargs = parse_typeargs_if_any(state, block[reader.BLOCK_INDEXES.GENERIC_TYPE.TYPEARGS])
       local base = parse_base_type(state, block[reader.BLOCK_INDEXES.GENERIC_TYPE.BASE]) as FirstOrderType
       return new_generic(state, block, typeargs, base)
-   elseif block.kind as string == "record" then
+  elseif block.kind as string == "record" then
       return parse_record_like_type(state, block, "record")
-   elseif block.kind == "interface" then
+  elseif block.kind == "interface" then
       return parse_record_like_type(state, block, "interface")
-   elseif block.kind == "struct" then
+  elseif block.kind == "struct" then
       -- struct is a record with OOP semantics: auto-generated .new + :init() + single inheritance
       return parse_record_like_type(state, block, "record")
   elseif block.kind == "array_type" then

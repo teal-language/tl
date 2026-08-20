@@ -1166,27 +1166,27 @@ visit_node.cbs = {
          return NONE
       end
    },
-    ["local_type"] = {
-       before = function(self: Context, node: Node)
-          local name = node.var.tk
-          local resolved, aliasing = self:get_typedecl(node.value)
-          local var = self:add_var(node.var, name, resolved, node.var.attribute)
-          if aliasing then
-             var.aliasing = aliasing
-          end
-       end,
-       after = function(self: Context, node: Node, _children: {Type}): Type
-          self:dismiss_unresolved(node.var.tk)
+   ["local_type"] = {
+      before = function(self: Context, node: Node)
+         local name = node.var.tk
+         local resolved, aliasing = self:get_typedecl(node.value)
+         local var = self:add_var(node.var, name, resolved, node.var.attribute)
+         if aliasing then
+            var.aliasing = aliasing
+         end
+      end,
+      after = function(self: Context, node: Node, _children: {Type}): Type
+         self:dismiss_unresolved(node.var.tk)
 
-          -- For `local struct X`: apply parent inheritance and synthesize
-          -- .new. Done here (rather than at module finalization) because the
-          -- var declaration lives in the surrounding "statements" scope,
-          -- which is popped by the time check.check() runs its post-pass.
-          finalize_struct_declaration(self, node)
+         -- For `local struct X`: apply parent inheritance and synthesize
+         -- .new. Done here (rather than at module finalization) because the
+         -- var declaration lives in the surrounding "statements" scope,
+         -- which is popped by the time check.check() runs its post-pass.
+         finalize_struct_declaration(self, node)
 
-          return NONE
-       end,
-    },
+         return NONE
+      end,
+   },
    ["global_type"] = {
       before = function(self: Context, node: Node)
          local global_scope = self.st[1]
@@ -1210,17 +1210,17 @@ visit_node.cbs = {
             end
          end
       end,
-       after = function(self: Context, node: Node, _children: {Type}): Type
-          self:dismiss_unresolved(node.var.tk)
+      after = function(self: Context, node: Node, _children: {Type}): Type
+         self:dismiss_unresolved(node.var.tk)
 
-          -- For `global struct X`: same parent inheritance + .new synthesis
-          -- as the local form.
-          finalize_struct_declaration(self, node)
+         -- For `global struct X`: same parent inheritance + .new synthesis
+         -- as the local form.
+         finalize_struct_declaration(self, node)
 
-          return NONE
-       end,
-    },
-    ["local_declaration"] = {
+         return NONE
+      end,
+   },
+   ["local_declaration"] = {
       before = function(self: Context, node: Node)
          if self.collector then
             for _, var in ipairs(node.vars) do
@@ -1228,28 +1228,28 @@ visit_node.cbs = {
             end
          end
       end,
-       before_exp = set_expected_types_to_decltuple,
-       after = function(self: Context, node: Node, children: {Type}): Type
-          local valtuple = children[3] as TupleType -- may be nil
+      before_exp = set_expected_types_to_decltuple,
+      after = function(self: Context, node: Node, children: {Type}): Type
+         local valtuple = children[3] as TupleType -- may be nil
 
-          -- record top-level `local X = require(...)` bindings: these
-          -- locals are guaranteed to hold the required module's return
-          -- value at runtime (module files execute to completion before
-          -- require returns), which is what cross-module struct parents
-          -- rely on for their emitted method copies and init calls
-          if #self.st == 2 and node.exps then
-             for i, var in ipairs(node.vars) do
-                local exp = node.exps[i]
-                if exp and parser.node_is_require_call(exp) then
-                   if not self.require_locals then
-                      self.require_locals = {}
-                   end
-                   self.require_locals[var.tk] = true
-                end
-             end
-          end
+         -- record top-level `local X = require(...)` bindings: these
+         -- locals are guaranteed to hold the required module's return
+         -- value at runtime (module files execute to completion before
+         -- require returns), which is what cross-module struct parents
+         -- rely on for their emitted method copies and init calls
+         if #self.st == 2 and node.exps then
+            for i, var in ipairs(node.vars) do
+               local exp = node.exps[i]
+               if exp and parser.node_is_require_call(exp) then
+                  if not self.require_locals then
+                     self.require_locals = {}
+                  end
+                  self.require_locals[var.tk] = true
+               end
+            end
+         end
 
-          local encountered_close = false
+         local encountered_close = false
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
             if var.attribute == "close" then
@@ -1262,9 +1262,9 @@ visit_node.cbs = {
                   encountered_close = true
                end
             end
-
+ 
             local ok, t = self:determine_declaration_type(var, node, infertypes, i)
-
+ 
             if var.attribute == "close" then
                if not type_is_closable(t) then
                   self.errs:add(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
@@ -1272,17 +1272,17 @@ visit_node.cbs = {
                   self.errs:add(var, "to-be-closed variable " .. var.tk .. " assigned a non-closable value")
                end
             end
-
+ 
             assert(var)
             self:add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "localizing")
             if var.elide_type then
                self.errs:add_warning("hint", node, "hint: consider using 'local type' instead")
             end
-
+ 
             local infertype = infertypes.tuple[i]
             if ok and infertype then
                local w = node.exps[i] or node.exps
-
+ 
                local rt = self:to_structural(t)
                if (not rt is EnumType)
                   and ((not t is NominalType) or (rt is UnionType))
@@ -1292,11 +1292,11 @@ visit_node.cbs = {
                   self:add_var(w, var.tk, t, "const", "narrowed_declaration")
                end
             end
-
+ 
             if self.collector then
                self.collector.store_type(var.y, var.x, t)
             end
-
+ 
             self:dismiss_unresolved(var.tk)
          end
          return NONE
@@ -1715,8 +1715,8 @@ visit_node.cbs = {
             end
          end
       end,
-       after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
-          self.fdb:set_truthy(node)
+      after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
+         self.fdb:set_truthy(node)
 
          if not node.expected then
             return infer_table_literal(self, node, children)
@@ -1759,27 +1759,27 @@ visit_node.cbs = {
             end
          end
 
-          if not is_lua_table_type(decltype) then
-             return infer_table_literal(self, node, children)
-          end
+         if not is_lua_table_type(decltype) then
+            return infer_table_literal(self, node, children)
+         end
 
-          -- struct types are nominal for construction purposes: table
-          -- literals (including {}) must not adopt a struct type, because
-          -- the resulting table lacks the metatable wiring that methods
-          -- and init rely on. Checked before resolve_self, which rebuilds
-          -- the type and would drop the is_struct marker.
-          if decltype is RecordType and (decltype as RecordType).is_struct then
-             local sname = (decltype as RecordType).declname or "struct"
-             self.errs:add(node, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of a table literal")
-             return node.expected
-          end
+         -- struct types are nominal for construction purposes: table
+         -- literals (including {}) must not adopt a struct type, because
+         -- the resulting table lacks the metatable wiring that methods
+         -- and init rely on. Checked before resolve_self, which rebuilds
+         -- the type and would drop the is_struct marker.
+         if decltype is RecordType and (decltype as RecordType).is_struct then
+            local sname = (decltype as RecordType).declname or "struct"
+            self.errs:add(node, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of a table literal")
+            return node.expected
+         end
 
-          if decltype is RecordLikeType then
-             self:begin_implied_scope()
-             self:add_self_type(node, decltype)
-             decltype = self:resolve_self(decltype, true)
-             self:end_implied_scope()
-          end
+         if decltype is RecordLikeType then
+            self:begin_implied_scope()
+            self:add_self_type(node, decltype)
+            decltype = self:resolve_self(decltype, true)
+            self:end_implied_scope()
+         end
 
          local force_array: Type = nil
 
@@ -2041,24 +2041,24 @@ visit_node.cbs = {
             r.field_order = {}
          end
 
-          if not rtype is RecordLikeType then
-             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
-             local short_type = show_type(rtype, true)
-             local msg = ("record function syntax cannot be used with this type: %s is %s"):format(owner_name, short_type)
-             self.errs:add(node, msg, rtype)
-             if rtype is MapType then
+         if not rtype is RecordLikeType then
+            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+            local short_type = show_type(rtype, true)
+            local msg = ("record function syntax cannot be used with this type: %s is %s"):format(owner_name, short_type)
+            self.errs:add(node, msg, rtype)
+            if rtype is MapType then
                 self.errs:add_warning("hint", node, "use the assignment syntax to store functions in maps", rtype)
-             end
-             return
-          end
+            end
+            return
+         end
 
-          -- structs reserve .new as the auto-generated constructor
-          if rtype is RecordType and (rtype as RecordType).is_struct and node.name.tk == "new" then
-             local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
-             self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '"
-                                       .. owner_name .. ":init()' for custom construction logic instead")
-             return
-          end
+         -- structs reserve .new as the auto-generated constructor
+         if rtype is RecordType and (rtype as RecordType).is_struct and node.name.tk == "new" then
+            local _, _, owner_name = self:find_record_to_extend(node.fn_owner)
+            self.errs:add(node, "cannot declare '" .. owner_name .. ".new': structs generate .new automatically; define '"
+                                      .. owner_name .. ":init()' for custom construction logic instead")
+            return
+         end
 
          local selftype = self:get_self_type(node.fn_owner)
          if node.is_method then

@@ -5629,18 +5629,16 @@ local function subtype_record(ck, a, b)
    for _, k in ipairs(a.field_order) do
       local ak = a.fields[k]
       local bk = b.fields[k]
-      if bk then
-         if k == "new" and struct_inherits then
 
 
 
-         else
-            local ok, fielderrs = ck:is_a(ak, bk)
-            if not ok then
-               ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
-            end
+      local skip = (k == "new" and struct_inherits)
+      if bk and not skip then
+         local ok, fielderrs = ck:is_a(ak, bk)
+         if not ok then
+            ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
          end
-      elseif b.typename == "record" and not struct_inherits then
+      elseif b.typename == "record" and not struct_inherits and not skip then
          table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
