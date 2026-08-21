@@ -1971,7 +1971,12 @@ end
 parse_simple_type_or_nominal = function(state, block)
    local tk = block.tk
    local st = simple_types[tk]
-   if st then
+
+
+
+
+   local rest = block[reader.BLOCK_INDEXES.NOMINAL_TYPE.NAME + 1]
+   if st and not (rest and rest.kind == "identifier") then
       return new_type(state, block, tk)
    elseif tk == "table" and block.kind ~= "nominal_type" then
       local typ = new_type(state, block, "map")
