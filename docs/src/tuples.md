@@ -28,7 +28,7 @@ local x = p1[my_number] -- => x is a string | number union
 if x is string then
    print("Name is " .. x .. "!")
 else
-   print("Age is " .. x)
+   print("Age is " .. x * 12 .. " months.")
 end
 ```
 

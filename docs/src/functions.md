@@ -38,7 +38,7 @@ argument type itself.
 
 You can declare functions that generate iterators which can be used in
 `for` statements: the function needs to produce another function that iterates.
-This is an example [taken the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
+This is an example [taken from the book "Programming in Lua"](https://www.lua.org/pil/7.1.html):
 
 ```lua
 local function allwords(): (function(): string)
@@ -148,6 +148,15 @@ local function test(...: number)
 end
 
 test(1, 2, 3)
+```
+
+Named vararg tables, as introduced in [Lua 5.5](https://www.lua.org/manual/5.5/manual.html#3.4.11),
+are supported by Teal:
+
+```lua
+local function test(...args: boolean): integer, boolean
+   return args.n, args[1]
+end
 ```
 
 In case your function returns a variable amount of values, you may also declare
