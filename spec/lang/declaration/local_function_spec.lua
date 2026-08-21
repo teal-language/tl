@@ -129,7 +129,7 @@ describe("local function", function()
       ]]))
    end)
 
-   describe("Lua 5.5 named variadic arguments", function()
+   describe("Lua 5.5-style named variadic arguments", function()
       it("works in a type annotation", util.check([[
          local _: function(a: integer, ...b: integer)
       ]]))
@@ -166,6 +166,16 @@ describe("local function", function()
 
          f(1, 2, 3, 4)
       ]])
+
+      it("the named vararg table is <const>", util.check_type_error([[
+         local function test(...args: boolean): integer, boolean
+            args[1] = false
+            args = { true }
+            return args.n, args[1]
+         end
+      ]], {
+         { y = 3, msg = "cannot assign to <const> variable" }
+      }))
    end)
 
    it("declaration", util.check([[

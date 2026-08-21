@@ -2328,7 +2328,7 @@ visit_node.cbs = {
                local generic_pack_table = (table_t.fields["PackTable"]).def
                local pack_table = self:apply_generic(node, generic_pack_table, { t })
 
-               self:add_var(node, node.name.tk, pack_table).is_func_arg = true
+               self:add_var(node, node.name.tk, pack_table, "const").is_func_arg = true
                is_named_vararg = true
             end
             t = a_vararg(node, { t })
