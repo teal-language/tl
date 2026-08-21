@@ -15,6 +15,7 @@ local type GenericType = types.GenericType
 local type NominalType = types.NominalType
 local type RecordType = types.RecordType
 local type RecordLikeType = types.RecordLikeType
+local type FunctionType = types.FunctionType
 
 local type ast_types = require("teal.ast")
 local type Node = ast_types.Node
@@ -202,6 +203,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
    end
 
    local visit_node: Visitor<nil, NodeKind, Node, Output> = {}
+   local visit_type: Visitor<nil, TypeName, Type, Output> = {}
 
    local lua_54_attribute <total>: {Attribute:string} = {
       ["const"] = " <const>",
@@ -312,6 +314,94 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       end
    end
 
+    -- Emit the struct runtime boilerplate (__index, static initializers,
+    -- flattened parent methods, auto-generated .new) right after the
+    -- `X = {}` declaration. Shared by local_type and global_type visitors.
+    -- Struct tables carry no metatable: inherited methods are flattened
+    -- via explicit `X.m = P.m` copies, so instance method dispatch is a
+    -- single table lookup with no chain.
+    local function emit_struct_runtime(out: Output, node: Node)
+       local owner_tk = node.var.tk
+       local nt = node.value.newtype
+       local rdef: RecordType
+       if nt is TypeDeclType then
+          local ntd = nt.def
+          if ntd is RecordType then
+             rdef = ntd
+          end
+       end
+
+       add_string(out, "; ")
+       add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+       -- emit initializers for static fields (set once on the type);
+       -- iterated in field_order so the output is deterministic and
+       -- `static b = S.a + 1` is emitted after `S.a = ...`
+       if rdef and rdef.static_default_values then
+          for _, fname in ipairs(rdef.field_order) do
+             local default_node = rdef.static_default_values[fname]
+             if default_node then
+                local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                add_string(out, "; ")
+                add_string(out, owner_tk .. "." .. fname .. " = ")
+                add_child(out, default_out)
+             end
+          end
+       end
+
+       -- flatten parent methods into this struct (one explicit copy per
+       -- method known at declaration time). Methods the child defines
+       -- later overwrite their copies, so overrides need no handling here
+       if rdef and rdef.struct_parent_name and rdef.struct_copied_methods then
+          local parent_name = rdef.struct_parent_name
+          for _, mname in ipairs(rdef.struct_copied_methods) do
+             add_string(out, "; " .. owner_tk .. "." .. mname .. " = " .. parent_name .. "." .. mname)
+          end
+       end
+
+       add_string(out, "; ")
+       add_string(out, owner_tk .. ".new = function(opts)")
+       add_string(out, " local self = setmetatable({}, " .. owner_tk .. ")")
+       add_string(out, " for k, v in pairs(opts) do self[k] = v end")
+
+       -- apply default values for fields missing from opts (own + inherited,
+       -- already merged into a single map by the typechecker: one `if` per
+       -- field, no redundant copies); iterated in field_order for
+       -- deterministic output
+       if rdef and rdef.default_values then
+          for _, fname in ipairs(rdef.field_order) do
+             local default_node = rdef.default_values[fname]
+             if default_node then
+                local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+                add_string(out, "; if opts." .. fname .. " == nil then")
+                add_string(out, " self." .. fname .. " = ")
+                add_child(out, default_out)
+                add_string(out, " end")
+             end
+          end
+       end
+
+       -- run init() from parents to children with no runtime dispatch:
+       -- the typechecker pre-filters struct_init_chain to ancestors that
+       -- actually declare init, and the owner's own init (checked here on
+       -- the post-typecheck field map) is known at generation time — so
+       -- every emitted call is unconditional and each init runs exactly once
+       if rdef and rdef.struct_init_chain then
+          for _, anc in ipairs(rdef.struct_init_chain) do
+             add_string(out, "; " .. anc .. ".init(self)")
+          end
+       end
+       if rdef then
+          local own_init = rdef.fields["init"]
+          if own_init ~= nil and own_init is FunctionType and (own_init as FunctionType).is_record_function then
+             add_string(out, "; " .. owner_tk .. ".init(self)")
+          end
+       end
+
+       add_string(out, "; return self")
+       add_string(out, " end")
+    end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
@@ -358,12 +448,26 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["local_type"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
             local out: Output = { y = node.y, h = 0 }
-            if not node.var.elide_type then
+            -- struct declarations always need their runtime `local X = {}`
+            -- (the auto-generated __index, .new, and static initializers
+            -- attach to it), so we don't elide even if Teal considers the
+            -- var "type-only" (e.g. when the struct is only used as a parent
+            -- via `from X`).
+            if not node.var.elide_type or node.synthesize_auto_new then
                table.insert(out, "local")
                add_child(out, children[1], " ")
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+            -- If typechecker flagged this `local struct X` for auto-generated
+            -- .new, emit the constructor plus the __index metatable that
+            -- makes `x:method()` dispatch work. For `struct Y from X` we also
+            -- chain parent lookup via setmetatable(X, {__index = Parent}).
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -375,6 +479,13 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+            -- `global struct X` gets the same runtime boilerplate as the
+            -- local form (metatable chain, __index, statics, .new)
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -788,7 +899,6 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
       ["pragma"] = emit_nothing_visitor_cbs,
    }
 
-   local visit_type: Visitor<nil, TypeName, Type, Output> = {}
    visit_type.cbs = {}
    local default_type_visitor = {
       after = function(_: nil, typ: Type, _children: {Output}): Output

@@ -132,6 +132,7 @@ local block = { Block = { ExpectedContext = {} } }
 
 
 
+
 local BLOCK_INDEXES = {
    PRAGMA = {
       KEY = 1,
@@ -287,6 +288,8 @@ local BLOCK_INDEXES = {
       FIELDS = 3,
       META_FIELDS = 4,
       WHERE_CLAUSE = 5,
+      PARENT = 6,
+      STATIC_FIELDS = 7,
    },
    INTERFACE = {
       ARRAY_TYPE = 1,

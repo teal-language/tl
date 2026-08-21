@@ -52,6 +52,7 @@ local record block
       "macro_var"
       "macro_invocation"
       "interface"
+      "struct"
       "pragma"
       "error_block"
       "userdata"
@@ -287,6 +288,8 @@ local BLOCK_INDEXES <const> = {
       FIELDS = 3,
       META_FIELDS = 4,
       WHERE_CLAUSE = 5,
+      PARENT = 6,
+      STATIC_FIELDS = 7,
    },
    INTERFACE = {
       ARRAY_TYPE = 1,

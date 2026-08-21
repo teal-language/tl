@@ -150,6 +150,10 @@ local record Node
    is_method: boolean
    is_self: boolean
 
+   -- set by typechecker for `local struct X` when an auto-generated
+   -- .new constructor is synthesized; consumed by codegen to emit it
+   synthesize_auto_new: boolean
+
    exp: Node
    if_parent: Node
    if_block_n: integer
@@ -1870,6 +1874,17 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
    decl.field_comments = {}
    decl.meta_field_comments = {}
 
+   -- struct is parsed as a record with is_struct = true marker
+   if block.kind == "struct" then
+      (decl as RecordType).is_struct = true
+      -- parse 'from Parent' clause
+      if block[reader.BLOCK_INDEXES.RECORD.PARENT] then
+         local parent_block = block[reader.BLOCK_INDEXES.RECORD.PARENT]
+         local parent_type = parse_type(state, parent_block) as NominalType
+         (decl as RecordType).struct_parent = parent_type
+      end
+   end
+
    if typename == "interface" then
       decl.interface_list = {}
    end
@@ -1924,6 +1939,15 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
                t.is_method = true
             end
             store_field_in_record(state, fld, field_name, t, decl, meta, comments)
+            -- struct-only: capture default value expression for codegen
+            local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+            if default_expr and not meta and decl is RecordType and (decl as RecordType).is_struct then
+               local rdef = decl as RecordType
+               if not rdef.default_values then
+                  rdef.default_values = {}
+               end
+               rdef.default_values[field_name] = parse_expression(state, default_expr)
+            end
             for i = #pending_field_comments, 1, -1 do
                table.remove(pending_field_comments, i)
             end
@@ -1934,6 +1958,15 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
                local vname = fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VAR].tk
                local nt_node = parse_newtype(state, fld[reader.BLOCK_INDEXES.LOCAL_TYPE.VALUE])
                if nt_node and nt_node.newtype then
+                  -- structs need runtime presence (methods, .new, __index)
+                  -- that nested type declarations do not emit: they would
+                  -- produce a struct type without a constructor. Reject
+                  -- here, mirroring the reader-level ban on `struct Inner`
+                  -- blocks nested in type bodies
+                  local nt_def = nt_node.newtype.def
+                  if nt_def is RecordType and (nt_def as RecordType).is_struct then
+                     fail(state, fld, "struct '" .. vname .. "' cannot be nested inside another type; declare it as a top-level statement")
+                  end
                   store_field_in_record(state, fld, vname, nt_node.newtype, decl, meta, comments)
                end
             end
@@ -1950,6 +1983,43 @@ parse_record_like_type = function(state: ParseState, block: Block, typename: str
 
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.FIELDS], false)
    parse_field_list(block[reader.BLOCK_INDEXES.RECORD.META_FIELDS], true)
+
+   -- struct-only: process `static ... end` block fields.
+   -- Static fields are added to `decl.fields` (so they're accessible via
+   -- both X.name and x.name through __index), but tracked separately in
+   -- `static_field_names` so that .new opts type can exclude them.
+   -- Initializers go into `static_default_values` (NOT `default_values`).
+   if block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS] then
+      local rdef_for_static = decl
+      if rdef_for_static is RecordType and (rdef_for_static as RecordType).is_struct then
+         local rdef = rdef_for_static as RecordType
+         rdef.static_field_names = {}
+         for _, fld in ipairs(block[reader.BLOCK_INDEXES.RECORD.STATIC_FIELDS]) do
+            if fld.kind == "record_field" then
+               local name_node = fld[reader.BLOCK_INDEXES.RECORD_FIELD.NAME]
+               local field_name: string
+               if name_node and name_node.kind == "string" then
+                  field_name = block_string_value(name_node) or name_node.tk or ""
+               else
+                  field_name = name_node and name_node.tk or ""
+               end
+               local t = parse_type(state, fld[reader.BLOCK_INDEXES.RECORD_FIELD.TYPE])
+               if t is FunctionType and t.maybe_method then
+                  t.is_method = true
+               end
+               store_field_in_record(state, fld, field_name, t, decl, false, nil)
+               rdef.static_field_names[field_name] = true
+               local default_expr = fld[reader.BLOCK_INDEXES.RECORD_FIELD.DEFAULT_VAL]
+               if default_expr then
+                  if not rdef.static_default_values then
+                     rdef.static_default_values = {}
+                  end
+                  rdef.static_default_values[field_name] = parse_expression(state, default_expr)
+               end
+            end
+         end
+      end
+   end
 
    if block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE] then
       local where_macroexp = parse_where_clause(state, block[reader.BLOCK_INDEXES.RECORD.WHERE_CLAUSE], decl)
@@ -2054,6 +2124,9 @@ parse_base_type = function(state: ParseState, block: Block): FirstClassType
       return parse_record_like_type(state, block, "record")
   elseif block.kind == "interface" then
       return parse_record_like_type(state, block, "interface")
+  elseif block.kind == "struct" then
+      -- struct is a record with OOP semantics: auto-generated .new + :init() + single inheritance
+      return parse_record_like_type(state, block, "record")
   elseif block.kind == "array_type" then
       local decl = new_type(state, block, "array") as ArrayType
       decl.elements = parse_type(state, block[reader.BLOCK_INDEXES.ARRAY_TYPE.ELEMENT])

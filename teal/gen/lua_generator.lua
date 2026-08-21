@@ -20,6 +20,7 @@ local types = require("teal.types")
 
 
 
+
 local traversal = require("teal.traversal")
 
 
@@ -202,6 +203,7 @@ function lua_generator.generate(ast, gen_target, opts)
    end
 
    local visit_node = {}
+   local visit_type = {}
 
    local lua_54_attribute = {
       ["const"] = " <const>",
@@ -312,6 +314,94 @@ function lua_generator.generate(ast, gen_target, opts)
       end
    end
 
+
+
+
+
+
+
+   local function emit_struct_runtime(out, node)
+      local owner_tk = node.var.tk
+      local nt = node.value.newtype
+      local rdef
+      if nt.typename == "typedecl" then
+         local ntd = nt.def
+         if ntd.typename == "record" then
+            rdef = ntd
+         end
+      end
+
+      add_string(out, "; ")
+      add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+
+
+
+      if rdef and rdef.static_default_values then
+         for _, fname in ipairs(rdef.field_order) do
+            local default_node = rdef.static_default_values[fname]
+            if default_node then
+               local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+               add_string(out, "; ")
+               add_string(out, owner_tk .. "." .. fname .. " = ")
+               add_child(out, default_out)
+            end
+         end
+      end
+
+
+
+
+      if rdef and rdef.struct_parent_name and rdef.struct_copied_methods then
+         local parent_name = rdef.struct_parent_name
+         for _, mname in ipairs(rdef.struct_copied_methods) do
+            add_string(out, "; " .. owner_tk .. "." .. mname .. " = " .. parent_name .. "." .. mname)
+         end
+      end
+
+      add_string(out, "; ")
+      add_string(out, owner_tk .. ".new = function(opts)")
+      add_string(out, " local self = setmetatable({}, " .. owner_tk .. ")")
+      add_string(out, " for k, v in pairs(opts) do self[k] = v end")
+
+
+
+
+
+      if rdef and rdef.default_values then
+         for _, fname in ipairs(rdef.field_order) do
+            local default_node = rdef.default_values[fname]
+            if default_node then
+               local default_out = traversal.traverse_nodes(nil, default_node, visit_node, visit_type)
+               add_string(out, "; if opts." .. fname .. " == nil then")
+               add_string(out, " self." .. fname .. " = ")
+               add_child(out, default_out)
+               add_string(out, " end")
+            end
+         end
+      end
+
+
+
+
+
+
+      if rdef and rdef.struct_init_chain then
+         for _, anc in ipairs(rdef.struct_init_chain) do
+            add_string(out, "; " .. anc .. ".init(self)")
+         end
+      end
+      if rdef then
+         local own_init = rdef.fields["init"]
+         if own_init ~= nil and own_init.typename == "function" and (own_init).is_record_function then
+            add_string(out, "; " .. owner_tk .. ".init(self)")
+         end
+      end
+
+      add_string(out, "; return self")
+      add_string(out, " end")
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_, node, children)
@@ -358,12 +448,26 @@ function lua_generator.generate(ast, gen_target, opts)
       ["local_type"] = {
          after = function(_, node, children)
             local out = { y = node.y, h = 0 }
-            if not node.var.elide_type then
+
+
+
+
+
+            if not node.var.elide_type or node.synthesize_auto_new then
                table.insert(out, "local")
                add_child(out, children[1], " ")
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+
+
+
+
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -375,6 +479,13 @@ function lua_generator.generate(ast, gen_target, opts)
                table.insert(out, " =")
                add_child(out, children[2], " ")
             end
+
+
+
+            if node.synthesize_auto_new then
+               emit_struct_runtime(out, node)
+            end
+
             return out
          end,
       },
@@ -788,7 +899,6 @@ function lua_generator.generate(ast, gen_target, opts)
       ["pragma"] = emit_nothing_visitor_cbs,
    }
 
-   local visit_type = {}
    visit_type.cbs = {}
    local default_type_visitor = {
       after = function(_, typ, _children)
