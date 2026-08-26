@@ -136,6 +136,26 @@ local function compare_or_infer_typevar(ck: TypeChecker, typevar: string, a: Typ
 end
 
 local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType): boolean, {Error}
+   -- struct types are nominal for construction purposes: a plain table
+   -- (literal or foreign record) must not be assigned where a struct
+   -- instance is expected, because it would lack the metatable wiring
+   -- that methods and init rely on. Struct-to-struct (child to parent)
+   -- is fine: both sides carry is_struct.
+   if b.typename == "record" then
+      local brec = b as RecordType
+      if brec.is_struct and not a.is_struct then
+         local name = brec.declname or "struct"
+         return false, { errors.new(name .. " is a struct; construct instances with " .. name .. ".new{ ... } instead of a table literal") }
+      end
+   end
+
+   -- a struct child may declare fields beyond its parent's; the
+   -- inheritance chain was validated at declaration time
+   local struct_inherits = false
+   if b.typename == "record" and a.is_struct and (b as RecordType).is_struct then
+      struct_inherits = a.struct_parent_typeids ~= nil and a.struct_parent_typeids[b.typeid] == true
+   end
+
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -160,12 +180,16 @@ local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType)
    for _, k in ipairs(a.field_order) do
       local ak = a.fields[k]
       local bk = b.fields[k]
-      if bk then
+      -- .new is compiler-synthesized per struct (its opts record reflects
+      -- each struct's own fields), so signatures are not
+      -- contravariant-compatible across the hierarchy; skip it
+      local skip = (k == "new" and struct_inherits)
+      if bk and not skip then
          local ok, fielderrs = ck:is_a(ak, bk)
          if not ok then
             ck:add_errors_prefixing(nil, fielderrs, "record field doesn't match: " .. k .. ": ", errs)
          end
-      elseif b.typename == "record" then
+      elseif b.typename == "record" and not struct_inherits and not skip then
          table.insert(errs, errors.new("record field doesn't exist: " .. k))
       end
    end
@@ -358,6 +382,10 @@ local emptytable_relations: {TypeName:CompareTypes} = {
       return not b.is_userdata
    end,
    ["record"] = function(_ck: TypeChecker, _a: Type, b: RecordType): boolean, {Error}
+      if b.is_struct then
+         local name = b.declname or "struct"
+         return false, { errors.new(name .. " is a struct; construct instances with " .. name .. ".new{ ... } instead of an empty table") }
+      end
       return not b.is_userdata
    end,
 }
@@ -617,6 +645,12 @@ relations.subtype_relations = {
          local union_b = rb is UnionType
          if union_a or union_b then
             return ck:is_a(union_a and ra or a, union_b and rb or b)
+         end
+
+         -- struct inheritance: a child struct is a subtype of its parent
+         if ra is RecordType and rb is RecordType
+           and (ra as RecordType).is_struct and (rb as RecordType).is_struct then
+            return ck:is_a(ra, rb)
          end
 
          -- match interface subtyping

@@ -186,6 +186,68 @@ local record types
    record RecordType
       is RecordLikeType
       where self.typename == "record"
+
+      -- set when declared via `struct` keyword: enables auto-generated
+      -- .__new constructor and (in codegen) the __index metatable setup
+      is_struct: boolean
+
+      -- for `struct Y from X`: nominal reference to the parent struct
+      struct_parent: NominalType
+
+      -- runtime name of the parent struct (its declaration variable name,
+      -- resolved through aliases by the typechecker); used by codegen to
+      -- emit `setmetatable(Y, { __index = <struct_parent_name> })`
+      struct_parent_name: string
+
+      -- transitive set of ancestor struct typeids (including the direct
+      -- parent); used by the subtyping rules so that a child struct is
+      -- accepted wherever its parent is expected
+      struct_parent_typeids: {integer:boolean}
+
+      -- ordered ancestor runtime names, root parent first, direct parent
+      -- last; codegen emits one unconditional init() call per entry
+      -- (the chain is pre-filtered at check time to ancestors that
+      -- declare their own init, so each runs exactly once, parent to
+      -- child, with zero runtime dispatch)
+      struct_init_chain: {string}
+
+      -- set once any struct extends this one: methods are flattened
+      -- into children at their declaration time, so declaring new
+      -- methods on the parent afterwards would silently not reach the
+      -- children; the record_function visitor rejects such declarations
+      has_struct_children: boolean
+
+      -- names of parent methods (record functions, excluding the
+      -- synthesized `new` and the chain-invoked `init`) to flatten into
+      -- this struct at declaration time: codegen emits `X.m = P.m` per
+      -- entry, so instance method dispatch is a single table lookup with
+      -- no metatable chain. Child methods defined later overwrite their
+      -- copies, so overrides always take effect
+      struct_copied_methods: {string}
+
+      -- for struct fields with default values (`x: number = 0`):
+      -- maps field name to the AST expression node of the default
+      default_values: {string:Node}
+
+      -- for `static ... end` block in struct body: set of field names
+      -- that belong to the type (not instances). They still live in
+      -- `fields` so they are accessible via both `X.name` and `x.name`
+      -- (via the __index chain), but they are excluded from `.new` opts.
+      static_field_names: {string:boolean}
+
+      -- initializers for static fields (`static x: number = 0`):
+      -- emitted as `X.x = <expr>` once, at struct declaration time.
+      -- Contains only the struct's OWN statics: inherited statics are
+      -- copied by reference (see struct_copied_statics)
+      static_default_values: {string:Node}
+
+      -- names of ALL parent static fields (declaration order): codegen
+      -- emits `X.name = Parent.name` per entry right after `__index`,
+      -- snapshotting the parent's values at the child's declaration
+      -- time — same lifecycle as flattened methods, zero dispatch.
+      -- Table/instance statics are therefore shared by reference across
+      -- the hierarchy; scalar statics become per-child copies
+      struct_copied_statics: {string}
    end
 
    record InterfaceType

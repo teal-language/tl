@@ -16,6 +16,7 @@
      - [Tuples](./tuples.md)
      - [Maps](./maps.md)
      - [Records](./records.md)
+     - [Structs](./structs.md)
      - [Interfaces](./interfaces.md)
      - [Generics](./generics.md)
      - [Enums](./enums.md)
