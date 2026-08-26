@@ -315,11 +315,12 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
    end
 
     -- Emit the struct runtime boilerplate (__index, static initializers,
-    -- flattened parent methods, auto-generated .new) right after the
-    -- `X = {}` declaration. Shared by local_type and global_type visitors.
-    -- Struct tables carry no metatable: inherited methods are flattened
-    -- via explicit `X.m = P.m` copies, so instance method dispatch is a
-    -- single table lookup with no chain.
+    -- copied parent statics, flattened parent methods, auto-generated
+    -- .new) right after the `X = {}` declaration. Shared by local_type
+    -- and global_type visitors. Struct tables carry no metatable:
+    -- inherited methods AND statics are resolved at declaration time via
+    -- explicit copies (`X.m = P.m`, `X.s = P.s`), so instance method
+    -- dispatch is a single table lookup with no chain anywhere.
     local function emit_struct_runtime(out: Output, node: Node)
        local owner_tk = node.var.tk
        local nt = node.value.newtype
@@ -334,9 +335,23 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
        add_string(out, "; ")
        add_string(out, owner_tk .. ".__index = " .. owner_tk)
 
-       -- emit initializers for static fields (set once on the type);
-       -- iterated in field_order so the output is deterministic and
-       -- `static b = S.a + 1` is emitted after `S.a = ...`
+       -- copy parent statics by reference (`X.name = Parent.name`):
+       -- scalars become per-child values, table/instance statics are
+       -- shared by reference across the whole hierarchy. Emitted before
+       -- the child's own static initializers, so an overriding child
+       -- initializer (declared in its static block) wins
+       if rdef and rdef.struct_parent_name and rdef.struct_copied_statics then
+          local parent_name = rdef.struct_parent_name
+          for _, fname in ipairs(rdef.struct_copied_statics) do
+             add_string(out, "; ")
+             add_string(out, owner_tk .. "." .. fname .. " = " .. parent_name .. "." .. fname)
+          end
+       end
+
+       -- emit initializers for the struct's OWN static fields (set once
+       -- on the type; inherited statics are covered by the reference
+       -- copies above); iterated in field_order so the output is
+       -- deterministic and `static b = S.a + 1` is emitted after `S.a`
        if rdef and rdef.static_default_values then
           for _, fname in ipairs(rdef.field_order) do
              local default_node = rdef.static_default_values[fname]
@@ -345,7 +360,7 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
                 add_string(out, "; ")
                 add_string(out, owner_tk .. "." .. fname .. " = ")
                 add_child(out, default_out)
-             end
+              end
           end
        end
 

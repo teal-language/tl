@@ -237,7 +237,17 @@ local record types
 
       -- initializers for static fields (`static x: number = 0`):
       -- emitted as `X.x = <expr>` once, at struct declaration time.
+      -- Contains only the struct's OWN statics: inherited statics are
+      -- copied by reference (see struct_copied_statics)
       static_default_values: {string:Node}
+
+      -- names of ALL parent static fields (declaration order): codegen
+      -- emits `X.name = Parent.name` per entry right after `__index`,
+      -- snapshotting the parent's values at the child's declaration
+      -- time — same lifecycle as flattened methods, zero dispatch.
+      -- Table/instance statics are therefore shared by reference across
+      -- the hierarchy; scalar statics become per-child copies
+      struct_copied_statics: {string}
    end
 
    record InterfaceType

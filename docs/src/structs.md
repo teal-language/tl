@@ -188,9 +188,9 @@ code, refer to the parent by name: `A.init(self)`.
 ### Methods are flattened, not dispatched
 
 Method calls on struct instances are a **single table lookup**. There is
-no metatable chain between structs and no method resolution at call
-time. Instead, at the point a child struct is declared, every method
-known on its parent is copied into the child:
+no method resolution at call time and no per-call overhead: at the point
+a child struct is declared, every method known on its parent is copied
+into the child:
 
 ```lua
 local struct Shape
@@ -222,7 +222,9 @@ Circle.new = function(opts) ... end       -- init chain: none here
 ```
 
 So `c:describe()` resolves as: instance table → (miss) → `__index` →
-`Circle.describe` → hit. One hop, always.
+`Circle.describe` → hit. One hop, always. Struct tables carry no
+metatable of their own — everything inherited (methods, statics) is
+copied onto the child at declaration time.
 
 **Overrides are just later assignments.** A method defined on the child
 *after* its declaration overwrites the flattened copy:
@@ -248,6 +250,7 @@ parent methods before child structs; the checker enforces this order.
 |---|---|---|
 | `__index = X` | once, at declaration | one metatable hop on instance field miss |
 | method flattening (`X.m = P.m`) | once, at declaration | none — direct table entry |
+| static copying (`X.s = P.s`) | once, at declaration | none — direct table entry |
 | init chain | fixed call list inside `.new` | none — unconditional direct calls |
 | defaults | one `if` per defaulted field in `.new` | `== nil` check only |
 
@@ -475,9 +478,22 @@ end
 print(Derived.klass)              -- "Base" (inherited)
 ```
 
-Initialized statics are re-emitted per child (an independent copy of the
-initializer); a static declared without an initializer on a parent is not
-readable through a child — assign it on the child explicitly if needed.
+Statics are copied **by reference** at the child's declaration — the
+generated code emits `Derived.klass = Base.klass` (and so on for every
+parent static), the same lifecycle and zero-dispatch approach as
+flattened methods. Consequences:
+
+- **struct instances stored in statics are shared by reference** across
+  the whole hierarchy: there is a single `config` instance, and
+  mutating `App.config.debug` is seen by every child — the common
+  pattern (shared configuration, singletons, pools) works exactly as
+  expected;
+- **scalar statics become per-child values**: rebinding `Base.count = 5`
+  after a child was declared is not seen by that child's slot (mutate a
+  shared holder instance instead if you need live updates);
+- **shadowing**: assigning `Derived.count = 100` creates the child's
+  own slot and leaves `Base.count` untouched; a child `static` block
+  entry with its own initializer does the same declaratively.
 
 ## Cross-module inheritance
 
@@ -520,9 +536,11 @@ error:
   presence at the child's declaration site;
 - the parent must not inherit `init` from its own ancestors (those
   ancestor tables are not visible outside the parent's module);
-- the parent's default values must be literals — computed defaults may
-  reference the parent module's locals, which don't exist in the
-  inheriting module;
+- the parent's *instance* default values must be literals — computed
+  defaults may reference the parent module's locals, which don't exist
+  in the inheriting module. Static initializers are exempt: inherited
+  statics are copied by value, so their expressions are never re-emitted
+  in the inheriting module;
 - structs described by declaration files (`.d.tl`) cannot be extended:
   their runtime shape is by contract and may not follow struct
   semantics.

@@ -8192,16 +8192,11 @@ local literal_kinds = {
 
 
 
+
+
 local function first_non_literal_default(rdef)
    if rdef.default_values then
       for fname, dnode in pairs(rdef.default_values) do
-         if not literal_kinds[(dnode).kind] then
-            return fname
-         end
-      end
-   end
-   if rdef.static_default_values then
-      for fname, dnode in pairs(rdef.static_default_values) do
          if not literal_kinds[(dnode).kind] then
             return fname
          end
@@ -8306,6 +8301,13 @@ local function finalize_struct_declaration(self, node)
       local rp_def = rp
       if rp_def.typename == "typedecl" then
          rp_def = (rp_def).def
+      end
+
+
+
+      if rp_def == (rstruct) then
+         self.errs:add(node, "struct '" .. node.var.tk .. "' cannot extend itself")
+         return
       end
 
       if not (rp_def.typename == "record") or not (rp_def).is_struct then
@@ -8429,10 +8431,14 @@ local function finalize_struct_declaration(self, node)
 
 
             if fname ~= "new" and fname ~= "init" then
-               if rstruct.static_field_names and rstruct.static_field_names[fname] then
+               local parent_is_static = pdef.static_field_names ~= nil and pdef.static_field_names[fname]
+               local child_is_static = rstruct.static_field_names ~= nil and rstruct.static_field_names[fname]
+               if child_is_static and not parent_is_static then
+
                   self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk ..
                   "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
                elseif rstruct.fields[fname] then
+
 
                   local ok = self:same_type(rstruct.fields[fname], pdef.fields[fname])
                   if not ok then
@@ -8457,6 +8463,9 @@ local function finalize_struct_declaration(self, node)
             end
          end
 
+
+
+
          if pdef.static_field_names then
             if not rstruct.static_field_names then
                rstruct.static_field_names = {}
@@ -8464,16 +8473,13 @@ local function finalize_struct_declaration(self, node)
             for fname, v in pairs(pdef.static_field_names) do
                rstruct.static_field_names[fname] = v
             end
-         end
-         if pdef.static_default_values then
-            if not rstruct.static_default_values then
-               rstruct.static_default_values = {}
-            end
-            for fname, default_node in pairs(pdef.static_default_values) do
-               if not rstruct.static_default_values[fname] then
-                  rstruct.static_default_values[fname] = default_node
+            local copies = {}
+            for _, fname in ipairs(pdef.field_order) do
+               if pdef.static_field_names[fname] then
+                  table.insert(copies, fname)
                end
             end
+            rstruct.struct_copied_statics = copies
          end
       end
    end
@@ -8481,12 +8487,13 @@ local function finalize_struct_declaration(self, node)
 
 
 
+
+
    if rstruct.fields["new"] then
-
-
-
-
       self.errs:add(node, "'" .. node.var.tk .. ".new' is reserved: structs generate .new automatically")
+   elseif rstruct.fields["init"] then
+      self.errs:add(node, "'" .. node.var.tk .. ".init' is reserved: define '" ..
+      node.var.tk .. ":init()' (colon syntax) for the construction hook")
    else
       local w = node
       local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
@@ -9723,6 +9730,17 @@ visit_node.cbs = {
             local ok, err = ensure_not_abstract(ra)
             if not ok then
                return self.errs:invalid_at(node.e1, err)
+            end
+
+
+
+
+
+            local gbs = self:to_structural(untuple(gb))
+            if gbs.typename == "record" and (gbs).is_struct and
+               node.e1.kind == "literal_table" then
+               local sname = (gbs).declname or "struct"
+               return self.errs:invalid_at(node.e1, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of casting a table literal")
             end
             return gb
 
@@ -12182,6 +12200,7 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
+
    local function emit_struct_runtime(out, node)
       local owner_tk = node.var.tk
       local nt = node.value.newtype
@@ -12195,6 +12214,20 @@ function lua_generator.generate(ast, gen_target, opts)
 
       add_string(out, "; ")
       add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+
+
+
+
+
+      if rdef and rdef.struct_parent_name and rdef.struct_copied_statics then
+         local parent_name = rdef.struct_parent_name
+         for _, fname in ipairs(rdef.struct_copied_statics) do
+            add_string(out, "; ")
+            add_string(out, owner_tk .. "." .. fname .. " = " .. parent_name .. "." .. fname)
+         end
+      end
+
 
 
 
@@ -19353,6 +19386,16 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 
 local types = { GenericType = {}, StringType = {}, IntegerType = {}, BooleanType = {}, BooleanContextType = {}, TypeDeclType = {}, LiteralTableItemType = {}, NominalType = {}, SelfType = {}, ArrayType = {}, RecordType = {}, InterfaceType = {}, InvalidType = {}, UnknownType = {}, TupleType = {}, UnresolvedTypeArgType = {}, UnresolvableTypeArgType = {}, TypeVarType = {}, MapType = {}, NilType = {}, EmptyTableType = {}, UnresolvedEmptyTableValueType = {}, FunctionType = {}, UnionType = {}, TupleTableType = {}, PolyType = {}, EnumType = {} }
+
+
+
+
+
+
+
+
+
+
 
 
 

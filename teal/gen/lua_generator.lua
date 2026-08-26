@@ -320,6 +320,7 @@ function lua_generator.generate(ast, gen_target, opts)
 
 
 
+
    local function emit_struct_runtime(out, node)
       local owner_tk = node.var.tk
       local nt = node.value.newtype
@@ -333,6 +334,20 @@ function lua_generator.generate(ast, gen_target, opts)
 
       add_string(out, "; ")
       add_string(out, owner_tk .. ".__index = " .. owner_tk)
+
+
+
+
+
+
+      if rdef and rdef.struct_parent_name and rdef.struct_copied_statics then
+         local parent_name = rdef.struct_parent_name
+         for _, fname in ipairs(rdef.struct_copied_statics) do
+            add_string(out, "; ")
+            add_string(out, owner_tk .. "." .. fname .. " = " .. parent_name .. "." .. fname)
+         end
+      end
+
 
 
 

@@ -244,6 +244,123 @@ describe("struct", function()
          print(Derived.count)
       ]]))
 
+      it("snapshots parent static scalars at the child's declaration (runtime)", function()
+         local code = [[
+            local struct Base
+               static
+                  count: number = 0
+               end
+            end
+
+            local struct Early:Base
+            end
+
+            Base.count = 5
+
+            local struct Late:Base
+            end
+
+            print(Early.count, Late.count)   -- 0 5: reference copies at declaration
+         ]]
+         local check_result = tl.check_string(code)
+         assert.same({}, check_result.type_errors)
+         local generated = tl.gen(code)
+         local chunk = load(generated, "@main.lua")
+         assert.truthy(chunk, "generated code must compile")
+         local out = {}
+         local orig_print = _G.print
+         _G.print = function(...) table.insert(out, table.concat({ ... }, "\t")) end
+         chunk()
+         _G.print = orig_print
+         assert.same({ "0\t5" }, out)
+      end)
+
+      it("shares static struct instances by reference across the hierarchy (runtime)", function()
+         local code = [[
+            local struct Config
+               debug: boolean
+            end
+
+            local struct App
+               static
+                  config: Config = Config.new { debug = false }
+               end
+            end
+
+            local struct DevApp:App
+            end
+
+            print(App.config == DevApp.config)   -- true: one shared instance
+            App.config.debug = true
+            print(DevApp.config.debug)           -- true: mutation is shared
+         ]]
+         local check_result = tl.check_string(code)
+         assert.same({}, check_result.type_errors)
+         local generated = tl.gen(code)
+         local chunk = load(generated, "@main.lua")
+         assert.truthy(chunk)
+         local out = {}
+         local orig_print = _G.print
+         _G.print = function(...)
+            local parts = {}
+            for i = 1, select("#", ...) do
+               table.insert(parts, tostring(select(i, ...)))
+            end
+            table.insert(out, table.concat(parts, "\t"))
+         end
+         chunk()
+         _G.print = orig_print
+         assert.same({ "true", "true" }, out)
+      end)
+
+      it("shadowing a parent static via the child creates the child's own slot", util.check([[
+         local struct Base
+            static
+               count: number = 0
+            end
+         end
+
+         local struct Child:Base
+         end
+
+         Base.count = 5
+         Child.count = 100                       -- shadow: child's own slot
+         print(Base.count, Child.count)          -- 5 100
+      ]]))
+
+      it("inherits uninitialized statics assigned before the child", util.check([[
+         local struct Parent
+            x: number
+            static
+               version: string
+            end
+         end
+
+         Parent.version = "1.0"                  -- BEFORE the child
+
+         local struct Child:Parent
+            y: number
+         end
+
+         print(Parent.version, Child.version)   -- 1.0  1.0
+      ]]))
+
+      it("allows overriding an inherited static with the child's own initializer", util.check([[
+         local struct Parent
+            static
+               tag: string = "parent"
+            end
+         end
+
+         local struct Child:Parent
+            static
+               tag: string = "child"
+            end
+         end
+
+         print(Parent.tag, Child.tag)   -- parent  child
+      ]]))
+
       it("allows only one static block per struct", function()
          local result, err = tl.check_string([[
             local struct Foo
@@ -658,7 +775,54 @@ describe("struct", function()
          ]])
          assert.truthy(result.syntax_errors and #result.syntax_errors > 0)
       end)
-   end)
+
+      it("rejects a struct extending itself", function()
+         local result = tl.check_string([[
+            local struct A:A
+               x: number
+            end
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("cannot extend itself", result.type_errors[1].msg)
+      end)
+
+      it("rejects casting a table literal to a struct type", function()
+         local result = tl.check_string([[
+            local struct Point
+               x: number
+               y: number
+            end
+
+            function Point:len(): number
+               return self.x + self.y
+            end
+
+            local p = { x = 1, y = 2 } as Point
+            print(p:len())
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("instead of casting a table literal", result.type_errors[1].msg)
+      end)
+
+      it("allows casting variables to struct types (interop escape hatch)", util.check([[
+         local struct Point
+            x: number
+            y: number
+         end
+
+         function Point:len(): number
+            return self.x + self.y
+         end
+
+         local p = Point.new { x = 1, y = 2 }
+         local q = p as Point
+         print(q:len())
+
+         local external: any = Point.new { x = 3, y = 4 }
+         local r = external as Point
+         print(r:len())
+      ]]))
+    end)
 
    describe(":Parent syntax ergonomics", function()
       it("allows a field named 'from' in first position of the body", util.check([[
@@ -890,14 +1054,17 @@ describe("struct", function()
          assert.match("new' is reserved", result.type_errors[1].msg)
       end)
 
-      it("allows a data field named 'init'", util.check([[
-         local struct A
-            x: number
-            init: number = 7
-         end
-         local a = A.new { x = 1 }
-         print(a.init)
-      ]]))
+      it("rejects a data field named 'init' with a clear error", function()
+         local result, err = tl.check_string([[
+            local struct A
+               x: number
+               init: number = 7
+            end
+            local a = A.new { x = 1 }
+         ]])
+         assert.truthy(result.type_errors and #result.type_errors > 0)
+         assert.match("init' is reserved", result.type_errors[1].msg)
+      end)
 
       it("rejects a static field shadowing an instance field", function()
          local result, err = tl.check_string([[

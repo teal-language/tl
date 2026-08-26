@@ -804,19 +804,14 @@ local literal_kinds: {string:boolean} = {
    ["nil"] = true,
 }
 
--- Returns the name of the first default-value expression of rdef (own or
--- inherited: the maps are merged at declaration) that is not a literal,
--- or nil if all defaults are literals
+-- Returns the name of the first INSTANCE default-value expression of
+-- rdef that is not a literal, or nil if all are literals. Static
+-- initializers are exempt: inherited statics are copied by value
+-- (`X.name = Parent.name`), so their expressions are never re-emitted
+-- in the inheriting module
 local function first_non_literal_default(rdef: RecordType): string
    if rdef.default_values then
       for fname, dnode in pairs(rdef.default_values) do
-         if not literal_kinds[(dnode as Node).kind] then
-            return fname
-         end
-      end
-   end
-   if rdef.static_default_values then
-      for fname, dnode in pairs(rdef.static_default_values) do
          if not literal_kinds[(dnode as Node).kind] then
             return fname
          end
@@ -921,6 +916,13 @@ local function finalize_struct_declaration(self: Context, node: Node)
       local rp_def = rp
       if rp_def is TypeDeclType then
          rp_def = (rp_def as TypeDeclType).def
+      end
+
+      -- reject `struct A:A`: the parent resolves to the struct being
+      -- declared, which would make it its own ancestor
+      if rp_def == (rstruct as Type) then
+         self.errs:add(node, "struct '" .. node.var.tk .. "' cannot extend itself")
+         return
       end
 
        if not (rp_def is RecordType) or not (rp_def as RecordType).is_struct then
@@ -1043,23 +1045,27 @@ local function finalize_struct_declaration(self: Context, node: Node)
             -- invoked explicitly via the init chain — neither is inherited
             -- as a field (which also keeps the chain filter accurate:
             -- fields["init"] is set only by the struct's own declaration)
-            if fname ~= "new" and fname ~= "init" then
-               if rstruct.static_field_names and rstruct.static_field_names[fname] then
-                  self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk
-                                 .. "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
-               elseif rstruct.fields[fname] then
-                  -- child redeclares an inherited field: types must agree
-                  local ok = self:same_type(rstruct.fields[fname], pdef.fields[fname])
-                  if not ok then
-                     self.errs:add(node, "field '" .. fname .. "' of struct '" .. node.var.tk
-                                    .. "' conflicts with field inherited from '" .. tostring(pdef.declname) .. "'")
-                  end
-               else
-                  rstruct.fields[fname] = pdef.fields[fname]
-                  table.insert(rstruct.field_order, fname)
-               end
-            end
-         end
+             if fname ~= "new" and fname ~= "init" then
+                local parent_is_static = pdef.static_field_names ~= nil and pdef.static_field_names[fname]
+                local child_is_static = rstruct.static_field_names ~= nil and rstruct.static_field_names[fname]
+                if child_is_static and not parent_is_static then
+                   -- child redeclares an inherited INSTANCE field as static
+                   self.errs:add(node, "static field '" .. fname .. "' of struct '" .. node.var.tk
+                                  .. "' conflicts with instance field inherited from '" .. tostring(pdef.declname) .. "'")
+                elseif rstruct.fields[fname] then
+                   -- child redeclares an inherited field (instance-instance,
+                   -- or a static-static override): types must agree
+                   local ok = self:same_type(rstruct.fields[fname], pdef.fields[fname])
+                   if not ok then
+                      self.errs:add(node, "field '" .. fname .. "' of struct '" .. node.var.tk
+                                     .. "' conflicts with field inherited from '" .. tostring(pdef.declname) .. "'")
+                   end
+                else
+                   rstruct.fields[fname] = pdef.fields[fname]
+                   table.insert(rstruct.field_order, fname)
+                end
+             end
+          end
          -- inherit default values as well
          if pdef.default_values then
             if not rstruct.default_values then
@@ -1071,38 +1077,39 @@ local function finalize_struct_declaration(self: Context, node: Node)
                end
             end
          end
-         -- inherit static field names and their initializers
-         if pdef.static_field_names then
-            if not rstruct.static_field_names then
-               rstruct.static_field_names = {}
-            end
-            for fname, v in pairs(pdef.static_field_names) do
-               rstruct.static_field_names[fname] = v
-            end
-         end
-          if pdef.static_default_values then
-             if not rstruct.static_default_values then
-                rstruct.static_default_values = {}
+          -- inherit static field NAMES for typing (so `Child.X`
+          -- typechecks); their VALUES are copied by reference at the
+          -- child's declaration (see struct_copied_statics) — no
+          -- dispatch, and table statics are shared across the hierarchy
+          if pdef.static_field_names then
+             if not rstruct.static_field_names then
+                rstruct.static_field_names = {}
              end
-             for fname, default_node in pairs(pdef.static_default_values) do
-                if not rstruct.static_default_values[fname] then
-                   rstruct.static_default_values[fname] = default_node
+             for fname, v in pairs(pdef.static_field_names) do
+                rstruct.static_field_names[fname] = v
+             end
+             local copies: {string} = {}
+             for _, fname in ipairs(pdef.field_order) do
+                if pdef.static_field_names[fname] then
+                   table.insert(copies, fname)
                 end
              end
+             rstruct.struct_copied_statics = copies
           end
        end
      end
 
-    -- synthesize .new (always, for struct). The opts parameter is a record
-    -- containing only the instance data fields: static fields and methods
-    -- (record functions) are excluded, so passing them to .new is a type error.
-    if rstruct.fields["new"] then
-       -- only reachable via a body field named `new` (record functions with
-       -- that name are rejected in the record_function visitor); the
-       -- constructor is reserved, so give a clear error instead of letting
-       -- the caller hit "not a function" at the call site
-       self.errs:add(node, "'" .. node.var.tk .. ".new' is reserved: structs generate .new automatically")
-    else
+     -- `new` and `init` are reserved: .new is the synthesized constructor,
+     -- :init() is the lifecycle hook (invoked by the init chain). A body
+     -- field with either name is rejected with a clear error (record
+     -- functions with those names are rejected in the record_function
+     -- visitor, which also covers the reserved-`new` hint)
+     if rstruct.fields["new"] then
+        self.errs:add(node, "'" .. node.var.tk .. ".new' is reserved: structs generate .new automatically")
+     elseif rstruct.fields["init"] then
+        self.errs:add(node, "'" .. node.var.tk .. ".init' is reserved: define '"
+                      .. node.var.tk .. ":init()' (colon syntax) for the construction hook")
+     else
        local w = node as Where
       local selftype = typedecl_to_nominal(w, node.var.tk, resolved)
       local opts_type = a_type(w, "record", {
@@ -2338,6 +2345,17 @@ visit_node.cbs = {
             local ok, err = ensure_not_abstract(ra)
             if not ok then
                return self.errs:invalid_at(node.e1, err)
+            end
+            -- struct types are nominal for construction: casting a table
+            -- literal to a struct produces a value without the metatable
+            -- wiring, so method calls on it crash at runtime. Casting a
+            -- *variable* remains the interop escape hatch (the value may
+            -- already be a properly-constructed table)
+            local gbs = self:to_structural(untuple(gb))
+            if gbs is RecordType and (gbs as RecordType).is_struct
+               and node.e1.kind == "literal_table" then
+               local sname = (gbs as RecordType).declname or "struct"
+               return self.errs:invalid_at(node.e1, sname .. " is a struct; construct instances with " .. sname .. ".new{ ... } instead of casting a table literal")
             end
             return gb
 
