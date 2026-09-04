@@ -743,12 +743,12 @@ local function gen(lax, code, expected, gen_target, type_errors)
          local expected_code = util.dedent(expected):match("^(.-)%s*$")
 
          local expected_lines = {}
-         for line in expected_code:gmatch("([^\n]*)\n") do
+         for line in expected_code:gmatch("([^\n]*)\n?") do
            table.insert(expected_lines, line)
          end
 
          local output_lines = {}
-         for line in output_code:gmatch("([^\n]*)\n") do
+         for line in output_code:gmatch("([^\n]*)\n?") do
            table.insert(output_lines, line)
          end
 

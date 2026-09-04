@@ -30,6 +30,20 @@ describe("Lua version compatibility", function()
       local x = bit32.band(2, (bit32.bor(bit32.rshift(c, bit32.bnot(4)), 0xff)))
    ]], "5.1"))
 
+   it("distinguishes unary and binary '~' operators", util.gen([[
+
+
+      local c = 0xcafebabe
+      local x = c ~ 0xff
+      local y = ~c ~ c
+   ]], [[
+      local bit32 = bit32; if not bit32 then local p, m = pcall(require, 'bit32'); if p then bit32 = m end end
+
+      local c = 0xcafebabe
+      local x = bit32.bxor(c, 0xff)
+      local y = bit32.bxor(bit32.bnot(c), c)
+   ]], "5.1"))
+
    it("generates compat code for bitwise unary operator metamethods", util.gen([[
 
       local type Rec = record
@@ -98,6 +112,42 @@ describe("Lua version compatibility", function()
       local s = setmetatable({}, rec_mt)
 
       print(_tl_mt("__shl", 1, r, s))
+   ]], "5.1"))
+
+   it("generates compat code for the binary '~' operator metamethod", util.gen([[
+
+      local type Rec = record
+         x: number
+         metamethod __bxor: function(Rec, Rec): number
+      end
+
+      local rec_mt: metatable<Rec> = {
+         __bxor = function(a: Rec, b: Rec): number
+            return a.x + b.x
+         end
+      }
+
+      local r = setmetatable({} as Rec, rec_mt)
+      local s = setmetatable({} as Rec, rec_mt)
+
+      print(r ~ s)
+   ]], [[
+      local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end
+
+
+
+
+
+      local rec_mt = {
+         __bxor = function(a, b)
+            return a.x + b.x
+         end,
+      }
+
+      local r = setmetatable({}, rec_mt)
+      local s = setmetatable({}, rec_mt)
+
+      print(_tl_mt("__bxor", 1, r, s))
    ]], "5.1"))
 
    -- varargs
