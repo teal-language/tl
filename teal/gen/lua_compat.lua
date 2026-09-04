@@ -231,7 +231,8 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
                      needs_compat[key] = true
                   end
                end
-            elseif node.op.op == "~" and gen_target == "5.1" then
+
+            elseif node.op.op == "~" and node.op.arity == 1 and gen_target == "5.1" then
                if node.op.meta_on_operand then
                   needs_compat["mt"] = true
                   convert_node_to_compat_mt_call(node, unop_to_metamethod[node.op.op], 1, node.e1)
