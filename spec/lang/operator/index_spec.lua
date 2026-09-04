@@ -74,6 +74,15 @@ describe("[]", function()
       }))
    end)
 
+   describe("on unions", function()
+      it("fail if indexing union", util.check_type_error([[
+         local u = true as boolean | {integer}
+         print(u[1])
+      ]], {
+         { msg = "cannot index object of type boolean | {integer} with integer" },
+      }))
+   end)
+
    describe("on strings", function()
       it("works with relevant stdlib string functions", util.check([[
          local s: string
