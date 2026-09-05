@@ -626,11 +626,15 @@ function lua_generator.generate(ast: Node, gen_target: GenTarget, opts?: Options
             elseif node.op.op == "as" then
                add_child(out, children[1], "", indent)
             elseif node.op.op == "is" then
-               if node.e2.casttype.typename == "integer" then
+               local ct = node.e2.casttype
+               while ct is NominalType and ct.resolved do
+                  ct = ct.resolved
+               end
+               if ct.typename == "integer" then
                   table.insert(out, "math.type(")
                   add_child(out, children[1], "", indent)
                   table.insert(out, ") == \"integer\"")
-               elseif node.e2.casttype.typename == "nil" then
+               elseif ct.typename == "nil" then
                   add_child(out, children[1], "", indent)
                   table.insert(out, " == nil")
                else

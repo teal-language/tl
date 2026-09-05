@@ -11321,6 +11321,9 @@ local traverse_nodes = traversal.traverse_nodes
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
+local types = require("teal.types")
+
+
 local lua_compat = {}
 
 
@@ -11516,9 +11519,13 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
       visit_node.cbs["op"] = {
          after = function(_, node, _children)
             if node.op.op == "is" then
-               if node.e2.casttype.typename == "integer" then
+               local ct = node.e2.casttype
+               while ct.typename == "nominal" and ct.resolved do
+                  ct = ct.resolved
+               end
+               if ct.typename == "integer" then
                   needs_compat["math"] = true
-               elseif node.e2.casttype.typename ~= "nil" then
+               elseif ct.typename ~= "nil" then
                   needs_compat["type"] = true
                end
             elseif node.op.op == "." then
@@ -12239,11 +12246,15 @@ function lua_generator.generate(ast, gen_target, opts)
             elseif node.op.op == "as" then
                add_child(out, children[1], "", indent)
             elseif node.op.op == "is" then
-               if node.e2.casttype.typename == "integer" then
+               local ct = node.e2.casttype
+               while ct.typename == "nominal" and ct.resolved do
+                  ct = ct.resolved
+               end
+               if ct.typename == "integer" then
                   table.insert(out, "math.type(")
                   add_child(out, children[1], "", indent)
                   table.insert(out, ") == \"integer\"")
-               elseif node.e2.casttype.typename == "nil" then
+               elseif ct.typename == "nil" then
                   add_child(out, children[1], "", indent)
                   table.insert(out, " == nil")
                else
