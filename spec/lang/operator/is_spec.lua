@@ -452,6 +452,23 @@ if not (r == nil) then
    r.f()
 end]]))
 
+      it("lowers 'is' on a type alias like its underlying type (regression test for #1149)", util.gen([[
+         local x: any = nil
+         local type MyInt = integer
+         local type MyNil = nil
+         print(x is MyInt)
+         print(x is MyNil)
+         print(x is integer)
+         print(x is nil)
+      ]], [[
+local x = nil
+
+
+print(math.type(x) == "integer")
+print(x == nil)
+print(math.type(x) == "integer")
+print(x == nil)]], "5.4"))
+
    end)
 
    describe("on while", function()

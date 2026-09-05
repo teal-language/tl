@@ -21,6 +21,9 @@ local traverse_nodes = traversal.traverse_nodes
 local util = require("teal.util")
 local sorted_keys = util.sorted_keys
 
+local types = require("teal.types")
+local type NominalType = types.NominalType
+
 local record lua_compat
 end
 
@@ -216,9 +219,13 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
       visit_node.cbs["op"] = {
          after = function(_: nil, node: Node, _children: {nil}): nil
             if node.op.op == "is" then
-               if node.e2.casttype.typename == "integer" then
+               local ct = node.e2.casttype
+               while ct is NominalType and ct.resolved do
+                  ct = ct.resolved
+               end
+               if ct.typename == "integer" then
                   needs_compat["math"] = true
-               elseif node.e2.casttype.typename ~= "nil" then
+               elseif ct.typename ~= "nil" then
                   needs_compat["type"] = true
                end
             elseif node.op.op == "." then
