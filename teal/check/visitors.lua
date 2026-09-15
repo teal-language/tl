@@ -2122,7 +2122,8 @@ visit_node.cbs = {
 
          if node.op.op == "==" or node.op.op == "~=" then
             if is_lua_table_type(ra) and is_lua_table_type(rb) then
-               self:check_metamethod(node, binop_to_metamethod[node.op.op], ra, rb, ua, ub)
+
+               self:check_metamethod(node, "__eq", ra, rb, ua, ub)
             end
 
             if ra.typename == "enum" and rb.typename == "string" then
