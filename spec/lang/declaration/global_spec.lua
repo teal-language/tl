@@ -205,6 +205,105 @@ describe("global", function()
       end)
    end)
 
+   describe("redeclared type", function()
+      it("fails if a global record is redeclared with different fields", util.check_type_error([[
+         global record Widget
+            id: integer
+         end
+
+         global record Widget
+            name: string
+         end
+      ]], {
+         { msg = "cannot redeclare global with a different type" },
+      }))
+
+      it("works if a global record is redeclared with the same fields", util.check([[
+         global record Widget
+            id: integer
+         end
+
+         global record Widget
+            id: integer
+         end
+      ]]))
+
+      it("works if a global generic record is redeclared identically", util.check([[
+         global record Foo<R>
+            item: R
+         end
+
+         global record Foo<R>
+            item: R
+         end
+      ]]))
+
+      it("fails if a global type alias is redeclared with a different type", util.check_type_error([[
+         global type X = number
+         global type X = string
+      ]], {
+         { msg = "cannot redeclare global with a different type" },
+      }))
+
+      it("does not crash when a global type alias is redeclared identically", util.check([[
+         global record Widget
+            id: integer
+         end
+
+         global type Handle = Widget
+         global type Handle = Widget
+      ]]))
+
+      it("fails if a global type alias is redeclared pointing at a different type", util.check_type_error([[
+         global record Widget
+            id: integer
+         end
+
+         global record Gadget
+            name: string
+         end
+
+         global type Handle = Widget
+         global type Handle = Gadget
+      ]], {
+         { msg = "cannot redeclare global with a different type" },
+      }))
+
+      it("fails if a global record is redeclared with different fields across files", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               global record Widget
+                  id: integer
+               end
+            ]]
+         })
+         util.run_check_type_error([[
+            local foo = require("foo")
+            global record Widget
+               name: string
+            end
+         ]], {
+            { msg = "cannot redeclare global with a different type" },
+         })
+      end)
+
+      it("does not crash when a global type alias is redeclared across files", function()
+         util.mock_io(finally, {
+            ["foo.tl"] = [[
+               global record Widget
+                  id: integer
+               end
+
+               global type Handle = Widget
+            ]],
+         })
+         util.run_check([[
+            local foo = require("foo")
+            global type Handle = Widget
+         ]])
+      end)
+   end)
+
    describe("with types", function()
       it("can be forward-declared to resolve circular type dependencies", function()
          util.mock_io(finally, {
