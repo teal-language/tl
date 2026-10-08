@@ -4,7 +4,7 @@ You can create declaration files to annotate the types of third-party Lua
 modules, including C Lua modules. To do so, create a file with the .d.tl
 extension and require it as normal, i.e. `local lfs = require("lfs")`.
 
-Types defined in this module will will be used as a source of type information 
+Types defined in this module will be used as a source of type information 
 checking with `tl check`, even though the real Lua module will be loaded
 instead when requiring the module from Lua or `tl run`.
 
