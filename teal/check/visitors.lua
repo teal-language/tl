@@ -849,7 +849,7 @@ visit_node.cbs = {
             if resolved.typename == "invalid" then
                return
             end
-            if aliasing then
+            if added and aliasing then
                added.aliasing = aliasing
             end
 

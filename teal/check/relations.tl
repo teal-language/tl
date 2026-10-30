@@ -425,6 +425,11 @@ relations.eqtype_relations = {
       end,
       ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
    },
+   ["typedecl"] = {
+      ["typedecl"] = function(ck: TypeChecker, a: TypeDeclType, b: TypeDeclType): boolean, {Error}
+         return ck:same_type(a.def, b.def)
+      end,
+   },
    ["function"] = {
       ["function"] = function(ck:TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
          local argdelta = a.is_method and 1 or 0
