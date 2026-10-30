@@ -318,7 +318,7 @@ local record types
 
    interface TupleLikeType
       is StructuralType
-      where self.types
+      where self.types -- FIXME: will be confused with AggregateType (see #1175)
       types: {Type}
    end
 
