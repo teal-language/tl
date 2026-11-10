@@ -1083,12 +1083,26 @@ function Context:same_in_all_union_entries<T is Type, F is Type>(u: UnionType, c
    return f
 end
 
-function Context:same_call_mt_in_all_union_entries(u: UnionType): FunctionType
-   return self:same_in_all_union_entries(u, function(t: Type): (TupleType, FunctionType)
+local function macroexps_match(ts: {Type}): boolean
+   local m: types.Node
+   for i, t in ipairs(ts) do
+      local tm = t is FunctionType and t.macroexp or nil
+      if i > 1 and tm ~= m then
+         return false
+      end
+      m = tm
+   end
+   return true
+end
+
+function Context:same_call_mt_in_all_union_entries(u: UnionType): FunctionType, boolean
+   local call_mts: {Type} = {}
+   local f = self:same_in_all_union_entries(u, function(t: Type): (TupleType, FunctionType)
       t = self:to_structural(t)
       if t is RecordLikeType then
          local call_mt = t.meta_fields and t.meta_fields["__call"]
          if call_mt is FunctionType then
+            table.insert(call_mts, call_mt)
             local args_tuple = a_tuple(u, {})
             for i = 2, #call_mt.args.tuple do
                table.insert(args_tuple.tuple, call_mt.args.tuple[i])
@@ -1097,6 +1111,7 @@ function Context:same_call_mt_in_all_union_entries(u: UnionType): FunctionType
          end
       end
    end)
+   return f, macroexps_match(call_mts)
 end
 
 function Context:resolve_for_call(func: Type, args: TupleType, is_method: boolean): Type, boolean
@@ -1122,8 +1137,11 @@ function Context:resolve_for_call(func: Type, args: TupleType, is_method: boolea
 
    -- resolve if union
    if func is UnionType then
-      local r = self:same_call_mt_in_all_union_entries(func)
+      local r, same_macroexp = self:same_call_mt_in_all_union_entries(func)
       if r then
+         if not same_macroexp then
+            return self.errs:invalid_at(args, "cannot use macroexp '__call' on union type %s", func), is_method
+         end
          table.insert(args.tuple, 1, func.types[1]) -- FIXME: is this right?
          return r, true
       end
@@ -1721,11 +1739,16 @@ function Context:match_record_key(t: Type, rec: Node, key: string): Type, string
    end
 
    if t is UnionType then
+      local fts: {Type} = {}
       local ty = self:same_in_all_union_entries(t, function(typ: Type): (Type, Type)
          local v = self:match_record_key(typ, rec, key)
+         table.insert(fts, v)
          return v, v
       end)
       if ty then
+         if not macroexps_match(fts) then
+            return nil, "cannot use macroexp '" .. key:gsub("%%", "%%%%") .. "' on union type %s"
+         end
          return ty
       end
    end
