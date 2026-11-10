@@ -4184,12 +4184,26 @@ function Context:same_in_all_union_entries(u, check)
    return f
 end
 
+local function macroexps_match(ts)
+   local m
+   for i, t in ipairs(ts) do
+      local tm = t.typename == "function" and t.macroexp or nil
+      if i > 1 and tm ~= m then
+         return false
+      end
+      m = tm
+   end
+   return true
+end
+
 function Context:same_call_mt_in_all_union_entries(u)
-   return self:same_in_all_union_entries(u, function(t)
+   local call_mts = {}
+   local f = self:same_in_all_union_entries(u, function(t)
       t = self:to_structural(t)
       if t.fields then
          local call_mt = t.meta_fields and t.meta_fields["__call"]
          if call_mt.typename == "function" then
+            table.insert(call_mts, call_mt)
             local args_tuple = a_type(u, "tuple", { tuple = {} })
             for i = 2, #call_mt.args.tuple do
                table.insert(args_tuple.tuple, call_mt.args.tuple[i])
@@ -4198,6 +4212,7 @@ function Context:same_call_mt_in_all_union_entries(u)
          end
       end
    end)
+   return f, macroexps_match(call_mts)
 end
 
 function Context:resolve_for_call(func, args, is_method)
@@ -4223,8 +4238,11 @@ function Context:resolve_for_call(func, args, is_method)
 
 
    if func.typename == "union" then
-      local r = self:same_call_mt_in_all_union_entries(func)
+      local r, same_macroexp = self:same_call_mt_in_all_union_entries(func)
       if r then
+         if not same_macroexp then
+            return self.errs:invalid_at(args, "cannot use macroexp '__call' on union type %s", func), is_method
+         end
          table.insert(args.tuple, 1, func.types[1])
          return r, true
       end
@@ -4822,11 +4840,16 @@ function Context:match_record_key(t, rec, key)
    end
 
    if t.typename == "union" then
+      local fts = {}
       local ty = self:same_in_all_union_entries(t, function(typ)
          local v = self:match_record_key(typ, rec, key)
+         table.insert(fts, v)
          return v, v
       end)
       if ty then
+         if not macroexps_match(fts) then
+            return nil, "cannot use macroexp '" .. key:gsub("%%", "%%%%") .. "' on union type %s"
+         end
          return ty
       end
    end
