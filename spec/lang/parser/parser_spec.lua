@@ -34,6 +34,16 @@ describe("parser", function()
       assert.same("return", result.ast[1].kind)
    end)
 
+   it("accepts 'return;' before 'end' (regression test for #976)", function ()
+      local result = tl.check_string("local function f() return; end")
+      assert.same({}, result.syntax_errors)
+   end)
+
+   it("does not accept a second ';' after 'return;'", function ()
+      local result = tl.check_string("local function f() return;; end")
+      assert.is_true(#result.syntax_errors > 0)
+   end)
+
    it("does not accept statements after 'return;' (regression test for #495)", function ()
       local result = tl.check_string([[
          return;
