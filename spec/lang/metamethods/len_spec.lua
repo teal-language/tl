@@ -18,6 +18,23 @@ describe("unary metamethod __len", function()
       print((#r):upper())
    ]]))
 
+   it("checks the type of self in the metatable", util.check_type_error([[
+      local record Test
+         metamethod __len: function(Test): number
+      end
+
+      local test_mt: metatable<Test> = {
+         __len = function(self: number): number
+            return self
+         end
+      }
+
+      local test: Test = setmetatable({}, test_mt)
+      print(#test)
+   ]], {
+      { msg = "__len: argument 1: got number, expected Test" },
+   }))
+
    it("can return arbitrary types", util.check([[
       local type Rec = record
          x: number
