@@ -855,7 +855,9 @@ do
                   self.errs:add(ftype, fname .. " does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
                end
             end
-            ret.fields[fname] = ftype
+            -- an explicit self type must be checked like a regular argument
+            local first = ftype is FunctionType and ftype.args.tuple[1]
+            ret.fields[fname] = (first and not first is SelfType) and ensure_not_method(ftype) or ftype
          end
       end
 
